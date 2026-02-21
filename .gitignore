@@ -38,3 +38,6 @@ Thumbs.db
 
 # OMC plugin sessions & state (local tool data)
 .omc/
+
+# Config with API keys (use config.example.json as template)
+config.json
