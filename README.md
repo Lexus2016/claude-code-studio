@@ -1,115 +1,190 @@
-# Claude Code Chat v4.0
+# Claude Code Chat
 
-Веб-інтерфейс для роботи з Claude Code. Підтримує CLI (Max підписка) та SDK (API ключ) режими.
+**Lightweight web UI for [Claude Code](https://claude.ai/code)** — chat with Claude directly in the browser, with multi-agent orchestration, MCP servers, skill files, and persistent SQLite history. No build step required.
 
-## 🎯 Можливості
+> Available in: [English](README.md) | [Українська](README_UA.md) | [Русский](README_RU.md)
 
-| Функція | Опис |
-|---------|------|
-| 🖥 CLI Mode | Працює через `claude` CLI з Max підпискою (безкоштовно) |
-| 🔌 SDK Mode | Працює через API ключ (платно за токени) |
-| 💬 Chat | Текстовий діалог з Claude Code через WebSocket |
-| 📁 Files | Файловий браузер workspace з прев'ю |
-| ⚡ MCP | Підключення MCP серверів (готові + ручні) |
-| 🧠 Skills | Завантаження skill файлів (.md) |
-| 🔄 Modes | Auto / Planning / Task режими роботи |
-| 👥 Multi-Agent | Оркестрація команди агентів |
-| 💎 Models | Opus 4.6 / Sonnet 4.5 / Haiku 4.5 |
-| 📋 History | Збереження сесій в SQLite |
-| 📋 Copy | Копіювання повідомлень в буфер |
-| ⚙️ Config Editor | Редагування config.json, CLAUDE.md, settings.json, .env |
-| 🔒 Auth | Авторизація з setup wizard при першому запуску |
-| 🐳 Docker | Dockerfile + docker-compose |
+---
 
-## 🚀 Швидкий старт
+## Features
 
-### Без Docker (з Max підпискою):
+| Feature | Description |
+|---------|-------------|
+| 🖥 CLI Mode | Works via `claude` CLI with Max subscription (no API costs) |
+| 🔌 SDK Mode | Works via Anthropic API key (pay-per-token) |
+| 💬 Real-time Chat | WebSocket streaming with markdown rendering |
+| 👥 Multi-Agent | Orchestrate a team of agents with dependency graph |
+| ⚡ MCP Servers | Connect any MCP server — presets + custom |
+| 🧠 Skills | Load `.md` skill files into Claude's system prompt |
+| 🔄 Modes | Auto / Planning / Task execution modes |
+| 💎 Models | Opus 4.6 / Sonnet 4.6 / Haiku 4.5 |
+| 📁 File Browser | Browse workspace, preview files, attach via `@mention` |
+| 🖼 Vision | Paste images from clipboard, send as vision blocks |
+| 📊 Stats | Claude Max usage limits with progress bars |
+| 📋 History | Persistent sessions in SQLite, resumable |
+| ⚙️ Config Editor | Edit `config.json`, `CLAUDE.md`, `.env` in the UI |
+| 🔒 Auth | bcrypt password + 30-day session tokens |
+| 🐳 Docker | Dockerfile + docker-compose included |
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Node.js 18+
+- [`claude` CLI](https://docs.anthropic.com/en/claude-code) installed and authenticated (for CLI mode)
+- OR an `ANTHROPIC_API_KEY` (for SDK mode)
+
+### Without Docker (CLI mode — Max subscription)
+
 ```bash
-# 1. Встановити залежності
+git clone https://github.com/Lexus2016/claude-code-chat.git
+cd claude-code-chat
 npm install
 
-# 2. Переконатися що claude CLI авторизований
+# Make sure claude CLI is authenticated
 claude --version
 
-# 3. Запустити
 node server.js
-
-# 4. Відкрити http://localhost:3000
-# Перший запуск — створити пароль
+# Open http://localhost:3000
+# First launch: create a password
 ```
 
-### Без Docker (з API ключем):
+### Without Docker (SDK mode — API key)
+
 ```bash
+git clone https://github.com/Lexus2016/claude-code-chat.git
+cd claude-code-chat
 npm install
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+
+cp .env.example .env
+# Edit .env → set ANTHROPIC_API_KEY=sk-ant-...
+
 node server.js
 ```
 
-### Docker:
+### With Docker
+
 ```bash
-# 1. Налаштувати .env
+git clone https://github.com/Lexus2016/claude-code-chat.git
+cd claude-code-chat
+
 cp .env.example .env
-# Відредагувати .env
+# Edit .env as needed
 
-# 2. Запустити
-docker-compose up -d --build
-
-# 3. Логи
-docker-compose logs -f
+docker compose up -d --build
+docker compose logs -f claude-chat
 ```
 
-## 📂 Структура
+---
+
+## Project Structure
+
 ```
 claude-code-chat/
-├── server.js          # Node.js backend (Express + WebSocket)
-├── auth.js            # Авторизація (bcrypt + tokens)
-├── claude-cli.js      # CLI wrapper з підтримкою сесій
-├── config.json        # MCP сервери + skills конфіг
+├── server.js           # Express + WebSocket server (main entry point)
+├── auth.js             # bcrypt auth, 30-day token sessions
+├── claude-cli.js       # Spawns claude CLI subprocess, parses JSON stream
+├── config.json         # MCP server definitions + skills catalog
 ├── package.json
 ├── Dockerfile
 ├── docker-compose.yml
-├── .env               # Змінні оточення
+├── .env.example        # Environment variable template
 ├── public/
-│   ├── index.html     # Головний UI
-│   └── auth.html      # Login / Setup сторінка
-├── skills/            # Skill файли (.md)
+│   ├── index.html      # Single-file SPA (embedded CSS + JS)
+│   └── auth.html       # Login / Setup page
+├── skills/             # Skill .md files (loaded into system prompt)
 │   ├── trading-bot.md
 │   ├── pinescript.md
 │   └── code-review.md
-├── data/              # SQLite DB + auth (persistent)
-└── workspace/         # Робоча директорія Claude Code
+├── data/               # Runtime data (gitignored)
+│   ├── chats.db        # SQLite database
+│   ├── auth.json       # bcrypt password hash
+│   └── sessions-auth.json
+└── workspace/          # Claude Code working directory (gitignored)
 ```
 
-## 🖥 CLI vs SDK
+---
 
-| | CLI (Max) | SDK (API) |
+## Configuration
+
+### Environment Variables (`.env`)
+
+```env
+PORT=3000
+ANTHROPIC_API_KEY=        # Required for SDK mode only
+SESSION_SECRET=           # Auto-generated if empty
+WORKDIR=./workspace       # Claude's working directory
+TRUST_PROXY=false         # Set true behind nginx/Caddy
+```
+
+### CLI vs SDK
+
+| | CLI (Max) | SDK (API Key) |
 |---|---|---|
-| Оплата | Max підписка | За токени |
-| Сесії | `--session-id --resume` | SDK session |
-| Streaming | stdout parsing | Native |
-| Стабільність | Залежить від CLI output | Стабільне |
+| Cost | Max subscription | Per-token billing |
+| Session resumption | `--resume <id>` | SDK session |
+| Streaming | stdout JSON parsing | Native |
+| Stability | CLI version dependent | Stable |
 | Multi-Agent | ✅ | ✅ |
 
-## ⚙️ Налаштування
+### Adding MCP Servers
+1. Left panel → ⚡ MCP → "+ Add MCP"
+2. Or edit `config.json` directly via ⚙️ Config Editor
 
-### Додавання MCP серверів
-1. Ліва панель → ⚡ MCP → "+ Додати MCP"
-2. Або редагувати `config.json` через ⚙️ → config.json
+### Adding Skills
+1. Left panel → 🧠 Skills → "+ Upload .md"
+2. Or drop `.md` files in `skills/` and update `config.json`
 
-### Додавання Skills
-1. Ліва панель → 🧠 Skills → "+ Upload .md"
-2. Або додати файл в `skills/` та оновити `config.json`
+---
 
-### Конфігурація Claude Code
-⚙️ Config Editor:
-- `config.json` — MCP + Skills конфіг
-- `CLAUDE.md` — System prompt для workspace
-- `.claude/settings.json` — Глобальні налаштування Claude Code
-- `.env` — API ключі та змінні оточення
+## Architecture
 
-## 🔒 Безпека
+```
+Client (browser) ──WS──► server.js ──► claude-cli.js ──► claude (subprocess)
+                                   └──► SDK query()    ──► Anthropic API
+                    HTTP ◄──────────────────────────────────────────────────
+```
 
-- Пароль хешується через bcrypt (12 rounds)
-- Auth токени 30 днів, зберігаються server-side
-- WebSocket авторизація через cookie
-- API ключі ніколи не передаються на фронтенд
+- Single Node.js process, no build tools
+- WebSocket for bidirectional streaming
+- SQLite (WAL mode) for sessions and messages
+- Multi-agent: orchestrator generates JSON plan → parallel agent execution
+
+### SQLite Schema
+
+```sql
+sessions: id, title, created_at, updated_at, claude_session_id,
+          active_mcp, active_skills, mode, agent_mode, model, engine
+
+messages: id, session_id, role, type, content,
+          tool_name, agent_id, created_at
+```
+
+---
+
+## Security
+
+- Passwords hashed with bcrypt (12 rounds)
+- Auth tokens: 32-byte hex, 30-day TTL, server-side storage
+- WebSocket protected by `httpOnly` cookie
+- API keys never sent to the frontend
+- Helmet.js security headers
+- Rate limiting on auth endpoints
+
+---
+
+## Development
+
+```bash
+npm run dev    # node --watch server.js (auto-reload)
+npm start      # node server.js (production)
+```
+
+No linter, no test suite, no build step — vanilla JS frontend, plain Node.js backend.
+
+---
+
+## License
+
+MIT

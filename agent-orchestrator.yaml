@@ -4,13 +4,13 @@ port: 3003
 defaults:
   runtime: tmux
   agent: claude-code
-  workspace: worktree
+  workspace: local
   notifiers:
     - desktop
 projects:
   my-project:
     repo: owner/repo
-    path: ~/my-project
+    path: ~/claude-code-chat
     defaultBranch: main
     agentRules: |-
       Always run tests before pushing.
