@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Auth & sessions (secrets)
+data/auth.json
+data/sessions-auth.json
+
+# Database (runtime data)
+data/chats.db
+data/chats.db-shm
+data/chats.db-wal
+
+# Projects config (user-specific paths)
+data/projects.json
+
+# Environment
+.env
+
+# Workspace (user files, Claude working dir)
+workspace/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo

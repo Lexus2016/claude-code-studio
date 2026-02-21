@@ -1,0 +1,20 @@
+{
+  "name": "claude-code-chat",
+  "version": "4.0.0",
+  "description": "Web chat interface for Claude Code with MCP, Skills, Multi-Agent, Auth & Docker",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.50",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.0.0",
+    "cookie-parser": "^1.4.6",
+    "express": "^4.21.0",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "multer": "^1.4.5-lts.1",
+    "ws": "^8.18.0"
+  }
+}

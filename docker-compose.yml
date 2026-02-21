@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  claude-chat:
+    build: .
+    container_name: claude-code-chat
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - chat-data:/app/data
+      - workspace:/app/workspace
+      - skills:/app/skills
+      - claude-home:/root/.claude
+    environment:
+      - PORT=3000
+      - WORKDIR=/app/workspace
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - NODE_ENV=production
+      - SESSION_SECRET=${SESSION_SECRET:-}
+      - TRUST_PROXY=${TRUST_PROXY:-false}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  chat-data:
+  workspace:
+  skills:
+  claude-home:

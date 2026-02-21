@@ -1,0 +1,106 @@
+{
+  "mcpServers": {
+    "tavily-remote-mcp": {
+      "label": "🔍 Tavily Search",
+      "description": "Web search via Tavily API",
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.tavily.com/mcp/?tavilyApiKey=YOUR_TAVILY_API_KEY"]
+    },
+    "web-search-prime": {
+      "label": "🌐 Web Search Prime",
+      "description": "Advanced web search (Z.ai)",
+      "type": "http",
+      "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_Z_AI_API_KEY"
+      },
+      "env": {
+        "ENABLE_TOOL_SEARCH": "true",
+        "ENABLE_EXPERIMENTAL_MCP_CLI": "true"
+      }
+    },
+    "web-reader": {
+      "label": "📖 Web Reader",
+      "description": "Read and extract web page content (Z.ai)",
+      "type": "http",
+      "url": "https://api.z.ai/api/mcp/web_reader/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_Z_AI_API_KEY"
+      },
+      "env": {
+        "ENABLE_TOOL_SEARCH": "true",
+        "ENABLE_EXPERIMENTAL_MCP_CLI": "true"
+      }
+    },
+    "zread": {
+      "label": "📚 ZRead",
+      "description": "Read docs, GitHub repos, issues (Z.ai)",
+      "type": "http",
+      "url": "https://api.z.ai/api/mcp/zread/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_Z_AI_API_KEY"
+      },
+      "env": {
+        "ENABLE_TOOL_SEARCH": "true",
+        "ENABLE_EXPERIMENTAL_MCP_CLI": "true"
+      }
+    },
+    "zai-mcp-server": {
+      "label": "🤖 Z.AI MCP",
+      "description": "Z.ai image analysis, OCR, diagrams",
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@z_ai/mcp-server"],
+      "env": {
+        "ENABLE_TOOL_SEARCH": "true",
+        "ENABLE_EXPERIMENTAL_MCP_CLI": "true",
+        "Z_AI_API_KEY": "YOUR_Z_AI_API_KEY",
+        "Z_AI_MODE": "ZAI"
+      }
+    },
+    "server-memory": {
+      "label": "🧠 Memory",
+      "description": "Persistent knowledge graph memory",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {
+        "ENABLE_TOOL_SEARCH": "true",
+        "ENABLE_EXPERIMENTAL_MCP_CLI": "true",
+        "MEMORY_FILE_PATH": "/Users/admin/.claude/memory.jsonl"
+      }
+    },
+    "filesystem": {
+      "label": "📁 Filesystem",
+      "description": "Read/write files in workspace",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/app/workspace"],
+      "enabled": false
+    },
+    "github": {
+      "label": "🐙 GitHub",
+      "description": "Repos, issues, PRs, code search",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_TOKEN": "" },
+      "enabled": false
+    }
+  },
+  "skills": {
+    "trading-bot": {
+      "label": "🤖 Trading Bot",
+      "description": "Створення торгових ботів для криптобірж",
+      "file": "skills/trading-bot.md"
+    },
+    "pinescript": {
+      "label": "📈 PineScript",
+      "description": "TradingView індикатори та стратегії",
+      "file": "skills/pinescript.md"
+    },
+    "code-review": {
+      "label": "🔍 Code Review",
+      "description": "Аудит та рев'ю Python/JS проєктів",
+      "file": "skills/code-review.md"
+    }
+  }
+}

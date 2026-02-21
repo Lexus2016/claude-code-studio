@@ -1,0 +1,2732 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code Chat</title>
+<style>
+:root {
+  --bg: #090d13; --s1: #111620; --s2: #181e2b; --s3: #1f2637;
+  --border: #2a3347; --text: #dce6f5; --muted: #7a8baa;
+  --accent: #7c6aef; --accent2: #a08df5; --abg: rgba(124,106,239,.13);
+  --green: #3fb950; --orange: #e5a435; --red: #f85149; --blue: #58a6ff;
+  --tool-bg: #131925; --r: 10px;
+  --code-bg: #0d1219; --user-msg: #1a2460;
+  --sidebar-w: 280px; --sidebar-r: 300px;
+  --shadow: 0 4px 24px rgba(0,0,0,.4);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; overflow: hidden; font-size: 14px; }
+
+/* ─── Layout ─── */
+.left {
+  width: var(--sidebar-w); background: var(--s1);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden;
+  transition: width .25s cubic-bezier(.4,0,.2,1), opacity .25s;
+}
+.left.collapsed { width: 0; opacity: 0; pointer-events: none; overflow: hidden; }
+.left-inner { flex: 1; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; min-height: 0; }
+.left-inner::-webkit-scrollbar { width: 3px; }
+.left-inner::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.center { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+.right {
+  width: var(--sidebar-r); background: var(--s1);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0;
+  transition: width .25s cubic-bezier(.4,0,.2,1), opacity .25s;
+}
+.right.collapsed { width: 0; opacity: 0; pointer-events: none; overflow: hidden; }
+.hidden { display: none !important; }
+
+/* ─── Panel Toggle Tabs ─── */
+.panel-tab {
+  width: 14px; display: flex; align-items: center; justify-content: center;
+  background: var(--s1); cursor: pointer; flex-shrink: 0;
+  position: relative; transition: background .15s; user-select: none; z-index: 10;
+}
+.panel-tab:hover { background: var(--s2); }
+.panel-tab-left { border-right: 1px solid var(--border); }
+.panel-tab-right { border-left: 1px solid var(--border); }
+.panel-tab-inner {
+  width: 14px; height: 56px; display: flex; align-items: center; justify-content: center;
+  background: var(--s2); border: 1px solid var(--border); border-radius: 0 5px 5px 0;
+  transition: background .15s, border-color .15s;
+}
+.panel-tab-right .panel-tab-inner { border-radius: 5px 0 0 5px; }
+.panel-tab:hover .panel-tab-inner { background: var(--s3); border-color: var(--accent); }
+.panel-tab-inner svg {
+  width: 10px; height: 10px; color: var(--muted); flex-shrink: 0;
+  transition: transform .25s cubic-bezier(.4,0,.2,1), color .15s;
+}
+.panel-tab:hover .panel-tab-inner svg { color: var(--accent2); }
+/* Left tab: default=collapsed → chevron right (→ to open) */
+.panel-tab-left .panel-tab-inner svg { transform: rotate(0deg); }
+/* Left tab: active=visible → chevron left (← to close) */
+.panel-tab-left.active .panel-tab-inner svg { transform: rotate(180deg); }
+/* Right tab: default=collapsed → chevron left (← to open) */
+.panel-tab-right .panel-tab-inner svg { transform: rotate(180deg); }
+/* Right tab: active=visible → chevron right (→ to close) */
+.panel-tab-right.active .panel-tab-inner svg { transform: rotate(0deg); }
+/* Tooltips for side tabs */
+.panel-tab-left[data-tip]::after { left: calc(100% + 6px); top: 50%; bottom: auto; transform: translateY(-50%); }
+.panel-tab-right[data-tip]::after { right: calc(100% + 6px); left: auto; top: 50%; bottom: auto; transform: translateY(-50%); }
+
+/* ─── Sections ─── */
+.sec { border-bottom: 1px solid var(--border); }
+.sec-title { padding: 9px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; transition: color .15s; }
+.sec-title:hover { color: var(--text); }
+.sec-title .badge { background: var(--accent); color: white; font-size: 10px; padding: 1px 7px; border-radius: 10px; font-weight: 700; min-width: 20px; text-align: center; }
+.sec-title .badge:empty { display: none; }
+.sec-body { padding: 4px 8px 10px; }
+.sec-body.collapsed { display: none; }
+
+/* ─── Stats Panel ─── */
+.stat-block { margin-bottom: 12px; }
+.stat-block-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 5px; }
+.stat-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.stat-bar { flex: 1; height: 8px; background: var(--s3); border-radius: 4px; overflow: hidden; }
+.stat-bar-fill { height: 100%; border-radius: 4px; transition: width .5s ease; }
+.stat-bar-fill.ok { background: var(--blue); }
+.stat-bar-fill.warn { background: var(--orange); }
+.stat-bar-fill.crit { background: var(--red); }
+.stat-pct { font-size: 11px; color: var(--text); white-space: nowrap; min-width: 52px; text-align: right; }
+.stat-reset { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.stat-agents { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.stat-agents-title { font-size: 10px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.agent-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--s3); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 10px; margin: 2px 2px 0 0; color: var(--text); }
+.agent-chip .dot { width: 5px; height: 5px; background: var(--green); border-radius: 50%; flex-shrink: 0; animation: dot-pulse 1.5s ease-in-out infinite; }
+@keyframes dot-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.stat-empty { font-size: 10px; color: var(--muted); font-style: italic; }
+.stat-refresh { font-size: 9px; color: var(--muted); text-align: right; margin-top: 8px; cursor: pointer; opacity: .6; user-select: none; }
+.stat-refresh:hover { opacity: 1; color: var(--accent2); }
+
+/* ─── Toggle items ─── */
+.ci { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r); cursor: pointer; font-size: 13px; transition: background .12s; border: 1px solid transparent; }
+.ci:hover { background: var(--s2); }
+.ci.on { background: rgba(124,106,239,.08); border-color: rgba(124,106,239,.2); }
+/* Toggle switch */
+.sw { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+.sw input { opacity: 0; width: 0; height: 0; position: absolute; }
+.sw-track { position: absolute; inset: 0; background: var(--s3); border-radius: 20px; border: 1px solid var(--border); transition: background .2s, border-color .2s; }
+.ci.on .sw-track { background: var(--accent); border-color: var(--accent); }
+.sw-thumb { position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; background: white; border-radius: 50%; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.ci.on .sw-thumb { transform: translateX(16px); }
+/* Info */
+.ci .inf { flex: 1; min-width: 0; }
+.ci .inf .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.ci .inf .ds { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.ci .inf .st { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; margin-top: 2px; color: var(--muted); }
+.ci.on .inf .st { color: var(--accent2); }
+/* Remove button */
+.ci .rm { opacity: 0; background: none; border: none; color: var(--red); cursor: pointer; font-size: 14px; padding: 3px 6px; border-radius: 4px; transition: opacity .12s; flex-shrink: 0; }
+.ci:hover .rm { opacity: .45; }
+.ci .rm:hover { opacity: 1 !important; background: rgba(248,81,73,.1); }
+
+/* ─── Add buttons & forms ─── */
+.add-btn { display: flex; align-items: center; gap: 6px; padding: 6px 9px; margin-top: 4px; border-radius: var(--r); cursor: pointer; font-size: 12px; color: var(--accent2); border: 1px dashed var(--border); background: none; width: 100%; transition: all .12s; }
+.add-btn:hover { background: var(--abg); border-color: var(--accent); }
+.af { margin-top: 7px; display: flex; flex-direction: column; gap: 6px; }
+.af input, .af textarea { background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 6px 9px; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border .12s; }
+.af input:focus, .af textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.15); }
+.af textarea { resize: vertical; min-height: 44px; font-family: 'SF Mono', monospace; font-size: 11px; }
+.fr { display: flex; gap: 6px; }
+.fr button { padding: 5px 13px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 500; }
+.bp { background: var(--accent); color: white; }
+.bp:hover { background: var(--accent2); }
+.bg { background: var(--s2); color: var(--muted); border: 1px solid var(--border) !important; }
+
+/* ─── History ─── */
+.hist-list { flex: 1; overflow-y: auto; padding: 4px 8px; max-height: 200px; }
+.hist-item { padding: 7px 10px; border-radius: var(--r); cursor: pointer; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 7px; transition: background .1s; }
+.hist-item:hover { background: var(--s2); }
+.hist-item.active { background: var(--abg); border-left: 2px solid var(--accent); padding-left: 8px; }
+.hist-item .ht { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-item .hd { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+.hist-item .del { opacity: 0; background: none; border: none; color: var(--red); cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 3px; }
+.hist-item:hover .del { opacity: .5; }
+.hist-item .del:hover { opacity: 1; }
+
+/* ─── Header ─── */
+.hdr { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--s1); border-bottom: 1px solid var(--border); }
+.hdr-l { display: flex; align-items: center; gap: 10px; }
+.logo { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), #a855f7); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; color: white; flex-shrink: 0; box-shadow: 0 2px 8px rgba(124,106,239,.4); }
+.hdr h1 { font-size: 15px; font-weight: 700; letter-spacing: -.2px; }
+.status-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.status-dot::before { content: '●'; font-size: 8px; }
+.status-dot.ok { color: var(--green); }
+.status-dot.ok::before { color: var(--green); }
+.status-dot.err { color: var(--red); }
+.status-dot.err::before { color: var(--red); }
+.status-dot.warn { color: var(--orange); }
+.status-dot.warn::before { color: var(--orange); }
+.hdr-btns { display: flex; gap: 5px; }
+.hb { background: var(--s2); border: 1px solid var(--border); color: var(--muted); padding: 5px 11px; border-radius: 7px; cursor: pointer; font-size: 12px; transition: all .15s; font-weight: 500; }
+.hb:hover { color: var(--text); border-color: var(--accent2); background: var(--s3); }
+.hb.active { color: var(--accent2); border-color: var(--accent); background: var(--abg); }
+
+/* ─── Toolbar ─── */
+.toolbar { display: flex; align-items: center; gap: 7px; padding: 6px 14px; background: var(--s1); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.tb-group { display: flex; align-items: center; gap: 2px; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+.tb-group .label { font-size: 10px; color: var(--muted); padding: 0 7px; text-transform: uppercase; letter-spacing: .6px; font-weight: 700; }
+.tb-btn { padding: 4px 11px; border-radius: 6px; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; transition: all .12s; white-space: nowrap; font-weight: 500; }
+.tb-btn:hover { color: var(--text); background: rgba(255,255,255,.06); }
+.tb-btn.on { background: var(--accent); color: white; box-shadow: 0 1px 6px rgba(124,106,239,.4); }
+.tb-sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+.tb-input { background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 6px; font-size: 12px; width: 55px; outline: none; text-align: center; }
+.tb-input:focus { border-color: var(--accent); }
+.mode-ind { font-size: 11px; color: var(--muted); padding: 2px 8px; display: flex; align-items: center; gap: 5px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.dot-plan { background: var(--blue); }
+.dot-task { background: var(--green); }
+.dot-auto { background: var(--orange); }
+
+/* ─── Messages ─── */
+.msgs { flex: 1; overflow-y: auto; padding: 20px 18px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+.msgs::-webkit-scrollbar { width: 4px; }
+.msgs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.mw { max-width: 86%; animation: fadeUp .15s ease; position: relative; }
+.mw:hover .cpb { opacity: .6; }
+.mw:hover .cpmd { opacity: .6; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } }
+.mw.user { align-self: flex-end; }
+.mw.assistant { align-self: flex-start; }
+
+/* ─── Message bubbles ─── */
+.msg { line-height: 1.7; font-size: 14.5px; word-break: break-word; }
+.mw.user .msg { background: var(--user-msg); padding: 10px 15px; border-radius: 14px 14px 4px 14px; white-space: pre-wrap; border: 1px solid rgba(124,106,239,.3); }
+.mw.assistant .msg { background: var(--s2); padding: 13px 16px; border-radius: 14px 14px 14px 4px; border: 1px solid var(--border); }
+
+/* ─── Markdown styles inside .msg ─── */
+.msg strong { font-weight: 700; color: var(--text); }
+.msg em { font-style: italic; color: #c9d1d9; }
+.msg h1, .msg h2, .msg h3 { font-weight: 700; margin: 12px 0 6px; color: var(--text); }
+.msg h1 { font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+.msg h2 { font-size: 15px; }
+.msg h3 { font-size: 14px; }
+.msg p { margin: 6px 0; }
+.msg ul, .msg ol { margin: 6px 0 6px 20px; }
+.msg li { margin: 3px 0; }
+.msg code { background: rgba(110,118,129,.18); padding: 2px 6px; border-radius: 5px; font-family: 'SF Mono', Consolas, 'Courier New', monospace; font-size: 13px; color: #e6a77b; }
+.msg pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 9px; margin: 10px 0; overflow: hidden; }
+.msg pre .pre-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--s3); border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+.msg pre .pre-header .lang { font-family: 'SF Mono', monospace; color: var(--accent2); font-weight: 700; font-size: 11px; }
+.msg pre code { background: none; padding: 12px 14px; border-radius: 0; font-size: 13px; color: var(--text); display: block; overflow-x: auto; line-height: 1.65; }
+.msg a { color: var(--accent2); text-decoration: none; }
+.msg a:hover { text-decoration: underline; }
+.msg blockquote { display: flex; align-items: flex-start; gap: 8px; border-left: 3px solid #3a4560; padding: 7px 12px; margin: 6px 0 10px; background: rgba(20,27,42,.75); border-radius: 0 8px 8px 0; color: #8a9bba; font-size: 13px; font-style: italic; line-height: 1.5; }
+.msg blockquote > svg { flex-shrink: 0; margin-top: 3px; opacity: .4; color: #8a9bba; }
+.msg hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.msg .table-wrap { overflow-x: auto; margin: 12px 0; border-radius: 9px; border: 1px solid var(--border); }
+.msg table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.msg th, .msg td { border: none; border-bottom: 1px solid var(--border); padding: 8px 14px; text-align: left; line-height: 1.5; }
+.msg th { background: var(--s3); font-weight: 700; color: var(--accent2); border-bottom: 2px solid var(--border); white-space: nowrap; }
+.msg tbody tr:nth-child(even) { background: rgba(255,255,255,.03); }
+.msg tbody tr:hover { background: rgba(124,106,239,.08); }
+.msg td { color: var(--text); }
+.msg td:first-child, .msg th:first-child { padding-left: 16px; }
+.msg td:last-child, .msg th:last-child { padding-right: 16px; }
+
+/* ─── Copy button ─── */
+.cpb { position: absolute; top: 5px; right: 5px; opacity: 0; background: var(--s3); border: 1px solid var(--border); color: var(--muted); padding: 3px 8px; border-radius: 5px; cursor: pointer; font-size: 11px; transition: opacity .15s; }
+.cpb:hover { color: var(--text); opacity: 1 !important; }
+.cpb.ok { color: var(--green); }
+.cpmd { position: absolute; top: 5px; right: 38px; opacity: 0; background: var(--s3); border: 1px solid var(--border); color: var(--muted); padding: 3px 8px; border-radius: 5px; cursor: pointer; font-size: 11px; font-weight: 600; transition: opacity .15s; }
+.cpmd:hover { color: var(--text); opacity: 1 !important; border-color: var(--accent2); }
+.cpmd.ok { color: var(--green); }
+.copy-code-btn { background: var(--s2); border: 1px solid var(--border); color: var(--muted); padding: 2px 9px; border-radius: 5px; cursor: pointer; font-size: 11px; font-family: inherit; transition: all .12s; }
+.copy-code-btn:hover { color: var(--text); border-color: var(--accent2); }
+.copy-code-btn.ok { color: var(--green); }
+
+/* ─── Agent badge (multi-agent) ─── */
+.ab { background: var(--accent); color: white; padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+
+/* ─── Agent status line (in-scroll legacy) ─── */
+.agent-status { align-self: flex-start; display: flex; align-items: center; gap: 9px; padding: 5px 0 5px 2px; font-size: 12px; color: var(--muted); }
+.agent-status .asdot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; animation: pulse-dot 1.4s ease-in-out infinite; }
+.agent-status .astxt { opacity: .75; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .25; transform: scale(.65); } }
+
+/* ─── Sticky status bar ─── */
+#statusBar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 20px;
+  background: var(--s1);
+  border-top: 1px solid transparent;
+  font-size: 12px; color: var(--muted);
+  max-height: 0; overflow: hidden; opacity: 0;
+  transition: max-height .22s ease, opacity .18s ease, padding .22s ease, border-color .22s ease;
+  flex-shrink: 0;
+}
+#statusBar.sb-active {
+  max-height: 36px; opacity: 1;
+  padding: 7px 20px;
+  border-top-color: var(--border);
+}
+#statusBar .sb-spin {
+  width: 11px; height: 11px;
+  border: 1.5px solid rgba(124,106,239,.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .65s linear infinite;
+  flex-shrink: 0;
+}
+#statusBar .sb-txt {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: .82; max-width: 520px;
+}
+
+/* ─── Message spinner / done badge ─── */
+.msg-spinner { position: absolute; top: 9px; right: 36px; width: 13px; height: 13px; border: 2px solid rgba(124,106,239,.2); border-top-color: var(--accent); border-radius: 50%; animation: spin .65s linear infinite; z-index: 1; }
+.msg-done { position: absolute; top: 7px; right: 34px; color: var(--green); font-size: 14px; line-height: 1; z-index: 1; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── User message acknowledgement (green ✓ after response received) ─── */
+.msg-ack { font-size: 11px; color: var(--green); text-align: right; padding: 2px 8px 0; line-height: 1; opacity: 0.75; animation: fadeUp .25s ease; }
+
+/* ─── Load history button ─── */
+.load-hist-btn {
+  align-self: center; background: var(--s2); border: 1px solid var(--border);
+  color: var(--muted); font-size: 12px; padding: 6px 18px; border-radius: 20px;
+  cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+  margin-bottom: 4px; flex-shrink: 0;
+}
+.load-hist-btn:hover { background: var(--s3); color: var(--text); border-color: var(--accent); }
+.load-hist-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ─── Load more messages button ─── */
+.load-more-wrap { display: flex; justify-content: center; padding: 8px 0 4px; flex-shrink: 0; }
+.load-more-btn { background: var(--s2); border: 1px solid var(--border); color: var(--muted); font-size: 11px; padding: 5px 16px; border-radius: 20px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.load-more-btn:hover { background: var(--s3); color: var(--text); border-color: var(--accent); }
+
+/* ─── Scroll-to-bottom button ─── */
+#scrollBtn {
+  position: absolute; bottom: 90px; right: 20px;
+  width: 36px; height: 36px;
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 50%; cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  box-shadow: var(--shadow); color: var(--muted);
+  opacity: 0; pointer-events: none; z-index: 20;
+  transition: opacity .2s, background .15s, color .15s;
+  font-size: 16px; line-height: 1;
+}
+#scrollBtn.visible { opacity: 1; pointer-events: all; }
+#scrollBtn:hover { background: var(--accent); border-color: var(--accent); color: white; }
+
+/* ─── Attachment chips (files & screenshots) ─── */
+.att-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 14px 2px; min-height: 0; }
+.att-chips:empty { display: none; }
+.att-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--s3); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px 3px 6px; font-size: 11px; color: var(--text); max-width: 260px; position: relative; transition: border-color .12s; }
+.att-chip:hover { border-color: var(--accent); }
+.att-chip .chip-icon { font-size: 13px; flex-shrink: 0; }
+.att-chip .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.att-chip .chip-rm { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 0 0 2px; font-size: 13px; line-height: 1; flex-shrink: 0; transition: color .1s; }
+.att-chip .chip-rm:hover { color: var(--red); }
+.att-chip.chip-img { padding: 3px 8px 3px 3px; gap: 6px; }
+.att-chip.chip-img img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; display: block; }
+
+/* ─── @ File picker popup ─── */
+.at-popup {
+  position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 4px;
+  background: var(--s2); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: var(--shadow); overflow: hidden; z-index: 200;
+  max-height: 260px; display: flex; flex-direction: column;
+}
+.at-popup-hdr { padding: 7px 12px; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.at-popup-hdr input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-size: 12px; }
+.at-popup-list { overflow-y: auto; flex: 1; }
+.at-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; font-size: 12px; transition: background .1s; }
+.at-item:hover, .at-item.active { background: var(--s3); }
+.at-item .at-info { display: flex; flex-direction: column; overflow: hidden; flex: 1; min-width: 0; }
+.at-item .at-name { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.at-item .at-dir { color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.at-item .at-icon { font-size: 14px; flex-shrink: 0; }
+.at-empty { padding: 12px; text-align: center; color: var(--muted); font-size: 11px; }
+.at-loading { padding: 12px; text-align: center; color: var(--muted); font-size: 11px; }
+
+/* ─── Welcome ─── */
+.welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); text-align: center; gap: 10px; }
+.wi { width: 54px; height: 54px; border-radius: 16px; background: linear-gradient(135deg, var(--accent), #a855f7); display: flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 4px; box-shadow: 0 4px 20px rgba(124,106,239,.35); }
+.welcome h2 { color: var(--text); font-size: 18px; font-weight: 700; }
+.welcome p { font-size: 13.5px; max-width: 300px; line-height: 1.65; }
+
+/* ─── Tabs bar ─── */
+.tabs-bar { display: flex; align-items: stretch; background: var(--bg); border-bottom: 1px solid var(--border); overflow-x: auto; flex-shrink: 0; min-height: 34px; }
+.tabs-bar::-webkit-scrollbar { height: 2px; }
+.tabs-bar::-webkit-scrollbar-thumb { background: var(--border); }
+.tab { display: flex; align-items: center; gap: 6px; padding: 0 10px 0 12px; min-width: 90px; max-width: 180px; border-right: 1px solid var(--border); cursor: pointer; font-size: 12.5px; color: var(--muted); transition: background .1s, color .1s; flex-shrink: 0; position: relative; }
+.tab:hover { background: var(--s2); color: var(--text); }
+.tab.active { background: var(--s2); color: var(--text); }
+.tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: var(--accent); }
+.tab-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tab-close { opacity: 0; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 3px; font-size: 11px; flex-shrink: 0; transition: opacity .12s; background: none; border: none; color: inherit; cursor: pointer; }
+.tab:hover .tab-close, .tab.active .tab-close { opacity: .45; }
+.tab-close:hover { opacity: 1 !important; background: var(--s3); }
+.tab-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.tab-dot.spinning { border: 1.5px solid rgba(124,106,239,.25); border-top-color: var(--accent); animation: spin .65s linear infinite; }
+.tab-dot.done { background: var(--green); }
+.tab-new { padding: 0 13px; display: flex; align-items: center; color: var(--muted); cursor: pointer; font-size: 20px; line-height: 1; transition: color .1s; flex-shrink: 0; background: none; border: none; }
+.tab-new:hover { color: var(--text); }
+
+/* ─── Input area ─── */
+.ia { padding: 12px 16px; background: var(--s1); border-top: 1px solid var(--border); }
+.iw { display: flex; align-items: flex-end; gap: 8px; background: var(--s2); border: 1px solid var(--border); border-radius: 12px; padding: 5px 5px 5px 14px; transition: border-color .15s, box-shadow .15s; }
+.iw:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.15); }
+.iw textarea { flex: 1; background: none; border: none; color: var(--text); font-size: 14.5px; font-family: inherit; resize: none; outline: none; max-height: 130px; padding: 7px 0; line-height: 1.55; }
+.iw textarea::placeholder { color: var(--muted); }
+.sb { width: 36px; height: 36px; border: none; background: var(--accent); color: white; border-radius: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .12s, box-shadow .12s; box-shadow: 0 2px 8px rgba(124,106,239,.4); }
+.sb:hover { background: var(--accent2); box-shadow: 0 3px 12px rgba(124,106,239,.5); }
+.sb:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+.stop-btn { background: var(--red); box-shadow: 0 2px 8px rgba(248,81,73,.4); }
+.stop-btn:hover { background: #ff6b6b !important; box-shadow: 0 3px 12px rgba(248,81,73,.5) !important; }
+.sb svg { width: 15px; height: 15px; }
+.msg-queued { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); margin-top: 5px; padding: 3px 6px 3px 8px; background: var(--s2); border: 1px solid var(--border); border-radius: 10px; }
+.msg-queued::before { content: '⏳'; font-size: 11px; }
+.mq-label { line-height: 1; }
+.qd-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 11px; padding: 1px 3px; line-height: 1; border-radius: 3px; transition: color .12s, background .12s; display: inline-flex; align-items: center; }
+.qd-btn:hover { background: var(--s3); }
+.qd-edit:hover { color: var(--accent2); }
+.qd-del:hover { color: var(--red); }
+.queue-editor { display: flex; flex-direction: column; gap: 5px; margin: 4px 0 2px; }
+.queue-edit-area { width: 100%; box-sizing: border-box; background: var(--s2); border: 1px solid var(--accent); border-radius: 8px; color: var(--text); font-size: 14px; font-family: inherit; padding: 7px 10px; resize: none; outline: none; min-height: 58px; line-height: 1.55; }
+.queue-edit-area:focus { box-shadow: 0 0 0 2px rgba(124,106,239,.18); }
+.queue-edit-btns { display: flex; gap: 6px; justify-content: flex-end; }
+.qe-save { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 4px 13px; font-size: 12px; font-family: inherit; cursor: pointer; transition: background .12s; }
+.qe-save:hover { background: var(--accent2); }
+.qe-cancel { background: var(--s3); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 4px 13px; font-size: 12px; font-family: inherit; cursor: pointer; transition: color .12s; }
+.qe-cancel:hover { color: var(--text); }
+.queue-badge { display:none; align-items:center; gap:4px; background:var(--orange); color:#000; font-size:11px; font-weight:700; padding:2px 9px 2px 7px; border-radius:12px; white-space:nowrap; flex-shrink:0; line-height:1.5; }
+.queue-badge.visible { display:inline-flex; animation:qbpulse 2s ease-in-out infinite; }
+.queue-badge::before { content:'⏳'; font-size:10px; }
+@keyframes qbpulse { 0%,100%{opacity:1} 50%{opacity:.72} }
+
+/* ─── File browser ─── */
+.fh { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
+.fh button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; transition: color .12s; }
+.fh button:hover { color: var(--text); }
+.ft { flex: 1; overflow-y: auto; padding: 5px 7px; }
+.fii { display: flex; align-items: center; gap: 7px; padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--muted); transition: all .1s; }
+.fii:hover { background: var(--s2); color: var(--text); }
+.fii .fi { width: 17px; text-align: center; font-size: 14px; flex-shrink: 0; }
+.fii .fn { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fii .fs { font-size: 10.5px; color: var(--muted); }
+.fp { border-top: 1px solid var(--border); max-height: 45%; overflow-y: auto; padding: 12px; font-family: 'SF Mono', monospace; font-size: 12px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; background: var(--bg); }
+.fp .fpn { color: var(--accent2); font-size: 11px; font-weight: 700; margin-bottom: 7px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+
+/* ─── Modal ─── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; animation: fadeUp .15s; backdrop-filter: blur(3px); }
+.modal { background: var(--s1); border: 1px solid var(--border); border-radius: 14px; width: 740px; max-width: 92vw; max-height: 86vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,.6); }
+.modal-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.modal-hdr h2 { font-size: 15px; font-weight: 700; }
+.modal-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 20px; padding: 4px; transition: color .12s; line-height: 1; }
+.modal-close:hover { color: var(--text); }
+.modal-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 14px; }
+.modal-tab { padding: 9px 16px; font-size: 13px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: all .15s; font-weight: 500; }
+.modal-tab:hover { color: var(--text); }
+.modal-tab.active { color: var(--accent2); border-bottom-color: var(--accent); }
+.modal-body { flex: 1; overflow: auto; padding: 16px; }
+.modal-body textarea { width: 100%; min-height: 340px; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 14px; border-radius: 9px; font-family: 'SF Mono', Consolas, monospace; font-size: 13px; line-height: 1.6; resize: vertical; outline: none; transition: border .15s; }
+.modal-body textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.12); }
+.modal-footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.modal-footer button { padding: 7px 18px; border-radius: 7px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; }
+.save-notice { color: var(--green); font-size: 12px; }
+.cfg-path { font-size: 11px; color: var(--muted); padding: 0 2px 10px; font-family: 'SF Mono', Consolas, monospace; letter-spacing: .2px; display: flex; align-items: center; gap: 6px; }
+
+/* ─── Toast notifications ─── */
+#toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--s3); border: 1px solid var(--border); color: var(--text); padding: 9px 18px; border-radius: 10px; font-size: 13px; z-index: 200; pointer-events: none; opacity: 0; transition: opacity .25s; box-shadow: var(--shadow); white-space: nowrap; }
+#toast.show { opacity: 1; }
+#toast.toast-err { border-color: var(--red); color: var(--red); }
+
+/* ─── Tooltips ─── */
+[data-tip] { position: relative; }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  background: #1c2333; border: 1px solid var(--border); color: var(--text);
+  padding: 4px 9px; border-radius: 6px; font-size: 11px; white-space: nowrap;
+  pointer-events: none; opacity: 0; transition: opacity .15s; z-index: 999;
+  box-shadow: 0 3px 10px rgba(0,0,0,.4);
+}
+[data-tip]:hover::after { opacity: 1; }
+.hdr [data-tip]::after { bottom: auto; top: calc(100% + 6px); }
+
+/* ─── Language selector ─── */
+.lang-sel { background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 3px 8px; border-radius: 6px; font-size: 12px; outline: none; cursor: pointer; font-weight: 500; }
+.lang-sel:hover, .lang-sel:focus { border-color: var(--accent2); }
+.lang-sel option { background: var(--s2); }
+
+/* ─── Directory browser ─── */
+.dir-modal { width: 520px; }
+.dir-path-bar { padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg); display: flex; align-items: center; gap: 6px; }
+.dir-path-bar .path-text { font-size: 12px; color: var(--accent2); font-family: 'SF Mono', monospace; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; word-break: break-all; }
+.dir-list { flex: 1; overflow-y: auto; max-height: 340px; padding: 4px 6px; }
+.dir-list::-webkit-scrollbar { width: 3px; }
+.dir-list::-webkit-scrollbar-thumb { background: var(--border); }
+.dii { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px; cursor: pointer; font-size: 13px; transition: background .1s; color: var(--text); }
+.dii:hover { background: var(--s2); }
+.dii.selected { background: var(--abg); border: 1px solid rgba(124,106,239,.3); }
+.dii .di { font-size: 15px; flex-shrink: 0; }
+.dii .dn { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dii.hidden-dir { opacity: .5; }
+.dir-footer { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+.dir-footer label { display: flex; align-items: center; gap: 7px; font-size: 12px; cursor: pointer; color: var(--muted); }
+.dir-footer input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
+
+/* ─── Project name input in dir modal ─── */
+.proj-name-row { padding: 8px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+.proj-name-row input { flex: 1; background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 5px 9px; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; }
+
+/* ─── Confirm Stop Dialog ─── */
+.confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; z-index: 300; backdrop-filter: blur(4px); animation: fadeUp .12s ease; }
+.confirm-dialog { background: var(--s1); border: 1px solid var(--border); border-radius: 14px; padding: 28px 32px 24px; width: 320px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,.65); text-align: center; }
+.confirm-dialog .cd-icon { font-size: 28px; margin-bottom: 12px; line-height: 1; }
+.confirm-dialog h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+.confirm-dialog p { font-size: 13px; color: var(--muted); margin-bottom: 22px; line-height: 1.45; }
+.confirm-actions { display: flex; gap: 10px; justify-content: center; }
+.confirm-actions button { padding: 8px 22px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: background .12s, transform .08s, box-shadow .12s; }
+.confirm-actions button:active { transform: scale(.96); }
+.cd-btn-stop { background: var(--red); color: #fff; box-shadow: 0 2px 8px rgba(248,81,73,.35); }
+.cd-btn-stop:hover { background: #ff6b6b; box-shadow: 0 3px 12px rgba(248,81,73,.5); }
+.cd-btn-cancel { background: var(--s3); color: var(--text); border: 1px solid var(--border) !important; }
+.cd-btn-cancel:hover { background: var(--border); }
+.proj-name-row input:focus { border-color: var(--accent); }
+
+/* ─── HUD Panel ─── */
+#hud {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--s1); border-top: 1px solid var(--border);
+  height: 32px; flex-shrink: 0; padding: 0 10px;
+  overflow: hidden; transition: height .2s cubic-bezier(.4,0,.2,1);
+  font-size: 11px; color: var(--muted); user-select: none;
+}
+#hud.collapsed { height: 12px; cursor: pointer; }
+#hud.collapsed > *:not(.hud-toggle) { opacity: 0; pointer-events: none; }
+.hud-toggle { font-size: 8px; opacity: .5; cursor: pointer; flex-shrink: 0; transition: transform .2s, opacity .15s; line-height: 1; padding: 2px 4px; border-radius: 3px; }
+.hud-toggle:hover { opacity: 1; background: var(--s3); }
+#hud.collapsed .hud-toggle { transform: rotate(-90deg); opacity: .4; }
+.hud-sep { width: 1px; height: 14px; background: var(--border); flex-shrink: 0; }
+.hud-item { display: flex; align-items: center; gap: 4px; white-space: nowrap; flex-shrink: 0; }
+.hud-label { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; opacity: .6; }
+.hud-val { color: var(--text); font-weight: 600; }
+.hud-dim { font-size: 10px; opacity: .55; }
+.hud-reset { font-size: 10px; opacity: .5; }
+.hud-warn { color: var(--orange) !important; }
+.hud-crit { color: var(--red) !important; }
+.hud-ctx-bar { width: 70px; height: 4px; background: var(--s3); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+.hud-ctx-fill { height: 100%; width: 0%; border-radius: 2px; background: var(--accent); transition: width .5s ease; }
+
+/* ─── File attachment bar (chips above input) ─── */
+.attach-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 2px 8px; }
+.attach-bar:empty { display: none; }
+.attach-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--s3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 4px 5px; max-width: 200px; animation: fadeUp .12s ease;
+}
+.attach-chip img { width: 30px; height: 30px; object-fit: cover; border-radius: 4px; flex-shrink: 0; cursor: zoom-in; }
+.attach-chip-icon {
+  width: 30px; height: 30px; border-radius: 4px; background: var(--s2);
+  display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0;
+}
+.attach-chip-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11.5px; color: var(--muted); max-width: 120px;
+}
+.attach-chip-rm {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 13px; padding: 0 2px; line-height: 1; flex-shrink: 0; transition: color .12s;
+}
+.attach-chip-rm:hover { color: var(--red); }
+
+/* ─── Paperclip button ─── */
+.attach-btn {
+  width: 30px; height: 30px; border: none; background: none; color: var(--muted);
+  border-radius: 7px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: color .12s, background .12s; margin-bottom: 3px;
+}
+.attach-btn:hover { color: var(--accent2); background: rgba(124,106,239,.1); }
+.attach-btn.has-files { color: var(--accent2); }
+
+/* ─── Full-screen drag-drop overlay ─── */
+.drop-overlay {
+  position: fixed; inset: 0; background: rgba(9,13,19,.82);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 300; opacity: 0; pointer-events: none;
+  transition: opacity .15s; backdrop-filter: blur(6px);
+}
+.drop-overlay.active { opacity: 1; }
+.drop-overlay-inner { text-align: center; color: var(--accent2); user-select: none; pointer-events: none; }
+.drop-overlay-inner svg { opacity: .8; }
+.drop-overlay-inner p { font-size: 20px; font-weight: 700; margin-top: 14px; letter-spacing: -.3px; }
+.drop-overlay-inner span { font-size: 13px; color: var(--muted); margin-top: 6px; display: block; }
+
+/* ─── Attachment previews inside message bubbles ─── */
+.msg-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.msg-attach-img {
+  width: 72px; height: 72px; object-fit: cover; border-radius: 8px;
+  border: 1px solid rgba(124,106,239,.35); cursor: zoom-in; transition: opacity .15s;
+}
+.msg-attach-img:hover { opacity: .85; }
+.msg-attach-file {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,.05); border: 1px solid var(--border);
+  border-radius: 7px; padding: 5px 10px; font-size: 12px; color: var(--muted);
+}
+
+/* ─── Reply button (hover on message) ─── */
+.reply-btn {
+  position: absolute; top: 30px; right: 5px;
+  opacity: 0; background: var(--s3); border: 1px solid var(--border);
+  color: var(--muted); padding: 3px 7px; border-radius: 5px;
+  cursor: pointer; font-size: 13px; line-height: 1; transition: opacity .15s;
+}
+.mw:hover .reply-btn { opacity: .6; }
+.reply-btn:hover { color: var(--text); opacity: 1 !important; background: var(--s2); }
+
+/* ─── Reply preview bar (above textarea) ─── */
+.reply-preview {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; margin-bottom: 6px;
+  animation: fadeUp .12s ease;
+}
+.reply-preview-accent { width: 3px; background: var(--accent); border-radius: 2px; align-self: stretch; flex-shrink: 0; }
+.reply-preview-content { flex: 1; min-width: 0; }
+.reply-preview-role { font-size: 10px; color: var(--accent2); font-weight: 700; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 2px; }
+.reply-preview-text { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reply-preview-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 3px; line-height: 1; flex-shrink: 0; transition: color .12s; }
+.reply-preview-close:hover { color: var(--red); }
+
+/* ─── Reply quote inside message bubble ─── */
+.msg-reply-quote {
+  font-size: 12px; color: var(--muted);
+  border-left: 3px solid var(--accent);
+  padding: 4px 8px; margin-bottom: 8px;
+  background: rgba(124,106,239,.08); border-radius: 0 6px 6px 0;
+  overflow: hidden;
+}
+.msg-reply-quote .rq-role { font-size: 10px; font-weight: 700; color: var(--accent2); text-transform: uppercase; letter-spacing: .4px; display: block; margin-bottom: 2px; }
+.msg-reply-quote .rq-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<!-- LEFT PANEL -->
+<div class="left" id="leftPanel">
+  <div class="left-inner">
+    <div class="sec">
+      <div class="sec-title" onclick="toggleSec('proactive')">
+        <span data-i18n="sec.proactive">Активні дії</span>
+        <span class="badge" id="proactiveCount"></span>
+      </div>
+      <div class="sec-body" id="proactiveBody">
+        <div id="proactiveList"><div class="stat-empty" data-i18n="toast.loading">Loading...</div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title" onclick="toggleSec('proj')">
+        <span data-i18n="sec.projects">Проекти</span>
+        <span class="badge" id="projCount"></span>
+      </div>
+      <div class="sec-body" id="projBody">
+        <div id="projList"></div>
+        <button class="add-btn" onclick="openAddProject()" data-i18n="proj.add">＋ Додати проект</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title" onclick="toggleSec('hist')">
+        <span data-i18n="sec.chats">Чати</span> <span class="badge" id="histCount">0</span>
+      </div>
+      <div class="sec-body" id="histBody">
+        <div class="hist-list" id="histList"></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title" onclick="toggleSec('mcp')">
+        <span data-i18n="sec.mcp">MCP</span>
+        <span class="badge" id="mcpCount">0</span>
+      </div>
+      <div class="sec-body" id="mcpBody">
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="mcp.hint">Увімкніть інструменти, які Claude може використовувати в цьому чаті.</div>
+        <div id="mcpList"></div>
+        <button class="add-btn" onclick="showMcpForm()" data-i18n="mcp.add">＋ Додати MCP-сервер</button>
+        <div id="mcpForm" style="display:none" class="af">
+          <input id="mcpId" data-i18n-ph="mcp.id" placeholder="ID (напр. my-server)">
+          <input id="mcpLabel" data-i18n-ph="mcp.label" placeholder="Назва">
+          <input id="mcpCmd" data-i18n-ph="mcp.cmd" placeholder="Команда (напр. npx)">
+          <input id="mcpArgs" data-i18n-ph="mcp.args" placeholder="Аргументи через кому">
+          <textarea id="mcpEnv" placeholder='{"KEY":"value"}'></textarea>
+          <div class="fr">
+            <button class="bp" onclick="addMcp()" data-i18n="mcp.add_btn">Додати</button>
+            <button class="bg" onclick="hideMcpForm()">✕</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title" onclick="toggleSec('skills')">
+        <span data-i18n="sec.skills">Навички</span>
+        <span class="badge" id="skillsCount">0</span>
+      </div>
+      <div class="sec-body" id="skillsBody">
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="skills.hint">Навички — файли інструкцій, що додаються до системного промпту.</div>
+        <div id="skillsList"></div>
+        <button class="add-btn" onclick="$i('skillUpload').click()" data-i18n="skills.upload">＋ Завантажити .md файл</button>
+        <input type="file" id="skillUpload" accept=".md,.txt" style="display:none" onchange="uploadSkill(this)">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LEFT PANEL TAB -->
+<div class="panel-tab panel-tab-left active" onclick="toggle('leftPanel')" data-tip="Сховати/показати ліву панель" data-i18n-tip="tip.panels.left">
+  <div class="panel-tab-inner">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>
+</div>
+
+<!-- CENTER PANEL -->
+<div class="center">
+  <div class="hdr">
+    <div class="hdr-l">
+      <div class="logo">CC</div>
+      <div>
+        <h1>Claude Code Chat</h1>
+        <span class="status-dot warn" id="statusEl">Підключення...</span>
+      </div>
+    </div>
+    <div class="hdr-btns">
+      <button class="hb" onclick="newSession()" data-tip="Нова сесія" data-i18n-tip="tip.new"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> <span data-i18n="btn.new">Нова</span></button>
+      <button class="hb" onclick="openCfgEditor()" data-tip="Налаштування" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
+
+      <button class="hb" onclick="logout()" data-tip="Вийти" data-i18n-tip="tip.logout"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="tb-group">
+      <span class="label" data-i18n="tb.mode">Режим</span>
+      <button class="tb-btn on" data-v="auto" onclick="setOpt(this,'mode')">Auto</button>
+      <button class="tb-btn" data-v="planning" onclick="setOpt(this,'mode')">Plan</button>
+      <button class="tb-btn" data-v="task" onclick="setOpt(this,'mode')">Task</button>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-group">
+      <span class="label" data-i18n="tb.agent">Агент</span>
+      <button class="tb-btn on" data-v="single" onclick="setOpt(this,'agent')">Single</button>
+      <button class="tb-btn" data-v="multi" onclick="setOpt(this,'agent')">Multi</button>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-group">
+      <span class="label" data-i18n="tb.model">Модель</span>
+      <button class="tb-btn" data-v="haiku" onclick="setOpt(this,'model')">Haiku</button>
+      <button class="tb-btn on" data-v="sonnet" onclick="setOpt(this,'model')">Sonnet</button>
+      <button class="tb-btn" data-v="opus" onclick="setOpt(this,'model')">Opus</button>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-group">
+      <span class="label" data-i18n="tb.turns">Кроки</span>
+      <input type="number" class="tb-input" id="maxTurns" value="30" min="1" max="100">
+    </div>
+    <div class="mode-ind" id="modeInd">
+      <span class="dot dot-auto"></span> Auto · Single · Sonnet
+    </div>
+    <div style="flex:1"></div>
+    <select class="lang-sel" id="langSel" onchange="setLang(this.value)">
+      <option value="en">EN</option>
+      <option value="uk">UK</option>
+      <option value="ru">RU</option>
+    </select>
+  </div>
+
+  <div class="tabs-bar" id="tabsBar"></div>
+
+  <div class="msgs" id="messages">
+    <div class="welcome">
+      <div class="wi">CC</div>
+      <h2>Claude Code Chat</h2>
+      <p data-i18n="welcome.desc">CLI (Max) або SDK (API ключ). Виберіть MCP та Навички зліва, файли — справа.</p>
+    </div>
+  </div>
+
+  <button id="scrollBtn" onclick="scrollToBottom()" data-i18n-title="scroll.down" title="Scroll to bottom">↓</button>
+
+  <div id="statusBar">
+    <span class="sb-spin"></span>
+    <span class="sb-txt" id="sbTxt"></span>
+  </div>
+
+  <div class="ia" style="position:relative">
+    <!-- @ file picker popup -->
+    <div class="at-popup hidden" id="atPopup">
+      <div class="at-popup-hdr">
+        <span>📁</span>
+        <input id="atSearch" data-i18n-ph="at.search" placeholder="Search file..." autocomplete="off" oninput="onAtSearch(this.value)">
+      </div>
+      <div class="at-popup-list" id="atList"></div>
+    </div>
+    <!-- Attachment chips (files + screenshots) -->
+    <div class="att-chips" id="attChips"></div>
+    <div id="replyPreview" class="reply-preview" style="display:none">
+      <div class="reply-preview-accent"></div>
+      <div class="reply-preview-content">
+        <div class="reply-preview-role" id="replyPreviewRole"></div>
+        <div class="reply-preview-text" id="replyPreviewText"></div>
+      </div>
+      <button class="reply-preview-close" onclick="clearReply()" data-i18n-title="reply.cancel" title="Cancel reply">✕</button>
+    </div>
+    <div class="iw">
+      <textarea id="input" rows="1" data-i18n-ph="input.ph" placeholder="Напишіть завдання... (Enter — надіслати, Shift+Enter — новий рядок)" autofocus></textarea>
+      <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Завдань у черзі"></span>
+      <button class="sb stop-btn hidden" id="stopBtn" onclick="confirmStop()" data-i18n-title="stop.agent" title="Stop agent">
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
+      <button class="sb" id="sendBtn" onclick="send()" data-i18n-title="send.msg" title="Send (Enter)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="22" y1="2" x2="11" y2="13"/>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT PANEL: File Browser -->
+<div class="right" id="rightPanel">
+  <div class="fh">
+    <span data-i18n="files.title">Робоча директорія</span>
+    <button onclick="loadFiles()" data-i18n-title="files.refresh" title="Оновити">↻</button>
+  </div>
+  <div class="ft" id="filesTree"></div>
+  <div class="fp" id="filePreview" style="display:none"></div>
+</div>
+
+<!-- RIGHT PANEL TAB -->
+<div class="panel-tab panel-tab-right active" onclick="toggle('rightPanel')" data-tip="Сховати/показати праву панель" data-i18n-tip="tip.panels.right">
+  <div class="panel-tab-inner">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>
+</div>
+
+<!-- Config Modal -->
+<div class="modal-overlay hidden" id="cfgModal" onclick="if(event.target===this)closeCfg()">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h2 data-i18n="cfg.title">Налаштування</h2>
+      <button class="modal-close" onclick="closeCfg()">✕</button>
+    </div>
+    <div class="modal-tabs" id="cfgTabs"></div>
+    <div class="modal-body">
+      <div class="cfg-path hidden" id="cfgPathInfo"></div>
+      <textarea id="cfgEditor" spellcheck="false"></textarea>
+    </div>
+    <div class="modal-footer">
+      <span class="save-notice hidden" id="saveNotice" data-i18n="cfg.saved">✓ Збережено</span>
+      <div style="display:flex;gap:8px">
+        <button class="bg" onclick="closeCfg()" data-i18n="cfg.close">Закрити</button>
+        <button class="bp" onclick="saveCfg()" data-i18n="cfg.save">Зберегти</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Directory Browser Modal -->
+<div class="modal-overlay hidden" id="dirModal" onclick="if(event.target===this)closeDirModal()">
+  <div class="modal dir-modal">
+    <div class="modal-hdr">
+      <h2 data-i18n="dir.title">Новий проект</h2>
+      <button class="modal-close" onclick="closeDirModal()">✕</button>
+    </div>
+    <div class="dir-path-bar">
+      <span class="path-text" id="dirCurrentPath">/</span>
+    </div>
+    <div class="dir-list" id="dirList">
+      <div style="padding:14px;color:var(--muted);text-align:center;font-size:12px" data-i18n="toast.loading">Завантаження...</div>
+    </div>
+    <div class="proj-name-row">
+      <span style="font-size:12px;color:var(--muted);white-space:nowrap">Назва:</span>
+      <input id="projNameInput" placeholder="Назва проекту (авто якщо порожньо)">
+    </div>
+    <div class="dir-footer">
+      <label>
+        <input type="checkbox" id="gitInitChk">
+        git init (якщо ще не репозиторій)
+      </label>
+      <div style="flex:1"></div>
+      <button class="bg" onclick="closeDirModal()" style="padding:6px 14px" data-i18n="dir.cancel">Cancel</button>
+      <button class="bp" onclick="selectDir()" style="padding:6px 14px">＋ Додати проект</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Stop Modal -->
+<div class="confirm-overlay hidden" id="confirmStopModal" onclick="if(event.target===this)cancelStop()">
+  <div class="confirm-dialog">
+    <div class="cd-icon">⏹</div>
+    <h3 data-i18n="confirm.stop.h">Stop task?</h3>
+    <p>Виконання агента буде перервано.</p>
+    <div class="confirm-actions">
+      <button class="cd-btn-cancel" onclick="cancelStop()" data-i18n="confirm.stop.cancel">Cancel</button>
+      <button class="cd-btn-stop" id="confirmStopBtn" onclick="doStop()" data-i18n="confirm.stop.yes">Yes, stop</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let ws = null, isGen = false, curEl = null, curTxt = '', currentSessionId = null, generatingTabId = null;
+let replyTo = null; // { id, role, content }
+let openTabs = [], activeTabId = null;
+let config = { mcpServers: {}, skills: {} };
+let activeMcp = new Set(), activeSkills = new Set();
+let cfgFiles = {}, activeCfgTab = null;
+let curMode = 'auto', curAgent = 'single', curModel = 'sonnet';
+let curWorkdir = null; // current working directory for the session
+let projects = [], curProjectId = null; // projects list + active project
+let userScrolled = false; // track if user scrolled up
+let histOffset = 0;       // offset of the oldest rendered message (non-tool)
+let histTotal  = 0;       // total non-tool message count for current session
+let dirBrowsePath = null; // path currently shown in dir browser
+
+const $i = id => document.getElementById(id);
+const msgsEl = $i('messages');
+const inEl = $i('input');
+
+// ─── i18n ─────────────────────────────────────────────────────────────────
+const TRANSLATIONS = {
+  uk: {
+    'sec.proactive':'Статус',
+    'sec.chats':'Чати','sec.mcp':'MCP',
+    'mcp.hint':'Увімкніть інструменти, які Claude може використовувати в цьому чаті.',
+    'mcp.add':'＋ Додати MCP-сервер','mcp.id':'ID (напр. my-server)','mcp.label':'Назва',
+    'mcp.cmd':'Команда (напр. npx)','mcp.args':'Аргументи через кому','mcp.add_btn':'Додати',
+    'sec.skills':'Навички','skills.hint':'Навички — файли інструкцій, що додаються до системного промпту.',
+    'skills.upload':'＋ Завантажити .md файл','sec.projects':'Проекти','proj.add':'＋ Додати проект',
+    'tip.new':'Нова сесія','tip.cfg':'Налаштування','tip.logout':'Вийти',
+    'tip.panels.left':'Сховати/показати ліву панель','tip.panels.right':'Сховати/показати праву панель',
+    'btn.new':'Нова','tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки',
+    'welcome.title':'Нова сесія','welcome.ready':'Готовий до роботи',
+    'welcome.desc':'Виберіть MCP та Навички зліва, файли — справа.',
+    'input.ph':'Напишіть завдання... (Enter — надіслати, Shift+Enter — новий рядок)',
+    'files.title':'Робоча директорія','files.refresh':'Оновити','queue.title':'Завдань у черзі',
+    'cfg.title':'Налаштування','cfg.saved':'✓ Збережено','cfg.close':'Закрити','cfg.save':'Зберегти',
+    'dir.title':'Новий проект','toast.loading':'Завантаження...',
+    'scroll.down':'Прокрутити вниз',
+    'at.search':'Пошук файлу...',
+    'reply.cancel':'Скасувати відповідь',
+    'stop.agent':'Зупинити агента',
+    'send.msg':'Надіслати (Enter)',
+    'dir.cancel':'Скасувати',
+    'confirm.stop.h':'Зупинити завдання?',
+    'confirm.stop.yes':'Так, зупинити',
+    'confirm.stop.cancel':'Скасувати',
+    'copy.code':'Копіювати',
+    'copy.msg':'Копіювати',
+    'msg.reply':'Відповісти',
+    'tab.new':'Новий чат',
+    'you.label':'Ви',
+    'err.stop.switch':'Зупиніть агента перед переключенням',
+    'err.stop.close':'Зупиніть агента перед закриттям',
+    'err.stop.new':'Зупиніть агента перед відкриттям нового чату',
+    'err.stop.project':'Зупиніть агента перед зміною проекту',
+    'queue.cancel':'Скасувати','queue.save':'Зберегти',
+    'proj.deactivated':'Проект деактивовано',
+    'load.more':'↑ Завантажити попередні повідомлення',
+    'logout.confirm':'Вийти з системи?\n\nВсі активні сесії залишаться збережені.',
+    'proj.delete.confirm':'Видалити проект "{{name}}"?\n\nДиректорія НЕ буде видалена.',
+    'proj.active':'● Активний','proj.inactive':'○ Не активний',
+    'proj.active.title':'Активний проект','proj.click.title':'Клік — активувати',
+    'proj.del.title':'Видалити проект',
+    'chip.remove':'Видалити',
+    'queue.label':'У черзі','queue.edit.title':'Редагувати повідомлення','queue.del.title':'Видалити з черги',
+    'agents.title':'Активні агенти',
+    'sess.delete.confirm':'Видалити сесію?','sess.load.err':'Помилка завантаження сесії',
+    'mcp.active':'● Активний у чаті','mcp.inactive':'○ Вимкнений','mcp.del.title':'Видалити сервер',
+    'skill.active':'● У системному промпті','skill.inactive':'○ Не активний','skill.del.title':'Видалити skill',
+  },
+  en: {
+    'sec.proactive':'Status',
+    'sec.chats':'Chats','sec.mcp':'MCP',
+    'mcp.hint':'Enable tools that Claude can use in this chat.',
+    'mcp.add':'＋ Add MCP server','mcp.id':'ID (e.g. my-server)','mcp.label':'Label',
+    'mcp.cmd':'Command (e.g. npx)','mcp.args':'Args comma-separated','mcp.add_btn':'Add',
+    'sec.skills':'Skills','skills.hint':'Skills are instruction files added to the system prompt.',
+    'skills.upload':'＋ Upload .md file','sec.projects':'Projects','proj.add':'＋ Add project',
+    'tip.new':'New session','tip.cfg':'Configuration','tip.logout':'Logout',
+    'tip.panels.left':'Toggle left panel','tip.panels.right':'Toggle right panel',
+    'btn.new':'New','tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns',
+    'welcome.title':'New session','welcome.ready':'Ready to work',
+    'welcome.desc':'Choose MCP and Skills on the left, files on the right.',
+    'input.ph':'Write a task... (Enter — send, Shift+Enter — new line)',
+    'files.title':'Workspace','files.refresh':'Refresh','queue.title':'Tasks waiting in queue',
+    'cfg.title':'Configuration','cfg.saved':'✓ Saved','cfg.close':'Close','cfg.save':'Save',
+    'dir.title':'New project','toast.loading':'Loading...',
+    'scroll.down':'Scroll to bottom',
+    'at.search':'Search file...',
+    'reply.cancel':'Cancel reply',
+    'stop.agent':'Stop agent',
+    'send.msg':'Send (Enter)',
+    'dir.cancel':'Cancel',
+    'confirm.stop.h':'Stop task?',
+    'confirm.stop.yes':'Yes, stop',
+    'confirm.stop.cancel':'Cancel',
+    'copy.code':'Copy',
+    'copy.msg':'Copy',
+    'msg.reply':'Reply',
+    'tab.new':'New chat',
+    'you.label':'You',
+    'err.stop.switch':'Stop agent before switching',
+    'err.stop.close':'Stop agent before closing',
+    'err.stop.new':'Stop agent before opening a new chat',
+    'err.stop.project':'Stop agent before switching project',
+    'queue.cancel':'Cancel','queue.save':'Save',
+    'proj.deactivated':'Project deactivated',
+    'load.more':'↑ Load previous messages',
+    'logout.confirm':'Sign out?\n\nAll active sessions will remain saved.',
+    'proj.delete.confirm':'Delete project "{{name}}"?\n\nThe directory will NOT be deleted.',
+    'proj.active':'● Active','proj.inactive':'○ Inactive',
+    'proj.active.title':'Active project','proj.click.title':'Click to activate',
+    'proj.del.title':'Delete project',
+    'chip.remove':'Remove',
+    'queue.label':'In queue','queue.edit.title':'Edit message','queue.del.title':'Remove from queue',
+    'agents.title':'Active agents',
+    'sess.delete.confirm':'Delete session?','sess.load.err':'Error loading session',
+    'mcp.active':'● Active in chat','mcp.inactive':'○ Disabled','mcp.del.title':'Remove server',
+    'skill.active':'● In system prompt','skill.inactive':'○ Inactive','skill.del.title':'Remove skill',
+  },
+  ru: {
+    'sec.proactive':'Статус',
+    'sec.chats':'Чаты','sec.mcp':'MCP',
+    'mcp.hint':'Включите инструменты, которые Claude может использовать в этом чате.',
+    'mcp.add':'＋ Добавить MCP-сервер','mcp.id':'ID (напр. my-server)','mcp.label':'Название',
+    'mcp.cmd':'Команда (напр. npx)','mcp.args':'Аргументы через запятую','mcp.add_btn':'Добавить',
+    'sec.skills':'Навыки','skills.hint':'Навыки — файлы инструкций, добавляемые в системный промпт.',
+    'skills.upload':'＋ Загрузить .md файл','sec.projects':'Проекты','proj.add':'＋ Добавить проект',
+    'tip.new':'Новая сессия','tip.cfg':'Настройки','tip.logout':'Выйти',
+    'tip.panels.left':'Скрыть/показать левую панель','tip.panels.right':'Скрыть/показать правую панель',
+    'btn.new':'Новая','tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги',
+    'welcome.title':'Новая сессия','welcome.ready':'Готов к работе',
+    'welcome.desc':'Выберите MCP и Навыки слева, файлы — справа.',
+    'input.ph':'Напишите задание... (Enter — отправить, Shift+Enter — новая строка)',
+    'files.title':'Рабочая директория','files.refresh':'Обновить','queue.title':'Задач в очереди',
+    'cfg.title':'Настройки','cfg.saved':'✓ Сохранено','cfg.close':'Закрыть','cfg.save':'Сохранить',
+    'dir.title':'Новый проект','toast.loading':'Загрузка...',
+    'scroll.down':'Прокрутить вниз',
+    'at.search':'Поиск файла...',
+    'reply.cancel':'Отменить ответ',
+    'stop.agent':'Остановить агента',
+    'send.msg':'Отправить (Enter)',
+    'dir.cancel':'Отмена',
+    'confirm.stop.h':'Остановить задание?',
+    'confirm.stop.yes':'Да, остановить',
+    'confirm.stop.cancel':'Отмена',
+    'copy.code':'Копировать',
+    'copy.msg':'Копировать',
+    'msg.reply':'Ответить',
+    'tab.new':'Новый чат',
+    'you.label':'Вы',
+    'err.stop.switch':'Остановите агента перед переключением',
+    'err.stop.close':'Остановите агента перед закрытием',
+    'err.stop.new':'Остановите агента перед открытием нового чата',
+    'err.stop.project':'Остановите агента перед сменой проекта',
+    'queue.cancel':'Отмена','queue.save':'Сохранить',
+    'proj.deactivated':'Проект деактивирован',
+    'load.more':'↑ Загрузить предыдущие сообщения',
+    'logout.confirm':'Выйти из системы?\n\nВсе активные сессии останутся сохранены.',
+    'proj.delete.confirm':'Удалить проект "{{name}}"?\n\nДиректория НЕ будет удалена.',
+    'proj.active':'● Активен','proj.inactive':'○ Не активен',
+    'proj.active.title':'Активный проект','proj.click.title':'Клик — активировать',
+    'proj.del.title':'Удалить проект',
+    'chip.remove':'Удалить',
+    'queue.label':'В очереди','queue.edit.title':'Редактировать сообщение','queue.del.title':'Удалить из очереди',
+    'agents.title':'Активные агенты',
+    'sess.delete.confirm':'Удалить сессию?','sess.load.err':'Ошибка загрузки сессии',
+    'mcp.active':'● Активен в чате','mcp.inactive':'○ Отключен','mcp.del.title':'Удалить сервер',
+    'skill.active':'● В системном промпте','skill.inactive':'○ Неактивен','skill.del.title':'Удалить skill',
+  }
+};
+function t(key) {
+  const lang = localStorage.getItem('lang') || 'uk';
+  return (TRANSLATIONS[lang] || TRANSLATIONS.uk)[key] || key;
+}
+function setLang(lang) {
+  const t = TRANSLATIONS[lang] || TRANSLATIONS.uk;
+  localStorage.setItem('lang', lang);
+  const sel = $i('langSel'); if (sel) sel.value = lang;
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => { const k = el.getAttribute('data-i18n'); if (t[k] !== undefined) el.textContent = t[k]; });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { const k = el.getAttribute('data-i18n-ph'); if (t[k] !== undefined) el.placeholder = t[k]; });
+  document.querySelectorAll('[data-i18n-tip]').forEach(el => { const k = el.getAttribute('data-i18n-tip'); if (t[k] !== undefined) el.setAttribute('data-tip', t[k]); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { const k = el.getAttribute('data-i18n-title'); if (t[k] !== undefined) el.title = t[k]; });
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────
+(async () => {
+  const r = await fetch('/api/auth/status');
+  const d = await r.json();
+  if (!d.loggedIn) window.location.href = d.setupDone ? '/login' : '/setup';
+})();
+
+async function logout() {
+  if (!confirm(t('logout.confirm'))) return;
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function toast(msg, isErr = false, dur = 3000) {
+  const el = $i('toast');
+  el.textContent = msg;
+  el.className = 'show' + (isErr ? ' toast-err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', dur);
+}
+
+// ─── Markdown renderer ───────────────────────────────────────────────────
+function escH(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderMd(text) {
+  if (!text) return '';
+
+  // 1. Extract and protect code blocks
+  const blocks = [];
+  text = text.replace(/```(\w*)\r?\n?([\s\S]*?)```/g, (_, lang, code) => {
+    const idx = blocks.length;
+    blocks.push({ lang: lang.trim(), code: code.replace(/\n$/, '') });
+    return `\x02BLOCK${idx}\x03`;
+  });
+
+  // 2. Escape remaining HTML
+  text = escH(text);
+
+  // 3. Block elements (order matters)
+  // Headers
+  text = text.replace(/^#{3}\s+(.+)$/gm, '<h3>$1</h3>');
+  text = text.replace(/^#{2}\s+(.+)$/gm, '<h2>$1</h2>');
+  text = text.replace(/^#{1}\s+(.+)$/gm, '<h1>$1</h1>');
+
+  // Horizontal rule
+  text = text.replace(/^(?:---|\*\*\*|___)\s*$/gm, '<hr>');
+
+  // Blockquote
+  text = text.replace(/^&gt;\s*(.+)$/gm, function(_, c) {
+    return '<blockquote><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg><span>' + c + '</span></blockquote>';
+  });
+
+  // Bullet lists (group consecutive items)
+  text = text.replace(/((?:^[-*+]\s+.+\n?)+)/gm, m => {
+    const items = m.trim().split('\n').map(l => `<li>${l.replace(/^[-*+]\s+/, '')}</li>`).join('');
+    return `<ul>${items}</ul>`;
+  });
+
+  // Ordered lists
+  text = text.replace(/((?:^\d+\.\s+.+\n?)+)/gm, m => {
+    const items = m.trim().split('\n').map(l => `<li>${l.replace(/^\d+\.\s+/, '')}</li>`).join('');
+    return `<ol>${items}</ol>`;
+  });
+
+  // 3.5 Tables — header row + separator row + data rows
+  text = text.replace(/((?:^\|.+\|\s*\n?)+)/gm, block => {
+    const rows = block.trim().split('\n');
+    if (rows.length < 2) return block;
+    // Validate separator row (only |, -, :, spaces)
+    if (!/^\|[\s\-:|]+\|/.test(rows[1])) return block;
+    const parseRow = row => row.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+    const headers = parseRow(rows[0]);
+    const dataRows = rows.slice(2).filter(r => r.trim());
+    const thead = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>`;
+    const tbody = dataRows.length
+      ? `<tbody>${dataRows.map(r => `<tr>${parseRow(r).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`
+      : '';
+    return `<div class="table-wrap"><table>${thead}${tbody}</table></div>`;
+  });
+
+  // 4. Inline elements
+  // Bold + italic
+  text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  // Bold
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  // Italic
+  text = text.replace(/\*(?!\s)(.+?)(?<!\s)\*/g, '<em>$1</em>');
+  text = text.replace(/_(?!\s)(.+?)(?<!\s)_/g, '<em>$1</em>');
+  // Strikethrough
+  text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
+  // Inline code
+  text = text.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // Links
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  // 5. Paragraphs — wrap lines that aren't block elements
+  const blockTags = /^<(?:h[1-6]|ul|ol|li|hr|blockquote|pre|div)/;
+  const lines = text.split('\n');
+  const out = [];
+  let para = [];
+  const flushPara = () => {
+    if (para.length) { out.push('<p>' + para.join('<br>') + '</p>'); para = []; }
+  };
+  for (const line of lines) {
+    if (blockTags.test(line.trimStart())) { flushPara(); out.push(line); }
+    else if (line.trim() === '') { flushPara(); }
+    else { para.push(line); }
+  }
+  flushPara();
+  text = out.join('\n');
+
+  // 6. Restore code blocks with header + copy button
+  text = text.replace(/\x02BLOCK(\d+)\x03/g, (_, i) => {
+    const { lang, code } = blocks[+i];
+    const id = 'cb' + Math.random().toString(36).slice(2, 8);
+    const langLabel = lang || 'code';
+    return `<pre><div class="pre-header"><span class="lang">${escH(langLabel)}</span><button class="copy-code-btn" onclick="copyCode('${id}',this)">${t('copy.code')}</button></div><code id="${id}">${escH(code)}</code></pre>`;
+  });
+
+  return text;
+}
+
+// Handle streaming: unclosed code fences shown as plain pre
+function renderStreaming(text) {
+  // Count code fences — if odd, the last block is open
+  const fences = (text.match(/```/g) || []).length;
+  if (fences % 2 !== 0) {
+    // Has open code block — render what's closed, append raw for open
+    const lastFence = text.lastIndexOf('```');
+    const closed = text.substring(0, lastFence);
+    const open = text.substring(lastFence + 3);
+    const langEnd = open.indexOf('\n');
+    const lang = langEnd > -1 ? open.substring(0, langEnd) : '';
+    const code = langEnd > -1 ? open.substring(langEnd + 1) : '';
+    return renderMd(closed) + `<pre><div class="pre-header"><span class="lang">${escH(lang || 'code')}</span></div><code>${escH(code)}</code></pre>`;
+  }
+  return renderMd(text);
+}
+
+function copyCode(id, btn) {
+  const code = $i(id);
+  if (!code) return;
+  navigator.clipboard.writeText(code.textContent).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Скопійовано';
+    btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('ok'); }, 1500);
+  });
+}
+
+// ─── WebSocket ────────────────────────────────────────────────────────────
+let _reconnectDelay = 1000; // starts at 1 s, doubles up to 30 s
+let _reconnectTimer = null;
+let _intentionalClose = false; // set before navigating away to suppress reconnect
+
+function connect() {
+  if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}`);
+
+  ws.onopen = () => {
+    _reconnectDelay = 1000; // reset backoff on successful connect
+    setStatus('Підключено', 'ok');
+    loadFiles();
+    loadHist();
+    // Re-attach to active session after a reconnect
+    if (currentSessionId && ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: 'start_session', sessionId: currentSessionId, mode: curMode, agentMode: curAgent, model: curModel, engine: 'cli'}));
+    }
+  };
+
+  ws.onclose = (ev) => {
+    // Clean close (e.g. server shutdown code 1001, or intentional nav) — reconnect
+    if (_intentionalClose) return;
+    setStatus('Перепідключення…', 'err');
+    if (isGen) { isGen = false; setSendStop(false); generatingTabId = null; } // reset generating state
+    // Exponential backoff with ±20 % jitter, capped at 30 s
+    const jitter = _reconnectDelay * 0.2 * (Math.random() * 2 - 1);
+    _reconnectTimer = setTimeout(() => {
+      _reconnectDelay = Math.min(_reconnectDelay * 2, 30000);
+      connect();
+    }, _reconnectDelay + jitter);
+  };
+
+  ws.onmessage = e => {
+    let d;
+    try { d = JSON.parse(e.data); } catch { return; }
+    handleWsMsg(d);
+  };
+
+  // onerror always precedes onclose — just log; onclose handles UI + reconnect
+  ws.onerror = (err) => { console.warn('WebSocket error:', err); };
+}
+
+// Stop reconnect loop on page unload to avoid pointless connections
+window.addEventListener('beforeunload', () => { _intentionalClose = true; if (_reconnectTimer) clearTimeout(_reconnectTimer); });
+
+function handleWsMsg(d) {
+  switch (d.type) {
+    case 'text':
+      rmStatus();
+      if (!curEl) { rmW(); curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
+      curTxt += d.text;
+      curEl.querySelector('.msg').innerHTML = renderStreaming(curTxt);
+      if (d.agent) addAgentBadge(curEl, d.agent);
+      scrollBottom();
+      break;
+
+    case 'tool':
+      if (!curEl) showStatus('⚙ ' + (d.tool || 'tool'));
+      break;
+
+    case 'thinking':
+      if (!curEl) showStatus('Обдумування...');
+      break;
+
+    case 'agent_status':
+      showStatus((d.agent ? d.agent + ' · ' : '') + escH(d.status));
+      break;
+
+    case 'status':
+      sbShow('Генерація…');
+      setStatus(`CLI · ${d.mode || ''} · ${d.model || ''}`, 'warn');
+      setSendStop(true);
+      { const t = openTabs.find(x => x.id === generatingTabId); if (t) { t.generating = true; t.done = false; renderTabs(); } }
+      break;
+
+    case 'done':
+      if (curEl && curTxt) { curEl.querySelector('.msg').innerHTML = renderMd(curTxt); }
+      markDone(curEl);
+      { // Mark first unacknowledged user message — only when viewing the generating tab
+        if (activeTabId === generatingTabId) {
+          const first = [...msgsEl.querySelectorAll('.mw.user')].find(m => !m.querySelector('.msg-ack'));
+          if (first) { const a = document.createElement('div'); a.className = 'msg-ack'; a.textContent = '✓'; first.appendChild(a); }
+        }
+      }
+      curEl = null; curTxt = '';
+      isGen = false;
+      setSendStop(false);
+      setStatus('Підключено', 'ok');
+      { const t = openTabs.find(x => x.id === generatingTabId); if (t) { t.generating = false; t.done = true; renderTabs(); } }
+      generatingTabId = null;
+      loadHist();
+      break;
+
+    case 'files_changed':
+      loadFiles();
+      break;
+
+    case 'error':
+      rmStatus();
+      sbHide();
+      if (curEl) {
+        const s = curEl.querySelector('.msg-spinner'); if (s) s.remove();
+        curEl.querySelector('.msg').innerHTML += `<br><span style="color:var(--red)">${escH(d.error)}</span>`;
+      }
+      else if (activeTabId === generatingTabId) {
+        // Only inject into visible DOM when we're still on the generating tab
+        const em = addMsg('assistant'); em.querySelector('.msg').innerHTML = `<span style="color:var(--red)">${escH(d.error)}</span>`;
+      }
+      isGen = false;
+      setSendStop(false);
+      setStatus('Помилка', 'err');
+      { const t = openTabs.find(x => x.id === generatingTabId); if (t) { t.generating = false; renderTabs(); } }
+      generatingTabId = null;
+      toast(d.error, true, 5000);
+      break;
+
+    case 'session_started':
+      { // Update temp tab id → real session id, keyed by generating tab (not active tab)
+        const srcId = generatingTabId || activeTabId;
+        const t = openTabs.find(x => x.id === srcId);
+        if (t?.isNew) {
+          t.id = d.sessionId; t.isNew = false;
+          if (generatingTabId === srcId) generatingTabId = d.sessionId;
+          if (activeTabId === srcId) activeTabId = d.sessionId;
+          renderTabs(); saveUIState();
+        }
+      }
+      if (activeTabId === d.sessionId) currentSessionId = d.sessionId;
+      break;
+
+    case 'session_title':
+      { const t = openTabs.find(x => x.id === (generatingTabId || activeTabId));
+        if (t && d.title) { t.title = d.title; renderTabs(); saveUIState(); } }
+      loadHist();
+      break;
+
+    case 'queued':
+      // Server confirmed message is queued — indicator already shown in send()
+      break;
+
+    case 'queue_update':
+      // Sync queued indicators: remove .msg-queued from messages no longer in server queue
+      if (Array.isArray(d.items)) {
+        const stillQueued = new Set(d.items.map(i => i.queueId).filter(Boolean));
+        msgsEl.querySelectorAll('.mw[data-queue-id]').forEach(el => {
+          if (!stillQueued.has(el.dataset.queueId)) {
+            const q = el.querySelector('.msg-queued');
+            if (q) q.remove();
+            delete el.dataset.queueId;
+          }
+        });
+      }
+      break;
+
+    case 'queue_removed':
+      {
+        const el = msgsEl.querySelector(`.mw[data-queue-id="${CSS.escape(d.queueId)}"]`);
+        if (el) { el.style.transition = 'opacity .2s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 200); }
+      }
+      break;
+
+    case 'queue_edited':
+      // Server confirmed edit — nothing extra needed (DOM already updated optimistically)
+      break;
+
+    case 'queue_start':
+      // Previous done, now processing queued message
+      { const q = msgsEl.querySelector('.msg-queued'); if (q) q.remove(); }
+      isGen = true;
+      showStatus('Обробка...');
+      setStatus('Обробка...', 'warn');
+      setSendStop(true);
+      break;
+
+    case 'session_reset':
+      msgsEl.innerHTML = '';
+      _allMsgs = []; _shownFrom = 0;
+      showW();
+      currentSessionId = null;
+      curWorkdir = null; curProjectId = null;
+      renderProjects();
+      break;
+  }
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────
+function setStatus(text, cls) {
+  const el = $i('statusEl');
+  el.textContent = text;
+  el.className = `status-dot ${cls}`;
+}
+
+function setSendStop(generating) {
+  const stopBtn = $i('stopBtn');
+  if (generating) {
+    stopBtn.classList.remove('hidden');
+  } else {
+    stopBtn.classList.add('hidden');
+  }
+}
+
+function updateQueueBadge(n) {
+  const b = $i('queueBadge');
+  if (!b) return;
+  if (n > 0) { b.textContent = n + ' у черзі'; b.classList.add('visible'); }
+  else { b.classList.remove('visible'); }
+}
+
+function confirmStop() {
+  const modal = $i('confirmStopModal');
+  modal.classList.remove('hidden');
+  setTimeout(() => $i('confirmStopBtn').focus(), 50);
+}
+function cancelStop() {
+  $i('confirmStopModal').classList.add('hidden');
+}
+function doStop() {
+  cancelStop();
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'stop' }));
+}
+function stopAgent() { confirmStop(); }
+
+function addAgentBadge(el, agent) {
+  if (el.querySelector('.ab')) return;
+  const b = document.createElement('span');
+  b.className = 'ab';
+  b.style.cssText = 'position:absolute;top:-9px;left:10px;font-size:8px';
+  b.textContent = agent;
+  el.style.position = 'relative';
+  el.style.marginTop = '10px';
+  el.appendChild(b);
+}
+
+function addMsg(role, opts = {}) {
+  rmW();
+  const w = document.createElement('div');
+  w.className = `mw ${role}`;
+  if (opts.msgId) w.dataset.msgId = String(opts.msgId);
+  let quoteHtml = '';
+  if (opts.replyQuote) {
+    const roleName = opts.replyQuote.quotedRole === 'user' ? t('you.label') : 'Claude';
+    const preview = escH((opts.replyQuote.quotedContent || '').slice(0, 120) + (opts.replyQuote.quotedContent?.length > 120 ? '…' : ''));
+    quoteHtml = `<div class="msg-reply-quote"><span class="rq-role">${escH(roleName)}</span><span class="rq-text">${preview}</span></div>`;
+  }
+  w.innerHTML = `${quoteHtml}<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>`;
+  msgsEl.appendChild(w);
+  scrollBottom();
+  return w;
+}
+
+function addEl(cls) {
+  const d = document.createElement('div');
+  d.className = cls;
+  msgsEl.appendChild(d);
+  return d;
+}
+
+function rmW() { const w = msgsEl.querySelector('.welcome'); if (w) w.remove(); }
+function showW() {
+  msgsEl.innerHTML = `<div class="welcome"><div class="wi">CC</div><h2>${t('welcome.title')}</h2><p>${t('welcome.ready')}</p></div>`;
+}
+
+function showStatus(txt) {
+  let el = msgsEl.querySelector('.agent-status');
+  if (!el) { rmW(); el = addEl('agent-status'); el.innerHTML = '<span class="asdot"></span><span class="astxt"></span>'; scrollBottom(); }
+  el.querySelector('.astxt').textContent = txt;
+}
+function rmStatus() { const el = msgsEl.querySelector('.agent-status'); if (el) el.remove(); }
+
+// ─── Sticky status bar helpers ───
+function sbShow(txt) {
+  $i('sbTxt').textContent = txt;
+  $i('statusBar').classList.add('sb-active');
+}
+function sbHide() {
+  const bar = $i('statusBar');
+  bar.classList.remove('sb-active');
+  setTimeout(() => { if (!bar.classList.contains('sb-active')) $i('sbTxt').textContent = ''; }, 250);
+}
+
+function addSpinner(el) {
+  if (!el || el.querySelector('.msg-spinner')) return;
+  const s = document.createElement('div'); s.className = 'msg-spinner';
+  el.appendChild(s);
+}
+function markDone(el) {
+  rmStatus();
+  sbHide();
+  loadStats();
+  if (!el) return;
+  const s = el.querySelector('.msg-spinner'); if (s) s.remove();
+  if (!el.querySelector('.msg-done')) {
+    const d = document.createElement('div'); d.className = 'msg-done'; d.textContent = '✓';
+    el.appendChild(d);
+  }
+}
+
+// Smart scroll: don't scroll if user scrolled up
+function scrollBottom() {
+  if (!userScrolled) msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+function scrollToBottom() {
+  userScrolled = false;
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+
+const _scrollBtn = document.getElementById('scrollBtn');
+msgsEl.addEventListener('scroll', () => {
+  const fromBottom = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight;
+  userScrolled = fromBottom > 60;
+  if (_scrollBtn) {
+    if (fromBottom > 300) _scrollBtn.classList.add('visible');
+    else _scrollBtn.classList.remove('visible');
+  }
+});
+
+function cpMsg(b) {
+  const t = b.parentElement.querySelector('.msg').textContent;
+  navigator.clipboard.writeText(t).then(() => {
+    b.innerHTML = '✓';
+    b.classList.add('ok');
+    setTimeout(() => { b.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>'; b.classList.remove('ok'); }, 1500);
+  });
+}
+
+function setReply(btn) {
+  const mw = btn.closest('.mw');
+  const id = mw.dataset.msgId || null;
+  const role = mw.classList.contains('user') ? 'user' : 'assistant';
+  const content = mw.querySelector('.msg').textContent.trim();
+  replyTo = { id, role, content };
+  $i('replyPreviewRole').textContent = role === 'user' ? 'Ви' : 'Claude';
+  $i('replyPreviewText').textContent = content.slice(0, 120) + (content.length > 120 ? '…' : '');
+  $i('replyPreview').style.display = 'flex';
+  inEl.focus();
+}
+
+function clearReply() {
+  replyTo = null;
+  $i('replyPreview').style.display = 'none';
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────
+function renderTabs() {
+  const bar = $i('tabsBar'); if (!bar) return;
+  bar.innerHTML = '';
+  for (const tab of openTabs) {
+    const el = document.createElement('div');
+    el.className = 'tab' + (tab.id === activeTabId ? ' active' : '');
+    el.onclick = () => switchTab(tab.id);
+    let dot = '';
+    if (tab.generating) dot = '<div class="tab-dot spinning"></div>';
+    else if (tab.done) dot = '<div class="tab-dot done"></div>';
+    el.innerHTML = `${dot}<span class="tab-title">${escH(tab.title || t('tab.new'))}</span><button class="tab-close" onclick="event.stopPropagation();closeTab('${tab.id}')">✕</button>`;
+    bar.appendChild(el);
+  }
+  const nb = document.createElement('button');
+  nb.className = 'tab-new'; nb.title = t('tab.new'); nb.textContent = '+';
+  nb.onclick = newTab;
+  bar.appendChild(nb);
+}
+
+function openTab(id, title) {
+  if (!openTabs.find(t => t.id === id))
+    openTabs.push({ id, title: title || t('tab.new'), generating: false, done: false });
+  switchTab(id);
+}
+
+function switchTab(id) {
+  if (activeTabId === id) return;
+  if (isGen) { toast(t('err.stop.switch'), true); return; }
+  activeTabId = id;
+  const tab = openTabs.find(t => t.id === id);
+  if (tab?.isNew) {
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'new_session' }));
+    currentSessionId = null; curWorkdir = null; curProjectId = null;
+    msgsEl.innerHTML = ''; showW(); renderProjects();
+  } else {
+    loadSess(id);
+  }
+  renderTabs(); saveUIState();
+}
+
+function closeTab(id) {
+  if (isGen && activeTabId === id) { toast(t('err.stop.close'), true); return; }
+  const idx = openTabs.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  openTabs.splice(idx, 1);
+  if (activeTabId === id) {
+    if (openTabs.length > 0) {
+      const next = openTabs[Math.min(idx, openTabs.length - 1)];
+      activeTabId = next.id;
+      if (next.isNew) { currentSessionId = null; curWorkdir = null; curProjectId = null; msgsEl.innerHTML = ''; showW(); renderProjects(); }
+      else loadSess(next.id);
+    } else {
+      activeTabId = null; currentSessionId = null;
+      curWorkdir = null; curProjectId = null;
+      msgsEl.innerHTML = ''; showW(); renderProjects();
+    }
+  }
+  renderTabs(); saveUIState();
+}
+
+function newTab() {
+  const tempId = 'new-' + Date.now();
+  if (isGen) { toast(t('err.stop.new'), true); return; }
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'new_session' }));
+  openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true });
+  activeTabId = tempId;
+  currentSessionId = null; curWorkdir = null; curProjectId = null;
+  msgsEl.innerHTML = ''; showW(); renderProjects();
+  userScrolled = false; renderTabs(); saveUIState();
+}
+
+function toggle(id) {
+  const el = $i(id);
+  el.classList.toggle('collapsed');
+  const btn = document.querySelector(`[onclick="toggle('${id}')"]`);
+  if (btn) btn.classList.toggle('active', !el.classList.contains('collapsed'));
+  saveUIState();
+}
+function toggleSec(id) { $i(id + 'Body').classList.toggle('collapsed'); saveUIState(); }
+
+// ─── Toolbar ─────────────────────────────────────────────────────────────
+function setOpt(btn, group) {
+  btn.closest('.tb-group').querySelectorAll('.tb-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  const v = btn.dataset.v;
+  if (group === 'mode') curMode = v;
+  else if (group === 'agent') curAgent = v;
+  else if (group === 'model') curModel = v;
+  updInd();
+}
+
+function updInd() {
+  const mc = { auto: 'dot-auto', planning: 'dot-plan', task: 'dot-task' };
+  const ml = { auto: 'Auto', planning: 'Plan', task: 'Task' };
+  const al = { single: 'Single', multi: 'Multi' };
+  const mo = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus' };
+  $i('modeInd').innerHTML = `<span class="dot ${mc[curMode]}"></span> ${ml[curMode]} · ${al[curAgent]} · ${mo[curModel]}`;
+}
+
+function syncBtn(group, val) {
+  const groups = { mode: ['auto','planning','task'], agent: ['single','multi'], model: ['haiku','sonnet','opus'] };
+  if (!groups[group]?.includes(val)) return;
+  document.querySelectorAll('.tb-group .tb-btn').forEach(b => {
+    if (b.dataset.v === val) {
+      b.closest('.tb-group').querySelectorAll('.tb-btn').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+    }
+  });
+}
+
+// ─── Attachments (@ files + clipboard screenshots) ───────────────────────
+let _attachments = []; // [{id, type:'file'|'image', name, relPath, absPath, projectDir, base64, mimeType}]
+
+function _getChips() { return $i('attChips'); }
+
+function _addFileChip(file) {
+  if (_attachments.find(a => a.type === 'file' && a.absPath === file.absPath)) return;
+  const id = 'att-' + Date.now() + Math.random().toString(36).slice(2, 6);
+  _attachments.push({ id, type: 'file', name: file.name, relPath: file.relPath, absPath: file.absPath, projectDir: curWorkdir });
+  const chip = document.createElement('div');
+  chip.className = 'att-chip'; chip.dataset.attId = id;
+  chip.innerHTML = `<span class="chip-icon">📄</span><span class="chip-name" title="${escH(file.relPath)}">${escH(file.name)}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
+  _getChips().appendChild(chip);
+}
+
+function _addImageChip(base64, mimeType, name) {
+  const id = 'att-' + Date.now() + Math.random().toString(36).slice(2, 6);
+  _attachments.push({ id, type: 'image', name: name || 'screenshot.png', base64, mimeType });
+  const chip = document.createElement('div');
+  chip.className = 'att-chip chip-img'; chip.dataset.attId = id;
+  chip.innerHTML = `<img src="data:${mimeType};base64,${base64}" alt=""><span class="chip-name">${escH(name || 'screenshot.png')}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
+  _getChips().appendChild(chip);
+}
+
+function rmChip(id) {
+  _attachments = _attachments.filter(a => a.id !== id);
+  const el = document.querySelector(`[data-att-id="${id}"]`);
+  if (el) el.remove();
+}
+
+function _clearAttachments() {
+  _attachments = [];
+  _getChips().innerHTML = '';
+}
+
+// ─── @ File picker ────────────────────────────────────────────────────────
+let _atTimer = null, _atFiles = [], _atActiveIdx = -1, _atMode = false;
+
+function _openAtPopup(query) {
+  const popup = $i('atPopup'), s = $i('atSearch');
+  popup.classList.remove('hidden');
+  s.value = query;
+  _atActiveIdx = -1;
+  _atMode = true;
+  _fetchAtFiles(query);
+}
+
+function _closeAtPopup() {
+  $i('atPopup').classList.add('hidden');
+  _atMode = false; _atFiles = []; _atActiveIdx = -1;
+}
+
+async function _fetchAtFiles(query) {
+  if (!curWorkdir) {
+    $i('atList').innerHTML = '<div class="at-empty">Оберіть проект, щоб шукати файли</div>';
+    return;
+  }
+  $i('atList').innerHTML = '<div class="at-loading">Пошук...</div>';
+  try {
+    const r = await fetch(`/api/project-files?dir=${encodeURIComponent(curWorkdir)}&q=${encodeURIComponent(query)}`);
+    const d = await r.json();
+    _atFiles = d.files || [];
+    _renderAtList();
+  } catch { $i('atList').innerHTML = '<div class="at-empty">Помилка пошуку</div>'; }
+}
+
+function _renderAtList() {
+  const list = $i('atList');
+  if (!_atFiles.length) { list.innerHTML = '<div class="at-empty">Файлів не знайдено</div>'; return; }
+  list.innerHTML = _atFiles.slice(0, 60).map((f, i) => {
+    const slashIdx = f.relPath.lastIndexOf('/');
+    const dir = slashIdx > 0 ? f.relPath.slice(0, slashIdx) : '.';
+    return `
+    <div class="at-item${i === _atActiveIdx ? ' active' : ''}" onclick="selectAtFile(${i})">
+      <span class="at-icon">📄</span>
+      <div class="at-info">
+        <span class="at-name">${escH(f.name)}</span>
+        <span class="at-dir">${escH(dir)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectAtFile(idx) {
+  const f = _atFiles[idx]; if (!f) return;
+  _addFileChip(f);
+  // Remove @query from textarea
+  const val = inEl.value, cur = inEl.selectionStart;
+  const before = val.slice(0, cur), atIdx = before.lastIndexOf('@');
+  if (atIdx >= 0) {
+    inEl.value = val.slice(0, atIdx) + val.slice(cur);
+    inEl.selectionStart = inEl.selectionEnd = atIdx;
+  }
+  _closeAtPopup(); inEl.focus();
+}
+
+function onAtSearch(query) {
+  clearTimeout(_atTimer);
+  _atTimer = setTimeout(() => _fetchAtFiles(query), 180);
+}
+
+// Input: watch for @ trigger
+inEl.addEventListener('input', () => {
+  const val = inEl.value, cur = inEl.selectionStart;
+  const before = val.slice(0, cur);
+  const atIdx = before.lastIndexOf('@');
+  if (atIdx >= 0) {
+    const afterAt = before.slice(atIdx + 1);
+    if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
+      _openAtPopup(afterAt); return;
+    }
+  }
+  if (!$i('atPopup').classList.contains('hidden')) _closeAtPopup();
+});
+
+// Keyboard navigation inside @ popup
+inEl.addEventListener('keydown', e => {
+  if ($i('atPopup').classList.contains('hidden')) return;
+  if (e.key === 'Escape') { _closeAtPopup(); e.preventDefault(); return; }
+  if (e.key === 'ArrowDown') { e.preventDefault(); _atActiveIdx = Math.min(_atActiveIdx + 1, _atFiles.length - 1); _renderAtList(); $i('atList').querySelector('.active')?.scrollIntoView({ block: 'nearest' }); return; }
+  if (e.key === 'ArrowUp') { e.preventDefault(); _atActiveIdx = Math.max(_atActiveIdx - 1, -1); _renderAtList(); return; }
+  if ((e.key === 'Enter' || e.key === 'Tab') && _atActiveIdx >= 0) { e.preventDefault(); selectAtFile(_atActiveIdx); return; }
+});
+
+// Close popup on click outside
+document.addEventListener('click', e => {
+  const popup = $i('atPopup');
+  if (popup && !popup.classList.contains('hidden') && !popup.contains(e.target) && e.target !== inEl) _closeAtPopup();
+});
+
+// ─── Clipboard paste (screenshots) ───────────────────────────────────────
+inEl.addEventListener('paste', e => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (!item.type.startsWith('image/')) continue;
+    e.preventDefault();
+    const blob = item.getAsFile(); if (!blob) continue;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const dataUrl = ev.target.result;
+      const base64 = dataUrl.split(',')[1];
+      const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      _addImageChip(base64, item.type, `screenshot-${ts}.png`);
+    };
+    reader.readAsDataURL(blob);
+    break;
+  }
+});
+
+// ─── Send / Stop ─────────────────────────────────────────────────────────
+async function send() {
+  if (!ws || ws.readyState !== 1) { toast('Немає з\'єднання', true); return; }
+
+  const txt = inEl.value.trim();
+  if (!txt && !_attachments.length) return;
+
+  // Collect attachment payloads (fetch file contents for @ mentions)
+  const attSnapshot = [..._attachments];
+  _clearAttachments();
+  _closeAtPopup();
+
+  const msgAttachments = [];
+  for (const att of attSnapshot) {
+    if (att.type === 'image') {
+      msgAttachments.push({ type: att.mimeType, base64: att.base64, name: att.name });
+    } else if (att.type === 'file') {
+      try {
+        const r = await fetch(`/api/project-files/read?path=${encodeURIComponent(att.absPath)}&dir=${encodeURIComponent(att.projectDir)}`);
+        const d = await r.json();
+        if (d.content !== undefined) msgAttachments.push({ type: 'text/plain', name: att.relPath || att.name, base64: btoa(unescape(encodeURIComponent(d.content))) });
+      } catch { toast(`Не вдалося прочитати: ${att.name}`, true); }
+    }
+  }
+
+  const msgEl = addMsg('user');
+  // Show file/image chips in message bubble
+  if (attSnapshot.length) {
+    const chipsDiv = document.createElement('div');
+    chipsDiv.className = 'att-chips';
+    chipsDiv.style.cssText = 'padding:4px 0 2px';
+    chipsDiv.innerHTML = attSnapshot.map(a => a.type === 'image'
+      ? `<div class="att-chip chip-img"><img src="data:${a.mimeType};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name)}</span></div>`
+      : `<div class="att-chip"><span class="chip-icon">📄</span><span class="chip-name">${escH(a.relPath || a.name)}</span></div>`
+    ).join('');
+    msgEl.querySelector('.msg').before(chipsDiv);
+  }
+  if (txt) msgEl.querySelector('.msg').textContent = txt;
+
+  inEl.value = '';
+  inEl.style.height = 'auto';
+  userScrolled = false;
+
+  const queueId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+
+  if (isGen) {
+    msgEl.dataset.queueId = queueId;
+    const q = document.createElement('div');
+    q.className = 'msg-queued';
+    q.innerHTML = `<span class="mq-label">${t('queue.label')}</span><button class="qd-btn qd-edit" onclick="editQueuedMsg(this)" title="${t('queue.edit.title')}">✏</button><button class="qd-btn qd-del" onclick="deleteQueuedMsg(this)" title="${t('queue.del.title')}">✕</button>`;
+    msgEl.appendChild(q);
+  } else {
+    isGen = true;
+    generatingTabId = activeTabId;
+    showStatus('Обробка...');
+    setStatus('Обробка...', 'warn');
+    setSendStop(true);
+  }
+
+  const currentReply = replyTo;
+  clearReply();
+
+  ws.send(JSON.stringify({
+    type: 'chat', text: txt || ' ',
+    attachments: msgAttachments.length ? msgAttachments : undefined,
+    queueId,
+    reply_to: currentReply || undefined,
+    skills: [...activeSkills],
+    mcpServers: [...activeMcp],
+    mode: curMode, agentMode: curAgent,
+    model: curModel, engine: curEngine,
+    maxTurns: parseInt($i('maxTurns').value) || 30,
+    workdir: curWorkdir || undefined,
+  }));
+}
+
+function newSession() { newTab(); }
+
+// ─── Queue edit / delete ──────────────────────────────────────────────────
+function editQueuedMsg(btn) {
+  const msgEl = btn.closest('.mw');
+  if (!msgEl) return;
+  const msgDiv = msgEl.querySelector('.msg');
+  if (!msgDiv) return;
+  const currentText = msgDiv.textContent;
+  msgEl.dataset.originalText = currentText;
+
+  const editor = document.createElement('div');
+  editor.className = 'queue-editor';
+  editor.innerHTML = `<textarea class="queue-edit-area" onkeydown="queueEditKey(event)">${escH(currentText)}</textarea><div class="queue-edit-btns"><button class="qe-cancel" onclick="cancelQueueEdit(this)">${t('queue.cancel')}</button><button class="qe-save" onclick="saveQueueEdit(this)">${t('queue.save')}</button></div>`;
+  msgDiv.replaceWith(editor);
+
+  const ta = editor.querySelector('.queue-edit-area');
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 180) + 'px';
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+function queueEditKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    saveQueueEdit(e.target.closest('.queue-editor').querySelector('.qe-save'));
+  }
+  if (e.key === 'Escape') {
+    cancelQueueEdit(e.target.closest('.queue-editor').querySelector('.qe-cancel'));
+  }
+}
+
+function saveQueueEdit(btn) {
+  const msgEl = btn.closest('.mw');
+  if (!msgEl) return;
+  const editor = btn.closest('.queue-editor');
+  const newText = editor.querySelector('.queue-edit-area').value.trim();
+  if (!newText) return;
+
+  const queueId = msgEl.dataset.queueId;
+  delete msgEl.dataset.originalText;
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'msg';
+  msgDiv.textContent = newText;
+  editor.replaceWith(msgDiv);
+
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({ type: 'queue_edit', queueId, text: newText }));
+  }
+}
+
+function cancelQueueEdit(btn) {
+  const msgEl = btn.closest('.mw');
+  if (!msgEl) return;
+  const editor = btn.closest('.queue-editor');
+  const originalText = msgEl.dataset.originalText || editor.querySelector('.queue-edit-area').value;
+  delete msgEl.dataset.originalText;
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'msg';
+  msgDiv.textContent = originalText;
+  editor.replaceWith(msgDiv);
+}
+
+function deleteQueuedMsg(btn) {
+  const msgEl = btn.closest('.mw');
+  if (!msgEl) return;
+  const queueId = msgEl.dataset.queueId;
+
+  // Optimistic UI: fade out and disable
+  msgEl.style.opacity = '0.4';
+  msgEl.style.pointerEvents = 'none';
+  msgEl.style.transition = 'opacity .2s';
+
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({ type: 'queue_remove', queueId }));
+  }
+}
+
+// Input auto-resize
+inEl.addEventListener('input', () => {
+  inEl.style.height = 'auto';
+  inEl.style.height = Math.min(inEl.scrollHeight, 120) + 'px';
+});
+inEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    if (!$i('atPopup').classList.contains('hidden')) return; // let @ handler deal with it
+    e.preventDefault(); send();
+  }
+});
+
+// ─── Stats Panel ──────────────────────────────────────────────────────────
+let _statsTimer = null;
+
+function _fmtResetDate(msFromNow) {
+  const d = new Date(Date.now() + msFromNow);
+  const months = ['Січ','Лют','Бер','Кві','Тра','Чер','Лип','Сер','Вер','Жов','Лис','Гру'];
+  const h = d.getHours(), m = d.getMinutes();
+  const hStr = h === 0 && m === 0 ? '00:00' : `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
+  return `${d.getDate()} ${months[d.getMonth()]} о ${hStr}`;
+}
+
+async function loadStats() {
+  const sid = currentSessionId || '';
+  let data;
+  try {
+    const r = await fetch(`/api/stats${sid ? '?session_id=' + encodeURIComponent(sid) : ''}`);
+    data = await r.json();
+  } catch { return; }
+
+  const daily   = data.daily_messages  || 0;
+  const weekly  = data.weekly_messages || 0;
+  const limD    = data.limits?.daily   || 45;
+  const limW    = data.limits?.weekly  || 225;
+  const agents  = data.active_agents   || [];
+  const ctxTok  = data.context_tokens  || 0;
+  const CTX_MAX = 200000;
+
+  const pDay  = Math.min(100, Math.round(daily  / limD  * 100));
+  const pWeek = Math.min(100, Math.round(weekly / limW  * 100));
+  const pCtx  = Math.min(100, Math.round(ctxTok / CTX_MAX * 100));
+
+  function cls(p) { return p >= 85 ? 'crit' : p >= 60 ? 'warn' : 'ok'; }
+  function barRow(p) {
+    return `<div class="stat-row"><div class="stat-bar"><div class="stat-bar-fill ${cls(p)}" style="width:${p}%"></div></div><span class="stat-pct">${p}% використано</span></div>`;
+  }
+
+  // Daily reset: next midnight local time
+  const now = new Date();
+  const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now;
+  const dayResetStr = _fmtResetDate(msToMidnight);
+
+  // Weekly reset: next Monday 00:00 local
+  const dow = now.getDay(); // 0=Sun
+  const daysToMon = dow === 0 ? 1 : 8 - dow;
+  const msToMon = daysToMon * 86400000
+    - (now.getHours() * 3600000 + now.getMinutes() * 60000 + now.getSeconds() * 1000);
+  const weekResetStr = _fmtResetDate(msToMon);
+
+  // Context block (only when session active)
+  const ctxBlock = sid ? `
+    <div class="stat-block">
+      <div class="stat-block-title">Поточна сесія</div>
+      ${barRow(pCtx)}
+      <div class="stat-reset">~${(ctxTok/1000).toFixed(1)}k / ${(CTX_MAX/1000).toFixed(0)}k токенів · Скидається при новому чаті</div>
+    </div>` : `
+    <div class="stat-block">
+      <div class="stat-block-title">Поточна сесія</div>
+      <div class="stat-reset" style="margin-top:4px">Відкрийте чат, щоб побачити завантаження контексту</div>
+    </div>`;
+
+  const agentsBlock = agents.length ? `
+    <div class="stat-agents">
+      <div class="stat-agents-title">${t('agents.title')} (${agents.length})</div>
+      ${agents.map(a => `<span class="agent-chip"><span class="dot"></span>${escH(a)}</span>`).join('')}
+    </div>` : '';
+
+  $i('proactiveList').innerHTML = `
+    ${ctxBlock}
+    <div class="stat-block">
+      <div class="stat-block-title">Поточний день</div>
+      ${barRow(pDay)}
+      <div class="stat-reset">Скидається ${dayResetStr}</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-block-title">Поточний тиждень (всі моделі)</div>
+      ${barRow(pWeek)}
+      <div class="stat-reset">Скидається ${weekResetStr}</div>
+    </div>
+    ${agentsBlock}
+    <div class="stat-refresh" onclick="loadStats()">↻ оновити</div>
+  `;
+
+  const badge = $i('proactiveCount');
+  if (badge) badge.textContent = agents.length > 0 ? String(agents.length) : '';
+}
+
+// ─── Session History ──────────────────────────────────────────────────────
+async function loadHist() {
+  try {
+    const url = curWorkdir ? `/api/sessions?workdir=${encodeURIComponent(curWorkdir)}` : '/api/sessions';
+    const r = await fetch(url);
+    const ss = await r.json();
+    const el = $i('histList');
+    el.innerHTML = '';
+    $i('histCount').textContent = ss.length || '';
+    for (const s of ss) {
+      const d = document.createElement('div');
+      d.className = `hist-item ${s.id === currentSessionId ? 'active' : ''}`;
+      const dt = new Date(s.updated_at).toLocaleDateString(localStorage.getItem('lang') || 'uk', { day: 'numeric', month: 'short' });
+      d.innerHTML = `<span class="ht">${escH(s.title)}</span><span class="hd">${dt}</span><button class="del" onclick="event.stopPropagation();delSess('${s.id}')" title="✕">✕</button>`;
+      d.onclick = () => openTab(s.id, s.title);
+      el.appendChild(d);
+    }
+  } catch (e) { console.error('loadHist:', e); }
+}
+
+// ─── Message pagination ───────────────────────────────────────────────────
+const MSG_PAGE = 50;
+let _allMsgs = [];   // all messages for current session (in memory)
+let _shownFrom = 0;  // index in _allMsgs from which messages are rendered
+
+function _renderMsgAt(idx, prepend = false) {
+  const m = _allMsgs[idx];
+  const hasReply = _allMsgs.slice(idx + 1).some(x => x.role === 'assistant');
+  const w = document.createElement('div');
+  w.className = `mw ${m.role}`;
+  if (m.id) w.dataset.msgId = String(m.id);
+  w.innerHTML = `<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>`;
+  if (m.role === 'assistant') {
+    w.querySelector('.msg').innerHTML = renderMd(m.content);
+  } else {
+    w.querySelector('.msg').textContent = m.content;
+    if (hasReply) { const a = document.createElement('div'); a.className = 'msg-ack'; a.textContent = '✓'; w.appendChild(a); }
+  }
+  if (m.agent_id) addAgentBadge(w, m.agent_id);
+  if (prepend) {
+    const firstMsg = msgsEl.querySelector('.mw');
+    if (firstMsg) msgsEl.insertBefore(w, firstMsg);
+    else msgsEl.prepend(w);
+  } else {
+    msgsEl.appendChild(w);
+  }
+  return w;
+}
+
+function _updateLoadMoreBtn() {
+  let btn = document.getElementById('loadMoreBtn');
+  const remaining = _shownFrom; // messages before current visible range
+  if (remaining <= 0) {
+    if (btn) btn.remove();
+    return;
+  }
+  if (!btn) {
+    const wrap = document.createElement('div');
+    wrap.id = 'loadMoreBtn';
+    wrap.className = 'load-more-wrap';
+    wrap.innerHTML = `<button class="load-more-btn" onclick="loadMoreMsgs()">${t('load.more')} (${remaining})</button>`;
+    const firstMsg = msgsEl.querySelector('.mw');
+    if (firstMsg) msgsEl.insertBefore(wrap, firstMsg);
+    else msgsEl.prepend(wrap);
+  } else {
+    btn.querySelector('button').textContent = `${t('load.more')} (${remaining})`;
+  }
+}
+
+function loadMoreMsgs() {
+  if (_shownFrom <= 0) return;
+  const prevHeight = msgsEl.scrollHeight;
+  const prevScroll = msgsEl.scrollTop;
+  const start = Math.max(0, _shownFrom - MSG_PAGE);
+  const end = _shownFrom;
+  // Prepend in reverse order so DOM order stays chronological
+  for (let i = end - 1; i >= start; i--) {
+    _renderMsgAt(i, true);
+  }
+  _shownFrom = start;
+  _updateLoadMoreBtn();
+  // Maintain scroll position after prepend
+  requestAnimationFrame(() => {
+    msgsEl.scrollTop = prevScroll + (msgsEl.scrollHeight - prevHeight);
+  });
+}
+
+async function loadSess(id) {
+  try {
+    const r = await fetch(`/api/sessions/${id}`);
+    if (!r.ok) { closeTab(id); toast('Сесію не знайдено', true); return; }
+    const d = await r.json();
+    msgsEl.innerHTML = '';
+    currentSessionId = id;
+    // Sync tab title
+    { const t = openTabs.find(x => x.id === id); if (t && d.title) { t.title = d.title; renderTabs(); } }
+
+    if (d.mode) { curMode = d.mode; syncBtn('mode', d.mode); }
+    if (d.agent_mode) { curAgent = d.agent_mode; syncBtn('agent', d.agent_mode); }
+    if (d.model) { curModel = d.model; syncBtn('model', d.model); }
+    updInd();
+
+    curWorkdir = d.workdir || null;
+    curProjectId = curWorkdir ? (projects.find(p => p.workdir === curWorkdir)?.id || null) : null;
+    renderProjects();
+
+    try { activeMcp = new Set(JSON.parse(d.active_mcp || '[]')); } catch { activeMcp = new Set(); }
+    try { activeSkills = new Set(JSON.parse(d.active_skills || '[]')); } catch { activeSkills = new Set(); }
+    renderMcp(); renderSkills();
+
+    _allMsgs = (d.messages || []).filter(m => m.type !== 'tool');
+    _shownFrom = Math.max(0, _allMsgs.length - MSG_PAGE);
+
+    for (let i = _shownFrom; i < _allMsgs.length; i++) {
+      _renderMsgAt(i, false);
+    }
+    _updateLoadMoreBtn();
+
+    userScrolled = false;
+    scrollBottom();
+    loadStats();
+
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: 'start_session', sessionId: id, mode: curMode, agentMode: curAgent, model: curModel, engine: 'cli'}));
+    }
+    loadHist();
+  } catch (e) { console.error('loadSess:', e); toast(t('sess.load.err'), true); }
+}
+
+async function delSess(id) {
+  if (!confirm(t('sess.delete.confirm'))) return;
+  await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
+  if (id === currentSessionId) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); }
+  loadHist();
+}
+
+// ─── MCP & Skills ─────────────────────────────────────────────────────────
+async function loadCfg() {
+  try {
+    const r = await fetch('/api/config');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    config = await r.json();
+    renderMcp();
+    renderSkills();
+  } catch (e) {
+    console.error('loadCfg:', e);
+    toast('Помилка завантаження конфігурації', true);
+  }
+}
+
+function mkToggle(on) {
+  return `<div class="sw"><div class="sw-track"></div><div class="sw-thumb"></div></div>`;
+}
+
+function renderMcp() {
+  const el = $i('mcpList'); el.innerHTML = '';
+  let c = 0;
+  for (const [id, m] of Object.entries(config.mcpServers || {})) {
+    const on = activeMcp.has(id);
+    if (on) c++;
+    const div = document.createElement('div');
+    div.className = `ci ${on ? 'on' : ''}`;
+    div.title = on ? 'Клік — вимкнути для цього чату' : 'Клік — увімкнути для цього чату';
+    div.onclick = () => tMcp(id);
+    div.innerHTML = `
+      ${mkToggle(on)}
+      <div class="inf">
+        <div class="nm">${escH(m.label || id)}</div>
+        <div class="ds">${escH(m.description || '')}</div>
+        <div class="st">${on ? t('mcp.active') : t('mcp.inactive')}</div>
+      </div>
+      ${m.custom ? `<button class="rm" onclick="event.stopPropagation();rMcp('${id}')" title="${t('mcp.del.title')}">✕</button>` : ''}`;
+    el.appendChild(div);
+  }
+  $i('mcpCount').textContent = c || '';
+}
+
+function tMcp(id) { if (activeMcp.has(id)) activeMcp.delete(id); else activeMcp.add(id); renderMcp(); saveUIState(); }
+async function rMcp(id) {
+  activeMcp.delete(id);
+  await fetch(`/api/mcp/${id}`, { method: 'DELETE' });
+  delete config.mcpServers[id];
+  renderMcp();
+}
+function showMcpForm() { $i('mcpForm').style.display = 'flex'; }
+function hideMcpForm() { $i('mcpForm').style.display = 'none'; }
+
+async function addMcp() {
+  const id = $i('mcpId').value.trim(), label = $i('mcpLabel').value.trim();
+  const command = $i('mcpCmd').value.trim();
+  const args = $i('mcpArgs').value.split(',').map(s => s.trim()).filter(Boolean);
+  let env = {};
+  try { env = JSON.parse($i('mcpEnv').value || '{}'); } catch {}
+  if (!id || !command) { toast('ID та Command обов\'язкові', true); return; }
+  await fetch('/api/mcp/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, label: label || id, command, args, env }) });
+  config.mcpServers[id] = { label: label || id, command, args, env, custom: true };
+  activeMcp.add(id);
+  renderMcp();
+  hideMcpForm();
+  ['mcpId','mcpLabel','mcpCmd','mcpArgs','mcpEnv'].forEach(x => $i(x).value = '');
+  toast('✓ MCP сервер додано');
+}
+
+function renderSkills() {
+  const el = $i('skillsList'); el.innerHTML = '';
+  let c = 0;
+  for (const [id, s] of Object.entries(config.skills || {})) {
+    const on = activeSkills.has(id);
+    if (on) c++;
+    const div = document.createElement('div');
+    div.className = `ci ${on ? 'on' : ''}`;
+    div.title = on ? 'Клік — вимкнути skill' : 'Клік — додати skill до системного промпту';
+    div.onclick = () => tSkill(id);
+    div.innerHTML = `
+      ${mkToggle(on)}
+      <div class="inf">
+        <div class="nm">${escH(s.label || id)}</div>
+        <div class="ds">${escH(s.description || '')}</div>
+        <div class="st">${on ? t('skill.active') : t('skill.inactive')}</div>
+      </div>
+      ${s.custom ? `<button class="rm" onclick="event.stopPropagation();rSkill('${id}')" title="${t('skill.del.title')}">✕</button>` : ''}`;
+    el.appendChild(div);
+  }
+  $i('skillsCount').textContent = c || '';
+}
+
+function tSkill(id) { if (activeSkills.has(id)) activeSkills.delete(id); else activeSkills.add(id); renderSkills(); saveUIState(); }
+async function rSkill(id) {
+  activeSkills.delete(id);
+  await fetch(`/api/skills/${id}`, { method: 'DELETE' });
+  delete config.skills[id];
+  renderSkills();
+}
+async function uploadSkill(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const name = prompt('Назва скілу:', file.name.replace(/\.md$/, ''));
+  if (!name) return;
+  const fd = new FormData();
+  fd.append('file', file); fd.append('name', name);
+  fd.append('label', name); fd.append('description', 'Custom skill');
+  const r = await fetch('/api/skills/upload', { method: 'POST', body: fd });
+  const d = await r.json();
+  if (d.ok) { toast('✓ Скіл завантажено'); input.value = ''; await loadCfg(); }
+  else toast('Помилка: ' + (d.error || '?'), true);
+}
+
+// ─── Config Editor ────────────────────────────────────────────────────────
+const CFG_TABS_BASE = [
+  { id: 'config.json', label: 'config.json' },
+  { id: '.claude/settings.json', label: 'settings.json' },
+  { id: '.env', label: '.env' },
+  { id: 'global-claude-md', label: '🌐 Global CLAUDE.md' },
+];
+
+async function openCfgEditor() {
+  const mdUrl = curWorkdir ? `/api/claude-md?dir=${encodeURIComponent(curWorkdir)}` : '/api/claude-md';
+  const [r1, r2] = await Promise.all([fetch('/api/config-files'), fetch(mdUrl)]);
+  cfgFiles = await r1.json();
+  const cm = await r2.json();
+  cfgFiles['global-claude-md'] = cm.global || '';
+  cfgFiles['__globalPath']     = cm.globalPath || '~/.claude/CLAUDE.md';
+
+  const tabs = [...CFG_TABS_BASE];
+  if (curWorkdir) {
+    cfgFiles['local-claude-md'] = cm.local || '';
+    cfgFiles['__localPath']     = cm.localPath || curWorkdir + '/CLAUDE.md';
+    const projName = projects.find(p => p.workdir === curWorkdir)?.name || curWorkdir.split('/').pop();
+    tabs.push({ id: 'local-claude-md', label: `📁 ${projName}` });
+  }
+
+  const t = $i('cfgTabs');
+  t.innerHTML = '';
+  tabs.forEach((c, i) => {
+    const d = document.createElement('div');
+    d.className = `modal-tab ${i === 0 ? 'active' : ''}`;
+    d.dataset.tabId = c.id;
+    d.textContent = c.label;
+    d.onclick = () => switchCfgTab(c.id);
+    t.appendChild(d);
+  });
+  activeCfgTab = tabs[0].id;
+  $i('cfgEditor').value = cfgFiles[activeCfgTab] || '';
+  $i('saveNotice').className = 'save-notice hidden';
+  updateCfgPathInfo(activeCfgTab);
+  $i('cfgModal').classList.remove('hidden');
+}
+
+function updateCfgPathInfo(id) {
+  const el = $i('cfgPathInfo');
+  if (!el) return;
+  let path = '';
+  if (id === 'global-claude-md') path = cfgFiles['__globalPath'] || '~/.claude/CLAUDE.md';
+  else if (id === 'local-claude-md') path = cfgFiles['__localPath'] || 'WORKDIR/CLAUDE.md';
+  if (path) { el.textContent = path; el.classList.remove('hidden'); }
+  else { el.textContent = ''; el.classList.add('hidden'); }
+}
+
+function switchCfgTab(id) {
+  cfgFiles[activeCfgTab] = $i('cfgEditor').value;
+  activeCfgTab = id;
+  $i('cfgEditor').value = cfgFiles[id] || '';
+  $i('saveNotice').className = 'save-notice hidden';
+  document.querySelectorAll('.modal-tab').forEach(t => t.classList.toggle('active', t.dataset.tabId === id));
+  updateCfgPathInfo(id);
+}
+
+async function saveCfg() {
+  cfgFiles[activeCfgTab] = $i('cfgEditor').value;
+  try {
+    let r;
+    if (activeCfgTab === 'global-claude-md') {
+      r = await fetch('/api/claude-md', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'global', content: cfgFiles[activeCfgTab] }) });
+    } else if (activeCfgTab === 'local-claude-md') {
+      r = await fetch('/api/claude-md', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'local', content: cfgFiles[activeCfgTab], dir: curWorkdir }) });
+    } else {
+      r = await fetch('/api/config-files', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: activeCfgTab, content: cfgFiles[activeCfgTab] }) });
+    }
+    const d = await r.json();
+    if (d.ok) {
+      $i('saveNotice').className = 'save-notice';
+      setTimeout(() => $i('saveNotice').className = 'save-notice hidden', 2000);
+      if (activeCfgTab === 'config.json') loadCfg();
+      toast('✓ Збережено');
+    } else toast('Помилка: ' + (d.error || '?'), true);
+  } catch (e) { toast(e.message, true); }
+}
+
+function closeCfg() { $i('cfgModal').classList.add('hidden'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeCfg(); closeDirModal(); cancelStop(); } });
+
+// ─── File Browser ─────────────────────────────────────────────────────────
+async function loadFiles(dir = '') {
+  try {
+    const r = await fetch(`/api/files?path=${encodeURIComponent(dir)}`);
+    const d = await r.json();
+    if (d.type !== 'dir') return;
+    const t = $i('filesTree');
+    t.innerHTML = '';
+
+    if (dir) {
+      const b = document.createElement('div');
+      b.className = 'fii';
+      b.innerHTML = '<span class="fi" style="color:var(--muted)">↑</span><span class="fn">..</span>';
+      b.onclick = () => loadFiles(dir.split('/').slice(0, -1).join('/'));
+      t.appendChild(b);
+    }
+
+    const items = d.items.sort((a, b) => a.type !== b.type ? (a.type === 'dir' ? -1 : 1) : a.name.localeCompare(b.name));
+    for (const it of items) {
+      const el = document.createElement('div');
+      el.className = 'fii';
+      el.innerHTML = `<span class="fi">${it.type === 'dir' ? '<span style="color:var(--accent2);font-size:13px">▸</span>' : fileIcon(it.name)}</span><span class="fn">${escH(it.name)}</span><span class="fs">${it.size ? fmtSize(it.size) : ''}</span>`;
+      el.onclick = it.type === 'dir' ? () => loadFiles(it.path) : () => previewFile(it.path);
+      t.appendChild(el);
+    }
+
+    if (!items.length) t.innerHTML = '<div style="padding:14px;color:var(--muted);text-align:center;font-size:11px">Порожньо</div>';
+  } catch {}
+}
+
+async function previewFile(fp) {
+  try {
+    const r = await fetch(`/api/files?path=${encodeURIComponent(fp)}`);
+    const d = await r.json();
+    const p = $i('filePreview');
+    p.style.display = 'block';
+    p.innerHTML = `<div class="fpn">${escH(d.name || fp)}</div>${escH(d.content || '')}`;
+  } catch {}
+}
+
+function fileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  const colors = { js: '#f7df1e', ts: '#3178c6', py: '#3572a5', html: '#e34c26', css: '#264de4', json: '#cbcb41', md: '#083fa1', sh: '#89e051', go: '#00add8', rs: '#dea584', rb: '#701516', sql: '#336791' };
+  const color = colors[ext];
+  if (color) return `<span style="font-size:10px;font-weight:700;color:${color};font-family:monospace">${ext.toUpperCase()}</span>`;
+  return `<span style="font-size:10px;color:var(--muted);font-family:monospace">${ext ? ext.toUpperCase() : 'FILE'}</span>`;
+}
+
+function fmtSize(b) {
+  return b < 1024 ? b + 'B' : b < 1048576 ? (b / 1024).toFixed(1) + 'K' : (b / 1048576).toFixed(1) + 'M';
+}
+
+// ─── Projects ──────────────────────────────────────────────────────────────
+async function loadProjectsList() {
+  try {
+    const r = await fetch('/api/projects');
+    projects = await r.json();
+    renderProjects();
+  } catch(e) { console.error('loadProjectsList:', e); }
+}
+
+function renderProjects() {
+  const el = $i('projList');
+  if (!el) return;
+  el.innerHTML = '';
+  $i('projCount').textContent = projects.length || '';
+
+  if (!projects.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5">Немає проектів. Додайте директорію для роботи з Claude Code.</div>';
+    return;
+  }
+
+  for (const p of projects) {
+    const active = p.id === curProjectId;
+    const div = document.createElement('div');
+    div.className = `ci${active ? ' on' : ''}`;
+    div.title = active ? t('proj.active.title') : t('proj.click.title');
+    div.onclick = () => switchProject(p.id);
+    const shortPath = p.workdir.length > 38 ? '…' + p.workdir.slice(-36) : p.workdir;
+    div.innerHTML = `
+      <div class="inf">
+        <div class="nm">${escH(p.name)}</div>
+        <div class="ds" title="${escH(p.workdir)}">${escH(shortPath)}</div>
+        <div class="st">${active ? t('proj.active') : t('proj.inactive')}</div>
+      </div>
+      <button class="rm" onclick="event.stopPropagation();delProject('${p.id}')" title="${t('proj.del.title')}">✕</button>`;
+    el.appendChild(div);
+  }
+}
+
+// ─── Per-project tab save/restore ────────────────────────────────────────
+const PROJ_TABS_KEY = pid => `cc_ptabs_${pid || '__none'}`;
+
+function saveProjTabs() {
+  try {
+    const tabs = openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title }));
+    localStorage.setItem(PROJ_TABS_KEY(curProjectId), JSON.stringify({ tabs, activeTabId }));
+  } catch {}
+}
+
+function loadProjTabs(pid) {
+  try { return JSON.parse(localStorage.getItem(PROJ_TABS_KEY(pid)) || 'null'); } catch { return null; }
+}
+
+function applyProjTabs(saved) {
+  if (saved?.tabs?.length) {
+    openTabs = saved.tabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false }));
+    activeTabId = saved.activeTabId || openTabs[0]?.id || null;
+    renderTabs();
+    if (activeTabId) loadSess(activeTabId);
+  } else {
+    openTabs = []; activeTabId = null; currentSessionId = null;
+    msgsEl.innerHTML = ''; showW(); renderTabs();
+  }
+}
+
+function switchProject(id) {
+  if (isGen) { toast(t('err.stop.project'), true); return; }
+  const p = projects.find(x => x.id === id);
+  if (!p) return;
+  saveProjTabs();
+  if (curProjectId === id) {
+    curProjectId = null; curWorkdir = null;
+    applyProjTabs(loadProjTabs(null));
+    renderProjects(); saveUIState(); loadHist();
+    toast(t('proj.deactivated'));
+    return;
+  }
+  curProjectId = id;
+  curWorkdir = p.workdir;
+  applyProjTabs(loadProjTabs(id));
+  renderProjects(); saveUIState(); loadHist();
+  toast(`✓ ${p.name}`);
+}
+
+async function delProject(id) {
+  const p = projects.find(x => x.id === id);
+  if (!confirm(t('proj.delete.confirm').replace('{{name}}', p?.name || id))) return;
+  await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+  if (curProjectId === id) {
+    curProjectId = null; curWorkdir = null;
+    applyProjTabs(loadProjTabs(null));
+    loadHist();
+  }
+  projects = projects.filter(x => x.id !== id);
+  try { localStorage.removeItem(PROJ_TABS_KEY(id)); } catch {}
+  renderProjects(); saveUIState();
+}
+
+// ─── Directory browser ───────────────────────────────────────────────────
+function openAddProject() {
+  $i('dirModal').classList.remove('hidden');
+  $i('gitInitChk').checked = false;
+  $i('projNameInput').value = '';
+  dirBrowsePath = null;
+  browseDirs(null);
+}
+
+async function browseDirs(dirPath) {
+  const url = dirPath ? `/api/browse-dirs?path=${encodeURIComponent(dirPath)}` : '/api/browse-dirs';
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+    if (d.error) { toast(d.error, true); return; }
+
+    dirBrowsePath = d.path;
+    $i('dirCurrentPath').textContent = d.path;
+    // Auto-fill name if empty
+    const nameEl = $i('projNameInput');
+    if (!nameEl.value) nameEl.value = d.path.split('/').filter(Boolean).pop() || '';
+
+    const list = $i('dirList');
+    list.innerHTML = '';
+
+    // Up button
+    if (d.parent) {
+      const b = document.createElement('div');
+      b.className = 'dii';
+      b.innerHTML = '<span class="di" style="color:var(--muted)">↑</span><span class="dn" style="color:var(--muted)">..</span>';
+      b.onclick = () => browseDirs(d.parent);
+      list.appendChild(b);
+    }
+
+    // Current dir as selectable row
+    const self = document.createElement('div');
+    self.className = 'dii selected';
+    self.innerHTML = `<span class="di" style="color:var(--accent2)">▸</span><span class="dn"><strong>. (ця директорія)</strong></span>`;
+    self.onclick = () => { dirBrowsePath = d.path; $i('dirCurrentPath').textContent = d.path; highlightSelected(self); };
+    list.appendChild(self);
+
+    // Subdirectories — single click selects, double click navigates
+    for (const it of d.items) {
+      const el = document.createElement('div');
+      el.className = `dii${it.hidden ? ' hidden-dir' : ''}`;
+      el.innerHTML = `<span class="di" style="color:var(--muted)">▸</span><span class="dn">${escH(it.name)}</span>`;
+      el.onclick = () => {
+        if (el._t) { clearTimeout(el._t); el._t = null; browseDirs(it.path); }
+        else { el._t = setTimeout(() => {
+          el._t = null;
+          dirBrowsePath = it.path;
+          $i('dirCurrentPath').textContent = it.path;
+          $i('projNameInput').value = it.name;
+          highlightSelected(el);
+        }, 220); }
+      };
+      list.appendChild(el);
+    }
+
+    if (!d.items.length) {
+      const e = document.createElement('div');
+      e.style.cssText = 'padding:12px;color:var(--muted);text-align:center;font-size:12px';
+      e.textContent = 'Немає підпапок';
+      list.appendChild(e);
+    }
+  } catch(e) { toast('Помилка: ' + e.message, true); }
+}
+
+function highlightSelected(el) {
+  $i('dirList').querySelectorAll('.dii').forEach(d => d.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+async function selectDir() {
+  if (!dirBrowsePath) { toast('Виберіть директорію', true); return; }
+  const name = ($i('projNameInput').value.trim()) || dirBrowsePath.split('/').filter(Boolean).pop() || dirBrowsePath;
+  const gitInit = $i('gitInitChk').checked;
+
+  const r = await fetch('/api/projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, workdir: dirBrowsePath, gitInit }),
+  });
+  const d = await r.json();
+  if (!d.ok) { toast('Помилка: ' + (d.error || '?'), true); return; }
+  if (d.gitError) toast('git init: ' + d.gitError, true, 4000);
+  else if (d.actions?.length) toast('✓ ' + d.actions.join(', '));
+
+  await loadProjectsList();
+  if (d.id) switchProject(d.id);
+  closeDirModal();
+}
+
+function closeDirModal() {
+  $i('dirModal').classList.add('hidden');
+}
+
+// ─── Persist UI state across page refreshes ──────────────────────────────
+const LS_KEY = 'cc_ui_state';
+function saveUIState() {
+  try {
+    const c = id => $i(id)?.classList.contains('collapsed');
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      activeMcp: [...activeMcp],
+      activeSkills: [...activeSkills],
+      curWorkdir, curProjectId,
+      panels: { left: c('leftPanel'), right: c('rightPanel') },
+      sections: { proactive: c('proactiveBody'), hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), proj: c('projBody') },
+      openTabs: openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
+      activeTabId: openTabs.find(t => t.id === activeTabId && !t.isNew) ? activeTabId : null,
+    }));
+  } catch {}
+}
+function restoreUIState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if (!s) return;
+    if (s.activeMcp) activeMcp = new Set(s.activeMcp);
+    if (s.activeSkills) activeSkills = new Set(s.activeSkills);
+    if (s.curWorkdir) curWorkdir = s.curWorkdir;
+    if (s.curProjectId) curProjectId = s.curProjectId;
+    if (s.panels) {
+      const setPanel = (id, collapsed) => {
+        const el = $i(id); if (!el) return;
+        el.classList.toggle('collapsed', !!collapsed);
+        const btn = document.querySelector(`[onclick="toggle('${id}')"]`);
+        if (btn) btn.classList.toggle('active', !collapsed);
+      };
+      setPanel('leftPanel', s.panels.left);
+      setPanel('rightPanel', s.panels.right);
+    }
+    if (s.sections) {
+      const secs = { proactive: 'proactiveBody', hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', proj: 'projBody' };
+      for (const [k, elId] of Object.entries(secs)) {
+        const el = $i(elId); if (el) el.classList.toggle('collapsed', !!s.sections[k]);
+      }
+    }
+    if (s.openTabs?.length) {
+      openTabs = s.openTabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false }));
+      activeTabId = s.activeTabId || null;
+    }
+  } catch {}
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+setLang(localStorage.getItem('lang') || 'uk');
+restoreUIState();
+renderTabs();
+loadCfg();
+loadProjectsList();
+connect();
+loadStats();
+_statsTimer = setInterval(loadStats, 30000);
+</script>
+</body>
+</html>
