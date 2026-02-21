@@ -63,9 +63,12 @@ class ClaudeCLI {
 
     args.push('-p', prompt);
 
-    // Unset CLAUDECODE to allow nested invocation from dev environment
+    // Unset CLAUDECODE to allow nested invocation from dev environment.
+    // Unset ANTHROPIC_API_KEY so the CLI subprocess uses Max subscription
+    // instead of prompting for API key configuration (which hangs on closed stdin).
     const env = { ...process.env };
     delete env.CLAUDECODE;
+    delete env.ANTHROPIC_API_KEY;
 
     const proc = spawn(this.claudeBin, args, {
       cwd: this.cwd,
