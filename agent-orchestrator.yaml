@@ -9,7 +9,7 @@ defaults:
     - desktop
 projects:
   my-project:
-    repo: owner/repo
+    repo: Lexus2016/claude-code-chat
     path: ~/claude-code-chat
     defaultBranch: main
     agentRules: |-
