@@ -58,7 +58,7 @@ cd claude-code-chat
 npm install
 
 cp .env.example .env
-# Edit .env → set ANTHROPIC_API_KEY=sk-ant-...
+# Edit .env → set ANTHROPIC_API_KEY=sk-ant-... (required for SDK mode)
 
 node server.js
 ```
@@ -112,7 +112,7 @@ claude-code-chat/
 
 ```env
 PORT=3000
-ANTHROPIC_API_KEY=        # Required for SDK mode only
+ANTHROPIC_API_KEY=        # SDK mode only; leave empty for CLI mode (Max subscription)
 SESSION_SECRET=           # Auto-generated if empty
 WORKDIR=./workspace       # Claude's working directory
 TRUST_PROXY=false         # Set true behind nginx/Caddy
