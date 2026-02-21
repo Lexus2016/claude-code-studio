@@ -58,7 +58,7 @@ cd claude-code-chat
 npm install
 
 cp .env.example .env
-# Відредагуйте .env → вкажіть ANTHROPIC_API_KEY=sk-ant-...
+# Відредагуйте .env → вкажіть ANTHROPIC_API_KEY=sk-ant-... (потрібно для SDK режиму)
 
 node server.js
 ```
@@ -112,7 +112,7 @@ claude-code-chat/
 
 ```env
 PORT=3000
-ANTHROPIC_API_KEY=        # Потрібно лише для SDK режиму
+ANTHROPIC_API_KEY=        # Лише для SDK режиму; залишити порожнім для CLI (Max підписка)
 SESSION_SECRET=           # Генерується автоматично якщо порожнє
 WORKDIR=./workspace       # Робоча директорія Claude
 TRUST_PROXY=false         # Встановити true за nginx/Caddy

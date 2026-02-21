@@ -89,17 +89,17 @@
   "skills": {
     "trading-bot": {
       "label": "🤖 Trading Bot",
-      "description": "Створення торгових ботів для криптобірж",
+      "description": "Creating trading bots for crypto exchanges",
       "file": "skills/trading-bot.md"
     },
     "pinescript": {
       "label": "📈 PineScript",
-      "description": "TradingView індикатори та стратегії",
+      "description": "TradingView indicators and strategies",
       "file": "skills/pinescript.md"
     },
     "code-review": {
       "label": "🔍 Code Review",
-      "description": "Аудит та рев'ю Python/JS проєктів",
+      "description": "Audit and review of Python/JS projects",
       "file": "skills/code-review.md"
     }
   }
