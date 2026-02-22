@@ -444,16 +444,9 @@ body::after {
 
 /* ─── Session info bar ─── */
 .sess-bar { display:flex; align-items:center; gap:6px; padding:3px 14px; font-size:11px; color:var(--text-dim); border-bottom:1px solid var(--border); user-select:none; min-height:24px; flex-shrink:0; }
-.sess-bar .sess-id { font-family:monospace; cursor:pointer; padding:1px 5px; border-radius:4px; background:var(--s1); transition:background .1s; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; }
-.sess-bar .sess-id:hover { background:var(--s2); }
-.sess-open-btn { padding:1px 8px; border-radius:4px; border:1px solid var(--border); background:transparent; color:var(--text-dim); cursor:pointer; font-size:11px; white-space:nowrap; transition:background .1s, color .1s; }
-.sess-open-btn:hover { background:var(--s2); color:var(--text); }
 .sess-project { font-weight:600; color:var(--accent2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:300px; }
 
-/* ─── Task interrupted / retry banner ─── */
-.msg-retry { display:flex; align-items:center; gap:10px; margin:8px 12px; padding:10px 14px; border-radius:8px; background:var(--s2); border:1px solid var(--warn,#f59e0b); font-size:13px; color:var(--text-dim); }
-.msg-retry button { padding:4px 14px; border-radius:6px; background:var(--accent); color:#fff; border:none; cursor:pointer; font-size:12px; }
-.msg-retry button:hover { opacity:.85; }
+/* ─── Retry indicators ─── */
 .retry-badge { font-size:11px; color:var(--text-dim); opacity:.65; margin-top:3px; letter-spacing:.01em; }
 .msg-retry-indicator { margin:2px 12px 6px; font-size:11px; color:var(--text-dim); opacity:.6; }
 
@@ -936,10 +929,11 @@ body::after {
   <div class="tabs-bar" id="tabsBar"></div>
 
   <div class="sess-bar" id="sessBar" style="display:none">
-    <span id="sessBarProject" class="sess-project"></span>
+    <span id="sessBarTitle" style="font-weight:600;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;flex-shrink:1;"></span>
+    <span id="sessBarClaudeId" style="display:none;font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="" onclick="copySessId()"></span>
+    <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openInClaude()">⚡ Claude Code</a>
     <span style="flex:1"></span>
-    <span id="sessBarId" class="sess-id" onclick="copySessId()" data-i18n-tip="session.copy_id" title="—">—</span>
-    <button class="sess-open-btn" onclick="openInClaude()" id="sessOpenBtn" style="display:none" data-i18n-tip="session.open_claude">⚡ Claude Code</button>
+    <span id="sessBarRetry" style="display:none;font-size:11px;color:var(--warn,#f59e0b);opacity:.85;flex-shrink:0;"></span>
   </div>
 
   <div class="msgs" id="messages" role="log" aria-live="polite" aria-label="Chat messages">
@@ -1141,7 +1135,7 @@ let config = { mcpServers: {}, skills: {} };
 let activeMcp = new Set(), activeSkills = new Set();
 let autoSkillsMode = true; // ON by default; user can disable
 let cfgFiles = {}, activeCfgTab = null;
-let curMode = 'auto', curAgent = 'single', curModel = 'sonnet', curEngine = 'cli';
+let curMode = 'auto', curAgent = 'single', curModel = 'sonnet';
 let curWorkdir = null; // current working directory for the session
 let projects = [], curProjectId = null; // projects list + active project
 
@@ -1241,7 +1235,7 @@ const TRANSLATIONS = {
     'dir.this_dir':'. (ця директорія)','dir.no_subdirs':'Немає підпапок',
     'toast.read_err':'Не вдалося прочитати: ','toast.err_prefix':'Помилка: ','dir.proj_name':'Назва проекту (авто якщо порожньо)',
     'welcome.prompt.1':'Поясни цей код крок за кроком','welcome.prompt.2':'Знайди та виправ помилки','welcome.prompt.3':'Напиши unit-тести','welcome.prompt.4':'Спроектуй архітектуру',
-    'toast.task_resumed':'Задачу відновлено','toast.task_lost':'З\'єднання втрачено, вивід недоступний','toast.task_interrupted':'Задачу перервано. Повторити?','toast.task_retry':'Повторити',
+    'toast.task_resumed':'Задачу відновлено','toast.task_lost':'З\'єднання втрачено, вивід недоступний','toast.task_retry':'retry',
     'session.copy_id':'Скопіювати ID сесії Claude','session.open_claude':'Відкрити в Claude Code',
   },
   en: {
@@ -1312,7 +1306,7 @@ const TRANSLATIONS = {
     'dir.this_dir':'. (this directory)','dir.no_subdirs':'No subdirectories',
     'toast.read_err':'Failed to read: ','toast.err_prefix':'Error: ','dir.proj_name':'Project name (auto if empty)',
     'welcome.prompt.1':'Explain this code step by step','welcome.prompt.2':'Find and fix bugs','welcome.prompt.3':'Write unit tests','welcome.prompt.4':'Design the architecture',
-    'toast.task_resumed':'Task resumed','toast.task_lost':'Connection lost, output unavailable','toast.task_interrupted':'Task was interrupted. Retry?','toast.task_retry':'Retry',
+    'toast.task_resumed':'Task resumed','toast.task_lost':'Connection lost, output unavailable','toast.task_retry':'retry',
     'session.copy_id':'Copy Claude session ID','session.open_claude':'Open in Claude Code',
   },
   ru: {
@@ -1383,7 +1377,7 @@ const TRANSLATIONS = {
     'dir.this_dir':'. (эта директория)','dir.no_subdirs':'Нет подпапок',
     'toast.read_err':'Не удалось прочитать: ','toast.err_prefix':'Ошибка: ','dir.proj_name':'Название проекта (авто если пусто)',
     'welcome.prompt.1':'Объясни этот код шаг за шагом','welcome.prompt.2':'Найди и исправь ошибки','welcome.prompt.3':'Напиши unit-тесты','welcome.prompt.4':'Спроектируй архитектуру',
-    'toast.task_resumed':'Задача возобновлена','toast.task_lost':'Соединение потеряно, вывод недоступен','toast.task_interrupted':'Задача прервана. Повторить?','toast.task_retry':'Повторить',
+    'toast.task_resumed':'Задача возобновлена','toast.task_lost':'Соединение потеряно, вывод недоступен','toast.task_retry':'retry',
     'session.copy_id':'Скопировать ID сессии Claude','session.open_claude':'Открыть в Claude Code',
   }
 };
@@ -1619,7 +1613,7 @@ function connect() {
       loadSess(activeTabId); // loadSess sets currentSessionId and sends start_session at the end
     } else if (currentSessionId && ws.readyState === 1) {
       // Re-attach to active session after a reconnect
-      ws.send(JSON.stringify({ type: 'start_session', sessionId: currentSessionId, mode: curMode, agentMode: curAgent, model: curModel, engine: 'cli'}));
+      ws.send(JSON.stringify({ type: 'start_session', sessionId: currentSessionId, mode: curMode, agentMode: curAgent, model: curModel}));
       ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: currentSessionId }));
     }
     // Subscribe to all open tabs across all projects to receive live task events
@@ -1673,8 +1667,31 @@ function handleWsMsg(d) {
       }
       break;
 
+    case 'task_retrying': {
+      if (isVisible) {
+        const rc = d.retryCount || 1;
+        const ind = document.createElement('div');
+        ind.className = 'msg-retry-indicator';
+        ind.textContent = `↩ ${t('toast.task_retry')} #${rc}`;
+        $i('messages')?.appendChild(ind);
+        setStatus('⚙ ' + (d.title || 'Task') + '…', 'warn');
+        sbShow('⚙ ' + (d.title || 'Task') + '…');
+        if (!curEl) { curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
+        scrollBottom();
+      }
+      if (found?.tab) {
+        found.tab.generating = true;
+        if (found.isCurrent) renderTabs(); else renderProjects();
+      }
+      break;
+    }
+
     case 'text':
-      if (!isVisible) break;
+      if (!isVisible) {
+        // Accumulate text for background tabs — restored when user switches back
+        const ts = getTS(tabId); ts.curTxt = (ts.curTxt || '') + d.text;
+        break;
+      }
       rmStatus();
       if (!curEl) { rmW(); curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
       curTxt += d.text;
@@ -1711,6 +1728,8 @@ function handleWsMsg(d) {
         if (curEl && curTxt) { curEl.querySelector('.msg').innerHTML = renderMd(curTxt); }
         markDone(curEl);
         curEl = null; curTxt = '';
+        // Clear retry badge on successful completion
+        { const rb = msgsEl.querySelector('.retry-badge'); if (rb) rb.remove(); }
         if (d.taskId) {
           // Task worker done — hide status bar, don't touch user chat state
           sbHide();
@@ -1725,6 +1744,8 @@ function handleWsMsg(d) {
           setStatus(t('status.connected'), 'ok');
         }
       }
+      // For background tabs: clear saved streaming text (message is now persisted to DB)
+      if (!isVisible) { const ts = getTS(tabId); if (ts) ts.curTxt = ''; }
       if (found?.tab) { found.tab.generating = false; found.tab.done = true; }
       if (isCurrent) { renderTabs(); if (tabId === activeTabId && !d.taskId) generatingTabId = null; }
       else renderProjects(); // background: remove busy dot from project
@@ -1752,6 +1773,8 @@ function handleWsMsg(d) {
         setStatus(t('status.error'), 'err');
         toast(d.error, true, 5000);
       }
+      // For background tabs: clear saved streaming text on error
+      if (!isVisible) { const ts = getTS(tabId); if (ts) ts.curTxt = ''; }
       if (found?.tab) { found.tab.generating = false; }
       if (isCurrent) { renderTabs(); if (tabId === activeTabId) generatingTabId = null; }
       else renderProjects();
@@ -1856,22 +1879,26 @@ function handleWsMsg(d) {
     }
 
     case 'task_interrupted': {
-      const ti = openTabs.find(x => x.id === tabId);
-      if (ti) { ti.generating = false; renderTabs(); saveUIState(); }
-      if (isVisible) { isGen = false; setSendStop(false); setStatus(t('status.connected'), 'ok'); }
-      if (!d.prompt) break;
-      { // auto-retry silently
-        const targetSessionId = d.sessionId || tabId;
+      if (!d.prompt) {
+        const ti = openTabs.find(x => x.id === tabId);
+        if (ti) { ti.generating = false; renderTabs(); saveUIState(); }
+        if (isVisible) { isGen = false; setSendStop(false); setStatus(t('status.connected'), 'ok'); }
+        break;
+      }
+      const targetSessionId = d.sessionId || tabId;
+      // Deduplicate: both resume_task and subscribe_session can fire task_interrupted
+      // for the same session — only retry once per page load
+      if (_retryingSessions.has(targetSessionId)) break;
+      _retryingSessions.add(targetSessionId);
+      { // auto-retry silently — no new message in chat
+        const ti = openTabs.find(x => x.id === tabId);
+        if (ti) { ti.generating = false; renderTabs(); }
+        if (isVisible) { isGen = false; setSendStop(false); }
         const retryCount = (d.retryCount || 0) + 1;
-        // Add retry badge to last user message instead of a new message bubble
-        if (isVisible) {
-          const userMsgs = $i('messages')?.querySelectorAll('.mw.user');
-          if (userMsgs?.length) {
-            const last = userMsgs[userMsgs.length - 1];
-            let badge = last.querySelector('.retry-badge');
-            if (!badge) { badge = document.createElement('div'); badge.className = 'retry-badge'; last.appendChild(badge); }
-            badge.textContent = `↩ retry ×${retryCount}`;
-          }
+        // Show retry count in session bar (not in chat)
+        if (tabId === activeTabId) {
+          const retryEl = $i('sessBarRetry');
+          if (retryEl) { retryEl.style.display = ''; retryEl.textContent = `↩ ×${retryCount}`; retryEl.title = `Retried ${retryCount} time(s)`; }
         }
         // Mark tab as generating and fire retry
         const targetTab = openTabs.find(x => x.id === targetSessionId);
@@ -1884,7 +1911,7 @@ function handleWsMsg(d) {
             retry: true,
             skills: [...activeSkills], mcpServers: [...activeMcp],
             mode: curMode, agentMode: curAgent,
-            model: curModel, engine: curEngine,
+            model: curModel,
             maxTurns: parseInt($i('maxTurns').value) || 30,
             workdir: curWorkdir || undefined,
           }));
@@ -2151,93 +2178,43 @@ function openTab(id, title) {
 async function updateSessBar() {
   const bar = $i('sessBar');
   if (!bar) return;
-  if (!activeTabId) { bar.style.display = 'none'; return; }
-  const _tab = openTabs.find(t => t.id === activeTabId);
-  if (!_tab || _tab.isNew) { bar.style.display = 'none'; return; }
+  if (!currentSessionId) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
   try {
-    const resp = await fetch(`/api/sessions/${activeTabId}`);
-    if (!resp.ok) { bar.style.display = 'none'; return; }
-    const s = await resp.json();
-    bar.style.display = 'flex';
-    const projEl = $i('sessBarProject');
-    if (projEl) {
-      const activeProj = curProjectId ? projects.find(p => p.id === curProjectId) : null;
-      projEl.textContent = activeProj ? activeProj.name : '';
-      projEl.title = activeProj ? activeProj.name : '';
-    }
-    const idEl = $i('sessBarId');
+    const r = await fetch(`/api/sessions/${currentSessionId}`);
+    if (!r.ok) { bar.style.display = 'none'; return; }
+    const sess = await r.json();
+    const titleEl = $i('sessBarTitle');
+    const idEl = $i('sessBarClaudeId');
+    const openBtn = $i('sessBarOpenBtn');
+    if (titleEl) { titleEl.textContent = sess.title || currentSessionId; titleEl.title = sess.title || ''; }
     if (idEl) {
-      const cid = s.claude_session_id || '';
-      idEl.textContent = cid ? cid.slice(0, 8) + '…' : '—';
-      idEl.dataset.fullId = cid;
-      idEl.title = cid || t('session.copy_id');
+      if (sess.claude_session_id) {
+        idEl.style.display = '';
+        idEl.textContent = sess.claude_session_id.slice(0, 8) + '…';
+        idEl.title = t('session.copy_id') + ': ' + sess.claude_session_id;
+        idEl.dataset.fullId = sess.claude_session_id;
+      } else { idEl.style.display = 'none'; }
     }
-    const openBtn = $i('sessOpenBtn');
-    if (openBtn) openBtn.style.display = s.claude_session_id ? '' : 'none';
-  } catch { if (bar) bar.style.display = 'none'; }
+    if (openBtn) { openBtn.style.display = sess.claude_session_id ? '' : 'none'; }
+  } catch { bar.style.display = 'none'; }
 }
-
 function copySessId() {
-  const id = $i('sessBarId')?.dataset.fullId;
+  const id = $i('sessBarClaudeId')?.dataset?.fullId;
   if (!id) return;
-  navigator.clipboard.writeText(id).then(() => toast(t('toast.link_copied')));
+  navigator.clipboard.writeText(id).then(() => toast('✓ ' + t('session.copy_id')));
 }
-
 async function openInClaude() {
-  if (!activeTabId) return;
+  if (!currentSessionId) return;
   try {
-    const resp = await fetch(`/api/sessions/${activeTabId}/open-terminal`, { method: 'POST' });
-    const d = await resp.json();
-    if (d.ok) {
-      toast('⚡ Claude Code launched');
-    } else if (d.command) {
-      // macOS not available — copy command to clipboard
-      navigator.clipboard.writeText(d.command).then(() => toast('📋 ' + d.command));
+    const r = await fetch(`/api/sessions/${currentSessionId}/open-terminal`, { method: 'POST' });
+    const d = await r.json();
+    if (!d.ok && d.command) {
+      navigator.clipboard.writeText(d.command).then(() => toast('✓ Команду скопійовано'));
     }
-  } catch { toast(t('toast.err_prefix') + 'open-terminal failed', true); }
+  } catch {}
 }
 
-function retryCrashedTask(btn) {
-  const retryEl = btn.closest('.msg-retry');
-  const sessionId = retryEl?.dataset.sessionId;
-  const prompt = retryEl?.dataset.prompt || '';
-  const retryCount = parseInt(retryEl?.dataset.retryCount || '0') + 1;
-
-  retryEl?.remove();
-  if (!sessionId || !prompt) return;
-  if (!ws || ws.readyState !== 1) { toast(t('toast.no_connection'), true); return; }
-
-  if (sessionId !== activeTabId) switchTab(sessionId);
-
-  // Add a silent retry indicator instead of a new user message
-  const indicator = document.createElement('div');
-  indicator.className = 'msg-retry-indicator';
-  indicator.textContent = `↩ ${t('toast.task_retry')} #${retryCount}`;
-  $i('messages')?.appendChild(indicator);
-  scrollBottom();
-
-  // Mark tab as generating
-  const tab = openTabs.find(x => x.id === activeTabId);
-  if (tab) { tab.generating = true; renderTabs(); }
-  isGen = true; generatingTabId = activeTabId;
-  showStatus(t('status.processing'));
-  setStatus(t('status.processing'), 'warn');
-  setSendStop(true);
-
-  // Send retry without adding a new user message to the chat
-  ws.send(JSON.stringify({
-    type: 'chat', text: prompt,
-    tabId: activeTabId,
-    sessionId,
-    retry: true,
-    skills: [...activeSkills],
-    mcpServers: [...activeMcp],
-    mode: curMode, agentMode: curAgent,
-    model: curModel, engine: curEngine,
-    maxTurns: parseInt($i('maxTurns').value) || 30,
-    workdir: curWorkdir || undefined,
-  }));
-}
 
 function switchTab(id) {
   if (activeTabId === id) return;
@@ -2292,7 +2269,7 @@ function closeTab(id) {
       msgsEl.innerHTML = ''; showW(); renderProjects();
     }
   }
-  renderTabs(); saveUIState();
+  renderTabs(); saveUIState(); updateSessBar();
 }
 
 function newTab() {
@@ -2665,7 +2642,7 @@ async function send() {
     skills: [...activeSkills],
     mcpServers: [...activeMcp],
     mode: curMode, agentMode: curAgent,
-    model: curModel, engine: curEngine,
+    model: curModel,
     maxTurns: parseInt($i('maxTurns').value) || 30,
     workdir: curWorkdir || undefined,
   }));
@@ -2819,6 +2796,7 @@ async function loadHist() {
 const MSG_PAGE = 50;
 let _allMsgs = [];   // all messages for current session (in memory)
 let _shownFrom = 0;  // index in _allMsgs from which messages are rendered
+const _retryingSessions = new Set(); // prevents duplicate retries from resume_task + subscribe_session
 
 function _renderMsgAt(idx, prepend = false) {
   const m = _allMsgs[idx];
@@ -2921,12 +2899,29 @@ async function loadSess(id) {
     }
     _updateLoadMoreBtn();
 
+    // Restore in-flight streaming content if tab was generating in background
+    const savedTxt = tabState[id]?.curTxt;
+    if (savedTxt) {
+      curEl = addMsg('assistant');
+      curTxt = savedTxt;
+      addSpinner(curEl);
+      curEl.querySelector('.msg').innerHTML = renderStreaming(curTxt);
+    }
+
     userScrolled = false;
     scrollBottom();
-  
+
     if (ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({ type: 'start_session', sessionId: id, mode: curMode, agentMode: curAgent, model: curModel, engine: 'cli'}));
+      ws.send(JSON.stringify({ type: 'start_session', sessionId: id, mode: curMode, agentMode: curAgent, model: curModel}));
       ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: id }));
+      // If task was interrupted or still running (server crash / tab reload),
+      // send resume_task so server decides: re-attach proxy (task_resumed) or silent retry (task_interrupted).
+      if (d.last_user_msg && !d.hasRunningTask) {
+        ws.send(JSON.stringify({ type: 'resume_task', sessionId: id, tabId: id }));
+        // Mark as generating immediately so the spinner shows before WS round-trip
+        const tabObj = openTabs.find(x => x.id === id);
+        if (tabObj && !tabObj.generating) { tabObj.generating = true; renderTabs(); saveUIState(); }
+      }
     }
     loadHist();
   } catch (e) { console.error('loadSess:', e); toast(t('sess.load.err'), true); }
@@ -3539,13 +3534,14 @@ function renderProjects() {
   el.innerHTML = '';
   $i('projCount').textContent = projects.length || '';
 
-  // Update active project label in header
+  // Update active project label in header + sessBar
+  const activeProj = curProjectId ? projects.find(p => p.id === curProjectId) : null;
   const activeProjLabel = $i('activeProjLabel');
   if (activeProjLabel) {
-    const activeProj = curProjectId ? projects.find(p => p.id === curProjectId) : null;
     if (activeProj) { activeProjLabel.textContent = activeProj.name; activeProjLabel.setAttribute('data-tip', activeProj.name + '\n' + activeProj.workdir); activeProjLabel.style.display = 'inline-block'; }
     else { activeProjLabel.textContent = ''; activeProjLabel.removeAttribute('data-tip'); activeProjLabel.style.display = 'none'; }
   }
+  document.title = activeProj ? activeProj.name : 'Claude Code Chat';
 
   if (!projects.length) {
     el.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5">Немає проектів. Додайте директорію для роботи з Claude Code.</div>';
@@ -3598,7 +3594,7 @@ function switchProject(id) {
     curProjectId = null; curWorkdir = null;
     openTabs = []; activeTabId = null; currentSessionId = null;
     msgsEl.innerHTML = ''; showW(); renderTabs();
-    renderProjects(); saveUIState(); loadHist();
+    renderProjects(); saveUIState(); loadHist(); updateSessBar();
     toast(t('proj.deactivated'));
     return;
   }
@@ -3636,7 +3632,7 @@ function switchProject(id) {
     isGen = false; generatingTabId = null; setSendStop(false); sbHide();
   }
 
-  renderProjects(); saveUIState(); loadHist(); loadFiles('');
+  renderProjects(); saveUIState(); loadHist(); loadFiles(''); updateSessBar();
   toast(`✓ ${p.name}`);
 }
 

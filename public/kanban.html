@@ -26,7 +26,6 @@ body{
   background:var(--bg); color:var(--text); font-size:14px;
   display:flex; flex-direction:column; line-height:1.55;
 }
-/* Noise texture (same as main app) */
 body::after{
   content:''; position:fixed; inset:0; z-index:9998; pointer-events:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
@@ -38,19 +37,32 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 ::-webkit-scrollbar-track{ background:transparent; }
 ::-webkit-scrollbar-thumb{ background:var(--border); border-radius:2px; }
 
-/* ─── Header (same as main app .hdr) ─── */
+/* ─── Header ─── */
 .hdr{ display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:var(--s1); border-bottom:1px solid var(--border); flex-shrink:0; }
 .hdr-l{ display:flex; align-items:center; gap:10px; }
-.logo{ font-size:17px; font-weight:800; background:linear-gradient(135deg,var(--accent2),var(--accent)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; letter-spacing:-0.5px; }
-.hdr h1{ font-size:16px; font-weight:700; letter-spacing:-.2px; }
+.logo{ width:32px; height:32px; border-radius:9px; background:linear-gradient(135deg,var(--accent),#a855f7); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; color:white; flex-shrink:0; box-shadow:0 2px 8px rgba(124,106,239,.4); }
 .hdr-btns{ display:flex; gap:5px; }
+.hdr-meta{ display:flex; align-items:center; gap:6px; }
+.status-dot{ display:inline-flex; align-items:center; gap:5px; font-size:13px; }
+.status-dot::before{ content:'●'; font-size:8px; }
+.status-dot.ok{ color:var(--green); }
+.status-dot.ok::before{ color:var(--green); }
+.status-dot.err{ color:var(--red); }
+.status-dot.err::before{ color:var(--red); }
+#kbVersionBadge{ font-size:11px; color:var(--muted); letter-spacing:.3px; }
 .hb{ background:var(--s2); border:1px solid var(--border); color:var(--muted); padding:5px 11px; border-radius:7px; cursor:pointer; font-size:13px; transition:all .15s; font-weight:500; font-family:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
 .hb:hover{ color:var(--text); border-color:var(--accent2); background:var(--s3); }
 .hb.active{ color:var(--accent2); border-color:var(--accent); background:var(--abg); }
 .hb:active{ transform:scale(0.95); transition-duration:0.07s; }
 
+/* ─── Nav switcher ─── */
+.nav-sw{ display:flex; align-items:center; background:var(--s3); border:1px solid var(--border); border-radius:8px; padding:3px; gap:2px; }
+.nav-sw-btn{ display:inline-flex; align-items:center; gap:5px; padding:4px 11px; border-radius:6px; font-size:13px; font-weight:600; color:var(--muted); text-decoration:none; transition:all .15s; white-space:nowrap; }
+.nav-sw-btn:hover{ color:var(--text); background:rgba(255,255,255,.05); }
+.nav-sw-btn.active{ background:var(--s2); color:var(--accent2); box-shadow:0 1px 3px rgba(0,0,0,.3); }
+
 /* ─── Project selector strip ─── */
-.proj-bar{ display:flex; align-items:center; gap:10px; padding:7px 16px; background:var(--s1); border-bottom:1px solid var(--border); flex-shrink:0; }
+.proj-bar{ display:flex; align-items:center; gap:10px; padding:9px 16px; background:var(--s1); border-bottom:1px solid var(--border); flex-shrink:0; }
 .proj-label{ font-size:11.5px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.6px; white-space:nowrap; }
 .proj-sel{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-sm); color:var(--text); font-size:13px; padding:4px 10px; cursor:pointer; font-family:inherit; max-width:280px; }
 .proj-sel:focus{ outline:none; border-color:var(--accent); }
@@ -67,7 +79,6 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .col-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 .col-title{ font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.6px; flex:1; color:var(--muted); }
 .col-cnt{ background:var(--s3); color:var(--muted); font-size:11px; padding:1px 7px; border-radius:10px; font-weight:600; }
-
 .col-body{ display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; padding:2px; min-height:80px; border-radius:var(--r-md); transition:background .12s; }
 .col-body.dz{ background:var(--abg); outline:2px dashed var(--accent); outline-offset:2px; }
 .col-add{ margin-top:8px; padding:7px; border-radius:var(--r-sm); border:1px dashed var(--border); background:transparent; color:var(--muted); cursor:pointer; font-size:12px; text-align:center; transition:.12s; font-family:inherit; }
@@ -91,7 +102,7 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .card-foot{ display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
 .badge{ font-size:11px; padding:2px 7px; border-radius:4px; white-space:nowrap; font-weight:500; }
 .badge-muted{ background:var(--s3); color:var(--muted); }
-.badge-accent{ background:var(--abg); color:var(--accent2); border:1px solid rgba(124,106,239,.2); }
+.badge-accent{ background:var(--abg); color:var(--accent2); border:1px solid rgba(124,106,239,.2); max-width:140px; overflow:hidden; text-overflow:ellipsis; }
 .badge-green{ background:rgba(63,185,80,.12); color:var(--green); border:1px solid rgba(63,185,80,.2); }
 .badge-orange{ background:rgba(229,164,53,.12); color:var(--orange); border:1px solid rgba(229,164,53,.2); }
 .card-time{ font-size:11px; color:var(--muted); margin-left:auto; }
@@ -150,6 +161,34 @@ textarea.inp{ resize:vertical; min-height:80px; }
 .open-link{ display:inline-flex; align-items:center; gap:4px; font-size:12px; color:var(--accent2); text-decoration:none; padding:2px 8px; border-radius:4px; border:1px solid rgba(124,106,239,.25); transition:background .1s; }
 .open-link:hover{ background:var(--abg); }
 
+/* ─── New session config (in Add modal) ─── */
+.new-sess-hdr{ font-size:11px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+.sess-cfg{ border:1px solid var(--border); border-radius:var(--r-md); padding:12px 14px; background:var(--s2); }
+.sc-row{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.sc-grp{ display:flex; flex-direction:column; gap:5px; }
+.sc-grp-lbl{ font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.5px; padding-left:1px; }
+.sc-seg{ display:flex; align-items:center; gap:2px; background:var(--s3); border:1px solid var(--border); border-radius:8px; padding:3px; }
+.sc-seg .sc-lbl{ font-size:11px; color:var(--muted); font-weight:700; letter-spacing:.6px; text-transform:uppercase; padding:0 7px; white-space:nowrap; }
+.sc-btn{ padding:4px 11px; border-radius:6px; border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:13px; transition:all .12s; white-space:nowrap; font-weight:500; font-family:inherit; }
+.sc-btn:hover{ color:var(--text); background:rgba(255,255,255,.06); }
+.sc-btn.on{ background:var(--accent); color:white; box-shadow:0 1px 6px rgba(124,106,239,.4); }
+.sc-sep{ width:1px; height:20px; background:var(--border); margin:0 2px; flex-shrink:0; }
+.sc-turns{ width:55px; padding:4px 8px; border-radius:6px; background:var(--s2); border:1px solid var(--border); color:var(--text); font-size:13px; text-align:center; font-family:inherit; outline:none; }
+.sc-turns:focus{ border-color:var(--accent); }
+.new-sess-cfg{ display:none; }
+.new-sess-cfg.visible{ display:block; }
+
+/* ─── Attachments ─── */
+.att-dropzone{ border:1px dashed var(--border); border-radius:var(--r-md); padding:10px 14px; text-align:center; cursor:pointer; font-size:12px; color:var(--muted); transition:border-color .15s,background .15s; }
+.att-dropzone:hover{ border-color:var(--accent); background:var(--abg); color:var(--text); }
+.att-previews{ display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
+.att-chip{ display:inline-flex; align-items:center; gap:6px; background:var(--s2); border:1px solid var(--border); border-radius:20px; padding:3px 8px 3px 4px; font-size:11px; max-width:220px; }
+.att-chip span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+.att-chip button{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px; line-height:1; padding:0; flex-shrink:0; }
+.att-chip button:hover{ color:var(--red); }
+.att-thumb{ width:22px; height:22px; object-fit:cover; border-radius:3px; flex-shrink:0; }
+.att-icon{ font-size:16px; flex-shrink:0; }
+
 /* ─── Toast ─── */
 .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--s3); border:1px solid var(--border); color:var(--text); padding:9px 18px; border-radius:var(--r-md); font-size:13px; font-weight:500; z-index:9999; pointer-events:none; opacity:0; transition:opacity .2s; white-space:nowrap; box-shadow:var(--shadow); }
 .toast.show{ opacity:1; }
@@ -157,22 +196,29 @@ textarea.inp{ resize:vertical; min-height:80px; }
 </head>
 <body>
 
-<!-- Header (same structure as main app) -->
+<!-- Header -->
 <div class="hdr">
   <div class="hdr-l">
-    <span class="logo">CC</span>
-    <div>
-      <h1 id="hdrTitle">Kanban</h1>
+    <div class="logo">CC</div>
+    <nav class="nav-sw" aria-label="Навігація між розділами">
+      <a class="nav-sw-btn" href="/" data-tip="Чат">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Chat
+      </a>
+      <a class="nav-sw-btn active" href="/kanban" data-tip="Kanban дошка">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
+        Kanban
+      </a>
+    </nav>
+    <div class="hdr-meta">
+      <span class="status-dot ok" id="kbStatusEl">Connected</span>
+      <span id="kbVersionBadge"></span>
     </div>
   </div>
   <div class="hdr-btns">
     <span class="refresh-ts" id="refreshTs" style="margin-right:4px"></span>
-    <button class="hb" onclick="refresh(true)" id="refreshBtn">↻</button>
-    <button class="hb" onclick="openAddModal()" id="addBtn">＋ <span id="addBtnLabel">Задача</span></button>
-    <a class="hb" href="/" data-tip="Чат">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-      <span id="chatLbl">Чат</span>
-    </a>
+    <button class="hb" onclick="refresh(true)" id="refreshBtn">&#8635;</button>
+    <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel">Задача</span></button>
     <a class="hb" href="https://github.com/Lexus2016/claude-code-chat" target="_blank" rel="noopener">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
     </a>
@@ -224,126 +270,123 @@ textarea.inp{ resize:vertical; min-height:80px; }
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TR = {
   uk: {
-    'hdr.title':'Kanban', 'hdr.chat':'Чат', 'hdr.add':'Задача',
-    'proj.label':'Проект:', 'proj.all':'— Всі проекти —',
-    'col.backlog':'Backlog', 'col.todo':'To Do', 'col.in_progress':'In Progress',
-    'col.done':'Виконано', 'col.cancelled':'Скасовано',
-    'col.empty':'Немає задач',
-    'card.generating':'Виконується',
-    'modal.add':'Нова задача', 'modal.edit':'Редагувати задачу',
-    'modal.name':'Назва *', 'modal.desc':'Опис',
-    'modal.status':'Статус', 'modal.session':'Пов\'язана сесія',
-    'modal.no_session':'— без сесії —',
-    'modal.create':'Створити', 'modal.save':'Зберегти', 'modal.cancel':'Скасувати',
+    'hdr.title':'Kanban','hdr.add':'Задача',
+    'proj.label':'Проект:','proj.all':'— Всі проекти —',
+    'col.backlog':'Backlog','col.todo':'До виконання','col.in_progress':'В процесі',
+    'col.done':'Виконано','col.cancelled':'Скасовано','col.empty':'Немає задач',
+    'modal.add':'Нова задача','modal.edit':'Редагувати задачу',
+    'modal.name':'Назва *','modal.status':'Статус','modal.session':"Пов'язана сесія",
+    'modal.no_session':'— без сесії —','modal.new_session':'➕ Нова сесія',
+    'modal.desc':'Опис','modal.notes':'Нотатки',
+    'modal.attach':'Вкладення','modal.attach_hint':'Клікніть або перетягніть файли (зображення, текст)',
+    'modal.create':'Створити','modal.save':'Зберегти','modal.cancel':'Скасувати',
     'modal.delete':'Видалити',
-    'confirm.title':'Видалити задачу?', 'confirm.body':'Ця дія незворотна.',
-    'confirm.ok':'Видалити', 'confirm.cancel':'Скасувати',
-    'chat.title':'Чат сесії', 'chat.empty':'Немає повідомлень',
-    'chat.open':'↗ Відкрити в чаті',
-    'modal.notes':'Уточнення для Claude',
-    'toast.created':'✓ Задачу створено', 'toast.saved':'✓ Збережено',
-    'toast.deleted':'Задачу видалено', 'toast.copied':'✓ ID скопійовано',
-    'toast.sess_created':'✓ Сесію створено автоматично',
-    'toast.err':'Помилка: ',
-    'card.running':'Виконується',
-    'msg.you':'Ви', 'msg.tool':'Tool',
-    'refresh.now':'щойно',
+    'confirm.title':'Видалити задачу?','confirm.body':'Ця дія незворотна.',
+    'confirm.ok':'Видалити','confirm.cancel':'Скасувати',
+    'chat.title':'Чат сесії','chat.empty':'Немає повідомлень','chat.open':'↗ Відкрити в чаті',
+    'toast.created':'✓ Задачу створено','toast.saved':'✓ Збережено',
+    'toast.deleted':'Задачу видалено','toast.copied':'✓ ID скопійовано',
+    'toast.sess_created':'✓ Сесію створено автоматично','toast.err':'Помилка: ',
+    'modal.new_sess_cfg':'Налаштування нової сесії',
+    'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки','tb.engine':'Двигун',
+    'card.running':'Виконується','msg.you':'Ви','msg.tool':'Tool','refresh.now':'щойно',
+    'card.retry':'↩ повтор',
+    'time.min':'хв','time.hr':'г','time.day':'д',
   },
   en: {
-    'hdr.title':'Kanban', 'hdr.chat':'Chat', 'hdr.add':'Task',
-    'proj.label':'Project:', 'proj.all':'— All projects —',
-    'col.backlog':'Backlog', 'col.todo':'To Do', 'col.in_progress':'In Progress',
-    'col.done':'Done', 'col.cancelled':'Cancelled',
-    'col.empty':'No tasks',
-    'card.generating':'Running',
-    'modal.add':'New task', 'modal.edit':'Edit task',
-    'modal.name':'Title *', 'modal.desc':'Description',
-    'modal.status':'Status', 'modal.session':'Linked session',
-    'modal.no_session':'— no session —',
-    'modal.create':'Create', 'modal.save':'Save', 'modal.cancel':'Cancel',
+    'hdr.title':'Kanban','hdr.add':'Task',
+    'proj.label':'Project:','proj.all':'— All projects —',
+    'col.backlog':'Backlog','col.todo':'To Do','col.in_progress':'In Progress',
+    'col.done':'Done','col.cancelled':'Cancelled','col.empty':'No tasks',
+    'modal.add':'New task','modal.edit':'Edit task',
+    'modal.name':'Title *','modal.status':'Status','modal.session':'Linked session',
+    'modal.no_session':'— no session —','modal.new_session':'➕ New Session',
+    'modal.desc':'Description','modal.notes':'Notes',
+    'modal.attach':'Attachments','modal.attach_hint':'Click or drag files (images, text)',
+    'modal.create':'Create','modal.save':'Save','modal.cancel':'Cancel',
     'modal.delete':'Delete',
-    'confirm.title':'Delete task?', 'confirm.body':'This action is irreversible.',
-    'confirm.ok':'Delete', 'confirm.cancel':'Cancel',
-    'chat.title':'Session chat', 'chat.empty':'No messages',
-    'chat.open':'↗ Open in chat',
-    'modal.notes':'Clarification for Claude',
-    'toast.created':'✓ Task created', 'toast.saved':'✓ Saved',
-    'toast.deleted':'Task deleted', 'toast.copied':'✓ ID copied',
-    'toast.sess_created':'✓ Session created automatically',
-    'toast.err':'Error: ',
-    'card.running':'Running',
-    'msg.you':'You', 'msg.tool':'Tool',
-    'refresh.now':'just now',
+    'confirm.title':'Delete task?','confirm.body':'This action is irreversible.',
+    'confirm.ok':'Delete','confirm.cancel':'Cancel',
+    'chat.title':'Session chat','chat.empty':'No messages','chat.open':'↗ Open in chat',
+    'toast.created':'✓ Task created','toast.saved':'✓ Saved',
+    'toast.deleted':'Task deleted','toast.copied':'✓ ID copied',
+    'toast.sess_created':'✓ Session created automatically','toast.err':'Error: ',
+    'modal.new_sess_cfg':'New session settings',
+    'tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns','tb.engine':'Engine',
+    'card.running':'Running','msg.you':'You','msg.tool':'Tool','refresh.now':'just now',
+    'card.retry':'↩ retry',
+    'time.min':'m','time.hr':'h','time.day':'d',
   },
   ru: {
-    'hdr.title':'Kanban', 'hdr.chat':'Чат', 'hdr.add':'Задача',
-    'proj.label':'Проект:', 'proj.all':'— Все проекты —',
-    'col.backlog':'Backlog', 'col.todo':'To Do', 'col.in_progress':'In Progress',
-    'col.done':'Выполнено', 'col.cancelled':'Отменено',
-    'col.empty':'Нет задач',
-    'card.generating':'Выполняется',
-    'modal.add':'Новая задача', 'modal.edit':'Редактировать задачу',
-    'modal.name':'Название *', 'modal.desc':'Описание',
-    'modal.status':'Статус', 'modal.session':'Связанная сессия',
-    'modal.no_session':'— без сессии —',
-    'modal.create':'Создать', 'modal.save':'Сохранить', 'modal.cancel':'Отмена',
+    'hdr.title':'Kanban','hdr.add':'Задача',
+    'proj.label':'Проект:','proj.all':'— Все проекты —',
+    'col.backlog':'Backlog','col.todo':'К выполнению','col.in_progress':'В процессе',
+    'col.done':'Выполнено','col.cancelled':'Отменено','col.empty':'Нет задач',
+    'modal.add':'Новая задача','modal.edit':'Редактировать задачу',
+    'modal.name':'Название *','modal.status':'Статус','modal.session':'Связанная сессия',
+    'modal.no_session':'— без сессии —','modal.new_session':'➕ Новая сессия',
+    'modal.desc':'Описание','modal.notes':'Заметки',
+    'modal.create':'Создать','modal.save':'Сохранить','modal.cancel':'Отмена',
     'modal.delete':'Удалить',
-    'confirm.title':'Удалить задачу?', 'confirm.body':'Это действие необратимо.',
-    'confirm.ok':'Удалить', 'confirm.cancel':'Отмена',
-    'chat.title':'Чат сессии', 'chat.empty':'Нет сообщений',
-    'chat.open':'↗ Открыть в чате',
-    'modal.notes':'Уточнение для Claude',
-    'toast.created':'✓ Задача создана', 'toast.saved':'✓ Сохранено',
-    'toast.deleted':'Задача удалена', 'toast.copied':'✓ ID скопирован',
-    'toast.sess_created':'✓ Сессия создана автоматически',
-    'toast.err':'Ошибка: ',
-    'card.running':'Выполняется',
-    'msg.you':'Вы', 'msg.tool':'Tool',
-    'refresh.now':'только что',
+    'confirm.title':'Удалить задачу?','confirm.body':'Это действие необратимо.',
+    'confirm.ok':'Удалить','confirm.cancel':'Отмена',
+    'chat.title':'Чат сессии','chat.empty':'Нет сообщений','chat.open':'↗ Открыть в чате',
+    'toast.created':'✓ Задача создана','toast.saved':'✓ Сохранено',
+    'toast.deleted':'Задача удалена','toast.copied':'✓ ID скопирован',
+    'toast.sess_created':'✓ Сессия создана автоматически','toast.err':'Ошибка: ',
+    'modal.new_sess_cfg':'Настройки новой сессии',
+    'modal.attach':'Вложения','modal.attach_hint':'Нажмите или перетащите файлы (изображения, текст)',
+    'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги','tb.engine':'Движок',
+    'card.running':'Выполняется','msg.you':'Вы','msg.tool':'Tool','refresh.now':'только что',
+    'card.retry':'↩ повтор',
+    'time.min':'м','time.hr':'ч','time.day':'д',
   },
 };
 const lang = localStorage.getItem('lang') || 'uk';
 function t(k){ return (TR[lang]||TR.uk)[k] || k; }
 
-// ─── Apply i18n to static elements ────────────────────────────────────────
 document.title = t('hdr.title') + ' — Claude Code Chat';
-document.getElementById('hdrTitle').textContent = t('hdr.title');
-document.getElementById('chatLbl').textContent = t('hdr.chat');
-document.getElementById('addBtnLabel').textContent = t('hdr.add');
-document.getElementById('projLabel').textContent = t('proj.label');
-document.getElementById('allProjOpt').textContent = t('proj.all');
-document.getElementById('cancelBtn').textContent = t('confirm.cancel');
-document.getElementById('confirmOkBtn').textContent = t('confirm.ok');
+fetch('/api/version').then(r=>r.json()).then(d=>{
+  const el=document.getElementById('kbVersionBadge');
+  if(el&&d.version) el.textContent='Claude Code Chat v'+d.version;
+}).catch(()=>{});
+document.getElementById('addBtnLabel').textContent=t('hdr.add');
+document.getElementById('projLabel').textContent=t('proj.label');
+document.getElementById('allProjOpt').textContent=t('proj.all');
+document.getElementById('cancelBtn').textContent=t('confirm.cancel');
+document.getElementById('confirmOkBtn').textContent=t('confirm.ok');
 
 // ─── State ────────────────────────────────────────────────────────────────
-const COLS = [
-  { id:'backlog',     dot:'dot-backlog'     },
-  { id:'todo',        dot:'dot-todo'        },
-  { id:'in_progress', dot:'dot-in_progress' },
-  { id:'done',        dot:'dot-done'        },
-  { id:'cancelled',   dot:'dot-cancelled'   },
+const COLS=[
+  {id:'backlog',dot:'dot-backlog'},
+  {id:'todo',dot:'dot-todo'},
+  {id:'in_progress',dot:'dot-in_progress'},
+  {id:'done',dot:'dot-done'},
+  {id:'cancelled',dot:'dot-cancelled'},
 ];
+let tasks=[],sessions=[],projects=[];
+let curWorkdir=null,lastEtag='',refreshTimer=null,modalMode=null,editingId=null,dragSrcId=null;
+let pendingAttachments=[]; // [{name, type, base64}]
 
-let tasks = [], sessions = [], projects = [];
-let curWorkdir = null;
-let lastEtag = '';
-let refreshTimer = null;
-let modalMode = null;
-let editingId = null;
-let dragSrcId = null;
+// ─── Session settings (persisted) ─────────────────────────────────────────
+let kbSettings={mode:'auto',agent_mode:'single',model:'sonnet',max_turns:30};
+try{
+  const _ks=JSON.parse(localStorage.getItem('kanban_sess_cfg')||'null');
+  if(_ks&&typeof _ks==='object') kbSettings={...kbSettings,..._ks};
+}catch{}
 
 // ─── Utils ────────────────────────────────────────────────────────────────
-function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function $i(id){ return document.getElementById(id); }
+function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function $i(id){return document.getElementById(id);}
 function relTime(iso){
-  if(!iso) return '';
-  const s = Math.round((Date.now() - new Date(iso.endsWith('Z')?iso:iso+'Z'))/1000);
-  if(s<60) return t('refresh.now');
-  if(s<3600) return Math.floor(s/60)+'хв';
-  if(s<86400) return Math.floor(s/3600)+'г';
-  return Math.floor(s/86400)+'д';
+  if(!iso)return'';
+  const s=Math.round((Date.now()-new Date(iso.endsWith('Z')?iso:iso+'Z'))/1000);
+  if(s<60)return t('refresh.now');
+  if(s<3600)return Math.floor(s/60)+t('time.min');
+  if(s<86400)return Math.floor(s/3600)+t('time.hr');
+  return Math.floor(s/86400)+t('time.day');
 }
-function toast(msg, err=false){
+function toast(msg,err=false){
   const el=$i('toast');
   el.textContent=msg;
   el.style.background=err?'rgba(248,81,73,.15)':'';
@@ -353,174 +396,134 @@ function toast(msg, err=false){
   el._t=setTimeout(()=>el.classList.remove('show'),2500);
 }
 
-// ─── Authenticated fetch (redirect to /login on 401) ──────────────────────
-async function apiFetch(url, opts={}){
-  const r = await fetch(url, opts);
-  if(r.status === 401){ location.href = '/login'; throw new Error('401'); }
+async function apiFetch(url,opts={}){
+  const r=await fetch(url,opts);
+  if(r.status===401){location.href='/login';throw new Error('401');}
   return r;
 }
 
-// ─── Project handling ─────────────────────────────────────────────────────
+// ─── Projects ─────────────────────────────────────────────────────────────
 async function loadProjects(){
-  try{
-    const r = await apiFetch('/api/projects');
-    projects = await r.json();
-  } catch { projects = []; }
-  const sel = $i('projSel');
-  // Remove old options except first (all)
-  while(sel.options.length > 1) sel.remove(1);
+  try{const r=await apiFetch('/api/projects');projects=await r.json();}catch{projects=[];}
+  const sel=$i('projSel');
+  while(sel.options.length>1)sel.remove(1);
   for(const p of projects){
-    const opt = document.createElement('option');
-    opt.value = p.workdir || p.id;
-    opt.textContent = p.name || p.workdir || p.id;
-    opt.dataset.workdir = p.workdir || '';
+    const opt=document.createElement('option');
+    opt.value=p.workdir||p.id;
+    opt.textContent=p.name||p.workdir||p.id;
+    opt.dataset.workdir=p.workdir||'';
     sel.appendChild(opt);
   }
-  // Try to restore last-used workdir from main app's localStorage
   try{
-    const s = JSON.parse(localStorage.getItem('cc_ui_state')||'null');
+    const s=JSON.parse(localStorage.getItem('cc_ui_state')||'null');
     if(s?.curWorkdir){
-      // Find matching option
       const opts=[...sel.options];
       const found=opts.find(o=>o.value===s.curWorkdir||o.dataset.workdir===s.curWorkdir);
-      if(found){ sel.value=found.value; }
+      if(found)sel.value=found.value;
     }
-  } catch {}
+  }catch{}
   onProjChange(false);
 }
-
 function onProjChange(doRefresh=true){
-  const sel = $i('projSel');
-  const opt = sel.options[sel.selectedIndex];
-  curWorkdir = opt?.value || null;
-  if(doRefresh) refresh(true);
+  const sel=$i('projSel');
+  const opt=sel.options[sel.selectedIndex];
+  curWorkdir=opt?.value||null;
+  if(doRefresh)refresh(true);
 }
 
 // ─── Data fetching ────────────────────────────────────────────────────────
 async function fetchTasks(){
-  const qs = curWorkdir ? '?workdir='+encodeURIComponent(curWorkdir) : '';
-  const r = await apiFetch('/api/tasks'+qs);
-  return r.json();
+  const qs=curWorkdir?'?workdir='+encodeURIComponent(curWorkdir):'';
+  return(await apiFetch('/api/tasks'+qs)).json();
 }
 async function fetchSessions(){
-  const qs = curWorkdir ? '?workdir='+encodeURIComponent(curWorkdir) : '';
-  const r = await apiFetch('/api/sessions'+qs);
-  return r.json();
+  const qs=curWorkdir?'?workdir='+encodeURIComponent(curWorkdir):'';
+  return(await apiFetch('/api/sessions'+qs)).json();
 }
 async function fetchEtag(){
-  const r = await apiFetch('/api/tasks/etag');
-  const d = await r.json();
+  const d=await(await apiFetch('/api/tasks/etag')).json();
   return d.ts+'|'+d.n;
 }
 async function fetchMessages(sessId){
-  const r = await apiFetch(`/api/sessions/${sessId}/messages?limit=30&offset=0`);
-  const d = await r.json();
-  return d.messages || [];
+  const d=await(await apiFetch(`/api/sessions/${sessId}/messages?limit=30&offset=0`)).json();
+  return d.messages||[];
 }
 
 async function refresh(force=false){
   const btn=$i('refreshBtn');
   btn.innerHTML='<span class="spinning"></span>';
   try{
-    const etag = await fetchEtag();
-    if(!force && etag===lastEtag){ return; }
-    const [newTasks, newSessions] = await Promise.all([fetchTasks(), fetchSessions()]);
-    tasks=newTasks; sessions=newSessions; lastEtag=etag;
+    const etag=await fetchEtag();
+    if(!force&&etag===lastEtag)return;
+    const[newTasks,newSessions]=await Promise.all([fetchTasks(),fetchSessions()]);
+    tasks=newTasks;sessions=newSessions;lastEtag=etag;
     renderBoard();
-    const ts = new Date().toLocaleTimeString(lang==='uk'?'uk-UA':lang==='ru'?'ru-RU':'en-GB',{hour:'2-digit',minute:'2-digit'});
-    $i('refreshTs').textContent = ts;
-    $i('refreshTs2').textContent = ts;
-  } catch(e){ if(e.message!=='401') toast(t('toast.err')+e.message, true); }
-  finally { btn.innerHTML='↻'; }
+    const ts=new Date().toLocaleTimeString(lang==='uk'?'uk-UA':lang==='ru'?'ru-RU':'en-GB',{hour:'2-digit',minute:'2-digit'});
+    $i('refreshTs').textContent=ts;
+    $i('refreshTs2').textContent=ts;
+  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
+  finally{btn.innerHTML='&#8635;';}
 }
-
 function startAutoRefresh(){
   clearTimeout(refreshTimer);
-  const hasActive = tasks.some(t => t.status === 'in_progress' || t.status === 'todo');
-  const delay = hasActive ? 5000 : 30000;
-  refreshTimer = setTimeout(async () => {
-    await refresh(false);
-    startAutoRefresh();
-  }, delay);
+  const hasActive=tasks.some(t=>t.status==='in_progress'||t.status==='todo');
+  const delay=hasActive?5000:30000;
+  refreshTimer=setTimeout(async()=>{await refresh(false);startAutoRefresh();},delay);
 }
 
 // ─── Board Render ─────────────────────────────────────────────────────────
 function renderBoard(){
-  const board=$i('board');
-  board.innerHTML='';
+  const board=$i('board');board.innerHTML='';
   for(const col of COLS){
     const colTasks=tasks.filter(tk=>tk.status===col.id).sort((a,b)=>a.sort_order-b.sort_order);
-    board.appendChild(makeColumn(col, colTasks));
+    board.appendChild(makeColumn(col,colTasks));
   }
 }
-
-function makeColumn(col, colTasks){
-  const el=document.createElement('div');
-  el.className='col';
-
-  const hd=document.createElement('div');
-  hd.className='col-head';
+function makeColumn(col,colTasks){
+  const el=document.createElement('div');el.className='col';
+  const hd=document.createElement('div');hd.className='col-head';
   hd.innerHTML=`<div class="col-dot ${col.dot}"></div><span class="col-title">${escH(t('col.'+col.id))}</span><span class="col-cnt">${colTasks.length}</span>`;
   el.appendChild(hd);
-
-  const body=document.createElement('div');
-  body.className='col-body';
-  body.dataset.status=col.id;
+  const body=document.createElement('div');body.className='col-body';body.dataset.status=col.id;
   setupDropZone(body);
-
   if(colTasks.length===0){
-    const empty=document.createElement('div');
-    empty.className='col-empty';
-    empty.textContent=t('col.empty');
-    body.appendChild(empty);
-  } else {
-    for(const tk of colTasks) body.appendChild(makeCard(tk));
+    const empty=document.createElement('div');empty.className='col-empty';empty.textContent=t('col.empty');body.appendChild(empty);
+  }else{
+    for(const tk of colTasks)body.appendChild(makeCard(tk));
   }
   el.appendChild(body);
-
-  const addBtn=document.createElement('button');
-  addBtn.className='col-add';
-  addBtn.textContent='＋ '+t('hdr.add');
-  addBtn.onclick=()=>openAddModal(col.id);
+  const addBtn=document.createElement('button');addBtn.className='col-add';
+  addBtn.textContent='＋ '+t('hdr.add');addBtn.onclick=()=>openAddModal(col.id);
   el.appendChild(addBtn);
   return el;
 }
-
 function makeCard(tk){
-  const el=document.createElement('div');
-  el.className='card';
-  el.dataset.id=tk.id;
-  el.draggable=true;
-
+  const el=document.createElement('div');el.className='card';el.dataset.id=tk.id;el.draggable=true;
   let sessBadge='';
   if(tk.status==='in_progress'){
     sessBadge=`<span class="badge badge-orange"><span class="spinning" style="width:10px;height:10px;border-width:1.5px"></span> ${escH(t('card.running'))}</span>`;
-  } else if(tk.session_id){
+  }else if(tk.session_id){
     sessBadge=`<span class="badge badge-accent">💬 ${escH(tk.sess_title||'session')}</span>`;
   }
   const modelBadge=tk.sess_model?`<span class="badge badge-muted">${escH(tk.sess_model)}</span>`:'';
-
+  const retryBadge=tk.retry_count>0?`<span class="badge badge-muted" title="${tk.retry_count} restart(s)">${escH(t('card.retry'))} ×${tk.retry_count}</span>`:'';
   el.innerHTML=`
     <div class="card-title">${escH(tk.title)}</div>
     ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
     <div class="card-foot">
-      ${sessBadge}${modelBadge}
+      ${sessBadge}${modelBadge}${retryBadge}
       <span class="card-time">${relTime(tk.updated_at)}</span>
       <span class="card-actions">
         <button class="cbtn" title="${t('modal.edit')}" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
         <button class="cbtn" title="${t('modal.delete')}" onclick="event.stopPropagation();confirmDelete('${tk.id}')">✕</button>
       </span>
     </div>`;
-
   el.onclick=()=>openEditModal(tk.id);
-
-  el.addEventListener('dragstart', e=>{
-    dragSrcId=tk.id;
-    el.classList.add('dragging');
-    e.dataTransfer.effectAllowed='move';
-    e.dataTransfer.setData('text/plain', tk.id);
+  el.addEventListener('dragstart',e=>{
+    dragSrcId=tk.id;el.classList.add('dragging');
+    e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',tk.id);
   });
-  el.addEventListener('dragend', ()=>{
+  el.addEventListener('dragend',()=>{
     el.classList.remove('dragging');
     document.querySelectorAll('.col-body.dz').forEach(z=>z.classList.remove('dz'));
     document.querySelectorAll('.card-ph').forEach(p=>p.remove());
@@ -530,31 +533,26 @@ function makeCard(tk){
 
 // ─── Drag & Drop ──────────────────────────────────────────────────────────
 function setupDropZone(el){
-  el.addEventListener('dragover', e=>{
-    e.preventDefault(); e.dataTransfer.dropEffect='move';
-    el.classList.add('dz');
-    const after=getDragAfter(el, e.clientY);
+  el.addEventListener('dragover',e=>{
+    e.preventDefault();e.dataTransfer.dropEffect='move';el.classList.add('dz');
+    const after=getDragAfter(el,e.clientY);
     document.querySelectorAll('.card-ph').forEach(p=>p.remove());
-    const ph=document.createElement('div');
-    ph.className='card-ph';
-    ph.style.height='52px';
-    if(after) el.insertBefore(ph, after); else el.appendChild(ph);
+    const ph=document.createElement('div');ph.className='card-ph';ph.style.height='52px';
+    if(after)el.insertBefore(ph,after);else el.appendChild(ph);
   });
-  el.addEventListener('dragleave', e=>{
+  el.addEventListener('dragleave',e=>{
     if(!el.contains(e.relatedTarget)){
-      el.classList.remove('dz');
-      document.querySelectorAll('.card-ph').forEach(p=>p.remove());
+      el.classList.remove('dz');document.querySelectorAll('.card-ph').forEach(p=>p.remove());
     }
   });
-  el.addEventListener('drop', async e=>{
-    e.preventDefault();
-    el.classList.remove('dz');
+  el.addEventListener('drop',async e=>{
+    e.preventDefault();el.classList.remove('dz');
     document.querySelectorAll('.card-ph').forEach(p=>p.remove());
     const id=e.dataTransfer.getData('text/plain')||dragSrcId;
-    if(!id) return;
+    if(!id)return;
     const newStatus=el.dataset.status;
     const cards=[...el.querySelectorAll('.card[data-id]')];
-    const afterEl=getDragAfter(el, e.clientY);
+    const afterEl=getDragAfter(el,e.clientY);
     let sort_order;
     if(afterEl){
       const afterTk=tasks.find(tk=>tk.id===afterEl.dataset.id);
@@ -562,44 +560,43 @@ function setupDropZone(el){
       const prevEl=cards[idx-1];
       const prevTk=prevEl?tasks.find(tk=>tk.id===prevEl.dataset.id):null;
       sort_order=((prevTk?.sort_order||0)+(afterTk?.sort_order||0))/2;
-    } else {
+    }else{
       const last=cards[cards.length-1];
       const lastTk=last?tasks.find(tk=>tk.id===last.dataset.id):null;
       sort_order=(lastTk?.sort_order||0)+1000;
     }
     try{
-      const task = tasks.find(tk=>tk.id===id);
-      let session_id = task?.session_id || null;
-      // Auto-create session when moving to In Progress without one
-      if(newStatus==='in_progress' && !session_id){
-        const sessR = await apiFetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({title: task?.title||t('col.todo'), workdir: curWorkdir||null})});
-        const sess = await sessR.json();
-        session_id = sess.id;
+      const task=tasks.find(tk=>tk.id===id);
+      let session_id=task?.session_id||null;
+      if(newStatus==='in_progress'&&!session_id){
+        const sessR=await apiFetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({title:task?.title||t('col.todo'),workdir:curWorkdir||null,
+            model:task?.model||kbSettings.model,mode:task?.mode||kbSettings.mode,agentMode:task?.agent_mode||kbSettings.agent_mode})});
+        const sess=await sessR.json();
+        session_id=sess.id;
         toast(t('toast.sess_created'));
       }
       await apiFetch(`/api/tasks/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({status:newStatus, sort_order, session_id: session_id||undefined})});
+        body:JSON.stringify({status:newStatus,sort_order,session_id:session_id||undefined})});
       await refresh(true);
-    } catch(err){ if(err.message!=='401') toast(t('toast.err')+err.message, true); }
+    }catch(err){if(err.message!=='401')toast(t('toast.err')+err.message,true);}
   });
 }
-
-function getDragAfter(container, y){
+function getDragAfter(container,y){
   const els=[...container.querySelectorAll('.card:not(.dragging):not(.card-ph)')];
   return els.reduce((cl,el)=>{
     const box=el.getBoundingClientRect();
     const offset=y-box.top-box.height/2;
-    if(offset<0 && offset>cl.offset) return {offset,el};
+    if(offset<0&&offset>cl.offset)return{offset,el};
     return cl;
   },{offset:-Infinity,el:null}).el;
 }
 
 // ─── Modal: Add ────────────────────────────────────────────────────────────
 function openAddModal(defaultStatus='backlog'){
-  modalMode='add'; editingId=null;
+  modalMode='add';editingId=null;pendingAttachments=[];
   $i('modalTitle').textContent=t('modal.add');
-  $i('modalBody').innerHTML=buildForm({status:defaultStatus});
+  $i('modalBody').innerHTML=buildForm({status:defaultStatus,...kbSettings});
   $i('modalFt').innerHTML=`
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
     <button class="btn btn-primary btn-sm" onclick="saveTask()">${t('modal.create')}</button>`;
@@ -610,40 +607,74 @@ function openAddModal(defaultStatus='backlog'){
 // ─── Modal: Edit ───────────────────────────────────────────────────────────
 async function openEditModal(id){
   const tk=tasks.find(x=>x.id===id);
-  if(!tk) return;
-  modalMode='edit'; editingId=id;
+  if(!tk)return;
+  modalMode='edit';editingId=id;
+  try{pendingAttachments=tk.attachments?JSON.parse(tk.attachments):[];}catch{pendingAttachments=[];}
   $i('modalTitle').textContent=t('modal.edit');
-  // Render form immediately
   $i('modalBody').innerHTML=buildForm(tk);
+  setTimeout(()=>renderAttPreviews(),0);
   $i('modalFt').innerHTML=`
     <button class="btn btn-danger btn-sm" onclick="confirmDelete('${id}');closeModal()">${t('modal.delete')}</button>
     <div style="flex:1"></div>
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
     <button class="btn btn-primary btn-sm" onclick="saveTask()">${t('modal.save')}</button>`;
   $i('taskOv').classList.remove('hidden');
-  // Load chat history asynchronously and append
   if(tk.session_id){
     try{
       const msgs=await fetchMessages(tk.session_id);
-      const chatHtml=buildChatPanel(tk, msgs);
+      const chatHtml=buildChatPanel(tk,msgs);
       const body=$i('modalBody');
-      if(body && !$i('taskOv').classList.contains('hidden')){
-        const div=document.createElement('div');
-        div.innerHTML=chatHtml;
-        body.appendChild(div.firstElementChild);
+      if(body&&!$i('taskOv').classList.contains('hidden')){
+        const div=document.createElement('div');div.innerHTML=chatHtml;body.appendChild(div.firstElementChild);
       }
-    } catch {}
+    }catch{}
   }
   setTimeout(()=>$i('fTitle')?.focus(),60);
 }
 
 function buildForm(tk={}){
+  const isNew=!tk.id;
+  const m=tk.mode||kbSettings.mode||'auto', ag=tk.agent_mode||kbSettings.agent_mode||'single', mdl=tk.model||kbSettings.model||'sonnet', eng=tk.engine||kbSettings.engine||'cli';
   const statusOpts=COLS.map(c=>`<option value="${c.id}"${tk.status===c.id?' selected':''}>${escH(t('col.'+c.id))}</option>`).join('');
-  const sessOpts=`<option value="">${escH(t('modal.no_session'))}</option>`+
+  const sessOpts=`<option value="">${escH(isNew?t('modal.new_session'):t('modal.no_session'))}</option>`+
     sessions.map(s=>`<option value="${s.id}"${tk.session_id===s.id?' selected':''}>${escH((s.title||s.id).substring(0,60))}</option>`).join('');
+  const visClass=!tk.session_id?' visible':'';
   return `
     <div><label class="lbl">${t('modal.name')}</label>
       <input id="fTitle" class="inp" placeholder="${t('modal.name')}" value="${escH(tk.title||'')}" maxlength="200">
+    </div>
+    <div class="grid2">
+      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel">${statusOpts}</select></div>
+      <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel" onchange="onFSessionChange()">${sessOpts}</select></div>
+    </div>
+    <div id="newSessCfg" class="new-sess-cfg${visClass}">
+      <div class="new-sess-hdr">${t('modal.new_sess_cfg')}</div>
+      <div class="sc-row">
+        <div class="sc-seg" data-group="mode">
+          <span class="sc-lbl">${t('tb.mode')}</span>
+          <button type="button" class="sc-btn${m==='auto'?' on':''}" data-v="auto" onclick="scOpt(this)">Auto</button>
+          <button type="button" class="sc-btn${m==='planning'?' on':''}" data-v="planning" onclick="scOpt(this)">Plan</button>
+          <button type="button" class="sc-btn${m==='task'?' on':''}" data-v="task" onclick="scOpt(this)">Task</button>
+        </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg" data-group="agent">
+          <span class="sc-lbl">${t('tb.agent')}</span>
+          <button type="button" class="sc-btn${ag==='single'?' on':''}" data-v="single" onclick="scOpt(this)">Single</button>
+          <button type="button" class="sc-btn${ag==='multi'?' on':''}" data-v="multi" onclick="scOpt(this)">Multi</button>
+        </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg" data-group="model">
+          <span class="sc-lbl">${t('tb.model')}</span>
+          <button type="button" class="sc-btn${mdl==='haiku'?' on':''}" data-v="haiku" onclick="scOpt(this)">Haiku</button>
+          <button type="button" class="sc-btn${mdl==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
+          <button type="button" class="sc-btn${mdl==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
+        </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg">
+          <span class="sc-lbl">${t('tb.turns')}</span>
+          <input type="number" class="sc-turns" id="fMaxTurns" value="${tk.max_turns||kbSettings.max_turns||30}" min="1" max="100" oninput="kbSettings.max_turns=+this.value||30;try{localStorage.setItem('kanban_sess_cfg',JSON.stringify(kbSettings));}catch{}">
+        </div>
+      </div>
     </div>
     <div><label class="lbl">${t('modal.desc')}</label>
       <textarea id="fDesc" class="inp" rows="3" placeholder="…" maxlength="2000">${escH(tk.description||'')}</textarea>
@@ -651,21 +682,82 @@ function buildForm(tk={}){
     <div><label class="lbl">${t('modal.notes')}</label>
       <textarea id="fNotes" class="inp" rows="2" placeholder="…" maxlength="2000">${escH(tk.notes||'')}</textarea>
     </div>
-    <div class="grid2">
-      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel">${statusOpts}</select></div>
-      <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel">${sessOpts}</select></div>
+    <div>
+      <label class="lbl">${t('modal.attach')}</label>
+      <input type="file" id="fAttachments" multiple accept="image/*,.txt,.md,.json,.csv,.log,.py,.js,.ts,.html,.css" style="display:none" onchange="onFileSelect(event)">
+      <div class="att-dropzone" onclick="$i('fAttachments').click()" ondragover="event.preventDefault()" ondrop="onFileDrop(event)">${t('modal.attach_hint')}</div>
+      <div class="att-previews" id="attPreviews"></div>
     </div>`;
 }
 
-function buildChatPanel(tk, msgs){
-  const sessTitle = escH(tk.sess_title || tk.session_id);
-  const claudeId = tk.claude_session_id || '';
-  const openUrl = `/?open_session=${encodeURIComponent(tk.session_id)}`;
+// ─── Attachment helpers ────────────────────────────────────────────────────
+const MAX_ATT_SIZE=5*1024*1024; // 5 MB per file
+const MAX_ATT_COUNT=10;
+function onFileSelect(e){processFiles(Array.from(e.target.files));e.target.value='';}
+function onFileDrop(e){e.preventDefault();processFiles(Array.from(e.dataTransfer.files));}
+function processFiles(files){
+  for(const f of files){
+    if(pendingAttachments.length>=MAX_ATT_COUNT){toast(t('modal.attach_hint'),true);break;}
+    if(f.size>MAX_ATT_SIZE){toast(`${f.name}: >5MB`,true);continue;}
+    const r=new FileReader();
+    r.onload=ev=>{
+      const b64=ev.target.result.split(',')[1];
+      if(!b64)return;
+      pendingAttachments.push({name:f.name,type:f.type||'application/octet-stream',base64:b64});
+      renderAttPreviews();
+    };
+    r.readAsDataURL(f);
+  }
+}
+function removeAtt(i){pendingAttachments.splice(i,1);renderAttPreviews();}
+function renderAttPreviews(){
+  const el=$i('attPreviews');
+  if(!el)return;
+  el.innerHTML=pendingAttachments.map((a,i)=>`
+    <div class="att-chip">
+      ${a.type.startsWith('image/')?`<img class="att-thumb" src="data:${a.type};base64,${a.base64}">`:'<span class="att-icon">📄</span>'}
+      <span title="${escH(a.name)}">${escH(a.name.length>28?a.name.slice(0,25)+'…':a.name)}</span>
+      <button onclick="removeAtt(${i})">✕</button>
+    </div>`).join('');
+}
 
+// ─── Session config helpers ───────────────────────────────────────────────
+function scOpt(btn){
+  const grp=btn.closest('.sc-seg');
+  if(!grp)return;
+  grp.querySelectorAll('.sc-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  const g=grp.dataset.group;
+  if(g==='agent')kbSettings.agent_mode=btn.dataset.v;
+  else if(g)kbSettings[g]=btn.dataset.v;
+  try{localStorage.setItem('kanban_sess_cfg',JSON.stringify(kbSettings));}catch{}
+}
+function onFSessionChange(){
+  const hasSess=!!$i('fSession')?.value;
+  const cfg=$i('newSessCfg');
+  if(cfg)cfg.classList.toggle('visible',!hasSess);
+}
+function getSessCfg(){
+  const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',maxTurns:30};
+  const cfg=$i('newSessCfg');
+  if(!cfg)return defaults;
+  const result={};
+  cfg.querySelectorAll('.sc-seg[data-group]').forEach(grp=>{
+    const on=grp.querySelector('.sc-btn.on');
+    if(on)result[grp.dataset.group]=on.dataset.v;
+  });
+  result.maxTurns=parseInt($i('fMaxTurns')?.value||30);
+  return{...defaults,...result};
+}
+
+function buildChatPanel(tk,msgs){
+  const sessTitle=escH(tk.sess_title||tk.session_id);
+  const claudeId=tk.claude_session_id||'';
+  const openUrl=`/?open_session=${encodeURIComponent(tk.session_id)}`;
   let msgsHtml;
   if(!msgs.length){
     msgsHtml=`<div class="chat-empty">${t('chat.empty')}</div>`;
-  } else {
+  }else{
     msgsHtml=msgs.map(m=>{
       const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
       const label=role==='user'?t('msg.you'):role==='tool'?`${t('msg.tool')}: ${escH(m.tool_name||'')}`:'Claude';
@@ -673,10 +765,8 @@ function buildChatPanel(tk, msgs){
       return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${text}</div></div>`;
     }).join('');
   }
-
   const copyBtn=claudeId?`<span class="mono-tag" title="Click to copy" onclick="navigator.clipboard.writeText('${escH(claudeId)}').then(()=>toast(t('toast.copied')))">${claudeId.slice(0,12)}…</span>`:'';
   const openBtn=`<a class="open-link" href="${openUrl}" target="_blank">${t('chat.open')}</a>`;
-
   return `<div class="chat-panel">
     <div class="chat-panel-hd">
       <span>${t('chat.title')}: ${sessTitle}</span>
@@ -689,30 +779,46 @@ function buildChatPanel(tk, msgs){
 // ─── Save task ────────────────────────────────────────────────────────────
 async function saveTask(){
   const title=($i('fTitle')?.value||'').trim();
-  if(!title){ toast(t('modal.name'), true); $i('fTitle')?.focus(); return; }
+  if(!title){toast(t('modal.name'),true);$i('fTitle')?.focus();return;}
+  let session_id=$i('fSession')?.value||null;
+  const cfg=getSessCfg();
+  const existingTask=editingId?tasks.find(t=>t.id===editingId):null;
   const body={
     title,
-    description:$i('fDesc')?.value||'',
-    notes:$i('fNotes')?.value||'',
+    description:$i('fDesc')?($i('fDesc').value||''):(existingTask?.description||''),
+    notes:$i('fNotes')?($i('fNotes').value||''):(existingTask?.notes||''),
     status:$i('fStatus')?.value||'backlog',
-    session_id:$i('fSession')?.value||null,
-    workdir: curWorkdir || null,
+    session_id,
+    workdir:curWorkdir||null,
+    model:cfg.model,
+    mode:cfg.mode,
+    agent_mode:cfg.agent,
+    max_turns:cfg.maxTurns,
+    attachments:pendingAttachments.length?JSON.stringify(pendingAttachments):null,
   };
   try{
     if(modalMode==='add'){
+      if(!session_id){
+        const sessR=await apiFetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({title,workdir:curWorkdir||null,model:cfg.model,engine:cfg.engine,mode:cfg.mode,agentMode:cfg.agent,maxTurns:cfg.maxTurns})});
+        const sess=await sessR.json();
+        session_id=sess.id;
+        body.session_id=session_id;
+        toast(t('toast.sess_created'));
+      }
       const colTasks=tasks.filter(tk=>tk.status===body.status);
       body.sort_order=colTasks.length?Math.max(...colTasks.map(tk=>tk.sort_order))+1000:0;
       await apiFetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       toast(t('toast.created'));
-    } else {
+    }else{
       const orig=tasks.find(tk=>tk.id===editingId);
-      if(orig) body.sort_order=orig.sort_order;
+      if(orig)body.sort_order=orig.sort_order;
       await apiFetch(`/api/tasks/${editingId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       toast(t('toast.saved'));
     }
     closeModal();
     await refresh(true);
-  } catch(e){ if(e.message!=='401') toast(t('toast.err')+e.message, true); }
+  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────
@@ -723,30 +829,30 @@ function confirmDelete(id){
   $i('confirmOkBtn').onclick=async()=>{
     try{
       await apiFetch(`/api/tasks/${id}`,{method:'DELETE'});
-      toast(t('toast.deleted'));
-      closeConfirm();
-      await refresh(true);
-    } catch(e){ if(e.message!=='401') toast(t('toast.err')+e.message, true); }
+      toast(t('toast.deleted'));closeConfirm();await refresh(true);
+    }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
   };
   $i('confirmOv').classList.remove('hidden');
 }
-function closeConfirm(){ $i('confirmOv').classList.add('hidden'); }
-function closeModal(){ $i('taskOv').classList.add('hidden'); }
+function closeConfirm(){$i('confirmOv').classList.add('hidden');}
+function closeModal(){$i('taskOv').classList.add('hidden');}
 
-// ─── Keyboard shortcuts ───────────────────────────────────────────────────
-document.addEventListener('keydown', e=>{
+document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    if(!$i('taskOv').classList.contains('hidden')){ closeModal(); return; }
-    if(!$i('confirmOv').classList.contains('hidden')){ closeConfirm(); return; }
+    if(!$i('taskOv').classList.contains('hidden')){closeModal();return;}
+    if(!$i('confirmOv').classList.contains('hidden')){closeConfirm();return;}
   }
-  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!$i('taskOv').classList.contains('hidden')) saveTask();
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!$i('taskOv').classList.contains('hidden'))saveTask();
 });
 
-// ─── Init ─────────────────────────────────────────────────────────────────
 (async()=>{
   await loadProjects();
   await refresh(true);
   startAutoRefresh();
+  try{
+    const bc=new BroadcastChannel('kanban');
+    bc.onmessage=e=>{if(e.data?.type==='session_deleted')refresh(true);};
+  }catch{}
 })();
 </script>
 </body>
