@@ -638,7 +638,7 @@ app.get('/api/health', (_, res) => {
     status,
     uptime:       Math.floor(process.uptime()),       // seconds
     timestamp:    new Date().toISOString(),
-    version:      process.env.npm_package_version || '4.0.0',
+    version:      (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8')).version; } catch { return 'unknown'; } })(),
     db:           dbOk ? 'ok' : 'error',
     connections:  wss.clients.size,
     memory: {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kanban — Claude Code Chat</title>
+<title>Kanban — Claude Code Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
@@ -219,7 +219,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
     <span class="refresh-ts" id="refreshTs" style="margin-right:4px"></span>
     <button class="hb" onclick="refresh(true)" id="refreshBtn">&#8635;</button>
     <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel">Задача</span></button>
-    <a class="hb" href="https://github.com/Lexus2016/claude-code-chat" target="_blank" rel="noopener">
+    <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
     </a>
   </div>
@@ -278,7 +278,7 @@ const TR = {
     'modal.name':'Назва *','modal.status':'Статус','modal.session':"Пов'язана сесія",
     'modal.no_session':'— без сесії —','modal.new_session':'➕ Нова сесія',
     'modal.desc':'Опис','modal.notes':'Нотатки',
-    'modal.attach':'Вкладення','modal.attach_hint':'Клікніть або перетягніть файли (зображення, текст)',
+    'modal.attach':'Вкладення','modal.attach_hint':'Клікніть або перетягніть файли (зображення, текст)','modal.attach_max':'Максимум 10 файлів на задачу',
     'modal.create':'Створити','modal.save':'Зберегти','modal.cancel':'Скасувати',
     'modal.delete':'Видалити',
     'confirm.title':'Видалити задачу?','confirm.body':'Ця дія незворотна.',
@@ -292,6 +292,7 @@ const TR = {
     'card.running':'Виконується','msg.you':'Ви','msg.tool':'Tool','refresh.now':'щойно',
     'card.retry':'↩ повтор',
     'time.min':'хв','time.hr':'г','time.day':'д',
+    'hdr.connected':'Підключено',
   },
   en: {
     'hdr.title':'Kanban','hdr.add':'Task',
@@ -302,7 +303,7 @@ const TR = {
     'modal.name':'Title *','modal.status':'Status','modal.session':'Linked session',
     'modal.no_session':'— no session —','modal.new_session':'➕ New Session',
     'modal.desc':'Description','modal.notes':'Notes',
-    'modal.attach':'Attachments','modal.attach_hint':'Click or drag files (images, text)',
+    'modal.attach':'Attachments','modal.attach_hint':'Click or drag files (images, text)','modal.attach_max':'Maximum 10 files per task',
     'modal.create':'Create','modal.save':'Save','modal.cancel':'Cancel',
     'modal.delete':'Delete',
     'confirm.title':'Delete task?','confirm.body':'This action is irreversible.',
@@ -316,6 +317,7 @@ const TR = {
     'card.running':'Running','msg.you':'You','msg.tool':'Tool','refresh.now':'just now',
     'card.retry':'↩ retry',
     'time.min':'m','time.hr':'h','time.day':'d',
+    'hdr.connected':'Connected',
   },
   ru: {
     'hdr.title':'Kanban','hdr.add':'Задача',
@@ -335,22 +337,24 @@ const TR = {
     'toast.deleted':'Задача удалена','toast.copied':'✓ ID скопирован',
     'toast.sess_created':'✓ Сессия создана автоматически','toast.err':'Ошибка: ',
     'modal.new_sess_cfg':'Настройки новой сессии',
-    'modal.attach':'Вложения','modal.attach_hint':'Нажмите или перетащите файлы (изображения, текст)',
+    'modal.attach':'Вложения','modal.attach_hint':'Нажмите или перетащите файлы (изображения, текст)','modal.attach_max':'Максимум 10 файлов на задачу',
     'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги','tb.engine':'Движок',
     'card.running':'Выполняется','msg.you':'Вы','msg.tool':'Tool','refresh.now':'только что',
     'card.retry':'↩ повтор',
     'time.min':'м','time.hr':'ч','time.day':'д',
+    'hdr.connected':'Подключено',
   },
 };
 const lang = localStorage.getItem('lang') || 'uk';
 function t(k){ return (TR[lang]||TR.uk)[k] || k; }
 
-document.title = t('hdr.title') + ' — Claude Code Chat';
+document.title = t('hdr.title') + ' — Claude Code Studio';
 fetch('/api/version').then(r=>r.json()).then(d=>{
   const el=document.getElementById('kbVersionBadge');
-  if(el&&d.version) el.textContent='Claude Code Chat v'+d.version;
+  if(el&&d.version) el.textContent='Claude Code Studio v'+d.version;
 }).catch(()=>{});
 document.getElementById('addBtnLabel').textContent=t('hdr.add');
+document.getElementById('kbStatusEl').textContent=t('hdr.connected');
 document.getElementById('projLabel').textContent=t('proj.label');
 document.getElementById('allProjOpt').textContent=t('proj.all');
 document.getElementById('cancelBtn').textContent=t('confirm.cancel');
@@ -697,7 +701,7 @@ function onFileSelect(e){processFiles(Array.from(e.target.files));e.target.value
 function onFileDrop(e){e.preventDefault();processFiles(Array.from(e.dataTransfer.files));}
 function processFiles(files){
   for(const f of files){
-    if(pendingAttachments.length>=MAX_ATT_COUNT){toast(t('modal.attach_hint'),true);break;}
+    if(pendingAttachments.length>=MAX_ATT_COUNT){toast(t('modal.attach_max'),true);break;}
     if(f.size>MAX_ATT_SIZE){toast(`${f.name}: >5MB`,true);continue;}
     const r=new FileReader();
     r.onload=ev=>{
