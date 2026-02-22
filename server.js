@@ -162,6 +162,9 @@ try { db.exec(`ALTER TABLE messages ADD COLUMN reply_to_id INTEGER REFERENCES me
 try { db.exec(`ALTER TABLE sessions ADD COLUMN last_user_msg TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN notes TEXT DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN model TEXT DEFAULT 'sonnet'`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN mode TEXT DEFAULT 'auto'`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN agent_mode TEXT DEFAULT 'single'`); } catch {}
 
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
@@ -188,10 +191,12 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,workdir) VALUES (?,?,?,?,?,?,?)`),
-  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,workdir,model,mode,agent_mode) VALUES (?,?,?,?,?,?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
+  deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
+  countTasksBySession: db.prepare(`SELECT COUNT(*) as n FROM tasks WHERE session_id=?`),
   getTasksEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM tasks`),
   // Stats queries
   activeAgents: db.prepare(`
@@ -651,9 +656,10 @@ app.get('/api/tasks', (req, res) => {
 });
 app.get('/api/tasks/etag', (req, res) => { res.json(stmts.getTasksEtag.get()); });
 app.post('/api/tasks', (req, res) => {
-  const { title='Нова задача', description='', notes='', status='backlog', sort_order=0, workdir=null } = req.body;
+  const { title='Нова задача', description='', notes='', status='backlog', sort_order=0, workdir=null,
+          model='sonnet', mode='auto', agent_mode='single' } = req.body;
   const id = genId();
-  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, workdir||null);
+  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, workdir||null, model, mode, agent_mode);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -663,11 +669,14 @@ app.put('/api/tasks/:id', (req, res) => {
   if (!task) return res.status(404).json({ error: 'Not found' });
   const { title=task.title, description=task.description, notes=task.notes,
           status=task.status, sort_order=task.sort_order,
-          session_id=task.session_id, workdir=task.workdir } = req.body;
+          session_id=task.session_id, workdir=task.workdir,
+          model=task.model||'sonnet', mode=task.mode||'auto', agent_mode=task.agent_mode||'single' } = req.body;
   stmts.updateTask.run(
     String(title).substring(0,200), String(description).substring(0,2000),
     String(notes||'').substring(0,2000),
-    status, sort_order, session_id || null, workdir || null, req.params.id
+    status, sort_order, session_id || null, workdir || null,
+    model, mode, agent_mode,
+    req.params.id
   );
   const updated = stmts.getTask.get(req.params.id);
   if (status === 'todo' && task.status !== 'todo') setImmediate(processQueue);
@@ -683,25 +692,37 @@ app.get('/api/sessions', (req,res) => {
   res.json(workdir ? stmts.getSessionsByWorkdir.all(workdir) : stmts.getSessions.all());
 });
 app.post('/api/sessions', (req, res) => {
-  const { title = 'Нова сесія', workdir = null, model = 'sonnet', engine = 'cli' } = req.body || {};
+  const { title = 'Нова сесія', workdir = null, model = 'sonnet', engine = 'cli', mode = 'auto', agentMode = 'single' } = req.body || {};
   const id = genId();
-  stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', 'auto', 'single', model, engine, workdir || null);
+  stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', mode, agentMode, model, engine, workdir || null);
   res.json(stmts.getSession.get(id));
 });
 app.get('/api/sessions/interrupted', (req, res) => { res.json(stmts.getInterrupted.all()); });
-app.get('/api/sessions/:id', (req,res) => { const s=stmts.getSession.get(req.params.id); if(!s) return res.status(404).json({error:'Not found'}); s.messages=stmts.getMsgs.all(req.params.id); res.json(s); });
+app.get('/api/sessions/:id', (req,res) => {
+  const s = stmts.getSession.get(req.params.id);
+  if (!s) return res.status(404).json({ error: 'Not found' });
+  s.messages = stmts.getMsgs.all(req.params.id);
+  // Include running-task flag so client can show spinner immediately on load
+  const rt = db.prepare(`SELECT id FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`).get(req.params.id);
+  s.hasRunningTask = !!rt;
+  res.json(s);
+});
 app.put('/api/sessions/:id', (req,res) => { if(req.body.title) stmts.updateTitle.run(req.body.title, req.params.id); res.json({ok:true}); });
-app.delete('/api/sessions/:id', (req,res) => { stmts.deleteSession.run(req.params.id); res.json({ok:true}); });
+app.get('/api/sessions/:id/tasks-count', (req,res) => { res.json(stmts.countTasksBySession.get(req.params.id)); });
+app.delete('/api/sessions/:id', (req,res) => { stmts.deleteTasksBySession.run(req.params.id); stmts.deleteSession.run(req.params.id); res.json({ok:true}); });
 app.post('/api/sessions/:id/open-terminal', (req, res) => {
   const session = stmts.getSession.get(req.params.id);
   if (!session?.claude_session_id) return res.status(400).json({ error: 'No Claude session ID' });
   const safeSid = session.claude_session_id.replace(/[^a-zA-Z0-9-]/g, '');
   if (!safeSid) return res.status(400).json({ error: 'Invalid session ID' });
+  const workdir = session.workdir || WORKDIR;
+  const safeWorkdir = workdir.replace(/'/g, "'\\''");
+  const fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; claude --resume ${safeSid}`;
   try {
-    execSync(`osascript -e 'tell application "Terminal" to activate' -e 'tell application "Terminal" to do script "unset CLAUDECODE; claude --resume ${safeSid}"'`);
+    execSync(`osascript -e 'tell application "Terminal" to activate' -e 'tell application "Terminal" to do script "${fullCmd.replace(/"/g, '\\"')}"'`);
     res.json({ ok: true });
   } catch {
-    res.json({ ok: false, command: `unset CLAUDECODE; claude --resume ${safeSid}` });
+    res.json({ ok: false, command: fullCmd });
   }
 });
 
