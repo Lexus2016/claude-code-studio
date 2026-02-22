@@ -11,7 +11,6 @@
 | Feature | Description |
 |---------|-------------|
 | 🖥 CLI Mode | Works via `claude` CLI with Max subscription (no API costs) |
-| 🔌 SDK Mode | Works via Anthropic API key (pay-per-token) |
 | 💬 Real-time Chat | WebSocket streaming with markdown rendering |
 | 👥 Multi-Agent | Orchestrate a team of agents with dependency graph |
 | ⚡ MCP Servers | Connect any MCP server — presets + custom |
@@ -59,7 +58,6 @@ npm install -g github:Lexus2016/claude-code-chat@latest
 **Prerequisites:**
 - Node.js 18+
 - [`claude` CLI](https://docs.anthropic.com/en/claude-code) installed and authenticated (for CLI mode)
-- OR an `ANTHROPIC_API_KEY` in `.env` (for SDK mode)
 
 ```bash
 git clone https://github.com/Lexus2016/claude-code-chat.git
@@ -70,9 +68,8 @@ npm install
 claude --version    # confirm claude CLI is authenticated
 node server.js
 
-# SDK mode (API key required):
 cp .env.example .env
-# Edit .env → set ANTHROPIC_API_KEY=sk-ant-...
+# Edit .env
 node server.js
 
 # Open http://localhost:3000
@@ -154,16 +151,6 @@ WORKDIR=./workspace       # Claude's working directory
 TRUST_PROXY=false         # Set true behind nginx/Caddy
 ```
 
-### CLI vs SDK
-
-| | CLI (Max) | SDK (API Key) |
-|---|---|---|
-| Cost | Max subscription | Per-token billing |
-| Session resumption | `--resume <id>` | SDK session |
-| Streaming | stdout JSON parsing | Native |
-| Stability | CLI version dependent | Stable |
-| Multi-Agent | ✅ | ✅ |
-
 ### Adding MCP Servers
 1. Left panel → ⚡ MCP → "+ Add MCP"
 2. Or edit `config.json` directly via ⚙️ Config Editor
@@ -178,7 +165,6 @@ TRUST_PROXY=false         # Set true behind nginx/Caddy
 
 ```
 Client (browser) ──WS──► server.js ──► claude-cli.js ──► claude (subprocess)
-                                   └──► SDK query()    ──► Anthropic API
                     HTTP ◄──────────────────────────────────────────────────
 ```
 
