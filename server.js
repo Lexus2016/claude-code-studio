@@ -274,16 +274,29 @@ async function startTask(task) {
     if (task.description?.trim()) parts.push(task.description.trim());
     if (task.notes?.trim()) parts.push(`---\nУточнення:\n${task.notes.trim()}`);
     const prompt = parts.join('\n\n');
-    // Save user message
-    stmts.addMsg.run(sessionId, 'user', 'text', prompt, null, null, null);
+    // Check if this is a restart (user message already exists in session)
+    const existingUserMsg = db.prepare(`SELECT id FROM messages WHERE session_id=? AND role='user' LIMIT 1`).get(sessionId);
+    const isRetry = !!existingUserMsg;
+    if (!isRetry) {
+      // First run — save user message normally
+      stmts.addMsg.run(sessionId, 'user', 'text', prompt, null, null, null);
+    } else {
+      // Restart after crash — increment retry counter, don't duplicate user message
+      stmts.incrementRetry.run(sessionId);
+    }
     // Resume existing claude session if any
     const session = stmts.getSession.get(sessionId);
     const claudeSessionId = session?.claude_session_id || null;
     const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
     let fullText = '', newCid = claudeSessionId, hasError = false;
     taskBuffers.set(task.id, '');
-    // Notify watchers that task started
-    broadcastToSession(sessionId, { type: 'task_started', taskId: task.id, title: task.title, tabId: sessionId });
+    // Notify watchers — use task_retrying for restarts, task_started for first run
+    if (isRetry) {
+      const retryCount = session?.retry_count || 1;
+      broadcastToSession(sessionId, { type: 'task_retrying', taskId: task.id, title: task.title, retryCount, tabId: sessionId });
+    } else {
+      broadcastToSession(sessionId, { type: 'task_started', taskId: task.id, title: task.title, tabId: sessionId });
+    }
     await new Promise(resolve => {
       cli.send({ prompt, sessionId: claudeSessionId, model: session?.model || task.model || 'sonnet', maxTurns: task.max_turns || 30 })
         .onText(t => {
@@ -351,10 +364,12 @@ function processQueue() {
 }
 // Run every 60s
 setInterval(processQueue, 60000);
-// Kick off on startup (pick up any tasks that were todo/in_progress before restart)
+// Kick off on startup
 setTimeout(() => {
-  // Reset any stuck in_progress tasks (from previous crash) back to todo
-  db.prepare(`UPDATE tasks SET status='todo', updated_at=datetime('now') WHERE status='in_progress'`).run();
+  // On restart, in_progress tasks had their subprocess killed with the server.
+  // Resetting to 'todo' would launch a DUPLICATE subprocess if the old one is still
+  // running as an OS orphan — wasting tokens. Cancel instead; user can retry from Kanban.
+  db.prepare(`UPDATE tasks SET status='cancelled', updated_at=datetime('now') WHERE status='in_progress'`).run();
   processQueue();
 }, 3000);
 
