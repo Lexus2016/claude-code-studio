@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Claude Code Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg: #090d13; --s1: #111620; --s2: #181e2b; --s3: #1f2637;
@@ -14,9 +17,34 @@
   --code-bg: #0d1219; --user-msg: #1a2460;
   --sidebar-w: 280px; --sidebar-r: 300px;
   --shadow: 0 4px 24px rgba(0,0,0,.4);
+  --shadow-sm: 0 1px 4px rgba(0,0,0,.2);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.32);
+  --shadow-lg: 0 12px 48px rgba(0,0,0,.5);
+  --shadow-xl: 0 24px 64px rgba(0,0,0,.65);
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; overflow: hidden; font-size: 14px; }
+body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; overflow: hidden; font-size: 15px; line-height: 1.55; }
+
+/* ─── Focus visible (keyboard nav) ─── */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+button:focus-visible, a:focus-visible { border-radius: 5px; }
+
+/* ─── Subtle background noise texture ─── */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 9998; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  opacity: 0.022;
+}
+
+/* ─── Staggered message entry ─── */
+.mw:nth-child(1) { animation-delay: 0ms; }
+.mw:nth-child(2) { animation-delay: 30ms; }
+.mw:nth-child(3) { animation-delay: 60ms; }
+.mw:nth-child(n+4) { animation-delay: 0ms; }
 
 /* ─── Layout ─── */
 .left {
@@ -68,13 +96,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .panel-tab-right .panel-tab-inner svg { transform: rotate(180deg); }
 /* Right tab: active=visible → chevron right (→ click to close) */
 .panel-tab-right.active .panel-tab-inner svg { transform: rotate(0deg); }
-/* Tooltips for side tabs */
-.panel-tab-left[data-tip]::after { left: calc(100% + 6px); top: 50%; bottom: auto; transform: translateY(-50%); }
-.panel-tab-right[data-tip]::after { left: calc(100% + 6px); right: auto; top: 50%; bottom: auto; transform: translateY(-50%); }
+/* Tooltips handled by JS (#globalTip) */
 
 /* ─── Sections ─── */
 .sec { border-bottom: 1px solid var(--border); }
-.sec-title { padding: 9px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; transition: color .15s; }
+.sec-title { padding: 9px 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; transition: color .15s; }
 .sec-title:hover { color: var(--text); }
 .sec-title .badge { background: var(--accent); color: white; font-size: 10px; padding: 1px 7px; border-radius: 10px; font-weight: 700; min-width: 20px; text-align: center; }
 .sec-title .badge:empty { display: none; }
@@ -82,8 +108,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .sec-body.collapsed { display: none; }
 
 /* ─── Active project label + version badge in header ─── */
-#activeProjLabel { font-size: 11px; color: var(--accent2); background: rgba(124,106,239,.1); border: 1px solid rgba(124,106,239,.25); border-radius: 4px; padding: 2px 8px; display: none; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#versionBadge { font-size: 10px; color: var(--muted); cursor: default; letter-spacing: .3px; }
+#activeProjLabel { font-size: 12px; color: var(--accent2); background: rgba(124,106,239,.1); border: 1px solid rgba(124,106,239,.25); border-radius: 4px; padding: 2px 8px; display: none; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#versionBadge { font-size: 11px; color: var(--muted); cursor: default; letter-spacing: .3px; }
 #versionBadge.update { color: var(--orange); cursor: pointer; text-decoration: underline dotted; }
 
 /* ─── File browser action buttons ─── */
@@ -93,7 +119,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .fii .fpe:hover { color: var(--green); opacity: 1 !important; }
 
 /* ─── Skill categories ─── */
-.sk-cat { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); padding: 10px 10px 4px; opacity: .7; }
+.sk-cat { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); padding: 10px 10px 4px; opacity: .7; }
 .sk-cat:first-child { padding-top: 2px; }
 
 /* ─── Toggle items ─── */
@@ -110,16 +136,27 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 /* Info */
 .ci .inf { flex: 1; min-width: 0; }
 .ci .inf .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
-.ci .inf .ds { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-.ci .inf .st { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; margin-top: 2px; color: var(--muted); }
+.ci .inf .ds { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.ci .inf .st { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; margin-top: 2px; color: var(--muted); }
 .ci.on .inf .st { color: var(--accent2); }
 /* Remove button */
 .ci .rm { opacity: 0; background: none; border: none; color: var(--red); cursor: pointer; font-size: 14px; padding: 3px 6px; border-radius: 4px; transition: opacity .12s; flex-shrink: 0; }
 .ci:hover .rm { opacity: .45; }
 .ci .rm:hover { opacity: 1 !important; background: rgba(248,81,73,.1); }
+.ci .cfg { opacity: 0; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 3px 6px; border-radius: 4px; transition: opacity .12s, color .12s; flex-shrink: 0; }
+.ci:hover .cfg { opacity: .6; }
+.ci .cfg:hover { opacity: 1 !important; color: var(--accent2); background: rgba(124,106,239,.1); }
+.ci .warn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--orange); flex-shrink: 0; margin-right: -4px; }
+.af select { background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 6px 9px; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; cursor: pointer; transition: border .12s; }
+.af select:focus { border-color: var(--accent); }
+#mcpStdioFields, #mcpUrlFields { display: flex; flex-direction: column; gap: 6px; }
 
 /* ─── Add buttons & forms ─── */
 .add-btn { display: flex; align-items: center; gap: 6px; padding: 6px 9px; margin-top: 4px; border-radius: var(--r); cursor: pointer; font-size: 12px; color: var(--accent2); border: 1px dashed var(--border); background: none; width: 100%; transition: all .12s; }
+.auto-skills-btn { font-size: 11px; font-weight: 700; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; cursor: pointer; transition: all .15s; line-height: 1.6; letter-spacing: .3px; }
+.auto-skills-btn:hover { color: var(--accent2); border-color: var(--accent); }
+.auto-skills-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+.auto-notif { font-size: 10px; color: var(--accent2); padding: 2px 10px 6px; }
 .add-btn:hover { background: var(--abg); border-color: var(--accent); }
 .af { margin-top: 7px; display: flex; flex-direction: column; gap: 6px; }
 .af input, .af textarea { background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 6px 9px; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border .12s; }
@@ -141,13 +178,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .hist-item .del { opacity: 0; background: none; border: none; color: var(--red); cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 3px; }
 .hist-item:hover .del { opacity: .5; }
 .hist-item .del:hover { opacity: 1; }
+.hist-spin { width: 8px; height: 8px; flex-shrink: 0; margin-right: 4px; }
 
 /* ─── Header ─── */
 .hdr { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--s1); border-bottom: 1px solid var(--border); }
 .hdr-l { display: flex; align-items: center; gap: 10px; }
 .logo { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), #a855f7); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; color: white; flex-shrink: 0; box-shadow: 0 2px 8px rgba(124,106,239,.4); }
-.hdr h1 { font-size: 15px; font-weight: 700; letter-spacing: -.2px; }
-.status-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.hdr h1 { font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
+.status-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; }
 .status-dot::before { content: '●'; font-size: 8px; }
 .status-dot.ok { color: var(--green); }
 .status-dot.ok::before { color: var(--green); }
@@ -156,21 +194,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .status-dot.warn { color: var(--orange); }
 .status-dot.warn::before { color: var(--orange); }
 .hdr-btns { display: flex; gap: 5px; }
-.hb { background: var(--s2); border: 1px solid var(--border); color: var(--muted); padding: 5px 11px; border-radius: 7px; cursor: pointer; font-size: 12px; transition: all .15s; font-weight: 500; }
+.hb { background: var(--s2); border: 1px solid var(--border); color: var(--muted); padding: 5px 11px; border-radius: 7px; cursor: pointer; font-size: 13px; transition: all .15s; font-weight: 500; }
 .hb:hover { color: var(--text); border-color: var(--accent2); background: var(--s3); }
 .hb.active { color: var(--accent2); border-color: var(--accent); background: var(--abg); }
 
 /* ─── Toolbar ─── */
 .toolbar { display: flex; align-items: center; gap: 7px; padding: 6px 14px; background: var(--s1); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .tb-group { display: flex; align-items: center; gap: 2px; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
-.tb-group .label { font-size: 10px; color: var(--muted); padding: 0 7px; text-transform: uppercase; letter-spacing: .6px; font-weight: 700; }
-.tb-btn { padding: 4px 11px; border-radius: 6px; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; transition: all .12s; white-space: nowrap; font-weight: 500; }
+.tb-group .label { font-size: 11px; color: var(--muted); padding: 0 7px; text-transform: uppercase; letter-spacing: .6px; font-weight: 700; }
+.tb-btn { padding: 4px 11px; border-radius: 6px; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; transition: all .12s; white-space: nowrap; font-weight: 500; }
 .tb-btn:hover { color: var(--text); background: rgba(255,255,255,.06); }
 .tb-btn.on { background: var(--accent); color: white; box-shadow: 0 1px 6px rgba(124,106,239,.4); }
 .tb-sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
-.tb-input { background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 6px; font-size: 12px; width: 55px; outline: none; text-align: center; }
+.tb-input { background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 6px; font-size: 13px; width: 55px; outline: none; text-align: center; }
 .tb-input:focus { border-color: var(--accent); }
-.mode-ind { font-size: 11px; color: var(--muted); padding: 2px 8px; display: flex; align-items: center; gap: 5px; }
+.mode-ind { font-size: 12px; color: var(--muted); padding: 2px 8px; display: flex; align-items: center; gap: 5px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 .dot-plan { background: var(--blue); }
 .dot-task { background: var(--green); }
@@ -189,32 +227,57 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .mw.assistant { align-self: flex-start; }
 
 /* ─── Message bubbles ─── */
-.msg { line-height: 1.7; font-size: 14.5px; word-break: break-word; }
+.msg { line-height: 1.75; font-size: 15.5px; word-break: break-word; }
 .mw.user .msg { background: var(--user-msg); padding: 10px 15px; border-radius: 14px 14px 4px 14px; white-space: pre-wrap; border: 1px solid rgba(124,106,239,.3); }
 .mw.assistant .msg { background: var(--s2); padding: 13px 16px; border-radius: 14px 14px 14px 4px; border: 1px solid var(--border); }
+
+/* ─── Assistant message avatar marker ─── */
+.mw.assistant { padding-left: 34px; }
+.mw.assistant::before {
+  content: 'AI';
+  position: absolute; left: 0; top: 2px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #a855f7);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 800; color: white; letter-spacing: .3px;
+  box-shadow: 0 2px 8px rgba(124,106,239,.35);
+  flex-shrink: 0;
+}
+
+/* User message right-align avatar */
+.mw.user { padding-right: 34px; }
+.mw.user::after {
+  content: 'You';
+  position: absolute; right: 0; top: 2px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--user-msg);
+  border: 1px solid rgba(124,106,239,.4);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: 700; color: var(--accent2); letter-spacing: .3px;
+}
 
 /* ─── Markdown styles inside .msg ─── */
 .msg strong { font-weight: 700; color: var(--text); }
 .msg em { font-style: italic; color: #c9d1d9; }
 .msg h1, .msg h2, .msg h3 { font-weight: 700; margin: 12px 0 6px; color: var(--text); }
-.msg h1 { font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
-.msg h2 { font-size: 15px; }
-.msg h3 { font-size: 14px; }
+.msg h1 { font-size: 21px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+.msg h2 { font-size: 18px; }
+.msg h3 { font-size: 16px; }
 .msg p { margin: 6px 0; }
 .msg ul, .msg ol { margin: 6px 0 6px 20px; }
 .msg li { margin: 3px 0; }
-.msg code { background: rgba(110,118,129,.18); padding: 2px 6px; border-radius: 5px; font-family: 'SF Mono', Consolas, 'Courier New', monospace; font-size: 13px; color: #e6a77b; }
+.msg code { background: rgba(110,118,129,.18); padding: 2px 6px; border-radius: 5px; font-family: 'SF Mono', Consolas, 'Courier New', monospace; font-size: 13.5px; color: #e6a77b; }
 .msg pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 9px; margin: 10px 0; overflow: hidden; }
-.msg pre .pre-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--s3); border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted); }
-.msg pre .pre-header .lang { font-family: 'SF Mono', monospace; color: var(--accent2); font-weight: 700; font-size: 11px; }
-.msg pre code { background: none; padding: 12px 14px; border-radius: 0; font-size: 13px; color: var(--text); display: block; overflow-x: auto; line-height: 1.65; }
+.msg pre .pre-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--s3); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.msg pre .pre-header .lang { font-family: 'SF Mono', monospace; color: var(--accent2); font-weight: 700; font-size: 12px; }
+.msg pre code { background: none; padding: 12px 14px; border-radius: 0; font-size: 13.5px; color: var(--text); display: block; overflow-x: auto; line-height: 1.65; }
 .msg a { color: var(--accent2); text-decoration: none; }
 .msg a:hover { text-decoration: underline; }
-.msg blockquote { display: flex; align-items: flex-start; gap: 8px; border-left: 3px solid #3a4560; padding: 7px 12px; margin: 6px 0 10px; background: rgba(20,27,42,.75); border-radius: 0 8px 8px 0; color: #8a9bba; font-size: 13px; font-style: italic; line-height: 1.5; }
+.msg blockquote { display: flex; align-items: flex-start; gap: 8px; border-left: 3px solid #3a4560; padding: 7px 12px; margin: 6px 0 10px; background: rgba(20,27,42,.75); border-radius: 0 8px 8px 0; color: #8a9bba; font-size: 14.5px; font-style: italic; line-height: 1.5; }
 .msg blockquote > svg { flex-shrink: 0; margin-top: 3px; opacity: .4; color: #8a9bba; }
 .msg hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 .msg .table-wrap { overflow-x: auto; margin: 12px 0; border-radius: 9px; border: 1px solid var(--border); }
-.msg table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.msg table { border-collapse: collapse; width: 100%; font-size: 14px; }
 .msg th, .msg td { border: none; border-bottom: 1px solid var(--border); padding: 8px 14px; text-align: left; line-height: 1.5; }
 .msg th { background: var(--s3); font-weight: 700; color: var(--accent2); border-bottom: 2px solid var(--border); white-space: nowrap; }
 .msg tbody tr:nth-child(even) { background: rgba(255,255,255,.03); }
@@ -346,6 +409,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .wi { width: 54px; height: 54px; border-radius: 16px; background: linear-gradient(135deg, var(--accent), #a855f7); display: flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 4px; box-shadow: 0 4px 20px rgba(124,106,239,.35); }
 .welcome h2 { color: var(--text); font-size: 18px; font-weight: 700; }
 .welcome p { font-size: 13.5px; max-width: 300px; line-height: 1.65; }
+.welcome-prompts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 420px; margin-top: 20px; }
+.wp-card { background: var(--s2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--muted); cursor: pointer; transition: all .15s; text-align: left; line-height: 1.4; }
+.wp-card:hover { background: var(--s3); border-color: rgba(124,106,239,.4); color: var(--text); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
 
 /* ─── Tabs bar ─── */
 .tabs-bar { display: flex; align-items: stretch; background: var(--bg); border-bottom: 1px solid var(--border); overflow-x: auto; flex-shrink: 0; min-height: 34px; }
@@ -362,8 +428,22 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .tab-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .tab-dot.spinning { border: 1.5px solid rgba(124,106,239,.25); border-top-color: var(--accent); animation: spin .65s linear infinite; }
 .tab-dot.done { background: var(--green); }
+.proj-busy-dot { display: inline-block; margin-left: 5px; vertical-align: middle; position: relative; top: -1px; }
 .tab-new { padding: 0 13px; display: flex; align-items: center; color: var(--muted); cursor: pointer; font-size: 20px; line-height: 1; transition: color .1s; flex-shrink: 0; background: none; border: none; }
 .tab-new:hover { color: var(--text); }
+.tab-rename-input { background: transparent; border: none; border-bottom: 1.5px solid var(--accent); color: var(--text); font-size: 12.5px; font-family: inherit; padding: 0 2px; outline: none; width: 100%; min-width: 40px; }
+
+/* ─── Session info bar ─── */
+.sess-bar { display:flex; align-items:center; gap:6px; padding:3px 14px; font-size:11px; color:var(--text-dim); border-bottom:1px solid var(--border); user-select:none; min-height:24px; flex-shrink:0; }
+.sess-bar .sess-id { font-family:monospace; cursor:pointer; padding:1px 5px; border-radius:4px; background:var(--s1); transition:background .1s; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; }
+.sess-bar .sess-id:hover { background:var(--s2); }
+.sess-open-btn { padding:1px 8px; border-radius:4px; border:1px solid var(--border); background:transparent; color:var(--text-dim); cursor:pointer; font-size:11px; white-space:nowrap; transition:background .1s, color .1s; }
+.sess-open-btn:hover { background:var(--s2); color:var(--text); }
+
+/* ─── Task interrupted / retry banner ─── */
+.msg-retry { display:flex; align-items:center; gap:10px; margin:8px 12px; padding:10px 14px; border-radius:8px; background:var(--s2); border:1px solid var(--warn,#f59e0b); font-size:13px; color:var(--text-dim); }
+.msg-retry button { padding:4px 14px; border-radius:6px; background:var(--accent); color:#fff; border:none; cursor:pointer; font-size:12px; }
+.msg-retry button:hover { opacity:.85; }
 
 /* ─── Input area ─── */
 .ia { padding: 12px 16px; background: var(--s1); border-top: 1px solid var(--border); }
@@ -408,21 +488,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .fii .fn { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fii .fs { font-size: 10.5px; color: var(--muted); }
 /* ─── File Preview Modal ─── */
-.fpv-modal { width: 880px; max-width: 95vw; max-height: 90vh !important; }
+.fpv-modal { width: calc(100vw - 40px) !important; max-width: calc(100vw - 40px) !important; height: calc(100vh - 40px); max-height: calc(100vh - 40px) !important; border-radius: 12px; }
 .fpv-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--s2); flex-shrink: 0; }
 .fpv-toolbar .fpv-ext { font-size: 10px; color: var(--muted); background: var(--s3); border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; margin-right: auto; }
 .fpv-body { flex: 1; overflow: auto; display: flex; flex-direction: column; min-height: 0; }
-.fpv-body img { max-width: 100%; max-height: 70vh; object-fit: contain; margin: auto; display: block; padding: 16px; }
-.fpv-body iframe { width: 100%; flex: 1; border: none; min-height: 500px; }
-.fpv-body .fpv-text { padding: 16px; font-family: 'SF Mono', monospace; font-size: 12px; line-height: 1.7; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.fpv-body img { max-width: 100%; max-height: calc(100vh - 155px); object-fit: contain; margin: auto; display: block; padding: 16px; }
+.fpv-body iframe { width: 100%; flex: 1; border: none; min-height: calc(100vh - 155px); flex: 1; }
+.fpv-body .fpv-text { padding: 16px; font-family: 'SF Mono', monospace; font-size: 13.5px; line-height: 1.7; color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .fpv-body .fpv-md { padding: 16px 20px; line-height: 1.7; }
 .fpv-body .fpv-binary { padding: 32px; display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; }
 .fpv-btn { background: var(--s2); border: 1px solid var(--border); color: var(--muted); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 5px; transition: all .15s; flex-shrink: 0; }
 .fpv-btn:hover { color: var(--text); border-color: var(--accent2); }
 
 /* ─── Modal ─── */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; animation: fadeUp .15s; backdrop-filter: blur(3px); }
-.modal { background: var(--s1); border: 1px solid var(--border); border-radius: 14px; width: 740px; max-width: 92vw; max-height: 86vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,.6); }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; animation: fadeUp .15s; backdrop-filter: blur(14px) saturate(150%); }
+.modal { background: var(--s1); border: 1px solid var(--border); border-radius: var(--r-lg); width: 740px; max-width: 92vw; max-height: 86vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-xl); }
 .modal-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
 .modal-hdr h2 { font-size: 15px; font-weight: 700; }
 .modal-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 20px; padding: 4px; transition: color .12s; line-height: 1; }
@@ -444,18 +524,38 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 #toast.show { opacity: 1; }
 #toast.toast-err { border-color: var(--red); color: var(--red); }
 
-/* ─── Tooltips ─── */
-[data-tip] { position: relative; }
-[data-tip]::after {
-  content: attr(data-tip);
-  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-  background: #1c2333; border: 1px solid var(--border); color: var(--text);
-  padding: 4px 9px; border-radius: 6px; font-size: 11px; white-space: nowrap;
-  pointer-events: none; opacity: 0; transition: opacity .15s; z-index: 999;
-  box-shadow: 0 3px 10px rgba(0,0,0,.4);
+/* ─── Tooltips (floating JS div) ─── */
+#globalTip {
+  position: fixed; z-index: 9999; pointer-events: none;
+  padding: 6px 11px; background: #1a2235; border: 1px solid rgba(255,255,255,.13);
+  border-radius: 8px; font-size: 12px; line-height: 1.5; max-width: 280px;
+  white-space: normal; color: var(--text);
+  box-shadow: 0 4px 20px rgba(0,0,0,.55), 0 1px 4px rgba(0,0,0,.3);
+  opacity: 0; transition: opacity .12s ease; word-break: break-word;
 }
-[data-tip]:hover::after { opacity: 1; }
-.hdr [data-tip]::after { bottom: auto; top: calc(100% + 6px); }
+
+/* ─── Scrollbars ─── */
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4a5568; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ─── Tactile button feedback ─── */
+.hb:active { transform: scale(0.95); transition-duration: 0.07s; }
+.tb-btn:active { transform: scale(0.93); transition-duration: 0.07s; }
+.add-btn:active { transform: scale(0.97); transition-duration: 0.07s; }
+.ci:active { transform: scale(0.98); transition-duration: 0.07s; }
+
+/* ─── Sidebar item left-border accent on hover ─── */
+.ci { transition: background .12s, box-shadow .12s, transform .12s; }
+.ci:hover { background: var(--s2); box-shadow: inset 2px 0 0 rgba(124,106,239,.3); }
+.ci.on { box-shadow: inset 2px 0 0 var(--accent); }
+.ci.on:hover { background: rgba(124,106,239,.13); }
+
+/* ─── History hover accent ─── */
+.hist-item { transition: background .12s, box-shadow .12s; }
+.hist-item:hover { background: var(--s2); box-shadow: inset 2px 0 0 rgba(124,106,239,.3); }
 
 /* ─── Language selector ─── */
 .lang-sel { background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 3px 8px; border-radius: 6px; font-size: 12px; outline: none; cursor: pointer; font-weight: 500; }
@@ -549,10 +649,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .attach-btn {
   width: 30px; height: 30px; border: none; background: none; color: var(--muted);
   border-radius: 7px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; transition: color .12s, background .12s; margin-bottom: 3px;
+  flex-shrink: 0; transition: color .12s, background .12s; margin-bottom: 3px; align-self: flex-end;
 }
 .attach-btn:hover { color: var(--accent2); background: rgba(124,106,239,.1); }
 .attach-btn.has-files { color: var(--accent2); }
+.attach-btn svg { width: 16px; height: 16px; }
 
 /* ─── Full-screen drag-drop overlay ─── */
 .drop-overlay {
@@ -614,6 +715,59 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 }
 .msg-reply-quote .rq-role { font-size: 10px; font-weight: 700; color: var(--accent2); text-transform: uppercase; letter-spacing: .4px; display: block; margin-bottom: 2px; }
 .msg-reply-quote .rq-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ─── Responsive / Mobile ─── */
+#mobileBackdrop {
+  display: none; position: fixed; inset: 0; z-index: 45;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(4px);
+}
+@media (max-width: 800px) {
+  /* Sidebars: fixed overlay instead of shrinking */
+  .left {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 50;
+    width: min(85vw, 300px) !important;
+    transform: translateX(0);
+    transition: transform .28s var(--ease-out), opacity .28s;
+    box-shadow: 6px 0 40px rgba(0,0,0,.55);
+    opacity: 1 !important;
+  }
+  .left.collapsed { transform: translateX(-105%); opacity: 0 !important; pointer-events: none; }
+  .right {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 50;
+    width: min(85vw, 300px) !important;
+    transform: translateX(0);
+    transition: transform .28s var(--ease-out), opacity .28s;
+    box-shadow: -6px 0 40px rgba(0,0,0,.55);
+    opacity: 1 !important;
+  }
+  .right.collapsed { transform: translateX(105%); opacity: 0 !important; pointer-events: none; }
+  /* Panel tabs — bigger touch targets */
+  .panel-tab { width: 32px; }
+  .panel-tab-inner { width: 32px; height: 48px; }
+  /* Center area adjustments */
+  .msgs { padding: 12px 10px; }
+  .mw { max-width: 94%; }
+  .mw.assistant { padding-left: 28px; }
+  .mw.assistant::before { width: 22px; height: 22px; font-size: 8px; }
+  .mw.user { padding-right: 28px; }
+  .mw.user::after { width: 22px; height: 22px; font-size: 7px; }
+  .toolbar { gap: 5px; padding: 5px 10px; }
+  .tb-group .label { display: none; }
+  .hdr { padding: 8px 12px; }
+  .hdr h1 { font-size: 14px; }
+  /* Input area */
+  .ia { padding: 10px 12px; }
+  /* Tabs bar */
+  .tabs-bar { overflow-x: auto; }
+  .tab { max-width: 140px; }
+  /* File preview: full screen on mobile */
+  .fpv-modal { width: 100vw !important; max-width: 100vw !important; height: 100vh !important; max-height: 100vh !important; border-radius: 0 !important; }
+}
+@media (max-width: 480px) {
+  .hdr-btns .hb span { display: none; }
+  .hb { padding: 5px 8px; }
+  .toolbar { font-size: 12px; }
+}
 </style>
 </head>
 <body>
@@ -651,10 +805,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
         <div id="mcpList"></div>
         <button class="add-btn" onclick="showMcpForm()" data-i18n="mcp.add">＋ Додати MCP-сервер</button>
         <div id="mcpForm" style="display:none" class="af">
+          <select id="mcpType" onchange="updateMcpFormType()">
+            <option value="stdio">stdio (команда)</option>
+            <option value="sse">SSE (URL потік)</option>
+            <option value="http">HTTP (REST)</option>
+          </select>
           <input id="mcpId" data-i18n-ph="mcp.id" placeholder="ID (напр. my-server)">
           <input id="mcpLabel" data-i18n-ph="mcp.label" placeholder="Назва">
-          <input id="mcpCmd" data-i18n-ph="mcp.cmd" placeholder="Команда (напр. npx)">
-          <input id="mcpArgs" data-i18n-ph="mcp.args" placeholder="Аргументи через кому">
+          <div id="mcpStdioFields">
+            <input id="mcpCmd" data-i18n-ph="mcp.cmd" placeholder="Команда (напр. npx)">
+            <input id="mcpArgs" data-i18n-ph="mcp.args" placeholder="Аргументи через кому">
+          </div>
+          <div id="mcpUrlFields" style="display:none">
+            <input id="mcpUrl" placeholder="URL (https://...)">
+            <textarea id="mcpHeadersArea" placeholder='{"Authorization":"Bearer TOKEN"}' style="display:none"></textarea>
+          </div>
           <textarea id="mcpEnv" placeholder='{"KEY":"value"}'></textarea>
           <div class="fr">
             <button class="bp" onclick="addMcp()" data-i18n="mcp.add_btn">Додати</button>
@@ -667,10 +832,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
     <div class="sec">
       <div class="sec-title" onclick="toggleSec('skills')">
         <span data-i18n="sec.skills">Навички</span>
-        <span class="badge" id="skillsCount">0</span>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+          <span class="badge" id="skillsCount">0</span>
+          <button id="autoSkillsBtn" class="auto-skills-btn" onclick="event.stopPropagation();toggleAutoSkills()">⚡ Auto</button>
+        </div>
       </div>
       <div class="sec-body" id="skillsBody">
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="skills.hint">Навички — файли інструкцій, що додаються до системного промпту.</div>
+        <div id="autoSkillsHint" class="auto-notif" style="display:none" data-i18n="skills.auto_hint">⚡ Навички обираються автоматично по тексту задачі</div>
         <div id="skillsList"></div>
         <button class="add-btn" onclick="$i('skillUpload').click()" data-i18n="skills.upload">＋ Завантажити .md файл</button>
         <input type="file" id="skillUpload" accept=".md,.txt" style="display:none" onchange="uploadSkill(this)">
@@ -747,11 +916,24 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 
   <div class="tabs-bar" id="tabsBar"></div>
 
-  <div class="msgs" id="messages">
+  <div class="sess-bar" id="sessBar" style="display:none">
+    <span id="sessBarTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;color:var(--text-dim)"></span>
+    <span style="flex:1"></span>
+    <span id="sessBarId" class="sess-id" onclick="copySessId()" data-i18n-tip="session.copy_id" title="—">—</span>
+    <button class="sess-open-btn" onclick="openInClaude()" id="sessOpenBtn" style="display:none" data-i18n-tip="session.open_claude">⚡ Claude Code</button>
+  </div>
+
+  <div class="msgs" id="messages" role="log" aria-live="polite" aria-label="Chat messages">
     <div class="welcome">
       <div class="wi">CC</div>
       <h2>Claude Code Chat</h2>
-      <p data-i18n="welcome.desc">CLI (Max) або SDK (API ключ). Виберіть MCP та Навички зліва, файли — справа.</p>
+      <p data-i18n="welcome.desc">Виберіть MCP та Навички зліва, файли — справа.</p>
+      <div class="welcome-prompts">
+        <div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; <span data-i18n="welcome.prompt.1">Поясни цей код крок за кроком</span></div>
+        <div class="wp-card" onclick="setPrompt(this)">&#x1F41B; <span data-i18n="welcome.prompt.2">Знайди та виправ помилки</span></div>
+        <div class="wp-card" onclick="setPrompt(this)">&#x2728; <span data-i18n="welcome.prompt.3">Напиши unit-тести</span></div>
+        <div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; <span data-i18n="welcome.prompt.4">Спроектуй архітектуру</span></div>
+      </div>
     </div>
   </div>
 
@@ -763,6 +945,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
   </div>
 
   <div class="ia" style="position:relative">
+    <!-- Hidden file input for local file attachment -->
+    <input type="file" id="filePickerInput" multiple style="display:none" onchange="onFilePicker(this)">
     <!-- @ file picker popup -->
     <div class="at-popup hidden" id="atPopup">
       <div class="at-popup-hdr">
@@ -782,7 +966,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
       <button class="reply-preview-close" onclick="clearReply()" data-i18n-title="reply.cancel" title="Cancel reply">✕</button>
     </div>
     <div class="iw">
-      <textarea id="input" rows="1" data-i18n-ph="input.ph" placeholder="Напишіть завдання... (Enter — надіслати, Shift+Enter — новий рядок)" autofocus></textarea>
+      <button class="attach-btn" type="button" onclick="$i('filePickerInput').click()" data-i18n-title="attach.file" title="Додати файл" aria-label="Attach file">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+        </svg>
+      </button>
+      <textarea id="input" rows="1" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Вставте скріншот (Ctrl+V) · @ для файлів проекту · 📎 для будь-яких файлів" autofocus aria-label="Message input" aria-multiline="true"></textarea>
       <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Завдань у черзі"></span>
       <button class="sb stop-btn hidden" id="stopBtn" onclick="confirmStop()" data-i18n-title="stop.agent" title="Stop agent">
         <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
@@ -835,22 +1024,37 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
   </div>
 </div>
 
+<!-- MCP Settings Modal -->
+<div class="modal-overlay hidden" id="mcpSettingsModal" onclick="if(event.target===this)closeMcpSettings()">
+  <div class="modal" style="width:440px;max-height:72vh">
+    <div class="modal-hdr">
+      <h2 id="mcpSettingsTitle" style="font-size:14px">⚙ MCP</h2>
+      <button class="modal-close" onclick="closeMcpSettings()">✕</button>
+    </div>
+    <div class="modal-body" id="mcpSettingsBody" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto"></div>
+    <div class="modal-footer">
+      <button class="bg" onclick="closeMcpSettings()" data-i18n="mcp.cfg.cancel">Скасувати</button>
+      <button class="bp" onclick="saveMcpSettings()" data-i18n="mcp.cfg.save">Зберегти</button>
+    </div>
+  </div>
+</div>
+
 <!-- File Preview Modal -->
 <div class="modal-overlay hidden" id="filePreviewModal" onclick="if(event.target===this)closeFpv()">
   <div class="modal fpv-modal">
     <div class="modal-hdr">
-      <h2 id="fpvTitle" style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:600px"></h2>
+      <h2 id="fpvTitle" style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0"></h2>
       <button class="modal-close" onclick="closeFpv()">✕</button>
     </div>
     <div class="fpv-toolbar">
       <span class="fpv-ext" id="fpvExt"></span>
-      <button class="fpv-btn" onclick="fpvDownload()" title="Завантажити файл">
+      <button class="fpv-btn" onclick="fpvDownload()" data-i18n-title="fpv.download.title" title="Завантажити файл">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Завантажити
+        <span data-i18n="fpv.download">Завантажити</span>
       </button>
-      <button class="fpv-btn" onclick="fpvShare()" id="fpvShareBtn" title="Поділитись / Скопіювати посилання">
+      <button class="fpv-btn" onclick="fpvShare()" id="fpvShareBtn" data-i18n-title="fpv.share.title" title="Поділитись / Скопіювати посилання">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-        Поділитись
+        <span data-i18n="fpv.share">Поділитись</span>
       </button>
     </div>
     <div class="fpv-body" id="fpvBody"></div>
@@ -872,7 +1076,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
     </div>
     <div class="proj-name-row">
       <span style="font-size:12px;color:var(--muted);white-space:nowrap">Назва:</span>
-      <input id="projNameInput" placeholder="Назва проекту (авто якщо порожньо)">
+      <input id="projNameInput" data-i18n-ph="dir.proj_name" placeholder="Назва проекту (авто якщо порожньо)">
     </div>
     <div class="dir-footer">
       <label>
@@ -909,12 +1113,35 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 let ws = null, isGen = false, curEl = null, curTxt = '', currentSessionId = null, generatingTabId = null;
 let replyTo = null; // { id, role, content }
 let openTabs = [], activeTabId = null;
+const tabState = {}; // per-tab: { curEl, curTxt, currentSessionId, generating, draft }
+function getTS(id) {
+  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', currentSessionId: null, generating: false, draft: '' };
+  return tabState[id];
+}
 let config = { mcpServers: {}, skills: {} };
 let activeMcp = new Set(), activeSkills = new Set();
+let autoSkillsMode = true; // ON by default; user can disable
 let cfgFiles = {}, activeCfgTab = null;
-let curMode = 'auto', curAgent = 'single', curModel = 'sonnet';
+let curMode = 'auto', curAgent = 'single', curModel = 'sonnet', curEngine = 'cli';
 let curWorkdir = null; // current working directory for the session
 let projects = [], curProjectId = null; // projects list + active project
+
+// ─── Per-project in-memory tab state ─────────────────────────────────────
+// Keeps all projects' tabs alive simultaneously so background generation continues
+const projectTabs = {};      // { projectId: Tab[] }  — live references to openTabs arrays
+const projectActiveTab = {}; // { projectId: string|null } — last active tab per project
+
+// Find a tab across current project and all background projects
+function findTabAcrossProjects(tabId) {
+  let tab = openTabs.find(t => t.id === tabId);
+  if (tab) return { tab, tabs: openTabs, projId: curProjectId, isCurrent: true };
+  for (const [pid, tabs] of Object.entries(projectTabs)) {
+    if (pid === curProjectId) continue;
+    tab = tabs.find(t => t.id === tabId);
+    if (tab) return { tab, tabs, projId: pid, isCurrent: false };
+  }
+  return null;
+}
 let userScrolled = false; // track if user scrolled up
 let histOffset = 0;       // offset of the oldest rendered message (non-tool)
 let histTotal  = 0;       // total non-tool message count for current session
@@ -940,7 +1167,7 @@ const TRANSLATIONS = {
     'btn.new':'Нова','tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки',
     'welcome.title':'Нова сесія','welcome.ready':'Готовий до роботи',
     'welcome.desc':'Виберіть MCP та Навички зліва, файли — справа.',
-    'input.ph':'Напишіть завдання... (Enter — надіслати, Shift+Enter — новий рядок)',
+    'input.ph':'Напишіть завдання... Вставте скріншот (Ctrl+V) · @ для файлів проекту · 📎 для будь-яких файлів',
     'files.title':'Робоча директорія','files.refresh':'Оновити','queue.title':'Завдань у черзі',
     'cfg.title':'Налаштування','cfg.saved':'✓ Збережено','cfg.close':'Закрити','cfg.save':'Зберегти',
     'dir.title':'Новий проект','toast.loading':'Завантаження...',
@@ -971,11 +1198,32 @@ const TRANSLATIONS = {
     'proj.active.title':'Активний проект','proj.click.title':'Клік — активувати',
     'proj.del.title':'Видалити проект',
     'chip.remove':'Видалити',
+    'attach.file':'Додати файл (📎)',
     'queue.label':'У черзі','queue.edit.title':'Редагувати повідомлення','queue.del.title':'Видалити з черги',
     'agents.title':'Активні агенти',
     'sess.delete.confirm':'Видалити сесію?','sess.load.err':'Помилка завантаження сесії',
     'mcp.active':'● Активний у чаті','mcp.inactive':'○ Вимкнений','mcp.del.title':'Видалити сервер',
-    'skill.active':'● У системному промпті','skill.inactive':'○ Не активний','skill.del.title':'Видалити skill',
+    'mcp.cfg.tip':'Налаштування','mcp.cfg.warn':'Потрібна конфігурація',
+    'mcp.toggle.on':'Клік — вимкнути','mcp.toggle.off':'Клік — увімкнути',
+    'mcp.cfg.api_warn':'⚠ Вкажіть API ключі для активації',
+    'mcp.cfg.no_params':'Немає параметрів для налаштування',
+    'mcp.cfg.saved':'✓ Налаштування збережено','mcp.cfg.save_err':'Помилка збереження',
+    'mcp.cfg.cancel':'Скасувати','mcp.cfg.save':'Зберегти',
+    'mcp.add.id_req':'ID обов\'язковий','mcp.add.url_req':'URL обов\'язковий',
+    'mcp.add.cmd_req':'Команда обов\'язкова','mcp.add.ok':'✓ MCP сервер додано',
+        'skill.active':'● У системному промпті','skill.inactive':'○ Не активний','skill.del.title':'Видалити skill',
+    'skills.auto_hint':'⚡ Навички обираються автоматично по тексту задачі',
+    'auto.title.on':'⚡ Auto-Skills: увімкнено — клік для вимкнення',
+    'auto.title.off':'⚡ Auto-Skills: вимкнено — клік для увімкнення',
+    'status.connected':'Підключено','status.generating':'Генерація…','status.thinking':'Обдумування...','status.processing':'Обробка...','status.reconnecting':'Перепідключення…','status.stopped':'Зупинено','status.error':'Помилка',
+    'fpv.download':'Завантажити','fpv.download.title':'Завантажити файл','fpv.share':'Поділитись','fpv.share.title':'Поділитись / Скопіювати посилання','fpv.binary':'Бінарний файл — перегляд недоступний','fpv.img_error':'Помилка завантаження зображення','fpv.load_error':'Помилка завантаження файлу',
+    'toast.no_connection':'Немає з\'єднання','toast.sess_not_found':'Сесію не знайдено','toast.cfg_load_err':'Помилка завантаження конфігурації','toast.skill_uploaded':'✓ Скіл завантажено','toast.link_copied':'✓ Посилання скопійовано','toast.select_dir':'Виберіть директорію','toast.link_prompt':'Скопіюйте посилання:',
+    'at.no_project':'Оберіть проект, щоб шукати файли','at.searching':'Пошук...','at.search_err':'Помилка пошуку','at.no_files':'Файлів не знайдено',
+    'dir.this_dir':'. (ця директорія)','dir.no_subdirs':'Немає підпапок',
+    'toast.read_err':'Не вдалося прочитати: ','toast.err_prefix':'Помилка: ','dir.proj_name':'Назва проекту (авто якщо порожньо)',
+    'welcome.prompt.1':'Поясни цей код крок за кроком','welcome.prompt.2':'Знайди та виправ помилки','welcome.prompt.3':'Напиши unit-тести','welcome.prompt.4':'Спроектуй архітектуру',
+    'toast.task_resumed':'Задачу відновлено','toast.task_lost':'З\'єднання втрачено, вивід недоступний','toast.task_interrupted':'Задачу перервано. Повторити?','toast.task_retry':'Повторити',
+    'session.copy_id':'Скопіювати ID сесії Claude','session.open_claude':'Відкрити в Claude Code',
   },
   en: {
     'sec.proactive':'Status',
@@ -990,7 +1238,7 @@ const TRANSLATIONS = {
     'btn.new':'New','tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns',
     'welcome.title':'New session','welcome.ready':'Ready to work',
     'welcome.desc':'Choose MCP and Skills on the left, files on the right.',
-    'input.ph':'Write a task... (Enter — send, Shift+Enter — new line)',
+    'input.ph':'Write a task... Paste screenshot (Ctrl+V) · @ for project files · 📎 for any files',
     'files.title':'Workspace','files.refresh':'Refresh','queue.title':'Tasks waiting in queue',
     'cfg.title':'Configuration','cfg.saved':'✓ Saved','cfg.close':'Close','cfg.save':'Save',
     'dir.title':'New project','toast.loading':'Loading...',
@@ -1021,11 +1269,32 @@ const TRANSLATIONS = {
     'proj.active.title':'Active project','proj.click.title':'Click to activate',
     'proj.del.title':'Delete project',
     'chip.remove':'Remove',
+    'attach.file':'Attach file (📎)',
     'queue.label':'In queue','queue.edit.title':'Edit message','queue.del.title':'Remove from queue',
     'agents.title':'Active agents',
     'sess.delete.confirm':'Delete session?','sess.load.err':'Error loading session',
     'mcp.active':'● Active in chat','mcp.inactive':'○ Disabled','mcp.del.title':'Remove server',
-    'skill.active':'● In system prompt','skill.inactive':'○ Inactive','skill.del.title':'Remove skill',
+    'mcp.cfg.tip':'Settings','mcp.cfg.warn':'Configuration required',
+    'mcp.toggle.on':'Click to disable','mcp.toggle.off':'Click to enable',
+    'mcp.cfg.api_warn':'⚠ Set API keys to enable',
+    'mcp.cfg.no_params':'No parameters to configure',
+    'mcp.cfg.saved':'✓ Settings saved','mcp.cfg.save_err':'Save error',
+    'mcp.cfg.cancel':'Cancel','mcp.cfg.save':'Save',
+    'mcp.add.id_req':'ID is required','mcp.add.url_req':'URL is required',
+    'mcp.add.cmd_req':'Command is required','mcp.add.ok':'✓ MCP server added',
+        'skill.active':'● In system prompt','skill.inactive':'○ Inactive','skill.del.title':'Remove skill',
+    'skills.auto_hint':'⚡ Skills are auto-selected based on task text',
+    'auto.title.on':'⚡ Auto-Skills: enabled — click to disable',
+    'auto.title.off':'⚡ Auto-Skills: disabled — click to enable',
+    'status.connected':'Connected','status.generating':'Generating…','status.thinking':'Thinking...','status.processing':'Processing...','status.reconnecting':'Reconnecting…','status.stopped':'Stopped','status.error':'Error',
+    'fpv.download':'Download','fpv.download.title':'Download file','fpv.share':'Share','fpv.share.title':'Share / Copy link','fpv.binary':'Binary file — preview not available','fpv.img_error':'Image load error','fpv.load_error':'File load error',
+    'toast.no_connection':'No connection','toast.sess_not_found':'Session not found','toast.cfg_load_err':'Config load error','toast.skill_uploaded':'✓ Skill uploaded','toast.link_copied':'✓ Link copied','toast.select_dir':'Select a directory','toast.link_prompt':'Copy link:',
+    'at.no_project':'Select a project to search files','at.searching':'Searching...','at.search_err':'Search error','at.no_files':'No files found',
+    'dir.this_dir':'. (this directory)','dir.no_subdirs':'No subdirectories',
+    'toast.read_err':'Failed to read: ','toast.err_prefix':'Error: ','dir.proj_name':'Project name (auto if empty)',
+    'welcome.prompt.1':'Explain this code step by step','welcome.prompt.2':'Find and fix bugs','welcome.prompt.3':'Write unit tests','welcome.prompt.4':'Design the architecture',
+    'toast.task_resumed':'Task resumed','toast.task_lost':'Connection lost, output unavailable','toast.task_interrupted':'Task was interrupted. Retry?','toast.task_retry':'Retry',
+    'session.copy_id':'Copy Claude session ID','session.open_claude':'Open in Claude Code',
   },
   ru: {
     'sec.proactive':'Статус',
@@ -1040,7 +1309,7 @@ const TRANSLATIONS = {
     'btn.new':'Новая','tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги',
     'welcome.title':'Новая сессия','welcome.ready':'Готов к работе',
     'welcome.desc':'Выберите MCP и Навыки слева, файлы — справа.',
-    'input.ph':'Напишите задание... (Enter — отправить, Shift+Enter — новая строка)',
+    'input.ph':'Напишите задание... Вставьте скриншот (Ctrl+V) · @ для файлов проекта · 📎 для любых файлов',
     'files.title':'Рабочая директория','files.refresh':'Обновить','queue.title':'Задач в очереди',
     'cfg.title':'Настройки','cfg.saved':'✓ Сохранено','cfg.close':'Закрыть','cfg.save':'Сохранить',
     'dir.title':'Новый проект','toast.loading':'Загрузка...',
@@ -1071,11 +1340,32 @@ const TRANSLATIONS = {
     'proj.active.title':'Активный проект','proj.click.title':'Клик — активировать',
     'proj.del.title':'Удалить проект',
     'chip.remove':'Удалить',
+    'attach.file':'Прикрепить файл (📎)',
     'queue.label':'В очереди','queue.edit.title':'Редактировать сообщение','queue.del.title':'Удалить из очереди',
     'agents.title':'Активные агенты',
     'sess.delete.confirm':'Удалить сессию?','sess.load.err':'Ошибка загрузки сессии',
     'mcp.active':'● Активен в чате','mcp.inactive':'○ Отключен','mcp.del.title':'Удалить сервер',
-    'skill.active':'● В системном промпте','skill.inactive':'○ Неактивен','skill.del.title':'Удалить skill',
+    'mcp.cfg.tip':'Настройки','mcp.cfg.warn':'Требуется настройка',
+    'mcp.toggle.on':'Клик — отключить','mcp.toggle.off':'Клик — включить',
+    'mcp.cfg.api_warn':'⚠ Укажите API ключи для активации',
+    'mcp.cfg.no_params':'Нет параметров для настройки',
+    'mcp.cfg.saved':'✓ Настройки сохранены','mcp.cfg.save_err':'Ошибка сохранения',
+    'mcp.cfg.cancel':'Отмена','mcp.cfg.save':'Сохранить',
+    'mcp.add.id_req':'ID обязателен','mcp.add.url_req':'URL обязателен',
+    'mcp.add.cmd_req':'Команда обязательна','mcp.add.ok':'✓ MCP сервер добавлен',
+        'skill.active':'● В системном промпте','skill.inactive':'○ Неактивен','skill.del.title':'Удалить skill',
+    'skills.auto_hint':'⚡ Навыки выбираются автоматически по тексту задачи',
+    'auto.title.on':'⚡ Auto-Skills: включено — клик для отключения',
+    'auto.title.off':'⚡ Auto-Skills: отключено — клик для включения',
+    'status.connected':'Подключено','status.generating':'Генерация…','status.thinking':'Обдумывание...','status.processing':'Обработка...','status.reconnecting':'Переподключение…','status.stopped':'Остановлено','status.error':'Ошибка',
+    'fpv.download':'Скачать','fpv.download.title':'Скачать файл','fpv.share':'Поделиться','fpv.share.title':'Поделиться / Скопировать ссылку','fpv.binary':'Бинарный файл — предпросмотр недоступен','fpv.img_error':'Ошибка загрузки изображения','fpv.load_error':'Ошибка загрузки файла',
+    'toast.no_connection':'Нет соединения','toast.sess_not_found':'Сессия не найдена','toast.cfg_load_err':'Ошибка загрузки конфигурации','toast.skill_uploaded':'✓ Навык загружен','toast.link_copied':'✓ Ссылка скопирована','toast.select_dir':'Выберите директорию','toast.link_prompt':'Скопируйте ссылку:',
+    'at.no_project':'Выберите проект для поиска файлов','at.searching':'Поиск...','at.search_err':'Ошибка поиска','at.no_files':'Файлов не найдено',
+    'dir.this_dir':'. (эта директория)','dir.no_subdirs':'Нет подпапок',
+    'toast.read_err':'Не удалось прочитать: ','toast.err_prefix':'Ошибка: ','dir.proj_name':'Название проекта (авто если пусто)',
+    'welcome.prompt.1':'Объясни этот код шаг за шагом','welcome.prompt.2':'Найди и исправь ошибки','welcome.prompt.3':'Напиши unit-тесты','welcome.prompt.4':'Спроектируй архитектуру',
+    'toast.task_resumed':'Задача возобновлена','toast.task_lost':'Соединение потеряно, вывод недоступен','toast.task_interrupted':'Задача прервана. Повторить?','toast.task_retry':'Повторить',
+    'session.copy_id':'Скопировать ID сессии Claude','session.open_claude':'Открыть в Claude Code',
   }
 };
 function t(key) {
@@ -1246,7 +1536,7 @@ function copyCode(id, btn) {
   if (!code) return;
   navigator.clipboard.writeText(code.textContent).then(() => {
     const orig = btn.textContent;
-    btn.textContent = '✓ Скопійовано';
+    btn.textContent = '✓ ' + t('copy.code');
     btn.classList.add('ok');
     setTimeout(() => { btn.textContent = orig; btn.classList.remove('ok'); }, 1500);
   });
@@ -1265,19 +1555,28 @@ function connect() {
 
   ws.onopen = () => {
     _reconnectDelay = 1000; // reset backoff on successful connect
-    setStatus('Підключено', 'ok');
+    setStatus(t('status.connected'), 'ok');
     loadFiles();
     loadHist();
     // Re-attach to active session after a reconnect
     if (currentSessionId && ws.readyState === 1) {
       ws.send(JSON.stringify({ type: 'start_session', sessionId: currentSessionId, mode: curMode, agentMode: curAgent, model: curModel, engine: 'cli'}));
     }
+    // Resume generating tabs across ALL projects (not just current)
+    const allTabArrays = [openTabs, ...Object.entries(projectTabs).filter(([pid]) => pid !== curProjectId).map(([,tabs]) => tabs)];
+    for (const tabs of allTabArrays) {
+      for (const tab of tabs) {
+        if (tab.generating && tab.id && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'resume_task', sessionId: tab.id, tabId: tab.id }));
+        }
+      }
+    }
   };
 
   ws.onclose = (ev) => {
     // Clean close (e.g. server shutdown code 1001, or intentional nav) — reconnect
     if (_intentionalClose) return;
-    setStatus('Перепідключення…', 'err');
+    setStatus(t('status.reconnecting'), 'err');
     if (isGen) { isGen = false; setSendStop(false); generatingTabId = null; } // reset generating state
     // Exponential backoff with ±20 % jitter, capped at 30 s
     const jitter = _reconnectDelay * 0.2 * (Math.random() * 2 - 1);
@@ -1301,8 +1600,15 @@ function connect() {
 window.addEventListener('beforeunload', () => { _intentionalClose = true; if (_reconnectTimer) clearTimeout(_reconnectTimer); });
 
 function handleWsMsg(d) {
+  const tabId = d.tabId || (generatingTabId || activeTabId);
+  // Look up tab across current project AND all background projects
+  const found = findTabAcrossProjects(tabId);
+  const isCurrent = found ? found.isCurrent : true;
+  const isVisible = isCurrent && tabId === activeTabId;
+
   switch (d.type) {
     case 'text':
+      if (!isVisible) break;
       rmStatus();
       if (!curEl) { rmW(); curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
       curTxt += d.text;
@@ -1312,40 +1618,46 @@ function handleWsMsg(d) {
       break;
 
     case 'tool':
-      if (!curEl) showStatus('⚙ ' + (d.tool || 'tool'));
+      if (!curEl && isVisible) showStatus('⚙ ' + (d.tool || 'tool'));
       break;
 
     case 'thinking':
-      if (!curEl) showStatus('Обдумування...');
+      if (!curEl && isVisible) showStatus(t('status.thinking'));
       break;
 
     case 'agent_status':
-      showStatus((d.agent ? d.agent + ' · ' : '') + escH(d.status));
+      if (isVisible) showStatus((d.agent ? d.agent + ' · ' : '') + escH(d.status));
       break;
 
     case 'status':
-      sbShow('Генерація…');
-      setStatus(`CLI · ${d.mode || ''} · ${d.model || ''}`, 'warn');
-      setSendStop(true);
-      { const t = openTabs.find(x => x.id === generatingTabId); if (t) { t.generating = true; t.done = false; renderTabs(); } }
+      if (isVisible) {
+        sbShow(t('status.generating'));
+        setStatus(`CLI · ${d.mode || ''} · ${d.model || ''}`, 'warn');
+        setSendStop(true);
+      }
+      if (found?.tab) { found.tab.generating = true; found.tab.done = false; }
+      if (isCurrent) renderTabs(); else renderProjects(); // background: show busy dot on project
+      if (tabId === activeTabId) { isGen = true; generatingTabId = tabId; }
       break;
 
     case 'done':
-      if (curEl && curTxt) { curEl.querySelector('.msg').innerHTML = renderMd(curTxt); }
-      markDone(curEl);
-      { // Mark first unacknowledged user message — only when viewing the generating tab
+      if (isVisible) {
+        if (curEl && curTxt) { curEl.querySelector('.msg').innerHTML = renderMd(curTxt); }
+        markDone(curEl);
         if (activeTabId === generatingTabId) {
           const first = [...msgsEl.querySelectorAll('.mw.user')].find(m => !m.querySelector('.msg-ack'));
           if (first) { const a = document.createElement('div'); a.className = 'msg-ack'; a.textContent = '✓'; first.appendChild(a); }
         }
+        curEl = null; curTxt = '';
+        isGen = false;
+        setSendStop(false);
+        setStatus(t('status.connected'), 'ok');
       }
-      curEl = null; curTxt = '';
-      isGen = false;
-      setSendStop(false);
-      setStatus('Підключено', 'ok');
-      { const t = openTabs.find(x => x.id === generatingTabId); if (t) { t.generating = false; t.done = true; renderTabs(); } }
-      generatingTabId = null;
+      if (found?.tab) { found.tab.generating = false; found.tab.done = true; }
+      if (isCurrent) { renderTabs(); if (tabId === activeTabId) generatingTabId = null; }
+      else renderProjects(); // background: remove busy dot from project
       loadHist();
+      if (tabId === activeTabId) updateSessBar();
       break;
 
     case 'files_changed':
@@ -1353,50 +1665,70 @@ function handleWsMsg(d) {
       break;
 
     case 'error':
-      rmStatus();
-      sbHide();
-      if (curEl) {
-        const s = curEl.querySelector('.msg-spinner'); if (s) s.remove();
-        curEl.querySelector('.msg').innerHTML += `<br><span style="color:var(--red)">${escH(d.error)}</span>`;
+      if (isVisible) {
+        rmStatus();
+        sbHide();
+        if (curEl) {
+          const s = curEl.querySelector('.msg-spinner'); if (s) s.remove();
+          curEl.querySelector('.msg').innerHTML += `<br><span style="color:var(--red)">${escH(d.error)}</span>`;
+        }
+        else {
+          const em = addMsg('assistant'); em.querySelector('.msg').innerHTML = `<span style="color:var(--red)">${escH(d.error)}</span>`;
+        }
+        isGen = false;
+        setSendStop(false);
+        setStatus(t('status.error'), 'err');
+        toast(d.error, true, 5000);
       }
-      else if (activeTabId === generatingTabId) {
-        // Only inject into visible DOM when we're still on the generating tab
-        const em = addMsg('assistant'); em.querySelector('.msg').innerHTML = `<span style="color:var(--red)">${escH(d.error)}</span>`;
-      }
-      isGen = false;
-      setSendStop(false);
-      setStatus('Помилка', 'err');
-      { const t = openTabs.find(x => x.id === generatingTabId); if (t) { t.generating = false; renderTabs(); } }
-      generatingTabId = null;
-      toast(d.error, true, 5000);
+      if (found?.tab) { found.tab.generating = false; }
+      if (isCurrent) { renderTabs(); if (tabId === activeTabId) generatingTabId = null; }
+      else renderProjects();
       break;
 
     case 'session_started':
-      { // Update temp tab id → real session id, keyed by generating tab (not active tab)
-        const srcId = generatingTabId || activeTabId;
-        const t = openTabs.find(x => x.id === srcId);
-        if (t?.isNew) {
-          t.id = d.sessionId; t.isNew = false;
-          if (generatingTabId === srcId) generatingTabId = d.sessionId;
-          if (activeTabId === srcId) activeTabId = d.sessionId;
-          renderTabs(); saveUIState();
+      {
+        const srcId = d.tabId || generatingTabId || activeTabId;
+        // Search across all projects, not just current
+        const sf = findTabAcrossProjects(srcId) || (openTabs.find(x => x.id === srcId) ? { tab: openTabs.find(x => x.id === srcId), tabs: openTabs, isCurrent: true } : null);
+        const tab = sf?.tab;
+        if (tab?.isNew) {
+          const oldId = tab.id;
+          tab.id = d.sessionId; tab.isNew = false;
+          // Move tabState from temp id to real id
+          if (tabState[oldId]) { tabState[d.sessionId] = tabState[oldId]; delete tabState[oldId]; }
+          if (generatingTabId === oldId) generatingTabId = d.sessionId;
+          if (activeTabId === oldId) activeTabId = d.sessionId;
+          // Update projectActiveTab if this was a background project's active tab
+          if (!sf.isCurrent && sf.projId && projectActiveTab[sf.projId] === oldId) {
+            projectActiveTab[sf.projId] = d.sessionId;
+          }
+          if (sf.isCurrent) renderTabs();
+          saveUIState();
         }
       }
-      if (activeTabId === d.sessionId) currentSessionId = d.sessionId;
+      if (activeTabId === d.sessionId || (!d.tabId && generatingTabId === d.sessionId)) {
+        currentSessionId = d.sessionId;
+      }
       break;
 
     case 'session_title':
-      { const t = openTabs.find(x => x.id === (generatingTabId || activeTabId));
-        if (t && d.title) { t.title = d.title; renderTabs(); saveUIState(); } }
+      {
+        const titleTabId = d.tabId || generatingTabId || activeTabId;
+        const tf = findTabAcrossProjects(titleTabId);
+        if (tf?.tab && d.title) {
+          tf.tab.title = d.title;
+          if (tf.isCurrent) renderTabs();
+          saveUIState();
+        }
+      }
       loadHist();
+      updateSessBar();
       break;
 
     case 'queued':
-      // Server confirmed message is queued — indicator already shown in send()
       break;
 
     case 'queue_update':
-      // Sync queued indicators: remove .msg-queued from messages no longer in server queue
       if (Array.isArray(d.items)) {
         const stillQueued = new Set(d.items.map(i => i.queueId).filter(Boolean));
         msgsEl.querySelectorAll('.mw[data-queue-id]').forEach(el => {
@@ -1417,16 +1749,16 @@ function handleWsMsg(d) {
       break;
 
     case 'queue_edited':
-      // Server confirmed edit — nothing extra needed (DOM already updated optimistically)
       break;
 
     case 'queue_start':
-      // Previous done, now processing queued message
       { const q = msgsEl.querySelector('.msg-queued'); if (q) q.remove(); }
-      isGen = true;
-      showStatus('Обробка...');
-      setStatus('Обробка...', 'warn');
-      setSendStop(true);
+      if (isVisible) {
+        isGen = true;
+        showStatus(t('status.processing'));
+        setStatus(t('status.processing'), 'warn');
+        setSendStop(true);
+      }
       break;
 
     case 'session_reset':
@@ -1434,9 +1766,37 @@ function handleWsMsg(d) {
       _allMsgs = []; _shownFrom = 0;
       showW();
       currentSessionId = null;
-      curWorkdir = null; curProjectId = null;
-      renderProjects();
       break;
+
+    case 'task_resumed':
+      toast('🔄 ' + t('toast.task_resumed'));
+      // Re-show generating state for this tab
+      { const tr = openTabs.find(x => x.id === tabId); if (tr) { tr.generating = true; renderTabs(); } }
+      if (isVisible) { isGen = true; generatingTabId = tabId; setSendStop(true); }
+      break;
+
+    case 'task_lost': {
+      const tl = openTabs.find(x => x.id === tabId);
+      if (tl) { tl.generating = false; renderTabs(); saveUIState(); }
+      if (isVisible) { isGen = false; setSendStop(false); setStatus(t('status.connected'), 'ok'); }
+      toast(t('toast.task_lost'), true, 4000);
+      break;
+    }
+
+    case 'task_interrupted': {
+      const ti = openTabs.find(x => x.id === tabId);
+      if (ti) { ti.generating = false; renderTabs(); saveUIState(); }
+      if (isVisible) { isGen = false; setSendStop(false); setStatus(t('status.connected'), 'ok'); }
+      if (isVisible && d.prompt) {
+        const retryEl = document.createElement('div');
+        retryEl.className = 'msg-retry';
+        const safePrompt = (d.prompt || '').replace(/'/g, "\\'").substring(0, 500);
+        retryEl.innerHTML = `<span>⚠️ ${escH(t('toast.task_interrupted'))}</span><button onclick="retryCrashedTask('${escH(d.sessionId || tabId)}', '${safePrompt}', this)">${escH(t('toast.task_retry'))}</button>`;
+        $i('messages')?.appendChild(retryEl);
+        scrollBottom();
+      }
+      break;
+    }
   }
 }
 
@@ -1473,7 +1833,18 @@ function cancelStop() {
 }
 function doStop() {
   cancelStop();
-  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'stop' }));
+  // Immediately reset client-side generating state (don't wait for server 'done')
+  const activeTab = openTabs.find(t => t.id === activeTabId);
+  if (activeTab) { activeTab.generating = false; renderTabs(); }
+  if (activeTabId && tabState[activeTabId]) {
+    tabState[activeTabId].generating = false;
+    tabState[activeTabId].curEl = null;
+    tabState[activeTabId].curTxt = '';
+  }
+  setSendStop(false);
+  setStatus(t('status.stopped'), 'ok');
+  rmStatus();
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'stop', tabId: activeTabId }));
 }
 function stopAgent() { confirmStop(); }
 
@@ -1514,7 +1885,7 @@ function addEl(cls) {
 
 function rmW() { const w = msgsEl.querySelector('.welcome'); if (w) w.remove(); }
 function showW() {
-  msgsEl.innerHTML = `<div class="welcome"><div class="wi">CC</div><h2>${t('welcome.title')}</h2><p>${t('welcome.ready')}</p></div>`;
+  msgsEl.innerHTML = `<div class="welcome"><div class="wi">CC</div><h2>Claude Code Chat</h2><p>${t('welcome.desc')}</p><div class="welcome-prompts"><div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; ${t('welcome.prompt.1')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F41B; ${t('welcome.prompt.2')}</div><div class="wp-card" onclick="setPrompt(this)">&#x2728; ${t('welcome.prompt.3')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; ${t('welcome.prompt.4')}</div></div></div>`;
 }
 
 function showStatus(txt) {
@@ -1558,6 +1929,12 @@ function scrollBottom() {
 function scrollToBottom() {
   userScrolled = false;
   msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+
+function setPrompt(el) {
+  const txt = el.textContent.replace(/^[^\s]+\s/, ''); // strip emoji
+  const inp = $i('input');
+  if (inp) { inp.value = txt; inp.focus(); inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 120) + 'px'; }
 }
 
 const _scrollBtn = document.getElementById('scrollBtn');
@@ -1607,13 +1984,66 @@ function renderTabs() {
     let dot = '';
     if (tab.generating) dot = '<div class="tab-dot spinning"></div>';
     else if (tab.done) dot = '<div class="tab-dot done"></div>';
-    el.innerHTML = `${dot}<span class="tab-title">${escH(tab.title || t('tab.new'))}</span><button class="tab-close" onclick="event.stopPropagation();closeTab('${tab.id}')">✕</button>`;
+    const titleTip = escH(tab.title || t('tab.new'));
+    el.innerHTML = `${dot}<span class="tab-title" data-tip="${titleTip}" ondblclick="event.stopPropagation();startRenameTab(event,'${tab.id}')">${escH(tab.title || t('tab.new'))}</span><button class="tab-close" onclick="event.stopPropagation();closeTab('${tab.id}')">✕</button>`;
     bar.appendChild(el);
   }
   const nb = document.createElement('button');
   nb.className = 'tab-new'; nb.title = t('tab.new'); nb.textContent = '+';
   nb.onclick = newTab;
   bar.appendChild(nb);
+  updateHistSpinners();
+}
+
+function updateHistSpinners() {
+  const el = $i('histList');
+  if (!el) return;
+  el.querySelectorAll('.hist-item[data-sess]').forEach(item => {
+    const tab = openTabs.find(t => t.id === item.dataset.sess);
+    let spinner = item.querySelector('.hist-spin');
+    if (tab?.generating) {
+      if (!spinner) {
+        spinner = document.createElement('span');
+        spinner.className = 'hist-spin tab-dot spinning';
+        item.insertBefore(spinner, item.firstChild);
+      }
+    } else {
+      if (spinner) spinner.remove();
+    }
+  });
+}
+
+function startRenameTab(e, tabId) {
+  const span = e.currentTarget;
+  const tab = openTabs.find(t => t.id === tabId);
+  if (!tab || tab.isNew) return;
+  const origTitle = tab.title || '';
+  const inp = document.createElement('input');
+  inp.className = 'tab-rename-input';
+  inp.value = origTitle;
+  span.replaceWith(inp);
+  inp.focus(); inp.select();
+  let saved = false;
+  const save = () => {
+    if (saved) return; saved = true;
+    const newTitle = inp.value.trim() || origTitle;
+    saveTabRename(tabId, newTitle);
+  };
+  inp.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') { ev.preventDefault(); save(); }
+    if (ev.key === 'Escape') { saved = true; renderTabs(); }
+  });
+  inp.addEventListener('blur', save);
+}
+
+async function saveTabRename(tabId, newTitle) {
+  const tab = openTabs.find(t => t.id === tabId);
+  if (!tab) return;
+  tab.title = newTitle;
+  renderTabs(); loadHist();
+  if (!tab.isNew) {
+    try { await fetch(`/api/sessions/${tabId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ title: newTitle }) }); } catch {}
+  }
 }
 
 function openTab(id, title) {
@@ -1622,18 +2052,87 @@ function openTab(id, title) {
   switchTab(id);
 }
 
+// ─── Session info bar ─────────────────────────────────────────────────────
+async function updateSessBar() {
+  const bar = $i('sessBar');
+  if (!bar) return;
+  if (!activeTabId) { bar.style.display = 'none'; return; }
+  try {
+    const resp = await fetch(`/api/sessions/${activeTabId}`);
+    if (!resp.ok) { bar.style.display = 'none'; return; }
+    const s = await resp.json();
+    bar.style.display = 'flex';
+    const titleEl = $i('sessBarTitle');
+    if (titleEl) titleEl.textContent = s.title || '';
+    const idEl = $i('sessBarId');
+    if (idEl) {
+      const cid = s.claude_session_id || '';
+      idEl.textContent = cid ? cid.slice(0, 8) + '…' : '—';
+      idEl.dataset.fullId = cid;
+      idEl.title = cid || t('session.copy_id');
+    }
+    const openBtn = $i('sessOpenBtn');
+    if (openBtn) openBtn.style.display = s.claude_session_id ? '' : 'none';
+  } catch { if (bar) bar.style.display = 'none'; }
+}
+
+function copySessId() {
+  const id = $i('sessBarId')?.dataset.fullId;
+  if (!id) return;
+  navigator.clipboard.writeText(id).then(() => toast(t('toast.link_copied')));
+}
+
+async function openInClaude() {
+  if (!activeTabId) return;
+  try {
+    const resp = await fetch(`/api/sessions/${activeTabId}/open-terminal`, { method: 'POST' });
+    const d = await resp.json();
+    if (d.ok) {
+      toast('⚡ Claude Code launched');
+    } else if (d.command) {
+      // macOS not available — copy command to clipboard
+      navigator.clipboard.writeText(d.command).then(() => toast('📋 ' + d.command));
+    }
+  } catch { toast(t('toast.err_prefix') + 'open-terminal failed', true); }
+}
+
+function retryCrashedTask(sessionId, prompt, btn) {
+  btn.closest('.msg-retry')?.remove();
+  if (sessionId !== activeTabId) switchTab(sessionId);
+  inEl.value = prompt;
+  inEl.dispatchEvent(new Event('input'));
+  doSend();
+}
+
 function switchTab(id) {
   if (activeTabId === id) return;
+  // Save textarea draft for current tab before switching
+  if (activeTabId) getTS(activeTabId).draft = inEl.value;
   activeTabId = id;
   const tab = openTabs.find(t => t.id === id);
   if (tab?.isNew) {
-    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'new_session' }));
     currentSessionId = null;
     msgsEl.innerHTML = ''; showW(); renderProjects();
   } else {
     loadSess(id);
   }
+  // Restore textarea draft for new tab
+  const draft = getTS(id).draft || '';
+  inEl.value = draft;
+  inEl.style.height = 'auto';
+  inEl.style.height = Math.min(inEl.scrollHeight, 130) + 'px';
+  // Update stop button state for new tab
+  const newTab = openTabs.find(t => t.id === id);
+  if (newTab?.generating) {
+    setSendStop(true);
+    setStatus(t('status.processing'), 'warn');
+    sbShow(t('status.generating'));
+  } else {
+    setSendStop(false);
+    sbHide();
+  }
   renderTabs(); saveUIState();
+  updateSessBar();
 }
 
 function closeTab(id) {
@@ -1641,6 +2140,7 @@ function closeTab(id) {
   const idx = openTabs.findIndex(t => t.id === id);
   if (idx === -1) return;
   openTabs.splice(idx, 1);
+  delete tabState[id];
   if (activeTabId === id) {
     if (openTabs.length > 0) {
       const next = openTabs[Math.min(idx, openTabs.length - 1)];
@@ -1658,10 +2158,13 @@ function closeTab(id) {
 function newTab() {
   const tempId = 'new-' + Date.now();
   if (!curProjectId) { _onProjectCreated = () => newTab(); openAddProject(); return; }
-  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'new_session' }));
+  // Save current tab's draft before switching
+  if (activeTabId) getTS(activeTabId).draft = inEl.value;
   openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true });
   activeTabId = tempId;
   currentSessionId = null;
+  inEl.value = '';
+  inEl.style.height = 'auto';
   msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();
   userScrolled = false; renderTabs(); saveUIState();
 }
@@ -1671,9 +2174,31 @@ function toggle(id) {
   el.classList.toggle('collapsed');
   const btn = document.querySelector(`[onclick="toggle('${id}')"]`);
   if (btn) btn.classList.toggle('active', !el.classList.contains('collapsed'));
+  // Mobile backdrop
+  if (window.innerWidth <= 800) {
+    const isOpen = !el.classList.contains('collapsed');
+    let bd = $i('mobileBackdrop');
+    if (!bd) {
+      bd = document.createElement('div');
+      bd.id = 'mobileBackdrop';
+      document.body.appendChild(bd);
+    }
+    const anyOpen = !$i('leftPanel')?.classList.contains('collapsed') || !$i('rightPanel')?.classList.contains('collapsed');
+    bd.style.display = anyOpen ? 'block' : 'none';
+    bd.onclick = () => {
+      if (!$i('leftPanel')?.classList.contains('collapsed')) toggle('leftPanel');
+      if (!$i('rightPanel')?.classList.contains('collapsed')) toggle('rightPanel');
+    };
+  }
   saveUIState();
 }
-function toggleSec(id) { $i(id + 'Body').classList.toggle('collapsed'); saveUIState(); }
+function toggleSec(id) {
+  const body = $i(id + 'Body');
+  body.classList.toggle('collapsed');
+  const title = body.previousElementSibling;
+  if (title) title.setAttribute('aria-expanded', String(!body.classList.contains('collapsed')));
+  saveUIState();
+}
 
 // ─── Toolbar ─────────────────────────────────────────────────────────────
 function setOpt(btn, group) {
@@ -1716,7 +2241,7 @@ function _addFileChip(file) {
   _attachments.push({ id, type: 'file', name: file.name, relPath: file.relPath, absPath: file.absPath, projectDir: curWorkdir });
   const chip = document.createElement('div');
   chip.className = 'att-chip'; chip.dataset.attId = id;
-  chip.innerHTML = `<span class="chip-icon">📄</span><span class="chip-name" title="${escH(file.relPath)}">${escH(file.name)}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
+  chip.innerHTML = `<span class="chip-icon">📄</span><span class="chip-name" data-tip="${escH(file.relPath)}">${escH(file.name)}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
   _getChips().appendChild(chip);
 }
 
@@ -1727,6 +2252,36 @@ function _addImageChip(base64, mimeType, name) {
   chip.className = 'att-chip chip-img'; chip.dataset.attId = id;
   chip.innerHTML = `<img src="data:${mimeType};base64,${base64}" alt=""><span class="chip-name">${escH(name || 'screenshot.png')}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
   _getChips().appendChild(chip);
+}
+
+function _addLocalFileChip(name, base64, mimeType) {
+  const id = 'att-' + Date.now() + Math.random().toString(36).slice(2, 6);
+  _attachments.push({ id, type: 'file', name, base64, mimeType: mimeType || 'application/octet-stream', local: true });
+  const chip = document.createElement('div');
+  chip.className = 'att-chip'; chip.dataset.attId = id;
+  chip.innerHTML = `<span class="chip-icon">📎</span><span class="chip-name" title="${escH(name)}">${escH(name)}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
+  _getChips().appendChild(chip);
+}
+
+function onFilePicker(input) {
+  const files = Array.from(input.files);
+  input.value = ''; // reset so same file can be re-selected
+  for (const file of files) {
+    const reader = new FileReader();
+    if (file.type.startsWith('image/')) {
+      reader.onload = ev => {
+        const base64 = ev.target.result.split(',')[1];
+        _addImageChip(base64, file.type, file.name);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      reader.onload = ev => {
+        const base64 = ev.target.result.split(',')[1];
+        _addLocalFileChip(file.name, base64, file.type || 'text/plain');
+      };
+      reader.readAsDataURL(file);
+    }
+  }
 }
 
 function rmChip(id) {
@@ -1759,21 +2314,21 @@ function _closeAtPopup() {
 
 async function _fetchAtFiles(query) {
   if (!curWorkdir) {
-    $i('atList').innerHTML = '<div class="at-empty">Оберіть проект, щоб шукати файли</div>';
+    $i('atList').innerHTML = `<div class="at-empty">${t('at.no_project')}</div>`;
     return;
   }
-  $i('atList').innerHTML = '<div class="at-loading">Пошук...</div>';
+  $i('atList').innerHTML = `<div class="at-loading">${t('at.searching')}</div>`;
   try {
     const r = await fetch(`/api/project-files?dir=${encodeURIComponent(curWorkdir)}&q=${encodeURIComponent(query)}`);
     const d = await r.json();
     _atFiles = d.files || [];
     _renderAtList();
-  } catch { $i('atList').innerHTML = '<div class="at-empty">Помилка пошуку</div>'; }
+  } catch { $i('atList').innerHTML = `<div class="at-empty">${t('at.search_err')}</div>`; }
 }
 
 function _renderAtList() {
   const list = $i('atList');
-  if (!_atFiles.length) { list.innerHTML = '<div class="at-empty">Файлів не знайдено</div>'; return; }
+  if (!_atFiles.length) { list.innerHTML = `<div class="at-empty">${t('at.no_files')}</div>`; return; }
   list.innerHTML = _atFiles.slice(0, 60).map((f, i) => {
     const slashIdx = f.relPath.lastIndexOf('/');
     const dir = slashIdx > 0 ? f.relPath.slice(0, slashIdx) : '.';
@@ -1857,7 +2412,7 @@ inEl.addEventListener('paste', e => {
 
 // ─── Send / Stop ─────────────────────────────────────────────────────────
 async function send() {
-  if (!ws || ws.readyState !== 1) { toast('Немає з\'єднання', true); return; }
+  if (!ws || ws.readyState !== 1) { toast(t('toast.no_connection'), true); return; }
 
   const txt = inEl.value.trim();
   if (!txt && !_attachments.length) return;
@@ -1879,11 +2434,16 @@ async function send() {
     if (att.type === 'image') {
       msgAttachments.push({ type: att.mimeType, base64: att.base64, name: att.name });
     } else if (att.type === 'file') {
-      try {
-        const r = await fetch(`/api/project-files/read?path=${encodeURIComponent(att.absPath)}&dir=${encodeURIComponent(att.projectDir)}`);
-        const d = await r.json();
-        if (d.content !== undefined) msgAttachments.push({ type: 'text/plain', name: att.relPath || att.name, base64: btoa(unescape(encodeURIComponent(d.content))) });
-      } catch { toast(`Не вдалося прочитати: ${att.name}`, true); }
+      if (att.local && att.base64) {
+        // Local file picked via file dialog — content already read client-side
+        msgAttachments.push({ type: att.mimeType || 'text/plain', name: att.name, base64: att.base64 });
+      } else {
+        try {
+          const r = await fetch(`/api/project-files/read?path=${encodeURIComponent(att.absPath)}&dir=${encodeURIComponent(att.projectDir)}`);
+          const d = await r.json();
+          if (d.content !== undefined) msgAttachments.push({ type: 'text/plain', name: att.relPath || att.name, base64: btoa(unescape(encodeURIComponent(d.content))) });
+        } catch { toast(t('toast.read_err') + att.name, true); }
+      }
     }
   }
 
@@ -1907,25 +2467,58 @@ async function send() {
 
   const queueId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
 
-  if (isGen) {
+  const activeTab = openTabs.find(t => t.id === activeTabId);
+  const tabIsGenerating = activeTab?.generating || false;
+
+  if (tabIsGenerating) {
     msgEl.dataset.queueId = queueId;
     const q = document.createElement('div');
     q.className = 'msg-queued';
     q.innerHTML = `<span class="mq-label">${t('queue.label')}</span><button class="qd-btn qd-edit" onclick="editQueuedMsg(this)" title="${t('queue.edit.title')}">✏</button><button class="qd-btn qd-del" onclick="deleteQueuedMsg(this)" title="${t('queue.del.title')}">✕</button>`;
     msgEl.appendChild(q);
   } else {
+    // Auto-create a tab if project is active but no tab is open
+    if (!activeTabId && curProjectId) {
+      const tempId = 'new-' + Date.now();
+      openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true });
+      activeTabId = tempId;
+      currentSessionId = null;
+      renderTabs();
+    }
     isGen = true;
     generatingTabId = activeTabId;
-    showStatus('Обробка...');
-    setStatus('Обробка...', 'warn');
+    if (activeTabId) { const at = openTabs.find(x => x.id === activeTabId); if (at) { at.generating = true; renderTabs(); } }
+    showStatus(t('status.processing'));
+    setStatus(t('status.processing'), 'warn');
     setSendStop(true);
   }
 
   const currentReply = replyTo;
   clearReply();
 
+  // Auto-skill selection
+  if (autoSkillsMode && txt && txt.trim().length > 3) {
+    const autoSelected = autoSelectSkills(txt);
+    if (autoSelected.length > 0) {
+      activeSkills = new Set(autoSelected);
+      renderSkills();
+      // Filter out the meta-skill from the toast display (it's always included)
+      const displaySkills = autoSelected.filter(id => id !== 'auto-mode');
+      if (displaySkills.length > 0) {
+        const names = displaySkills.map(id => (config.skills[id]?.label || id).replace(/^\S+\s/, '')).join(', ');
+        toast('⚡ ' + names);
+      }
+    } else if (config.skills['auto-mode']) {
+      // No specific skill matched — still apply auto-mode meta-skill for quality
+      activeSkills = new Set(['auto-mode']);
+      renderSkills();
+    }
+  }
+
   ws.send(JSON.stringify({
     type: 'chat', text: txt || ' ',
+    tabId: activeTabId,
+    sessionId: currentSessionId || undefined,
     attachments: msgAttachments.length ? msgAttachments : undefined,
     queueId,
     reply_to: currentReply || undefined,
@@ -2072,11 +2665,13 @@ async function loadHist() {
     for (const s of ss) {
       const d = document.createElement('div');
       d.className = `hist-item ${s.id === currentSessionId ? 'active' : ''}`;
+      d.dataset.sess = s.id;
       const dt = new Date(s.updated_at).toLocaleDateString(localStorage.getItem('lang') || 'uk', { day: 'numeric', month: 'short' });
-      d.innerHTML = `<span class="ht">${escH(s.title)}</span><span class="hd">${dt}</span><button class="del" onclick="event.stopPropagation();delSess('${s.id}')" title="✕">✕</button>`;
+      d.innerHTML = `<span class="ht" data-tip="${escH(s.title)}">${escH(s.title)}</span><span class="hd">${dt}</span><button class="del" onclick="event.stopPropagation();delSess('${s.id}')" title="✕">✕</button>`;
       d.onclick = () => openTab(s.id, s.title);
       el.appendChild(d);
     }
+    updateHistSpinners();
   } catch (e) { console.error('loadHist:', e); }
 }
 
@@ -2150,7 +2745,7 @@ function loadMoreMsgs() {
 async function loadSess(id) {
   try {
     const r = await fetch(`/api/sessions/${id}`);
-    if (!r.ok) { closeTab(id); toast('Сесію не знайдено', true); return; }
+    if (!r.ok) { closeTab(id); toast(t('toast.sess_not_found'), true); return; }
     const d = await r.json();
     msgsEl.innerHTML = '';
     currentSessionId = id;
@@ -2205,38 +2800,61 @@ async function loadCfg() {
     renderSkills();
   } catch (e) {
     console.error('loadCfg:', e);
-    toast('Помилка завантаження конфігурації', true);
+    toast(t('toast.cfg_load_err'), true);
   }
 }
 
 function mkToggle(on) {
-  return `<div class="sw"><div class="sw-track"></div><div class="sw-thumb"></div></div>`;
+  return `<div class="sw" role="switch" aria-checked="${on}"><div class="sw-track"></div><div class="sw-thumb"></div></div>`;
 }
 
 function renderMcp() {
   const el = $i('mcpList'); el.innerHTML = '';
+  const tipWarn = t('mcp.cfg.warn'), tipCfg = t('mcp.cfg.tip');
   let c = 0;
   for (const [id, m] of Object.entries(config.mcpServers || {})) {
     const on = activeMcp.has(id);
     if (on) c++;
+    const missing = getMcpMissingFields(m);
     const div = document.createElement('div');
     div.className = `ci ${on ? 'on' : ''}`;
-    div.title = on ? 'Клік — вимкнути для цього чату' : 'Клік — увімкнути для цього чату';
+    div.title = on ? t('mcp.toggle.on') : t('mcp.toggle.off');
     div.onclick = () => tMcp(id);
     div.innerHTML = `
       ${mkToggle(on)}
       <div class="inf">
-        <div class="nm">${escH(m.label || id)}</div>
-        <div class="ds">${escH(m.description || '')}</div>
+        <div class="nm" data-tip="${escH(m.label || id)}">${escH(m.label || id)}</div>
+        <div class="ds" data-tip="${escH(m.description || '')}">${escH(m.description || '')}</div>
         <div class="st">${on ? t('mcp.active') : t('mcp.inactive')}</div>
       </div>
+      ${missing.length ? `<div class="warn-dot" title="${escH(tipWarn)}"></div>` : ''}
+      <button class="cfg" onclick="event.stopPropagation();showMcpSettings('${id}')" title="${escH(tipCfg)}">⚙</button>
       ${m.custom ? `<button class="rm" onclick="event.stopPropagation();rMcp('${id}')" title="${t('mcp.del.title')}">✕</button>` : ''}`;
     el.appendChild(div);
   }
   $i('mcpCount').textContent = c || '';
 }
 
-function tMcp(id) { if (activeMcp.has(id)) activeMcp.delete(id); else activeMcp.add(id); renderMcp(); saveUIState(); }
+// Returns unconfigured credential fields (placeholder values)
+function getMcpMissingFields(m) {
+  const PH=/YOUR_[A-Z_]+/;
+  const SKIP_ENV=new Set(['ENABLE_TOOL_SEARCH','ENABLE_EXPERIMENTAL_MCP_CLI']);
+  const fields=[];
+  for(const[k,v]of Object.entries(m.env||{})){if(SKIP_ENV.has(k))continue;if(PH.test(v)||(v===''&&/KEY|TOKEN|SECRET|API/i.test(k)))fields.push({source:'env',key:k,val:v});}
+  for(const[k,v]of Object.entries(m.headers||{})){if(PH.test(v))fields.push({source:'headers',key:k,val:v});}
+  if(m.url&&PH.test(m.url))fields.push({source:'url',key:'url',val:m.url});
+  if(m.args)m.args.forEach((a,i)=>{if(PH.test(a))fields.push({source:'args',key:i,val:a});});
+  return fields;
+}
+
+function tMcp(id) {
+  if (!activeMcp.has(id)) {
+    const m=config.mcpServers[id];
+    if (m&&getMcpMissingFields(m).length) { showMcpSettings(id,true); return; }
+  }
+  if (activeMcp.has(id)) activeMcp.delete(id); else activeMcp.add(id);
+  renderMcp(); saveUIState();
+}
 async function rMcp(id) {
   activeMcp.delete(id);
   await fetch(`/api/mcp/${id}`, { method: 'DELETE' });
@@ -2245,21 +2863,151 @@ async function rMcp(id) {
 }
 function showMcpForm() { $i('mcpForm').style.display = 'flex'; }
 function hideMcpForm() { $i('mcpForm').style.display = 'none'; }
+function updateMcpFormType() {
+  const type=$i('mcpType').value, isUrl=type==='sse'||type==='http';
+  $i('mcpStdioFields').style.display=isUrl?'none':'flex';
+  $i('mcpUrlFields').style.display=isUrl?'flex':'none';
+  $i('mcpHeadersArea').style.display=type==='http'?'block':'none';
+}
 
 async function addMcp() {
-  const id = $i('mcpId').value.trim(), label = $i('mcpLabel').value.trim();
-  const command = $i('mcpCmd').value.trim();
-  const args = $i('mcpArgs').value.split(',').map(s => s.trim()).filter(Boolean);
-  let env = {};
-  try { env = JSON.parse($i('mcpEnv').value || '{}'); } catch {}
-  if (!id || !command) { toast('ID та Command обов\'язкові', true); return; }
-  await fetch('/api/mcp/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, label: label || id, command, args, env }) });
-  config.mcpServers[id] = { label: label || id, command, args, env, custom: true };
-  activeMcp.add(id);
-  renderMcp();
-  hideMcpForm();
-  ['mcpId','mcpLabel','mcpCmd','mcpArgs','mcpEnv'].forEach(x => $i(x).value = '');
-  toast('✓ MCP сервер додано');
+  const id=$i('mcpId').value.trim(), label=$i('mcpLabel').value.trim();
+  const type=$i('mcpType').value;
+  if (!id) { toast(t('mcp.add.id_req'),true); return; }
+  let body={id, label:label||id, type};
+  if (type==='sse'||type==='http') {
+    const url=$i('mcpUrl').value.trim();
+    if (!url) { toast(t('mcp.add.url_req'),true); return; }
+    let headers={}; try{headers=JSON.parse($i('mcpHeadersArea').value||'{}')}catch{}
+    let env={}; try{env=JSON.parse($i('mcpEnv').value||'{}')}catch{}
+    body={...body,url,headers,env};
+  } else {
+    const command=$i('mcpCmd').value.trim();
+    if (!command) { toast(t('mcp.add.cmd_req'),true); return; }
+    const args=$i('mcpArgs').value.split(',').map(s=>s.trim()).filter(Boolean);
+    let env={}; try{env=JSON.parse($i('mcpEnv').value||'{}')}catch{}
+    body={...body,command,args,env};
+  }
+  await fetch('/api/mcp/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  config.mcpServers[id]={...body,custom:true};
+  activeMcp.add(id); renderMcp(); hideMcpForm();
+  ['mcpId','mcpLabel','mcpCmd','mcpArgs','mcpEnv','mcpUrl','mcpHeadersArea'].forEach(x=>{const el=$i(x);if(el)el.value='';});
+  $i('mcpType').value='stdio'; updateMcpFormType();
+  toast(t('mcp.add.ok'));
+}
+
+// ─── MCP Settings Modal ─────────────────────────────────────────────────────
+let _mcpCfgId=null, _mcpCfgEnable=false;
+const SKIP_ENV_DISPLAY=new Set(['ENABLE_TOOL_SEARCH','ENABLE_EXPERIMENTAL_MCP_CLI']);
+
+function showMcpSettings(id, enableAfter=false) {
+  _mcpCfgId=id; _mcpCfgEnable=enableAfter;
+  const m=config.mcpServers[id]; if(!m) return;
+  $i('mcpSettingsTitle').textContent=`⚙ ${m.label||id}`;
+  const body=$i('mcpSettingsBody'); body.innerHTML='';
+  if (enableAfter) {
+    const note=document.createElement('div');
+    note.style.cssText='font-size:12px;color:var(--orange);padding:2px 0 8px;font-weight:600';
+    note.textContent=t('mcp.cfg.api_warn');
+    body.appendChild(note);
+  }
+  const rows=[];
+  const PH=/YOUR_[A-Z_]+/;
+  // URL for http/sse type
+  if (m.type==='sse'||m.type==='http') rows.push({source:'url',key:'url',val:m.url||'',label:'URL',secret:false});
+  // Headers
+  for(const[k,v]of Object.entries(m.headers||{})) rows.push({source:'headers',key:k,val:v,label:`Header: ${k}`,secret:true});
+  // Env vars (skip internal flags)
+  for(const[k,v]of Object.entries(m.env||{})){
+    if(SKIP_ENV_DISPLAY.has(k)) continue;
+    rows.push({source:'env',key:k,val:v,label:k,secret:/KEY|TOKEN|SECRET|PASS/i.test(k)});
+  }
+  // Args: extract URL query params containing placeholders (e.g. Tavily ?apiKey=YOUR_KEY)
+  if (m.args) {
+    m.args.forEach((a,i)=>{
+      if(!PH.test(a)) return;
+      // Try to extract query param name containing the placeholder
+      const paramRe=/[?&](\w+)=(YOUR_[A-Z_]+)/g;
+      let pm;
+      while((pm=paramRe.exec(a))!==null){
+        const paramName=pm[1], placeholder=pm[2];
+        // prefix = everything up to and including '?paramName='
+        const prefixEnd=a.indexOf(placeholder);
+        const prefix=a.slice(0,prefixEnd);
+        const suffix=a.slice(prefixEnd+placeholder.length);
+        rows.push({source:'arg_param',key:`arg_${i}_${paramName}`,val:placeholder,label:paramName,secret:true,argIdx:i,placeholder,prefix,suffix});
+      }
+      // If the whole arg is a placeholder (not a URL param)
+      if(!a.match(/[?&]\w+=YOUR_[A-Z_]+/)){
+        rows.push({source:'arg',key:`arg_${i}`,val:a,label:`Arg[${i}]`,secret:false,argIdx:i});
+      }
+    });
+  }
+  if (rows.length===0) {
+    const empty=document.createElement('div');
+    empty.style.cssText='color:var(--muted);font-size:13px;text-align:center;padding:20px 0';
+    empty.textContent=t('mcp.cfg.no_params');
+    body.appendChild(empty);
+  } else {
+    rows.forEach(f=>{
+      const need=PH.test(f.val)||(f.val===''&&/KEY|TOKEN|SECRET|API/i.test(f.key));
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;flex-direction:column;gap:4px';
+      const extraAttrs=f.source==='arg_param'
+        ? ` data-arg-idx="${f.argIdx}" data-placeholder="${escH(f.placeholder)}" data-prefix="${escH(f.prefix)}" data-suffix="${escH(f.suffix)}"`
+        : f.source==='arg' ? ` data-arg-idx="${f.argIdx}"` : '';
+      row.innerHTML=`<label style="font-size:11px;color:${need?'var(--orange)':'var(--muted)'};font-weight:600;text-transform:uppercase;letter-spacing:.4px">${escH(f.label)}${need?' ⚠':''}</label>
+        <input type="${f.secret?'password':'text'}" data-src="${f.source}" data-key="${escH(String(f.key))}" value="${escH(f.val)}"${extraAttrs}
+          style="background:var(--s2);border:1px solid ${need?'var(--orange)':'var(--border)'};color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;outline:none;width:100%;font-family:monospace;transition:border .12s">`;
+      body.appendChild(row);
+    });
+  }
+  $i('mcpSettingsModal').classList.remove('hidden');
+}
+function closeMcpSettings() {
+  $i('mcpSettingsModal').classList.add('hidden');
+  _mcpCfgId=null; _mcpCfgEnable=false;
+}
+async function saveMcpSettings() {
+  const id=_mcpCfgId; if(!id) return;
+  const inputs=$i('mcpSettingsBody').querySelectorAll('input[data-src]');
+  const envU={}, headU={};
+  let urlU=undefined;
+  // Collect arg_param changes (need to rebuild args array)
+  const argChanges=[]; // {argIdx, placeholder, prefix, suffix, newVal}
+  const argDirectChanges=[]; // {argIdx, newVal}
+  for(const inp of inputs){
+    const src=inp.dataset.src, key=inp.dataset.key, val=inp.value.trim();
+    if(src==='env') envU[key]=val;
+    else if(src==='headers') headU[key]=val;
+    else if(src==='url') urlU=val;
+    else if(src==='arg_param') argChanges.push({argIdx:parseInt(inp.dataset.argIdx),placeholder:inp.dataset.placeholder,prefix:inp.dataset.prefix,suffix:inp.dataset.suffix,newVal:val});
+    else if(src==='arg') argDirectChanges.push({argIdx:parseInt(inp.dataset.argIdx),newVal:val});
+  }
+  const payload={};
+  if(Object.keys(envU).length) payload.env=envU;
+  if(Object.keys(headU).length) payload.headers=headU;
+  if(urlU!==undefined) payload.url=urlU;
+  // Rebuild args if needed
+  const m=config.mcpServers[id];
+  if((argChanges.length||argDirectChanges.length)&&m&&m.args){
+    const newArgs=[...m.args];
+    for(const ch of argChanges) newArgs[ch.argIdx]=ch.prefix+ch.newVal+ch.suffix;
+    for(const ch of argDirectChanges) newArgs[ch.argIdx]=ch.newVal;
+    payload.args=newArgs;
+  }
+  try{
+    const r=await fetch(`/api/mcp/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    if(m){
+      if(payload.env) m.env={...(m.env||{}),...payload.env};
+      if(payload.headers) m.headers={...(m.headers||{}),...payload.headers};
+      if(payload.url!==undefined) m.url=payload.url;
+      if(payload.args) m.args=payload.args;
+    }
+    if(_mcpCfgEnable){activeMcp.add(id);renderMcp();saveUIState();}
+    closeMcpSettings(); toast(t('mcp.cfg.saved'));
+  }catch(e){toast(t('mcp.cfg.save_err'),true);}
 }
 
 const SKILL_CATS = {
@@ -2269,7 +3017,68 @@ const SKILL_CATS = {
   security:    { en: '🔒 Security', uk: '🔒 Безпека', ru: '🔒 Безопасность' },
   design:      { en: '🎨 Design', uk: '🎨 Дизайн', ru: '🎨 Дизайн' },
   product:     { en: '📋 Product', uk: '📋 Продукт', ru: '📋 Продукт' },
+  finance:     { en: '💼 Finance', uk: '💼 Фінанси', ru: '💼 Финансы' },
+  research:    { en: '🔬 Research', uk: '🔬 Дослідження', ru: '🔬 Исследования' },
+  system:      { en: '⚙️ System', uk: '⚙️ Система', ru: '⚙️ Система' },
 };
+
+const SKILL_TRIGGERS = {
+  'backend':            ['backend', 'api endpoint', 'server', 'node.js', 'express', 'fastify', 'endpoint', 'rest api', 'crud', 'migration', 'transaction', 'queue', 'http server'],
+  'api-designer':       ['graphql', 'grpc', 'swagger', 'openapi', 'api versioning', 'api design', 'api contract', 'rest design', 'api spec'],
+  'frontend':           ['react', 'vue', 'angular', 'component', 'jsx', 'tsx', 'css', 'html', 'browser', 'dom', 'state management', 'hook', 'redux', 'tailwind', 'responsive'],
+  'fullstack':          ['full stack', 'fullstack', 'entire feature', 'end to end', 'build a page', 'build a form', 'build an app', 'build a screen', 'full feature'],
+  'devops':             ['docker', 'kubernetes', 'k8s', 'deploy', 'aws', 'gcp', 'azure', 'terraform', 'ci/cd', 'pipeline', 'container', 'nginx', 'helm', 'infrastructure', 'monitoring'],
+  'postgres-wizard':    ['postgres', 'postgresql', 'index', 'query optimization', 'explain analyze', 'partitioning', 'vacuum', 'slow query'],
+  'data-engineer':      ['data pipeline', 'etl', 'spark', 'airflow', 'dbt', 'data warehouse', 'data lake', 'kafka', 'transform data', 'data quality', 'cdc', 'batch processing'],
+  'llm-architect':      ['llm', 'chatgpt', 'claude api', 'openai', 'anthropic', 'agent', 'langchain', 'chatbot', 'ai product', 'ai application', 'ai system'],
+  'prompt-engineer':    ['prompt', 'system prompt', 'few-shot', 'chain of thought', 'instruction tuning', 'jailbreak', 'context window', 'token limit'],
+  'rag-engineer':       ['rag', 'vector', 'embedding', 'retrieval', 'semantic search', 'pinecone', 'chroma', 'weaviate', 'chunk', 'knowledge base', 'vector db'],
+  'security':           ['security', 'vulnerability', 'xss', 'sql injection', 'csrf', 'owasp', 'exploit', 'pentest', 'attack', 'breach', 'sanitize', 'threat model'],
+  'auth-specialist':    ['auth', 'login', 'oauth', 'jwt', 'token', 'session', 'password', 'sso', 'saml', 'mfa', 'permission', 'rbac', 'roles'],
+  'debugging-master':   ['debug', 'bug', 'error', 'fix', 'issue', 'problem', 'crash', 'exception', 'stacktrace', 'not working', 'broken', 'fails', 'investigate error'],
+  'code-quality':       ['refactor', 'clean code', 'solid', 'technical debt', 'maintainable', 'readable', 'code smell', 'coupling', 'cohesion'],
+  'code-review':        ['review', 'pull request', ' pr ', 'code review', 'feedback on code', 'review this'],
+  'system-designer':    ['architecture', 'system design', 'scalable', 'distributed', 'microservices', 'high availability', 'design pattern', 'cap theorem', 'event driven'],
+  'ui-design':          ['ui design', 'visual design', 'color palette', 'typography', 'layout', 'figma', 'design system', 'component library', 'style guide', 'pixel'],
+  'ux-design':          ['ux', 'user experience', 'usability', 'wireframe', 'prototype', 'user flow', 'journey map', 'onboarding', 'user research', 'usability test'],
+  'product-management': ['product', 'roadmap', 'prioritize', 'user story', 'requirements', 'sprint', 'backlog', 'product manager', 'feature request', 'rice'],
+  'docs-engineer':      ['documentation', 'readme', 'tutorial', 'guide', 'api docs', 'onboarding doc', 'wiki', 'write docs'],
+  'technical-writer':   ['technical writing', 'blog post', 'article', 'write about', 'explain how', 'technical article'],
+  'investment-banking': ['dcf', 'lbo', 'valuation', 'financial model', 'investment', 'equity research', 'merger', 'acquisition', 'm&a', 'ebitda', 'wacc', 'comps', 'ipo', 'private equity', 'ic memo', 'investment committee'],
+  'researcher':         ['research', 'investigate', 'find information', 'competitive analysis', 'market research', 'analyze market', 'due diligence', 'landscape analysis', 'find and analyze'],
+};
+
+function autoSelectSkills(text) {
+  const t = text.toLowerCase();
+  const scores = {};
+  for (const [id] of Object.entries(config.skills || {})) {
+    if (id === 'auto-mode') continue; // always included separately
+    let score = 0;
+    const triggers = SKILL_TRIGGERS[id] || [];
+    for (const kw of triggers) { if (t.includes(kw)) score += 2; }
+    const descWords = (config.skills[id].description || '').toLowerCase().split(/\W+/).filter(w => w.length > 5);
+    for (const w of descWords) { if (t.includes(w)) score += 1; }
+    if (score > 0) scores[id] = score;
+  }
+  const selected = Object.entries(scores).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([id]) => id);
+  // Always prepend auto-mode meta-skill so Claude knows to embrace specialist roles
+  if (selected.length > 0 && config.skills['auto-mode']) {
+    return ['auto-mode', ...selected];
+  }
+  return selected;
+}
+
+function toggleAutoSkills() {
+  autoSkillsMode = !autoSkillsMode;
+  const btn = $i('autoSkillsBtn');
+  if (btn) {
+    btn.classList.toggle('active', autoSkillsMode);
+    btn.title = autoSkillsMode ? t('auto.title.on') : t('auto.title.off');
+  }
+  const hint = $i('autoSkillsHint');
+  if (hint) hint.style.display = autoSkillsMode ? 'block' : 'none';
+  saveUIState();
+}
 
 function renderSkills() {
   const el = $i('skillsList'); el.innerHTML = '';
@@ -2314,8 +3123,8 @@ function renderSkills() {
       div.innerHTML = `
         ${mkToggle(on)}
         <div class="inf">
-          <div class="nm">${escH(s.label || id)}</div>
-          <div class="ds">${escH(s.description || '')}</div>
+          <div class="nm" data-tip="${escH(s.label || id)}">${escH(s.label || id)}</div>
+          <div class="ds" data-tip="${escH(s.description || '')}">${escH(s.description || '')}</div>
           <div class="st">${on ? t('skill.active') : t('skill.inactive')}</div>
         </div>
         ${s.custom ? `<button class="rm" onclick="event.stopPropagation();rSkill('${id}')" title="${t('skill.del.title')}">✕</button>` : ''}`;
@@ -2342,8 +3151,8 @@ async function uploadSkill(input) {
   fd.append('label', name); fd.append('description', 'Custom skill');
   const r = await fetch('/api/skills/upload', { method: 'POST', body: fd });
   const d = await r.json();
-  if (d.ok) { toast('✓ Скіл завантажено'); input.value = ''; await loadCfg(); }
-  else toast('Помилка: ' + (d.error || '?'), true);
+  if (d.ok) { toast(t('toast.skill_uploaded')); input.value = ''; await loadCfg(); }
+  else toast(t('toast.err_prefix') + (d.error || '?'), true);
 }
 
 // ─── Config Editor ────────────────────────────────────────────────────────
@@ -2425,8 +3234,8 @@ async function saveCfg() {
       $i('saveNotice').className = 'save-notice';
       setTimeout(() => $i('saveNotice').className = 'save-notice hidden', 2000);
       if (activeCfgTab === 'config.json') loadCfg();
-      toast('✓ Збережено');
-    } else toast('Помилка: ' + (d.error || '?'), true);
+      toast(t('cfg.saved'));
+    } else toast(t('toast.err_prefix') + (d.error || '?'), true);
   } catch (e) { toast(e.message, true); }
 }
 
@@ -2497,7 +3306,7 @@ async function openFilePreview(relPath, name) {
                    '.zsh','.sql','.graphql','.xml','.vue','.svelte','.log','.pine','.lock'];
 
   if (imgExts.includes(ext)) {
-    body.innerHTML = `<img src="${escH(rawUrl)}" alt="${escH(_fpvName)}" onerror="this.alt='Помилка завантаження зображення'">`;
+    body.innerHTML = `<img src="${escH(rawUrl)}" alt="${escH(_fpvName)}" onerror="this.alt=t('fpv.img_error')">`;
     return;
   }
   if (pdfExts.includes(ext)) {
@@ -2509,7 +3318,7 @@ async function openFilePreview(relPath, name) {
     const r = await fetch(`/api/files?${_filesQS(relPath)}`);
     const d = await r.json();
     if (d.content === '[Binary]' || (!d.content && !textExts.includes(ext) && !mdExts.includes(ext))) {
-      body.innerHTML = `<div class="fpv-binary"><div style="font-size:40px">📦</div><div>Бінарний файл — перегляд недоступний</div><button class="fpv-btn" onclick="fpvDownload()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Завантажити файл</button></div>`;
+      body.innerHTML = `<div class="fpv-binary"><div style="font-size:40px">📦</div><div>${t('fpv.binary')}</div><button class="fpv-btn" onclick="fpvDownload()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('fpv.download')}</button></div>`;
       return;
     }
     if (mdExts.includes(ext)) {
@@ -2518,7 +3327,7 @@ async function openFilePreview(relPath, name) {
       body.innerHTML = `<div class="fpv-text">${escH(d.content || '')}</div>`;
     }
   } catch {
-    body.innerHTML = `<div class="fpv-binary">Помилка завантаження файлу</div>`;
+    body.innerHTML = `<div class="fpv-binary">${t('fpv.load_error')}</div>`;
   }
 }
 
@@ -2537,9 +3346,9 @@ async function fpvShare() {
   }
   try {
     await navigator.clipboard.writeText(url);
-    toast('✓ Посилання скопійовано');
+    toast(t('toast.link_copied'));
   } catch {
-    prompt('Скопіюйте посилання:', url);
+    prompt(t('toast.link_prompt'), url);
   }
 }
 
@@ -2578,8 +3387,8 @@ function renderProjects() {
   const activeProjLabel = $i('activeProjLabel');
   if (activeProjLabel) {
     const activeProj = curProjectId ? projects.find(p => p.id === curProjectId) : null;
-    if (activeProj) { activeProjLabel.textContent = activeProj.name; activeProjLabel.style.display = 'inline-block'; }
-    else { activeProjLabel.textContent = ''; activeProjLabel.style.display = 'none'; }
+    if (activeProj) { activeProjLabel.textContent = activeProj.name; activeProjLabel.setAttribute('data-tip', activeProj.name + '\n' + activeProj.workdir); activeProjLabel.style.display = 'inline-block'; }
+    else { activeProjLabel.textContent = ''; activeProjLabel.removeAttribute('data-tip'); activeProjLabel.style.display = 'none'; }
   }
 
   if (!projects.length) {
@@ -2589,15 +3398,19 @@ function renderProjects() {
 
   for (const p of projects) {
     const active = p.id === curProjectId;
+    // Check if any tab in this project is generating (works for both current and background)
+    const tabs = active ? openTabs : (projectTabs[p.id] || []);
+    const busy = tabs.some(tab => tab.generating);
     const div = document.createElement('div');
     div.className = `ci${active ? ' on' : ''}`;
     div.title = active ? t('proj.active.title') : t('proj.click.title');
     div.onclick = () => switchProject(p.id);
     const shortPath = p.workdir.length > 38 ? '…' + p.workdir.slice(-36) : p.workdir;
+    const busyDot = busy ? '<span class="proj-busy-dot tab-dot spinning" title="Генерація у фоні..."></span>' : '';
     div.innerHTML = `
       <div class="inf">
-        <div class="nm">${escH(p.name)}</div>
-        <div class="ds" title="${escH(p.workdir)}">${escH(shortPath)}</div>
+        <div class="nm" data-tip="${escH(p.name)}">${escH(p.name)}${busyDot}</div>
+        <div class="ds" data-tip="${escH(p.workdir)}">${escH(shortPath)}</div>
         <div class="st">${active ? t('proj.active') : t('proj.inactive')}</div>
       </div>
       <button class="rm" onclick="event.stopPropagation();delProject('${p.id}')" title="${t('proj.del.title')}">✕</button>`;
@@ -2608,44 +3421,65 @@ function renderProjects() {
 // ─── Per-project tab save/restore ────────────────────────────────────────
 const PROJ_TABS_KEY = pid => `cc_ptabs_${pid || '__none'}`;
 
-function saveProjTabs() {
-  try {
-    const tabs = openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title }));
-    localStorage.setItem(PROJ_TABS_KEY(curProjectId), JSON.stringify({ tabs, activeTabId }));
-  } catch {}
-}
-
+// loadProjTabs: read from localStorage for initial restore only
 function loadProjTabs(pid) {
   try { return JSON.parse(localStorage.getItem(PROJ_TABS_KEY(pid)) || 'null'); } catch { return null; }
 }
 
-function applyProjTabs(saved) {
-  if (saved?.tabs?.length) {
-    openTabs = saved.tabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false }));
-    activeTabId = saved.activeTabId || openTabs[0]?.id || null;
-    renderTabs();
-    if (activeTabId) loadSess(activeTabId);
-  } else {
-    openTabs = []; activeTabId = null; currentSessionId = null;
-    msgsEl.innerHTML = ''; showW(); renderTabs();
-  }
-}
-
 function switchProject(id) {
-  if (isGen) { toast(t('err.stop.project'), true); return; }
+  // No isGen block — background generation continues uninterrupted
   const p = projects.find(x => x.id === id);
   if (!p) return;
-  saveProjTabs();
+
+  // Persist current project's live tab state to memory before switching away
+  if (curProjectId) {
+    projectTabs[curProjectId] = openTabs;
+    projectActiveTab[curProjectId] = activeTabId;
+  }
+
+  // Toggle off if clicking the already-active project
   if (curProjectId === id) {
     curProjectId = null; curWorkdir = null;
-    applyProjTabs(loadProjTabs(null));
+    openTabs = []; activeTabId = null; currentSessionId = null;
+    msgsEl.innerHTML = ''; showW(); renderTabs();
     renderProjects(); saveUIState(); loadHist();
     toast(t('proj.deactivated'));
     return;
   }
+
   curProjectId = id;
   curWorkdir = p.workdir;
-  applyProjTabs(loadProjTabs(id));
+
+  // Restore from in-memory state (if project was visited before), else from localStorage
+  if (projectTabs[id]) {
+    openTabs = projectTabs[id];
+    activeTabId = projectActiveTab[id] ?? openTabs[0]?.id ?? null;
+  } else {
+    const saved = loadProjTabs(id);
+    if (saved?.tabs?.length) {
+      openTabs = saved.tabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false }));
+      activeTabId = saved.activeTabId || openTabs[0]?.id || null;
+    } else {
+      openTabs = []; activeTabId = null;
+    }
+    projectTabs[id] = openTabs;
+    projectActiveTab[id] = activeTabId;
+  }
+
+  // Update UI for the newly active project
+  renderTabs();
+  if (activeTabId) {
+    const tab = openTabs.find(t => t.id === activeTabId);
+    if (tab?.isNew) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); }
+    else loadSess(activeTabId);
+    // Sync send/stop button to this tab's generating state
+    if (tab?.generating) { isGen = true; generatingTabId = activeTabId; setSendStop(true); sbShow(t('status.generating')); }
+    else { isGen = false; generatingTabId = null; setSendStop(false); sbHide(); }
+  } else {
+    currentSessionId = null; msgsEl.innerHTML = ''; showW();
+    isGen = false; generatingTabId = null; setSendStop(false); sbHide();
+  }
+
   renderProjects(); saveUIState(); loadHist(); loadFiles('');
   toast(`✓ ${p.name}`);
 }
@@ -2701,7 +3535,7 @@ async function browseDirs(dirPath) {
     // Current dir as selectable row
     const self = document.createElement('div');
     self.className = 'dii selected';
-    self.innerHTML = `<span class="di" style="color:var(--accent2)">▸</span><span class="dn"><strong>. (ця директорія)</strong></span>`;
+    self.innerHTML = `<span class="di" style="color:var(--accent2)">▸</span><span class="dn"><strong>${t('dir.this_dir')}</strong></span>`;
     self.onclick = () => { dirBrowsePath = d.path; $i('dirCurrentPath').textContent = d.path; highlightSelected(self); };
     list.appendChild(self);
 
@@ -2726,10 +3560,10 @@ async function browseDirs(dirPath) {
     if (!d.items.length) {
       const e = document.createElement('div');
       e.style.cssText = 'padding:12px;color:var(--muted);text-align:center;font-size:12px';
-      e.textContent = 'Немає підпапок';
+      e.textContent = t('dir.no_subdirs');
       list.appendChild(e);
     }
-  } catch(e) { toast('Помилка: ' + e.message, true); }
+  } catch(e) { toast(t('toast.err_prefix') + e.message, true); }
 }
 
 function highlightSelected(el) {
@@ -2738,7 +3572,7 @@ function highlightSelected(el) {
 }
 
 async function selectDir() {
-  if (!dirBrowsePath) { toast('Виберіть директорію', true); return; }
+  if (!dirBrowsePath) { toast(t('toast.select_dir'), true); return; }
   const name = ($i('projNameInput').value.trim()) || dirBrowsePath.split('/').filter(Boolean).pop() || dirBrowsePath;
   const gitInit = $i('gitInitChk').checked;
 
@@ -2748,7 +3582,7 @@ async function selectDir() {
     body: JSON.stringify({ name, workdir: dirBrowsePath, gitInit }),
   });
   const d = await r.json();
-  if (!d.ok) { toast('Помилка: ' + (d.error || '?'), true); return; }
+  if (!d.ok) { toast(t('toast.err_prefix') + (d.error || '?'), true); return; }
   if (d.gitError) toast('git init: ' + d.gitError, true, 4000);
   else if (d.actions?.length) toast('✓ ' + d.actions.join(', '));
 
@@ -2767,14 +3601,31 @@ const LS_KEY = 'cc_ui_state';
 function saveUIState() {
   try {
     const c = id => $i(id)?.classList.contains('collapsed');
+    // Collect all project tab states (current + background)
+    const allProjTabs = {};
+    for (const [pid, tabs] of Object.entries(projectTabs)) {
+      allProjTabs[pid] = {
+        tabs: tabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
+        activeTabId: pid === curProjectId ? activeTabId : (projectActiveTab[pid] || tabs[0]?.id || null),
+      };
+    }
+    // Ensure current project is always included
+    if (curProjectId) {
+      allProjTabs[curProjectId] = {
+        tabs: openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
+        activeTabId: openTabs.find(t => t.id === activeTabId && !t.isNew) ? activeTabId : null,
+      };
+    }
     localStorage.setItem(LS_KEY, JSON.stringify({
       activeMcp: [...activeMcp],
       activeSkills: [...activeSkills],
+      autoSkillsMode,
       curWorkdir, curProjectId,
       panels: { left: c('leftPanel'), right: c('rightPanel') },
       sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), proj: c('projBody') },
       openTabs: openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
       activeTabId: openTabs.find(t => t.id === activeTabId && !t.isNew) ? activeTabId : null,
+      allProjTabs,
     }));
   } catch {}
 }
@@ -2784,6 +3635,7 @@ function restoreUIState() {
     if (!s) return;
     if (s.activeMcp) activeMcp = new Set(s.activeMcp);
     if (s.activeSkills) activeSkills = new Set(s.activeSkills);
+    if (s.autoSkillsMode !== undefined) { autoSkillsMode = !!s.autoSkillsMode; }
     if (s.curWorkdir) curWorkdir = s.curWorkdir;
     if (s.curProjectId) curProjectId = s.curProjectId;
     if (s.panels) {
@@ -2799,19 +3651,81 @@ function restoreUIState() {
     if (s.sections) {
       const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', proj: 'projBody' };
       for (const [k, elId] of Object.entries(secs)) {
-        const el = $i(elId); if (el) el.classList.toggle('collapsed', !!s.sections[k]);
+        const el = $i(elId);
+        if (!el) continue;
+        el.classList.toggle('collapsed', !!s.sections[k]);
+        const title = el.previousElementSibling;
+        if (title) title.setAttribute('aria-expanded', String(!s.sections[k]));
       }
     }
+    // Restore current project's tabs
     if (s.openTabs?.length) {
       openTabs = s.openTabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false }));
       activeTabId = s.activeTabId || null;
     }
+    // Pre-populate background project tab arrays from saved state
+    if (s.allProjTabs) {
+      for (const [pid, saved] of Object.entries(s.allProjTabs)) {
+        if (pid === curProjectId) continue; // current project already restored above
+        if (saved?.tabs?.length) {
+          projectTabs[pid] = saved.tabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false }));
+          projectActiveTab[pid] = saved.activeTabId || projectTabs[pid][0]?.id || null;
+        }
+      }
+    }
+    // Sync projectTabs for current project
+    if (curProjectId && openTabs.length) {
+      projectTabs[curProjectId] = openTabs;
+      projectActiveTab[curProjectId] = activeTabId;
+    }
   } catch {}
 }
+
+// ─── Global tooltip system ────────────────────────────────────────────────
+const _tipEl = (() => {
+  const d = document.createElement('div');
+  d.id = 'globalTip';
+  document.body.appendChild(d);
+  return d;
+})();
+let _tipTimer = null;
+document.addEventListener('mouseover', e => {
+  const el = e.target.closest('[data-tip]');
+  clearTimeout(_tipTimer);
+  if (!el) { _tipEl.style.opacity = '0'; return; }
+  const txt = el.getAttribute('data-tip');
+  if (!txt) { _tipEl.style.opacity = '0'; return; }
+  _tipTimer = setTimeout(() => {
+    _tipEl.textContent = txt;
+    const r = el.getBoundingClientRect();
+    const tw = _tipEl.offsetWidth || 200;
+    const th = _tipEl.offsetHeight || 30;
+    let x = Math.round(r.left + r.width / 2 - tw / 2);
+    let y = Math.round(r.top - th - 8);
+    if (y < 8) y = Math.round(r.bottom + 8);
+    x = Math.max(8, Math.min(x, window.innerWidth - tw - 8));
+    _tipEl.style.left = x + 'px';
+    _tipEl.style.top = y + 'px';
+    _tipEl.style.opacity = '1';
+  }, 420);
+});
+document.addEventListener('mouseout', () => {
+  clearTimeout(_tipTimer);
+  _tipEl.style.opacity = '0';
+});
 
 // ─── Init ─────────────────────────────────────────────────────────────────
 setLang(localStorage.getItem('lang') || 'uk');
 restoreUIState();
+{
+  const btn = $i('autoSkillsBtn');
+  if (btn) {
+    btn.classList.toggle('active', autoSkillsMode);
+    btn.title = autoSkillsMode ? t('auto.title.on') : t('auto.title.off');
+  }
+  const hint = $i('autoSkillsHint');
+  if (hint) hint.style.display = autoSkillsMode ? 'block' : 'none';
+}
 renderTabs();
 loadCfg();
 loadProjectsList();

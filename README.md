@@ -1,6 +1,6 @@
 # Claude Code Chat
 
-**Lightweight web UI for [Claude Code](https://claude.ai/code)** — chat with Claude directly in the browser, with multi-agent orchestration, MCP servers, skill files, and persistent SQLite history. No build step required.
+**Lightweight web UI for [Claude Code](https://claude.ai/code)** — chat with Claude directly in the browser, with multi-agent orchestration, MCP servers, skill files, projects, and persistent SQLite history. No build step required.
 
 > Available in: [English](README.md) | [Українська](README_UA.md) | [Русский](README_RU.md)
 
@@ -23,6 +23,9 @@
 | ⚙️ Config Editor | Edit `config.json`, `CLAUDE.md`, `.env` in the UI |
 | 🔒 Auth | bcrypt password + 30-day session tokens |
 | 🐳 Docker | Dockerfile + docker-compose included |
+| 🗂 Projects | Named projects with custom workdir, git init, directory browser |
+| 🪟 Parallel Tabs | Multiple browser tabs run independently and simultaneously |
+| 📊 Stats Panel | Daily/weekly Claude Max usage, context token estimate |
 | 🔐 Multi-instance Safety | File-lock hooks prevent conflicts when multiple Claude Code sessions work in parallel |
 
 ---
@@ -64,14 +67,10 @@ git clone https://github.com/Lexus2016/claude-code-chat.git
 cd claude-code-chat
 npm install
 
-# CLI mode (Max subscription, no API key needed):
-claude --version    # confirm claude CLI is authenticated
-node server.js
-
 cp .env.example .env
-# Edit .env
-node server.js
+# Edit .env as needed
 
+node server.js
 # Open http://localhost:3000
 # First launch: create a password
 ```
@@ -115,10 +114,13 @@ claude-code-chat/
 ├── auth.js             # bcrypt auth, 30-day token sessions
 ├── claude-cli.js       # Spawns claude CLI subprocess, parses JSON stream
 ├── config.json         # MCP server definitions + skills catalog
+├── config.example.json # Config template (committed to git)
 ├── package.json
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example        # Environment variable template
+├── bin/
+│   └── cli.js          # npx / global install entry point
 ├── public/
 │   ├── index.html      # Single-file SPA (embedded CSS + JS)
 │   └── auth.html       # Login / Setup page
@@ -134,8 +136,10 @@ claude-code-chat/
 ├── data/               # Runtime data (gitignored)
 │   ├── chats.db        # SQLite database
 │   ├── auth.json       # bcrypt password hash
-│   └── sessions-auth.json
-└── workspace/          # Claude Code working directory (gitignored)
+│   ├── sessions-auth.json
+│   ├── projects.json   # Saved projects list
+│   └── uploads/        # Uploaded files
+└── workspace/          # Default Claude Code working directory (gitignored)
 ```
 
 ---
@@ -147,8 +151,10 @@ claude-code-chat/
 ```env
 PORT=3000
 SESSION_SECRET=           # Auto-generated if empty
-WORKDIR=./workspace       # Claude's working directory
+WORKDIR=./workspace       # Default Claude working directory
 TRUST_PROXY=false         # Set true behind nginx/Caddy
+LOG_LEVEL=info            # Logging verbosity: error | warn | info | debug
+NODE_ENV=production       # Enables structured JSON logging (for Loki, Datadog, etc.)
 ```
 
 ### Adding MCP Servers
@@ -158,6 +164,13 @@ TRUST_PROXY=false         # Set true behind nginx/Caddy
 ### Adding Skills
 1. Left panel → 🧠 Skills → "+ Upload .md"
 2. Or drop `.md` files in `skills/` and update `config.json`
+3. Global skills from `~/.claude/skills/` are also loaded automatically
+
+### Projects
+- Left panel → 🗂 Projects → "+ New Project"
+- Each project has a name and a working directory (any path on disk)
+- Optional `git init` on creation
+- Sessions are scoped to a project — history is filtered per project
 
 ---
 
@@ -172,6 +185,17 @@ Client (browser) ──WS──► server.js ──► claude-cli.js ──► c
 - WebSocket for bidirectional streaming
 - SQLite (WAL mode) for sessions and messages
 - Multi-agent: orchestrator generates JSON plan → parallel agent execution
+- Per-tab parallelism: each browser tab runs its own independent queue
+
+### SQLite Schema
+
+```sql
+sessions: id, title, created_at, updated_at, claude_session_id,
+          active_mcp, active_skills, mode, agent_mode, model, engine, workdir
+
+messages: id, session_id, role, type, content, tool_name,
+          agent_id, reply_to_id, created_at
+```
 
 ---
 

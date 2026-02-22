@@ -95,3 +95,124 @@ Environment (`.env`, see `.env.example`):
 ## Docker
 
 Node 20 Bookworm image. Named volumes: `data`, `workspace`, `skills`, `claude-home`. Healthcheck: `GET /api/health` every 30s.
+
+---
+
+## Project Conventions
+
+### No-Build Philosophy
+This is intentional — do not introduce build tools.
+- **No webpack, vite, esbuild, rollup** — zero build step, ever
+- **`public/index.html` is a single file** — embedded CSS + JS, dark theme. Do not split it into components or separate files.
+- **No TypeScript** — vanilla JS throughout
+- **No CSS frameworks** — vanilla CSS only
+
+### WebSocket Protocol — Do Not Break
+The entire UI depends on this exact message contract:
+- Client → Server: `{ type: 'chat', text, mode, model, engine, mcpServers, skills }`
+- Server → Client: `{ type: 'text' | 'tool_use' | 'done' | 'error', ... }`
+
+Changing these shapes silently breaks streaming — test in browser after any WS-related change.
+
+### SQLite Rules
+- WAL mode is on — never change the journal mode
+- Schema changes: `ALTER TABLE` to add columns, or full migration with data preservation
+- Never `DROP TABLE` without a migration plan
+
+### Security Rules
+- `data/auth.json` — never expose contents via any API endpoint
+- All file read operations must stay within `WORKDIR` — path traversal protection is already in place, don't bypass it
+- Auth tokens: 32-byte hex, stored httpOnly; accept both cookie and `x-auth-token` header
+
+---
+
+## Known Gotchas
+
+### claude-cli.js — Critical Requirements
+These are non-obvious bugs that caused real failures:
+
+| Issue | Correct approach |
+|-------|-----------------|
+| Claude hangs forever | `--dangerously-skip-permissions` is **required** — without it Claude waits for interactive stdin (which is a closed pipe) |
+| Session resume broken | Use `--resume <sessionId>` as one arg, NOT `--session-id X --resume` |
+| Tool allow-list broken | `--allowedTools Bash View GlobTool` — variadic args, **not** comma-joined in a single string |
+| Subprocess crashes in dev | `delete env.CLAUDECODE` before spawning — the parent Claude Code session sets this env var which confuses the child |
+| Streaming not working | `--output-format stream-json` + `--include-partial-messages` are both needed |
+
+### Model IDs (exact strings)
+```
+claude-opus-4-6
+claude-sonnet-4-6
+claude-haiku-4-5
+```
+Use these in both `server.js` (SDK) and `claude-cli.js` (CLI). Do not use dated suffixes in CLI flags.
+
+### Markdown Rendering in SPA
+- During streaming: `renderStreaming()` handles unclosed code fences
+- On `done` event: re-render with full `renderMd()` for proper final formatting
+- Code blocks have copy button + language label — preserve this behavior
+
+---
+
+## How to Verify Changes
+
+No automated tests exist. Verify manually:
+
+```bash
+# 1. Start server
+npm run dev
+
+# 2. Open browser → http://localhost:PORT
+# - Send a chat message (CLI engine)
+# - Send a chat message (SDK engine if API key set)
+# - Check streaming works (text appears progressively)
+# - Check multi-agent mode produces multiple agents in sidebar
+
+# 3. Check database state
+sqlite3 data/chats.db "SELECT id, title FROM sessions ORDER BY id DESC LIMIT 5;"
+sqlite3 data/chats.db "SELECT role, type, substr(content,1,80) FROM messages WHERE session_id=X;"
+
+# 4. Auth flow
+# - Visit /setup on fresh install
+# - Login / logout cycle
+# - Check token cookie is httpOnly
+```
+
+---
+
+## Agent Working Guidelines
+
+These rules apply to anyone (human or AI) making changes to this codebase.
+
+### Before Making Changes
+- **Read the file first** — never modify code you haven't read
+- **State assumptions** before implementing anything non-trivial
+- **Plan for 3+ step tasks** — write the plan before touching code
+- **Stop and ask** when something is unclear — don't guess and push forward
+
+### Scope Discipline
+- Touch only what was asked — no unsolicited cleanup, refactoring, or "improvements"
+- A bug fix does not need surrounding code polished
+- No new abstractions for one-off operations — three similar lines beat a premature helper
+
+### After Every Change
+Report in this format:
+```
+CHANGES MADE:
+- [file:line]: [what changed and why]
+
+THINGS I DIDN'T TOUCH:
+- [file]: [intentionally left alone because...]
+
+POTENTIAL CONCERNS:
+- [any risks or things to verify]
+```
+
+### Verification Before Done
+- Never call a task complete without proving it works
+- Run the server, test the relevant flow in the browser
+- If behavior changed — describe the before/after difference
+
+### Elegance Check (non-trivial changes only)
+Before finishing, ask: "Would a senior engineer approve this PR?"
+If a fix feels hacky, ask yourself: "Knowing what I know now, what's the elegant version?"

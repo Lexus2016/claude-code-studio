@@ -148,6 +148,7 @@ db.exec(`
 // Safe migration for existing databases
 try { db.exec(`ALTER TABLE sessions ADD COLUMN workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN reply_to_id INTEGER REFERENCES messages(id)`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN last_user_msg TEXT`); } catch {}
 
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
@@ -162,6 +163,9 @@ const stmts = {
   getMsgs: db.prepare(`SELECT * FROM messages WHERE session_id=? ORDER BY id ASC`),
   getMsgsPaginated: db.prepare(`SELECT * FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool') ORDER BY id ASC LIMIT ? OFFSET ?`),
   countMsgs: db.prepare(`SELECT COUNT(*) AS total FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool')`),
+  setLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=? WHERE id=?`),
+  clearLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=NULL WHERE id=?`),
+  getInterrupted: db.prepare(`SELECT id, title, last_user_msg FROM sessions WHERE last_user_msg IS NOT NULL`),
   // Stats queries
   activeAgents: db.prepare(`
     SELECT DISTINCT agent_id
@@ -190,6 +194,29 @@ const stmts = {
 };
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+// ─── Active task registry ─────────────────────────────────────────────────
+// Keeps running Claude subprocesses alive when the browser tab closes/reloads.
+// Key: localSessionId, Value: { proxy, abortController, cleanupTimer }
+const activeTasks = new Map();
+const TASK_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // abort orphaned tasks after 30 min
+
+class WsProxy {
+  constructor(ws) { this._ws = ws; this._buffer = []; }
+  send(data) {
+    if (this._ws && this._ws.readyState === 1) {
+      this._ws.send(data);
+    } else if (this._buffer.length < 1000) {
+      this._buffer.push(data);
+    }
+  }
+  attach(newWs) {
+    this._ws = newWs;
+    const buf = this._buffer.splice(0);
+    for (const msg of buf) { try { newWs.send(msg); } catch {} }
+  }
+  detach() { this._ws = null; }
+}
 
 // Build Claude content blocks from text + file attachments.
 // Returns plain string when no attachments, or ContentBlock[] when attachments present.
@@ -253,7 +280,7 @@ function saveProjects(p) { const d=path.dirname(PROJECTS_FILE); if(!fs.existsSyn
 // --- CLI Single Agent ---
 function runCliSingle(p) {
   return new Promise((resolve, reject) => {
-    const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, workdir } = p;
+    const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, workdir, tabId } = p;
     const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
     const sp = (mp + (systemPrompt||'')).trim() || undefined;
     const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook'] : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write'];
@@ -263,19 +290,19 @@ function runCliSingle(p) {
     // Pass content blocks to CLI when attachments are present (images need vision input)
     const contentBlocks = Array.isArray(userContent) ? userContent : null;
     cli.send({ prompt, contentBlocks, sessionId:claudeSessionId, model, maxTurns:maxTurns||30, systemPrompt:sp, mcpServers, allowedTools:tools, abortController })
-      .onText(t => { fullText+=t; ws.send(JSON.stringify({ type:'text', text:t })); })
-      .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t })); })
-      .onTool((name, inp) => { ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600) })); stmts.addMsg.run(sessionId,'assistant','tool',inp||'',name,null,null); })
+      .onText(t => { fullText+=t; ws.send(JSON.stringify({ type:'text', text:t, ...(tabId ? { tabId } : {}) })); })
+      .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
+      .onTool((name, inp) => { ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) })); stmts.addMsg.run(sessionId,'assistant','tool',inp||'',name,null,null); })
       .onSessionId(sid => { newCid=sid; })
-      .onError(err => { ws.send(JSON.stringify({ type:'error', error:err.substring(0,500) })); })
+      .onError(err => { ws.send(JSON.stringify({ type:'error', error:err.substring(0,500), ...(tabId ? { tabId } : {}) })); })
       .onDone(sid => { if(sid) newCid=sid; if(fullText) stmts.addMsg.run(sessionId,'assistant','text',fullText,null,null,null); resolve(newCid); });
   });
 }
 
 // --- Multi-Agent (CLI only) ---
 async function runMultiAgent(p) {
-  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController } = p;
-  ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'🧠 Планування...' }));
+  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, tabId } = p;
+  ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'🧠 Планування...', ...(tabId ? { tabId } : {}) }));
 
   // Get plan via CLI
   let planText = '';
@@ -290,11 +317,11 @@ async function runMultiAgent(p) {
   try { const m = planText.match(/\{[\s\S]*\}/); if (m) plan = JSON.parse(m[0]); } catch {}
 
   if (!plan?.agents?.length) {
-    ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'⚠️ Перехід до одиночного режиму' }));
+    ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'⚠️ Перехід до одиночного режиму', ...(tabId ? { tabId } : {}) }));
     return runCliSingle(p);
   }
 
-  ws.send(JSON.stringify({ type:'text', text:`📋 **${plan.plan}**\n🤖 ${plan.agents.map(a=>`${a.id}(${a.role})`).join(', ')}\n---\n` }));
+  ws.send(JSON.stringify({ type:'text', text:`📋 **${plan.plan}**\n🤖 ${plan.agents.map(a=>`${a.id}(${a.role})`).join(', ')}\n---\n`, ...(tabId ? { tabId } : {}) }));
   stmts.addMsg.run(sessionId,'assistant','text',`Plan: ${plan.plan}`,null,'orchestrator',null);
 
   const completed = new Set(), results = {};
@@ -302,11 +329,11 @@ async function runMultiAgent(p) {
 
   while (remaining.length) {
     const runnable = remaining.filter(a => (a.depends_on||[]).every(d => completed.has(d)));
-    if (!runnable.length) { ws.send(JSON.stringify({ type:'error', error:'Circular deps' })); break; }
+    if (!runnable.length) { ws.send(JSON.stringify({ type:'error', error:'Circular deps', ...(tabId ? { tabId } : {}) })); break; }
 
     await Promise.all(runnable.map(async agent => {
       remaining.splice(remaining.indexOf(agent), 1);
-      ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`🔄 ${agent.role}` }));
+      ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`🔄 ${agent.role}`, ...(tabId ? { tabId } : {}) }));
       const depCtx = (agent.depends_on||[]).map(d => results[d] ? `\n[${d}]:${results[d].substring(0,500)}` : '').join('');
       const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
       const agentSp = `You are ${agent.role}. ${systemPrompt||''}`;
@@ -315,18 +342,18 @@ async function runMultiAgent(p) {
 
       await new Promise(res => {
         claudeCli.send({ prompt:agentPrompt, model, maxTurns:Math.min(maxTurns,15), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
-          .onText(t => { agentText+=t; ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id })); })
-          .onTool((n,i) => { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id })); stmts.addMsg.run(sessionId,'assistant','tool',i||'',n,agent.id,null); })
+          .onText(t => { agentText+=t; ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); })
+          .onTool((n,i) => { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); stmts.addMsg.run(sessionId,'assistant','tool',i||'',n,agent.id,null); })
           .onDone(() => res());
       });
 
       results[agent.id] = agentText;
       if (agentText) stmts.addMsg.run(sessionId,'assistant','text',agentText,null,agent.id,null);
       completed.add(agent.id);
-      ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`✅ ${agent.role}` }));
+      ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`✅ ${agent.role}`, ...(tabId ? { tabId } : {}) }));
     }));
   }
-  ws.send(JSON.stringify({ type:'text', text:'\n---\n✅ Всі агенти завершили\n' }));
+  ws.send(JSON.stringify({ type:'text', text:'\n---\n✅ Всі агенти завершили\n', ...(tabId ? { tabId } : {}) }));
 }
 
 // ============================================
@@ -467,9 +494,22 @@ app.get('/api/sessions', (req,res) => {
   const { workdir } = req.query;
   res.json(workdir ? stmts.getSessionsByWorkdir.all(workdir) : stmts.getSessions.all());
 });
+app.get('/api/sessions/interrupted', (req, res) => { res.json(stmts.getInterrupted.all()); });
 app.get('/api/sessions/:id', (req,res) => { const s=stmts.getSession.get(req.params.id); if(!s) return res.status(404).json({error:'Not found'}); s.messages=stmts.getMsgs.all(req.params.id); res.json(s); });
 app.put('/api/sessions/:id', (req,res) => { if(req.body.title) stmts.updateTitle.run(req.body.title, req.params.id); res.json({ok:true}); });
 app.delete('/api/sessions/:id', (req,res) => { stmts.deleteSession.run(req.params.id); res.json({ok:true}); });
+app.post('/api/sessions/:id/open-terminal', (req, res) => {
+  const session = stmts.getSession.get(req.params.id);
+  if (!session?.claude_session_id) return res.status(400).json({ error: 'No Claude session ID' });
+  const safeSid = session.claude_session_id.replace(/[^a-zA-Z0-9-]/g, '');
+  if (!safeSid) return res.status(400).json({ error: 'Invalid session ID' });
+  try {
+    execSync(`osascript -e 'tell application "Terminal" to activate' -e 'tell application "Terminal" to do script "claude --resume ${safeSid}"'`);
+    res.json({ ok: true });
+  } catch {
+    res.json({ ok: false, command: `claude --resume ${safeSid}` });
+  }
+});
 
 // Paginated messages — GET /api/sessions/:id/messages?limit=50&offset=0
 app.get('/api/sessions/:id/messages', (req, res) => {
@@ -517,7 +557,31 @@ app.get('/api/config', (_,res) => {
   for (const[k,s] of Object.entries(c.skills||{})) { try{s.content=fs.readFileSync(resolveSkillFile(s.file),'utf-8')}catch{s.content=''} }
   res.json(c);
 });
-app.post('/api/mcp/add', (req,res) => { const{id,label,description,command,args,env}=req.body; const c=loadConfig(); c.mcpServers[id]={label:label||id,description:description||'',command,args:args||[],env:env||{},enabled:true,custom:true}; saveConfig(c); res.json({ok:true}); });
+app.post('/api/mcp/add', (req,res) => {
+  const{id,label,description,type,command,args,env,url,headers}=req.body;
+  const c=loadConfig();
+  const entry={label:label||id,description:description||'',enabled:true,custom:true};
+  if(type==='sse'||type==='http'){
+    entry.type=type; entry.url=url||''; entry.headers=headers||{}; entry.env=env||{};
+  } else {
+    entry.command=command; entry.args=args||[]; entry.env=env||{};
+  }
+  c.mcpServers[id]=entry; saveConfig(c); res.json({ok:true});
+});
+app.put('/api/mcp/:id', (req,res) => {
+  const c=loadConfig(); const id=req.params.id;
+  const{env,headers,url,args}=req.body;
+  if(!c.mcpServers[id]){
+    const merged=loadMergedConfig();
+    if(!merged.mcpServers[id]) return res.status(404).json({error:'Not found'});
+    c.mcpServers[id]={...merged.mcpServers[id]};
+  }
+  if(env) c.mcpServers[id].env={...(c.mcpServers[id].env||{}),...env};
+  if(headers) c.mcpServers[id].headers={...(c.mcpServers[id].headers||{}),...headers};
+  if(url!==undefined) c.mcpServers[id].url=url;
+  if(args) c.mcpServers[id].args=args;
+  saveConfig(c); res.json({ok:true});
+});
 app.delete('/api/mcp/:id', (req,res) => { const c=loadConfig(); if(c.mcpServers[req.params.id]?.custom){delete c.mcpServers[req.params.id]; saveConfig(c)} res.json({ok:true}); });
 
 const upload = multer({ dest:'/tmp/skills-upload/' });
@@ -865,58 +929,90 @@ server.on('upgrade', (req, socket, head) => {
 
 wss.on('connection', (ws) => {
   log.info('ws connected', { clients: wss.clients.size });
-  let currentSessionId=null, claudeSessionId=undefined;
-  ws._busy = false;
-  ws._queue = [];
-  ws._queueIdCounter = 0;
+  // Per-tab concurrency tracking
+  ws._tabBusy  = {};  // tabId → bool
+  ws._tabQueue = {};  // tabId → msg[]
+  ws._tabAbort = {};  // tabId → AbortController
+  // Legacy single-connection state (kept for backward compat with start_session)
+  let legacySessionId = null, legacyClaudeId = undefined;
+  // Legacy queue (for messages without tabId)
+  ws._queue = []; ws._busy = false; ws._queueIdCounter = 0;
 
-  // Build queue_update payload (always includes item list for client UI)
-  function queuePayload() {
+  function queuePayload(tabId) {
+    const queue = tabId ? (ws._tabQueue[tabId] || []) : ws._queue;
     return JSON.stringify({
       type: 'queue_update',
-      pending: ws._queue.length,
-      items: ws._queue.map(m => ({ id: m._queueId, queueId: m.queueId || null, text: m.text || '' })),
+      tabId,
+      pending: queue.length,
+      items: queue.map(m => ({ id: m._queueId, queueId: m.queueId || null, text: m.text || '' })),
     });
   }
 
   async function processChat(msg) {
-    ws._busy = true;
-    // Notify client how many messages are still pending while this one runs
-    ws.send(queuePayload());
-    if (!currentSessionId || !stmts.getSession.get(currentSessionId)) { currentSessionId=genId(); stmts.createSession.run(currentSessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||'cli',null); }
+    const tabId = msg.tabId || null;
+    const proxy = new WsProxy(ws); // buffers output when browser disconnects
+
+    // Mark this tab as busy
+    if (tabId) ws._tabBusy[tabId] = true;
+    else ws._busy = true;
+
+    ws.send(queuePayload(tabId));
+
+    // Resolve session: use sessionId from message, or legacy, or create new
+    let localSessionId = msg.sessionId || (tabId ? null : legacySessionId);
+    let localClaudeId  = undefined;
+
+    if (!localSessionId || !stmts.getSession.get(localSessionId)) {
+      localSessionId = genId();
+      stmts.createSession.run(localSessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||'cli',msg.workdir||null);
+    } else {
+      localClaudeId = stmts.getSession.get(localSessionId)?.claude_session_id || undefined;
+    }
+
+    // For legacy (no tabId) mode, keep WS-level state in sync
+    if (!tabId) { legacySessionId = localSessionId; }
+
+    // Tell client which real session this tab is using (converts temp tab id → real session id)
+    ws.send(JSON.stringify({ type:'session_started', sessionId:localSessionId, tabId }));
+
+    // After session_started, use localSessionId as the effective tabId for all subsequent events.
+    // The client renames the tab from tempId → localSessionId upon receiving session_started,
+    // so further events must carry localSessionId (not the original temp tabId) to be routed correctly.
+    const effectiveTabId = tabId ? localSessionId : null;
+    // Migrate _tabBusy/_tabAbort keys from tempId to real session id
+    if (tabId && tabId !== localSessionId) {
+      ws._tabBusy[localSessionId] = true; delete ws._tabBusy[tabId];
+      if (ws._tabQueue[tabId]) { ws._tabQueue[localSessionId] = ws._tabQueue[tabId]; delete ws._tabQueue[tabId]; }
+    }
 
     const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, engine='cli', workdir=null, reply_to=null } = msg;
 
-    // Build quote prefix when replying to a specific message
     let replyQuote = '';
     if (reply_to && reply_to.content) {
       const snippet = String(reply_to.content).slice(0, 200);
-      const replyRole = reply_to.role || 'user';
-      replyQuote = `[Replying to: ${replyRole}: ${snippet}]\n\n`;
+      replyQuote = `[Replying to: ${reply_to.role || 'user'}: ${snippet}]\n\n`;
     }
     const replyToId = reply_to?.id ?? null;
-
-    // engineMessage = quoted prefix + original text (only sent to AI, not stored raw)
     const engineMessage = replyQuote + userMessage;
     const userContent = buildUserContent(engineMessage, attachments);
 
-    stmts.addMsg.run(currentSessionId,'user','text',userMessage,null,null,replyToId);
-    stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(sIds),mode,agentMode,model,engine,workdir||null,currentSessionId);
+    stmts.addMsg.run(localSessionId,'user','text',userMessage,null,null,replyToId);
+    stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(sIds),mode,agentMode,model,engine,workdir||null,localSessionId);
 
     // Auto-title
-    const session = stmts.getSession.get(currentSessionId);
+    const session = stmts.getSession.get(localSessionId);
     if (session?.title==='Нова сесія') {
       const title=userMessage.substring(0,60)+(userMessage.length>60?'...':'');
-      stmts.updateTitle.run(title, currentSessionId);
-      ws.send(JSON.stringify({ type:'session_title', sessionId:currentSessionId, title }));
+      stmts.updateTitle.run(title, localSessionId);
+      ws.send(JSON.stringify({ type:'session_title', sessionId:localSessionId, title, tabId: effectiveTabId }));
     }
 
     try {
       const config = loadMergedConfig();
       const abortController = new AbortController();
-      ws._abort = abortController;
+      if (effectiveTabId) ws._tabAbort[effectiveTabId] = abortController;
+      else ws._abort = abortController;
 
-      // Base instruction: quote the specific question when answering one of many
       let systemPrompt = `When you are answering a specific question or task that is one of several questions or tasks in the user's message, begin your response with a short quote (1–2 lines) of that specific question or task formatted as a markdown blockquote:\n> <original question or task text>\nThen provide your answer below it. Do not add the blockquote if the message contains only a single question or task.`;
       for (const sid of sIds) { const s=config.skills[sid]; if(s) try{systemPrompt+=`\n\n--- SKILL: ${s.label} ---\n${fs.readFileSync(resolveSkillFile(s.file),'utf-8')}`}catch{} }
 
@@ -931,34 +1027,53 @@ wss.on('connection', (ws) => {
         }
       }
 
-      ws.send(JSON.stringify({ type:'status', status:'thinking', mode, agentMode, model, engine }));
+      proxy.send(JSON.stringify({ type:'status', status:'thinking', mode, agentMode, model, engine, tabId: effectiveTabId }));
 
-      const params = { prompt:engineMessage, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId:currentSessionId, abortController, claudeSessionId, mode, workdir: workdir || WORKDIR };
+      // Register task in activeTasks so it survives client disconnect/reload
+      stmts.setLastUserMsg.run(userMessage, localSessionId);
+      activeTasks.set(localSessionId, { proxy, abortController, cleanupTimer: null });
 
+      const params = { prompt:engineMessage, userContent, systemPrompt, mcpServers, model, maxTurns, ws: proxy, sessionId:localSessionId, abortController, claudeSessionId:localClaudeId, mode, workdir: workdir || WORKDIR, tabId: effectiveTabId };
+
+      let newCid;
       if (agentMode==='multi') {
         await runMultiAgent(params);
       } else {
-        const newCid = await runCliSingle(params);
-        if (newCid) { claudeSessionId=newCid; stmts.updateClaudeId.run(claudeSessionId, currentSessionId); }
+        newCid = await runCliSingle(params);
+        if (newCid) { stmts.updateClaudeId.run(newCid, localSessionId); }
       }
 
-      ws.send(JSON.stringify({ type:'done' }));
-      ws.send(JSON.stringify({ type:'files_changed' }));
+      proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId }));
+      proxy.send(JSON.stringify({ type:'files_changed' }));
     } catch(err) {
-      if(err.name==='AbortError') ws.send(JSON.stringify({ type:'text', text:'\n[Зупинено]' }));
-      else { log.error('chat error', { message: err.message, name: err.name }); ws.send(JSON.stringify({ type:'error', error:err.message })); }
-      ws.send(JSON.stringify({ type:'done' }));
+      if(err.name==='AbortError') proxy.send(JSON.stringify({ type:'text', text:'\n[Зупинено]', tabId: effectiveTabId }));
+      else { log.error('chat error', { message: err.message, name: err.name }); proxy.send(JSON.stringify({ type:'error', error:err.message, tabId: effectiveTabId })); }
+      proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId }));
     } finally {
-      ws._busy = false;
-      ws._abort = null;
-      if (ws._queue.length > 0) {
-        // Dequeue next message and tell the client how many are still waiting after this shift
-        const next = ws._queue.shift();
-        ws.send(queuePayload());
-        await processChat(next);
+      activeTasks.delete(localSessionId);
+      try { stmts.clearLastUserMsg.run(localSessionId); } catch {}
+      if (effectiveTabId) {
+        ws._tabBusy[effectiveTabId] = false;
+        delete ws._tabAbort[effectiveTabId];
+        const tabQ = ws._tabQueue[effectiveTabId] || [];
+        if (tabQ.length > 0) {
+          const next = tabQ.shift();
+          ws.send(queuePayload(effectiveTabId));
+          processChat(next); // fire and don't await to avoid blocking other tabs
+        } else {
+          delete ws._tabQueue[effectiveTabId];
+          ws.send(JSON.stringify({ type: 'queue_update', tabId: effectiveTabId, pending: 0, items: [] }));
+        }
       } else {
-        // Queue drained — confirm zero pending
-        ws.send(JSON.stringify({ type: 'queue_update', pending: 0, items: [] }));
+        ws._busy = false;
+        ws._abort = null;
+        if (ws._queue.length > 0) {
+          const next = ws._queue.shift();
+          ws.send(queuePayload(null));
+          await processChat(next);
+        } else {
+          ws.send(JSON.stringify({ type: 'queue_update', pending: 0, items: [] }));
+        }
       }
     }
   }
@@ -967,43 +1082,105 @@ wss.on('connection', (ws) => {
     let msg; try{msg=JSON.parse(raw)}catch{return}
 
     if (msg.type==='start_session') {
-      currentSessionId = msg.sessionId || genId();
-      const existing = stmts.getSession.get(currentSessionId);
-      if (existing) claudeSessionId = existing.claude_session_id || undefined;
-      else stmts.createSession.run(currentSessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||'cli',null);
-      ws.send(JSON.stringify({ type:'session_started', sessionId:currentSessionId }));
+      legacySessionId = msg.sessionId || genId();
+      const existing = stmts.getSession.get(legacySessionId);
+      if (existing) legacyClaudeId = existing.claude_session_id || undefined;
+      else stmts.createSession.run(legacySessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||'cli',null);
+      ws.send(JSON.stringify({ type:'session_started', sessionId:legacySessionId }));
       return;
     }
 
     if (msg.type==='chat') {
-      if (ws._busy) {
-        msg._queueId = ++ws._queueIdCounter;
-        ws._queue.push(msg);
-        // Tell client the new pending count + queue item list
-        ws.send(queuePayload());
-        return;
+      const tabId = msg.tabId || null;
+      if (tabId) {
+        // Per-tab concurrency: queue if this specific tab is busy
+        if (ws._tabBusy[tabId]) {
+          if (!ws._tabQueue[tabId]) ws._tabQueue[tabId] = [];
+          msg._queueId = ++ws._queueIdCounter;
+          ws._tabQueue[tabId].push(msg);
+          ws.send(queuePayload(tabId));
+          return;
+        }
+      } else {
+        // Legacy single-tab mode
+        if (ws._busy) {
+          msg._queueId = ++ws._queueIdCounter;
+          ws._queue.push(msg);
+          ws.send(queuePayload(null));
+          return;
+        }
       }
-      await processChat(msg);
+      processChat(msg); // don't await — allows parallel tabs
       return;
     }
 
     if (msg.type==='stop') {
-      // Abort current + clear queue
-      ws._queue = [];
-      if (ws._abort) ws._abort.abort();
+      const tabId = msg.tabId;
+      if (tabId && ws._tabAbort && ws._tabAbort[tabId]) {
+        if (ws._tabQueue) ws._tabQueue[tabId] = [];
+        ws._tabAbort[tabId].abort();
+        delete ws._tabAbort[tabId];
+      } else {
+        ws._queue = [];
+        if (ws._abort) ws._abort.abort();
+        if (ws._tabAbort) { Object.values(ws._tabAbort).forEach(ac => { try { ac.abort(); } catch {} }); ws._tabAbort = {}; }
+        if (ws._tabQueue) ws._tabQueue = {};
+      }
     }
+
     if (msg.type==='new_session') {
       ws._queue = [];
       if (ws._abort) ws._abort.abort();
-      currentSessionId=null; claudeSessionId=undefined;
+      legacySessionId=null; legacyClaudeId=undefined;
       ws.send(JSON.stringify({ type:'session_reset' }));
+    }
+
+    if (msg.type==='new_session_silent') {
+      // Reset server state for a specific tab without sending session_reset back
+      // (used when client auto-creates a tab and sends first message)
+      // Nothing to do here since processChat now uses per-message sessionId
+      // Just clear legacy state if no tabId involved
+    }
+
+    if (msg.type === 'resume_task') {
+      const { sessionId, tabId } = msg;
+      const task = activeTasks.get(sessionId);
+      if (task) {
+        // Task is still running — cancel cleanup timer and re-attach to new WS
+        if (task.cleanupTimer) { clearTimeout(task.cleanupTimer); task.cleanupTimer = null; }
+        task.proxy.attach(ws);
+        if (tabId) ws._tabAbort[tabId] = task.abortController;
+        ws.send(JSON.stringify({ type: 'task_resumed', sessionId, tabId }));
+      } else {
+        // Task not in memory — check if it was interrupted (server crash)
+        const session = stmts.getSession.get(sessionId);
+        if (session?.last_user_msg) {
+          ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId, prompt: session.last_user_msg }));
+        } else {
+          ws.send(JSON.stringify({ type: 'task_lost', sessionId, tabId }));
+        }
+      }
+      return;
     }
   });
 
   ws.on('close', () => {
     log.info('ws disconnected', { clients: wss.clients.size - 1 });
-    // Abort any running Claude subprocess so it doesn't keep consuming CPU/RAM
     ws._queue = [];
+    // Detach from active task proxies — tasks keep running in background
+    for (const [sid, task] of activeTasks) {
+      if (task.proxy._ws === ws) {
+        task.proxy.detach();
+        if (!task.cleanupTimer) {
+          task.cleanupTimer = setTimeout(() => {
+            log.info('task idle timeout, aborting', { sessionId: sid });
+            try { task.abortController.abort(); } catch {}
+            activeTasks.delete(sid);
+          }, TASK_IDLE_TIMEOUT_MS);
+        }
+      }
+    }
+    // Abort legacy (no-tab) session tasks only
     if (ws._abort) { ws._abort.abort(); ws._abort = null; }
   });
 });
@@ -1027,6 +1204,7 @@ function gracefulShutdown(signal) {
   wss.clients.forEach(ws => {
     ws._queue = [];
     if (ws._abort) { try { ws._abort.abort(); } catch {} }
+    if (ws._tabAbort) { Object.values(ws._tabAbort).forEach(ac => { try { ac.abort(); } catch {} }); }
     // Close WebSocket with "server going down" code so clients reconnect
     try { ws.close(1001, 'Server shutting down'); } catch {}
   });

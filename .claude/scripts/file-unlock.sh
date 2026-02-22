@@ -35,7 +35,9 @@ get_claude_pid() {
     local pid=$PPID
     for _ in 1 2 3 4 5; do
         local cmd
-        cmd=$(ps -p "$pid" -o comm= 2>/dev/null | tr -d ' ')
+        # macOS ps -o comm= may return full path (e.g. /Users/.../.local/bin/claude)
+        # Use basename so "^claude|^node" matches regardless of install path
+        cmd=$(basename "$(ps -p "$pid" -o comm= 2>/dev/null | tr -d ' ')" 2>/dev/null)
         if echo "$cmd" | grep -qiE "^claude|^node"; then
             echo "$pid"; return
         fi
