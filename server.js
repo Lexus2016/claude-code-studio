@@ -688,6 +688,30 @@ app.get('/api/files/download', (req,res) => {
   } catch { res.status(404).json({error:'Not found'}); }
 });
 
+app.get('/api/files/raw', (req, res) => {
+  const fp_rel = req.query.path || '';
+  const workdirReal = resolveFilesWorkdir(req.query.workdir);
+  if (!workdirReal) return res.status(403).json({error:'Workdir not in registered projects'});
+  const fp = path.resolve(workdirReal, fp_rel);
+  if (fp !== workdirReal && !fp.startsWith(workdirReal + path.sep)) return res.status(403).json({error:'Denied'});
+  try {
+    const stat = fs.statSync(fp);
+    if (stat.isDirectory()) return res.status(400).json({error:'Cannot serve directory'});
+    const ext = path.extname(fp).toLowerCase();
+    const mimeMap = {
+      '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg',
+      '.gif':'image/gif', '.webp':'image/webp', '.svg':'image/svg+xml',
+      '.pdf':'application/pdf',
+      '.mp4':'video/mp4', '.webm':'video/webm', '.ogg':'video/ogg',
+    };
+    const mime = mimeMap[ext] || 'application/octet-stream';
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Length', stat.size);
+    res.setHeader('Content-Disposition', 'inline');
+    fs.createReadStream(fp).pipe(res);
+  } catch { res.status(404).json({error:'Not found'}); }
+});
+
 // ─── Project file search (for @ mention) ────────────────────────────────────
 const TEXT_EXTS = new Set(['.js','.ts','.jsx','.tsx','.mjs','.cjs','.py','.rb','.go','.rs','.php','.java','.kt','.swift','.cs','.cpp','.c','.h','.html','.css','.scss','.less','.json','.yaml','.yml','.toml','.ini','.cfg','.env','.md','.txt','.sh','.bash','.zsh','.sql','.graphql','.xml','.vue','.svelte','.lock','.log','.pine','.r','.jl']);
 const SKIP_DIRS  = new Set(['node_modules','.git','.next','.nuxt','__pycache__','dist','build','.cache','vendor','venv','.venv','.svn','.hg']);
