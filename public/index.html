@@ -408,16 +408,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .fii .fn { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fii .fs { font-size: 10.5px; color: var(--muted); }
 /* ─── File Preview Modal ─── */
-.fpv-modal { width: 880px; max-width: 95vw; max-height: 90vh; }
-.fpv-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--s2); flex-shrink: 0; }
-.fpv-toolbar .fpv-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fpv-toolbar .fpv-ext { font-size: 10px; color: var(--muted); background: var(--s3); border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; }
+.fpv-modal { width: 880px; max-width: 95vw; max-height: 90vh !important; }
+.fpv-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--s2); flex-shrink: 0; }
+.fpv-toolbar .fpv-ext { font-size: 10px; color: var(--muted); background: var(--s3); border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; margin-right: auto; }
 .fpv-body { flex: 1; overflow: auto; display: flex; flex-direction: column; min-height: 0; }
 .fpv-body img { max-width: 100%; max-height: 70vh; object-fit: contain; margin: auto; display: block; padding: 16px; }
 .fpv-body iframe { width: 100%; flex: 1; border: none; min-height: 500px; }
 .fpv-body .fpv-text { padding: 16px; font-family: 'SF Mono', monospace; font-size: 12px; line-height: 1.7; color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .fpv-body .fpv-md { padding: 16px 20px; line-height: 1.7; }
-.fpv-body .fpv-binary { padding: 32px; text-align: center; color: var(--muted); font-size: 14px; }
+.fpv-body .fpv-binary { padding: 32px; display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; }
 .fpv-btn { background: var(--s2); border: 1px solid var(--border); color: var(--muted); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 5px; transition: all .15s; flex-shrink: 0; }
 .fpv-btn:hover { color: var(--text); border-color: var(--accent2); }
 
@@ -844,7 +843,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
       <button class="modal-close" onclick="closeFpv()">✕</button>
     </div>
     <div class="fpv-toolbar">
-      <span class="fpv-name" id="fpvName"></span>
       <span class="fpv-ext" id="fpvExt"></span>
       <button class="fpv-btn" onclick="fpvDownload()" title="Завантажити файл">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -2433,7 +2431,7 @@ async function saveCfg() {
 }
 
 function closeCfg() { $i('cfgModal').classList.add('hidden'); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeCfg(); closeDirModal(); cancelStop(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFpv(); closeCfg(); closeDirModal(); cancelStop(); } });
 
 // ─── File Browser ─────────────────────────────────────────────────────────
 function _filesQS(relPath) {
@@ -2484,7 +2482,6 @@ async function openFilePreview(relPath, name) {
   _fpvName = name || relPath.split('/').pop();
   const ext = (_fpvName.lastIndexOf('.') > 0 ? _fpvName.slice(_fpvName.lastIndexOf('.')).toLowerCase() : '');
   $i('fpvTitle').textContent = _fpvName;
-  $i('fpvName').textContent = _fpvName;
   $i('fpvExt').textContent = ext || 'file';
   const body = $i('fpvBody');
   body.innerHTML = `<div class="fpv-text" style="color:var(--muted)">Завантаження...</div>`;
@@ -2512,7 +2509,7 @@ async function openFilePreview(relPath, name) {
     const r = await fetch(`/api/files?${_filesQS(relPath)}`);
     const d = await r.json();
     if (d.content === '[Binary]' || (!d.content && !textExts.includes(ext) && !mdExts.includes(ext))) {
-      body.innerHTML = `<div class="fpv-binary"><div style="font-size:40px;margin-bottom:12px">📦</div><div>Бінарний файл — перегляд недоступний</div><br><button class="fpv-btn" style="margin:auto" onclick="fpvDownload()">⬇ Завантажити файл</button></div>`;
+      body.innerHTML = `<div class="fpv-binary"><div style="font-size:40px">📦</div><div>Бінарний файл — перегляд недоступний</div><button class="fpv-btn" onclick="fpvDownload()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Завантажити файл</button></div>`;
       return;
     }
     if (mdExts.includes(ext)) {
