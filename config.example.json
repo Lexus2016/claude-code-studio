@@ -77,7 +77,7 @@
       "env": {
         "ENABLE_TOOL_SEARCH": "true",
         "ENABLE_EXPERIMENTAL_MCP_CLI": "true",
-        "MEMORY_FILE_PATH": "/Users/admin/.claude/memory.jsonl"
+        "MEMORY_FILE_PATH": "~/.claude/memory.jsonl"
       }
     },
     "filesystem": {
