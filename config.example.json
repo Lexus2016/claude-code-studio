@@ -5,7 +5,11 @@
       "description": "Web search via Tavily API",
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.tavily.com/mcp/?tavilyApiKey=YOUR_TAVILY_API_KEY"]
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.tavily.com/mcp/?tavilyApiKey=YOUR_TAVILY_API_KEY"
+      ]
     },
     "web-search-prime": {
       "label": "🌐 Web Search Prime",
@@ -51,7 +55,10 @@
       "description": "Z.ai image analysis, OCR, diagrams",
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@z_ai/mcp-server"],
+      "args": [
+        "-y",
+        "@z_ai/mcp-server"
+      ],
       "env": {
         "ENABLE_TOOL_SEARCH": "true",
         "ENABLE_EXPERIMENTAL_MCP_CLI": "true",
@@ -63,7 +70,10 @@
       "label": "🧠 Memory",
       "description": "Persistent knowledge graph memory",
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
       "env": {
         "ENABLE_TOOL_SEARCH": "true",
         "ENABLE_EXPERIMENTAL_MCP_CLI": "true",
@@ -74,33 +84,171 @@
       "label": "📁 Filesystem",
       "description": "Read/write files in workspace",
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/app/workspace"],
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/app/workspace"
+      ],
       "enabled": false
     },
     "github": {
       "label": "🐙 GitHub",
       "description": "Repos, issues, PRs, code search",
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": { "GITHUB_TOKEN": "" },
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_TOKEN": ""
+      },
       "enabled": false
     }
   },
   "skills": {
-    "trading-bot": {
-      "label": "🤖 Trading Bot",
-      "description": "Creating trading bots for crypto exchanges",
-      "file": "skills/trading-bot.md"
+    "auto-mode": {
+      "label": "🎯 Auto-Skill Mode",
+      "description": "Meta-instructions for specialist role embodiment (auto-included when Auto-Skills is on)",
+      "file": "skills/auto-mode.md",
+      "category": "system"
     },
-    "pinescript": {
-      "label": "📈 PineScript",
-      "description": "TradingView indicators and strategies",
-      "file": "skills/pinescript.md"
+    "backend": {
+      "label": "⚙️ Backend Engineer",
+      "description": "Distributed systems, database architecture, API design at scale",
+      "file": "skills/backend.md",
+      "category": "engineering"
+    },
+    "api-designer": {
+      "label": "🔌 API Designer",
+      "description": "REST, GraphQL, gRPC, versioning strategies, developer experience",
+      "file": "skills/api-designer.md",
+      "category": "engineering"
+    },
+    "frontend": {
+      "label": "🎨 Frontend Engineer",
+      "description": "React philosophy, performance, accessibility, production-grade interfaces",
+      "file": "skills/frontend.md",
+      "category": "engineering"
+    },
+    "devops": {
+      "label": "🐳 DevOps Engineer",
+      "description": "Cloud architecture, CI/CD pipelines, infrastructure as code",
+      "file": "skills/devops.md",
+      "category": "engineering"
+    },
+    "postgres-wizard": {
+      "label": "🗄️ PostgreSQL Wizard",
+      "description": "Query optimization, indexing, schema design, billions of rows",
+      "file": "skills/postgres-wizard.md",
+      "category": "engineering"
+    },
+    "llm-architect": {
+      "label": "🧠 LLM Architect",
+      "description": "AI product architecture, context management, evaluation strategies",
+      "file": "skills/llm-architect.md",
+      "category": "ai"
+    },
+    "prompt-engineer": {
+      "label": "✍️ Prompt Engineer",
+      "description": "System prompts, few-shot examples, chain-of-thought, evaluation",
+      "file": "skills/prompt-engineer.md",
+      "category": "ai"
+    },
+    "rag-engineer": {
+      "label": "🔍 RAG Engineer",
+      "description": "Vector search, embeddings, chunking, retrieval quality optimization",
+      "file": "skills/rag-engineer.md",
+      "category": "ai"
+    },
+    "code-quality": {
+      "label": "💎 Code Quality",
+      "description": "Readability, SOLID principles, naming, maintainability practices",
+      "file": "skills/code-quality.md",
+      "category": "quality"
+    },
+    "debugging-master": {
+      "label": "🐛 Debugging Master",
+      "description": "Scientific debugging, root cause analysis, hypothesis testing",
+      "file": "skills/debugging-master.md",
+      "category": "quality"
     },
     "code-review": {
-      "label": "🔍 Code Review",
-      "description": "Audit and review of Python/JS projects",
-      "file": "skills/code-review.md"
+      "label": "👁️ Code Reviewer",
+      "description": "Principal engineer code review — security, logic, performance, architecture",
+      "file": "skills/code-review.md",
+      "category": "quality"
+    },
+    "system-designer": {
+      "label": "🏗️ System Designer",
+      "description": "Scalable architecture, trade-offs, distributed systems design",
+      "file": "skills/system-designer.md",
+      "category": "quality"
+    },
+    "security": {
+      "label": "🔒 Security Expert",
+      "description": "Penetration testing mindset, OWASP, threat modeling, breaches prevention",
+      "file": "skills/security.md",
+      "category": "security"
+    },
+    "auth-specialist": {
+      "label": "🛡️ Auth Specialist",
+      "description": "OAuth, JWT, session management, identity systems, millions of logins",
+      "file": "skills/auth-specialist.md",
+      "category": "security"
+    },
+    "ui-design": {
+      "label": "🎭 UI Designer",
+      "description": "Visual hierarchy, color systems, components, pixel-perfect interfaces",
+      "file": "skills/ui-design.md",
+      "category": "design"
+    },
+    "ux-design": {
+      "label": "🧩 UX Designer",
+      "description": "User research, information architecture, usability, interaction design",
+      "file": "skills/ux-design.md",
+      "category": "design"
+    },
+    "product-management": {
+      "label": "📋 Product Manager",
+      "description": "Feature prioritization, metrics, roadmaps, stakeholder alignment",
+      "file": "skills/product-management.md",
+      "category": "product"
+    },
+    "docs-engineer": {
+      "label": "📚 Docs Engineer",
+      "description": "Developer documentation, API references, tutorials, onboarding guides",
+      "file": "skills/docs-engineer.md",
+      "category": "product"
+    },
+    "technical-writer": {
+      "label": "✒️ Technical Writer",
+      "description": "Clear technical communication, guides, READMEs, release notes",
+      "file": "skills/technical-writer.md",
+      "category": "product"
+    },
+    "fullstack": {
+      "label": "🔗 Fullstack Engineer",
+      "description": "End-to-end product engineer — schema, API, UI, integration thinking in one",
+      "file": "skills/fullstack.md",
+      "category": "engineering"
+    },
+    "data-engineer": {
+      "label": "📊 Data Engineer",
+      "description": "ETL pipelines, data quality, CDC, batch/stream processing at scale",
+      "file": "skills/data-engineer.md",
+      "category": "engineering"
+    },
+    "investment-banking": {
+      "label": "💼 Investment Banking Analyst",
+      "description": "Goldman Sachs-level financial analysis — DCF, LBO, M&A, Comps, IC memos",
+      "file": "skills/investment-banking.md",
+      "category": "finance"
+    },
+    "researcher": {
+      "label": "🔬 Deep Researcher",
+      "description": "Systematic research, competitive intelligence, market sizing, synthesis",
+      "file": "skills/researcher.md",
+      "category": "research"
     }
   }
 }
