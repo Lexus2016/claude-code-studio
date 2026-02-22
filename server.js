@@ -874,11 +874,19 @@ app.get('/api/config', (_,res) => {
       if (!c.skills[id]) c.skills[id] = { label:`🌐 ${id}`, description:'Global skill (~/.claude/skills/)', file:path.join(GLOBAL_SKILLS_DIR, f), global:true };
     }
   }
-  // Auto-discover skills from local dir that are not already in config
+  // Auto-discover skills from local dir (APP_DIR/skills/) that are not already in config
   if (fs.existsSync(SKILLS_DIR)) {
     for (const f of fs.readdirSync(SKILLS_DIR).filter(f => f.endsWith('.md'))) {
       const id = path.parse(f).name;
       if (!c.skills[id]) c.skills[id] = { label:`📄 ${id}`, description:'Local skill', file:`skills/${f}` };
+    }
+  }
+  // Auto-discover bundled skills (__dirname/skills/) when running via npx (APP_DIR != __dirname)
+  const BUNDLED_SKILLS_DIR = path.join(__dirname, 'skills');
+  if (BUNDLED_SKILLS_DIR !== SKILLS_DIR && fs.existsSync(BUNDLED_SKILLS_DIR)) {
+    for (const f of fs.readdirSync(BUNDLED_SKILLS_DIR).filter(f => f.endsWith('.md'))) {
+      const id = path.parse(f).name;
+      if (!c.skills[id]) c.skills[id] = { label:`📄 ${id}`, description:'Bundled skill', file:path.join(BUNDLED_SKILLS_DIR, f) };
     }
   }
   for (const[k,s] of Object.entries(c.skills||{})) { try{s.content=fs.readFileSync(resolveSkillFile(s.file),'utf-8')}catch{s.content=''} }
