@@ -16,7 +16,7 @@ const ClaudeCLI = require('./claude-cli');
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
 {
-  const envPath = path.join(__dirname, '.env');
+  const envPath = path.join(process.env.APP_DIR || __dirname, '.env');
   if (fs.existsSync(envPath)) {
     for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
       const t = line.trim();
@@ -63,7 +63,7 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
-const PORT = process.env.PORT || 3005;
+const PORT = process.env.PORT || 3000;
 // When launched via npx/global install, cli.js sets APP_DIR to cwd so user
 // data persists in the user's directory, not inside the npm cache.
 const APP_DIR = process.env.APP_DIR || __dirname;
@@ -1032,12 +1032,12 @@ app.get('/api/config-files', (_,res) => {
   try{files['config.json']=fs.readFileSync(CONFIG_PATH,'utf-8')}catch{files['config.json']='{}'}
   try{files['CLAUDE.md']=fs.readFileSync(path.join(WORKDIR,'CLAUDE.md'),'utf-8')}catch{files['CLAUDE.md']=''}
   try{files['.claude/settings.json']=fs.readFileSync(path.join(process.env.HOME||'/root','.claude','settings.json'),'utf-8')}catch{files['.claude/settings.json']='{}'}
-  try{files['.env']=fs.readFileSync(path.join(__dirname,'.env'),'utf-8')}catch{files['.env']=''}
+  try{files['.env']=fs.readFileSync(path.join(APP_DIR,'.env'),'utf-8')}catch{files['.env']=''}
   res.json(files);
 });
 app.put('/api/config-files', (req,res) => {
   const{filename,content}=req.body;
-  const allowed={'config.json':CONFIG_PATH,'CLAUDE.md':path.join(WORKDIR,'CLAUDE.md'),'.claude/settings.json':path.join(process.env.HOME||'/root','.claude','settings.json'),'.env':path.join(__dirname,'.env')};
+  const allowed={'config.json':CONFIG_PATH,'CLAUDE.md':path.join(WORKDIR,'CLAUDE.md'),'.claude/settings.json':path.join(process.env.HOME||'/root','.claude','settings.json'),'.env':path.join(APP_DIR,'.env')};
   const target=allowed[filename]; if(!target) return res.status(400).json({error:'Unknown'});
   try{const dir=path.dirname(target); if(!fs.existsSync(dir)) fs.mkdirSync(dir,{recursive:true}); fs.writeFileSync(target,content,'utf-8'); res.json({ok:true})}
   catch(e){res.status(500).json({error:e.message})}

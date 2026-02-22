@@ -3,8 +3,9 @@ const bcrypt = require('bcryptjs');
 const path = require('path');
 const fs = require('fs');
 
-const AUTH_FILE = path.join(__dirname, 'data', 'auth.json');
-const SESSIONS_FILE = path.join(__dirname, 'data', 'sessions-auth.json');
+const APP_DIR = process.env.APP_DIR || __dirname;
+const AUTH_FILE = path.join(APP_DIR, 'data', 'auth.json');
+const SESSIONS_FILE = path.join(APP_DIR, 'data', 'sessions-auth.json');
 const TOKEN_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 function loadAuth() {
