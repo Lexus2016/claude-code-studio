@@ -2094,10 +2094,10 @@ async function loadStats() {
 // ─── Session History ──────────────────────────────────────────────────────
 async function loadHist() {
   try {
-    const url = curWorkdir ? `/api/sessions?workdir=${encodeURIComponent(curWorkdir)}` : '/api/sessions';
-    const r = await fetch(url);
-    const ss = await r.json();
     const el = $i('histList');
+    if (!curWorkdir) { el.innerHTML = ''; $i('histCount').textContent = ''; return; }
+    const r = await fetch(`/api/sessions?workdir=${encodeURIComponent(curWorkdir)}`);
+    const ss = await r.json();
     el.innerHTML = '';
     $i('histCount').textContent = ss.length || '';
     for (const s of ss) {
