@@ -129,7 +129,6 @@ db.exec(`
     mode TEXT DEFAULT 'auto',
     agent_mode TEXT DEFAULT 'single',
     model TEXT DEFAULT 'sonnet',
-    engine TEXT DEFAULT 'cli',
     workdir TEXT
   );
   CREATE TABLE IF NOT EXISTS messages (
@@ -168,14 +167,15 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN agent_mode TEXT DEFAULT 'single'`); 
 try { db.exec(`ALTER TABLE tasks ADD COLUMN max_turns INTEGER DEFAULT 30`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN retry_count INTEGER DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN worker_pid INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN attachments TEXT`); } catch {}
 
 const stmts = {
-  createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
+  createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir) VALUES (?,?,?,?,?,?,?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`),
-  updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,engine=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
-  getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,engine,workdir FROM sessions ORDER BY updated_at DESC LIMIT 100`),
-  getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,engine,workdir FROM sessions WHERE workdir=? ORDER BY updated_at DESC LIMIT 100`),
+  updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
+  getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir FROM sessions ORDER BY updated_at DESC LIMIT 100`),
+  getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir FROM sessions WHERE workdir=? ORDER BY updated_at DESC LIMIT 100`),
   getSession: db.prepare(`SELECT * FROM sessions WHERE id=?`),
   deleteSession: db.prepare(`DELETE FROM sessions WHERE id=?`),
   addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id) VALUES (?,?,?,?,?,?,?)`),
@@ -189,14 +189,14 @@ const stmts = {
   // Tasks (Kanban)
   getTasks: db.prepare(`
     SELECT t.*, s.title as sess_title, s.claude_session_id, s.model as sess_model,
-           s.updated_at as sess_updated_at
+           s.updated_at as sess_updated_at, COALESCE(s.retry_count, 0) as retry_count
     FROM tasks t LEFT JOIN sessions s ON t.session_id = s.id
     WHERE (@w IS NULL OR t.workdir = @w)
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,workdir,model,mode,agent_mode,max_turns) VALUES (?,?,?,?,?,?,?,?,?,?,?)`),
-  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,updated_at=datetime('now') WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,workdir,model,mode,agent_mode,max_turns,attachments) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
@@ -254,7 +254,9 @@ function broadcastToSession(sessionId, data) {
 
 // ─── Kanban Task Queue Worker ─────────────────────────────────────────────
 const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '5', 10));
-const taskRunning = new Set(); // task IDs currently executing
+const taskRunning = new Set();        // task IDs currently executing
+const runningTaskAborts = new Map();  // taskId → AbortController
+const stoppingTasks = new Set();      // task IDs being manually stopped (onDone must not overwrite status)
 
 async function startTask(task) {
   if (taskRunning.has(task.id)) return;
@@ -274,6 +276,26 @@ async function startTask(task) {
     const parts = [task.title];
     if (task.description?.trim()) parts.push(task.description.trim());
     if (task.notes?.trim()) parts.push(`---\nУточнення:\n${task.notes.trim()}`);
+    // Write attachment files to workspace so Claude Code can read them
+    if (task.attachments) {
+      try {
+        const atts = JSON.parse(task.attachments);
+        if (Array.isArray(atts) && atts.length) {
+          const attDir = path.join(task.workdir || WORKDIR, '.kanban-attachments', task.id);
+          fs.mkdirSync(attDir, { recursive: true });
+          const names = [];
+          for (const att of atts) {
+            if (att.base64 && att.name) {
+              fs.writeFileSync(path.join(attDir, att.name), Buffer.from(att.base64, 'base64'));
+              names.push(att.name);
+            }
+          }
+          if (names.length) {
+            parts.push(`---\nAttached files (in .kanban-attachments/${task.id}/):\n${names.map(n => `- ${n}`).join('\n')}`);
+          }
+        }
+      } catch (e) { console.error('[taskWorker] attachments write error:', e); }
+    }
     const prompt = parts.join('\n\n');
     // Check if this is a restart (user message already exists in session)
     const existingUserMsg = db.prepare(`SELECT id FROM messages WHERE session_id=? AND role='user' LIMIT 1`).get(sessionId);
@@ -289,6 +311,8 @@ async function startTask(task) {
     const session = stmts.getSession.get(sessionId);
     const claudeSessionId = session?.claude_session_id || null;
     const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
+    const taskAbort = new AbortController();
+    runningTaskAborts.set(task.id, taskAbort);
     let fullText = '', newCid = claudeSessionId, hasError = false;
     taskBuffers.set(task.id, '');
     // Notify watchers — use task_retrying for restarts, task_started for first run
@@ -298,7 +322,7 @@ async function startTask(task) {
     } else {
       broadcastToSession(sessionId, { type: 'task_started', taskId: task.id, title: task.title, tabId: sessionId });
     }
-    const stream = cli.send({ prompt, sessionId: claudeSessionId, model: session?.model || task.model || 'sonnet', maxTurns: task.max_turns || 30 });
+    const stream = cli.send({ prompt, sessionId: claudeSessionId, model: session?.model || task.model || 'sonnet', maxTurns: task.max_turns || 30, abortController: taskAbort });
     // Save subprocess PID so startup recovery can kill orphans on restart
     if (stream.process?.pid) {
       db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
@@ -324,10 +348,19 @@ async function startTask(task) {
         .onDone(() => {
           if (newCid) stmts.updateClaudeId.run(newCid, sessionId);
           if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null);
-          // Clear worker_pid on normal completion
-          db.prepare(`UPDATE tasks SET status=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
-            .run(hasError ? 'cancelled' : 'done', task.id);
-          console.log(`[taskWorker] task ${task.id}: ${hasError ? 'cancelled' : 'done'}`);
+          const wasStopped = stoppingTasks.has(task.id);
+          stoppingTasks.delete(task.id);
+          if (!wasStopped) {
+            // Normal completion — set final status
+            db.prepare(`UPDATE tasks SET status=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+              .run(hasError ? 'cancelled' : 'done', task.id);
+            if (!hasError) db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
+            console.log(`[taskWorker] task ${task.id}: ${hasError ? 'cancelled' : 'done'}`);
+          } else {
+            // Manually stopped — status already set by PUT; just clear worker_pid
+            db.prepare(`UPDATE tasks SET worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(task.id);
+            console.log(`[taskWorker] task ${task.id}: stopped by user`);
+          }
           broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id });
           resolve();
         });
@@ -338,6 +371,7 @@ async function startTask(task) {
   } finally {
     taskBuffers.delete(task.id);
     taskRunning.delete(task.id);
+    runningTaskAborts.delete(task.id);
     setTimeout(processQueue, 500);
   }
 }
@@ -348,22 +382,29 @@ function processQueue() {
   const inProg = db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`).all();
   // Sessions currently occupied (in_progress or just started by taskRunning)
   const occupiedSids = new Set(inProg.filter(t => t.session_id).map(t => t.session_id));
+  // Workdir-level lock: prevents two Claude instances from writing to the same directory concurrently
+  const occupiedWorkdirs = new Set(inProg.filter(t => t.workdir).map(t => t.workdir));
   // Count independent running tasks (null session_id)
   let indepRunning = inProg.filter(t => !t.session_id).length;
   const startedSids = new Set();
+  const startedWorkdirs = new Set();
   for (const task of todo) {
     if (taskRunning.has(task.id)) continue;
+    // Workdir lock: skip if another task is already running in the same directory
+    if (task.workdir && (occupiedWorkdirs.has(task.workdir) || startedWorkdirs.has(task.workdir))) continue;
     if (task.session_id) {
       // Shared session: one at a time per session
       if (!occupiedSids.has(task.session_id) && !startedSids.has(task.session_id)) {
         occupiedSids.add(task.session_id);
         startedSids.add(task.session_id);
+        if (task.workdir) startedWorkdirs.add(task.workdir);
         startTask(task).catch(e => console.error('[taskWorker]', e));
       }
     } else {
       // Independent: up to MAX_TASK_WORKERS concurrent
       if (indepRunning < MAX_TASK_WORKERS) {
         indepRunning++;
+        if (task.workdir) startedWorkdirs.add(task.workdir);
         startTask(task).catch(e => console.error('[taskWorker]', e));
       }
     }
@@ -707,9 +748,9 @@ app.get('/api/tasks/running-sessions', (req, res) => {
 });
 app.post('/api/tasks', (req, res) => {
   const { title='Нова задача', description='', notes='', status='backlog', sort_order=0, workdir=null,
-          model='sonnet', mode='auto', agent_mode='single', max_turns=30 } = req.body;
+          model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null } = req.body;
   const id = genId();
-  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, workdir||null, model, mode, agent_mode, max_turns);
+  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, workdir||null, model, mode, agent_mode, max_turns, attachments||null);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -721,12 +762,24 @@ app.put('/api/tasks/:id', (req, res) => {
           status=task.status, sort_order=task.sort_order,
           session_id=task.session_id, workdir=task.workdir,
           model=task.model||'sonnet', mode=task.mode||'auto', agent_mode=task.agent_mode||'single',
-          max_turns=task.max_turns||30 } = req.body;
+          max_turns=task.max_turns||30, attachments=task.attachments } = req.body;
+  // Stop running process when task is moved away from in_progress
+  if (task.status === 'in_progress' && status !== 'in_progress') {
+    const ctrl = runningTaskAborts.get(req.params.id);
+    if (ctrl) {
+      stoppingTasks.add(req.params.id);
+      ctrl.abort();
+      console.log(`[taskWorker] aborting task "${task.title}" (${req.params.id}) — moved to ${status}`);
+    } else if (task.worker_pid) {
+      stoppingTasks.add(req.params.id);
+      try { process.kill(task.worker_pid, 'SIGTERM'); } catch {}
+    }
+  }
   stmts.updateTask.run(
     String(title).substring(0,200), String(description).substring(0,2000),
     String(notes||'').substring(0,2000),
     status, sort_order, session_id || null, workdir || null,
-    model, mode, agent_mode, max_turns,
+    model, mode, agent_mode, max_turns, attachments || null,
     req.params.id
   );
   const updated = stmts.getTask.get(req.params.id);
@@ -743,9 +796,9 @@ app.get('/api/sessions', (req,res) => {
   res.json(workdir ? stmts.getSessionsByWorkdir.all(workdir) : stmts.getSessions.all());
 });
 app.post('/api/sessions', (req, res) => {
-  const { title = 'Нова сесія', workdir = null, model = 'sonnet', engine = 'cli', mode = 'auto', agentMode = 'single' } = req.body || {};
+  const { title = 'Нова сесія', workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single' } = req.body || {};
   const id = genId();
-  stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', mode, agentMode, model, engine, workdir || null);
+  stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', mode, agentMode, model, workdir || null);
   res.json(stmts.getSession.get(id));
 });
 app.get('/api/sessions/interrupted', (req, res) => { res.json(stmts.getInterrupted.all()); });
@@ -1230,7 +1283,7 @@ wss.on('connection', (ws) => {
 
     if (!localSessionId || !stmts.getSession.get(localSessionId)) {
       localSessionId = genId();
-      stmts.createSession.run(localSessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||'cli',msg.workdir||null);
+      stmts.createSession.run(localSessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.workdir||null);
     } else {
       localClaudeId = stmts.getSession.get(localSessionId)?.claude_session_id || undefined;
     }
@@ -1251,7 +1304,7 @@ wss.on('connection', (ws) => {
       if (ws._tabQueue[tabId]) { ws._tabQueue[localSessionId] = ws._tabQueue[tabId]; delete ws._tabQueue[tabId]; }
     }
 
-    const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, engine='cli', workdir=null, reply_to=null, retry=false } = msg;
+    const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false } = msg;
 
     let replyQuote = '';
     if (reply_to && reply_to.content) {
@@ -1267,7 +1320,7 @@ wss.on('connection', (ws) => {
     } else {
       stmts.incrementRetry.run(localSessionId);
     }
-    stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(sIds),mode,agentMode,model,engine,workdir||null,localSessionId);
+    stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(sIds),mode,agentMode,model,workdir||null,localSessionId);
 
     // Auto-title
     const session = stmts.getSession.get(localSessionId);
@@ -1297,7 +1350,7 @@ wss.on('connection', (ws) => {
         }
       }
 
-      proxy.send(JSON.stringify({ type:'status', status:'thinking', mode, agentMode, model, engine, tabId: effectiveTabId }));
+      proxy.send(JSON.stringify({ type:'status', status:'thinking', mode, agentMode, model, tabId: effectiveTabId }));
 
       // Register task in activeTasks so it survives client disconnect/reload
       stmts.setLastUserMsg.run(userMessage, localSessionId);
@@ -1355,7 +1408,7 @@ wss.on('connection', (ws) => {
       legacySessionId = msg.sessionId || genId();
       const existing = stmts.getSession.get(legacySessionId);
       if (existing) legacyClaudeId = existing.claude_session_id || undefined;
-      else stmts.createSession.run(legacySessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||'cli',null);
+      else stmts.createSession.run(legacySessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',null);
       ws.send(JSON.stringify({ type:'session_started', sessionId:legacySessionId }));
       return;
     }

@@ -1,6 +1,6 @@
 {
   "name": "claude-code-chat",
-  "version": "4.1.0",
+  "version": "5.0.1",
   "description": "Web chat interface for Claude Code with MCP, Skills, Multi-Agent, Auth & Docker",
   "bin": {
     "claude-code-chat": "./bin/cli.js"

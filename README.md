@@ -24,9 +24,13 @@
 | 🔒 Auth | bcrypt password + 30-day session tokens |
 | 🐳 Docker | Dockerfile + docker-compose included |
 | 🗂 Projects | Named projects with custom workdir, git init, directory browser |
-| 🪟 Parallel Tabs | Multiple browser tabs run independently and simultaneously |
+| 🪟 Parallel Tabs | Multiple browser tabs run independently; streaming preserved when switching |
 | 📊 Stats Panel | Daily/weekly Claude Max usage, context token estimate |
-| 🔐 Multi-instance Safety | File-lock hooks prevent conflicts when multiple Claude Code sessions work in parallel |
+| 🔐 Multi-instance Safety | File-lock hooks prevent conflicts; workdir-level queue in Kanban |
+| 📋 Kanban Board | Drag-and-drop task board at `/kanban` — create tasks, run Claude Code per card |
+| 📎 File Attachments | Attach images and text files to Kanban cards — written to workspace for Claude |
+| 🔁 Retry Tracking | Auto-retry on crash with retry count badge; no duplicate user messages |
+| 🌍 i18n | Interface in English / Ukrainian / Russian (auto-detected) |
 
 ---
 
@@ -196,6 +200,20 @@ sessions: id, title, created_at, updated_at, claude_session_id,
 messages: id, session_id, role, type, content, tool_name,
           agent_id, reply_to_id, created_at
 ```
+
+---
+
+## Kanban Board
+
+Navigate to `/kanban` to access the task board.
+
+- **Columns**: Backlog → To Do → In Progress → Done / Cancelled
+- **Create tasks**: title, description, notes, linked session, model/mode settings
+- **File attachments**: attach images or text files — written to `.kanban-attachments/{taskId}/` in the workspace at task start
+- **Run Claude Code**: move a card to "To Do" and it starts automatically; one task per workdir at a time
+- **Stop**: drag a running card away from "In Progress" to send SIGTERM to the Claude subprocess
+- **Retry**: if Claude crashes, the task auto-restarts with a retry badge (no duplicate messages)
+- **Session link**: each card links to its chat session — view history or open in Claude Code terminal
 
 ---
 
