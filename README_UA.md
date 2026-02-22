@@ -112,7 +112,6 @@ claude-code-chat/
 
 ```env
 PORT=3000
-ANTHROPIC_API_KEY=        # Лише для SDK режиму; залишити порожнім для CLI (Max підписка)
 SESSION_SECRET=           # Генерується автоматично якщо порожнє
 WORKDIR=./workspace       # Робоча директорія Claude
 TRUST_PROXY=false         # Встановити true за nginx/Caddy
