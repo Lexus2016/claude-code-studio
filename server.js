@@ -64,8 +64,11 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
 const PORT = process.env.PORT || 3005;
-const WORKDIR = process.env.WORKDIR || path.join(__dirname, 'workspace');
-const CONFIG_PATH = path.join(__dirname, 'config.json');
+// When launched via npx/global install, cli.js sets APP_DIR to cwd so user
+// data persists in the user's directory, not inside the npm cache.
+const APP_DIR = process.env.APP_DIR || __dirname;
+const WORKDIR = process.env.WORKDIR || path.join(APP_DIR, 'workspace');
+const CONFIG_PATH = path.join(APP_DIR, 'config.json');
 
 // ─── Security config ──────────────────────────────────────────────────────────
 // Trust X-Forwarded-For when behind nginx/Caddy (needed for rate limiting)
@@ -76,12 +79,13 @@ const SECURE_COOKIES = process.env.TRUST_PROXY === 'true';
 const ALLOWED_BROWSE_ROOTS = [
   path.resolve(os.homedir()),
   path.resolve(WORKDIR),
+  path.resolve(APP_DIR),
   path.resolve(__dirname),
 ];
-const SKILLS_DIR = path.join(__dirname, 'skills');
-const DB_PATH = path.join(__dirname, 'data', 'chats.db');
-const PROJECTS_FILE = path.join(__dirname, 'data', 'projects.json');
-const UPLOADS_DIR   = path.join(__dirname, 'data', 'uploads');
+const SKILLS_DIR = path.join(APP_DIR, 'skills');
+const DB_PATH = path.join(APP_DIR, 'data', 'chats.db');
+const PROJECTS_FILE = path.join(APP_DIR, 'data', 'projects.json');
+const UPLOADS_DIR   = path.join(APP_DIR, 'data', 'uploads');
 
 // ─── Global Claude Code directory (priority: global → local) ─────────────────
 const GLOBAL_CLAUDE_DIR  = path.join(os.homedir(), '.claude');
@@ -505,6 +509,9 @@ function resolveSkillFile(file) {
   if (path.isAbsolute(file)) return file;
   const globalPath = path.join(GLOBAL_SKILLS_DIR, path.basename(file));
   if (fs.existsSync(globalPath)) return globalPath;
+  // Try APP_DIR first (user-uploaded skills), then __dirname (bundled skills)
+  const appPath = path.join(APP_DIR, file);
+  if (fs.existsSync(appPath)) return appPath;
   return path.join(__dirname, file);
 }
 
@@ -909,10 +916,10 @@ app.post('/api/skills/upload', upload.single('file'), (req,res) => {
   if(!req.file) return res.status(400).json({error:'No file'});
   const name=req.body.name||path.parse(req.file.originalname).name;
   const id=name.toLowerCase().replace(/[^a-z0-9]+/g,'-');
-  const destFile=`skills/${id}.md`; fs.copyFileSync(req.file.path, path.join(__dirname,destFile)); fs.unlinkSync(req.file.path);
+  const destFile=`skills/${id}.md`; fs.mkdirSync(SKILLS_DIR,{recursive:true}); fs.copyFileSync(req.file.path, path.join(APP_DIR,destFile)); fs.unlinkSync(req.file.path);
   const c=loadConfig(); c.skills[id]={label:req.body.label||`📄 ${name}`,description:req.body.description||'Custom',file:destFile,custom:true}; saveConfig(c); res.json({ok:true,id});
 });
-app.delete('/api/skills/:id', (req,res) => { const c=loadConfig(); const s=c.skills[req.params.id]; if(s?.custom){try{fs.unlinkSync(path.join(__dirname,s.file))}catch{} delete c.skills[req.params.id]; saveConfig(c)} res.json({ok:true}); });
+app.delete('/api/skills/:id', (req,res) => { const c=loadConfig(); const s=c.skills[req.params.id]; if(s?.custom){try{fs.unlinkSync(path.join(APP_DIR,s.file))}catch{} delete c.skills[req.params.id]; saveConfig(c)} res.json({ok:true}); });
 
 // ============================================
 // FILE UPLOAD  (images / text / PDF)
