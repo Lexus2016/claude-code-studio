@@ -159,6 +159,7 @@ WORKDIR=./workspace       # Рабочая директория Claude по ум
 TRUST_PROXY=false         # Установить true за nginx/Caddy
 LOG_LEVEL=info            # Уровень логирования: error | warn | info | debug
 NODE_ENV=production       # Включает структурированный JSON-лог (для Loki, Datadog и др.)
+MAX_TASK_WORKERS=5        # Макс. количество параллельных процессов Claude Code для Kanban
 ```
 
 ### Добавление MCP серверов
