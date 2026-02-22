@@ -3,17 +3,40 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-// Resolve claude binary: prefer absolute path, fallback to PATH lookup
+// Resolve claude binary — cross-platform (macOS, Linux, Windows)
 function findClaudeBin() {
-  const candidates = [
-    '/Users/admin/.local/bin/claude',
-    '/opt/homebrew/bin/claude',
-    '/usr/local/bin/claude',
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
+  const isWin = process.platform === 'win32';
+
+  // Unix-only candidate paths (macOS / Linux)
+  if (!isWin) {
+    const unixCandidates = [
+      path.join(os.homedir(), '.local', 'bin', 'claude'),
+      '/opt/homebrew/bin/claude',
+      '/usr/local/bin/claude',
+      '/usr/bin/claude',
+    ];
+    for (const c of unixCandidates) {
+      if (fs.existsSync(c)) return c;
+    }
   }
-  return 'claude'; // fallback to PATH
+
+  // Windows: look for claude.cmd or claude.exe in common locations
+  if (isWin) {
+    const appData  = process.env.APPDATA  || '';
+    const localApp = process.env.LOCALAPPDATA || '';
+    const winCandidates = [
+      path.join(appData,  'npm', 'claude.cmd'),
+      path.join(localApp, 'npm', 'claude.cmd'),
+      path.join(appData,  'npm', 'claude.exe'),
+      path.join(localApp, 'Programs', 'claude', 'claude.exe'),
+    ];
+    for (const c of winCandidates) {
+      if (fs.existsSync(c)) return c;
+    }
+    return 'claude.cmd'; // fallback: PATH lookup for npm global install on Windows
+  }
+
+  return 'claude'; // fallback to PATH (Unix)
 }
 
 const CLAUDE_BIN = findClaudeBin();
@@ -70,10 +93,15 @@ class ClaudeCLI {
     delete env.CLAUDECODE;
     delete env.ANTHROPIC_API_KEY;
 
+    // On Windows .cmd/.bat files require cmd.exe (shell:true) to execute.
+    // On Unix, binaries execute directly (shell:false is safer).
+    const needsShell = process.platform === 'win32' &&
+      /\.(cmd|bat)$/i.test(this.claudeBin);
     const proc = spawn(this.claudeBin, args, {
       cwd: this.cwd,
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
+      shell: needsShell,
     });
 
     // Close stdin immediately (non-interactive)
@@ -88,7 +116,7 @@ class ClaudeCLI {
 
     proc.stdout.on('data', (chunk) => {
       buffer += chunk.toString();
-      const lines = buffer.split('\n');
+      const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() || '';
       for (const line of lines) {
         if (!line.trim()) continue;

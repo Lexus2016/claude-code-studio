@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const url = require('url');
-const { execSync } = require('child_process');
+const { execSync, spawn: spawnProc } = require('child_process');
 const multer = require('multer');
 const Database = require('better-sqlite3');
 const cookieParser = require('cookie-parser');
@@ -18,7 +18,7 @@ const ClaudeCLI = require('./claude-cli');
 {
   const envPath = path.join(process.env.APP_DIR || __dirname, '.env');
   if (fs.existsSync(envPath)) {
-    for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+    for (const line of fs.readFileSync(envPath, 'utf-8').split(/\r?\n/)) {
       const t = line.trim();
       if (!t || t.startsWith('#')) continue;
       const eq = t.indexOf('=');
@@ -121,6 +121,21 @@ const GLOBAL_SKILLS_DIR  = path.join(GLOBAL_CLAUDE_DIR, 'skills');
 const GLOBAL_CONFIG_PATH = path.join(GLOBAL_CLAUDE_DIR, 'config.json');
 
 const claudeCli = new ClaudeCLI({ cwd: WORKDIR });
+
+// Expand leading ~ to os.homedir() — works on macOS, Linux and Windows
+function expandTilde(v) {
+  if (typeof v !== 'string') return v;
+  if (v === '~') return os.homedir();
+  if (v.startsWith('~/') || v.startsWith('~\\')) return path.join(os.homedir(), v.slice(2));
+  return v;
+}
+// Recursively expand ~ in all string values of an object (used for MCP env maps)
+function expandTildeInObj(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) out[k] = expandTilde(v);
+  return out;
+}
 
 [WORKDIR, SKILLS_DIR, path.dirname(DB_PATH), UPLOADS_DIR].forEach(d => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
@@ -856,14 +871,39 @@ app.post('/api/sessions/:id/open-terminal', (req, res) => {
   const safeSid = session.claude_session_id.replace(/[^a-zA-Z0-9-]/g, '');
   if (!safeSid) return res.status(400).json({ error: 'Invalid session ID' });
   const workdir = session.workdir || WORKDIR;
-  const safeWorkdir = workdir.replace(/'/g, "'\\''");
-  const fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; claude --resume ${safeSid}`;
+  const platform = process.platform;
+  let fullCmd, ok = false;
   try {
-    execSync(`osascript -e 'tell application "Terminal" to activate' -e 'tell application "Terminal" to do script "${fullCmd.replace(/"/g, '\\"')}"'`);
-    res.json({ ok: true });
-  } catch {
-    res.json({ ok: false, command: fullCmd });
-  }
+    if (platform === 'win32') {
+      fullCmd = `cd /d "${workdir}" && set CLAUDECODE= && claude --resume ${safeSid}`;
+      // Empty title "" required: without it cmd.exe treats first quoted arg as window title
+      execSync(`start "" cmd /k "${fullCmd.replace(/"/g, '\\"')}"`, { shell: true });
+      ok = true;
+    } else if (platform === 'darwin') {
+      const safeWorkdir = workdir.replace(/'/g, "'\\''");
+      fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; claude --resume ${safeSid}`;
+      execSync(`osascript -e 'tell application "Terminal" to activate' -e 'tell application "Terminal" to do script "${fullCmd.replace(/"/g, '\\"')}"'`);
+      ok = true;
+    } else {
+      // Linux: try common terminal emulators using spawn+detach (non-blocking)
+      // execSync would kill xterm after the timeout; spawnProc+unref lets it live.
+      const safeWorkdir = workdir.replace(/'/g, "'\\''");
+      fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; claude --resume ${safeSid}`;
+      const termCandidates = [
+        ['gnome-terminal', ['--', 'bash', '-c', `${fullCmd}; exec bash`]],
+        ['xterm',          ['-e', 'bash', '-c', `${fullCmd}; exec bash`]],
+        ['konsole',        ['-e', 'bash', '-c', fullCmd]],
+      ];
+      for (const [cmd, args] of termCandidates) {
+        try {
+          const p = spawnProc(cmd, args, { detached: true, stdio: 'ignore' });
+          p.unref();
+          ok = true; break;
+        } catch {}
+      }
+    }
+  } catch {}
+  res.json({ ok, command: fullCmd });
 });
 
 // Paginated messages — GET /api/sessions/:id/messages?limit=50&offset=0
@@ -953,7 +993,7 @@ app.put('/api/mcp/:id', (req,res) => {
 });
 app.delete('/api/mcp/:id', (req,res) => { const c=loadConfig(); if(c.mcpServers[req.params.id]?.custom){delete c.mcpServers[req.params.id]; saveConfig(c)} res.json({ok:true}); });
 
-const upload = multer({ dest:'/tmp/skills-upload/' });
+const upload = multer({ dest: path.join(os.tmpdir(), 'skills-upload') });
 app.post('/api/skills/upload', upload.single('file'), (req,res) => {
   if(!req.file) return res.status(400).json({error:'No file'});
   const name=req.body.name||path.parse(req.file.originalname).name;
@@ -1031,13 +1071,13 @@ app.get('/api/config-files', (_,res) => {
   const files={};
   try{files['config.json']=fs.readFileSync(CONFIG_PATH,'utf-8')}catch{files['config.json']='{}'}
   try{files['CLAUDE.md']=fs.readFileSync(path.join(WORKDIR,'CLAUDE.md'),'utf-8')}catch{files['CLAUDE.md']=''}
-  try{files['.claude/settings.json']=fs.readFileSync(path.join(process.env.HOME||'/root','.claude','settings.json'),'utf-8')}catch{files['.claude/settings.json']='{}'}
+  try{files['.claude/settings.json']=fs.readFileSync(path.join(os.homedir(),'.claude','settings.json'),'utf-8')}catch{files['.claude/settings.json']='{}'}
   try{files['.env']=fs.readFileSync(path.join(APP_DIR,'.env'),'utf-8')}catch{files['.env']=''}
   res.json(files);
 });
 app.put('/api/config-files', (req,res) => {
   const{filename,content}=req.body;
-  const allowed={'config.json':CONFIG_PATH,'CLAUDE.md':path.join(WORKDIR,'CLAUDE.md'),'.claude/settings.json':path.join(process.env.HOME||'/root','.claude','settings.json'),'.env':path.join(APP_DIR,'.env')};
+  const allowed={'config.json':CONFIG_PATH,'CLAUDE.md':path.join(WORKDIR,'CLAUDE.md'),'.claude/settings.json':path.join(os.homedir(),'.claude','settings.json'),'.env':path.join(APP_DIR,'.env')};
   const target=allowed[filename]; if(!target) return res.status(400).json({error:'Unknown'});
   try{const dir=path.dirname(target); if(!fs.existsSync(dir)) fs.mkdirSync(dir,{recursive:true}); fs.writeFileSync(target,content,'utf-8'); res.json({ok:true})}
   catch(e){res.status(500).json({error:e.message})}
@@ -1394,9 +1434,9 @@ wss.on('connection', (ws) => {
         const m = config.mcpServers[mid];
         if (!m) continue;
         if (m.type === 'http' || m.type === 'sse' || m.url) {
-          mcpServers[mid] = { type: m.type || 'http', url: m.url, ...(m.headers ? { headers: m.headers } : {}), ...(m.env ? { env: m.env } : {}) };
+          mcpServers[mid] = { type: m.type || 'http', url: m.url, ...(m.headers ? { headers: m.headers } : {}), ...(m.env ? { env: expandTildeInObj(m.env) } : {}) };
         } else {
-          mcpServers[mid] = { command: m.command, args: m.args || [], env: m.env || {} };
+          mcpServers[mid] = { command: m.command, args: m.args || [], env: expandTildeInObj(m.env || {}) };
         }
       }
 

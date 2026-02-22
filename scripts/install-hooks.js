@@ -20,18 +20,19 @@ const SETTINGS     = path.join(SETTINGS_DIR, 'settings.json');
 const LOCKS_DIR    = path.join(SETTINGS_DIR, 'locks');
 
 // ── Our hooks to install ──────────────────────────────────────────────────────
+// Use node-based scripts for cross-platform compatibility (macOS, Linux, Windows)
 const FILE_LOCK_MATCHER = 'Edit|Write|MultiEdit|NotebookEdit';
 const OUR_HOOKS = {
   PreToolUse: [
     {
       matcher: FILE_LOCK_MATCHER,
-      hooks: [{ type: 'command', command: 'bash .claude/scripts/file-lock.sh' }],
+      hooks: [{ type: 'command', command: 'node .claude/scripts/file-lock.js' }],
     },
   ],
   PostToolUse: [
     {
       matcher: FILE_LOCK_MATCHER,
-      hooks: [{ type: 'command', command: 'bash .claude/scripts/file-unlock.sh' }],
+      hooks: [{ type: 'command', command: 'node .claude/scripts/file-unlock.js' }],
     },
   ],
 };
@@ -64,6 +65,26 @@ function mergeHooks(existing) {
   }
 }
 
+// ── Copy hook scripts ─────────────────────────────────────────────────────────
+// Copies Node.js lock scripts from the package into .claude/scripts/
+// so the hook commands (node .claude/scripts/file-lock.js) resolve correctly.
+const SCRIPTS_SRC = path.join(__dirname, '..', '.claude', 'scripts');
+const SCRIPTS_DST = path.join(ROOT, '.claude', 'scripts');
+const HOOK_SCRIPTS = ['file-lock.js', 'file-unlock.js'];
+
+function copyHookScripts() {
+  try {
+    fs.mkdirSync(SCRIPTS_DST, { recursive: true });
+    for (const name of HOOK_SCRIPTS) {
+      const src = path.join(SCRIPTS_SRC, name);
+      const dst = path.join(SCRIPTS_DST, name);
+      if (fs.existsSync(src)) fs.copyFileSync(src, dst);
+    }
+  } catch (e) {
+    console.warn('[hooks] Could not copy hook scripts:', e.message);
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 // 1. Read existing settings (or start fresh)
@@ -87,5 +108,8 @@ fs.writeFileSync(SETTINGS, JSON.stringify(settings, null, 2) + '\n', 'utf8');
 fs.mkdirSync(LOCKS_DIR, { recursive: true });
 const gitkeep = path.join(LOCKS_DIR, '.gitkeep');
 if (!fs.existsSync(gitkeep)) fs.writeFileSync(gitkeep, '');
+
+// 5. Copy cross-platform Node.js hook scripts
+copyHookScripts();
 
 console.log('✓ Claude Code file-lock hooks installed (.claude/settings.json)');
