@@ -1,6 +1,6 @@
-# Claude Code Chat
+# Claude Code Studio
 
-**Лёгкий веб-интерфейс для [Claude Code](https://claude.ai/code)** — чат с Claude прямо в браузере, с мульти-агентной оркестрацией, MCP серверами, skill файлами, проектами и историей в SQLite. Без шага сборки.
+**Полнофункциональный веб-воркспейс для [Claude Code](https://claude.ai/code)** — чат, Kanban доска задач, мульти-агентная оркестрация, MCP серверы, Skills, проекты — всё в одном месте. Без шага сборки.
 
 > Языки: [English](README.md) | [Українська](README_UA.md) | [Русский](README_RU.md)
 
@@ -41,21 +41,21 @@
 Самый простой способ. Скачивает и запускает последний релиз сразу:
 
 ```bash
-npx github:Lexus2016/claude-code-chat
+npx github:Lexus2016/claude-code-studio
 # Откройте http://localhost:3000
 ```
 
 Или установите глобально и запускайте в любое время:
 
 ```bash
-npm install -g github:Lexus2016/claude-code-chat
+npm install -g github:Lexus2016/claude-code-studio
 claude-code-chat
 # Откройте http://localhost:3000
 ```
 
 **Как обновить:**
 ```bash
-npm install -g github:Lexus2016/claude-code-chat@latest
+npm install -g github:Lexus2016/claude-code-studio@latest
 ```
 
 ---
@@ -67,8 +67,8 @@ npm install -g github:Lexus2016/claude-code-chat@latest
 - [`claude` CLI](https://docs.anthropic.com/en/claude-code) установлен и авторизован (для CLI режима)
 
 ```bash
-git clone https://github.com/Lexus2016/claude-code-chat.git
-cd claude-code-chat
+git clone https://github.com/Lexus2016/claude-code-studio.git
+cd claude-code-studio
 npm install
 
 cp .env.example .env
@@ -91,8 +91,8 @@ node server.js
 ### Способ 3 — Docker
 
 ```bash
-git clone https://github.com/Lexus2016/claude-code-chat.git
-cd claude-code-chat
+git clone https://github.com/Lexus2016/claude-code-studio.git
+cd claude-code-studio
 
 cp .env.example .env
 # Настройте .env по необходимости
@@ -113,7 +113,7 @@ docker compose up -d --build
 ## Структура проекта
 
 ```
-claude-code-chat/
+claude-code-studio/
 ├── server.js           # Express + WebSocket сервер (главная точка входа)
 ├── auth.js             # bcrypt авторизация, 30-дневные токен-сессии
 ├── claude-cli.js       # Запуск claude CLI подпроцесса, парсинг JSON стрима

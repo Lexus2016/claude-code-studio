@@ -1,9 +1,9 @@
 {
-  "name": "claude-code-chat",
+  "name": "claude-code-studio",
   "version": "5.0.1",
-  "description": "Web chat interface for Claude Code with MCP, Skills, Multi-Agent, Auth & Docker",
+  "description": "Full-featured web workspace for Claude Code — chat, Kanban, multi-agent, MCP, skills, projects",
   "bin": {
-    "claude-code-chat": "./bin/cli.js"
+    "claude-code-studio": "./bin/cli.js"
   },
   "scripts": {
     "start": "node server.js",
@@ -12,7 +12,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Lexus2016/claude-code-chat.git"
+    "url": "https://github.com/Lexus2016/claude-code-studio.git"
   },
   "keywords": ["claude", "claude-code", "ai", "chat", "mcp"],
   "license": "MIT",
