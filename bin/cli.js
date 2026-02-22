@@ -25,6 +25,13 @@ if (!fs.existsSync(configDest)) {
   if (fs.existsSync(template)) fs.copyFileSync(template, configDest);
 }
 
+// Seed .env from .env.example on first run
+const envDest = path.join(process.env.APP_DIR, '.env');
+if (!fs.existsSync(envDest)) {
+  const envTemplate = path.join(__dirname, '..', '.env.example');
+  if (fs.existsSync(envTemplate)) fs.copyFileSync(envTemplate, envDest);
+}
+
 // Default workspace to APP_DIR/workspace (can be overridden by WORKDIR env)
 if (!process.env.WORKDIR) {
   process.env.WORKDIR = path.join(process.env.APP_DIR, 'workspace');
