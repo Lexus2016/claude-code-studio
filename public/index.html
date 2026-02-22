@@ -883,7 +883,7 @@ body::after {
       </div>
     </div>
     <div class="hdr-btns">
-      <button class="hb" onclick="newSession()" data-tip="Нова сесія" data-i18n-tip="tip.new"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> <span data-i18n="btn.new">Нова</span></button>
+      <button class="hb" onclick="newSession()" data-tip="Новий чат" data-i18n-tip="tip.new">&#xFF0B; <span data-i18n="btn.new">Чат</span></button>
       <button class="hb" onclick="openCfgEditor()" data-tip="Налаштування" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
       <select class="lang-sel" id="langSel" onchange="setLang(this.value)" data-tip="Мова інтерфейсу">
         <option value="en">EN</option>
@@ -1175,9 +1175,9 @@ const TRANSLATIONS = {
     'mcp.cmd':'Команда (напр. npx)','mcp.args':'Аргументи через кому','mcp.add_btn':'Додати',
     'sec.skills':'Навички','skills.hint':'Навички — файли інструкцій, що додаються до системного промпту.',
     'skills.upload':'＋ Завантажити .md файл','sec.projects':'Проекти','proj.add':'＋ Додати проект',
-    'tip.new':'Нова сесія','tip.cfg':'Налаштування','tip.logout':'Вийти',
+    'tip.new':'Новий чат','tip.cfg':'Налаштування','tip.logout':'Вийти',
     'tip.panels.left':'Сховати/показати ліву панель','tip.panels.right':'Сховати/показати праву панель',
-    'btn.new':'Нова','tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки',
+    'btn.new':'Чат','tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки',
     'welcome.title':'Нова сесія','welcome.ready':'Готовий до роботи',
     'welcome.desc':'Виберіть MCP та Навички зліва, файли — справа.',
     'input.ph':'Напишіть завдання... Вставте скріншот (Ctrl+V) · @ для файлів проекту · 📎 для будь-яких файлів',
@@ -1246,9 +1246,9 @@ const TRANSLATIONS = {
     'mcp.cmd':'Command (e.g. npx)','mcp.args':'Args comma-separated','mcp.add_btn':'Add',
     'sec.skills':'Skills','skills.hint':'Skills are instruction files added to the system prompt.',
     'skills.upload':'＋ Upload .md file','sec.projects':'Projects','proj.add':'＋ Add project',
-    'tip.new':'New session','tip.cfg':'Configuration','tip.logout':'Logout',
+    'tip.new':'New chat','tip.cfg':'Configuration','tip.logout':'Logout',
     'tip.panels.left':'Toggle left panel','tip.panels.right':'Toggle right panel',
-    'btn.new':'New','tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns',
+    'btn.new':'Chat','tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns',
     'welcome.title':'New session','welcome.ready':'Ready to work',
     'welcome.desc':'Choose MCP and Skills on the left, files on the right.',
     'input.ph':'Write a task... Paste screenshot (Ctrl+V) · @ for project files · 📎 for any files',
@@ -1317,9 +1317,9 @@ const TRANSLATIONS = {
     'mcp.cmd':'Команда (напр. npx)','mcp.args':'Аргументы через запятую','mcp.add_btn':'Добавить',
     'sec.skills':'Навыки','skills.hint':'Навыки — файлы инструкций, добавляемые в системный промпт.',
     'skills.upload':'＋ Загрузить .md файл','sec.projects':'Проекты','proj.add':'＋ Добавить проект',
-    'tip.new':'Новая сессия','tip.cfg':'Настройки','tip.logout':'Выйти',
+    'tip.new':'Новый чат','tip.cfg':'Настройки','tip.logout':'Выйти',
     'tip.panels.left':'Скрыть/показать левую панель','tip.panels.right':'Скрыть/показать правую панель',
-    'btn.new':'Новая','tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги',
+    'btn.new':'Чат','tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги',
     'welcome.title':'Новая сессия','welcome.ready':'Готов к работе',
     'welcome.desc':'Выберите MCP и Навыки слева, файлы — справа.',
     'input.ph':'Напишите задание... Вставьте скриншот (Ctrl+V) · @ для файлов проекта · 📎 для любых файлов',

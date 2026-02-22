@@ -293,6 +293,7 @@ const TR = {
     'card.retry':'↩ повтор',
     'time.min':'хв','time.hr':'г','time.day':'д',
     'hdr.connected':'Підключено',
+    'card.sess_fallback':'сесія','card.retry_tooltip':'повтор(ів)','chat.copy_id':'Клікніть для копіювання',
   },
   en: {
     'hdr.title':'Kanban','hdr.add':'Task',
@@ -318,6 +319,7 @@ const TR = {
     'card.retry':'↩ retry',
     'time.min':'m','time.hr':'h','time.day':'d',
     'hdr.connected':'Connected',
+    'card.sess_fallback':'session','card.retry_tooltip':'restart(s)','chat.copy_id':'Click to copy',
   },
   ru: {
     'hdr.title':'Kanban','hdr.add':'Задача',
@@ -343,6 +345,7 @@ const TR = {
     'card.retry':'↩ повтор',
     'time.min':'м','time.hr':'ч','time.day':'д',
     'hdr.connected':'Подключено',
+    'card.sess_fallback':'сессия','card.retry_tooltip':'перезапуск(ов)','chat.copy_id':'Нажмите для копирования',
   },
 };
 const lang = localStorage.getItem('lang') || 'uk';
@@ -507,10 +510,10 @@ function makeCard(tk){
   if(tk.status==='in_progress'){
     sessBadge=`<span class="badge badge-orange"><span class="spinning" style="width:10px;height:10px;border-width:1.5px"></span> ${escH(t('card.running'))}</span>`;
   }else if(tk.session_id){
-    sessBadge=`<span class="badge badge-accent">💬 ${escH(tk.sess_title||'session')}</span>`;
+    sessBadge=`<span class="badge badge-accent">💬 ${escH(tk.sess_title||t('card.sess_fallback'))}</span>`;
   }
   const modelBadge=tk.sess_model?`<span class="badge badge-muted">${escH(tk.sess_model)}</span>`:'';
-  const retryBadge=tk.retry_count>0?`<span class="badge badge-muted" title="${tk.retry_count} restart(s)">${escH(t('card.retry'))} ×${tk.retry_count}</span>`:'';
+  const retryBadge=tk.retry_count>0?`<span class="badge badge-muted" title="${tk.retry_count} ${t('card.retry_tooltip')}">${escH(t('card.retry'))} ×${tk.retry_count}</span>`:'';
   el.innerHTML=`
     <div class="card-title">${escH(tk.title)}</div>
     ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
@@ -769,7 +772,7 @@ function buildChatPanel(tk,msgs){
       return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${text}</div></div>`;
     }).join('');
   }
-  const copyBtn=claudeId?`<span class="mono-tag" title="Click to copy" onclick="navigator.clipboard.writeText('${escH(claudeId)}').then(()=>toast(t('toast.copied')))">${claudeId.slice(0,12)}…</span>`:'';
+  const copyBtn=claudeId?`<span class="mono-tag" title="${t('chat.copy_id')}" onclick="navigator.clipboard.writeText('${escH(claudeId)}').then(()=>toast(t('toast.copied')))">${claudeId.slice(0,12)}…</span>`:'';
   const openBtn=`<a class="open-link" href="${openUrl}" target="_blank">${t('chat.open')}</a>`;
   return `<div class="chat-panel">
     <div class="chat-panel-hd">
