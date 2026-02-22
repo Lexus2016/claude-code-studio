@@ -165,6 +165,8 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN notes TEXT DEFAULT ''`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN model TEXT DEFAULT 'sonnet'`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN mode TEXT DEFAULT 'auto'`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN agent_mode TEXT DEFAULT 'single'`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN max_turns INTEGER DEFAULT 30`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN retry_count INTEGER DEFAULT 0`); } catch {}
 
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
@@ -180,8 +182,9 @@ const stmts = {
   getMsgsPaginated: db.prepare(`SELECT * FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool') ORDER BY id ASC LIMIT ? OFFSET ?`),
   countMsgs: db.prepare(`SELECT COUNT(*) AS total FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool')`),
   setLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=? WHERE id=?`),
-  clearLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=NULL WHERE id=?`),
+  clearLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=NULL, retry_count=0 WHERE id=?`),
   getInterrupted: db.prepare(`SELECT id, title, last_user_msg FROM sessions WHERE last_user_msg IS NOT NULL`),
+  incrementRetry: db.prepare(`UPDATE sessions SET retry_count = COALESCE(retry_count, 0) + 1 WHERE id=?`),
   // Tasks (Kanban)
   getTasks: db.prepare(`
     SELECT t.*, s.title as sess_title, s.claude_session_id, s.model as sess_model,
@@ -191,8 +194,8 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,workdir,model,mode,agent_mode) VALUES (?,?,?,?,?,?,?,?,?,?)`),
-  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,updated_at=datetime('now') WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,workdir,model,mode,agent_mode,max_turns) VALUES (?,?,?,?,?,?,?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
@@ -261,7 +264,7 @@ async function startTask(task) {
     let sessionId = task.session_id;
     if (!sessionId) {
       sessionId = genId();
-      stmts.createSession.run(sessionId, task.title.substring(0, 200), '[]', '[]', 'auto', 'single', 'sonnet', 'cli', task.workdir || null);
+      stmts.createSession.run(sessionId, task.title.substring(0, 200), '[]', '[]', task.mode || 'auto', task.agent_mode || 'single', task.model || 'sonnet', 'cli', task.workdir || null);
       db.prepare(`UPDATE tasks SET session_id=?, updated_at=datetime('now') WHERE id=?`).run(sessionId, task.id);
     }
     // Mark in_progress
@@ -282,7 +285,7 @@ async function startTask(task) {
     // Notify watchers that task started
     broadcastToSession(sessionId, { type: 'task_started', taskId: task.id, title: task.title, tabId: sessionId });
     await new Promise(resolve => {
-      cli.send({ prompt, sessionId: claudeSessionId, model: 'sonnet', maxTurns: 50 })
+      cli.send({ prompt, sessionId: claudeSessionId, model: session?.model || task.model || 'sonnet', maxTurns: task.max_turns || 30 })
         .onText(t => {
           fullText += t;
           taskBuffers.set(task.id, (taskBuffers.get(task.id) || '') + t);
@@ -655,11 +658,16 @@ app.get('/api/tasks', (req, res) => {
   res.json(result);
 });
 app.get('/api/tasks/etag', (req, res) => { res.json(stmts.getTasksEtag.get()); });
+// Returns session IDs that currently have in_progress tasks — used by client to show spinners on all tabs
+app.get('/api/tasks/running-sessions', (req, res) => {
+  const rows = db.prepare(`SELECT DISTINCT session_id FROM tasks WHERE status='in_progress' AND session_id IS NOT NULL`).all();
+  res.json(rows.map(r => r.session_id));
+});
 app.post('/api/tasks', (req, res) => {
   const { title='Нова задача', description='', notes='', status='backlog', sort_order=0, workdir=null,
-          model='sonnet', mode='auto', agent_mode='single' } = req.body;
+          model='sonnet', mode='auto', agent_mode='single', max_turns=30 } = req.body;
   const id = genId();
-  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, workdir||null, model, mode, agent_mode);
+  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, workdir||null, model, mode, agent_mode, max_turns);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -670,12 +678,13 @@ app.put('/api/tasks/:id', (req, res) => {
   const { title=task.title, description=task.description, notes=task.notes,
           status=task.status, sort_order=task.sort_order,
           session_id=task.session_id, workdir=task.workdir,
-          model=task.model||'sonnet', mode=task.mode||'auto', agent_mode=task.agent_mode||'single' } = req.body;
+          model=task.model||'sonnet', mode=task.mode||'auto', agent_mode=task.agent_mode||'single',
+          max_turns=task.max_turns||30 } = req.body;
   stmts.updateTask.run(
     String(title).substring(0,200), String(description).substring(0,2000),
     String(notes||'').substring(0,2000),
     status, sort_order, session_id || null, workdir || null,
-    model, mode, agent_mode,
+    model, mode, agent_mode, max_turns,
     req.params.id
   );
   const updated = stmts.getTask.get(req.params.id);
@@ -1200,7 +1209,7 @@ wss.on('connection', (ws) => {
       if (ws._tabQueue[tabId]) { ws._tabQueue[localSessionId] = ws._tabQueue[tabId]; delete ws._tabQueue[tabId]; }
     }
 
-    const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, engine='cli', workdir=null, reply_to=null } = msg;
+    const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, engine='cli', workdir=null, reply_to=null, retry=false } = msg;
 
     let replyQuote = '';
     if (reply_to && reply_to.content) {
@@ -1211,7 +1220,11 @@ wss.on('connection', (ws) => {
     const engineMessage = replyQuote + userMessage;
     const userContent = buildUserContent(engineMessage, attachments);
 
-    stmts.addMsg.run(localSessionId,'user','text',userMessage,null,null,replyToId);
+    if (!retry) {
+      stmts.addMsg.run(localSessionId,'user','text',userMessage,null,null,replyToId);
+    } else {
+      stmts.incrementRetry.run(localSessionId);
+    }
     stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(sIds),mode,agentMode,model,engine,workdir||null,localSessionId);
 
     // Auto-title
@@ -1358,20 +1371,22 @@ wss.on('connection', (ws) => {
     }
 
     if (msg.type === 'subscribe_session') {
-      const { sessionId } = msg;
+      const { sessionId, noCatchUp } = msg;
       if (sessionId) {
-        // Remove ws from any previous session watcher sets
-        for (const [sid, set] of sessionWatchers) { set.delete(ws); if (!set.size) sessionWatchers.delete(sid); }
+        // Allow multi-session watching: do NOT remove from other sessions.
+        // Cleanup happens on WS disconnect (ws.on('close') handler).
         if (!sessionWatchers.has(sessionId)) sessionWatchers.set(sessionId, new Set());
         sessionWatchers.get(sessionId).add(ws);
-        // If task is already running for this session, catch up the new subscriber
-        const runningTask = db.prepare(
-          `SELECT * FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`
-        ).get(sessionId);
-        if (runningTask && ws.readyState === 1) {
-          ws.send(JSON.stringify({ type: 'task_started', taskId: runningTask.id, title: runningTask.title, tabId: sessionId }));
-          const buf = taskBuffers.get(runningTask.id);
-          if (buf) ws.send(JSON.stringify({ type: 'text', text: buf, tabId: sessionId }));
+        // Catch up new subscriber with any already-running task (unless suppressed)
+        if (!noCatchUp) {
+          const runningTask = db.prepare(
+            `SELECT * FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`
+          ).get(sessionId);
+          if (runningTask && ws.readyState === 1) {
+            ws.send(JSON.stringify({ type: 'task_started', taskId: runningTask.id, title: runningTask.title, tabId: sessionId }));
+            const buf = taskBuffers.get(runningTask.id);
+            if (buf) ws.send(JSON.stringify({ type: 'text', text: buf, tabId: sessionId }));
+          }
         }
       }
       return;
@@ -1390,7 +1405,7 @@ wss.on('connection', (ws) => {
         // Task not in memory — check if it was interrupted (server crash)
         const session = stmts.getSession.get(sessionId);
         if (session?.last_user_msg) {
-          ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId, prompt: session.last_user_msg }));
+          ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId, prompt: session.last_user_msg, retryCount: session.retry_count || 0 }));
         } else {
           ws.send(JSON.stringify({ type: 'task_lost', sessionId, tabId }));
         }

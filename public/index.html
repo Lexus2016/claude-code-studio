@@ -448,11 +448,14 @@ body::after {
 .sess-bar .sess-id:hover { background:var(--s2); }
 .sess-open-btn { padding:1px 8px; border-radius:4px; border:1px solid var(--border); background:transparent; color:var(--text-dim); cursor:pointer; font-size:11px; white-space:nowrap; transition:background .1s, color .1s; }
 .sess-open-btn:hover { background:var(--s2); color:var(--text); }
+.sess-project { font-weight:600; color:var(--accent2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:300px; }
 
 /* ─── Task interrupted / retry banner ─── */
 .msg-retry { display:flex; align-items:center; gap:10px; margin:8px 12px; padding:10px 14px; border-radius:8px; background:var(--s2); border:1px solid var(--warn,#f59e0b); font-size:13px; color:var(--text-dim); }
 .msg-retry button { padding:4px 14px; border-radius:6px; background:var(--accent); color:#fff; border:none; cursor:pointer; font-size:12px; }
 .msg-retry button:hover { opacity:.85; }
+.retry-badge { font-size:11px; color:var(--text-dim); opacity:.65; margin-top:3px; letter-spacing:.01em; }
+.msg-retry-indicator { margin:2px 12px 6px; font-size:11px; color:var(--text-dim); opacity:.6; }
 
 /* ─── Input area ─── */
 .ia { padding: 12px 16px; background: var(--s1); border-top: 1px solid var(--border); }
@@ -933,7 +936,7 @@ body::after {
   <div class="tabs-bar" id="tabsBar"></div>
 
   <div class="sess-bar" id="sessBar" style="display:none">
-    <span id="sessBarTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;color:var(--text-dim)"></span>
+    <span id="sessBarProject" class="sess-project"></span>
     <span style="flex:1"></span>
     <span id="sessBarId" class="sess-id" onclick="copySessId()" data-i18n-tip="session.copy_id" title="—">—</span>
     <button class="sess-open-btn" onclick="openInClaude()" id="sessOpenBtn" style="display:none" data-i18n-tip="session.open_claude">⚡ Claude Code</button>
@@ -1560,6 +1563,41 @@ function copyCode(id, btn) {
 }
 
 // ─── WebSocket ────────────────────────────────────────────────────────────
+
+// Subscribe to all open tabs across all projects for live task events.
+// Uses noCatchUp:true so we don't flood with buffer text for background tabs.
+// When user switches to a tab, loadSess sends subscribe_session without noCatchUp
+// which triggers a full catch-up with current buffer.
+async function subscribeAllTabs() {
+  try {
+    // Fetch session IDs that currently have running tasks (for immediate spinner update)
+    const running = await (await fetch('/api/tasks/running-sessions')).json();
+    const runningSet = new Set(running);
+    // Collect all tabs across all projects
+    const groups = [{ tabs: openTabs, isCurrent: true }];
+    for (const [pid, tabs] of Object.entries(projectTabs)) {
+      if (pid !== curProjectId) groups.push({ tabs, isCurrent: false });
+    }
+    let needTabs = false, needProjs = false;
+    for (const { tabs, isCurrent } of groups) {
+      for (const tab of tabs) {
+        if (!tab.id || tab.isNew) continue;
+        // Subscribe to receive live task events (no catch-up — loadSess handles that for active tab)
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: tab.id, noCatchUp: true }));
+        }
+        // Immediately show spinner if this tab's session has a running task
+        if (runningSet.has(tab.id) && !tab.generating) {
+          tab.generating = true;
+          if (isCurrent) needTabs = true; else needProjs = true;
+        }
+      }
+    }
+    if (needTabs) renderTabs();
+    if (needProjs) renderProjects();
+  } catch (e) { console.error('subscribeAllTabs:', e); }
+}
+
 let _reconnectDelay = 1000; // starts at 1 s, doubles up to 30 s
 let _reconnectTimer = null;
 let _intentionalClose = false; // set before navigating away to suppress reconnect
@@ -1584,15 +1622,8 @@ function connect() {
       ws.send(JSON.stringify({ type: 'start_session', sessionId: currentSessionId, mode: curMode, agentMode: curAgent, model: curModel, engine: 'cli'}));
       ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: currentSessionId }));
     }
-    // Resume generating tabs across ALL projects (not just current)
-    const allTabArrays = [openTabs, ...Object.entries(projectTabs).filter(([pid]) => pid !== curProjectId).map(([,tabs]) => tabs)];
-    for (const tabs of allTabArrays) {
-      for (const tab of tabs) {
-        if (tab.generating && tab.id && ws.readyState === 1) {
-          ws.send(JSON.stringify({ type: 'resume_task', sessionId: tab.id, tabId: tab.id }));
-        }
-      }
-    }
+    // Subscribe to all open tabs across all projects to receive live task events
+    subscribeAllTabs();
   };
 
   ws.onclose = (ev) => {
@@ -1636,7 +1667,10 @@ function handleWsMsg(d) {
         sbShow('⚙ ' + (d.title || 'Task') + '…');
         if (!curEl) { curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
       }
-      if (found?.tab) { found.tab.generating = true; renderTabs(); }
+      if (found?.tab) {
+        found.tab.generating = true;
+        if (found.isCurrent) renderTabs(); else renderProjects();
+      }
       break;
 
     case 'text':
@@ -1825,13 +1859,36 @@ function handleWsMsg(d) {
       const ti = openTabs.find(x => x.id === tabId);
       if (ti) { ti.generating = false; renderTabs(); saveUIState(); }
       if (isVisible) { isGen = false; setSendStop(false); setStatus(t('status.connected'), 'ok'); }
-      if (isVisible && d.prompt) {
-        const retryEl = document.createElement('div');
-        retryEl.className = 'msg-retry';
-        const safePrompt = (d.prompt || '').replace(/'/g, "\\'").substring(0, 500);
-        retryEl.innerHTML = `<span>⚠️ ${escH(t('toast.task_interrupted'))}</span><button onclick="retryCrashedTask('${escH(d.sessionId || tabId)}', '${safePrompt}', this)">${escH(t('toast.task_retry'))}</button>`;
-        $i('messages')?.appendChild(retryEl);
-        scrollBottom();
+      if (!d.prompt) break;
+      { // auto-retry silently
+        const targetSessionId = d.sessionId || tabId;
+        const retryCount = (d.retryCount || 0) + 1;
+        // Add retry badge to last user message instead of a new message bubble
+        if (isVisible) {
+          const userMsgs = $i('messages')?.querySelectorAll('.mw.user');
+          if (userMsgs?.length) {
+            const last = userMsgs[userMsgs.length - 1];
+            let badge = last.querySelector('.retry-badge');
+            if (!badge) { badge = document.createElement('div'); badge.className = 'retry-badge'; last.appendChild(badge); }
+            badge.textContent = `↩ retry ×${retryCount}`;
+          }
+        }
+        // Mark tab as generating and fire retry
+        const targetTab = openTabs.find(x => x.id === targetSessionId);
+        if (targetTab) { targetTab.generating = true; renderTabs(); saveUIState(); }
+        if (isVisible) { isGen = true; generatingTabId = activeTabId; showStatus(t('status.processing')); setStatus(t('status.processing'), 'warn'); setSendStop(true); }
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({
+            type: 'chat', text: d.prompt,
+            tabId: targetSessionId, sessionId: targetSessionId,
+            retry: true,
+            skills: [...activeSkills], mcpServers: [...activeMcp],
+            mode: curMode, agentMode: curAgent,
+            model: curModel, engine: curEngine,
+            maxTurns: parseInt($i('maxTurns').value) || 30,
+            workdir: curWorkdir || undefined,
+          }));
+        }
       }
       break;
     }
@@ -2102,8 +2159,12 @@ async function updateSessBar() {
     if (!resp.ok) { bar.style.display = 'none'; return; }
     const s = await resp.json();
     bar.style.display = 'flex';
-    const titleEl = $i('sessBarTitle');
-    if (titleEl) titleEl.textContent = s.title || '';
+    const projEl = $i('sessBarProject');
+    if (projEl) {
+      const activeProj = curProjectId ? projects.find(p => p.id === curProjectId) : null;
+      projEl.textContent = activeProj ? activeProj.name : '';
+      projEl.title = activeProj ? activeProj.name : '';
+    }
     const idEl = $i('sessBarId');
     if (idEl) {
       const cid = s.claude_session_id || '';
@@ -2136,12 +2197,46 @@ async function openInClaude() {
   } catch { toast(t('toast.err_prefix') + 'open-terminal failed', true); }
 }
 
-function retryCrashedTask(sessionId, prompt, btn) {
-  btn.closest('.msg-retry')?.remove();
+function retryCrashedTask(btn) {
+  const retryEl = btn.closest('.msg-retry');
+  const sessionId = retryEl?.dataset.sessionId;
+  const prompt = retryEl?.dataset.prompt || '';
+  const retryCount = parseInt(retryEl?.dataset.retryCount || '0') + 1;
+
+  retryEl?.remove();
+  if (!sessionId || !prompt) return;
+  if (!ws || ws.readyState !== 1) { toast(t('toast.no_connection'), true); return; }
+
   if (sessionId !== activeTabId) switchTab(sessionId);
-  inEl.value = prompt;
-  inEl.dispatchEvent(new Event('input'));
-  doSend();
+
+  // Add a silent retry indicator instead of a new user message
+  const indicator = document.createElement('div');
+  indicator.className = 'msg-retry-indicator';
+  indicator.textContent = `↩ ${t('toast.task_retry')} #${retryCount}`;
+  $i('messages')?.appendChild(indicator);
+  scrollBottom();
+
+  // Mark tab as generating
+  const tab = openTabs.find(x => x.id === activeTabId);
+  if (tab) { tab.generating = true; renderTabs(); }
+  isGen = true; generatingTabId = activeTabId;
+  showStatus(t('status.processing'));
+  setStatus(t('status.processing'), 'warn');
+  setSendStop(true);
+
+  // Send retry without adding a new user message to the chat
+  ws.send(JSON.stringify({
+    type: 'chat', text: prompt,
+    tabId: activeTabId,
+    sessionId,
+    retry: true,
+    skills: [...activeSkills],
+    mcpServers: [...activeMcp],
+    mode: curMode, agentMode: curAgent,
+    model: curModel, engine: curEngine,
+    maxTurns: parseInt($i('maxTurns').value) || 30,
+    workdir: curWorkdir || undefined,
+  }));
 }
 
 function switchTab(id) {
