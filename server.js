@@ -168,6 +168,7 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN max_turns INTEGER DEFAULT 30`); } ca
 try { db.exec(`ALTER TABLE sessions ADD COLUMN retry_count INTEGER DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN worker_pid INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN attachments TEXT`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN engine TEXT`); } catch {}
 
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),

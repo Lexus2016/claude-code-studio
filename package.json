@@ -1,6 +1,6 @@
 {
   "name": "claude-code-studio",
-  "version": "5.0.6",
+  "version": "5.0.7",
   "description": "Full-featured web workspace for Claude Code — chat, Kanban, multi-agent, MCP, skills, projects",
   "bin": {
     "claude-code-studio": "./bin/cli.js"
@@ -14,7 +14,13 @@
     "type": "git",
     "url": "https://github.com/Lexus2016/claude-code-studio.git"
   },
-  "keywords": ["claude", "claude-code", "ai", "chat", "mcp"],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai",
+    "chat",
+    "mcp"
+  ],
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/claude-code": "^2.1.50",
