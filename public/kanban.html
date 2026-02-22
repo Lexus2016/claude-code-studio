@@ -240,10 +240,12 @@ const TR = {
     'confirm.ok':'Видалити', 'confirm.cancel':'Скасувати',
     'chat.title':'Чат сесії', 'chat.empty':'Немає повідомлень',
     'chat.open':'↗ Відкрити в чаті',
+    'modal.notes':'Уточнення для Claude',
     'toast.created':'✓ Задачу створено', 'toast.saved':'✓ Збережено',
     'toast.deleted':'Задачу видалено', 'toast.copied':'✓ ID скопійовано',
     'toast.sess_created':'✓ Сесію створено автоматично',
     'toast.err':'Помилка: ',
+    'card.running':'Виконується',
     'msg.you':'Ви', 'msg.tool':'Tool',
     'refresh.now':'щойно',
   },
@@ -264,10 +266,12 @@ const TR = {
     'confirm.ok':'Delete', 'confirm.cancel':'Cancel',
     'chat.title':'Session chat', 'chat.empty':'No messages',
     'chat.open':'↗ Open in chat',
+    'modal.notes':'Clarification for Claude',
     'toast.created':'✓ Task created', 'toast.saved':'✓ Saved',
     'toast.deleted':'Task deleted', 'toast.copied':'✓ ID copied',
     'toast.sess_created':'✓ Session created automatically',
     'toast.err':'Error: ',
+    'card.running':'Running',
     'msg.you':'You', 'msg.tool':'Tool',
     'refresh.now':'just now',
   },
@@ -288,10 +292,12 @@ const TR = {
     'confirm.ok':'Удалить', 'confirm.cancel':'Отмена',
     'chat.title':'Чат сессии', 'chat.empty':'Нет сообщений',
     'chat.open':'↗ Открыть в чате',
+    'modal.notes':'Уточнение для Claude',
     'toast.created':'✓ Задача создана', 'toast.saved':'✓ Сохранено',
     'toast.deleted':'Задача удалена', 'toast.copied':'✓ ID скопирован',
     'toast.sess_created':'✓ Сессия создана автоматически',
     'toast.err':'Ошибка: ',
+    'card.running':'Выполняется',
     'msg.you':'Вы', 'msg.tool':'Tool',
     'refresh.now':'только что',
   },
@@ -429,8 +435,13 @@ async function refresh(force=false){
 }
 
 function startAutoRefresh(){
-  clearInterval(refreshTimer);
-  refreshTimer = setInterval(()=>refresh(false), 30000);
+  clearTimeout(refreshTimer);
+  const hasActive = tasks.some(t => t.status === 'in_progress' || t.status === 'todo');
+  const delay = hasActive ? 5000 : 30000;
+  refreshTimer = setTimeout(async () => {
+    await refresh(false);
+    startAutoRefresh();
+  }, delay);
 }
 
 // ─── Board Render ─────────────────────────────────────────────────────────
@@ -482,12 +493,10 @@ function makeCard(tk){
   el.draggable=true;
 
   let sessBadge='';
-  if(tk.session_id){
-    if(tk.is_active){
-      sessBadge=`<span class="badge badge-orange">⚙ ${escH(t('card.generating'))}</span>`;
-    } else {
-      sessBadge=`<span class="badge badge-accent">💬 ${escH(tk.sess_title||'session')}</span>`;
-    }
+  if(tk.status==='in_progress'){
+    sessBadge=`<span class="badge badge-orange"><span class="spinning" style="width:10px;height:10px;border-width:1.5px"></span> ${escH(t('card.running'))}</span>`;
+  } else if(tk.session_id){
+    sessBadge=`<span class="badge badge-accent">💬 ${escH(tk.sess_title||'session')}</span>`;
   }
   const modelBadge=tk.sess_model?`<span class="badge badge-muted">${escH(tk.sess_model)}</span>`:'';
 
@@ -639,6 +648,9 @@ function buildForm(tk={}){
     <div><label class="lbl">${t('modal.desc')}</label>
       <textarea id="fDesc" class="inp" rows="3" placeholder="…" maxlength="2000">${escH(tk.description||'')}</textarea>
     </div>
+    <div><label class="lbl">${t('modal.notes')}</label>
+      <textarea id="fNotes" class="inp" rows="2" placeholder="…" maxlength="2000">${escH(tk.notes||'')}</textarea>
+    </div>
     <div class="grid2">
       <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel">${statusOpts}</select></div>
       <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel">${sessOpts}</select></div>
@@ -681,6 +693,7 @@ async function saveTask(){
   const body={
     title,
     description:$i('fDesc')?.value||'',
+    notes:$i('fNotes')?.value||'',
     status:$i('fStatus')?.value||'backlog',
     session_id:$i('fSession')?.value||null,
     workdir: curWorkdir || null,

@@ -161,6 +161,7 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN reply_to_id INTEGER REFERENCES messages(id)`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN last_user_msg TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN workdir TEXT`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN notes TEXT DEFAULT ''`); } catch {}
 
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
@@ -187,8 +188,8 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,status,sort_order,workdir) VALUES (?,?,?,?,?,?)`),
-  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,status=?,sort_order=?,session_id=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,workdir) VALUES (?,?,?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   getTasksEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM tasks`),
@@ -226,6 +227,100 @@ function genId() { return Date.now().toString(36) + Math.random().toString(36).s
 // Key: localSessionId, Value: { proxy, abortController, cleanupTimer }
 const activeTasks = new Map();
 const TASK_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // abort orphaned tasks after 30 min
+
+// ─── Kanban Task Queue Worker ─────────────────────────────────────────────
+const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '5', 10));
+const taskRunning = new Set(); // task IDs currently executing
+
+async function startTask(task) {
+  if (taskRunning.has(task.id)) return;
+  taskRunning.add(task.id);
+  console.log(`[taskWorker] starting "${task.title}" (${task.id})`);
+  try {
+    // Create session if needed
+    let sessionId = task.session_id;
+    if (!sessionId) {
+      sessionId = genId();
+      stmts.createSession.run(sessionId, task.title.substring(0, 200), '[]', '[]', 'auto', 'single', 'sonnet', 'cli', task.workdir || null);
+      db.prepare(`UPDATE tasks SET session_id=?, updated_at=datetime('now') WHERE id=?`).run(sessionId, task.id);
+    }
+    // Mark in_progress
+    db.prepare(`UPDATE tasks SET status='in_progress', updated_at=datetime('now') WHERE id=?`).run(task.id);
+    // Build prompt
+    const parts = [task.title];
+    if (task.description?.trim()) parts.push(task.description.trim());
+    if (task.notes?.trim()) parts.push(`---\nУточнення:\n${task.notes.trim()}`);
+    const prompt = parts.join('\n\n');
+    // Save user message
+    stmts.addMsg.run(sessionId, 'user', 'text', prompt, null, null, null);
+    // Resume existing claude session if any
+    const session = stmts.getSession.get(sessionId);
+    const claudeSessionId = session?.claude_session_id || null;
+    const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
+    let fullText = '', newCid = claudeSessionId, hasError = false;
+    await new Promise(resolve => {
+      cli.send({ prompt, sessionId: claudeSessionId, model: 'sonnet', maxTurns: 50 })
+        .onText(t => { fullText += t; })
+        .onTool((name, inp) => { stmts.addMsg.run(sessionId, 'assistant', 'tool', inp || '', name, null, null); })
+        .onSessionId(sid => { newCid = sid; })
+        .onError(err => {
+          hasError = true;
+          console.error(`[taskWorker] task ${task.id} error:`, err);
+          stmts.addMsg.run(sessionId, 'assistant', 'text', `❌ ${err.substring(0, 500)}`, null, null, null);
+        })
+        .onDone(() => {
+          if (newCid) stmts.updateClaudeId.run(newCid, sessionId);
+          if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null);
+          db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`)
+            .run(hasError ? 'cancelled' : 'done', task.id);
+          console.log(`[taskWorker] task ${task.id}: ${hasError ? 'cancelled' : 'done'}`);
+          resolve();
+        });
+    });
+  } catch (err) {
+    console.error(`[taskWorker] task ${task.id} exception:`, err);
+    db.prepare(`UPDATE tasks SET status='cancelled', updated_at=datetime('now') WHERE id=?`).run(task.id);
+  } finally {
+    taskRunning.delete(task.id);
+    setTimeout(processQueue, 500);
+  }
+}
+
+function processQueue() {
+  const todo = db.prepare(`SELECT * FROM tasks WHERE status='todo' ORDER BY sort_order ASC, created_at ASC`).all();
+  if (!todo.length) return;
+  const inProg = db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`).all();
+  // Sessions currently occupied (in_progress or just started by taskRunning)
+  const occupiedSids = new Set(inProg.filter(t => t.session_id).map(t => t.session_id));
+  // Count independent running tasks (null session_id)
+  let indepRunning = inProg.filter(t => !t.session_id).length;
+  const startedSids = new Set();
+  for (const task of todo) {
+    if (taskRunning.has(task.id)) continue;
+    if (task.session_id) {
+      // Shared session: one at a time per session
+      if (!occupiedSids.has(task.session_id) && !startedSids.has(task.session_id)) {
+        occupiedSids.add(task.session_id);
+        startedSids.add(task.session_id);
+        startTask(task).catch(e => console.error('[taskWorker]', e));
+      }
+    } else {
+      // Independent: up to MAX_TASK_WORKERS concurrent
+      if (indepRunning < MAX_TASK_WORKERS) {
+        indepRunning++;
+        startTask(task).catch(e => console.error('[taskWorker]', e));
+      }
+    }
+  }
+}
+// Run every 60s
+setInterval(processQueue, 60000);
+// Kick off on startup (pick up any tasks that were todo/in_progress before restart)
+setTimeout(() => {
+  // Reset any stuck in_progress tasks (from previous crash) back to todo
+  db.prepare(`UPDATE tasks SET status='todo', updated_at=datetime('now') WHERE status='in_progress'`).run();
+  processQueue();
+}, 3000);
 
 class WsProxy {
   constructor(ws) { this._ws = ws; this._buffer = []; }
@@ -528,21 +623,27 @@ app.get('/api/tasks', (req, res) => {
 });
 app.get('/api/tasks/etag', (req, res) => { res.json(stmts.getTasksEtag.get()); });
 app.post('/api/tasks', (req, res) => {
-  const { title='Нова задача', description='', status='backlog', sort_order=0, workdir=null } = req.body;
+  const { title='Нова задача', description='', notes='', status='backlog', sort_order=0, workdir=null } = req.body;
   const id = genId();
-  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), status, sort_order, workdir||null);
-  res.json(stmts.getTask.get(id));
+  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, workdir||null);
+  const task = stmts.getTask.get(id);
+  if (status === 'todo') setImmediate(processQueue);
+  res.json(task);
 });
 app.put('/api/tasks/:id', (req, res) => {
   const task = stmts.getTask.get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Not found' });
-  const { title=task.title, description=task.description, status=task.status,
-          sort_order=task.sort_order, session_id=task.session_id, workdir=task.workdir } = req.body;
+  const { title=task.title, description=task.description, notes=task.notes,
+          status=task.status, sort_order=task.sort_order,
+          session_id=task.session_id, workdir=task.workdir } = req.body;
   stmts.updateTask.run(
     String(title).substring(0,200), String(description).substring(0,2000),
+    String(notes||'').substring(0,2000),
     status, sort_order, session_id || null, workdir || null, req.params.id
   );
-  res.json(stmts.getTask.get(req.params.id));
+  const updated = stmts.getTask.get(req.params.id);
+  if (status === 'todo' && task.status !== 'todo') setImmediate(processQueue);
+  res.json(updated);
 });
 app.delete('/api/tasks/:id', (req, res) => {
   stmts.deleteTask.run(req.params.id); res.json({ ok: true });
