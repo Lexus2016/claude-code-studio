@@ -167,6 +167,7 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN mode TEXT DEFAULT 'auto'`); } catch 
 try { db.exec(`ALTER TABLE tasks ADD COLUMN agent_mode TEXT DEFAULT 'single'`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN max_turns INTEGER DEFAULT 30`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN retry_count INTEGER DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN worker_pid INTEGER`); } catch {}
 
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
@@ -297,8 +298,13 @@ async function startTask(task) {
     } else {
       broadcastToSession(sessionId, { type: 'task_started', taskId: task.id, title: task.title, tabId: sessionId });
     }
+    const stream = cli.send({ prompt, sessionId: claudeSessionId, model: session?.model || task.model || 'sonnet', maxTurns: task.max_turns || 30 });
+    // Save subprocess PID so startup recovery can kill orphans on restart
+    if (stream.process?.pid) {
+      db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
+    }
     await new Promise(resolve => {
-      cli.send({ prompt, sessionId: claudeSessionId, model: session?.model || task.model || 'sonnet', maxTurns: task.max_turns || 30 })
+      stream
         .onText(t => {
           fullText += t;
           taskBuffers.set(task.id, (taskBuffers.get(task.id) || '') + t);
@@ -318,7 +324,8 @@ async function startTask(task) {
         .onDone(() => {
           if (newCid) stmts.updateClaudeId.run(newCid, sessionId);
           if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null);
-          db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`)
+          // Clear worker_pid on normal completion
+          db.prepare(`UPDATE tasks SET status=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(hasError ? 'cancelled' : 'done', task.id);
           console.log(`[taskWorker] task ${task.id}: ${hasError ? 'cancelled' : 'done'}`);
           broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id });
@@ -364,12 +371,32 @@ function processQueue() {
 }
 // Run every 60s
 setInterval(processQueue, 60000);
-// Kick off on startup
+// Kick off on startup — smart recovery for in_progress tasks
 setTimeout(() => {
-  // On restart, in_progress tasks had their subprocess killed with the server.
-  // Resetting to 'todo' would launch a DUPLICATE subprocess if the old one is still
-  // running as an OS orphan — wasting tokens. Cancel instead; user can retry from Kanban.
-  db.prepare(`UPDATE tasks SET status='cancelled', updated_at=datetime('now') WHERE status='in_progress'`).run();
+  const stuck = db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`).all();
+  for (const task of stuck) {
+    // Step 1: Kill orphaned subprocess to prevent double-execution.
+    // When Node restarts, spawned 'claude' processes become OS orphans and keep running.
+    // We kill them before deciding what to do with the task.
+    if (task.worker_pid) {
+      try {
+        process.kill(task.worker_pid, 'SIGTERM');
+        console.log(`[startup] killed orphan PID ${task.worker_pid} for task "${task.title}"`);
+      } catch {} // ESRCH = process already dead — that's fine
+    }
+    // Step 2: Determine if the task actually completed.
+    // Assistant text is only written to DB on onDone — so its presence means success.
+    let newStatus = 'todo'; // default: retry (task was interrupted)
+    if (task.session_id) {
+      const assistantMsg = db.prepare(
+        `SELECT id FROM messages WHERE session_id=? AND role='assistant' AND type='text' LIMIT 1`
+      ).get(task.session_id);
+      if (assistantMsg) newStatus = 'done'; // completed before/during restart
+    }
+    db.prepare(`UPDATE tasks SET status=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+      .run(newStatus, task.id);
+    console.log(`[startup] recovered task "${task.title}" (${task.id}): in_progress → ${newStatus}`);
+  }
   processQueue();
 }, 3000);
 
@@ -1401,6 +1428,20 @@ wss.on('connection', (ws) => {
             ws.send(JSON.stringify({ type: 'task_started', taskId: runningTask.id, title: runningTask.title, tabId: sessionId }));
             const buf = taskBuffers.get(runningTask.id);
             if (buf) ws.send(JSON.stringify({ type: 'text', text: buf, tabId: sessionId }));
+          } else if (!activeTasks.has(sessionId)) {
+            // Check for interrupted chat session (server crash recovery).
+            // Only when no live task exists in memory — prevents false interrupts on WS hiccup.
+            const sess = stmts.getSession.get(sessionId);
+            if (sess?.last_user_msg && ws.readyState === 1) {
+              ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: sessionId, prompt: sess.last_user_msg, retryCount: sess.retry_count || 0 }));
+            }
+          } else {
+            // Chat task is running but WS reconnected — reattach proxy so output resumes.
+            const activeTask = activeTasks.get(sessionId);
+            if (activeTask.cleanupTimer) { clearTimeout(activeTask.cleanupTimer); activeTask.cleanupTimer = null; }
+            activeTask.proxy.attach(ws);
+            ws._tabAbort[sessionId] = activeTask.abortController;
+            if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'task_resumed', sessionId, tabId: sessionId }));
           }
         }
       }
