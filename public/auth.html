@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -27,25 +27,25 @@ h1{font-size:20px;margin-bottom:4px}
 <div class="card">
   <div class="logo">CC</div>
   <h1 id="title">Claude Code Chat</h1>
-  <p class="sub" id="subtitle">Завантаження...</p>
+  <p class="sub" id="subtitle">Loading...</p>
   <form id="setupForm" style="display:none" onsubmit="return doSetup(event)">
-    <div class="field"><label>Ваше ім'я</label><input type="text" id="setupName" placeholder="Admin" autocomplete="name"></div>
-    <div class="field"><label>Пароль (мін. 6 символів)</label><input type="password" id="setupPass" placeholder="••••••••" required minlength="6"></div>
-    <div class="field"><label>Підтвердіть пароль</label><input type="password" id="setupPass2" placeholder="••••••••" required minlength="6"></div>
-    <button type="submit" class="btn btn-primary" id="setupBtn">🚀 Створити акаунт</button>
+    <div class="field"><label>Your name</label><input type="text" id="setupName" placeholder="Admin" autocomplete="name"></div>
+    <div class="field"><label>Password (min. 6 characters)</label><input type="password" id="setupPass" placeholder="••••••••" required minlength="6"></div>
+    <div class="field"><label>Confirm password</label><input type="password" id="setupPass2" placeholder="••••••••" required minlength="6"></div>
+    <button type="submit" class="btn btn-primary" id="setupBtn">🚀 Create account</button>
     <div class="error" id="setupError"></div>
-    <p class="note">Перший запуск. Пароль зберігається локально (bcrypt hash).</p>
+    <p class="note">First run. Password is stored locally (bcrypt hash).</p>
   </form>
   <form id="loginForm" style="display:none" onsubmit="return doLogin(event)">
-    <div class="field"><label>Пароль</label><input type="password" id="loginPass" placeholder="••••••••" required autofocus></div>
-    <button type="submit" class="btn btn-primary" id="loginBtn">🔑 Увійти</button>
+    <div class="field"><label>Password</label><input type="password" id="loginPass" placeholder="••••••••" required autofocus></div>
+    <button type="submit" class="btn btn-primary" id="loginBtn">🔑 Sign in</button>
     <div class="error" id="loginError"></div>
   </form>
 </div>
 <script>
-async function checkStatus(){const r=await fetch('/api/auth/status');const d=await r.json();if(d.loggedIn){window.location.href='/';return}if(!d.setupDone){document.getElementById('title').textContent='Перший запуск';document.getElementById('subtitle').textContent='Створіть пароль для доступу';document.getElementById('setupForm').style.display='block'}else{document.getElementById('title').textContent='Вхід';document.getElementById('subtitle').textContent='Введіть пароль';document.getElementById('loginForm').style.display='block'}}
-async function doSetup(e){e.preventDefault();const p=document.getElementById('setupPass').value,p2=document.getElementById('setupPass2').value,n=document.getElementById('setupName').value||'Admin',err=document.getElementById('setupError');if(p!==p2){err.textContent='Паролі не збігаються';return false}document.getElementById('setupBtn').disabled=true;try{const r=await fetch('/api/auth/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p,displayName:n})});const d=await r.json();if(d.ok)window.location.href='/';else err.textContent=d.error||'Помилка'}catch(e){err.textContent='Помилка з\'єднання'}document.getElementById('setupBtn').disabled=false;return false}
-async function doLogin(e){e.preventDefault();const p=document.getElementById('loginPass').value,err=document.getElementById('loginError');document.getElementById('loginBtn').disabled=true;try{const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})});const d=await r.json();if(d.ok)window.location.href='/';else err.textContent=d.error==='Invalid password'?'Невірний пароль':d.error}catch(e){err.textContent='Помилка з\'єднання'}document.getElementById('loginBtn').disabled=false;return false}
+async function checkStatus(){const r=await fetch('/api/auth/status');const d=await r.json();if(d.loggedIn){window.location.href='/';return}if(!d.setupDone){document.getElementById('title').textContent='First run';document.getElementById('subtitle').textContent='Create a password to get started';document.getElementById('setupForm').style.display='block'}else{document.getElementById('title').textContent='Sign in';document.getElementById('subtitle').textContent='Enter your password';document.getElementById('loginForm').style.display='block'}}
+async function doSetup(e){e.preventDefault();const p=document.getElementById('setupPass').value,p2=document.getElementById('setupPass2').value,n=document.getElementById('setupName').value||'Admin',err=document.getElementById('setupError');if(p!==p2){err.textContent='Passwords do not match';return false}document.getElementById('setupBtn').disabled=true;try{const r=await fetch('/api/auth/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p,displayName:n})});const d=await r.json();if(d.ok)window.location.href='/';else err.textContent=d.error||'Error'}catch(e){err.textContent='Connection error'}document.getElementById('setupBtn').disabled=false;return false}
+async function doLogin(e){e.preventDefault();const p=document.getElementById('loginPass').value,err=document.getElementById('loginError');document.getElementById('loginBtn').disabled=true;try{const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})});const d=await r.json();if(d.ok)window.location.href='/';else err.textContent=d.error==='Invalid password'?'Invalid password':d.error}catch(e){err.textContent='Connection error'}document.getElementById('loginBtn').disabled=false;return false}
 checkStatus();
 </script>
 </body>

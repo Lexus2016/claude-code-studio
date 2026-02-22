@@ -54,6 +54,7 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .hb:hover{ color:var(--text); border-color:var(--accent2); background:var(--s3); }
 .hb.active{ color:var(--accent2); border-color:var(--accent); background:var(--abg); }
 .hb:active{ transform:scale(0.95); transition-duration:0.07s; }
+.hb:disabled{ opacity:.4; cursor:not-allowed; pointer-events:none; }
 
 /* ─── Nav switcher ─── */
 .nav-sw{ display:flex; align-items:center; background:var(--s3); border:1px solid var(--border); border-radius:8px; padding:3px; gap:2px; }
@@ -287,6 +288,7 @@ const TR = {
     'toast.created':'✓ Задачу створено','toast.saved':'✓ Збережено',
     'toast.deleted':'Задачу видалено','toast.copied':'✓ ID скопійовано',
     'toast.sess_created':'✓ Сесію створено автоматично','toast.err':'Помилка: ',
+    'toast.no_project':'Спочатку оберіть проект',
     'modal.new_sess_cfg':'Налаштування нової сесії',
     'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки','tb.engine':'Двигун',
     'card.running':'Виконується','msg.you':'Ви','msg.tool':'Tool','refresh.now':'щойно',
@@ -313,6 +315,7 @@ const TR = {
     'toast.created':'✓ Task created','toast.saved':'✓ Saved',
     'toast.deleted':'Task deleted','toast.copied':'✓ ID copied',
     'toast.sess_created':'✓ Session created automatically','toast.err':'Error: ',
+    'toast.no_project':'Select a project first',
     'modal.new_sess_cfg':'New session settings',
     'tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns','tb.engine':'Engine',
     'card.running':'Running','msg.you':'You','msg.tool':'Tool','refresh.now':'just now',
@@ -338,6 +341,7 @@ const TR = {
     'toast.created':'✓ Задача создана','toast.saved':'✓ Сохранено',
     'toast.deleted':'Задача удалена','toast.copied':'✓ ID скопирован',
     'toast.sess_created':'✓ Сессия создана автоматически','toast.err':'Ошибка: ',
+    'toast.no_project':'Сначала выберите проект',
     'modal.new_sess_cfg':'Настройки новой сессии',
     'modal.attach':'Вложения','modal.attach_hint':'Нажмите или перетащите файлы (изображения, текст)','modal.attach_max':'Максимум 10 файлов на задачу',
     'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги','tb.engine':'Движок',
@@ -435,6 +439,8 @@ function onProjChange(doRefresh=true){
   const sel=$i('projSel');
   const opt=sel.options[sel.selectedIndex];
   curWorkdir=opt?.value||null;
+  const addBtn=$i('addBtn');
+  if(addBtn){addBtn.disabled=!curWorkdir;addBtn.title=curWorkdir?'':t('toast.no_project');}
   if(doRefresh)refresh(true);
 }
 
@@ -601,6 +607,7 @@ function getDragAfter(container,y){
 
 // ─── Modal: Add ────────────────────────────────────────────────────────────
 function openAddModal(defaultStatus='backlog'){
+  if(!curWorkdir){toast(t('toast.no_project'),true);return;}
   modalMode='add';editingId=null;pendingAttachments=[];
   $i('modalTitle').textContent=t('modal.add');
   $i('modalBody').innerHTML=buildForm({status:defaultStatus,...kbSettings});
