@@ -47,13 +47,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 }
 .panel-tab:hover { background: var(--s2); }
 .panel-tab-left { border-right: 1px solid var(--border); }
-.panel-tab-right { border-left: 1px solid var(--border); }
+.panel-tab-right { border-right: 1px solid var(--border); }
 .panel-tab-inner {
   width: 14px; height: 56px; display: flex; align-items: center; justify-content: center;
   background: var(--s2); border: 1px solid var(--border); border-radius: 0 5px 5px 0;
   transition: background .15s, border-color .15s;
 }
-.panel-tab-right .panel-tab-inner { border-radius: 5px 0 0 5px; }
+.panel-tab-right .panel-tab-inner { border-radius: 0 5px 5px 0; }
 .panel-tab:hover .panel-tab-inner { background: var(--s3); border-color: var(--accent); }
 .panel-tab-inner svg {
   width: 10px; height: 10px; color: var(--muted); flex-shrink: 0;
@@ -64,13 +64,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .panel-tab-left .panel-tab-inner svg { transform: rotate(0deg); }
 /* Left tab: active=visible → chevron left (← to close) */
 .panel-tab-left.active .panel-tab-inner svg { transform: rotate(180deg); }
-/* Right tab: default=collapsed → chevron left (← to open) */
-.panel-tab-right .panel-tab-inner svg { transform: rotate(180deg); }
-/* Right tab: active=visible → chevron right (→ to close) */
-.panel-tab-right.active .panel-tab-inner svg { transform: rotate(0deg); }
+/* Right tab (now on LEFT of right panel): collapsed → chevron right (→ to open) */
+.panel-tab-right .panel-tab-inner svg { transform: rotate(0deg); }
+/* Right tab: active=visible → chevron left (← to close) */
+.panel-tab-right.active .panel-tab-inner svg { transform: rotate(180deg); }
 /* Tooltips for side tabs */
 .panel-tab-left[data-tip]::after { left: calc(100% + 6px); top: 50%; bottom: auto; transform: translateY(-50%); }
-.panel-tab-right[data-tip]::after { right: calc(100% + 6px); left: auto; top: 50%; bottom: auto; transform: translateY(-50%); }
+.panel-tab-right[data-tip]::after { left: calc(100% + 6px); right: auto; top: 50%; bottom: auto; transform: translateY(-50%); }
 
 /* ─── Sections ─── */
 .sec { border-bottom: 1px solid var(--border); }
@@ -81,25 +81,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .sec-body { padding: 4px 8px 10px; }
 .sec-body.collapsed { display: none; }
 
-/* ─── Stats Panel ─── */
-.stat-block { margin-bottom: 12px; }
-.stat-block-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 5px; }
-.stat-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
-.stat-bar { flex: 1; height: 8px; background: var(--s3); border-radius: 4px; overflow: hidden; }
-.stat-bar-fill { height: 100%; border-radius: 4px; transition: width .5s ease; }
-.stat-bar-fill.ok { background: var(--blue); }
-.stat-bar-fill.warn { background: var(--orange); }
-.stat-bar-fill.crit { background: var(--red); }
-.stat-pct { font-size: 11px; color: var(--text); white-space: nowrap; min-width: 52px; text-align: right; }
-.stat-reset { font-size: 10px; color: var(--muted); margin-top: 2px; }
-.stat-agents { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
-.stat-agents-title { font-size: 10px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
-.agent-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--s3); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 10px; margin: 2px 2px 0 0; color: var(--text); }
-.agent-chip .dot { width: 5px; height: 5px; background: var(--green); border-radius: 50%; flex-shrink: 0; animation: dot-pulse 1.5s ease-in-out infinite; }
-@keyframes dot-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-.stat-empty { font-size: 10px; color: var(--muted); font-style: italic; }
-.stat-refresh { font-size: 9px; color: var(--muted); text-align: right; margin-top: 8px; cursor: pointer; opacity: .6; user-select: none; }
-.stat-refresh:hover { opacity: 1; color: var(--accent2); }
+/* ─── Active project label in header ─── */
+#activeProjLabel { font-size: 11px; color: var(--accent2); background: rgba(124,106,239,.1); border: 1px solid rgba(124,106,239,.25); border-radius: 4px; padding: 2px 8px; display: none; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ─── Toggle items ─── */
 .ci { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r); cursor: pointer; font-size: 13px; transition: background .12s; border: 1px solid transparent; }
@@ -617,16 +600,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 <div class="left" id="leftPanel">
   <div class="left-inner">
     <div class="sec">
-      <div class="sec-title" onclick="toggleSec('proactive')">
-        <span data-i18n="sec.proactive">Активні дії</span>
-        <span class="badge" id="proactiveCount"></span>
-      </div>
-      <div class="sec-body" id="proactiveBody">
-        <div id="proactiveList"><div class="stat-empty" data-i18n="toast.loading">Loading...</div></div>
-      </div>
-    </div>
-
-    <div class="sec">
       <div class="sec-title" onclick="toggleSec('proj')">
         <span data-i18n="sec.projects">Проекти</span>
         <span class="badge" id="projCount"></span>
@@ -698,7 +671,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
       <div class="logo">CC</div>
       <div>
         <h1>Claude Code Chat</h1>
-        <span class="status-dot warn" id="statusEl">Підключення...</span>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+          <span class="status-dot warn" id="statusEl">Підключення...</span>
+          <span id="activeProjLabel"></span>
+        </div>
       </div>
     </div>
     <div class="hdr-btns">
@@ -797,6 +773,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
   </div>
 </div>
 
+<!-- RIGHT PANEL TAB (left side of right panel) -->
+<div class="panel-tab panel-tab-right active" onclick="toggle('rightPanel')" data-tip="Сховати/показати праву панель" data-i18n-tip="tip.panels.right">
+  <div class="panel-tab-inner">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>
+</div>
+
 <!-- RIGHT PANEL: File Browser -->
 <div class="right" id="rightPanel">
   <div class="fh">
@@ -805,13 +788,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
   </div>
   <div class="ft" id="filesTree"></div>
   <div class="fp" id="filePreview" style="display:none"></div>
-</div>
-
-<!-- RIGHT PANEL TAB -->
-<div class="panel-tab panel-tab-right active" onclick="toggle('rightPanel')" data-tip="Сховати/показати праву панель" data-i18n-tip="tip.panels.right">
-  <div class="panel-tab-inner">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-  </div>
 </div>
 
 <!-- Config Modal -->
@@ -898,6 +874,7 @@ let userScrolled = false; // track if user scrolled up
 let histOffset = 0;       // offset of the oldest rendered message (non-tool)
 let histTotal  = 0;       // total non-tool message count for current session
 let dirBrowsePath = null; // path currently shown in dir browser
+let _onProjectCreated = null; // callback to invoke after a new project is created
 
 const $i = id => document.getElementById(id);
 const msgsEl = $i('messages');
@@ -1521,7 +1498,6 @@ function addSpinner(el) {
 function markDone(el) {
   rmStatus();
   sbHide();
-  loadStats();
   if (!el) return;
   const s = el.querySelector('.msg-spinner'); if (s) s.remove();
   if (!el.querySelector('.msg-done')) {
@@ -1608,7 +1584,7 @@ function switchTab(id) {
   const tab = openTabs.find(t => t.id === id);
   if (tab?.isNew) {
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'new_session' }));
-    currentSessionId = null; curWorkdir = null; curProjectId = null;
+    currentSessionId = null;
     msgsEl.innerHTML = ''; showW(); renderProjects();
   } else {
     loadSess(id);
@@ -1625,11 +1601,10 @@ function closeTab(id) {
     if (openTabs.length > 0) {
       const next = openTabs[Math.min(idx, openTabs.length - 1)];
       activeTabId = next.id;
-      if (next.isNew) { currentSessionId = null; curWorkdir = null; curProjectId = null; msgsEl.innerHTML = ''; showW(); renderProjects(); }
+      if (next.isNew) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); renderProjects(); }
       else loadSess(next.id);
     } else {
       activeTabId = null; currentSessionId = null;
-      curWorkdir = null; curProjectId = null;
       msgsEl.innerHTML = ''; showW(); renderProjects();
     }
   }
@@ -1639,11 +1614,12 @@ function closeTab(id) {
 function newTab() {
   const tempId = 'new-' + Date.now();
   if (isGen) { toast(t('err.stop.new'), true); return; }
+  if (!curProjectId) { _onProjectCreated = () => newTab(); openAddProject(); return; }
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'new_session' }));
   openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true });
   activeTabId = tempId;
-  currentSessionId = null; curWorkdir = null; curProjectId = null;
-  msgsEl.innerHTML = ''; showW(); renderProjects();
+  currentSessionId = null;
+  msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();
   userScrolled = false; renderTabs(); saveUIState();
 }
 
@@ -1843,6 +1819,13 @@ async function send() {
   const txt = inEl.value.trim();
   if (!txt && !_attachments.length) return;
 
+  // Require a project before sending the first message in a new session
+  if (!curProjectId && !currentSessionId) {
+    _onProjectCreated = () => send();
+    openAddProject();
+    return;
+  }
+
   // Collect attachment payloads (fetch file contents for @ mentions)
   const attSnapshot = [..._attachments];
   _clearAttachments();
@@ -2005,91 +1988,9 @@ inEl.addEventListener('keydown', e => {
   }
 });
 
-// ─── Stats Panel ──────────────────────────────────────────────────────────
-let _statsTimer = null;
+// ─── (Stats panel removed) ────────────────────────────────────────────────
 
-function _fmtResetDate(msFromNow) {
-  const d = new Date(Date.now() + msFromNow);
-  const months = ['Січ','Лют','Бер','Кві','Тра','Чер','Лип','Сер','Вер','Жов','Лис','Гру'];
-  const h = d.getHours(), m = d.getMinutes();
-  const hStr = h === 0 && m === 0 ? '00:00' : `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
-  return `${d.getDate()} ${months[d.getMonth()]} о ${hStr}`;
-}
-
-async function loadStats() {
-  const sid = currentSessionId || '';
-  let data;
-  try {
-    const r = await fetch(`/api/stats${sid ? '?session_id=' + encodeURIComponent(sid) : ''}`);
-    data = await r.json();
-  } catch { return; }
-
-  const daily   = data.daily_messages  || 0;
-  const weekly  = data.weekly_messages || 0;
-  const limD    = data.limits?.daily   || 45;
-  const limW    = data.limits?.weekly  || 225;
-  const agents  = data.active_agents   || [];
-  const ctxTok  = data.context_tokens  || 0;
-  const CTX_MAX = 200000;
-
-  const pDay  = Math.min(100, Math.round(daily  / limD  * 100));
-  const pWeek = Math.min(100, Math.round(weekly / limW  * 100));
-  const pCtx  = Math.min(100, Math.round(ctxTok / CTX_MAX * 100));
-
-  function cls(p) { return p >= 85 ? 'crit' : p >= 60 ? 'warn' : 'ok'; }
-  function barRow(p) {
-    return `<div class="stat-row"><div class="stat-bar"><div class="stat-bar-fill ${cls(p)}" style="width:${p}%"></div></div><span class="stat-pct">${p}% використано</span></div>`;
-  }
-
-  // Daily reset: next midnight local time
-  const now = new Date();
-  const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now;
-  const dayResetStr = _fmtResetDate(msToMidnight);
-
-  // Weekly reset: next Monday 00:00 local
-  const dow = now.getDay(); // 0=Sun
-  const daysToMon = dow === 0 ? 1 : 8 - dow;
-  const msToMon = daysToMon * 86400000
-    - (now.getHours() * 3600000 + now.getMinutes() * 60000 + now.getSeconds() * 1000);
-  const weekResetStr = _fmtResetDate(msToMon);
-
-  // Context block (only when session active)
-  const ctxBlock = sid ? `
-    <div class="stat-block">
-      <div class="stat-block-title">Поточна сесія</div>
-      ${barRow(pCtx)}
-      <div class="stat-reset">~${(ctxTok/1000).toFixed(1)}k / ${(CTX_MAX/1000).toFixed(0)}k токенів · Скидається при новому чаті</div>
-    </div>` : `
-    <div class="stat-block">
-      <div class="stat-block-title">Поточна сесія</div>
-      <div class="stat-reset" style="margin-top:4px">Відкрийте чат, щоб побачити завантаження контексту</div>
-    </div>`;
-
-  const agentsBlock = agents.length ? `
-    <div class="stat-agents">
-      <div class="stat-agents-title">${t('agents.title')} (${agents.length})</div>
-      ${agents.map(a => `<span class="agent-chip"><span class="dot"></span>${escH(a)}</span>`).join('')}
-    </div>` : '';
-
-  $i('proactiveList').innerHTML = `
-    ${ctxBlock}
-    <div class="stat-block">
-      <div class="stat-block-title">Поточний день</div>
-      ${barRow(pDay)}
-      <div class="stat-reset">Скидається ${dayResetStr}</div>
-    </div>
-    <div class="stat-block">
-      <div class="stat-block-title">Поточний тиждень (всі моделі)</div>
-      ${barRow(pWeek)}
-      <div class="stat-reset">Скидається ${weekResetStr}</div>
-    </div>
-    ${agentsBlock}
-    <div class="stat-refresh" onclick="loadStats()">↻ оновити</div>
-  `;
-
-  const badge = $i('proactiveCount');
-  if (badge) badge.textContent = agents.length > 0 ? String(agents.length) : '';
-}
+function loadStats() { /* removed */ }
 
 // ─── Session History ──────────────────────────────────────────────────────
 async function loadHist() {
@@ -2211,8 +2112,7 @@ async function loadSess(id) {
 
     userScrolled = false;
     scrollBottom();
-    loadStats();
-
+  
     if (ws && ws.readyState === 1) {
       ws.send(JSON.stringify({ type: 'start_session', sessionId: id, mode: curMode, agentMode: curAgent, model: curModel, engine: 'cli'}));
     }
@@ -2492,6 +2392,14 @@ function renderProjects() {
   el.innerHTML = '';
   $i('projCount').textContent = projects.length || '';
 
+  // Update active project label in header
+  const activeProjLabel = $i('activeProjLabel');
+  if (activeProjLabel) {
+    const activeProj = curProjectId ? projects.find(p => p.id === curProjectId) : null;
+    if (activeProj) { activeProjLabel.textContent = activeProj.name; activeProjLabel.style.display = 'inline-block'; }
+    else { activeProjLabel.textContent = ''; activeProjLabel.style.display = 'none'; }
+  }
+
   if (!projects.length) {
     el.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5">Немає проектів. Додайте директорію для роботи з Claude Code.</div>';
     return;
@@ -2665,6 +2573,7 @@ async function selectDir() {
   await loadProjectsList();
   if (d.id) switchProject(d.id);
   closeDirModal();
+  if (_onProjectCreated) { const cb = _onProjectCreated; _onProjectCreated = null; cb(); }
 }
 
 function closeDirModal() {
@@ -2681,7 +2590,7 @@ function saveUIState() {
       activeSkills: [...activeSkills],
       curWorkdir, curProjectId,
       panels: { left: c('leftPanel'), right: c('rightPanel') },
-      sections: { proactive: c('proactiveBody'), hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), proj: c('projBody') },
+      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), proj: c('projBody') },
       openTabs: openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
       activeTabId: openTabs.find(t => t.id === activeTabId && !t.isNew) ? activeTabId : null,
     }));
@@ -2706,7 +2615,7 @@ function restoreUIState() {
       setPanel('rightPanel', s.panels.right);
     }
     if (s.sections) {
-      const secs = { proactive: 'proactiveBody', hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', proj: 'projBody' };
+      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', proj: 'projBody' };
       for (const [k, elId] of Object.entries(secs)) {
         const el = $i(elId); if (el) el.classList.toggle('collapsed', !!s.sections[k]);
       }
@@ -2725,8 +2634,6 @@ renderTabs();
 loadCfg();
 loadProjectsList();
 connect();
-loadStats();
-_statsTimer = setInterval(loadStats, 30000);
 </script>
 </body>
 </html>
