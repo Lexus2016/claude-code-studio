@@ -1559,9 +1559,14 @@ function connect() {
     setStatus(t('status.connected'), 'ok');
     loadFiles();
     loadHist();
-    // Re-attach to active session after a reconnect
-    if (currentSessionId && ws.readyState === 1) {
+    // On page refresh: currentSessionId is null (restoreUIState doesn't call loadSess),
+    // but activeTabId may point to a real session — load it now so history appears.
+    if (!currentSessionId && activeTabId && openTabs.find(t => t.id === activeTabId && !t.isNew)) {
+      loadSess(activeTabId); // loadSess sets currentSessionId and sends start_session at the end
+    } else if (currentSessionId && ws.readyState === 1) {
+      // Re-attach to active session after a reconnect
       ws.send(JSON.stringify({ type: 'start_session', sessionId: currentSessionId, mode: curMode, agentMode: curAgent, model: curModel, engine: 'cli'}));
+      ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: currentSessionId }));
     }
     // Resume generating tabs across ALL projects (not just current)
     const allTabArrays = [openTabs, ...Object.entries(projectTabs).filter(([pid]) => pid !== curProjectId).map(([,tabs]) => tabs)];
@@ -1608,6 +1613,16 @@ function handleWsMsg(d) {
   const isVisible = isCurrent && tabId === activeTabId;
 
   switch (d.type) {
+    case 'task_started':
+      if (isVisible) {
+        rmW();
+        setStatus('⚙ ' + (d.title || 'Task') + '…', 'warn');
+        sbShow('⚙ ' + (d.title || 'Task') + '…');
+        if (!curEl) { curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
+      }
+      if (found?.tab) { found.tab.generating = true; renderTabs(); }
+      break;
+
     case 'text':
       if (!isVisible) break;
       rmStatus();
@@ -1645,17 +1660,23 @@ function handleWsMsg(d) {
       if (isVisible) {
         if (curEl && curTxt) { curEl.querySelector('.msg').innerHTML = renderMd(curTxt); }
         markDone(curEl);
-        if (activeTabId === generatingTabId) {
-          const first = [...msgsEl.querySelectorAll('.mw.user')].find(m => !m.querySelector('.msg-ack'));
-          if (first) { const a = document.createElement('div'); a.className = 'msg-ack'; a.textContent = '✓'; first.appendChild(a); }
-        }
         curEl = null; curTxt = '';
-        isGen = false;
-        setSendStop(false);
-        setStatus(t('status.connected'), 'ok');
+        if (d.taskId) {
+          // Task worker done — hide status bar, don't touch user chat state
+          sbHide();
+          setStatus(t('status.connected'), 'ok');
+        } else {
+          if (activeTabId === generatingTabId) {
+            const first = [...msgsEl.querySelectorAll('.mw.user')].find(m => !m.querySelector('.msg-ack'));
+            if (first) { const a = document.createElement('div'); a.className = 'msg-ack'; a.textContent = '✓'; first.appendChild(a); }
+          }
+          isGen = false;
+          setSendStop(false);
+          setStatus(t('status.connected'), 'ok');
+        }
       }
       if (found?.tab) { found.tab.generating = false; found.tab.done = true; }
-      if (isCurrent) { renderTabs(); if (tabId === activeTabId) generatingTabId = null; }
+      if (isCurrent) { renderTabs(); if (tabId === activeTabId && !d.taskId) generatingTabId = null; }
       else renderProjects(); // background: remove busy dot from project
       loadHist();
       if (tabId === activeTabId) updateSessBar();
@@ -2058,6 +2079,8 @@ async function updateSessBar() {
   const bar = $i('sessBar');
   if (!bar) return;
   if (!activeTabId) { bar.style.display = 'none'; return; }
+  const _tab = openTabs.find(t => t.id === activeTabId);
+  if (!_tab || _tab.isNew) { bar.style.display = 'none'; return; }
   try {
     const resp = await fetch(`/api/sessions/${activeTabId}`);
     if (!resp.ok) { bar.style.display = 'none'; return; }
@@ -2167,7 +2190,7 @@ function newTab() {
   inEl.value = '';
   inEl.style.height = 'auto';
   msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();
-  userScrolled = false; renderTabs(); saveUIState();
+  userScrolled = false; renderTabs(); saveUIState(); updateSessBar();
 }
 
 function toggle(id) {
@@ -2779,6 +2802,7 @@ async function loadSess(id) {
   
     if (ws && ws.readyState === 1) {
       ws.send(JSON.stringify({ type: 'start_session', sessionId: id, mode: curMode, agentMode: curAgent, model: curModel, engine: 'cli'}));
+      ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: id }));
     }
     loadHist();
   } catch (e) { console.error('loadSess:', e); toast(t('sess.load.err'), true); }
@@ -3491,9 +3515,13 @@ async function delProject(id) {
   await fetch(`/api/projects/${id}`, { method: 'DELETE' });
   if (curProjectId === id) {
     curProjectId = null; curWorkdir = null;
-    applyProjTabs(loadProjTabs(null));
+    openTabs = []; activeTabId = null; currentSessionId = null;
+    msgsEl.innerHTML = ''; showW(); renderTabs();
     loadHist();
   }
+  // Clean up in-memory state for deleted project
+  delete projectTabs[id];
+  delete projectActiveTab[id];
   projects = projects.filter(x => x.id !== id);
   try { localStorage.removeItem(PROJ_TABS_KEY(id)); } catch {}
   renderProjects(); saveUIState();

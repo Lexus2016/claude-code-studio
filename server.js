@@ -228,6 +228,19 @@ function genId() { return Date.now().toString(36) + Math.random().toString(36).s
 const activeTasks = new Map();
 const TASK_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // abort orphaned tasks after 30 min
 
+// ─── Session Watchers (real-time task worker → chat streaming) ────────────
+// When chat client opens a session, it subscribes via WS. Task worker broadcasts
+// text/tool/done events to all watchers of that session.
+const sessionWatchers = new Map(); // sessionId → Set<WebSocket>
+function broadcastToSession(sessionId, data) {
+  const watchers = sessionWatchers.get(sessionId);
+  if (!watchers?.size) return;
+  const msg = JSON.stringify(data);
+  for (const w of watchers) {
+    if (w.readyState === 1) { try { w.send(msg); } catch {} }
+  }
+}
+
 // ─── Kanban Task Queue Worker ─────────────────────────────────────────────
 const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '5', 10));
 const taskRunning = new Set(); // task IDs currently executing
@@ -258,15 +271,24 @@ async function startTask(task) {
     const claudeSessionId = session?.claude_session_id || null;
     const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
     let fullText = '', newCid = claudeSessionId, hasError = false;
+    // Notify watchers that task started
+    broadcastToSession(sessionId, { type: 'task_started', taskId: task.id, title: task.title, tabId: sessionId });
     await new Promise(resolve => {
       cli.send({ prompt, sessionId: claudeSessionId, model: 'sonnet', maxTurns: 50 })
-        .onText(t => { fullText += t; })
-        .onTool((name, inp) => { stmts.addMsg.run(sessionId, 'assistant', 'tool', inp || '', name, null, null); })
+        .onText(t => {
+          fullText += t;
+          broadcastToSession(sessionId, { type: 'text', text: t, tabId: sessionId });
+        })
+        .onTool((name, inp) => {
+          stmts.addMsg.run(sessionId, 'assistant', 'tool', inp || '', name, null, null);
+          broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
+        })
         .onSessionId(sid => { newCid = sid; })
         .onError(err => {
           hasError = true;
           console.error(`[taskWorker] task ${task.id} error:`, err);
           stmts.addMsg.run(sessionId, 'assistant', 'text', `❌ ${err.substring(0, 500)}`, null, null, null);
+          broadcastToSession(sessionId, { type: 'error', error: err.substring(0, 500), tabId: sessionId });
         })
         .onDone(() => {
           if (newCid) stmts.updateClaudeId.run(newCid, sessionId);
@@ -274,6 +296,7 @@ async function startTask(task) {
           db.prepare(`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`)
             .run(hasError ? 'cancelled' : 'done', task.id);
           console.log(`[taskWorker] task ${task.id}: ${hasError ? 'cancelled' : 'done'}`);
+          broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id });
           resolve();
         });
     });
@@ -670,10 +693,10 @@ app.post('/api/sessions/:id/open-terminal', (req, res) => {
   const safeSid = session.claude_session_id.replace(/[^a-zA-Z0-9-]/g, '');
   if (!safeSid) return res.status(400).json({ error: 'Invalid session ID' });
   try {
-    execSync(`osascript -e 'tell application "Terminal" to activate' -e 'tell application "Terminal" to do script "claude --resume ${safeSid}"'`);
+    execSync(`osascript -e 'tell application "Terminal" to activate' -e 'tell application "Terminal" to do script "unset CLAUDECODE; claude --resume ${safeSid}"'`);
     res.json({ ok: true });
   } catch {
-    res.json({ ok: false, command: `claude --resume ${safeSid}` });
+    res.json({ ok: false, command: `unset CLAUDECODE; claude --resume ${safeSid}` });
   }
 });
 
@@ -1308,6 +1331,17 @@ wss.on('connection', (ws) => {
       // Just clear legacy state if no tabId involved
     }
 
+    if (msg.type === 'subscribe_session') {
+      const { sessionId } = msg;
+      if (sessionId) {
+        // Remove ws from any previous session watcher sets
+        for (const [sid, set] of sessionWatchers) { set.delete(ws); if (!set.size) sessionWatchers.delete(sid); }
+        if (!sessionWatchers.has(sessionId)) sessionWatchers.set(sessionId, new Set());
+        sessionWatchers.get(sessionId).add(ws);
+      }
+      return;
+    }
+
     if (msg.type === 'resume_task') {
       const { sessionId, tabId } = msg;
       const task = activeTasks.get(sessionId);
@@ -1333,6 +1367,8 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     log.info('ws disconnected', { clients: wss.clients.size - 1 });
     ws._queue = [];
+    // Clean up session watchers
+    for (const [sid, set] of sessionWatchers) { set.delete(ws); if (!set.size) sessionWatchers.delete(sid); }
     // Detach from active task proxies — tasks keep running in background
     for (const [sid, task] of activeTasks) {
       if (task.proxy._ws === ws) {
