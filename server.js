@@ -144,6 +144,17 @@ db.exec(`
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_msg_session ON messages(session_id);
+  CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT 'Нова задача',
+    description TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'backlog',
+    sort_order REAL DEFAULT 0,
+    session_id TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
+  );
 `);
 // Safe migration for existing databases
 try { db.exec(`ALTER TABLE sessions ADD COLUMN workdir TEXT`); } catch {}
@@ -166,6 +177,19 @@ const stmts = {
   setLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=? WHERE id=?`),
   clearLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=NULL WHERE id=?`),
   getInterrupted: db.prepare(`SELECT id, title, last_user_msg FROM sessions WHERE last_user_msg IS NOT NULL`),
+  // Tasks (Kanban)
+  getTasks: db.prepare(`
+    SELECT t.*, s.title as sess_title, s.claude_session_id, s.model as sess_model,
+           s.updated_at as sess_updated_at
+    FROM tasks t LEFT JOIN sessions s ON t.session_id = s.id
+    ORDER BY t.sort_order ASC, t.created_at ASC
+  `),
+  getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,status,sort_order) VALUES (?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,status=?,sort_order=?,session_id=?,updated_at=datetime('now') WHERE id=?`),
+  patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
+  deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
+  getTasksEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM tasks`),
   // Stats queries
   activeAgents: db.prepare(`
     SELECT DISTINCT agent_id
@@ -488,6 +512,39 @@ app.post('/api/auth/change-password', async (req,res) => {
 
 app.get('/setup', (_,res) => { if(auth.isSetupDone()) return res.redirect('/'); res.sendFile(path.join(__dirname,'public','auth.html')); });
 app.get('/login', (_,res) => { if(!auth.isSetupDone()) return res.redirect('/setup'); res.sendFile(path.join(__dirname,'public','auth.html')); });
+app.get('/kanban', (_,res) => res.sendFile(path.join(__dirname,'public','kanban.html')));
+
+// ─── Tasks (Kanban) ───────────────────────────────────────────────────────
+app.get('/api/tasks', (req, res) => {
+  const rows = stmts.getTasks.all();
+  // Annotate with live "generating" status from activeTasks
+  const result = rows.map(t => ({
+    ...t,
+    is_active: t.session_id ? activeTasks.has(t.session_id) : false,
+  }));
+  res.json(result);
+});
+app.get('/api/tasks/etag', (req, res) => { res.json(stmts.getTasksEtag.get()); });
+app.post('/api/tasks', (req, res) => {
+  const { title='Нова задача', description='', status='backlog', sort_order=0 } = req.body;
+  const id = genId();
+  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), status, sort_order);
+  res.json(stmts.getTask.get(id));
+});
+app.put('/api/tasks/:id', (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  const { title=task.title, description=task.description, status=task.status,
+          sort_order=task.sort_order, session_id=task.session_id } = req.body;
+  stmts.updateTask.run(
+    String(title).substring(0,200), String(description).substring(0,2000),
+    status, sort_order, session_id || null, req.params.id
+  );
+  res.json(stmts.getTask.get(req.params.id));
+});
+app.delete('/api/tasks/:id', (req, res) => {
+  stmts.deleteTask.run(req.params.id); res.json({ ok: true });
+});
 
 // Sessions
 app.get('/api/sessions', (req,res) => {
