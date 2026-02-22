@@ -86,10 +86,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 #versionBadge { font-size: 10px; color: var(--muted); cursor: default; letter-spacing: .3px; }
 #versionBadge.update { color: var(--orange); cursor: pointer; text-decoration: underline dotted; }
 
-/* ─── File browser download button ─── */
-.fii .fdl { opacity: 0; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 11px; padding: 1px 4px; border-radius: 3px; transition: opacity .1s, color .1s; flex-shrink: 0; }
-.fii:hover .fdl { opacity: .7; }
+/* ─── File browser action buttons ─── */
+.fii .fdl, .fii .fpe { opacity: 0; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 1px 4px; border-radius: 3px; transition: opacity .1s, color .1s; flex-shrink: 0; line-height: 1; }
+.fii:hover .fdl, .fii:hover .fpe { opacity: .7; }
 .fii .fdl:hover { color: var(--accent2); opacity: 1 !important; }
+.fii .fpe:hover { color: var(--green); opacity: 1 !important; }
+
+/* ─── Skill categories ─── */
+.sk-cat { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); padding: 10px 10px 4px; opacity: .7; }
+.sk-cat:first-child { padding-top: 2px; }
 
 /* ─── Toggle items ─── */
 .ci { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r); cursor: pointer; font-size: 13px; transition: background .12s; border: 1px solid transparent; }
@@ -402,8 +407,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .fii .fi { width: 17px; text-align: center; font-size: 14px; flex-shrink: 0; }
 .fii .fn { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fii .fs { font-size: 10.5px; color: var(--muted); }
-.fp { border-top: 1px solid var(--border); max-height: 45%; overflow-y: auto; padding: 12px; font-family: 'SF Mono', monospace; font-size: 12px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; background: var(--bg); }
-.fp .fpn { color: var(--accent2); font-size: 11px; font-weight: 700; margin-bottom: 7px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+/* ─── File Preview Modal ─── */
+.fpv-modal { width: 880px; max-width: 95vw; max-height: 90vh; }
+.fpv-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--s2); flex-shrink: 0; }
+.fpv-toolbar .fpv-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fpv-toolbar .fpv-ext { font-size: 10px; color: var(--muted); background: var(--s3); border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; }
+.fpv-body { flex: 1; overflow: auto; display: flex; flex-direction: column; min-height: 0; }
+.fpv-body img { max-width: 100%; max-height: 70vh; object-fit: contain; margin: auto; display: block; padding: 16px; }
+.fpv-body iframe { width: 100%; flex: 1; border: none; min-height: 500px; }
+.fpv-body .fpv-text { padding: 16px; font-family: 'SF Mono', monospace; font-size: 12px; line-height: 1.7; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.fpv-body .fpv-md { padding: 16px 20px; line-height: 1.7; }
+.fpv-body .fpv-binary { padding: 32px; text-align: center; color: var(--muted); font-size: 14px; }
+.fpv-btn { background: var(--s2); border: 1px solid var(--border); color: var(--muted); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 5px; transition: all .15s; flex-shrink: 0; }
+.fpv-btn:hover { color: var(--text); border-color: var(--accent2); }
 
 /* ─── Modal ─── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; animation: fadeUp .15s; backdrop-filter: blur(3px); }
@@ -689,6 +705,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
       <button class="hb" onclick="newSession()" data-tip="Нова сесія" data-i18n-tip="tip.new"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> <span data-i18n="btn.new">Нова</span></button>
       <button class="hb" onclick="openCfgEditor()" data-tip="Налаштування" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
 
+      <a class="hb" href="https://github.com/Lexus2016/claude-code-chat" target="_blank" rel="noopener" data-tip="GitHub" style="text-decoration:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg></a>
       <button class="hb" onclick="logout()" data-tip="Вийти" data-i18n-tip="tip.logout"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
   </div>
@@ -795,7 +812,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
     <button onclick="loadFiles()" data-i18n-title="files.refresh" title="Оновити">↻</button>
   </div>
   <div class="ft" id="filesTree"></div>
-  <div class="fp" id="filePreview" style="display:none"></div>
 </div>
 
 <!-- Config Modal -->
@@ -817,6 +833,29 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
         <button class="bp" onclick="saveCfg()" data-i18n="cfg.save">Зберегти</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- File Preview Modal -->
+<div class="modal-overlay hidden" id="filePreviewModal" onclick="if(event.target===this)closeFpv()">
+  <div class="modal fpv-modal">
+    <div class="modal-hdr">
+      <h2 id="fpvTitle" style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:600px"></h2>
+      <button class="modal-close" onclick="closeFpv()">✕</button>
+    </div>
+    <div class="fpv-toolbar">
+      <span class="fpv-name" id="fpvName"></span>
+      <span class="fpv-ext" id="fpvExt"></span>
+      <button class="fpv-btn" onclick="fpvDownload()" title="Завантажити файл">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Завантажити
+      </button>
+      <button class="fpv-btn" onclick="fpvShare()" id="fpvShareBtn" title="Поділитись / Скопіювати посилання">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Поділитись
+      </button>
+    </div>
+    <div class="fpv-body" id="fpvBody"></div>
   </div>
 </div>
 
@@ -2225,25 +2264,65 @@ async function addMcp() {
   toast('✓ MCP сервер додано');
 }
 
+const SKILL_CATS = {
+  engineering: { en: '⚙️ Engineering', uk: '⚙️ Розробка', ru: '⚙️ Разработка' },
+  ai:          { en: '🧠 AI & Prompts', uk: '🧠 AI та промпти', ru: '🧠 AI и промпты' },
+  quality:     { en: '💎 Code Quality', uk: '💎 Якість коду', ru: '💎 Качество кода' },
+  security:    { en: '🔒 Security', uk: '🔒 Безпека', ru: '🔒 Безопасность' },
+  design:      { en: '🎨 Design', uk: '🎨 Дизайн', ru: '🎨 Дизайн' },
+  product:     { en: '📋 Product', uk: '📋 Продукт', ru: '📋 Продукт' },
+};
+
 function renderSkills() {
   const el = $i('skillsList'); el.innerHTML = '';
   let c = 0;
+  const lang = localStorage.getItem('lang') || 'uk';
+
+  // Group skills by category
+  const grouped = {};
+  const uncategorized = [];
   for (const [id, s] of Object.entries(config.skills || {})) {
-    const on = activeSkills.has(id);
-    if (on) c++;
-    const div = document.createElement('div');
-    div.className = `ci ${on ? 'on' : ''}`;
-    div.title = on ? 'Клік — вимкнути skill' : 'Клік — додати skill до системного промпту';
-    div.onclick = () => tSkill(id);
-    div.innerHTML = `
-      ${mkToggle(on)}
-      <div class="inf">
-        <div class="nm">${escH(s.label || id)}</div>
-        <div class="ds">${escH(s.description || '')}</div>
-        <div class="st">${on ? t('skill.active') : t('skill.inactive')}</div>
-      </div>
-      ${s.custom ? `<button class="rm" onclick="event.stopPropagation();rSkill('${id}')" title="${t('skill.del.title')}">✕</button>` : ''}`;
-    el.appendChild(div);
+    const cat = s.category || '__custom__';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push([id, s]);
+  }
+
+  // Render in defined category order, then custom
+  const catOrder = Object.keys(SKILL_CATS);
+  const toRender = [
+    ...catOrder.filter(k => grouped[k]),
+    ...(grouped['__custom__'] ? ['__custom__'] : [])
+  ];
+
+  for (const catId of toRender) {
+    const items = grouped[catId];
+    if (!items?.length) continue;
+
+    // Category header
+    const catMeta = SKILL_CATS[catId];
+    const catLabel = catMeta ? (catMeta[lang] || catMeta.en) : '🔧 Custom';
+    const catDiv = document.createElement('div');
+    catDiv.className = 'sk-cat';
+    catDiv.textContent = catLabel;
+    el.appendChild(catDiv);
+
+    for (const [id, s] of items) {
+      const on = activeSkills.has(id);
+      if (on) c++;
+      const div = document.createElement('div');
+      div.className = `ci ${on ? 'on' : ''}`;
+      div.title = on ? 'Клік — вимкнути skill' : 'Клік — додати skill до системного промпту';
+      div.onclick = () => tSkill(id);
+      div.innerHTML = `
+        ${mkToggle(on)}
+        <div class="inf">
+          <div class="nm">${escH(s.label || id)}</div>
+          <div class="ds">${escH(s.description || '')}</div>
+          <div class="st">${on ? t('skill.active') : t('skill.inactive')}</div>
+        </div>
+        ${s.custom ? `<button class="rm" onclick="event.stopPropagation();rSkill('${id}')" title="${t('skill.del.title')}">✕</button>` : ''}`;
+      el.appendChild(div);
+    }
   }
   $i('skillsCount').textContent = c || '';
 }
@@ -2382,9 +2461,9 @@ async function loadFiles(dir = '') {
     for (const it of items) {
       const el = document.createElement('div');
       el.className = 'fii';
-      const dlBtn = it.type === 'file' ? `<button class="fdl" onclick="event.stopPropagation();downloadFile('${escH(it.path)}')" title="Завантажити">⬇</button>` : '';
-      el.innerHTML = `<span class="fi">${it.type === 'dir' ? '<span style="color:var(--accent2);font-size:13px">▸</span>' : fileIcon(it.name)}</span><span class="fn">${escH(it.name)}</span><span class="fs">${it.size ? fmtSize(it.size) : ''}</span>${dlBtn}`;
-      el.onclick = it.type === 'dir' ? () => loadFiles(it.path) : () => previewFile(it.path);
+      const fileBtns = it.type === 'file' ? `<button class="fpe" onclick="event.stopPropagation();openFilePreview('${escH(it.path)}','${escH(it.name)}')" title="Переглянути">👁</button><button class="fdl" onclick="event.stopPropagation();downloadFile('${escH(it.path)}')" title="Завантажити">⬇</button>` : '';
+      el.innerHTML = `<span class="fi">${it.type === 'dir' ? '<span style="color:var(--accent2);font-size:13px">▸</span>' : fileIcon(it.name)}</span><span class="fn">${escH(it.name)}</span><span class="fs">${it.size ? fmtSize(it.size) : ''}</span>${fileBtns}`;
+      el.onclick = it.type === 'dir' ? () => loadFiles(it.path) : () => openFilePreview(it.path, it.name);
       t.appendChild(el);
     }
 
@@ -2392,14 +2471,79 @@ async function loadFiles(dir = '') {
   } catch {}
 }
 
-async function previewFile(fp) {
+let _fpvPath = '', _fpvName = '';
+
+function closeFpv() {
+  $i('filePreviewModal').classList.add('hidden');
+  $i('fpvBody').innerHTML = '';
+  _fpvPath = ''; _fpvName = '';
+}
+
+async function openFilePreview(relPath, name) {
+  _fpvPath = relPath;
+  _fpvName = name || relPath.split('/').pop();
+  const ext = (_fpvName.lastIndexOf('.') > 0 ? _fpvName.slice(_fpvName.lastIndexOf('.')).toLowerCase() : '');
+  $i('fpvTitle').textContent = _fpvName;
+  $i('fpvName').textContent = _fpvName;
+  $i('fpvExt').textContent = ext || 'file';
+  const body = $i('fpvBody');
+  body.innerHTML = `<div class="fpv-text" style="color:var(--muted)">Завантаження...</div>`;
+  $i('filePreviewModal').classList.remove('hidden');
+
+  const rawUrl = `/api/files/raw?${_filesQS(relPath)}`;
+  const imgExts = ['.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp','.ico','.tiff'];
+  const pdfExts = ['.pdf'];
+  const mdExts  = ['.md','.mdx'];
+  const textExts= ['.js','.ts','.jsx','.tsx','.mjs','.cjs','.py','.rb','.go','.rs','.php',
+                   '.java','.kt','.swift','.cs','.cpp','.c','.h','.html','.css','.scss',
+                   '.json','.yaml','.yml','.toml','.ini','.cfg','.env','.txt','.sh','.bash',
+                   '.zsh','.sql','.graphql','.xml','.vue','.svelte','.log','.pine','.lock'];
+
+  if (imgExts.includes(ext)) {
+    body.innerHTML = `<img src="${escH(rawUrl)}" alt="${escH(_fpvName)}" onerror="this.alt='Помилка завантаження зображення'">`;
+    return;
+  }
+  if (pdfExts.includes(ext)) {
+    body.innerHTML = `<iframe src="${escH(rawUrl)}" title="${escH(_fpvName)}"></iframe>`;
+    return;
+  }
+  // md and text: fetch content
   try {
-    const r = await fetch(`/api/files?${_filesQS(fp)}`);
+    const r = await fetch(`/api/files?${_filesQS(relPath)}`);
     const d = await r.json();
-    const p = $i('filePreview');
-    p.style.display = 'block';
-    p.innerHTML = `<div class="fpn">${escH(d.name || fp)}<button onclick="downloadFile('${escH(fp)}')" title="Завантажити файл" style="float:right;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;border-radius:4px;padding:1px 7px;font-size:11px">⬇ скачати</button></div><pre style="margin:0;white-space:pre-wrap">${escH(d.content || '')}</pre>`;
-  } catch {}
+    if (d.content === '[Binary]' || (!d.content && !textExts.includes(ext) && !mdExts.includes(ext))) {
+      body.innerHTML = `<div class="fpv-binary"><div style="font-size:40px;margin-bottom:12px">📦</div><div>Бінарний файл — перегляд недоступний</div><br><button class="fpv-btn" style="margin:auto" onclick="fpvDownload()">⬇ Завантажити файл</button></div>`;
+      return;
+    }
+    if (mdExts.includes(ext)) {
+      body.innerHTML = `<div class="fpv-md msg">${renderMd(d.content || '')}</div>`;
+    } else {
+      body.innerHTML = `<div class="fpv-text">${escH(d.content || '')}</div>`;
+    }
+  } catch {
+    body.innerHTML = `<div class="fpv-binary">Помилка завантаження файлу</div>`;
+  }
+}
+
+function fpvDownload() {
+  if (_fpvPath) downloadFile(_fpvPath);
+}
+
+async function fpvShare() {
+  if (!_fpvPath) return;
+  const url = location.origin + `/api/files/raw?${_filesQS(_fpvPath)}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: _fpvName, url });
+      return;
+    } catch {}
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('✓ Посилання скопійовано');
+  } catch {
+    prompt('Скопіюйте посилання:', url);
+  }
 }
 
 function downloadFile(relPath) {

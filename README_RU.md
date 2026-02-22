@@ -20,7 +20,6 @@
 | 💎 Модели | Opus 4.6 / Sonnet 4.6 / Haiku 4.5 |
 | 📁 Файловый браузер | Просмотр workspace, превью файлов, прикрепление через `@mention` |
 | 🖼 Vision | Вставка изображений из буфера обмена как vision блоков |
-| 📊 Статистика | Лимиты Claude Max с прогресс-барами |
 | 📋 История | Постоянные сессии в SQLite с возможностью восстановления |
 | ⚙️ Config Editor | Редактирование `config.json`, `CLAUDE.md`, `.env` прямо в UI |
 | 🔒 Auth | bcrypt пароль + 30-дневные сессионные токены |
@@ -28,42 +27,67 @@
 
 ---
 
-## Быстрый старт
+## Установка и запуск
 
-### Требования
+### Способ 1 — Запуск через npx (без установки)
+
+Самый простой способ. Скачивает и запускает последний релиз сразу:
+
+```bash
+npx github:Lexus2016/claude-code-chat
+# Откройте http://localhost:3000
+```
+
+Или установите глобально и запускайте в любое время:
+
+```bash
+npm install -g github:Lexus2016/claude-code-chat
+claude-code-chat
+# Откройте http://localhost:3000
+```
+
+**Как обновить:**
+```bash
+npm install -g github:Lexus2016/claude-code-chat@latest
+```
+
+---
+
+### Способ 2 — git clone (полный контроль)
+
+**Требования:**
 - Node.js 18+
 - [`claude` CLI](https://docs.anthropic.com/en/claude-code) установлен и авторизован (для CLI режима)
-- ИЛИ `ANTHROPIC_API_KEY` (для SDK режима)
-
-### Без Docker (CLI режим — Max подписка)
+- ИЛИ `ANTHROPIC_API_KEY` в `.env` (для SDK режима)
 
 ```bash
 git clone https://github.com/Lexus2016/claude-code-chat.git
 cd claude-code-chat
 npm install
 
-# Убедитесь что claude CLI авторизован
-claude --version
-
+# CLI режим (Max подписка, API ключ не нужен):
+claude --version    # убедитесь что claude CLI авторизован
 node server.js
+
+# SDK режим (нужен API ключ):
+cp .env.example .env
+# Отредактируйте .env → укажите ANTHROPIC_API_KEY=sk-ant-...
+node server.js
+
 # Откройте http://localhost:3000
 # Первый запуск: установите пароль
 ```
 
-### Без Docker (SDK режим — API ключ)
-
+**Как обновить:**
 ```bash
-git clone https://github.com/Lexus2016/claude-code-chat.git
-cd claude-code-chat
+git pull
 npm install
-
-cp .env.example .env
-# Отредактируйте .env → укажите ANTHROPIC_API_KEY=sk-ant-... (нужно для SDK режима)
-
 node server.js
 ```
 
-### С Docker
+---
+
+### Способ 3 — Docker
 
 ```bash
 git clone https://github.com/Lexus2016/claude-code-chat.git
@@ -74,6 +98,13 @@ cp .env.example .env
 
 docker compose up -d --build
 docker compose logs -f claude-chat
+# Откройте http://localhost:3000
+```
+
+**Как обновить:**
+```bash
+git pull
+docker compose up -d --build
 ```
 
 ---
@@ -94,9 +125,6 @@ claude-code-chat/
 │   ├── index.html      # Однофайловый SPA (встроенный CSS + JS)
 │   └── auth.html       # Страница логина / настройки
 ├── skills/             # Skill .md файлы (загружаются в системный промпт)
-│   ├── trading-bot.md
-│   ├── pinescript.md
-│   └── code-review.md
 ├── data/               # Данные рантайма (в .gitignore)
 │   ├── chats.db        # SQLite база данных
 │   ├── auth.json       # bcrypt хеш пароля
@@ -149,16 +177,6 @@ TRUST_PROXY=false         # Установить true за nginx/Caddy
 - WebSocket для двустороннего стриминга
 - SQLite (WAL режим) для сессий и сообщений
 - Мульти-агент: оркестратор генерирует JSON план → параллельное выполнение агентов
-
-### SQLite схема
-
-```sql
-sessions: id, title, created_at, updated_at, claude_session_id,
-          active_mcp, active_skills, mode, agent_mode, model, engine
-
-messages: id, session_id, role, type, content,
-          tool_name, agent_id, created_at
-```
 
 ---
 

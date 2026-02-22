@@ -20,7 +20,6 @@
 | 💎 Models | Opus 4.6 / Sonnet 4.6 / Haiku 4.5 |
 | 📁 File Browser | Browse workspace, preview files, attach via `@mention` |
 | 🖼 Vision | Paste images from clipboard, send as vision blocks |
-| 📊 Stats | Claude Max usage limits with progress bars |
 | 📋 History | Persistent sessions in SQLite, resumable |
 | ⚙️ Config Editor | Edit `config.json`, `CLAUDE.md`, `.env` in the UI |
 | 🔒 Auth | bcrypt password + 30-day session tokens |
@@ -28,59 +27,67 @@
 
 ---
 
-## Quick Start
+## Installation & Running
 
-### Prerequisites
-- Node.js 18+
-- [`claude` CLI](https://docs.anthropic.com/en/claude-code) installed and authenticated (for CLI mode)
-- OR an `ANTHROPIC_API_KEY` (for SDK mode)
+### Method 1 — Run instantly with npx (no install)
 
-### Run latest version instantly (npx)
+The easiest way. Downloads and runs the latest release directly:
 
 ```bash
-# Download & run the latest release — no git clone needed
 npx github:Lexus2016/claude-code-chat
-
 # Open http://localhost:3000
-# Data is stored in the directory where you run the command
 ```
 
-Or install globally:
+Or install globally and run any time:
 
 ```bash
 npm install -g github:Lexus2016/claude-code-chat
-claude-code-chat          # runs on http://localhost:3000
+claude-code-chat
+# Open http://localhost:3000
 ```
 
-### Without Docker (CLI mode — Max subscription)
+**How to update:**
+```bash
+npm install -g github:Lexus2016/claude-code-chat@latest
+```
+
+---
+
+### Method 2 — git clone (full control)
+
+**Prerequisites:**
+- Node.js 18+
+- [`claude` CLI](https://docs.anthropic.com/en/claude-code) installed and authenticated (for CLI mode)
+- OR an `ANTHROPIC_API_KEY` in `.env` (for SDK mode)
 
 ```bash
 git clone https://github.com/Lexus2016/claude-code-chat.git
 cd claude-code-chat
 npm install
 
-# Make sure claude CLI is authenticated
-claude --version
-
+# CLI mode (Max subscription, no API key needed):
+claude --version    # confirm claude CLI is authenticated
 node server.js
+
+# SDK mode (API key required):
+cp .env.example .env
+# Edit .env → set ANTHROPIC_API_KEY=sk-ant-...
+node server.js
+
 # Open http://localhost:3000
 # First launch: create a password
 ```
 
-### Without Docker (SDK mode — API key)
-
+**How to update:**
 ```bash
-git clone https://github.com/Lexus2016/claude-code-chat.git
-cd claude-code-chat
+git pull
 npm install
-
-cp .env.example .env
-# Edit .env → set ANTHROPIC_API_KEY=sk-ant-... (required for SDK mode)
-
 node server.js
 ```
 
-### With Docker
+---
+
+### Method 3 — Docker
 
 ```bash
 git clone https://github.com/Lexus2016/claude-code-chat.git
@@ -91,6 +98,13 @@ cp .env.example .env
 
 docker compose up -d --build
 docker compose logs -f claude-chat
+# Open http://localhost:3000
+```
+
+**How to update:**
+```bash
+git pull
+docker compose up -d --build
 ```
 
 ---
@@ -111,9 +125,6 @@ claude-code-chat/
 │   ├── index.html      # Single-file SPA (embedded CSS + JS)
 │   └── auth.html       # Login / Setup page
 ├── skills/             # Skill .md files (loaded into system prompt)
-│   ├── trading-bot.md
-│   ├── pinescript.md
-│   └── code-review.md
 ├── data/               # Runtime data (gitignored)
 │   ├── chats.db        # SQLite database
 │   ├── auth.json       # bcrypt password hash
@@ -166,16 +177,6 @@ Client (browser) ──WS──► server.js ──► claude-cli.js ──► c
 - WebSocket for bidirectional streaming
 - SQLite (WAL mode) for sessions and messages
 - Multi-agent: orchestrator generates JSON plan → parallel agent execution
-
-### SQLite Schema
-
-```sql
-sessions: id, title, created_at, updated_at, claude_session_id,
-          active_mcp, active_skills, mode, agent_mode, model, engine
-
-messages: id, session_id, role, type, content,
-          tool_name, agent_id, created_at
-```
 
 ---
 
