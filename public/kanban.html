@@ -242,6 +242,7 @@ const TR = {
     'chat.open':'↗ Відкрити в чаті',
     'toast.created':'✓ Задачу створено', 'toast.saved':'✓ Збережено',
     'toast.deleted':'Задачу видалено', 'toast.copied':'✓ ID скопійовано',
+    'toast.sess_created':'✓ Сесію створено автоматично',
     'toast.err':'Помилка: ',
     'msg.you':'Ви', 'msg.tool':'Tool',
     'refresh.now':'щойно',
@@ -265,6 +266,7 @@ const TR = {
     'chat.open':'↗ Open in chat',
     'toast.created':'✓ Task created', 'toast.saved':'✓ Saved',
     'toast.deleted':'Task deleted', 'toast.copied':'✓ ID copied',
+    'toast.sess_created':'✓ Session created automatically',
     'toast.err':'Error: ',
     'msg.you':'You', 'msg.tool':'Tool',
     'refresh.now':'just now',
@@ -288,6 +290,7 @@ const TR = {
     'chat.open':'↗ Открыть в чате',
     'toast.created':'✓ Задача создана', 'toast.saved':'✓ Сохранено',
     'toast.deleted':'Задача удалена', 'toast.copied':'✓ ID скопирован',
+    'toast.sess_created':'✓ Сессия создана автоматически',
     'toast.err':'Ошибка: ',
     'msg.you':'Вы', 'msg.tool':'Tool',
     'refresh.now':'только что',
@@ -556,7 +559,18 @@ function setupDropZone(el){
       sort_order=(lastTk?.sort_order||0)+1000;
     }
     try{
-      await apiFetch(`/api/tasks/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus,sort_order})});
+      const task = tasks.find(tk=>tk.id===id);
+      let session_id = task?.session_id || null;
+      // Auto-create session when moving to In Progress without one
+      if(newStatus==='in_progress' && !session_id){
+        const sessR = await apiFetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({title: task?.title||t('col.todo'), workdir: curWorkdir||null})});
+        const sess = await sessR.json();
+        session_id = sess.id;
+        toast(t('toast.sess_created'));
+      }
+      await apiFetch(`/api/tasks/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({status:newStatus, sort_order, session_id: session_id||undefined})});
       await refresh(true);
     } catch(err){ if(err.message!=='401') toast(t('toast.err')+err.message, true); }
   });

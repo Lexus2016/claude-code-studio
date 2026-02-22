@@ -553,6 +553,12 @@ app.get('/api/sessions', (req,res) => {
   const { workdir } = req.query;
   res.json(workdir ? stmts.getSessionsByWorkdir.all(workdir) : stmts.getSessions.all());
 });
+app.post('/api/sessions', (req, res) => {
+  const { title = 'Нова сесія', workdir = null, model = 'sonnet', engine = 'cli' } = req.body || {};
+  const id = genId();
+  stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', 'auto', 'single', model, engine, workdir || null);
+  res.json(stmts.getSession.get(id));
+});
 app.get('/api/sessions/interrupted', (req, res) => { res.json(stmts.getInterrupted.all()); });
 app.get('/api/sessions/:id', (req,res) => { const s=stmts.getSession.get(req.params.id); if(!s) return res.status(404).json({error:'Not found'}); s.messages=stmts.getMsgs.all(req.params.id); res.json(s); });
 app.put('/api/sessions/:id', (req,res) => { if(req.body.title) stmts.updateTitle.run(req.body.title, req.params.id); res.json({ok:true}); });
