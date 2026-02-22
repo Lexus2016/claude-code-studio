@@ -87,6 +87,34 @@ const DB_PATH = path.join(APP_DIR, 'data', 'chats.db');
 const PROJECTS_FILE = path.join(APP_DIR, 'data', 'projects.json');
 const UPLOADS_DIR   = path.join(APP_DIR, 'data', 'uploads');
 
+// Category map for bundled skills — used when skill is auto-discovered (not in config)
+const BUNDLED_SKILL_META = {
+  'auto-mode':         { label:'🎯 Auto-Skill Mode',           category:'system'      },
+  'backend':           { label:'⚙️ Backend Engineer',           category:'engineering' },
+  'api-designer':      { label:'🔌 API Designer',              category:'engineering' },
+  'frontend':          { label:'🎨 Frontend Engineer',          category:'engineering' },
+  'fullstack':         { label:'🔗 Fullstack Engineer',         category:'engineering' },
+  'devops':            { label:'🐳 DevOps Engineer',            category:'engineering' },
+  'postgres-wizard':   { label:'🗄️ PostgreSQL Wizard',          category:'engineering' },
+  'data-engineer':     { label:'📊 Data Engineer',              category:'engineering' },
+  'llm-architect':     { label:'🧠 LLM Architect',              category:'ai'          },
+  'prompt-engineer':   { label:'✍️ Prompt Engineer',            category:'ai'          },
+  'rag-engineer':      { label:'🔍 RAG Engineer',               category:'ai'          },
+  'code-quality':      { label:'💎 Code Quality',               category:'quality'     },
+  'debugging-master':  { label:'🐛 Debugging Master',           category:'quality'     },
+  'code-review':       { label:'👁️ Code Reviewer',              category:'quality'     },
+  'system-designer':   { label:'🏗️ System Designer',            category:'quality'     },
+  'security':          { label:'🔒 Security Expert',            category:'security'    },
+  'auth-specialist':   { label:'🛡️ Auth Specialist',            category:'security'    },
+  'ui-design':         { label:'🎭 UI Designer',                category:'design'      },
+  'ux-design':         { label:'🧩 UX Designer',                category:'design'      },
+  'product-management':{ label:'📋 Product Manager',            category:'product'     },
+  'docs-engineer':     { label:'📚 Docs Engineer',              category:'product'     },
+  'technical-writer':  { label:'✒️ Technical Writer',           category:'product'     },
+  'investment-banking':{ label:'💼 Investment Banking Analyst', category:'finance'     },
+  'researcher':        { label:'🔬 Deep Researcher',            category:'research'    },
+};
+
 // ─── Global Claude Code directory (priority: global → local) ─────────────────
 const GLOBAL_CLAUDE_DIR  = path.join(os.homedir(), '.claude');
 const GLOBAL_SKILLS_DIR  = path.join(GLOBAL_CLAUDE_DIR, 'skills');
@@ -878,7 +906,10 @@ app.get('/api/config', (_,res) => {
   if (fs.existsSync(SKILLS_DIR)) {
     for (const f of fs.readdirSync(SKILLS_DIR).filter(f => f.endsWith('.md'))) {
       const id = path.parse(f).name;
-      if (!c.skills[id]) c.skills[id] = { label:`📄 ${id}`, description:'Local skill', file:`skills/${f}` };
+      if (!c.skills[id]) {
+        const meta = BUNDLED_SKILL_META[id] || {};
+        c.skills[id] = { label: meta.label || `📄 ${id}`, description:'Local skill', file:`skills/${f}`, ...(meta.category ? { category:meta.category } : {}) };
+      }
     }
   }
   // Auto-discover bundled skills (__dirname/skills/) when running via npx (APP_DIR != __dirname)
@@ -886,7 +917,10 @@ app.get('/api/config', (_,res) => {
   if (BUNDLED_SKILLS_DIR !== SKILLS_DIR && fs.existsSync(BUNDLED_SKILLS_DIR)) {
     for (const f of fs.readdirSync(BUNDLED_SKILLS_DIR).filter(f => f.endsWith('.md'))) {
       const id = path.parse(f).name;
-      if (!c.skills[id]) c.skills[id] = { label:`📄 ${id}`, description:'Bundled skill', file:path.join(BUNDLED_SKILLS_DIR, f) };
+      if (!c.skills[id]) {
+        const meta = BUNDLED_SKILL_META[id] || {};
+        c.skills[id] = { label: meta.label || `📄 ${id}`, description:'Bundled skill', file:path.join(BUNDLED_SKILLS_DIR, f), ...(meta.category ? { category:meta.category } : {}) };
+      }
     }
   }
   for (const[k,s] of Object.entries(c.skills||{})) { try{s.content=fs.readFileSync(resolveSkillFile(s.file),'utf-8')}catch{s.content=''} }
