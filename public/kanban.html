@@ -718,7 +718,7 @@ document.addEventListener('keydown', e=>{
 // ─── Init ─────────────────────────────────────────────────────────────────
 (async()=>{
   await loadProjects();
-  // curWorkdir is set by loadProjects → onProjChange already called refresh(true)
+  await refresh(true);
   startAutoRefresh();
 })();
 </script>
