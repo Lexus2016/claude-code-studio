@@ -64,10 +64,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .panel-tab-left .panel-tab-inner svg { transform: rotate(0deg); }
 /* Left tab: active=visible → chevron left (← to close) */
 .panel-tab-left.active .panel-tab-inner svg { transform: rotate(180deg); }
-/* Right tab (now on LEFT of right panel): collapsed → chevron right (→ to open) */
-.panel-tab-right .panel-tab-inner svg { transform: rotate(0deg); }
-/* Right tab: active=visible → chevron left (← to close) */
-.panel-tab-right.active .panel-tab-inner svg { transform: rotate(180deg); }
+/* Right tab (left of right panel): collapsed → chevron left (← click to open) */
+.panel-tab-right .panel-tab-inner svg { transform: rotate(180deg); }
+/* Right tab: active=visible → chevron right (→ click to close) */
+.panel-tab-right.active .panel-tab-inner svg { transform: rotate(0deg); }
 /* Tooltips for side tabs */
 .panel-tab-left[data-tip]::after { left: calc(100% + 6px); top: 50%; bottom: auto; transform: translateY(-50%); }
 .panel-tab-right[data-tip]::after { left: calc(100% + 6px); right: auto; top: 50%; bottom: auto; transform: translateY(-50%); }
@@ -1579,7 +1579,6 @@ function openTab(id, title) {
 
 function switchTab(id) {
   if (activeTabId === id) return;
-  if (isGen) { toast(t('err.stop.switch'), true); return; }
   activeTabId = id;
   const tab = openTabs.find(t => t.id === id);
   if (tab?.isNew) {
@@ -1593,7 +1592,7 @@ function switchTab(id) {
 }
 
 function closeTab(id) {
-  if (isGen && activeTabId === id) { toast(t('err.stop.close'), true); return; }
+  if (isGen && activeTabId === id) { isGen = false; setSendStop(false); generatingTabId = null; curEl = null; }
   const idx = openTabs.findIndex(t => t.id === id);
   if (idx === -1) return;
   openTabs.splice(idx, 1);
@@ -1613,7 +1612,6 @@ function closeTab(id) {
 
 function newTab() {
   const tempId = 'new-' + Date.now();
-  if (isGen) { toast(t('err.stop.new'), true); return; }
   if (!curProjectId) { _onProjectCreated = () => newTab(); openAddProject(); return; }
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'new_session' }));
   openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true });
