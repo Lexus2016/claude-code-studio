@@ -160,6 +160,7 @@ db.exec(`
 try { db.exec(`ALTER TABLE sessions ADD COLUMN workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN reply_to_id INTEGER REFERENCES messages(id)`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN last_user_msg TEXT`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN workdir TEXT`); } catch {}
 
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
@@ -182,11 +183,12 @@ const stmts = {
     SELECT t.*, s.title as sess_title, s.claude_session_id, s.model as sess_model,
            s.updated_at as sess_updated_at
     FROM tasks t LEFT JOIN sessions s ON t.session_id = s.id
+    WHERE (@w IS NULL OR t.workdir = @w)
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,status,sort_order) VALUES (?,?,?,?,?)`),
-  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,status=?,sort_order=?,session_id=?,updated_at=datetime('now') WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,status,sort_order,workdir) VALUES (?,?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,status=?,sort_order=?,session_id=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   getTasksEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM tasks`),
@@ -516,8 +518,8 @@ app.get('/kanban', (_,res) => res.sendFile(path.join(__dirname,'public','kanban.
 
 // ─── Tasks (Kanban) ───────────────────────────────────────────────────────
 app.get('/api/tasks', (req, res) => {
-  const rows = stmts.getTasks.all();
-  // Annotate with live "generating" status from activeTasks
+  const workdir = req.query.workdir || null;
+  const rows = stmts.getTasks.all({ w: workdir || null });
   const result = rows.map(t => ({
     ...t,
     is_active: t.session_id ? activeTasks.has(t.session_id) : false,
@@ -526,19 +528,19 @@ app.get('/api/tasks', (req, res) => {
 });
 app.get('/api/tasks/etag', (req, res) => { res.json(stmts.getTasksEtag.get()); });
 app.post('/api/tasks', (req, res) => {
-  const { title='Нова задача', description='', status='backlog', sort_order=0 } = req.body;
+  const { title='Нова задача', description='', status='backlog', sort_order=0, workdir=null } = req.body;
   const id = genId();
-  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), status, sort_order);
+  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), status, sort_order, workdir||null);
   res.json(stmts.getTask.get(id));
 });
 app.put('/api/tasks/:id', (req, res) => {
   const task = stmts.getTask.get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Not found' });
   const { title=task.title, description=task.description, status=task.status,
-          sort_order=task.sort_order, session_id=task.session_id } = req.body;
+          sort_order=task.sort_order, session_id=task.session_id, workdir=task.workdir } = req.body;
   stmts.updateTask.run(
     String(title).substring(0,200), String(description).substring(0,2000),
-    status, sort_order, session_id || null, req.params.id
+    status, sort_order, session_id || null, workdir || null, req.params.id
   );
   res.json(stmts.getTask.get(req.params.id));
 });

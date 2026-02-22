@@ -2,152 +2,190 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kanban — Claude Code Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
 <style>
+/* ─── CSS vars identical to main app ─── */
 :root {
-  --bg:#0d0d0d; --s1:#111; --s2:#1a1a1a; --s3:#242424; --s4:#2c2c2c;
-  --border:#2a2a2a; --border2:#333;
-  --text:#e8e8e8; --text-dim:#888; --muted:#555;
-  --accent:#7c6af7; --accent2:rgba(124,106,247,.15);
-  --green:#22c55e; --green2:rgba(34,197,94,.15);
-  --red:#ef4444; --red2:rgba(239,68,68,.12);
-  --warn:#f59e0b; --warn2:rgba(245,158,11,.15);
-  --blue:#3b82f6; --blue2:rgba(59,130,246,.15);
-  --scrollbar:#2a2a2a; --scrollbar-thumb:#3a3a3a;
+  --bg: #090d13; --s1: #111620; --s2: #181e2b; --s3: #1f2637;
+  --border: #2a3347; --text: #dce6f5; --muted: #7a8baa;
+  --accent: #7c6aef; --accent2: #a08df5; --abg: rgba(124,106,239,.13);
+  --green: #3fb950; --orange: #e5a435; --red: #f85149; --blue: #58a6ff;
+  --r: 10px; --r-sm: 6px; --r-md: 10px; --r-lg: 14px;
+  --shadow: 0 4px 24px rgba(0,0,0,.4);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.32);
+  --shadow-xl: 0 24px 64px rgba(0,0,0,.65);
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden}
-body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:14px;display:flex;flex-direction:column}
+*{ margin:0; padding:0; box-sizing:border-box; }
+html,body{ height:100%; overflow:hidden; }
+body{
+  font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:var(--bg); color:var(--text); font-size:14px;
+  display:flex; flex-direction:column; line-height:1.55;
+}
+/* Noise texture (same as main app) */
+body::after{
+  content:''; position:fixed; inset:0; z-index:9998; pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  opacity:0.022;
+}
+:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:3px; }
+button:focus-visible,a:focus-visible{ border-radius:5px; }
+::-webkit-scrollbar{ width:4px; height:4px; }
+::-webkit-scrollbar-track{ background:transparent; }
+::-webkit-scrollbar-thumb{ background:var(--border); border-radius:2px; }
 
-/* Scrollbars */
-::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
+/* ─── Header (same as main app .hdr) ─── */
+.hdr{ display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:var(--s1); border-bottom:1px solid var(--border); flex-shrink:0; }
+.hdr-l{ display:flex; align-items:center; gap:10px; }
+.logo{ font-size:17px; font-weight:800; background:linear-gradient(135deg,var(--accent2),var(--accent)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; letter-spacing:-0.5px; }
+.hdr h1{ font-size:16px; font-weight:700; letter-spacing:-.2px; }
+.hdr-btns{ display:flex; gap:5px; }
+.hb{ background:var(--s2); border:1px solid var(--border); color:var(--muted); padding:5px 11px; border-radius:7px; cursor:pointer; font-size:13px; transition:all .15s; font-weight:500; font-family:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+.hb:hover{ color:var(--text); border-color:var(--accent2); background:var(--s3); }
+.hb.active{ color:var(--accent2); border-color:var(--accent); background:var(--abg); }
+.hb:active{ transform:scale(0.95); transition-duration:0.07s; }
 
-/* ── Header ── */
-.hdr{display:flex;align-items:center;gap:12px;padding:9px 20px;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;min-height:48px}
-.hdr-logo{font-weight:700;font-size:15px;color:var(--text);text-decoration:none;letter-spacing:-.3px}
-.hdr-sep{color:var(--muted);font-size:13px}
-.hdr-title{font-size:14px;font-weight:600;color:var(--text)}
-.hdr-sp{flex:1}
-.refresh-ts{font-size:11px;color:var(--muted)}
-.spinning{display:inline-block;width:12px;height:12px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
-@keyframes spin{to{transform:rotate(360deg)}}
+/* ─── Project selector strip ─── */
+.proj-bar{ display:flex; align-items:center; gap:10px; padding:7px 16px; background:var(--s1); border-bottom:1px solid var(--border); flex-shrink:0; }
+.proj-label{ font-size:11.5px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.6px; white-space:nowrap; }
+.proj-sel{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-sm); color:var(--text); font-size:13px; padding:4px 10px; cursor:pointer; font-family:inherit; max-width:280px; }
+.proj-sel:focus{ outline:none; border-color:var(--accent); }
+.refresh-ts{ font-size:11px; color:var(--muted); margin-left:auto; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+.spinning{ display:inline-block; width:12px; height:12px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; }
+
+/* ─── Board ─── */
+.board{ display:flex; gap:12px; padding:14px 16px 20px; overflow-x:auto; flex:1; align-items:flex-start; }
+
+/* ─── Column ─── */
+.col{ flex-shrink:0; width:268px; display:flex; flex-direction:column; max-height:100%; }
+.col-head{ display:flex; align-items:center; gap:8px; padding:8px 10px; margin-bottom:8px; border-radius:var(--r-md); background:var(--s2); border:1px solid var(--border); }
+.col-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.col-title{ font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.6px; flex:1; color:var(--muted); }
+.col-cnt{ background:var(--s3); color:var(--muted); font-size:11px; padding:1px 7px; border-radius:10px; font-weight:600; }
+
+.col-body{ display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; padding:2px; min-height:80px; border-radius:var(--r-md); transition:background .12s; }
+.col-body.dz{ background:var(--abg); outline:2px dashed var(--accent); outline-offset:2px; }
+.col-add{ margin-top:8px; padding:7px; border-radius:var(--r-sm); border:1px dashed var(--border); background:transparent; color:var(--muted); cursor:pointer; font-size:12px; text-align:center; transition:.12s; font-family:inherit; }
+.col-add:hover{ background:var(--s2); color:var(--text); border-color:var(--muted); }
+.col-empty{ text-align:center; padding:24px 10px; color:var(--muted); font-size:12px; border:1px dashed var(--border); border-radius:var(--r-md); user-select:none; }
+
+/* Status colours */
+.dot-backlog{ background:var(--muted); }
+.dot-todo{ background:var(--blue); }
+.dot-in_progress{ background:var(--orange); }
+.dot-done{ background:var(--green); }
+.dot-cancelled{ background:var(--red); }
+
+/* ─── Card ─── */
+.card{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-md); padding:11px 13px; cursor:grab; user-select:none; transition:box-shadow .15s,border-color .15s,transform .1s; }
+.card:hover{ border-color:var(--muted); box-shadow:var(--shadow-md); }
+.card.dragging{ opacity:.4; cursor:grabbing; transform:scale(.97); }
+.card-ph{ border:2px dashed var(--accent); border-radius:var(--r-md); background:var(--abg); opacity:.5; }
+.card-title{ font-size:13px; font-weight:600; line-height:1.4; margin-bottom:5px; word-break:break-word; }
+.card-desc{ font-size:12px; color:var(--muted); line-height:1.5; margin-bottom:8px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
+.card-foot{ display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+.badge{ font-size:11px; padding:2px 7px; border-radius:4px; white-space:nowrap; font-weight:500; }
+.badge-muted{ background:var(--s3); color:var(--muted); }
+.badge-accent{ background:var(--abg); color:var(--accent2); border:1px solid rgba(124,106,239,.2); }
+.badge-green{ background:rgba(63,185,80,.12); color:var(--green); border:1px solid rgba(63,185,80,.2); }
+.badge-orange{ background:rgba(229,164,53,.12); color:var(--orange); border:1px solid rgba(229,164,53,.2); }
+.card-time{ font-size:11px; color:var(--muted); margin-left:auto; }
+.card-actions{ display:none; gap:3px; margin-left:auto; }
+.card:hover .card-actions{ display:flex; }
+.card:hover .card-time{ display:none; }
+.cbtn{ background:none; border:none; cursor:pointer; color:var(--muted); padding:2px 5px; border-radius:var(--r-sm); font-size:12px; line-height:1; transition:color .1s,background .1s; }
+.cbtn:hover{ color:var(--text); background:var(--s3); }
+
+/* ─── Modal overlay ─── */
+.ov{ position:fixed; inset:0; background:rgba(0,0,0,.65); display:flex; align-items:center; justify-content:center; z-index:200; padding:16px; backdrop-filter:blur(4px); }
+.ov.hidden{ display:none; }
+.modal{ background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); width:100%; max-width:680px; max-height:92vh; display:flex; flex-direction:column; box-shadow:var(--shadow-xl); }
+.modal-hd{ display:flex; align-items:center; gap:10px; padding:15px 20px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.modal-hd-title{ font-size:15px; font-weight:700; flex:1; }
+.modal-close{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:20px; padding:2px 6px; border-radius:var(--r-sm); line-height:1; transition:color .1s,background .1s; }
+.modal-close:hover{ color:var(--text); background:var(--s2); }
+.modal-body{ padding:20px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:14px; }
+.modal-ft{ padding:12px 20px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; flex-shrink:0; }
+
+/* Form elements */
+.lbl{ font-size:11.5px; color:var(--muted); font-weight:600; margin-bottom:5px; display:block; text-transform:uppercase; letter-spacing:.4px; }
+.inp{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-sm); color:var(--text); font-size:13px; padding:8px 12px; width:100%; font-family:inherit; transition:border-color .15s; }
+.inp:focus{ outline:none; border-color:var(--accent); }
+textarea.inp{ resize:vertical; min-height:80px; }
+.sel{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-sm); color:var(--text); font-size:13px; padding:8px 12px; width:100%; cursor:pointer; font-family:inherit; transition:border-color .15s; }
+.sel:focus{ outline:none; border-color:var(--accent); }
+.grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 
 /* Buttons */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:7px;border:none;cursor:pointer;font-size:13px;font-family:inherit;transition:opacity .1s,background .1s;white-space:nowrap}
-.btn:hover{opacity:.88}
-.btn-primary{background:var(--accent);color:#fff}
-.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text-dim)}
-.btn-ghost:hover{color:var(--text);background:var(--s2);border-color:var(--muted)}
-.btn-danger{background:transparent;border:1px solid var(--red);color:var(--red)}
-.btn-danger:hover{background:var(--red2)}
-.btn-sm{padding:3px 9px;font-size:12px;border-radius:5px}
+.btn{ display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--r-sm); border:none; cursor:pointer; font-size:13px; font-family:inherit; font-weight:600; transition:opacity .12s,background .12s; }
+.btn:hover{ opacity:.88; }
+.btn:active{ transform:scale(.96); transition-duration:.07s; }
+.btn-primary{ background:var(--accent); color:#fff; box-shadow:0 2px 10px rgba(124,106,239,.35); }
+.btn-ghost{ background:transparent; border:1px solid var(--border); color:var(--muted); }
+.btn-ghost:hover{ color:var(--text); background:var(--s2); border-color:var(--muted); }
+.btn-danger{ background:transparent; border:1px solid var(--red); color:var(--red); }
+.btn-danger:hover{ background:rgba(248,81,73,.1); }
+.btn-sm{ padding:4px 10px; font-size:12px; }
 
-/* ── Board ── */
-.board{display:flex;gap:14px;padding:16px 20px 20px;overflow-x:auto;flex:1;align-items:flex-start}
+/* ─── Chat history panel in modal ─── */
+.chat-panel{ border:1px solid var(--border); border-radius:var(--r-md); overflow:hidden; }
+.chat-panel-hd{ padding:8px 14px; background:var(--s2); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+.chat-panel-body{ max-height:280px; overflow-y:auto; }
+.chat-msg{ padding:9px 14px; border-bottom:1px solid var(--border); }
+.chat-msg:last-child{ border-bottom:none; }
+.chat-role{ font-size:10px; font-weight:700; text-transform:uppercase; margin-bottom:3px; letter-spacing:.5px; }
+.chat-role.user{ color:var(--blue); }
+.chat-role.assistant{ color:var(--accent2); }
+.chat-role.tool{ color:var(--orange); }
+.chat-text{ font-size:12px; line-height:1.5; color:var(--text); white-space:pre-wrap; word-break:break-word; max-height:100px; overflow:hidden; }
+.chat-empty{ padding:20px; text-align:center; color:var(--muted); font-size:12px; }
+.sess-info{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-left:auto; }
+.mono-tag{ font-family:monospace; font-size:11px; color:var(--muted); background:var(--s3); padding:2px 7px; border-radius:4px; cursor:pointer; border:1px solid var(--border); transition:border-color .1s; }
+.mono-tag:hover{ border-color:var(--muted); color:var(--text); }
+.open-link{ display:inline-flex; align-items:center; gap:4px; font-size:12px; color:var(--accent2); text-decoration:none; padding:2px 8px; border-radius:4px; border:1px solid rgba(124,106,239,.25); transition:background .1s; }
+.open-link:hover{ background:var(--abg); }
 
-/* ── Column ── */
-.col{flex-shrink:0;width:272px;display:flex;flex-direction:column;max-height:100%}
-.col-head{display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:8px;border-radius:8px;background:var(--s2);border:1px solid var(--border)}
-.col-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.col-title{font-weight:600;font-size:13px;flex:1}
-.col-cnt{background:var(--s3);color:var(--text-dim);font-size:11px;padding:1px 7px;border-radius:10px;min-width:20px;text-align:center}
-.col-body{display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;padding:2px 2px 2px;min-height:80px;border-radius:8px;transition:background .12s,outline .12s}
-.col-body.dz{background:var(--accent2);outline:2px dashed var(--accent);outline-offset:2px}
-.col-add{margin-top:8px;padding:7px;border-radius:7px;border:1px dashed var(--border2);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;text-align:center;transition:.12s;font-family:inherit}
-.col-add:hover{background:var(--s2);color:var(--text);border-color:var(--muted)}
-.col-empty{text-align:center;padding:24px 10px;color:var(--muted);font-size:12px;border:1px dashed var(--border);border-radius:8px;user-select:none}
-
-/* Status dot colours */
-.dot-backlog{background:var(--muted)}
-.dot-todo{background:var(--blue)}
-.dot-in_progress{background:var(--warn)}
-.dot-done{background:var(--green)}
-.dot-cancelled{background:var(--red)}
-
-/* ── Card ── */
-.card{background:var(--s2);border:1px solid var(--border2);border-radius:9px;padding:11px 13px;cursor:grab;user-select:none;transition:box-shadow .15s,border-color .15s,transform .1s}
-.card:hover{border-color:var(--muted);box-shadow:0 3px 14px rgba(0,0,0,.45)}
-.card.dragging{opacity:.45;cursor:grabbing;transform:scale(.97)}
-.card.drag-placeholder{background:rgba(124,106,247,.06);border:2px dashed var(--accent);opacity:.6}
-.card-title{font-size:13px;font-weight:500;line-height:1.45;margin-bottom:5px;word-break:break-word}
-.card-desc{font-size:11.5px;color:var(--text-dim);line-height:1.5;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
-.card-footer{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-.badge{font-size:10.5px;padding:1.5px 6px;border-radius:4px;white-space:nowrap}
-.badge-muted{background:var(--s3);color:var(--text-dim)}
-.badge-accent{background:var(--accent2);color:var(--accent)}
-.badge-green{background:var(--green2);color:var(--green)}
-.badge-warn{background:var(--warn2);color:var(--warn)}
-.card-time{font-size:10px;color:var(--muted);margin-left:auto}
-.card-actions{display:none;gap:3px;margin-left:auto}
-.card:hover .card-actions{display:flex}
-.card-actions .card-time{display:none}
-.card:hover .card-time{display:none}
-.cbtn{background:none;border:none;cursor:pointer;color:var(--muted);padding:2px 5px;border-radius:4px;font-size:12px;line-height:1}
-.cbtn:hover{color:var(--text);background:var(--s3)}
-
-/* ── Modal overlay ── */
-.ov{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
-.ov.hidden{display:none}
-
-/* ── Task modal ── */
-.modal{background:var(--s1);border:1px solid var(--border2);border-radius:13px;width:100%;max-width:700px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.6)}
-.modal-hd{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
-.modal-hd-title{font-size:15px;font-weight:600;flex:1}
-.modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:2px 6px;border-radius:5px;line-height:1}
-.modal-close:hover{color:var(--text);background:var(--s2)}
-.modal-body{padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px}
-.modal-ft{padding:13px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
-
-.lbl{font-size:11.5px;color:var(--text-dim);font-weight:500;margin-bottom:5px;display:block}
-.inp{background:var(--s2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:13px;padding:8px 12px;width:100%;font-family:inherit;transition:border-color .15s}
-.inp:focus{outline:none;border-color:var(--accent)}
-textarea.inp{resize:vertical;min-height:80px}
-.sel{background:var(--s2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:13px;padding:8px 12px;width:100%;cursor:pointer;font-family:inherit}
-.sel:focus{outline:none;border-color:var(--accent)}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-
-/* ── Chat history panel ── */
-.chat-panel{border:1px solid var(--border);border-radius:8px;overflow:hidden}
-.chat-panel-hd{padding:9px 14px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--text-dim)}
-.chat-panel-body{max-height:300px;overflow-y:auto}
-.chat-msg{padding:9px 14px;border-bottom:1px solid var(--border)}
-.chat-msg:last-child{border-bottom:none}
-.chat-role{font-size:10px;font-weight:700;text-transform:uppercase;margin-bottom:3px;letter-spacing:.5px}
-.chat-role.user{color:var(--blue)}
-.chat-role.assistant{color:var(--accent)}
-.chat-role.tool{color:var(--warn)}
-.chat-text{font-size:12px;line-height:1.55;color:var(--text);white-space:pre-wrap;word-break:break-word;max-height:120px;overflow:hidden}
-.chat-text.long::after{content:'';display:block;height:24px;background:linear-gradient(transparent,var(--s1));margin-top:-24px;pointer-events:none}
-.chat-empty{padding:20px;text-align:center;color:var(--muted);font-size:12px}
-.chat-open-link{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--accent);text-decoration:none;padding:3px 8px;border-radius:5px;border:1px solid var(--accent2)}
-.chat-open-link:hover{background:var(--accent2)}
-.sess-info{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.sess-id-mono{font-family:monospace;font-size:11px;color:var(--text-dim);background:var(--s2);padding:2px 7px;border-radius:4px;cursor:pointer;border:1px solid var(--border)}
-.sess-id-mono:hover{border-color:var(--muted);color:var(--text)}
-
-/* ── Toast ── */
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--s3);border:1px solid var(--border2);color:var(--text);padding:9px 18px;border-radius:8px;font-size:13px;z-index:999;pointer-events:none;opacity:0;transition:opacity .2s;white-space:nowrap}
-.toast.show{opacity:1}
-
-/* ── Confirm dialog ── */
-.confirm-body{padding:20px 20px 0;font-size:14px;line-height:1.6;color:var(--text-dim)}
-.confirm-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px}
+/* ─── Toast ─── */
+.toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--s3); border:1px solid var(--border); color:var(--text); padding:9px 18px; border-radius:var(--r-md); font-size:13px; font-weight:500; z-index:9999; pointer-events:none; opacity:0; transition:opacity .2s; white-space:nowrap; box-shadow:var(--shadow); }
+.toast.show{ opacity:1; }
 </style>
 </head>
 <body>
 
-<!-- Header -->
+<!-- Header (same structure as main app) -->
 <div class="hdr">
-  <a href="/" class="hdr-logo">CC</a>
-  <span class="hdr-sep">/</span>
-  <span class="hdr-title">Kanban</span>
-  <div class="hdr-sp"></div>
-  <span class="refresh-ts" id="refreshTs">—</span>
-  <button class="btn btn-ghost btn-sm" onclick="refresh(true)" id="refreshBtn">↻ Refresh</button>
-  <button class="btn btn-primary btn-sm" onclick="openAddModal()">＋ Задача</button>
+  <div class="hdr-l">
+    <span class="logo">CC</span>
+    <div>
+      <h1 id="hdrTitle">Kanban</h1>
+    </div>
+  </div>
+  <div class="hdr-btns">
+    <span class="refresh-ts" id="refreshTs" style="margin-right:4px"></span>
+    <button class="hb" onclick="refresh(true)" id="refreshBtn">↻</button>
+    <button class="hb" onclick="openAddModal()" id="addBtn">＋ <span id="addBtnLabel">Задача</span></button>
+    <a class="hb" href="/" data-tip="Чат">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      <span id="chatLbl">Чат</span>
+    </a>
+    <a class="hb" href="https://github.com/Lexus2016/claude-code-chat" target="_blank" rel="noopener">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+    </a>
+  </div>
+</div>
+
+<!-- Project selector bar -->
+<div class="proj-bar">
+  <span class="proj-label" id="projLabel">Проект:</span>
+  <select class="proj-sel" id="projSel" onchange="onProjChange()">
+    <option value="" id="allProjOpt">— Всі проекти —</option>
+  </select>
+  <span class="refresh-ts" id="refreshTs2"></span>
 </div>
 
 <!-- Board -->
@@ -157,7 +195,7 @@ textarea.inp{resize:vertical;min-height:80px}
 <div class="ov hidden" id="taskOv" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <div class="modal-hd">
-      <span class="modal-hd-title" id="modalTitle">Задача</span>
+      <span class="modal-hd-title" id="modalTitle"></span>
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
     <div class="modal-body" id="modalBody"></div>
@@ -167,14 +205,14 @@ textarea.inp{resize:vertical;min-height:80px}
 
 <!-- Confirm modal -->
 <div class="ov hidden" id="confirmOv">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:400px">
     <div class="modal-hd">
-      <span class="modal-hd-title" id="confirmTitle">Підтвердження</span>
+      <span class="modal-hd-title" id="confirmTitle"></span>
       <button class="modal-close" onclick="closeConfirm()">×</button>
     </div>
-    <div class="confirm-body" id="confirmBody"></div>
+    <div class="modal-body" id="confirmBody" style="gap:8px"></div>
     <div class="modal-ft">
-      <button class="btn btn-ghost btn-sm" onclick="closeConfirm()">Скасувати</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeConfirm()" id="cancelBtn">Скасувати</button>
       <button class="btn btn-danger btn-sm" id="confirmOkBtn">Видалити</button>
     </div>
   </div>
@@ -183,31 +221,115 @@ textarea.inp{resize:vertical;min-height:80px}
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── State ───────────────────────────────────────────────────────────────
+// ─── i18n ─────────────────────────────────────────────────────────────────
+const TR = {
+  uk: {
+    'hdr.title':'Kanban', 'hdr.chat':'Чат', 'hdr.add':'Задача',
+    'proj.label':'Проект:', 'proj.all':'— Всі проекти —',
+    'col.backlog':'Backlog', 'col.todo':'To Do', 'col.in_progress':'In Progress',
+    'col.done':'Виконано', 'col.cancelled':'Скасовано',
+    'col.empty':'Немає задач',
+    'card.generating':'Виконується',
+    'modal.add':'Нова задача', 'modal.edit':'Редагувати задачу',
+    'modal.name':'Назва *', 'modal.desc':'Опис',
+    'modal.status':'Статус', 'modal.session':'Пов\'язана сесія',
+    'modal.no_session':'— без сесії —',
+    'modal.create':'Створити', 'modal.save':'Зберегти', 'modal.cancel':'Скасувати',
+    'modal.delete':'Видалити',
+    'confirm.title':'Видалити задачу?', 'confirm.body':'Ця дія незворотна.',
+    'confirm.ok':'Видалити', 'confirm.cancel':'Скасувати',
+    'chat.title':'Чат сесії', 'chat.empty':'Немає повідомлень',
+    'chat.open':'↗ Відкрити в чаті',
+    'toast.created':'✓ Задачу створено', 'toast.saved':'✓ Збережено',
+    'toast.deleted':'Задачу видалено', 'toast.copied':'✓ ID скопійовано',
+    'toast.err':'Помилка: ',
+    'msg.you':'Ви', 'msg.tool':'Tool',
+    'refresh.now':'щойно',
+  },
+  en: {
+    'hdr.title':'Kanban', 'hdr.chat':'Chat', 'hdr.add':'Task',
+    'proj.label':'Project:', 'proj.all':'— All projects —',
+    'col.backlog':'Backlog', 'col.todo':'To Do', 'col.in_progress':'In Progress',
+    'col.done':'Done', 'col.cancelled':'Cancelled',
+    'col.empty':'No tasks',
+    'card.generating':'Running',
+    'modal.add':'New task', 'modal.edit':'Edit task',
+    'modal.name':'Title *', 'modal.desc':'Description',
+    'modal.status':'Status', 'modal.session':'Linked session',
+    'modal.no_session':'— no session —',
+    'modal.create':'Create', 'modal.save':'Save', 'modal.cancel':'Cancel',
+    'modal.delete':'Delete',
+    'confirm.title':'Delete task?', 'confirm.body':'This action is irreversible.',
+    'confirm.ok':'Delete', 'confirm.cancel':'Cancel',
+    'chat.title':'Session chat', 'chat.empty':'No messages',
+    'chat.open':'↗ Open in chat',
+    'toast.created':'✓ Task created', 'toast.saved':'✓ Saved',
+    'toast.deleted':'Task deleted', 'toast.copied':'✓ ID copied',
+    'toast.err':'Error: ',
+    'msg.you':'You', 'msg.tool':'Tool',
+    'refresh.now':'just now',
+  },
+  ru: {
+    'hdr.title':'Kanban', 'hdr.chat':'Чат', 'hdr.add':'Задача',
+    'proj.label':'Проект:', 'proj.all':'— Все проекты —',
+    'col.backlog':'Backlog', 'col.todo':'To Do', 'col.in_progress':'In Progress',
+    'col.done':'Выполнено', 'col.cancelled':'Отменено',
+    'col.empty':'Нет задач',
+    'card.generating':'Выполняется',
+    'modal.add':'Новая задача', 'modal.edit':'Редактировать задачу',
+    'modal.name':'Название *', 'modal.desc':'Описание',
+    'modal.status':'Статус', 'modal.session':'Связанная сессия',
+    'modal.no_session':'— без сессии —',
+    'modal.create':'Создать', 'modal.save':'Сохранить', 'modal.cancel':'Отмена',
+    'modal.delete':'Удалить',
+    'confirm.title':'Удалить задачу?', 'confirm.body':'Это действие необратимо.',
+    'confirm.ok':'Удалить', 'confirm.cancel':'Отмена',
+    'chat.title':'Чат сессии', 'chat.empty':'Нет сообщений',
+    'chat.open':'↗ Открыть в чате',
+    'toast.created':'✓ Задача создана', 'toast.saved':'✓ Сохранено',
+    'toast.deleted':'Задача удалена', 'toast.copied':'✓ ID скопирован',
+    'toast.err':'Ошибка: ',
+    'msg.you':'Вы', 'msg.tool':'Tool',
+    'refresh.now':'только что',
+  },
+};
+const lang = localStorage.getItem('lang') || 'uk';
+function t(k){ return (TR[lang]||TR.uk)[k] || k; }
+
+// ─── Apply i18n to static elements ────────────────────────────────────────
+document.title = t('hdr.title') + ' — Claude Code Chat';
+document.getElementById('hdrTitle').textContent = t('hdr.title');
+document.getElementById('chatLbl').textContent = t('hdr.chat');
+document.getElementById('addBtnLabel').textContent = t('hdr.add');
+document.getElementById('projLabel').textContent = t('proj.label');
+document.getElementById('allProjOpt').textContent = t('proj.all');
+document.getElementById('cancelBtn').textContent = t('confirm.cancel');
+document.getElementById('confirmOkBtn').textContent = t('confirm.ok');
+
+// ─── State ────────────────────────────────────────────────────────────────
 const COLS = [
-  { id:'backlog',     label:'Backlog',       dot:'dot-backlog'     },
-  { id:'todo',        label:'To Do',         dot:'dot-todo'        },
-  { id:'in_progress', label:'In Progress',   dot:'dot-in_progress' },
-  { id:'done',        label:'Done',          dot:'dot-done'        },
-  { id:'cancelled',   label:'Cancelled',     dot:'dot-cancelled'   },
+  { id:'backlog',     dot:'dot-backlog'     },
+  { id:'todo',        dot:'dot-todo'        },
+  { id:'in_progress', dot:'dot-in_progress' },
+  { id:'done',        dot:'dot-done'        },
+  { id:'cancelled',   dot:'dot-cancelled'   },
 ];
 
-let tasks = [];
-let sessions = [];
+let tasks = [], sessions = [], projects = [];
+let curWorkdir = null;
 let lastEtag = '';
 let refreshTimer = null;
-let modalMode = null; // 'add' | 'edit'
-let editingTaskId = null;
+let modalMode = null;
+let editingId = null;
 let dragSrcId = null;
 
-// ─── Utils ───────────────────────────────────────────────────────────────
+// ─── Utils ────────────────────────────────────────────────────────────────
 function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function $i(id){ return document.getElementById(id); }
 function relTime(iso){
   if(!iso) return '';
-  const d = new Date(iso.endsWith('Z')?iso:iso+'Z');
-  const s = Math.round((Date.now()-d)/1000);
-  if(s<60) return 'щойно';
+  const s = Math.round((Date.now() - new Date(iso.endsWith('Z')?iso:iso+'Z'))/1000);
+  if(s<60) return t('refresh.now');
   if(s<3600) return Math.floor(s/60)+'хв';
   if(s<86400) return Math.floor(s/3600)+'г';
   return Math.floor(s/86400)+'д';
@@ -215,49 +337,92 @@ function relTime(iso){
 function toast(msg, err=false){
   const el=$i('toast');
   el.textContent=msg;
-  el.style.background=err?'#2a0f0f':'';
+  el.style.background=err?'rgba(248,81,73,.15)':'';
   el.style.borderColor=err?'var(--red)':'';
   el.classList.add('show');
   clearTimeout(el._t);
   el._t=setTimeout(()=>el.classList.remove('show'),2500);
 }
 
-// ─── Data ────────────────────────────────────────────────────────────────
+// ─── Authenticated fetch (redirect to /login on 401) ──────────────────────
+async function apiFetch(url, opts={}){
+  const r = await fetch(url, opts);
+  if(r.status === 401){ location.href = '/login'; throw new Error('401'); }
+  return r;
+}
+
+// ─── Project handling ─────────────────────────────────────────────────────
+async function loadProjects(){
+  try{
+    const r = await apiFetch('/api/projects');
+    projects = await r.json();
+  } catch { projects = []; }
+  const sel = $i('projSel');
+  // Remove old options except first (all)
+  while(sel.options.length > 1) sel.remove(1);
+  for(const p of projects){
+    const opt = document.createElement('option');
+    opt.value = p.workdir || p.id;
+    opt.textContent = p.name || p.workdir || p.id;
+    opt.dataset.workdir = p.workdir || '';
+    sel.appendChild(opt);
+  }
+  // Try to restore last-used workdir from main app's localStorage
+  try{
+    const s = JSON.parse(localStorage.getItem('cc_ui_state')||'null');
+    if(s?.curWorkdir){
+      // Find matching option
+      const opts=[...sel.options];
+      const found=opts.find(o=>o.value===s.curWorkdir||o.dataset.workdir===s.curWorkdir);
+      if(found){ sel.value=found.value; }
+    }
+  } catch {}
+  onProjChange(false);
+}
+
+function onProjChange(doRefresh=true){
+  const sel = $i('projSel');
+  const opt = sel.options[sel.selectedIndex];
+  curWorkdir = opt?.value || null;
+  if(doRefresh) refresh(true);
+}
+
+// ─── Data fetching ────────────────────────────────────────────────────────
 async function fetchTasks(){
-  const r=await fetch('/api/tasks');
-  if(!r.ok) throw new Error(r.statusText);
+  const qs = curWorkdir ? '?workdir='+encodeURIComponent(curWorkdir) : '';
+  const r = await apiFetch('/api/tasks'+qs);
   return r.json();
 }
 async function fetchSessions(){
-  const r=await fetch('/api/sessions');
-  if(!r.ok) return [];
+  const qs = curWorkdir ? '?workdir='+encodeURIComponent(curWorkdir) : '';
+  const r = await apiFetch('/api/sessions'+qs);
   return r.json();
 }
 async function fetchEtag(){
-  const r=await fetch('/api/tasks/etag');
-  if(!r.ok) return '';
-  const d=await r.json();
+  const r = await apiFetch('/api/tasks/etag');
+  const d = await r.json();
   return d.ts+'|'+d.n;
 }
 async function fetchMessages(sessId){
-  const r=await fetch(`/api/sessions/${sessId}/messages?limit=30&offset=0`);
-  if(!r.ok) return [];
-  const d=await r.json();
-  return d.messages||[];
+  const r = await apiFetch(`/api/sessions/${sessId}/messages?limit=30&offset=0`);
+  const d = await r.json();
+  return d.messages || [];
 }
 
 async function refresh(force=false){
   const btn=$i('refreshBtn');
   btn.innerHTML='<span class="spinning"></span>';
-  try {
+  try{
     const etag = await fetchEtag();
     if(!force && etag===lastEtag){ return; }
     const [newTasks, newSessions] = await Promise.all([fetchTasks(), fetchSessions()]);
     tasks=newTasks; sessions=newSessions; lastEtag=etag;
     renderBoard();
-    $i('refreshTs').textContent = new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});
-  } catch(e){ toast('Помилка оновлення: '+e.message, true); }
-  finally { btn.innerHTML='↻ Refresh'; }
+    const ts = new Date().toLocaleTimeString(lang==='uk'?'uk-UA':lang==='ru'?'ru-RU':'en-GB',{hour:'2-digit',minute:'2-digit'});
+    $i('refreshTs').textContent = ts;
+    $i('refreshTs2').textContent = ts;
+  } catch(e){ if(e.message!=='401') toast(t('toast.err')+e.message, true); }
+  finally { btn.innerHTML='↻'; }
 }
 
 function startAutoRefresh(){
@@ -270,8 +435,7 @@ function renderBoard(){
   const board=$i('board');
   board.innerHTML='';
   for(const col of COLS){
-    const colTasks=tasks.filter(t=>t.status===col.id)
-      .sort((a,b)=>a.sort_order-b.sort_order);
+    const colTasks=tasks.filter(tk=>tk.status===col.id).sort((a,b)=>a.sort_order-b.sort_order);
     board.appendChild(makeColumn(col, colTasks));
   }
 }
@@ -279,15 +443,12 @@ function renderBoard(){
 function makeColumn(col, colTasks){
   const el=document.createElement('div');
   el.className='col';
-  el.dataset.status=col.id;
 
-  // Header
   const hd=document.createElement('div');
   hd.className='col-head';
-  hd.innerHTML=`<div class="col-dot ${col.dot}"></div><span class="col-title">${escH(col.label)}</span><span class="col-cnt">${colTasks.length}</span>`;
+  hd.innerHTML=`<div class="col-dot ${col.dot}"></div><span class="col-title">${escH(t('col.'+col.id))}</span><span class="col-cnt">${colTasks.length}</span>`;
   el.appendChild(hd);
 
-  // Card list (drop zone)
   const body=document.createElement('div');
   body.className='col-body';
   body.dataset.status=col.id;
@@ -296,284 +457,268 @@ function makeColumn(col, colTasks){
   if(colTasks.length===0){
     const empty=document.createElement('div');
     empty.className='col-empty';
-    empty.textContent='Немає задач';
+    empty.textContent=t('col.empty');
     body.appendChild(empty);
   } else {
-    for(const task of colTasks) body.appendChild(makeCard(task));
+    for(const tk of colTasks) body.appendChild(makeCard(tk));
   }
   el.appendChild(body);
 
-  // Add button
   const addBtn=document.createElement('button');
   addBtn.className='col-add';
-  addBtn.textContent='＋ Додати задачу';
+  addBtn.textContent='＋ '+t('hdr.add');
   addBtn.onclick=()=>openAddModal(col.id);
   el.appendChild(addBtn);
   return el;
 }
 
-function makeCard(task){
+function makeCard(tk){
   const el=document.createElement('div');
   el.className='card';
-  el.dataset.id=task.id;
+  el.dataset.id=tk.id;
   el.draggable=true;
 
-  // Session badge
-  let sessHtml='';
-  if(task.session_id){
-    if(task.is_active){
-      sessHtml=`<span class="badge badge-green">⚙ ${escH(task.sess_title||'…')}</span>`;
+  let sessBadge='';
+  if(tk.session_id){
+    if(tk.is_active){
+      sessBadge=`<span class="badge badge-orange">⚙ ${escH(t('card.generating'))}</span>`;
     } else {
-      sessHtml=`<span class="badge badge-accent">💬 ${escH(task.sess_title||'сесія')}</span>`;
+      sessBadge=`<span class="badge badge-accent">💬 ${escH(tk.sess_title||'session')}</span>`;
     }
   }
-
-  // Model badge
-  const modelHtml=task.sess_model?`<span class="badge badge-muted">${escH(task.sess_model)}</span>`:'';
+  const modelBadge=tk.sess_model?`<span class="badge badge-muted">${escH(tk.sess_model)}</span>`:'';
 
   el.innerHTML=`
-    <div class="card-title">${escH(task.title)}</div>
-    ${task.description?`<div class="card-desc">${escH(task.description)}</div>`:''}
-    <div class="card-footer">
-      ${sessHtml}${modelHtml}
-      <span class="card-time">${relTime(task.updated_at)}</span>
+    <div class="card-title">${escH(tk.title)}</div>
+    ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
+    <div class="card-foot">
+      ${sessBadge}${modelBadge}
+      <span class="card-time">${relTime(tk.updated_at)}</span>
       <span class="card-actions">
-        <button class="cbtn" title="Відкрити" onclick="event.stopPropagation();openEditModal('${task.id}')">✎</button>
-        <button class="cbtn" title="Видалити" onclick="event.stopPropagation();confirmDelete('${task.id}')">✕</button>
+        <button class="cbtn" title="${t('modal.edit')}" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
+        <button class="cbtn" title="${t('modal.delete')}" onclick="event.stopPropagation();confirmDelete('${tk.id}')">✕</button>
       </span>
     </div>`;
 
-  el.onclick=()=>openEditModal(task.id);
+  el.onclick=()=>openEditModal(tk.id);
 
-  // Drag
   el.addEventListener('dragstart', e=>{
-    dragSrcId=task.id;
+    dragSrcId=tk.id;
     el.classList.add('dragging');
     e.dataTransfer.effectAllowed='move';
-    e.dataTransfer.setData('text/plain', task.id);
+    e.dataTransfer.setData('text/plain', tk.id);
   });
   el.addEventListener('dragend', ()=>{
     el.classList.remove('dragging');
-    document.querySelectorAll('.dz').forEach(z=>z.classList.remove('dz'));
+    document.querySelectorAll('.col-body.dz').forEach(z=>z.classList.remove('dz'));
+    document.querySelectorAll('.card-ph').forEach(p=>p.remove());
   });
   return el;
 }
 
-// ─── Drag & Drop ─────────────────────────────────────────────────────────
+// ─── Drag & Drop ──────────────────────────────────────────────────────────
 function setupDropZone(el){
   el.addEventListener('dragover', e=>{
-    e.preventDefault();
-    e.dataTransfer.dropEffect='move';
+    e.preventDefault(); e.dataTransfer.dropEffect='move';
     el.classList.add('dz');
-    // Show insertion point
-    const after=getDragAfterEl(el, e.clientY);
-    const placeholder=document.querySelector('.drag-placeholder');
-    if(placeholder) placeholder.remove();
+    const after=getDragAfter(el, e.clientY);
+    document.querySelectorAll('.card-ph').forEach(p=>p.remove());
     const ph=document.createElement('div');
-    ph.className='card drag-placeholder';
-    ph.style.height='50px';
-    if(after) el.insertBefore(ph, after);
-    else el.appendChild(ph);
+    ph.className='card-ph';
+    ph.style.height='52px';
+    if(after) el.insertBefore(ph, after); else el.appendChild(ph);
   });
   el.addEventListener('dragleave', e=>{
     if(!el.contains(e.relatedTarget)){
       el.classList.remove('dz');
-      const ph=el.querySelector('.drag-placeholder');
-      if(ph) ph.remove();
+      document.querySelectorAll('.card-ph').forEach(p=>p.remove());
     }
   });
   el.addEventListener('drop', async e=>{
     e.preventDefault();
     el.classList.remove('dz');
-    document.querySelectorAll('.drag-placeholder').forEach(p=>p.remove());
+    document.querySelectorAll('.card-ph').forEach(p=>p.remove());
     const id=e.dataTransfer.getData('text/plain')||dragSrcId;
     if(!id) return;
     const newStatus=el.dataset.status;
-    // Determine sort_order from position
     const cards=[...el.querySelectorAll('.card[data-id]')];
-    const afterEl=getDragAfterEl(el, e.clientY);
-    let sort_order=0;
+    const afterEl=getDragAfter(el, e.clientY);
+    let sort_order;
     if(afterEl){
-      const afterTask=tasks.find(t=>t.id===afterEl.dataset.id);
+      const afterTk=tasks.find(tk=>tk.id===afterEl.dataset.id);
       const idx=cards.indexOf(afterEl);
       const prevEl=cards[idx-1];
-      const prevTask=prevEl?tasks.find(t=>t.id===prevEl.dataset.id):null;
-      sort_order=((prevTask?.sort_order||0)+(afterTask?.sort_order||0))/2;
+      const prevTk=prevEl?tasks.find(tk=>tk.id===prevEl.dataset.id):null;
+      sort_order=((prevTk?.sort_order||0)+(afterTk?.sort_order||0))/2;
     } else {
       const last=cards[cards.length-1];
-      const lastTask=last?tasks.find(t=>t.id===last.dataset.id):null;
-      sort_order=(lastTask?.sort_order||0)+1000;
+      const lastTk=last?tasks.find(tk=>tk.id===last.dataset.id):null;
+      sort_order=(lastTk?.sort_order||0)+1000;
     }
     try{
-      await fetch(`/api/tasks/${id}`,{
-        method:'PUT',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({status:newStatus, sort_order}),
-      });
+      await apiFetch(`/api/tasks/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus,sort_order})});
       await refresh(true);
-    } catch(err){ toast('Помилка: '+err.message, true); }
+    } catch(err){ if(err.message!=='401') toast(t('toast.err')+err.message, true); }
   });
 }
 
-function getDragAfterEl(container, y){
-  const els=[...container.querySelectorAll('.card:not(.dragging):not(.drag-placeholder)')];
-  return els.reduce((closest,el)=>{
+function getDragAfter(container, y){
+  const els=[...container.querySelectorAll('.card:not(.dragging):not(.card-ph)')];
+  return els.reduce((cl,el)=>{
     const box=el.getBoundingClientRect();
     const offset=y-box.top-box.height/2;
-    if(offset<0 && offset>closest.offset) return {offset,el};
-    return closest;
+    if(offset<0 && offset>cl.offset) return {offset,el};
+    return cl;
   },{offset:-Infinity,el:null}).el;
 }
 
-// ─── Modal: Add Task ──────────────────────────────────────────────────────
+// ─── Modal: Add ────────────────────────────────────────────────────────────
 function openAddModal(defaultStatus='backlog'){
-  modalMode='add';
-  editingTaskId=null;
-  $i('modalTitle').textContent='Нова задача';
-  $i('modalBody').innerHTML=buildFormHtml({status:defaultStatus});
+  modalMode='add'; editingId=null;
+  $i('modalTitle').textContent=t('modal.add');
+  $i('modalBody').innerHTML=buildForm({status:defaultStatus});
   $i('modalFt').innerHTML=`
-    <button class="btn btn-ghost btn-sm" onclick="closeModal()">Скасувати</button>
-    <button class="btn btn-primary btn-sm" onclick="saveTask()">Створити</button>`;
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
+    <button class="btn btn-primary btn-sm" onclick="saveTask()">${t('modal.create')}</button>`;
   $i('taskOv').classList.remove('hidden');
-  setTimeout(()=>$i('fTitle')?.focus(),50);
+  setTimeout(()=>$i('fTitle')?.focus(),60);
 }
 
-// ─── Modal: Edit Task ─────────────────────────────────────────────────────
+// ─── Modal: Edit ───────────────────────────────────────────────────────────
 async function openEditModal(id){
-  const task=tasks.find(t=>t.id===id);
-  if(!task) return;
-  modalMode='edit';
-  editingTaskId=id;
-  $i('modalTitle').textContent='Редагувати задачу';
-
-  let chatHtml='';
-  if(task.session_id){
-    chatHtml=`<div style="height:8px"></div>`+await buildChatPanel(task);
-  }
-
-  $i('modalBody').innerHTML=buildFormHtml(task)+chatHtml;
+  const tk=tasks.find(x=>x.id===id);
+  if(!tk) return;
+  modalMode='edit'; editingId=id;
+  $i('modalTitle').textContent=t('modal.edit');
+  // Render form immediately
+  $i('modalBody').innerHTML=buildForm(tk);
   $i('modalFt').innerHTML=`
-    <button class="btn btn-danger btn-sm" onclick="confirmDelete('${id}');closeModal()">Видалити</button>
+    <button class="btn btn-danger btn-sm" onclick="confirmDelete('${id}');closeModal()">${t('modal.delete')}</button>
     <div style="flex:1"></div>
-    <button class="btn btn-ghost btn-sm" onclick="closeModal()">Скасувати</button>
-    <button class="btn btn-primary btn-sm" onclick="saveTask()">Зберегти</button>`;
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
+    <button class="btn btn-primary btn-sm" onclick="saveTask()">${t('modal.save')}</button>`;
   $i('taskOv').classList.remove('hidden');
-  setTimeout(()=>$i('fTitle')?.focus(),50);
+  // Load chat history asynchronously and append
+  if(tk.session_id){
+    try{
+      const msgs=await fetchMessages(tk.session_id);
+      const chatHtml=buildChatPanel(tk, msgs);
+      const body=$i('modalBody');
+      if(body && !$i('taskOv').classList.contains('hidden')){
+        const div=document.createElement('div');
+        div.innerHTML=chatHtml;
+        body.appendChild(div.firstElementChild);
+      }
+    } catch {}
+  }
+  setTimeout(()=>$i('fTitle')?.focus(),60);
 }
 
-function buildFormHtml(task={}){
-  const statusOpts=COLS.map(c=>`<option value="${c.id}"${task.status===c.id?' selected':''}>${c.label}</option>`).join('');
-  const sessOpts=`<option value="">— без сесії —</option>`+
-    sessions.map(s=>`<option value="${s.id}"${task.session_id===s.id?' selected':''}>${escH(s.title||s.id)}</option>`).join('');
-
+function buildForm(tk={}){
+  const statusOpts=COLS.map(c=>`<option value="${c.id}"${tk.status===c.id?' selected':''}>${escH(t('col.'+c.id))}</option>`).join('');
+  const sessOpts=`<option value="">${escH(t('modal.no_session'))}</option>`+
+    sessions.map(s=>`<option value="${s.id}"${tk.session_id===s.id?' selected':''}>${escH((s.title||s.id).substring(0,60))}</option>`).join('');
   return `
-    <div><label class="lbl">Назва *</label>
-      <input id="fTitle" class="inp" placeholder="Що потрібно зробити?" value="${escH(task.title||'')}">
+    <div><label class="lbl">${t('modal.name')}</label>
+      <input id="fTitle" class="inp" placeholder="${t('modal.name')}" value="${escH(tk.title||'')}" maxlength="200">
     </div>
-    <div><label class="lbl">Опис</label>
-      <textarea id="fDesc" class="inp" rows="3" placeholder="Деталі, контекст, посилання…">${escH(task.description||'')}</textarea>
+    <div><label class="lbl">${t('modal.desc')}</label>
+      <textarea id="fDesc" class="inp" rows="3" placeholder="…" maxlength="2000">${escH(tk.description||'')}</textarea>
     </div>
     <div class="grid2">
-      <div><label class="lbl">Статус</label>
-        <select id="fStatus" class="sel">${statusOpts}</select>
-      </div>
-      <div><label class="lbl">Пов'язана сесія</label>
-        <select id="fSession" class="sel">${sessOpts}</select>
-      </div>
+      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel">${statusOpts}</select></div>
+      <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel">${sessOpts}</select></div>
     </div>`;
 }
 
-async function buildChatPanel(task){
-  let msgs=[];
-  try{ msgs=await fetchMessages(task.session_id); } catch{}
+function buildChatPanel(tk, msgs){
+  const sessTitle = escH(tk.sess_title || tk.session_id);
+  const claudeId = tk.claude_session_id || '';
+  const openUrl = `/?open_session=${encodeURIComponent(tk.session_id)}`;
 
-  const sessTitle=task.sess_title||task.session_id;
-  const claudeId=task.claude_session_id||'';
-
-  let msgsHtml='';
-  if(msgs.length===0){
-    msgsHtml=`<div class="chat-empty">Немає повідомлень</div>`;
+  let msgsHtml;
+  if(!msgs.length){
+    msgsHtml=`<div class="chat-empty">${t('chat.empty')}</div>`;
   } else {
     msgsHtml=msgs.map(m=>{
       const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
-      const text=m.type==='tool'?`[${escH(m.tool_name||'tool')}] ${escH((m.content||'').substring(0,120))}`:escH((m.content||'').substring(0,300));
-      const long=(m.content||'').length>200;
-      return `<div class="chat-msg"><div class="chat-role ${role}">${role==='user'?'Ви':role==='tool'?'Tool':'Claude'}</div><div class="chat-text${long?' long':''}">${text}</div></div>`;
+      const label=role==='user'?t('msg.you'):role==='tool'?`${t('msg.tool')}: ${escH(m.tool_name||'')}`:'Claude';
+      const text=escH((m.content||'').substring(0,300));
+      return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${text}</div></div>`;
     }).join('');
   }
 
-  const openLink=`<a href="/?open_session=${encodeURIComponent(task.session_id)}" class="chat-open-link" target="_blank">↗ Відкрити в чаті</a>`;
-  const copyBtn=claudeId?`<span class="sess-id-mono" title="Клік — скопіювати" onclick="navigator.clipboard.writeText('${escH(claudeId)}').then(()=>toast('✓ Скопійовано'));">${claudeId.slice(0,12)}…</span>`:'';
+  const copyBtn=claudeId?`<span class="mono-tag" title="Click to copy" onclick="navigator.clipboard.writeText('${escH(claudeId)}').then(()=>toast(t('toast.copied')))">${claudeId.slice(0,12)}…</span>`:'';
+  const openBtn=`<a class="open-link" href="${openUrl}" target="_blank">${t('chat.open')}</a>`;
 
-  return `
-    <div class="chat-panel">
-      <div class="chat-panel-hd">
-        <span style="flex:1">💬 ${escH(sessTitle)}</span>
-        <div class="sess-info">${copyBtn}${openLink}</div>
-      </div>
-      <div class="chat-panel-body">${msgsHtml}</div>
-    </div>`;
+  return `<div class="chat-panel">
+    <div class="chat-panel-hd">
+      <span>${t('chat.title')}: ${sessTitle}</span>
+      <div class="sess-info">${copyBtn}${openBtn}</div>
+    </div>
+    <div class="chat-panel-body">${msgsHtml}</div>
+  </div>`;
 }
 
-// ─── Save ─────────────────────────────────────────────────────────────────
+// ─── Save task ────────────────────────────────────────────────────────────
 async function saveTask(){
   const title=($i('fTitle')?.value||'').trim();
-  if(!title){ toast('Введіть назву задачі', true); $i('fTitle')?.focus(); return; }
+  if(!title){ toast(t('modal.name'), true); $i('fTitle')?.focus(); return; }
   const body={
     title,
     description:$i('fDesc')?.value||'',
     status:$i('fStatus')?.value||'backlog',
     session_id:$i('fSession')?.value||null,
+    workdir: curWorkdir || null,
   };
-
   try{
     if(modalMode==='add'){
-      // Find max sort_order in that column
-      const colTasks=tasks.filter(t=>t.status===body.status);
-      body.sort_order=colTasks.length?Math.max(...colTasks.map(t=>t.sort_order))+1000:0;
-      await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      toast('✓ Задачу створено');
+      const colTasks=tasks.filter(tk=>tk.status===body.status);
+      body.sort_order=colTasks.length?Math.max(...colTasks.map(tk=>tk.sort_order))+1000:0;
+      await apiFetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      toast(t('toast.created'));
     } else {
-      const orig=tasks.find(t=>t.id===editingTaskId);
+      const orig=tasks.find(tk=>tk.id===editingId);
       if(orig) body.sort_order=orig.sort_order;
-      await fetch(`/api/tasks/${editingTaskId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      toast('✓ Збережено');
+      await apiFetch(`/api/tasks/${editingId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      toast(t('toast.saved'));
     }
     closeModal();
     await refresh(true);
-  } catch(e){ toast('Помилка: '+e.message, true); }
+  } catch(e){ if(e.message!=='401') toast(t('toast.err')+e.message, true); }
 }
 
-// ─── Delete ──────────────────────────────────────────────────────────────
+// ─── Delete ───────────────────────────────────────────────────────────────
 function confirmDelete(id){
-  const task=tasks.find(t=>t.id===id);
-  $i('confirmTitle').textContent='Видалити задачу?';
-  $i('confirmBody').innerHTML=`<p>«${escH(task?.title||id)}»</p><p style="font-size:12px;margin-top:6px;color:var(--muted)">Ця дія незворотна.</p>`;
+  const tk=tasks.find(x=>x.id===id);
+  $i('confirmTitle').textContent=t('confirm.title');
+  $i('confirmBody').innerHTML=`<p style="font-size:14px;color:var(--text)">«${escH(tk?.title||id)}»</p><p style="font-size:12px;color:var(--muted);margin-top:6px">${t('confirm.body')}</p>`;
   $i('confirmOkBtn').onclick=async()=>{
     try{
-      await fetch(`/api/tasks/${id}`,{method:'DELETE'});
-      toast('Задачу видалено');
+      await apiFetch(`/api/tasks/${id}`,{method:'DELETE'});
+      toast(t('toast.deleted'));
       closeConfirm();
       await refresh(true);
-    } catch(e){ toast('Помилка: '+e.message, true); }
+    } catch(e){ if(e.message!=='401') toast(t('toast.err')+e.message, true); }
   };
   $i('confirmOv').classList.remove('hidden');
 }
 function closeConfirm(){ $i('confirmOv').classList.add('hidden'); }
 function closeModal(){ $i('taskOv').classList.add('hidden'); }
 
-// ─── Keyboard ─────────────────────────────────────────────────────────────
+// ─── Keyboard shortcuts ───────────────────────────────────────────────────
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){
     if(!$i('taskOv').classList.contains('hidden')){ closeModal(); return; }
     if(!$i('confirmOv').classList.contains('hidden')){ closeConfirm(); return; }
   }
-  if((e.ctrlKey||e.metaKey)&&e.key==='Enter' && !$i('taskOv').classList.contains('hidden')){ saveTask(); }
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!$i('taskOv').classList.contains('hidden')) saveTask();
 });
 
 // ─── Init ─────────────────────────────────────────────────────────────────
 (async()=>{
-  await refresh(true);
+  await loadProjects();
+  // curWorkdir is set by loadProjects → onProjChange already called refresh(true)
   startAutoRefresh();
 })();
 </script>
