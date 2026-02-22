@@ -1449,6 +1449,18 @@ wss.on('connection', (ws) => {
         if (ws._tabAbort) { Object.values(ws._tabAbort).forEach(ac => { try { ac.abort(); } catch {} }); ws._tabAbort = {}; }
         if (ws._tabQueue) ws._tabQueue = {};
       }
+      // Also stop any Kanban task running under this session
+      if (tabId) {
+        const runningTask = db.prepare(`SELECT id, worker_pid FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`).get(tabId);
+        if (runningTask) {
+          stoppingTasks.add(runningTask.id);
+          db.prepare(`UPDATE tasks SET status='cancelled', updated_at=datetime('now') WHERE id=?`).run(runningTask.id);
+          const ctrl = runningTaskAborts.get(runningTask.id);
+          if (ctrl) { ctrl.abort(); }
+          else if (runningTask.worker_pid) { try { process.kill(runningTask.worker_pid, 'SIGTERM'); } catch {} }
+          log.info('ws stop aborted kanban task', { taskId: runningTask.id, sessionId: tabId });
+        }
+      }
     }
 
     if (msg.type==='new_session') {
