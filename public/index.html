@@ -185,6 +185,7 @@ body::after {
 .hdr-l { display: flex; align-items: center; gap: 10px; }
 .logo { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), #a855f7); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; color: white; flex-shrink: 0; box-shadow: 0 2px 8px rgba(124,106,239,.4); }
 .hdr h1 { font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
+.hdr-meta { display: flex; align-items: center; gap: 6px; }
 .status-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; }
 .status-dot::before { content: '●'; font-size: 8px; }
 .status-dot.ok { color: var(--green); }
@@ -204,7 +205,7 @@ body::after {
 .nav-sw-btn.active { background: var(--s2); color: var(--accent2); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
 
 /* ─── Toolbar ─── */
-.toolbar { display: flex; align-items: center; gap: 7px; padding: 6px 14px; background: var(--s1); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.toolbar { display: flex; align-items: center; gap: 7px; padding: 6px 14px; background: var(--s1); border-bottom: 1px solid var(--border); flex-wrap: nowrap; overflow-x: auto; }
 .tb-group { display: flex; align-items: center; gap: 2px; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
 .tb-group .label { font-size: 11px; color: var(--muted); padding: 0 7px; text-transform: uppercase; letter-spacing: .6px; font-weight: 700; }
 .tb-btn { padding: 4px 11px; border-radius: 6px; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; transition: all .12s; white-space: nowrap; font-weight: 500; }
@@ -774,6 +775,7 @@ body::after {
 @media (max-width: 480px) {
   .hdr-btns .hb span { display: none; }
   .hb { padding: 5px 8px; }
+  .nav-sw-btn { padding: 4px 8px; }
   .toolbar { font-size: 12px; }
 }
 </style>
@@ -878,12 +880,10 @@ body::after {
           Kanban
         </a>
       </nav>
-      <div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span class="status-dot warn" id="statusEl">Підключення...</span>
-          <span id="activeProjLabel"></span>
-          <span id="versionBadge" title="Перевірка версії..."></span>
-        </div>
+      <div class="hdr-meta">
+        <span class="status-dot warn" id="statusEl">Підключення...</span>
+        <span id="activeProjLabel"></span>
+        <span id="versionBadge" title="Перевірка версії..."></span>
       </div>
     </div>
     <div class="hdr-btns">
@@ -1217,7 +1217,7 @@ const TRANSLATIONS = {
     'attach.file':'Додати файл (📎)',
     'queue.label':'У черзі','queue.edit.title':'Редагувати повідомлення','queue.del.title':'Видалити з черги',
     'agents.title':'Активні агенти',
-    'sess.delete.confirm':'Видалити сесію?','sess.load.err':'Помилка завантаження сесії',
+    'sess.delete.confirm':'Видалити сесію?','sess.delete.tasks':'Видалити сесію?\n\nДо неї прив\'язано завдань у Kanban: {n}. Вони також будуть видалені.','sess.load.err':'Помилка завантаження сесії',
     'mcp.active':'● Активний у чаті','mcp.inactive':'○ Вимкнений','mcp.del.title':'Видалити сервер',
     'mcp.cfg.tip':'Налаштування','mcp.cfg.warn':'Потрібна конфігурація',
     'mcp.toggle.on':'Клік — вимкнути','mcp.toggle.off':'Клік — увімкнути',
@@ -1288,7 +1288,7 @@ const TRANSLATIONS = {
     'attach.file':'Attach file (📎)',
     'queue.label':'In queue','queue.edit.title':'Edit message','queue.del.title':'Remove from queue',
     'agents.title':'Active agents',
-    'sess.delete.confirm':'Delete session?','sess.load.err':'Error loading session',
+    'sess.delete.confirm':'Delete session?','sess.delete.tasks':'Delete session?\n\nLinked Kanban tasks: {n}. They will also be deleted.','sess.load.err':'Error loading session',
     'mcp.active':'● Active in chat','mcp.inactive':'○ Disabled','mcp.del.title':'Remove server',
     'mcp.cfg.tip':'Settings','mcp.cfg.warn':'Configuration required',
     'mcp.toggle.on':'Click to disable','mcp.toggle.off':'Click to enable',
@@ -1359,7 +1359,7 @@ const TRANSLATIONS = {
     'attach.file':'Прикрепить файл (📎)',
     'queue.label':'В очереди','queue.edit.title':'Редактировать сообщение','queue.del.title':'Удалить из очереди',
     'agents.title':'Активные агенты',
-    'sess.delete.confirm':'Удалить сессию?','sess.load.err':'Ошибка загрузки сессии',
+    'sess.delete.confirm':'Удалить сессию?','sess.delete.tasks':'Удалить сессию?\n\nПривязанных задач в Kanban: {n}. Они также будут удалены.','sess.load.err':'Ошибка загрузки сессии',
     'mcp.active':'● Активен в чате','mcp.inactive':'○ Отключен','mcp.del.title':'Удалить сервер',
     'mcp.cfg.tip':'Настройки','mcp.cfg.warn':'Требуется настройка',
     'mcp.toggle.on':'Клик — отключить','mcp.toggle.off':'Клик — включить',
@@ -2790,12 +2790,20 @@ function loadMoreMsgs() {
 async function loadSess(id) {
   try {
     const r = await fetch(`/api/sessions/${id}`);
+    if (id !== activeTabId) return; // tab was switched while fetching — discard stale load
     if (!r.ok) { closeTab(id); toast(t('toast.sess_not_found'), true); return; }
     const d = await r.json();
+    if (id !== activeTabId) return; // tab was switched while parsing — discard stale load
     msgsEl.innerHTML = '';
     currentSessionId = id;
     // Sync tab title
     { const t = openTabs.find(x => x.id === id); if (t && d.title) { t.title = d.title; renderTabs(); } }
+    // Proactively show spinner if a task is currently running for this session
+    // (avoids waiting for WS task_started roundtrip, especially after page refresh)
+    if (d.hasRunningTask) {
+      const tabObj = openTabs.find(x => x.id === id);
+      if (tabObj) { tabObj.generating = true; renderTabs(); }
+    }
 
     if (d.mode) { curMode = d.mode; syncBtn('mode', d.mode); }
     if (d.agent_mode) { curAgent = d.agent_mode; syncBtn('agent', d.agent_mode); }
@@ -2830,9 +2838,16 @@ async function loadSess(id) {
 }
 
 async function delSess(id) {
-  if (!confirm(t('sess.delete.confirm'))) return;
+  let msg = t('sess.delete.confirm');
+  try {
+    const r = await fetch(`/api/sessions/${id}/tasks-count`);
+    if (r.ok) { const d = await r.json(); if (d.n > 0) msg = t('sess.delete.tasks').replace('{n}', d.n); }
+  } catch {}
+  if (!confirm(msg)) return;
   await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
-  if (id === currentSessionId) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); }
+  try { new BroadcastChannel('kanban').postMessage({ type: 'session_deleted', sessionId: id }); } catch {}
+  if (openTabs.find(t => t.id === id)) closeTab(id);
+  else if (id === currentSessionId) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); }
   loadHist();
 }
 
