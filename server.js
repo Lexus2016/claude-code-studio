@@ -355,6 +355,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ─── Health check ─────────────────────────────────────────────────────────────
 // Deep health check: verifies DB connectivity, reports uptime / memory / WS connections.
 // Returns HTTP 503 if any critical subsystem is degraded.
+app.get('/api/version', (_, res) => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8'));
+  res.json({ version: pkg.version, name: pkg.name });
+});
+
 app.get('/api/health', (_, res) => {
   let dbOk = false;
   try { db.prepare('SELECT 1').get(); dbOk = true; } catch { /* db unavailable */ }
@@ -635,9 +640,22 @@ app.post('/api/claude-md', (req,res) => {
 });
 
 // Files browser
+// Resolve the effective workspace for /api/files and /api/files/download.
+// Priority: ?workdir= query param (must match a registered project) → global WORKDIR.
+function resolveFilesWorkdir(reqWorkdir) {
+  if (reqWorkdir) {
+    const projects = loadProjects();
+    const match = projects.find(p => path.resolve(p.workdir) === path.resolve(reqWorkdir));
+    if (match) return path.resolve(match.workdir);
+    return null; // not a registered project — deny
+  }
+  return path.resolve(WORKDIR);
+}
+
 app.get('/api/files', (req,res) => {
   const dir=req.query.path||'';
-  const workdirReal=path.resolve(WORKDIR);
+  const workdirReal = resolveFilesWorkdir(req.query.workdir);
+  if (!workdirReal) return res.status(403).json({error:'Workdir not in registered projects'});
   const fp=path.resolve(workdirReal,dir);
   if(fp!==workdirReal && !fp.startsWith(workdirReal+path.sep)) return res.status(403).json({error:'Denied'});
   try{
@@ -645,14 +663,29 @@ app.get('/api/files', (req,res) => {
     if(stat.isDirectory()){
       const items=fs.readdirSync(fp,{withFileTypes:true}).filter(d=>!d.name.startsWith('.'))
         .map(d=>({name:d.name,type:d.isDirectory()?'dir':'file',path:path.join(dir,d.name),size:d.isFile()?fs.statSync(path.join(fp,d.name)).size:null}));
-      res.json({type:'dir',items});
+      res.json({type:'dir',items,workdir:workdirReal});
     } else {
       const ext=path.extname(fp).toLowerCase();
       const te=['.js','.ts','.py','.html','.css','.json','.md','.txt','.yaml','.yml','.sh','.env','.toml','.sql','.jsx','.tsx','.pine','.cfg','.log','.mjs','.go','.rs','.rb','.php'];
       const content=(te.includes(ext)||stat.size<512*1024)?fs.readFileSync(fp,'utf-8'):'[Binary]';
-      res.json({type:'file',name:path.basename(fp),content,ext});
+      res.json({type:'file',name:path.basename(fp),content,ext,workdir:workdirReal});
     }
   }catch{res.status(404).json({error:'Not found'})}
+});
+
+app.get('/api/files/download', (req,res) => {
+  const fp_rel = req.query.path || '';
+  const workdirReal = resolveFilesWorkdir(req.query.workdir);
+  if (!workdirReal) return res.status(403).json({error:'Workdir not in registered projects'});
+  const fp = path.resolve(workdirReal, fp_rel);
+  if (fp !== workdirReal && !fp.startsWith(workdirReal + path.sep)) return res.status(403).json({error:'Denied'});
+  try {
+    const stat = fs.statSync(fp);
+    if (stat.isDirectory()) return res.status(400).json({error:'Cannot download a directory'});
+    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(fp)}"`);
+    res.setHeader('Content-Length', stat.size);
+    fs.createReadStream(fp).pipe(res);
+  } catch { res.status(404).json({error:'Not found'}); }
 });
 
 // ─── Project file search (for @ mention) ────────────────────────────────────

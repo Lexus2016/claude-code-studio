@@ -81,8 +81,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
 .sec-body { padding: 4px 8px 10px; }
 .sec-body.collapsed { display: none; }
 
-/* ─── Active project label in header ─── */
+/* ─── Active project label + version badge in header ─── */
 #activeProjLabel { font-size: 11px; color: var(--accent2); background: rgba(124,106,239,.1); border: 1px solid rgba(124,106,239,.25); border-radius: 4px; padding: 2px 8px; display: none; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#versionBadge { font-size: 10px; color: var(--muted); cursor: default; letter-spacing: .3px; }
+#versionBadge.update { color: var(--orange); cursor: pointer; text-decoration: underline dotted; }
+
+/* ─── File browser download button ─── */
+.fii .fdl { opacity: 0; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 11px; padding: 1px 4px; border-radius: 3px; transition: opacity .1s, color .1s; flex-shrink: 0; }
+.fii:hover .fdl { opacity: .7; }
+.fii .fdl:hover { color: var(--accent2); opacity: 1 !important; }
 
 /* ─── Toggle items ─── */
 .ci { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r); cursor: pointer; font-size: 13px; transition: background .12s; border: 1px solid transparent; }
@@ -674,6 +681,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-s
         <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
           <span class="status-dot warn" id="statusEl">Підключення...</span>
           <span id="activeProjLabel"></span>
+          <span id="versionBadge" title="Перевірка версії..."></span>
         </div>
       </div>
     </div>
@@ -1990,6 +1998,31 @@ inEl.addEventListener('keydown', e => {
 
 function loadStats() { /* removed */ }
 
+// ─── Version check ────────────────────────────────────────────────────────
+async function checkVersion() {
+  try {
+    const local = await fetch('/api/version').then(r => r.json());
+    const el = $i('versionBadge');
+    if (!el) return;
+    const cur = local.version || '?';
+    el.textContent = `v${cur}`;
+    el.title = 'Поточна версія';
+    try {
+      const gh = await fetch('https://api.github.com/repos/Lexus2016/claude-code-chat/releases/latest',
+        { headers: { Accept: 'application/vnd.github.v3+json' } }).then(r => r.json());
+      const latest = (gh.tag_name || '').replace(/^v/, '');
+      if (latest && latest !== cur) {
+        el.textContent = `v${cur} → v${latest} ↑`;
+        el.className = 'update';
+        el.title = `Доступне оновлення ${gh.tag_name}!\nЗапустіть: npx github:Lexus2016/claude-code-chat`;
+        el.onclick = () => window.open(gh.html_url, '_blank');
+      } else if (latest) {
+        el.title = `v${cur} — остання версія ✓`;
+      }
+    } catch { /* GitHub API unavailable, keep local version only */ }
+  } catch { /* API not ready */ }
+}
+
 // ─── Session History ──────────────────────────────────────────────────────
 async function loadHist() {
   try {
@@ -2324,9 +2357,14 @@ function closeCfg() { $i('cfgModal').classList.add('hidden'); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeCfg(); closeDirModal(); cancelStop(); } });
 
 // ─── File Browser ─────────────────────────────────────────────────────────
+function _filesQS(relPath) {
+  const wd = curWorkdir;
+  return `path=${encodeURIComponent(relPath)}${wd ? '&workdir=' + encodeURIComponent(wd) : ''}`;
+}
+
 async function loadFiles(dir = '') {
   try {
-    const r = await fetch(`/api/files?path=${encodeURIComponent(dir)}`);
+    const r = await fetch(`/api/files?${_filesQS(dir)}`);
     const d = await r.json();
     if (d.type !== 'dir') return;
     const t = $i('filesTree');
@@ -2344,7 +2382,8 @@ async function loadFiles(dir = '') {
     for (const it of items) {
       const el = document.createElement('div');
       el.className = 'fii';
-      el.innerHTML = `<span class="fi">${it.type === 'dir' ? '<span style="color:var(--accent2);font-size:13px">▸</span>' : fileIcon(it.name)}</span><span class="fn">${escH(it.name)}</span><span class="fs">${it.size ? fmtSize(it.size) : ''}</span>`;
+      const dlBtn = it.type === 'file' ? `<button class="fdl" onclick="event.stopPropagation();downloadFile('${escH(it.path)}')" title="Завантажити">⬇</button>` : '';
+      el.innerHTML = `<span class="fi">${it.type === 'dir' ? '<span style="color:var(--accent2);font-size:13px">▸</span>' : fileIcon(it.name)}</span><span class="fn">${escH(it.name)}</span><span class="fs">${it.size ? fmtSize(it.size) : ''}</span>${dlBtn}`;
       el.onclick = it.type === 'dir' ? () => loadFiles(it.path) : () => previewFile(it.path);
       t.appendChild(el);
     }
@@ -2355,12 +2394,16 @@ async function loadFiles(dir = '') {
 
 async function previewFile(fp) {
   try {
-    const r = await fetch(`/api/files?path=${encodeURIComponent(fp)}`);
+    const r = await fetch(`/api/files?${_filesQS(fp)}`);
     const d = await r.json();
     const p = $i('filePreview');
     p.style.display = 'block';
-    p.innerHTML = `<div class="fpn">${escH(d.name || fp)}</div>${escH(d.content || '')}`;
+    p.innerHTML = `<div class="fpn">${escH(d.name || fp)}<button onclick="downloadFile('${escH(fp)}')" title="Завантажити файл" style="float:right;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;border-radius:4px;padding:1px 7px;font-size:11px">⬇ скачати</button></div><pre style="margin:0;white-space:pre-wrap">${escH(d.content || '')}</pre>`;
   } catch {}
+}
+
+function downloadFile(relPath) {
+  window.open(`/api/files/download?${_filesQS(relPath)}`, '_blank');
 }
 
 function fileIcon(name) {
@@ -2462,7 +2505,7 @@ function switchProject(id) {
   curProjectId = id;
   curWorkdir = p.workdir;
   applyProjTabs(loadProjTabs(id));
-  renderProjects(); saveUIState(); loadHist();
+  renderProjects(); saveUIState(); loadHist(); loadFiles('');
   toast(`✓ ${p.name}`);
 }
 
@@ -2632,6 +2675,7 @@ renderTabs();
 loadCfg();
 loadProjectsList();
 connect();
+checkVersion();
 </script>
 </body>
 </html>

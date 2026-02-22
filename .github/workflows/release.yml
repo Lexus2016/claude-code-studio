@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "${{ steps.version.outputs.VERSION }}" | head -1)
+          if [ -n "$PREV_TAG" ]; then
+            LOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+          else
+            LOG=$(git log --pretty=format:"- %s" --no-merges | head -20)
+          fi
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$LOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: '${{ steps.version.outputs.VERSION }}',
+              name: 'Claude Code Chat ${{ steps.version.outputs.VERSION }}',
+              body: `## What's Changed\n\n${{ steps.changelog.outputs.CHANGELOG }}\n\n## Installation\n\n\`\`\`bash\n# Run latest version directly\nnpx github:Lexus2016/claude-code-chat\n\n# Or install globally\nnpm install -g github:Lexus2016/claude-code-chat\nclaude-code-chat\n\`\`\`\n\n> Open http://localhost:3000 in your browser`,
+              draft: false,
+              prerelease: false,
+            });

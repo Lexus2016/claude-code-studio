@@ -1,0 +1,10 @@
+{
+  "enabledMcpjsonServers": [
+    "spawner",
+    "zen",
+    "tavily-remote-mcp",
+    "context7",
+    "sem"
+  ],
+  "enableAllProjectMcpServers": true
+}

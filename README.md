@@ -35,6 +35,23 @@
 - [`claude` CLI](https://docs.anthropic.com/en/claude-code) installed and authenticated (for CLI mode)
 - OR an `ANTHROPIC_API_KEY` (for SDK mode)
 
+### Run latest version instantly (npx)
+
+```bash
+# Download & run the latest release — no git clone needed
+npx github:Lexus2016/claude-code-chat
+
+# Open http://localhost:3000
+# Data is stored in the directory where you run the command
+```
+
+Or install globally:
+
+```bash
+npm install -g github:Lexus2016/claude-code-chat
+claude-code-chat          # runs on http://localhost:3000
+```
+
 ### Without Docker (CLI mode — Max subscription)
 
 ```bash

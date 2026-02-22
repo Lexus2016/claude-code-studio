@@ -1,11 +1,20 @@
 {
   "name": "claude-code-chat",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Web chat interface for Claude Code with MCP, Skills, Multi-Agent, Auth & Docker",
+  "bin": {
+    "claude-code-chat": "./bin/cli.js"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lexus2016/claude-code-chat.git"
+  },
+  "keywords": ["claude", "claude-code", "ai", "chat", "mcp"],
+  "license": "MIT",
   "dependencies": {
     "@anthropic-ai/claude-code": "^2.1.50",
     "bcryptjs": "^2.4.3",
