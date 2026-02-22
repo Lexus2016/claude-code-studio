@@ -170,7 +170,7 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN worker_pid INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN attachments TEXT`); } catch {}
 
 const stmts = {
-  createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir) VALUES (?,?,?,?,?,?,?,?)`),
+  createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`),
   updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
@@ -796,9 +796,9 @@ app.get('/api/sessions', (req,res) => {
   res.json(workdir ? stmts.getSessionsByWorkdir.all(workdir) : stmts.getSessions.all());
 });
 app.post('/api/sessions', (req, res) => {
-  const { title = 'Нова сесія', workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single' } = req.body || {};
+  const { title = 'Нова сесія', workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single', engine = null } = req.body || {};
   const id = genId();
-  stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', mode, agentMode, model, workdir || null);
+  stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', mode, agentMode, model, engine, workdir || null);
   res.json(stmts.getSession.get(id));
 });
 app.get('/api/sessions/interrupted', (req, res) => { res.json(stmts.getInterrupted.all()); });
@@ -1283,7 +1283,7 @@ wss.on('connection', (ws) => {
 
     if (!localSessionId || !stmts.getSession.get(localSessionId)) {
       localSessionId = genId();
-      stmts.createSession.run(localSessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.workdir||null);
+      stmts.createSession.run(localSessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||null,msg.workdir||null);
     } else {
       localClaudeId = stmts.getSession.get(localSessionId)?.claude_session_id || undefined;
     }
@@ -1408,7 +1408,7 @@ wss.on('connection', (ws) => {
       legacySessionId = msg.sessionId || genId();
       const existing = stmts.getSession.get(legacySessionId);
       if (existing) legacyClaudeId = existing.claude_session_id || undefined;
-      else stmts.createSession.run(legacySessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',null);
+      else stmts.createSession.run(legacySessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||null,null);
       ws.send(JSON.stringify({ type:'session_started', sessionId:legacySessionId }));
       return;
     }
