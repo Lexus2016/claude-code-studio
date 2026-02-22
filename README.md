@@ -24,6 +24,7 @@
 | ⚙️ Config Editor | Edit `config.json`, `CLAUDE.md`, `.env` in the UI |
 | 🔒 Auth | bcrypt password + 30-day session tokens |
 | 🐳 Docker | Dockerfile + docker-compose included |
+| 🔐 Multi-instance Safety | File-lock hooks prevent conflicts when multiple Claude Code sessions work in parallel |
 
 ---
 
@@ -125,6 +126,14 @@ claude-code-chat/
 │   ├── index.html      # Single-file SPA (embedded CSS + JS)
 │   └── auth.html       # Login / Setup page
 ├── skills/             # Skill .md files (loaded into system prompt)
+├── scripts/
+│   └── install-hooks.js  # postinstall: merges Claude Code hooks into .claude/settings.json
+├── .claude/
+│   ├── settings.json   # Claude Code project hooks config (auto-managed by postinstall)
+│   ├── scripts/
+│   │   ├── file-lock.sh    # PreToolUse hook: wait for file lock before editing
+│   │   └── file-unlock.sh  # PostToolUse hook: release lock after editing
+│   └── locks/          # Runtime lock files (gitignored)
 ├── data/               # Runtime data (gitignored)
 │   ├── chats.db        # SQLite database
 │   ├── auth.json       # bcrypt password hash
@@ -177,6 +186,31 @@ Client (browser) ──WS──► server.js ──► claude-cli.js ──► c
 - WebSocket for bidirectional streaming
 - SQLite (WAL mode) for sessions and messages
 - Multi-agent: orchestrator generates JSON plan → parallel agent execution
+
+---
+
+## Multi-instance Safety
+
+When you open Claude Code in multiple terminals and work on the same project simultaneously, two instances can accidentally edit the same file at the same time — the last write silently overwrites the other's changes.
+
+This project ships **Claude Code file-lock hooks** that handle this automatically:
+
+- **Before editing** any file — the hook checks if another Claude Code instance is already editing it. If so, it **waits** (polling every 3 seconds) until the file is free, then proceeds.
+- **After editing** — the hook immediately releases the lock so the next waiting instance can continue.
+- **Stale locks** (e.g. if a Claude session crashed) are detected via PID check and cleared automatically.
+
+```
+Claude A (terminal 1)        Claude B (terminal 2)
+──────────────────────       ──────────────────────────────
+Edit server.js               Edit server.js  ← arrives simultaneously
+→ acquires lock              → sees lock, starts waiting...
+→ edits file ✓                 ⏳ polling every 3s
+→ releases lock              → lock is free! acquires it
+                             → edits file ✓
+                             → releases lock
+```
+
+The hooks are installed automatically on `npm install` via the `postinstall` script. The script **merges** into any existing `.claude/settings.json` — it never overwrites hooks you already have configured. Works on macOS and Linux (including Docker).
 
 ---
 

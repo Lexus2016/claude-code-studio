@@ -39,5 +39,8 @@ Thumbs.db
 # OMC plugin sessions & state (local tool data)
 .omc/
 
+# File locks (multi-instance Claude Code coordination)
+.claude/locks/*.lock
+
 # Config with API keys (use config.example.json as template)
 config.json

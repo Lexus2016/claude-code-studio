@@ -1,13 +1,23 @@
 {
   "hooks": {
-    "PostToolUse": [
+    "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/admin/_Projects/AI_Osoba/CC_WEB/claude-code-chat/.claude/metadata-updater.sh",
-            "timeout": 5000
+            "command": "bash .claude/scripts/file-lock.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/scripts/file-unlock.sh"
           }
         ]
       }
