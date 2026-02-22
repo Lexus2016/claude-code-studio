@@ -232,6 +232,8 @@ const TASK_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // abort orphaned tasks after 30 mi
 // When chat client opens a session, it subscribes via WS. Task worker broadcasts
 // text/tool/done events to all watchers of that session.
 const sessionWatchers = new Map(); // sessionId → Set<WebSocket>
+const taskBuffers = new Map();     // taskId → accumulated text (for late subscribers)
+
 function broadcastToSession(sessionId, data) {
   const watchers = sessionWatchers.get(sessionId);
   if (!watchers?.size) return;
@@ -271,12 +273,14 @@ async function startTask(task) {
     const claudeSessionId = session?.claude_session_id || null;
     const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
     let fullText = '', newCid = claudeSessionId, hasError = false;
+    taskBuffers.set(task.id, '');
     // Notify watchers that task started
     broadcastToSession(sessionId, { type: 'task_started', taskId: task.id, title: task.title, tabId: sessionId });
     await new Promise(resolve => {
       cli.send({ prompt, sessionId: claudeSessionId, model: 'sonnet', maxTurns: 50 })
         .onText(t => {
           fullText += t;
+          taskBuffers.set(task.id, (taskBuffers.get(task.id) || '') + t);
           broadcastToSession(sessionId, { type: 'text', text: t, tabId: sessionId });
         })
         .onTool((name, inp) => {
@@ -304,6 +308,7 @@ async function startTask(task) {
     console.error(`[taskWorker] task ${task.id} exception:`, err);
     db.prepare(`UPDATE tasks SET status='cancelled', updated_at=datetime('now') WHERE id=?`).run(task.id);
   } finally {
+    taskBuffers.delete(task.id);
     taskRunning.delete(task.id);
     setTimeout(processQueue, 500);
   }
@@ -1338,6 +1343,15 @@ wss.on('connection', (ws) => {
         for (const [sid, set] of sessionWatchers) { set.delete(ws); if (!set.size) sessionWatchers.delete(sid); }
         if (!sessionWatchers.has(sessionId)) sessionWatchers.set(sessionId, new Set());
         sessionWatchers.get(sessionId).add(ws);
+        // If task is already running for this session, catch up the new subscriber
+        const runningTask = db.prepare(
+          `SELECT * FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`
+        ).get(sessionId);
+        if (runningTask && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'task_started', taskId: runningTask.id, title: runningTask.title, tabId: sessionId }));
+          const buf = taskBuffers.get(runningTask.id);
+          if (buf) ws.send(JSON.stringify({ type: 'text', text: buf, tabId: sessionId }));
+        }
       }
       return;
     }
