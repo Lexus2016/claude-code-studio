@@ -1663,8 +1663,36 @@ function parseListBlock(blockText) {
   return buildList(lines);
 }
 
+// Pre-process: detect inline numbered items "1) text, 2) text, 3) text"
+// and reformat as standard markdown list "1. text\n2. text\n3. text"
+function reformatInlineNumberedItems(text) {
+  return text.split('\n').map(line => {
+    const regex = /\b(\d+)\)\s+/g;
+    const matches = [...line.matchAll(regex)];
+    if (matches.length < 2) return line;
+    const nums = matches.map(m => parseInt(m[1]));
+    if (nums[0] !== 1) return line;
+    const prefix = line.substring(0, matches[0].index).trimEnd();
+    const items = [];
+    for (let i = 0; i < matches.length; i++) {
+      const start = matches[i].index + matches[i][0].length;
+      const end = i + 1 < matches.length ? matches[i + 1].index : line.length;
+      let itemText = line.substring(start, end).trim();
+      itemText = itemText.replace(/[,;]\s*$/, '');
+      items.push(`${nums[i]}. ${itemText}`);
+    }
+    const parts = [];
+    if (prefix) parts.push(prefix);
+    parts.push(...items);
+    return parts.join('\n');
+  }).join('\n');
+}
+
 function renderMd(text) {
   if (!text) return '';
+
+  // 0. Reformat inline numbered items into proper markdown list
+  text = reformatInlineNumberedItems(text);
 
   // 1. Extract and protect code blocks
   const blocks = [];

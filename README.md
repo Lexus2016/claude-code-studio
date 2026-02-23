@@ -1,131 +1,273 @@
 # Claude Code Studio
 
-**Full-featured web workspace for [Claude Code](https://claude.ai/code)** — chat, Kanban task board, multi-agent orchestration, MCP servers, skills, projects — all in one place. No build step required.
+**A web interface for Claude Code** — chat with AI, manage tasks on a Kanban board, run multiple agents in parallel, and automate your entire development workflow. No coding skills required to get started.
 
 > Available in: [English](README.md) | [Українська](README_UA.md) | [Русский](README_RU.md)
 
 ---
 
-## Features
+## What is this?
 
-| Feature | Description |
-|---------|-------------|
-| 🖥 CLI Mode | Works via `claude` CLI with Max subscription (no API costs) |
-| 💬 Real-time Chat | WebSocket streaming with markdown rendering |
-| 👥 Multi-Agent | Orchestrate a team of agents with dependency graph |
-| ⚡ MCP Servers | Connect any MCP server — presets + custom |
-| 🧠 Skills | Load `.md` skill files into Claude's system prompt |
-| 🔄 Modes | Auto / Planning / Task execution modes |
-| 💎 Models | Opus 4.6 / Sonnet 4.6 / Haiku 4.5 |
-| 📁 File Browser | Browse workspace, preview files, attach via `@mention` |
-| 🖼 Vision | Paste images from clipboard, send as vision blocks |
-| 📋 History | Persistent sessions in SQLite, resumable |
-| ⚙️ Config Editor | Edit `config.json`, `CLAUDE.md`, `.env` in the UI |
-| 🔒 Auth | bcrypt password + 30-day session tokens |
-| 🐳 Docker | Dockerfile + docker-compose included |
-| 🗂 Projects | Named projects with custom workdir, git init, directory browser |
-| 🪟 Parallel Tabs | Multiple browser tabs run independently; streaming preserved when switching |
-| 📊 Stats Panel | Daily/weekly Claude Max usage, context token estimate |
-| 🔐 Multi-instance Safety | File-lock hooks prevent conflicts; workdir-level queue in Kanban |
-| 📋 Kanban Board | Drag-and-drop task board at `/kanban` — create tasks, run Claude Code per card |
-| 📎 File Attachments | Attach images and text files to Kanban cards — written to workspace for Claude |
-| 🔁 Retry Tracking | Auto-retry on crash with retry count badge; no duplicate user messages |
-| 🌍 i18n | Interface in English / Ukrainian / Russian (auto-detected) |
+Claude Code Studio is a browser-based workspace that lets you work with [Claude Code](https://claude.ai/code) — Anthropic's AI coding assistant — without using a terminal. You open it in your browser, type what you want done, and Claude does it.
+
+**Think of it as a control panel for your AI assistant:**
+- 💬 Chat with Claude and see the work happen in real time
+- 📋 Create task cards on a Kanban board — Claude picks them up and runs them automatically
+- 👥 Run multiple agents working in parallel on different tasks
+- 📁 Browse files, paste images, attach documents — all from the browser
+- 🔌 Connect MCP servers and custom skill files to extend Claude's capabilities
+
+---
+
+## Demo Video
+
+Watch how the Kanban board works: create a task card for a new release → Claude Code picks it up → runs the task → card moves to Done. At the end you can see the actual GitHub release before and after — the agent really did ship the new version.
+
+<video src="https://github.com/Lexus2016/claude-code-studio/releases/download/v5.1.0/new_release_video.mov" controls width="100%"></video>
+
+> **Can't see the video?** [Download and watch it directly](https://github.com/Lexus2016/claude-code-studio/releases/download/v5.1.0/new_release_video.mov)
 
 ---
 
 ## Screenshots
 
 ### Login Screen
-Secure authentication with bcrypt-hashed passwords and 30-day session tokens.
+A clean, secure login page. On first launch you set your own password.
 
 ![Login Screen](public/screenshots/01-login.png)
 
 ### Chat Interface
-Full-featured workspace: real-time WebSocket chat with markdown rendering, MCP server toggles, 20+ skill presets (auto-selected by task), file browser with preview, model & mode selectors — all in a single dark-themed SPA.
+Real-time conversation with Claude Code. Supports markdown, code blocks with syntax highlighting, MCP server toggles, skill presets, file browser, and model selector — all in one dark-themed page.
 
 ![Chat Interface](public/screenshots/02-main-chat.png)
 
 ### Kanban Board
-Drag-and-drop task board with automatic Claude Code execution. Move a card to "To Do" — Claude picks it up, runs the task, and reports back. Retry on crash, per-project filtering, model selection per card.
+Drag a card to "To Do" and Claude starts working on it automatically. See live output, retry on crash, link cards to chat sessions, and track everything in one place.
 
 ![Kanban Board](public/screenshots/03-kanban.png)
 
 ---
 
-## Installation & Running
+## Quick Start (3 steps)
 
-### Method 1 — Run instantly with npx (no install)
+**Requirements:** [Node.js 18+](https://nodejs.org) and the [`claude` CLI](https://docs.anthropic.com/en/claude-code) installed and logged in.
 
-The easiest way. Downloads and runs the latest release directly:
+```bash
+# 1. Run it instantly (no installation needed)
+npx github:Lexus2016/claude-code-studio
+
+# 2. Open your browser
+# → http://localhost:3000
+
+# 3. Set your password on first launch, then start chatting
+```
+
+That's it. To run it again later, just repeat step 1.
+
+---
+
+## Installation Methods
+
+### Option A — Run with npx (easiest, no install)
 
 ```bash
 npx github:Lexus2016/claude-code-studio
-# Open http://localhost:3000
 ```
 
-Or install globally and run any time:
+**Update to latest version:**
+```bash
+npx github:Lexus2016/claude-code-studio@latest
+```
+
+---
+
+### Option B — Install globally (run anytime)
 
 ```bash
 npm install -g github:Lexus2016/claude-code-studio
 claude-code-chat
-# Open http://localhost:3000
 ```
 
-**How to update:**
+**Update:**
 ```bash
 npm install -g github:Lexus2016/claude-code-studio@latest
 ```
 
 ---
 
-### Method 2 — git clone (full control)
-
-**Prerequisites:**
-- Node.js 18+
-- [`claude` CLI](https://docs.anthropic.com/en/claude-code) installed and authenticated (for CLI mode)
+### Option C — Clone the repo (for developers)
 
 ```bash
 git clone https://github.com/Lexus2016/claude-code-studio.git
 cd claude-code-studio
 npm install
-
 cp .env.example .env
-# Edit .env as needed
-
 node server.js
-# Open http://localhost:3000
-# First launch: create a password
 ```
 
-**How to update:**
+Open `http://localhost:3000` in your browser.
+
+**Update:**
 ```bash
-git pull
-npm install
-node server.js
+git pull && npm install && node server.js
 ```
 
 ---
 
-### Method 3 — Docker
+### Option D — Docker
 
 ```bash
 git clone https://github.com/Lexus2016/claude-code-studio.git
 cd claude-code-studio
-
 cp .env.example .env
-# Edit .env as needed
-
 docker compose up -d --build
-docker compose logs -f claude-chat
-# Open http://localhost:3000
 ```
 
-**How to update:**
+Open `http://localhost:3000`. Logs: `docker compose logs -f claude-chat`
+
+**Update:**
 ```bash
-git pull
-docker compose up -d --build
+git pull && docker compose up -d --build
 ```
+
+---
+
+## What Can It Do?
+
+| Feature | What it means for you |
+|---------|----------------------|
+| 💬 **Real-time Chat** | Talk to Claude, see responses stream in as it thinks and works |
+| 📋 **Kanban Board** | Create task cards → Claude runs them automatically, one by one or in parallel |
+| 👥 **Multi-Agent Mode** | Claude spawns a team of specialized agents and coordinates them for big tasks |
+| ⚡ **MCP Servers** | Connect external tools (databases, GitHub, Slack, etc.) so Claude can use them |
+| 🧠 **Skills** | Upload `.md` files that tell Claude how to work in your specific domain |
+| 📁 **File Browser** | Browse your project files, preview them, attach with `@filename` in chat |
+| 🖼 **Vision** | Paste screenshots from clipboard — Claude can see and analyze images |
+| 🗂 **Projects** | Separate projects with their own working directories and chat history |
+| 💾 **History** | All sessions saved to SQLite — resume any conversation where you left off |
+| 🔒 **Auth** | Password login + 30-day session tokens. Your data stays on your machine |
+| 🌍 **i18n** | Interface in English, Ukrainian, or Russian (auto-detected) |
+| 🐳 **Docker** | Deploy anywhere with the included Dockerfile and docker-compose |
+
+---
+
+## Kanban Board — How It Works
+
+Go to `/kanban` in your browser (or click the board icon in the sidebar).
+
+### Basic flow
+1. **Create a card** — give it a title and describe what Claude should do
+2. **Move it to "To Do"** — Claude picks it up automatically and starts working
+3. **Watch the progress** — click the card to see the live chat output
+4. **Card moves to "Done"** — when the task is complete, the card advances on its own
+
+### Parallel vs Sequential tasks
+
+When creating a card you choose whether to link it to a **new session** or an **existing one**:
+
+| | New session | Same session as another card |
+|---|---|---|
+| **Context** | Fresh start — Claude doesn't know about other tasks | Shared — Claude remembers what the previous card did |
+| **Execution** | **Runs in parallel** with other new-session cards | **Runs after** the previous card in that session finishes |
+| **Use when** | Tasks are independent | One task needs the result of another |
+
+**Example — parallel (independent tasks):**
+```
+Card: "Add login page"          → New session
+Card: "Redesign dashboard"      → New session
+```
+Both run at the same time in separate Claude processes.
+
+**Example — sequential (dependent tasks):**
+```
+Card: "Create /users API"       → New session #14
+Card: "Write tests for the API" → Existing session #14
+```
+Card 2 waits for Card 1 to finish, then runs with full context of what was built.
+
+> **Rule of thumb:** if you'd ask these in one chat conversation, link them to the same session. If you'd open two separate chats, use new sessions.
+
+---
+
+## Multi-Instance Safety (File Locks)
+
+If you run multiple Claude Code processes on the same project at the same time, they might try to edit the same file simultaneously — which can cause data loss.
+
+Claude Code Studio solves this automatically with **file-lock hooks**:
+
+- Before Claude edits any file → it checks if another Claude process is already editing it
+- If yes → it waits until the file is free (checks every 3 seconds)
+- After editing → it releases the lock so the next process can continue
+- Crashed processes → stale locks are detected and cleared automatically
+
+```
+Claude A (task 1)          Claude B (task 2)
+──────────────────         ──────────────────────────
+Edit server.js             Edit server.js  ← same time
+→ acquires lock            → waits (lock is taken)
+→ edits file ✓              ⏳ checking every 3s...
+→ releases lock            → lock free! acquires it
+                           → edits file ✓
+```
+
+Hooks are installed automatically on `npm install`. Works on macOS, Linux, and Docker.
+
+---
+
+## Configuration
+
+### Environment variables (`.env`)
+
+Copy `.env.example` to `.env` and adjust as needed:
+
+```env
+PORT=3000                    # Port to run on
+WORKDIR=./workspace          # Where Claude works (your project files)
+MAX_TASK_WORKERS=5           # Max parallel Claude processes for Kanban
+CLAUDE_TIMEOUT_MS=1800000    # Max time per task in ms (default: 30 minutes)
+TRUST_PROXY=false            # Set true if running behind nginx/Caddy
+LOG_LEVEL=info               # Logging: error | warn | info | debug
+```
+
+For SDK engine (optional, if you want to use an API key instead of `claude` CLI):
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### Adding MCP servers
+Open the left panel → ⚡ MCP → **+ Add MCP**
+
+### Adding Skills
+Open the left panel → 🧠 Skills → **+ Upload .md**
+
+Or drop `.md` files directly into the `skills/` folder and restart.
+
+### Projects
+Left panel → 🗂 Projects → **+ New Project**
+
+Each project has its own working directory. Sessions are scoped to projects.
+
+---
+
+## Security
+
+- Passwords are hashed with bcrypt (12 rounds) — never stored in plain text
+- Auth tokens: 32-byte random hex, 30-day expiry, server-side storage
+- WebSocket protected by `httpOnly` cookie
+- API keys never sent to the browser
+- Helmet.js security headers on all responses
+- Rate limiting on login endpoints
+
+---
+
+## Development
+
+```bash
+npm run dev    # auto-reload on file changes (node --watch)
+npm start      # production start
+```
+
+No build tools, no TypeScript, no linting config — vanilla JS frontend, plain Node.js backend. Open `public/index.html` to see the entire frontend.
 
 ---
 
@@ -133,191 +275,19 @@ docker compose up -d --build
 
 ```
 claude-code-studio/
-├── server.js           # Express + WebSocket server (main entry point)
-├── auth.js             # bcrypt auth, 30-day token sessions
-├── claude-cli.js       # Spawns claude CLI subprocess, parses JSON stream
-├── config.json         # MCP server definitions + skills catalog
-├── config.example.json # Config template (committed to git)
-├── package.json
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example        # Environment variable template
-├── bin/
-│   └── cli.js          # npx / global install entry point
+├── server.js           ← main server (Express + WebSocket)
+├── auth.js             ← login, password hashing, session tokens
+├── claude-cli.js       ← spawns claude subprocess, parses output stream
+├── config.json         ← MCP servers + skills catalog
 ├── public/
-│   ├── index.html      # Single-file SPA (embedded CSS + JS)
-│   └── auth.html       # Login / Setup page
-├── skills/             # Skill .md files (loaded into system prompt)
-├── scripts/
-│   └── install-hooks.js  # postinstall: merges Claude Code hooks into .claude/settings.json
-├── .claude/
-│   ├── settings.json   # Claude Code project hooks config (auto-managed by postinstall)
-│   ├── scripts/
-│   │   ├── file-lock.sh    # PreToolUse hook: wait for file lock before editing
-│   │   └── file-unlock.sh  # PostToolUse hook: release lock after editing
-│   └── locks/          # Runtime lock files (gitignored)
-├── data/               # Runtime data (gitignored)
-│   ├── chats.db        # SQLite database
-│   ├── auth.json       # bcrypt password hash
-│   ├── sessions-auth.json
-│   ├── projects.json   # Saved projects list
-│   └── uploads/        # Uploaded files
-└── workspace/          # Default Claude Code working directory (gitignored)
+│   ├── index.html      ← entire frontend (single file: HTML + CSS + JS)
+│   └── auth.html       ← login/setup page
+├── skills/             ← .md skill files loaded into Claude's system prompt
+├── data/               ← runtime data (gitignored)
+│   ├── chats.db        ← SQLite database (sessions + messages)
+│   └── auth.json       ← password hash
+└── workspace/          ← default Claude working directory (gitignored)
 ```
-
----
-
-## Configuration
-
-### Environment Variables (`.env`)
-
-```env
-PORT=3000
-SESSION_SECRET=           # Auto-generated if empty
-WORKDIR=./workspace       # Default Claude working directory
-TRUST_PROXY=false         # Set true behind nginx/Caddy
-LOG_LEVEL=info            # Logging verbosity: error | warn | info | debug
-NODE_ENV=production       # Enables structured JSON logging (for Loki, Datadog, etc.)
-MAX_TASK_WORKERS=5        # Max parallel Claude Code processes for Kanban tasks
-CLAUDE_TIMEOUT_MS=1800000 # Claude subprocess timeout in ms (default 30 min; increase for long agentic tasks)
-```
-
-### Adding MCP Servers
-1. Left panel → ⚡ MCP → "+ Add MCP"
-2. Or edit `config.json` directly via ⚙️ Config Editor
-
-### Adding Skills
-1. Left panel → 🧠 Skills → "+ Upload .md"
-2. Or drop `.md` files in `skills/` and update `config.json`
-3. Global skills from `~/.claude/skills/` are also loaded automatically
-
-### Projects
-- Left panel → 🗂 Projects → "+ New Project"
-- Each project has a name and a working directory (any path on disk)
-- Optional `git init` on creation
-- Sessions are scoped to a project — history is filtered per project
-
----
-
-## Architecture
-
-```
-Client (browser) ──WS──► server.js ──► claude-cli.js ──► claude (subprocess)
-                    HTTP ◄──────────────────────────────────────────────────
-```
-
-- Single Node.js process, no build tools
-- WebSocket for bidirectional streaming
-- SQLite (WAL mode) for sessions and messages
-- Multi-agent: orchestrator generates JSON plan → parallel agent execution
-- Per-tab parallelism: each browser tab runs its own independent queue
-
-### SQLite Schema
-
-```sql
-sessions: id, title, created_at, updated_at, claude_session_id,
-          active_mcp, active_skills, mode, agent_mode, model, engine, workdir
-
-messages: id, session_id, role, type, content, tool_name,
-          agent_id, reply_to_id, created_at
-```
-
----
-
-## Kanban Board
-
-Navigate to `/kanban` to access the task board.
-
-- **Columns**: Backlog → To Do → In Progress → Done / Cancelled
-- **Create tasks**: title, description, notes, linked session, model/mode settings
-- **File attachments**: attach images or text files — written to `.kanban-attachments/{taskId}/` in the workspace at task start
-- **Run Claude Code**: move a card to "To Do" and it starts automatically; one task per workdir at a time
-- **Stop**: drag a running card away from "In Progress" to send SIGTERM to the Claude subprocess
-- **Retry**: if Claude crashes, the task auto-restarts with a retry badge (no duplicate messages)
-- **Session link**: each card links to its chat session — view history or open in Claude Code terminal
-
-### Sessions in Kanban: Parallel vs Sequential Execution
-
-A **session** in Kanban is the same thing as a **chat** in Chat mode. It holds the full conversation context — everything Claude has already seen and discussed.
-
-When creating a Kanban task, you choose whether to create a **new session** or select an **existing one**. This choice fundamentally changes how Claude executes the task:
-
-| | New Session | Existing Session |
-|---|---|---|
-| **Context** | Fresh — Claude knows nothing about prior tasks | Shared — Claude remembers all previous tasks in this session |
-| **Execution** | **Parallel** — runs independently alongside other tasks | **Sequential** — waits for the previous task in the same session to finish |
-| **Best for** | Independent tasks that don't depend on each other | Step-by-step work where each task builds on the previous one |
-
-**Example — Parallel (new sessions):**
-
-You need to add a login page AND redesign the dashboard. These are unrelated tasks, so you create two Kanban cards, each with a **new session**:
-
-```
-Card 1: "Add login page"        → New Session (Session #12)
-Card 2: "Redesign dashboard"    → New Session (Session #13)
-```
-
-Both cards run **at the same time** in separate Claude Code processes. Each Claude instance has its own clean context and doesn't know about the other task. *(Limited by `MAX_TASK_WORKERS` — default 5 parallel processes.)*
-
-**Example — Sequential (same session):**
-
-You want Claude to first create an API, then write tests for it. The second task needs the context of the first. You create two cards linked to the **same session**:
-
-```
-Card 1: "Create REST API for /users"     → New Session (Session #14)
-Card 2: "Write tests for /users API"     → Existing Session #14
-```
-
-Card 1 runs first. When it finishes and moves to "Done", Card 2 starts — **in the same session**. Claude already knows the API structure, file locations, and decisions from Card 1, so it writes tests with full context. This is like continuing a conversation in Chat mode.
-
-> **Tip:** Think of it this way — if you would ask these questions in **one chat conversation** (sequential), link the cards to the same session. If you would open **separate chats** (parallel), create new sessions for each card.
-
----
-
-## Multi-instance Safety
-
-When you open Claude Code in multiple terminals and work on the same project simultaneously, two instances can accidentally edit the same file at the same time — the last write silently overwrites the other's changes.
-
-This project ships **Claude Code file-lock hooks** that handle this automatically:
-
-- **Before editing** any file — the hook checks if another Claude Code instance is already editing it. If so, it **waits** (polling every 3 seconds) until the file is free, then proceeds.
-- **After editing** — the hook immediately releases the lock so the next waiting instance can continue.
-- **Stale locks** (e.g. if a Claude session crashed) are detected via PID check and cleared automatically.
-
-```
-Claude A (terminal 1)        Claude B (terminal 2)
-──────────────────────       ──────────────────────────────
-Edit server.js               Edit server.js  ← arrives simultaneously
-→ acquires lock              → sees lock, starts waiting...
-→ edits file ✓                 ⏳ polling every 3s
-→ releases lock              → lock is free! acquires it
-                             → edits file ✓
-                             → releases lock
-```
-
-The hooks are installed automatically on `npm install` via the `postinstall` script. The script **merges** into any existing `.claude/settings.json` — it never overwrites hooks you already have configured. Works on macOS and Linux (including Docker).
-
----
-
-## Security
-
-- Passwords hashed with bcrypt (12 rounds)
-- Auth tokens: 32-byte hex, 30-day TTL, server-side storage
-- WebSocket protected by `httpOnly` cookie
-- API keys never sent to the frontend
-- Helmet.js security headers
-- Rate limiting on auth endpoints
-
----
-
-## Development
-
-```bash
-npm run dev    # node --watch server.js (auto-reload)
-npm start      # node server.js (production)
-```
-
-No linter, no test suite, no build step — vanilla JS frontend, plain Node.js backend.
 
 ---
 
