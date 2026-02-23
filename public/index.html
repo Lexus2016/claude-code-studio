@@ -202,7 +202,7 @@ body::after {
 /* ─── Header ─── */
 .hdr { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--s1); border-bottom: 1px solid var(--border); }
 .hdr-l { display: flex; align-items: center; gap: 10px; }
-.logo { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), #a855f7); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; color: white; flex-shrink: 0; box-shadow: 0 2px 8px rgba(124,106,239,.4); }
+.logo { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), #a855f7); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 10px; color: white; flex-shrink: 0; box-shadow: 0 2px 8px rgba(124,106,239,.4); }
 .hdr h1 { font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
 .hdr-meta { display: flex; align-items: center; gap: 6px; }
 .status-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; }
@@ -335,6 +335,102 @@ body::after {
 .agent-status .astxt { opacity: .75; }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .25; transform: scale(.65); } }
 
+/* ─── Agent team card ─── */
+.agent-team-card {
+  align-self: flex-start;
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0;
+  max-width: 380px;
+  overflow: hidden;
+  animation: status-appear .25s var(--ease-out);
+  margin: 4px 0;
+}
+.atc-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid rgba(124,106,239,.1);
+}
+.atc-header .atc-icon {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0;
+}
+.atc-header .atc-title {
+  font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: .02em;
+}
+.atc-header .atc-plan {
+  font-size: 10.5px; color: var(--muted); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px;
+}
+.atc-agents {
+  padding: 6px 10px 10px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.atc-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.02);
+  transition: background .15s;
+}
+.atc-row:hover { background: rgba(255,255,255,.04); }
+.atc-row .atc-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--muted); opacity: .4;
+  transition: all .25s var(--ease-out);
+}
+.atc-row.atc-working .atc-dot {
+  background: var(--accent); opacity: 1;
+  animation: pulse-dot 1.4s ease-in-out infinite;
+  box-shadow: 0 0 6px rgba(124,106,239,.4);
+}
+.atc-row.atc-done .atc-dot {
+  background: var(--green); opacity: 1;
+  box-shadow: 0 0 6px rgba(63,185,80,.3);
+}
+.atc-row.atc-error .atc-dot {
+  background: var(--red); opacity: 1;
+  box-shadow: 0 0 6px rgba(248,81,73,.3);
+}
+.atc-row .atc-id {
+  font-size: 10px; font-weight: 700; color: var(--accent2);
+  min-width: 56px; flex-shrink: 0;
+}
+.atc-row .atc-role {
+  font-size: 11px; color: var(--text); opacity: .8;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.atc-row .atc-task {
+  font-size: 10px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 200px;
+  display: none;
+}
+.atc-row:hover .atc-task { display: inline; }
+.atc-row:hover .atc-role { display: none; }
+.atc-footer {
+  padding: 4px 14px 8px;
+  border-top: 1px solid rgba(124,106,239,.06);
+  display: flex; align-items: center; gap: 6px;
+}
+.atc-footer .atc-count {
+  font-size: 10px; color: var(--muted); opacity: .7;
+}
+.atc-footer .atc-progress {
+  flex: 1; height: 3px; border-radius: 2px;
+  background: rgba(255,255,255,.05);
+  overflow: hidden;
+}
+.atc-footer .atc-progress-bar {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  transition: width .4s var(--ease-out);
+  width: 0%;
+}
+
 /* ─── Sticky status bar ─── */
 #statusBar {
   display: flex; align-items: center; gap: 10px;
@@ -364,9 +460,130 @@ body::after {
   opacity: .82; max-width: 520px;
 }
 
-/* ─── Message spinner / done badge ─── */
-.msg-spinner { position: absolute; top: 9px; right: 36px; width: 13px; height: 13px; border: 2px solid rgba(124,106,239,.2); border-top-color: var(--accent); border-radius: 50%; animation: spin .65s linear infinite; z-index: 1; }
-.msg-done { position: absolute; top: 7px; right: 34px; color: var(--green); font-size: 14px; line-height: 1; z-index: 1; }
+/* ─── Message status footer ─── */
+.msg-status-footer {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 14px 4px;
+  border-top: 1px solid transparent;
+  margin-top: 2px;
+  animation: status-appear .2s var(--ease-out);
+  overflow: hidden;
+}
+@keyframes status-appear {
+  from { opacity: 0; transform: translateY(-4px); max-height: 0; padding-top: 0; }
+  to   { opacity: 1; transform: translateY(0);    max-height: 36px; }
+}
+
+/* ─── Streaming state ─── */
+.msg-status-footer.state-streaming {
+  border-top-color: rgba(124,106,239,.12);
+}
+.msg-status-footer.state-streaming .msf-icon {
+  position: relative; width: 14px; height: 14px; flex-shrink: 0;
+}
+.msg-status-footer.state-streaming .msf-icon::before,
+.msg-status-footer.state-streaming .msf-icon::after {
+  content: ''; position: absolute; border-radius: 50%;
+}
+.msg-status-footer.state-streaming .msf-icon::before {
+  inset: 0;
+  border: 2px solid rgba(124,106,239,.18);
+  border-top-color: var(--accent);
+  animation: msf-spin .7s linear infinite;
+}
+.msg-status-footer.state-streaming .msf-icon::after {
+  inset: 4px;
+  background: var(--accent);
+  opacity: .45;
+  animation: msf-pulse 1.4s ease-in-out infinite;
+}
+.msg-status-footer.state-streaming .msf-label {
+  font-size: 11.5px; font-weight: 600; letter-spacing: .03em;
+  color: var(--accent2); opacity: .85;
+}
+.msg-status-footer.state-streaming .msf-dots span {
+  display: inline-block; width: 3px; height: 3px; border-radius: 50%;
+  background: var(--accent2); opacity: .5; margin-left: 2px;
+  animation: msf-dot-bounce .9s ease-in-out infinite;
+}
+.msg-status-footer.state-streaming .msf-dots span:nth-child(2) { animation-delay: .15s; }
+.msg-status-footer.state-streaming .msf-dots span:nth-child(3) { animation-delay: .3s; }
+
+/* ─── Done state ─── */
+.msg-status-footer.state-done {
+  border-top-color: rgba(63,185,80,.1);
+  animation: status-done-in .35s var(--ease-out);
+}
+@keyframes status-done-in {
+  from { opacity: 0; transform: translateY(-3px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.msg-status-footer.state-done .msf-icon {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(63,185,80,.18);
+  border: 1.5px solid rgba(63,185,80,.45);
+  display: flex; align-items: center; justify-content: center;
+  animation: msf-check-pop .3s var(--ease-out);
+  box-shadow: 0 0 8px rgba(63,185,80,.2);
+}
+@keyframes msf-check-pop {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.msg-status-footer.state-done .msf-icon::after {
+  content: '';
+  display: block; width: 6px; height: 4px;
+  border-left: 2px solid var(--green); border-bottom: 2px solid var(--green);
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+.msg-status-footer.state-done .msf-label {
+  font-size: 12px; font-weight: 600; letter-spacing: .02em;
+  color: var(--green); opacity: .85;
+}
+
+/* ─── Error state ─── */
+.msg-status-footer.state-error {
+  border-top-color: rgba(248,81,73,.1);
+}
+.msg-status-footer.state-error .msf-icon {
+  width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(248,81,73,.12); border: 1.5px solid rgba(248,81,73,.35);
+  display: flex; align-items: center; justify-content: center;
+}
+.msg-status-footer.state-error .msf-icon::after {
+  content: '!'; font-size: 9px; font-weight: 800; color: var(--red); line-height: 1;
+}
+.msg-status-footer.state-error .msf-label {
+  font-size: 11px; font-weight: 500; color: var(--red); opacity: .75;
+}
+
+/* ─── Waiting state ─── */
+.msg-status-footer.state-waiting {
+  border-top-color: rgba(229,164,53,.08);
+}
+.msg-status-footer.state-waiting .msf-icon {
+  width: 14px; height: 14px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; gap: 2px;
+}
+.msg-status-footer.state-waiting .msf-icon span {
+  display: block; width: 3px; border-radius: 2px; background: var(--orange);
+  animation: msf-bar-bounce .8s ease-in-out infinite;
+}
+.msg-status-footer.state-waiting .msf-icon span:nth-child(1) { height: 5px; animation-delay: 0s; }
+.msg-status-footer.state-waiting .msf-icon span:nth-child(2) { height: 9px; animation-delay: .12s; }
+.msg-status-footer.state-waiting .msf-icon span:nth-child(3) { height: 5px; animation-delay: .24s; }
+.msg-status-footer.state-waiting .msf-label {
+  font-size: 11px; font-weight: 500; color: var(--orange); opacity: .75;
+}
+
+/* ─── Keyframe library ─── */
+@keyframes msf-spin        { to { transform: rotate(360deg); } }
+@keyframes msf-pulse       { 0%,100% { transform: scale(1); opacity: .45; } 50% { transform: scale(0); opacity: 0; } }
+@keyframes msf-dot-bounce  { 0%,80%,100% { transform: translateY(0); opacity: .5; } 40% { transform: translateY(-3px); opacity: 1; } }
+@keyframes msf-bar-bounce  { 0%,100% { transform: scaleY(1); opacity: .6; } 50% { transform: scaleY(1.5); opacity: 1; } }
+
+/* Legacy: keep spin for any old refs that may exist */
 @keyframes spin { to { transform: rotate(360deg); } }
 /* ─── Streaming cursor ─── */
 .stream-cursor { display: inline-block; width: 2px; height: .85em; background: var(--accent); margin-left: 2px; vertical-align: middle; border-radius: 1px; animation: blink .8s step-end infinite; }
@@ -468,6 +685,8 @@ body::after {
 /* ─── Session info bar ─── */
 .sess-bar { display:flex; align-items:center; gap:6px; padding:3px 14px; font-size:11px; color:var(--text-dim); border-bottom:1px solid var(--border); user-select:none; min-height:24px; flex-shrink:0; }
 .sess-project { font-weight:600; color:var(--accent2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:300px; }
+.sess-skill-chip { font-size:10px; color:var(--accent2); background:rgba(124,106,239,.12); border:1px solid rgba(124,106,239,.25); padding:1px 7px; border-radius:4px; white-space:nowrap; max-width:120px; overflow:hidden; text-overflow:ellipsis; }
+.sess-skill-auto { color:var(--orange); background:rgba(229,164,53,.12); border-color:rgba(229,164,53,.3); }
 
 /* ─── Retry indicators ─── */
 .retry-badge { font-size:11px; color:var(--text-dim); opacity:.65; margin-top:3px; letter-spacing:.01em; }
@@ -912,7 +1131,7 @@ body::after {
 <div class="center">
   <div class="hdr">
     <div class="hdr-l">
-      <div class="logo">CC</div>
+      <div class="logo">CCS</div>
       <nav class="nav-sw" aria-label="Навігація між розділами" data-i18n-aria="nav.aria">
         <a class="nav-sw-btn active" href="/" data-tip="Чат" data-i18n-tip="nav.chat.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
@@ -924,7 +1143,6 @@ body::after {
         </a>
       </nav>
       <div class="hdr-meta">
-        <span class="status-dot warn" id="statusEl" data-i18n="status.connecting">Підключення...</span>
         <span id="activeProjLabel"></span>
         <span id="versionBadge" data-i18n-title="ver.checking" title="Перевірка версії..."></span>
       </div>
@@ -980,20 +1198,18 @@ body::after {
       <span class="label" data-i18n="tb.turns">Кроки</span>
       <input type="number" class="tb-input" id="maxTurns" value="30" min="1" max="100">
     </div>
-    <div class="mode-ind" id="modeInd">
-      <span class="dot dot-auto"></span> Auto · Single · Sonnet
-    </div>
     <div style="flex:1"></div>
+    <span class="status-dot warn" id="statusEl" data-i18n="status.connecting">Підключення...</span>
   </div>
 
   <div class="tabs-bar" id="tabsBar"></div>
 
   <div class="sess-bar" id="sessBar" style="display:none">
-    <span id="sessBarTitle" style="font-weight:600;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;flex-shrink:1;"></span>
-    <span id="sessBarClaudeId" style="display:none;font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="" onclick="copySessId()"></span>
-    <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openInClaude()">⚡ Claude Code</a>
+    <span id="sessBarSkills" style="display:flex;gap:4px;align-items:center;overflow:hidden;flex-shrink:1;"></span>
     <span style="flex:1"></span>
     <span id="sessBarRetry" style="display:none;font-size:11px;color:var(--warn,#f59e0b);opacity:.85;flex-shrink:0;"></span>
+    <span id="sessBarClaudeId" style="display:none;font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="" onclick="copySessId()"></span>
+    <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openInClaude()">⚡ Claude Code</a>
   </div>
 
   <div class="msgs" id="messages" role="log" aria-live="polite" aria-label="Chat messages">
@@ -1374,6 +1590,8 @@ const TRANSLATIONS = {
     'mcp.parse.empty':'Список серверів порожній',
     'mcp.cfg.env_json_err':'Невірний формат ENV JSON',
     'agent.planning':'🧠 Планування...','agent.fallback_single':'⚠️ Перехід до одиночного режиму','agent.done':'✅ Всі агенти завершили','agent.circular_deps':'⚠️ Кругова залежність між агентами',
+    'msf.working':'Працює','msf.done':'Готово','msf.error':'Помилка','msf.waiting':'Очікування',
+    'msf.team':'Команда агентів',
   },
   en: {
     'sec.proactive':'Status',
@@ -1477,6 +1695,8 @@ const TRANSLATIONS = {
     'mcp.parse.empty':'Server list is empty',
     'mcp.cfg.env_json_err':'Invalid ENV JSON format',
     'agent.planning':'🧠 Planning...','agent.fallback_single':'⚠️ Falling back to single mode','agent.done':'✅ All agents done','agent.circular_deps':'⚠️ Circular dependency between agents',
+    'msf.working':'Working','msf.done':'Done','msf.error':'Error','msf.waiting':'Waiting',
+    'msf.team':'Agent Team',
   },
   ru: {
     'sec.proactive':'Статус',
@@ -1580,6 +1800,8 @@ const TRANSLATIONS = {
     'mcp.parse.empty':'Список серверов пуст',
     'mcp.cfg.env_json_err':'Неверный формат ENV JSON',
     'agent.planning':'🧠 Планирование...','agent.fallback_single':'⚠️ Переход в одиночный режим','agent.done':'✅ Все агенты завершили','agent.circular_deps':'⚠️ Циклическая зависимость между агентами',
+    'msf.working':'Работает','msf.done':'Готово','msf.error':'Ошибка','msf.waiting':'Ожидание',
+    'msf.team':'Команда агентов',
   }
 };
 function t(key) {
@@ -1979,10 +2201,23 @@ function handleWsMsg(d) {
       if (!curEl && isVisible) showStatus(t('status.thinking'));
       break;
 
+    case 'agent_plan':
+      if (isVisible && d.agents?.length) {
+        _atcRender(d.plan || '', d.agents);
+      }
+      break;
+
     case 'agent_status': {
       const _asTxt = (d.agent ? d.agent + ' · ' : '') + escH(d.statusKey ? t(d.statusKey) : d.status);
       getTS(tabId).agentStatus = _asTxt; // persist for tab-switch restoration
       if (isVisible) showStatus(_asTxt);
+      // Update team card
+      if (d.agent && d.agent !== 'orchestrator') {
+        const st = d.status || '';
+        if (st.startsWith('🔄')) _atcUpdate(d.agent, 'working');
+        else if (st.startsWith('✅')) _atcUpdate(d.agent, 'done');
+        else if (st.startsWith('❌')) _atcUpdate(d.agent, 'error');
+      }
       break;
     }
 
@@ -2038,11 +2273,14 @@ function handleWsMsg(d) {
         rmStatus();
         sbHide();
         if (curEl) {
-          const s = curEl.querySelector('.msg-spinner'); if (s) s.remove();
+          _msfRemove(curEl);
+          const ef = _msfCreate('error', t('msf.error'));
+          curEl.appendChild(ef);
           curEl.querySelector('.msg').innerHTML += `<br><span style="color:var(--red)">${escH(d.error)}</span>`;
         }
         else {
           const em = addMsg('assistant'); em.querySelector('.msg').innerHTML = `<span style="color:var(--red)">${escH(d.error)}</span>`;
+          const ef = _msfCreate('error', t('msf.error')); em.appendChild(ef);
         }
         isGen = false;
         setSendStop(false);
@@ -2103,9 +2341,10 @@ function handleWsMsg(d) {
     case 'queued':
       break;
 
-    case 'queue_update':
+    case 'queue_update': {
       if (Array.isArray(d.items)) {
         const stillQueued = new Set(d.items.map(i => i.queueId).filter(Boolean));
+        // Remove badges from items no longer in queue
         msgsEl.querySelectorAll('.mw[data-queue-id]').forEach(el => {
           if (!stillQueued.has(el.dataset.queueId)) {
             const q = el.querySelector('.msg-queued');
@@ -2113,8 +2352,23 @@ function handleWsMsg(d) {
             delete el.dataset.queueId;
           }
         });
+        // Recreate queued message bubbles for items missing from DOM
+        // (happens after tab switch when loadSess() cleared the DOM)
+        const _existQIds = new Set([...msgsEl.querySelectorAll('.mw[data-queue-id]')].map(el => el.dataset.queueId));
+        for (const item of d.items) {
+          if (item.queueId && !_existQIds.has(item.queueId)) {
+            const w = addMsg('user');
+            w.dataset.queueId = item.queueId;
+            w.querySelector('.msg').textContent = item.text || '';
+            const qb = document.createElement('div');
+            qb.className = 'msg-queued';
+            qb.innerHTML = `<span class="mq-label">${t('queue.label')}</span><button class="qd-btn qd-edit" onclick="editQueuedMsg(this)" title="${t('queue.edit.title')}">✏</button><button class="qd-btn qd-del" onclick="deleteQueuedMsg(this)" title="${t('queue.del.title')}">✕</button>`;
+            w.appendChild(qb);
+          }
+        }
       }
       break;
+    }
 
     case 'queue_removed':
       {
@@ -2359,6 +2613,65 @@ function addEl(cls) {
   return d;
 }
 
+// ─── Agent team card ───
+let _atcAgents = new Map(); // track agent states per current generation
+function _atcRender(planText, agents) {
+  // Remove any existing card
+  const old = msgsEl.querySelector('.agent-team-card');
+  if (old) old.remove();
+  _atcAgents.clear();
+  agents.forEach(a => _atcAgents.set(a.id, { ...a, state: 'pending' }));
+
+  const card = document.createElement('div');
+  card.className = 'agent-team-card';
+  card.innerHTML = `
+    <div class="atc-header">
+      <div class="atc-icon">🤖</div>
+      <div>
+        <div class="atc-title">${escH(t('msf.team'))}</div>
+        <div class="atc-plan" title="${escH(planText)}">${escH(planText)}</div>
+      </div>
+    </div>
+    <div class="atc-agents">
+      ${agents.map(a => `
+        <div class="atc-row" data-agent-id="${escH(a.id)}">
+          <span class="atc-dot"></span>
+          <span class="atc-id">${escH(a.id)}</span>
+          <span class="atc-role">${escH(a.role)}</span>
+          <span class="atc-task">${escH(a.task || '')}</span>
+        </div>
+      `).join('')}
+    </div>
+    <div class="atc-footer">
+      <span class="atc-count">0/${agents.length}</span>
+      <div class="atc-progress"><div class="atc-progress-bar"></div></div>
+    </div>`;
+  msgsEl.appendChild(card);
+  scrollBottom();
+}
+function _atcUpdate(agentId, state) {
+  const card = msgsEl.querySelector('.agent-team-card');
+  if (!card) return;
+  const info = _atcAgents.get(agentId);
+  if (info) info.state = state;
+
+  const row = card.querySelector(`[data-agent-id="${agentId}"]`);
+  if (row) {
+    row.classList.remove('atc-working', 'atc-done', 'atc-error');
+    if (state === 'working') row.classList.add('atc-working');
+    else if (state === 'done') row.classList.add('atc-done');
+    else if (state === 'error') row.classList.add('atc-error');
+  }
+
+  // Update progress
+  const total = _atcAgents.size;
+  const done = [..._atcAgents.values()].filter(a => a.state === 'done' || a.state === 'error').length;
+  const countEl = card.querySelector('.atc-count');
+  const barEl = card.querySelector('.atc-progress-bar');
+  if (countEl) countEl.textContent = `${done}/${total}`;
+  if (barEl) barEl.style.width = `${Math.round((done / total) * 100)}%`;
+}
+
 function rmW() { const w = msgsEl.querySelector('.welcome'); if (w) w.remove(); }
 function showW() {
   curEl = null;
@@ -2383,19 +2696,34 @@ function sbHide() {
   setTimeout(() => { if (!bar.classList.contains('sb-active')) $i('sbTxt').textContent = ''; }, 250);
 }
 
+function _msfCreate(state, labelText) {
+  const f = document.createElement('div');
+  f.className = `msg-status-footer state-${state}`;
+  if (state === 'streaming') {
+    f.innerHTML = `<div class="msf-icon"></div><span class="msf-label">${labelText}</span><div class="msf-dots"><span></span><span></span><span></span></div>`;
+  } else if (state === 'waiting') {
+    f.innerHTML = `<div class="msf-icon"><span></span><span></span><span></span></div><span class="msf-label">${labelText}</span>`;
+  } else {
+    f.innerHTML = `<div class="msf-icon"></div><span class="msf-label">${labelText}</span>`;
+  }
+  return f;
+}
+function _msfGet(el) { return el ? el.querySelector('.msg-status-footer') : null; }
+function _msfRemove(el) { const f = _msfGet(el); if (f) f.remove(); }
+
 function addSpinner(el) {
-  if (!el || el.querySelector('.msg-spinner')) return;
-  const s = document.createElement('div'); s.className = 'msg-spinner';
-  el.appendChild(s);
+  if (!el || _msfGet(el)) return;
+  const f = _msfCreate('streaming', t('msf.working'));
+  el.appendChild(f);
 }
 function markDone(el) {
   rmStatus();
   sbHide();
   if (!el) return;
-  const s = el.querySelector('.msg-spinner'); if (s) s.remove();
-  if (!el.querySelector('.msg-done')) {
-    const d = document.createElement('div'); d.className = 'msg-done'; d.textContent = '✓';
-    el.appendChild(d);
+  _msfRemove(el);
+  if (!_msfGet(el)) {
+    const f = _msfCreate('done', t('msf.done'));
+    el.appendChild(f);
   }
 }
 
@@ -2539,10 +2867,8 @@ async function updateSessBar() {
     const r = await fetch(`/api/sessions/${currentSessionId}`);
     if (!r.ok) { bar.style.display = 'none'; return; }
     const sess = await r.json();
-    const titleEl = $i('sessBarTitle');
     const idEl = $i('sessBarClaudeId');
     const openBtn = $i('sessBarOpenBtn');
-    if (titleEl) { titleEl.textContent = sess.title || currentSessionId; titleEl.title = sess.title || ''; }
     if (idEl) {
       if (sess.claude_session_id) {
         idEl.style.display = '';
@@ -2552,6 +2878,7 @@ async function updateSessBar() {
       } else { idEl.style.display = 'none'; }
     }
     if (openBtn) { openBtn.style.display = sess.claude_session_id ? '' : 'none'; }
+    updateSessBarSkills();
   } catch { bar.style.display = 'none'; }
 }
 function copySessId() {
@@ -2692,12 +3019,33 @@ function setOpt(btn, group) {
   updInd();
 }
 
-function updInd() {
-  const mc = { auto: 'dot-auto', planning: 'dot-plan', task: 'dot-task' };
-  const ml = { auto: 'Auto', planning: 'Plan', task: 'Task' };
-  const al = { single: 'Single', multi: 'Multi' };
-  const mo = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus' };
-  $i('modeInd').innerHTML = `<span class="dot ${mc[curMode]}"></span> ${ml[curMode]} · ${al[curAgent]} · ${mo[curModel]}`;
+function updInd() { /* removed — mode indicator no longer in toolbar */ }
+
+function updateSessBarSkills() {
+  const el = $i('sessBarSkills');
+  if (!el) return;
+  el.innerHTML = '';
+  // Auto-skills mode badge
+  if (autoSkillsMode) {
+    const auto = document.createElement('span');
+    auto.className = 'sess-skill-chip sess-skill-auto';
+    auto.textContent = '⚡ Auto';
+    auto.title = t('auto.title.on') || 'Skills are auto-selected based on task';
+    el.appendChild(auto);
+  }
+  // Show active skill chips (filter out 'auto-mode' meta-skill)
+  if (activeSkills && activeSkills.size > 0) {
+    for (const id of activeSkills) {
+      if (id === 'auto-mode') continue;
+      const s = config.skills?.[id];
+      if (!s) continue;
+      const chip = document.createElement('span');
+      chip.className = 'sess-skill-chip';
+      chip.textContent = s.label || id;
+      chip.title = s.description || id;
+      el.appendChild(chip);
+    }
+  }
 }
 
 function syncBtn(group, val) {
@@ -2982,7 +3330,7 @@ async function send() {
     const autoSelected = autoSelectSkills(txt);
     if (autoSelected.length > 0) {
       activeSkills = new Set(autoSelected);
-      renderSkills();
+      renderSkills(); updateSessBarSkills();
       // Filter out the meta-skill from the toast display (it's always included)
       const displaySkills = autoSelected.filter(id => id !== 'auto-mode');
       if (displaySkills.length > 0) {
@@ -2992,7 +3340,7 @@ async function send() {
     } else if (config.skills['auto-mode']) {
       // No specific skill matched — still apply auto-mode meta-skill for quality
       activeSkills = new Set(['auto-mode']);
-      renderSkills();
+      renderSkills(); updateSessBarSkills();
     }
   }
 
@@ -3172,6 +3520,23 @@ function _renderMsgAt(idx, prepend = false) {
   w.className = `mw ${m.role}`;
   if (m.id) w.dataset.msgId = String(m.id);
   w.innerHTML = `<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>`;
+  // Render saved attachments (images/files) as chips above message text
+  if (m.attachments) {
+    try {
+      const atts = typeof m.attachments === 'string' ? JSON.parse(m.attachments) : m.attachments;
+      if (Array.isArray(atts) && atts.length) {
+        const chipsDiv = document.createElement('div');
+        chipsDiv.className = 'att-chips';
+        chipsDiv.style.cssText = 'padding:4px 0 2px';
+        chipsDiv.innerHTML = atts.map(a =>
+          a.type && a.type.startsWith('image/')
+            ? `<div class="att-chip chip-img"><img src="data:${escH(a.type)};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name || 'image')}</span></div>`
+            : `<div class="att-chip"><span class="chip-icon">📄</span><span class="chip-name">${escH(a.name || 'file')}</span></div>`
+        ).join('');
+        w.querySelector('.msg').before(chipsDiv);
+      }
+    } catch {}
+  }
   if (m.role === 'assistant') {
     w.querySelector('.msg').innerHTML = renderMd(m.content);
   } else {
@@ -3809,7 +4174,7 @@ function toggleAutoSkills() {
   }
   const hint = $i('autoSkillsHint');
   if (hint) hint.style.display = autoSkillsMode ? 'block' : 'none';
-  saveUIState();
+  saveUIState(); updateSessBarSkills();
 }
 
 function renderSkills() {
@@ -3883,7 +4248,7 @@ function tSkill(id) {
     const hint = $i('autoSkillsHint');
     if (hint) hint.style.display = 'none';
   }
-  renderSkills(); saveUIState();
+  renderSkills(); saveUIState(); updateSessBarSkills();
   // Save skills state to current session immediately (mirrors tMcp behaviour)
   if (currentSessionId) {
     fetch(`/api/sessions/${currentSessionId}`, {

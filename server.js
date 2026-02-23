@@ -224,6 +224,7 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN max_turns INTEGER DEFAULT 30`); } ca
 try { db.exec(`ALTER TABLE sessions ADD COLUMN retry_count INTEGER DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN worker_pid INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN attachments TEXT`); } catch {}
+try { db.exec(`ALTER TABLE messages ADD COLUMN attachments TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN engine TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN partial_text TEXT`); } catch {}
 // Performance indexes — safe to re-run (IF NOT EXISTS)
@@ -240,7 +241,7 @@ const stmts = {
   getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE workdir=? ORDER BY updated_at DESC LIMIT 100`),
   getSession: db.prepare(`SELECT * FROM sessions WHERE id=?`),
   deleteSession: db.prepare(`DELETE FROM sessions WHERE id=?`),
-  addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id) VALUES (?,?,?,?,?,?,?)`),
+  addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments) VALUES (?,?,?,?,?,?,?,?)`),
   getMsgs: db.prepare(`SELECT * FROM messages WHERE session_id=? ORDER BY id ASC`),
   getMsgsPaginated: db.prepare(`SELECT * FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool') ORDER BY id ASC LIMIT ? OFFSET ?`),
   countMsgs: db.prepare(`SELECT COUNT(*) AS total FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool')`),
@@ -378,7 +379,7 @@ async function startTask(task) {
     const isRetry = !!existingUserMsg;
     if (!isRetry) {
       // First run — save user message normally
-      stmts.addMsg.run(sessionId, 'user', 'text', prompt, null, null, null);
+      stmts.addMsg.run(sessionId, 'user', 'text', prompt, null, null, null, null);
     } else {
       // Restart after crash — increment retry counter, don't duplicate user message
       stmts.incrementRetry.run(sessionId);
@@ -411,14 +412,14 @@ async function startTask(task) {
           broadcastToSession(sessionId, { type: 'text', text: t, tabId: sessionId });
         })
         .onTool((name, inp) => {
-          stmts.addMsg.run(sessionId, 'assistant', 'tool', inp || '', name, null, null);
+          stmts.addMsg.run(sessionId, 'assistant', 'tool', inp || '', name, null, null, null);
           broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
         })
         .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} }) // persist early so open-terminal works during active task
         .onError(err => {
           hasError = true;
           console.error(`[taskWorker] task ${task.id} error:`, err);
-          stmts.addMsg.run(sessionId, 'assistant', 'text', `❌ ${err.substring(0, 500)}`, null, null, null);
+          stmts.addMsg.run(sessionId, 'assistant', 'text', `❌ ${err.substring(0, 500)}`, null, null, null, null);
           broadcastToSession(sessionId, { type: 'error', error: err.substring(0, 500), tabId: sessionId });
         })
         .onDone(() => {
@@ -426,7 +427,7 @@ async function startTask(task) {
           // EventEmitter listener, leaving the Promise pending forever.
           try {
             if (newCid) stmts.updateClaudeId.run(newCid, sessionId);
-            if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null);
+            if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null);
             const wasStopped = stoppingTasks.has(task.id);
             stoppingTasks.delete(task.id);
             if (!wasStopped) {
@@ -643,7 +644,7 @@ function runCliSingle(p) {
         }
       })
       .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
-      .onTool((name, inp) => { ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) })); try { stmts.addMsg.run(sessionId,'assistant','tool',inp||'',name,null,null); } catch {} })
+      .onTool((name, inp) => { ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) })); try { stmts.addMsg.run(sessionId,'assistant','tool',inp||'',name,null,null,null); } catch {} })
       .onSessionId(sid => { newCid=sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} }) // persist early so open-terminal works during active chat
       .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
       .onError(err => {
@@ -654,7 +655,7 @@ function runCliSingle(p) {
       })
       .onDone(sid => {
         if(sid) newCid=sid;
-        try { if(fullText) stmts.addMsg.run(sessionId,'assistant','text',fullText,null,null,null); } catch {}
+        try { if(fullText) stmts.addMsg.run(sessionId,'assistant','text',fullText,null,null,null,null); } catch {}
         // Clear partial text — full message is now saved to messages table
         try { stmts.setPartialText.run(null, sessionId); } catch {}
         _resolve(newCid);
@@ -698,7 +699,8 @@ async function runMultiAgent(p) {
   const planSummaryText = `📋 **${plan.plan}**\n🤖 ${plan.agents.map(a=>`${a.id}(${a.role})`).join(', ')}\n---\n`;
   chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + planSummaryText);
   ws.send(JSON.stringify({ type:'text', text: planSummaryText, ...(tabId ? { tabId } : {}) }));
-  try { stmts.addMsg.run(sessionId,'assistant','text',`Plan: ${plan.plan}`,null,'orchestrator',null); } catch {}
+  ws.send(JSON.stringify({ type:'agent_plan', plan: plan.plan, agents: plan.agents.map(a => ({ id: a.id, role: a.role, task: a.task })), ...(tabId ? { tabId } : {}) }));
+  try { stmts.addMsg.run(sessionId,'assistant','text',`Plan: ${plan.plan}`,null,'orchestrator',null,null); } catch {}
 
   const completed = new Set(), results = {};
   const remaining = [...plan.agents];
@@ -721,13 +723,13 @@ async function runMultiAgent(p) {
         const _res = () => { if (!_settled) { _settled = true; res(); } };
         cli.send({ prompt:agentPrompt, model, maxTurns:Math.min(maxTurns,15), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
           .onText(t => { agentText+=t; chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + t); try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
-          .onTool((n,i) => { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} try { stmts.addMsg.run(sessionId,'assistant','tool',i||'',n,agent.id,null); } catch {} })
+          .onTool((n,i) => { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} try { stmts.addMsg.run(sessionId,'assistant','tool',i||'',n,agent.id,null,null); } catch {} })
           .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
           .onDone(() => _res());
       });
 
       results[agent.id] = agentText;
-      try { if (agentText) stmts.addMsg.run(sessionId,'assistant','text',agentText,null,agent.id,null); } catch {}
+      try { if (agentText) stmts.addMsg.run(sessionId,'assistant','text',agentText,null,agent.id,null,null); } catch {}
       completed.add(agent.id);
       ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`✅ ${agent.role}`, ...(tabId ? { tabId } : {}) }));
     }));
@@ -1568,7 +1570,8 @@ wss.on('connection', (ws) => {
       const userContent = buildUserContent(engineMessage, attachments);
 
       if (!retry) {
-        stmts.addMsg.run(localSessionId,'user','text',userMessage,null,null,replyToId);
+        const attJson = attachments.length ? JSON.stringify(attachments.map(a => ({ type: a.type, name: a.name, base64: a.base64 }))) : null;
+        stmts.addMsg.run(localSessionId,'user','text',userMessage,null,null,replyToId,attJson);
       } else {
         stmts.incrementRetry.run(localSessionId);
       }
@@ -1588,6 +1591,9 @@ wss.on('connection', (ws) => {
 
       let systemPrompt = `When you are answering a specific question or task that is one of several questions or tasks in the user's message, begin your response with a short quote (1–2 lines) of that specific question or task formatted as a markdown blockquote:\n> <original question or task text>\nThen provide your answer below it. Do not add the blockquote if the message contains only a single question or task.`;
       for (const sid of sIds) { const s=config.skills[sid]; if(s) try{systemPrompt+=`\n\n--- SKILL: ${s.label} ---\n${fs.readFileSync(resolveSkillFile(s.file),'utf-8')}`}catch{} }
+
+      // Always end with a clear status line so the user knows what's happening
+      systemPrompt += `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:\n- "✅ Done — [brief summary of what was completed]." when the task is fully finished.\n- "⏳ In progress — [what's happening now and what comes next]." when you're still working and will continue.\n- "❓ Waiting for input — [what you need from the user]." when you need the user to answer or decide something.\n- "⚠️ Blocked — [what went wrong and what's needed to proceed]." when something prevents you from continuing.\nThis status line must always be the very last thing in your response. Never skip it.`;
 
       const mcpServers = {};
       for (const mid of mIds) {
@@ -1783,6 +1789,10 @@ wss.on('connection', (ws) => {
               if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'task_resumed', sessionId, tabId: sessionId }));
             }
           }
+        }
+        // Re-send queue state so client can restore queued message badges after tab switch
+        if (ws._tabQueue?.[sessionId]?.length > 0 && ws.readyState === 1) {
+          ws.send(queuePayload(sessionId));
         }
       }
       return;
