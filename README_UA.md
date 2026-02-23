@@ -179,6 +179,7 @@ TRUST_PROXY=false         # Встановити true за nginx/Caddy
 LOG_LEVEL=info            # Рівень логування: error | warn | info | debug
 NODE_ENV=production       # Вмикає структурований JSON-лог (для Loki, Datadog тощо)
 MAX_TASK_WORKERS=5        # Макс. кількість паралельних процесів Claude Code для Kanban
+CLAUDE_TIMEOUT_MS=1800000 # Таймаут підпроцесу Claude в мс (за замовч. 30 хв; збільш. для довгих агентських задач)
 ```
 
 ### Додавання MCP серверів

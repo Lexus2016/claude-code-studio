@@ -187,6 +187,8 @@ textarea.inp{ resize:vertical; min-height:80px; }
 .att-chip span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
 .att-chip button{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px; line-height:1; padding:0; flex-shrink:0; }
 .att-chip button:hover{ color:var(--red); }
+@keyframes paste-flash{ 0%{border-color:var(--accent);background:var(--abg);box-shadow:0 0 0 3px rgba(124,106,239,.18);} 100%{border-color:var(--border);background:transparent;box-shadow:none;} }
+.att-dropzone.paste-flash{ animation:paste-flash .55s ease-out; }
 .att-thumb{ width:22px; height:22px; object-fit:cover; border-radius:3px; flex-shrink:0; }
 .att-icon{ font-size:16px; flex-shrink:0; }
 
@@ -279,7 +281,7 @@ const TR = {
     'modal.name':'Назва *','modal.status':'Статус','modal.session':"Пов'язана сесія",
     'modal.no_session':'— без сесії —','modal.new_session':'➕ Нова сесія',
     'modal.desc':'Опис','modal.notes':'Нотатки',
-    'modal.attach':'Вкладення','modal.attach_hint':'Клікніть або перетягніть файли (зображення, текст)','modal.attach_max':'Максимум 10 файлів на задачу',
+    'modal.attach':'Вкладення','modal.attach_hint':'Клікніть, перетягніть або вставте (Ctrl+V)','modal.attach_max':'Максимум 10 файлів на задачу',
     'modal.create':'Створити','modal.save':'Зберегти','modal.cancel':'Скасувати',
     'modal.delete':'Видалити',
     'confirm.title':'Видалити задачу?','confirm.body':'Ця дія незворотна.',
@@ -296,6 +298,7 @@ const TR = {
     'time.min':'хв','time.hr':'г','time.day':'д',
     'hdr.connected':'Підключено',
     'card.sess_fallback':'сесія','card.retry_tooltip':'повтор(ів)','chat.copy_id':'Клікніть для копіювання',
+    'nav.chat':'Чат','nav.kanban':'Kanban дошка','nav.aria':'Навігація між розділами',
   },
   en: {
     'hdr.title':'Kanban','hdr.add':'Task',
@@ -306,7 +309,7 @@ const TR = {
     'modal.name':'Title *','modal.status':'Status','modal.session':'Linked session',
     'modal.no_session':'— no session —','modal.new_session':'➕ New Session',
     'modal.desc':'Description','modal.notes':'Notes',
-    'modal.attach':'Attachments','modal.attach_hint':'Click or drag files (images, text)','modal.attach_max':'Maximum 10 files per task',
+    'modal.attach':'Attachments','modal.attach_hint':'Click, drag or paste (Ctrl+V)','modal.attach_max':'Maximum 10 files per task',
     'modal.create':'Create','modal.save':'Save','modal.cancel':'Cancel',
     'modal.delete':'Delete',
     'confirm.title':'Delete task?','confirm.body':'This action is irreversible.',
@@ -323,6 +326,7 @@ const TR = {
     'time.min':'m','time.hr':'h','time.day':'d',
     'hdr.connected':'Connected',
     'card.sess_fallback':'session','card.retry_tooltip':'restart(s)','chat.copy_id':'Click to copy',
+    'nav.chat':'Chat','nav.kanban':'Kanban board','nav.aria':'Navigation',
   },
   ru: {
     'hdr.title':'Kanban','hdr.add':'Задача',
@@ -343,13 +347,14 @@ const TR = {
     'toast.sess_created':'✓ Сессия создана автоматически','toast.err':'Ошибка: ',
     'toast.no_project':'Сначала выберите проект',
     'modal.new_sess_cfg':'Настройки новой сессии',
-    'modal.attach':'Вложения','modal.attach_hint':'Нажмите или перетащите файлы (изображения, текст)','modal.attach_max':'Максимум 10 файлов на задачу',
+    'modal.attach':'Вложения','modal.attach_hint':'Нажмите, перетащите или вставьте (Ctrl+V)','modal.attach_max':'Максимум 10 файлов на задачу',
     'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги','tb.engine':'Движок',
     'card.running':'Выполняется','msg.you':'Вы','msg.tool':'Tool','refresh.now':'только что',
     'card.retry':'↩ повтор',
     'time.min':'м','time.hr':'ч','time.day':'д',
     'hdr.connected':'Подключено',
     'card.sess_fallback':'сессия','card.retry_tooltip':'перезапуск(ов)','chat.copy_id':'Нажмите для копирования',
+    'nav.chat':'Чат','nav.kanban':'Kanban доска','nav.aria':'Навигация',
   },
 };
 const lang = localStorage.getItem('lang') || 'uk';
@@ -365,6 +370,9 @@ document.getElementById('kbStatusEl').textContent=t('hdr.connected');
 document.getElementById('projLabel').textContent=t('proj.label');
 document.getElementById('allProjOpt').textContent=t('proj.all');
 document.getElementById('cancelBtn').textContent=t('confirm.cancel');
+document.querySelector('.nav-sw').setAttribute('aria-label', t('nav.aria'));
+document.querySelector('a.nav-sw-btn[href="/"]').setAttribute('data-tip', t('nav.chat'));
+document.querySelector('a.nav-sw-btn[href="/kanban"]').setAttribute('data-tip', t('nav.kanban'));
 document.getElementById('confirmOkBtn').textContent=t('confirm.ok');
 
 // ─── State ────────────────────────────────────────────────────────────────
@@ -734,6 +742,29 @@ function renderAttPreviews(){
       <button onclick="removeAtt(${i})">✕</button>
     </div>`).join('');
 }
+
+// ─── Clipboard paste ───────────────────────────────────────────────────────
+function onClipboardPaste(e){
+  if($i('taskOv').classList.contains('hidden'))return;
+  const items=e.clipboardData?.items;
+  if(!items)return;
+  const imgs=[];
+  for(const item of items){
+    if(item.type.startsWith('image/')){
+      const f=item.getAsFile();
+      if(f) imgs.push(f);
+    }
+  }
+  if(!imgs.length)return;
+  e.preventDefault();
+  const dz=document.querySelector('.att-dropzone');
+  if(dz){dz.classList.remove('paste-flash');void dz.offsetWidth;dz.classList.add('paste-flash');}
+  processFiles(imgs.map((f,i)=>{
+    const ext=f.type==='image/png'?'png':f.type==='image/jpeg'?'jpg':'png';
+    return new File([f],`screenshot-${Date.now()}${i?'-'+i:''}.${ext}`,{type:f.type});
+  }));
+}
+document.addEventListener('paste',onClipboardPaste);
 
 // ─── Session config helpers ───────────────────────────────────────────────
 function scOpt(btn){
