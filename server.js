@@ -314,6 +314,12 @@ const sessionWatchers = new Map(); // sessionId → Set<WebSocket>
 const taskBuffers = new Map();     // taskId → accumulated text (for late subscribers)
 const chatBuffers = new Map();     // sessionId → accumulated text for direct chat (for catch-up on reconnect)
 
+// ─── Ask User (Internal MCP) ─────────────────────────────────────────────
+// Pending user questions: requestId → { resolve, sessionId, timer, question, options, inputType }
+const pendingAskUser = new Map();
+const ASK_USER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const ASK_USER_SECRET = require('crypto').randomBytes(16).toString('hex');
+
 function broadcastToSession(sessionId, data) {
   const watchers = sessionWatchers.get(sessionId);
   if (!watchers?.size) return;
@@ -644,7 +650,7 @@ function runCliSingle(p) {
         }
       })
       .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
-      .onTool((name, inp) => { ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) })); try { stmts.addMsg.run(sessionId,'assistant','tool',inp||'',name,null,null,null); } catch {} })
+      .onTool((name, inp) => { if (name !== 'ask_user') { ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) })); } try { stmts.addMsg.run(sessionId,'assistant','tool',inp||'',name,null,null,null); } catch {} })
       .onSessionId(sid => { newCid=sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} }) // persist early so open-terminal works during active chat
       .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
       .onError(err => {
@@ -723,7 +729,7 @@ async function runMultiAgent(p) {
         const _res = () => { if (!_settled) { _settled = true; res(); } };
         cli.send({ prompt:agentPrompt, model, maxTurns:Math.min(maxTurns,15), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
           .onText(t => { agentText+=t; chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + t); try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
-          .onTool((n,i) => { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} try { stmts.addMsg.run(sessionId,'assistant','tool',i||'',n,agent.id,null,null); } catch {} })
+          .onTool((n,i) => { if (n !== 'ask_user') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',i||'',n,agent.id,null,null); } catch {} })
           .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
           .onDone(() => _res());
       });
@@ -759,6 +765,68 @@ app.use((req, res, next) => {
     log[lvl]('http', { method: req.method, path: req.path, status: res.statusCode, ms });
   });
   next();
+});
+
+// ─── Internal MCP: ask_user endpoint ─────────────────────────────────────────
+// Registered BEFORE authMiddleware — MCP subprocess authenticates with ASK_USER_SECRET,
+// not with a user session token. The Bearer secret is a 32-char hex generated per process.
+app.post('/api/internal/ask-user', express.json(), (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  if (authHeader !== `Bearer ${ASK_USER_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { requestId, sessionId, question, options, inputType } = req.body;
+  if (!requestId || !sessionId || !question) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // Set up a timer that auto-resolves if the user doesn't answer
+  const timer = setTimeout(() => {
+    const entry = pendingAskUser.get(requestId);
+    if (entry) {
+      pendingAskUser.delete(requestId);
+      entry.resolve({ answer: '[No response — proceed with your best judgment.]' });
+      // Notify client that the question timed out so it can disable the card
+      const task = activeTasks.get(sessionId);
+      if (task?.proxy) {
+        try { task.proxy.send(JSON.stringify({ type: 'ask_user_timeout', requestId, tabId: sessionId })); } catch {}
+      }
+    }
+  }, ASK_USER_TIMEOUT_MS);
+
+  // Store the pending question — resolve will be called by WS handler
+  const promise = new Promise((resolve) => {
+    pendingAskUser.set(requestId, {
+      resolve,
+      sessionId,
+      timer,
+      question,
+      options: options || null,
+      inputType: inputType || 'free_text',
+    });
+  });
+
+  // Route question to the client via the active task's proxy (survives WS reconnects)
+  const activeTask = activeTasks.get(sessionId);
+  if (activeTask?.proxy) {
+    const payload = JSON.stringify({
+      type: 'ask_user',
+      requestId,
+      question,
+      options: options || null,
+      inputType: inputType || 'free_text',
+      tabId: sessionId,
+    });
+    try { activeTask.proxy.send(payload); } catch {}
+  }
+
+  // Wait for the user's answer (or timeout)
+  promise.then((result) => {
+    res.json(result);
+  }).catch((err) => {
+    res.status(500).json({ error: err.message || 'Internal error' });
+  });
 });
 
 app.use(auth.authMiddleware);
@@ -1592,6 +1660,9 @@ wss.on('connection', (ws) => {
       let systemPrompt = `When you are answering a specific question or task that is one of several questions or tasks in the user's message, begin your response with a short quote (1–2 lines) of that specific question or task formatted as a markdown blockquote:\n> <original question or task text>\nThen provide your answer below it. Do not add the blockquote if the message contains only a single question or task.`;
       for (const sid of sIds) { const s=config.skills[sid]; if(s) try{systemPrompt+=`\n\n--- SKILL: ${s.label} ---\n${fs.readFileSync(resolveSkillFile(s.file),'utf-8')}`}catch{} }
 
+      // Ask User tool instruction
+      systemPrompt += `\n\nYou have access to an "ask_user" tool (via MCP server "_ccs_ask_user"). When you need user input BEFORE proceeding — such as choosing between approaches, confirming an action, or clarifying requirements — you MUST call ask_user instead of writing questions as text. The ask_user tool pauses execution and waits for the user's response. Do NOT ask questions in your text output and then continue working — always use the ask_user tool for questions.`;
+
       // Always end with a clear status line so the user knows what's happening
       systemPrompt += `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:\n- "✅ Done — [brief summary of what was completed]." when the task is fully finished.\n- "⏳ In progress — [what's happening now and what comes next]." when you're still working and will continue.\n- "❓ Waiting for input — [what you need from the user]." when you need the user to answer or decide something.\n- "⚠️ Blocked — [what went wrong and what's needed to proceed]." when something prevents you from continuing.\nThis status line must always be the very last thing in your response. Never skip it.`;
 
@@ -1605,6 +1676,17 @@ wss.on('connection', (ws) => {
           mcpServers[mid] = { command: m.command, args: m.args || [], env: expandTildeInObj(m.env || {}) };
         }
       }
+
+      // --- Internal MCPs (always injected, invisible to user) ---
+      mcpServers['_ccs_ask_user'] = {
+        command: 'node',
+        args: [path.join(__dirname, 'mcp-ask-user.js')],
+        env: {
+          ASK_USER_SERVER_URL: `http://127.0.0.1:${PORT}`,
+          ASK_USER_SESSION_ID: localSessionId,
+          ASK_USER_SECRET: ASK_USER_SECRET,
+        },
+      };
 
       proxy.send(JSON.stringify({ type:'status', status:'thinking', mode, agentMode, model, tabId: effectiveTabId }));
 
@@ -1632,6 +1714,14 @@ wss.on('connection', (ws) => {
     } finally {
       activeTasks.delete(localSessionId);
       chatBuffers.delete(localSessionId); // cleanup in-memory buffer
+      // Clean up any pending ask_user questions for this session
+      for (const [rid, entry] of pendingAskUser) {
+        if (entry.sessionId === localSessionId) {
+          clearTimeout(entry.timer);
+          pendingAskUser.delete(rid);
+          entry.resolve({ answer: '[Session ended]' });
+        }
+      }
       try { stmts.clearLastUserMsg.run(localSessionId); } catch {}
       if (effectiveTabId) {
         ws._tabBusy[effectiveTabId] = false;
@@ -1722,6 +1812,37 @@ wss.on('connection', (ws) => {
           log.info('ws stop aborted kanban task', { taskId: runningTask.id, sessionId: tabId });
         }
       }
+      // Resolve any pending ask_user questions for this session with "[Cancelled]"
+      if (tabId) {
+        for (const [rid, entry] of pendingAskUser) {
+          if (entry.sessionId === tabId) {
+            clearTimeout(entry.timer);
+            pendingAskUser.delete(rid);
+            entry.resolve({ answer: '[Cancelled]' });
+          }
+        }
+      }
+    }
+
+    // ─── Ask User responses ──────────────────────────────────────────────────
+    if (msg.type === 'ask_user_response') {
+      const entry = pendingAskUser.get(msg.requestId);
+      if (entry) {
+        clearTimeout(entry.timer);
+        pendingAskUser.delete(msg.requestId);
+        entry.resolve({ answer: msg.answer || '[Empty response]' });
+      }
+      return;
+    }
+
+    if (msg.type === 'ask_user_cancel') {
+      const entry = pendingAskUser.get(msg.requestId);
+      if (entry) {
+        clearTimeout(entry.timer);
+        pendingAskUser.delete(msg.requestId);
+        entry.resolve({ answer: '[Skipped by user]' });
+      }
+      return;
     }
 
     if (msg.type==='new_session') {
@@ -1787,6 +1908,12 @@ wss.on('connection', (ws) => {
               activeTask.proxy.attach(ws);
               ws._tabAbort[sessionId] = activeTask.abortController;
               if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'task_resumed', sessionId, tabId: sessionId }));
+              // Re-send any pending ask_user questions for this session
+              for (const [rid, entry] of pendingAskUser) {
+                if (entry.sessionId === sessionId && ws.readyState === 1) {
+                  ws.send(JSON.stringify({ type: 'ask_user', requestId: rid, question: entry.question, options: entry.options, inputType: entry.inputType, tabId: sessionId }));
+                }
+              }
             }
           }
         }

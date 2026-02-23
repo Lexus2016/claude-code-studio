@@ -721,6 +721,57 @@ body::after {
 .msg-retry-indicator { margin:2px 12px 6px; font-size:11px; color:var(--text-dim); opacity:.6; }
 .msg-interrupted { margin:4px 12px 6px; font-size:11px; color:var(--yellow,#e5c07b); opacity:.8; }
 
+/* ─── Ask User Card ─── */
+.ask-user-card {
+  margin: 10px 12px; padding: 16px 18px; background: var(--s2); border: 1px solid var(--accent);
+  border-radius: var(--r-md); animation: askSlideIn .3s var(--ease-out);
+  box-shadow: 0 0 0 2px rgba(124,106,239,.12), var(--shadow-sm);
+}
+@keyframes askSlideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+.ask-user-card .ask-q { font-size: 14.5px; line-height: 1.5; margin-bottom: 12px; color: var(--text); }
+.ask-user-card .ask-q p { margin: 0; }
+.ask-user-card .ask-options { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.ask-user-card .ask-opt {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: var(--s3); border: 1px solid var(--border); border-radius: var(--r-sm);
+  cursor: pointer; transition: border-color .15s, background .15s; font-size: 14px; color: var(--text);
+}
+.ask-user-card .ask-opt:hover { border-color: var(--accent); background: rgba(124,106,239,.08); }
+.ask-user-card .ask-opt input[type="radio"],
+.ask-user-card .ask-opt input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; flex-shrink: 0; }
+.ask-user-card .ask-opt.selected { border-color: var(--accent); background: rgba(124,106,239,.12); }
+.ask-user-card .ask-text {
+  width: 100%; padding: 10px 12px; background: var(--s3); border: 1px solid var(--border);
+  border-radius: var(--r-sm); color: var(--text); font-size: 14px; font-family: inherit;
+  resize: vertical; min-height: 56px; margin-bottom: 12px; outline: none;
+  transition: border-color .15s;
+}
+.ask-user-card .ask-text:focus { border-color: var(--accent); }
+.ask-user-card .ask-btns { display: flex; gap: 8px; align-items: center; }
+.ask-user-card .ask-submit {
+  padding: 7px 18px; background: var(--accent); color: #fff; border: none;
+  border-radius: var(--r-sm); font-size: 13.5px; font-weight: 600; cursor: pointer;
+  transition: opacity .15s;
+}
+.ask-user-card .ask-submit:hover { opacity: .88; }
+.ask-user-card .ask-submit:disabled { opacity: .4; cursor: default; }
+.ask-user-card .ask-skip {
+  padding: 7px 14px; background: transparent; color: var(--muted); border: 1px solid var(--border);
+  border-radius: var(--r-sm); font-size: 13px; cursor: pointer; transition: color .15s, border-color .15s;
+}
+.ask-user-card .ask-skip:hover { color: var(--text); border-color: var(--muted); }
+.ask-user-card .ask-timer { font-size: 11px; color: var(--muted); margin-left: auto; }
+.ask-user-card.ask-answered {
+  border-color: var(--green); opacity: .7; pointer-events: none;
+}
+.ask-user-card.ask-answered .ask-btns { display: none; }
+.ask-user-card.ask-answered .ask-timer { display: none; }
+.ask-user-card .ask-answer-display {
+  display: none; margin-top: 10px; padding: 8px 12px; background: rgba(63,185,80,.08);
+  border: 1px solid rgba(63,185,80,.25); border-radius: var(--r-sm); font-size: 13px; color: var(--green);
+}
+.ask-user-card.ask-answered .ask-answer-display { display: block; }
+
 /* ─── Input area ─── */
 .ia { padding: 12px 16px; background: var(--s1); border-top: 1px solid var(--border); }
 .iw { display: flex; align-items: flex-end; gap: 8px; background: var(--s2); border: 1px solid var(--border); border-radius: 12px; padding: 5px 5px 5px 14px; transition: border-color .15s, box-shadow .15s; }
@@ -1587,6 +1638,7 @@ const TRANSLATIONS = {
     'toast.read_err':'Не вдалося прочитати: ','toast.err_prefix':'Помилка: ','dir.proj_name':'Назва проекту (авто якщо порожньо)',
     'welcome.prompt.1':'Поясни цей код крок за кроком','welcome.prompt.2':'Знайди та виправ помилки','welcome.prompt.3':'Напиши unit-тести','welcome.prompt.4':'Спроектуй архітектуру',
     'toast.task_resumed':'Задачу відновлено','toast.task_lost':'З\'єднання втрачено, вивід недоступний','toast.task_retry':'retry',
+    'ask.submit':'Надіслати відповідь','ask.skip':'Пропустити','ask.answered':'Відповідь','ask.skipped':'Пропущено','ask.timer':'Залишилось',
     'session.copy_id':'Скопіювати ID сесії Claude','session.open_claude':'Відкрити в Claude Code',
     'stream.interrupted':'Відповідь була перервана',
     'rl.title.warn':'Наближається ліміт','rl.title.crit':'Ліміт вичерпується!',
@@ -1693,6 +1745,7 @@ const TRANSLATIONS = {
     'toast.read_err':'Failed to read: ','toast.err_prefix':'Error: ','dir.proj_name':'Project name (auto if empty)',
     'welcome.prompt.1':'Explain this code step by step','welcome.prompt.2':'Find and fix bugs','welcome.prompt.3':'Write unit tests','welcome.prompt.4':'Design the architecture',
     'toast.task_resumed':'Task resumed','toast.task_lost':'Connection lost, output unavailable','toast.task_retry':'retry',
+    'ask.submit':'Send Answer','ask.skip':'Skip','ask.answered':'Answer','ask.skipped':'Skipped','ask.timer':'Remaining',
     'session.copy_id':'Copy Claude session ID','session.open_claude':'Open in Claude Code',
     'stream.interrupted':'Response was interrupted',
     'rl.title.warn':'Limit approaching','rl.title.crit':'Limit critical!',
@@ -1799,6 +1852,7 @@ const TRANSLATIONS = {
     'toast.read_err':'Не удалось прочитать: ','toast.err_prefix':'Ошибка: ','dir.proj_name':'Название проекта (авто если пусто)',
     'welcome.prompt.1':'Объясни этот код шаг за шагом','welcome.prompt.2':'Найди и исправь ошибки','welcome.prompt.3':'Напиши unit-тесты','welcome.prompt.4':'Спроектируй архитектуру',
     'toast.task_resumed':'Задача возобновлена','toast.task_lost':'Соединение потеряно, вывод недоступен','toast.task_retry':'retry',
+    'ask.submit':'Отправить ответ','ask.skip':'Пропустить','ask.answered':'Ответ','ask.skipped':'Пропущено','ask.timer':'Осталось',
     'session.copy_id':'Скопировать ID сессии Claude','session.open_claude':'Открыть в Claude Code',
     'stream.interrupted':'Ответ был прерван',
     'rl.title.warn':'Приближается лимит','rl.title.crit':'Лимит исчерпывается!',
@@ -2331,6 +2385,32 @@ function handleWsMsg(d) {
       updateRateLimit(d.info);
       break;
 
+    case 'ask_user':
+      if (isVisible) {
+        renderAskUserCard(d);
+      } else {
+        // Store for background tab — will render on tab switch
+        const ts = getTS(tabId);
+        if (!ts._pendingAskUser) ts._pendingAskUser = [];
+        ts._pendingAskUser.push(d);
+      }
+      break;
+
+    case 'ask_user_timeout': {
+      // Server timed out — disable the card
+      const _ric = d.requestId;
+      if (_ric && /^[a-f0-9-]{36}$/.test(_ric)) {
+        const _card = document.querySelector(`.ask-user-card[data-rid="${_ric}"]`);
+        if (_card && !_card.classList.contains('ask-answered')) {
+          _card.classList.add('ask-answered');
+          _card.querySelector('.ask-answer-display').textContent = t('ask.skipped') + ' (timeout)';
+          _card.style.borderColor = 'var(--muted)';
+          if (_card._askInterval) clearInterval(_card._askInterval);
+        }
+      }
+      break;
+    }
+
     case 'session_started':
       {
         const srcId = d.tabId || generatingTabId || activeTabId;
@@ -2761,6 +2841,113 @@ function markDone(el) {
 }
 
 // Smart scroll: don't scroll if user scrolled up
+// ─── Ask User Card ───────────────────────────────────────────────────────────
+function renderAskUserCard(data) {
+  const { requestId, question, options, inputType } = data;
+  // Validate requestId is a UUID to prevent XSS injection
+  if (!requestId || !/^[a-f0-9-]{36}$/.test(requestId)) return;
+  // Deduplicate — don't render if card already exists
+  if (document.querySelector(`.ask-user-card[data-rid="${requestId}"]`)) return;
+
+  const card = document.createElement('div');
+  card.className = 'ask-user-card';
+  card.dataset.rid = requestId;
+
+  const type = inputType || (options?.length ? 'single_choice' : 'free_text');
+
+  let html = `<div class="ask-q">${renderMd(question)}</div>`;
+
+  if ((type === 'single_choice' || type === 'multi_choice') && options?.length) {
+    const inputKind = type === 'multi_choice' ? 'checkbox' : 'radio';
+    html += '<div class="ask-options">';
+    for (let i = 0; i < options.length; i++) {
+      html += `<label class="ask-opt"><input type="${inputKind}" name="ask_${requestId}" value="${escH(options[i])}"${i === 0 && type === 'single_choice' ? ' checked' : ''}> <span>${escH(options[i])}</span></label>`;
+    }
+    html += '</div>';
+  }
+
+  if (type === 'free_text' || !options?.length) {
+    html += `<textarea class="ask-text" placeholder="..." rows="2"></textarea>`;
+  }
+
+  html += `<div class="ask-btns">`;
+  html += `<button class="ask-submit">${t('ask.submit')}</button>`;
+  html += `<button class="ask-skip">${t('ask.skip')}</button>`;
+  html += `<span class="ask-timer" data-end="${Date.now() + 5 * 60 * 1000}">5:00</span>`;
+  html += `</div>`;
+  html += `<div class="ask-answer-display"></div>`;
+
+  card.innerHTML = html;
+
+  // Attach event listeners (not inline onclick — prevents XSS)
+  card.querySelector('.ask-submit').addEventListener('click', () => askUserSubmit(requestId));
+  card.querySelector('.ask-skip').addEventListener('click', () => askUserCancel(requestId));
+  // Toggle selected class on option labels
+  card.querySelectorAll('.ask-opt').forEach(opt => opt.addEventListener('click', () => opt.classList.toggle('selected')));
+
+  msgsEl.appendChild(card);
+  scrollBottom();
+
+  // Focus text input if free_text
+  const ta = card.querySelector('.ask-text');
+  if (ta) {
+    ta.focus();
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); askUserSubmit(requestId); }
+    });
+  }
+
+  // Start countdown timer
+  const timerEl = card.querySelector('.ask-timer');
+  if (timerEl) {
+    const endTime = parseInt(timerEl.dataset.end);
+    const _askInterval = setInterval(() => {
+      const left = Math.max(0, endTime - Date.now());
+      const m = Math.floor(left / 60000);
+      const s = Math.floor((left % 60000) / 1000);
+      timerEl.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+      if (left <= 0) { clearInterval(_askInterval); timerEl.textContent = '0:00'; }
+    }, 1000);
+    card._askInterval = _askInterval;
+  }
+}
+
+function askUserSubmit(requestId) {
+  const card = document.querySelector(`.ask-user-card[data-rid="${requestId}"]`);
+  if (!card || card.classList.contains('ask-answered')) return;
+
+  let answer = '';
+  const ta = card.querySelector('.ask-text');
+  if (ta) {
+    answer = ta.value.trim();
+  } else {
+    // Collect checked options
+    const checked = card.querySelectorAll('input:checked');
+    const vals = [...checked].map(c => c.value);
+    answer = vals.join(', ');
+  }
+  if (!answer) return;
+
+  ws.send(JSON.stringify({ type: 'ask_user_response', requestId, answer }));
+
+  // Mark as answered
+  card.classList.add('ask-answered');
+  card.querySelector('.ask-answer-display').textContent = `${t('ask.answered')}: ${answer}`;
+  if (card._askInterval) clearInterval(card._askInterval);
+}
+
+function askUserCancel(requestId) {
+  const card = document.querySelector(`.ask-user-card[data-rid="${requestId}"]`);
+  if (!card || card.classList.contains('ask-answered')) return;
+
+  ws.send(JSON.stringify({ type: 'ask_user_cancel', requestId }));
+
+  card.classList.add('ask-answered');
+  card.querySelector('.ask-answer-display').textContent = t('ask.skipped');
+  card.style.borderColor = 'var(--muted)';
+  if (card._askInterval) clearInterval(card._askInterval);
+}
+
 function scrollBottom() {
   if (!userScrolled) msgsEl.scrollTop = msgsEl.scrollHeight;
 }
@@ -3749,6 +3936,13 @@ async function loadSess(id) {
     // Re-show agent status if this tab is still generating (was cleared by msgsEl.innerHTML = '')
     const _savedStatus = tabState[id]?.agentStatus;
     if (_savedStatus) showStatus(_savedStatus);
+
+    // Render any pending ask_user cards that arrived while this tab was in the background
+    const _askTs = tabState[id];
+    if (_askTs?._pendingAskUser?.length) {
+      for (const askData of _askTs._pendingAskUser) renderAskUserCard(askData);
+      _askTs._pendingAskUser = [];
+    }
 
     userScrolled = false;
     scrollBottom();
