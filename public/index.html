@@ -119,9 +119,9 @@ body::after {
 #rlBadge .rl-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; animation:rlPulse 1.8s ease-in-out infinite; }
 @keyframes rlPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.45;transform:scale(.8)} }
 #rlBadge .rl-label { white-space:nowrap; }
-#rlTooltip { display:none; position:absolute; top:100%; right:0; margin-top:6px; width:275px; background:#1a1f2e; border:1px solid rgba(245,158,11,.35); border-radius:10px; padding:13px 15px; z-index:9999; box-shadow:0 8px 32px rgba(0,0,0,.55); font-size:12.5px; line-height:1.55; }
-/* Bridge: transparent 6px area above tooltip keeps #rlBadge:hover true while mouse travels down */
-#rlTooltip::before { content:''; position:absolute; top:-6px; left:0; right:0; height:6px; }
+#rlTooltip { display:none; position:absolute; bottom:100%; right:0; margin-bottom:6px; width:275px; background:#1a1f2e; border:1px solid rgba(245,158,11,.35); border-radius:10px; padding:13px 15px; z-index:9999; box-shadow:0 8px 32px rgba(0,0,0,.55); font-size:12.5px; line-height:1.55; }
+/* Bridge: transparent 6px area below tooltip keeps #rlBadge:hover true while mouse travels up */
+#rlTooltip::after { content:''; position:absolute; bottom:-6px; left:0; right:0; height:6px; }
 #rlBadge:hover #rlTooltip { display:block; }
 #rlTooltip .rl-tt-title { font-weight:700; font-size:13px; color:var(--text); margin-bottom:9px; display:flex; align-items:center; gap:6px; }
 #rlTooltip .rl-tt-row { display:flex; justify-content:space-between; align-items:center; padding:3px 0; border-bottom:1px solid rgba(255,255,255,.05); }
