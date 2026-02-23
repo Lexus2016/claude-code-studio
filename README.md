@@ -23,9 +23,9 @@ Claude Code Studio is a browser-based workspace that lets you work with [Claude 
 
 Watch how the Kanban board works: create a task card for a new release → Claude Code picks it up → runs the task → card moves to Done. At the end you can see the actual GitHub release before and after — the agent really did ship the new version.
 
-<video src="https://github.com/Lexus2016/claude-code-studio/releases/download/v5.1.0/new_release_video.mov" controls width="100%"></video>
+<video src="public/videos/new_release_video.mp4" controls width="100%"></video>
 
-> **Can't see the video?** [Download and watch it directly](https://github.com/Lexus2016/claude-code-studio/releases/download/v5.1.0/new_release_video.mov)
+> **Can't see the video?** [Download and watch it directly](public/videos/new_release_video.mp4)
 
 ---
 
