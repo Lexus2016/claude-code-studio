@@ -24,6 +24,7 @@
   --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --msg-font: 15.5px;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; overflow: hidden; font-size: 15px; line-height: 1.55; }
@@ -252,7 +253,7 @@ body::after {
 .mw.assistant { align-self: flex-start; }
 
 /* ─── Message bubbles ─── */
-.msg { line-height: 1.75; font-size: 15.5px; word-break: break-word; }
+.msg { line-height: 1.75; font-size: var(--msg-font, 15.5px); word-break: break-word; }
 .mw.user .msg { background: var(--user-msg); padding: 10px 15px; border-radius: 14px 14px 4px 14px; white-space: pre-wrap; border: 1px solid rgba(124,106,239,.3); }
 .mw.assistant .msg { background: var(--s2); padding: 13px 16px; border-radius: 14px 14px 14px 4px; border: 1px solid var(--border); }
 
@@ -590,7 +591,7 @@ body::after {
 @keyframes blink { 0%,100%{ opacity:1 } 50%{ opacity:0 } }
 
 /* ─── User message acknowledgement (green ✓ after response received) ─── */
-.msg-ack { font-size: 11px; color: var(--green); text-align: right; padding: 2px 8px 0; line-height: 1; opacity: 0.75; animation: fadeUp .25s ease; }
+.msg-ack { font-size: 13px; color: var(--green); text-align: right; padding: 3px 8px 0; line-height: 1; opacity: 0.9; animation: fadeUp .25s ease; }
 
 /* ─── Load history button ─── */
 .load-hist-btn {
@@ -661,6 +662,33 @@ body::after {
 .welcome-prompts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 420px; margin-top: 20px; }
 .wp-card { background: var(--s2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--muted); cursor: pointer; transition: all .15s; text-align: left; line-height: 1.4; }
 .wp-card:hover { background: var(--s3); border-color: rgba(124,106,239,.4); color: var(--text); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+
+/* ─── Collapsible header ─── */
+.hdr-collapse-zone { overflow: hidden; transition: max-height .3s var(--ease-out), opacity .2s; max-height: 200px; opacity: 1; }
+.hdr-collapse-zone.collapsed { max-height: 0; opacity: 0; pointer-events: none; }
+.hdr-toggle { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex-shrink: 0; background: var(--s2); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; color: var(--muted); transition: all .15s; margin: 3px 4px 3px 6px; }
+.hdr-toggle:hover { color: var(--accent2); border-color: var(--accent); background: var(--s3); }
+.hdr-toggle svg { width: 11px; height: 11px; transition: transform .25s var(--ease-out); }
+.hdr-toggle.collapsed svg { transform: rotate(180deg); }
+
+/* ─── Font size slider ─── */
+.font-slider-wrap { display: flex; align-items: center; gap: 5px; margin-left: auto; padding: 0 8px; flex-shrink: 0; }
+.font-slider-wrap .fs-icon { font-size: 11px; color: var(--muted); user-select: none; flex-shrink: 0; }
+.font-slider-wrap .fs-icon.lg { font-size: 15px; }
+.font-slider { -webkit-appearance: none; appearance: none; width: 70px; height: 4px; border-radius: 2px; background: var(--border); outline: none; cursor: pointer; }
+.font-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid var(--s1); box-shadow: 0 1px 4px rgba(0,0,0,.3); cursor: pointer; transition: background .15s; }
+.font-slider::-webkit-slider-thumb:hover { background: var(--accent2); }
+.font-slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid var(--s1); box-shadow: 0 1px 4px rgba(0,0,0,.3); cursor: pointer; }
+.font-slider::-moz-range-track { height: 4px; border-radius: 2px; background: var(--border); }
+
+/* ─── Collapsible large messages ─── */
+.msg-clamp { max-height: 200px; overflow: hidden; position: relative; transition: max-height .35s var(--ease-out); }
+.msg-clamp::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 60px; background: linear-gradient(transparent, var(--s2)); pointer-events: none; transition: opacity .2s; }
+.mw.user .msg-clamp::after { background: linear-gradient(transparent, var(--user-msg)); }
+.msg-clamp.expanded { max-height: none; }
+.msg-clamp.expanded::after { opacity: 0; }
+.msg-expand-btn { display: block; width: 100%; margin-top: 6px; padding: 4px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--s3); color: var(--muted); font-size: 12px; font-family: inherit; cursor: pointer; transition: all .15s; text-align: center; }
+.msg-expand-btn:hover { color: var(--accent2); border-color: var(--accent); background: var(--abg); }
 
 /* ─── Tabs bar ─── */
 .tabs-bar { display: flex; align-items: stretch; background: var(--bg); border-bottom: 1px solid var(--border); overflow-x: auto; flex-shrink: 0; min-height: 34px; }
@@ -1129,6 +1157,7 @@ body::after {
 
 <!-- CENTER PANEL -->
 <div class="center">
+  <div class="hdr-collapse-zone" id="hdrZone">
   <div class="hdr">
     <div class="hdr-l">
       <div class="logo">CCS</div>
@@ -1201,6 +1230,7 @@ body::after {
     <div style="flex:1"></div>
     <span class="status-dot warn" id="statusEl" data-i18n="status.connecting">Підключення...</span>
   </div>
+  </div><!-- /hdr-collapse-zone -->
 
   <div class="tabs-bar" id="tabsBar"></div>
 
@@ -1592,6 +1622,7 @@ const TRANSLATIONS = {
     'agent.planning':'🧠 Планування...','agent.fallback_single':'⚠️ Перехід до одиночного режиму','agent.done':'✅ Всі агенти завершили','agent.circular_deps':'⚠️ Кругова залежність між агентами',
     'msf.working':'Працює','msf.done':'Готово','msf.error':'Помилка','msf.waiting':'Очікування',
     'msf.team':'Команда агентів',
+    'hdr.toggle':'Згорнути/розгорнути панель','msg.show_more':'Показати більше','msg.show_less':'Показати менше',
   },
   en: {
     'sec.proactive':'Status',
@@ -1697,6 +1728,7 @@ const TRANSLATIONS = {
     'agent.planning':'🧠 Planning...','agent.fallback_single':'⚠️ Falling back to single mode','agent.done':'✅ All agents done','agent.circular_deps':'⚠️ Circular dependency between agents',
     'msf.working':'Working','msf.done':'Done','msf.error':'Error','msf.waiting':'Waiting',
     'msf.team':'Agent Team',
+    'hdr.toggle':'Collapse/expand header','msg.show_more':'Show more','msg.show_less':'Show less',
   },
   ru: {
     'sec.proactive':'Статус',
@@ -1802,6 +1834,7 @@ const TRANSLATIONS = {
     'agent.planning':'🧠 Планирование...','agent.fallback_single':'⚠️ Переход в одиночный режим','agent.done':'✅ Все агенты завершили','agent.circular_deps':'⚠️ Циклическая зависимость между агентами',
     'msf.working':'Работает','msf.done':'Готово','msf.error':'Ошибка','msf.waiting':'Ожидание',
     'msf.team':'Команда агентов',
+    'hdr.toggle':'Свернуть/развернуть панель','msg.show_more':'Показать больше','msg.show_less':'Показать меньше',
   }
 };
 function t(key) {
@@ -2235,7 +2268,7 @@ function handleWsMsg(d) {
     case 'done':
       getTS(tabId).agentStatus = ''; // task finished — clear saved status
       if (isVisible) {
-        if (curEl && curTxt) { curEl.querySelector('.msg').innerHTML = renderMd(curTxt); }
+        if (curEl && curTxt) { curEl.querySelector('.msg').innerHTML = renderMd(curTxt); applyMsgClamp(curEl); }
         markDone(curEl);
         curEl = null; curTxt = '';
         // Clear retry badge on successful completion
@@ -2782,6 +2815,14 @@ function clearReply() {
 function renderTabs() {
   const bar = $i('tabsBar'); if (!bar) return;
   bar.innerHTML = '';
+  // Header collapse toggle
+  const hdrBtn = document.createElement('button');
+  hdrBtn.className = 'hdr-toggle' + ($i('hdrZone')?.classList.contains('collapsed') ? ' collapsed' : '');
+  hdrBtn.id = 'hdrToggleBtn';
+  hdrBtn.title = t('hdr.toggle');
+  hdrBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg>';
+  hdrBtn.onclick = toggleHeader;
+  bar.appendChild(hdrBtn);
   for (const tab of openTabs) {
     const el = document.createElement('div');
     el.className = 'tab' + (tab.id === activeTabId ? ' active' : '');
@@ -2797,6 +2838,13 @@ function renderTabs() {
   nb.className = 'tab-new'; nb.title = t('tab.new'); nb.textContent = '+';
   nb.onclick = newTab;
   bar.appendChild(nb);
+  // Font size slider
+  const curFont = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15.5;
+  const fsWrap = document.createElement('div');
+  fsWrap.className = 'font-slider-wrap';
+  fsWrap.innerHTML = '<span class="fs-icon">A</span><input type="range" class="font-slider" id="fontSlider" min="12" max="22" step="0.5" value="' + curFont + '"><span class="fs-icon lg">A</span>';
+  bar.appendChild(fsWrap);
+  fsWrap.querySelector('.font-slider').addEventListener('input', function() { setFontSize(parseFloat(this.value)); });
   updateHistSpinners();
 }
 
@@ -3006,6 +3054,38 @@ function toggleSec(id) {
   const title = body.previousElementSibling;
   if (title) title.setAttribute('aria-expanded', String(!body.classList.contains('collapsed')));
   saveUIState();
+}
+
+function toggleHeader() {
+  const zone = $i('hdrZone');
+  if (!zone) return;
+  zone.classList.toggle('collapsed');
+  const btn = $i('hdrToggleBtn');
+  if (btn) btn.classList.toggle('collapsed', zone.classList.contains('collapsed'));
+  saveUIState();
+}
+
+function setFontSize(px) {
+  document.documentElement.style.setProperty('--msg-font', px + 'px');
+  saveUIState();
+}
+
+const MSG_CLAMP_THRESHOLD = 300;
+function applyMsgClamp(mw) {
+  if (!mw) return;
+  const msgEl = mw.querySelector('.msg');
+  if (!msgEl || msgEl.classList.contains('msg-clamp') || msgEl.dataset.clampChecked) return;
+  msgEl.dataset.clampChecked = '1';
+  if (msgEl.scrollHeight <= MSG_CLAMP_THRESHOLD) return;
+  msgEl.classList.add('msg-clamp');
+  const btn = document.createElement('button');
+  btn.className = 'msg-expand-btn';
+  btn.textContent = t('msg.show_more');
+  btn.onclick = () => {
+    const isExpanded = msgEl.classList.toggle('expanded');
+    btn.textContent = isExpanded ? t('msg.show_less') : t('msg.show_more');
+  };
+  msgEl.after(btn);
 }
 
 // ─── Toolbar ─────────────────────────────────────────────────────────────
@@ -3551,6 +3631,7 @@ function _renderMsgAt(idx, prepend = false) {
   } else {
     msgsEl.appendChild(w);
   }
+  applyMsgClamp(w);
   return w;
 }
 
@@ -4754,6 +4835,8 @@ function saveUIState() {
       openTabs: openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
       activeTabId: openTabs.find(t => t.id === activeTabId && !t.isNew) ? activeTabId : null,
       allProjTabs,
+      headerCollapsed: c('hdrZone') || false,
+      fontSize: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15.5,
     }));
   } catch {}
 }
@@ -4805,6 +4888,15 @@ function restoreUIState() {
     if (curProjectId && openTabs.length) {
       projectTabs[curProjectId] = openTabs;
       projectActiveTab[curProjectId] = activeTabId;
+    }
+    // Restore header collapsed state
+    if (s.headerCollapsed) {
+      const zone = $i('hdrZone');
+      if (zone) zone.classList.add('collapsed');
+    }
+    // Restore font size
+    if (s.fontSize) {
+      document.documentElement.style.setProperty('--msg-font', s.fontSize + 'px');
     }
   } catch {}
 }
