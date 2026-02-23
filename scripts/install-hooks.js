@@ -20,7 +20,8 @@ const SETTINGS     = path.join(SETTINGS_DIR, 'settings.json');
 const LOCKS_DIR    = path.join(SETTINGS_DIR, 'locks');
 
 // ── Our hooks to install ──────────────────────────────────────────────────────
-// Use node-based scripts for cross-platform compatibility (macOS, Linux, Windows)
+// Use Node.js scripts for cross-platform compatibility (macOS, Linux, Windows).
+// Node is guaranteed available since this is a Node.js project.
 const FILE_LOCK_MATCHER = 'Edit|Write|MultiEdit|NotebookEdit';
 const OUR_HOOKS = {
   PreToolUse: [
@@ -37,6 +38,12 @@ const OUR_HOOKS = {
   ],
 };
 
+// Legacy commands from older versions — remove on upgrade to prevent duplicates
+const LEGACY_COMMANDS = [
+  'bash .claude/scripts/file-lock.sh',
+  'bash .claude/scripts/file-unlock.sh',
+];
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Returns true if `command` is already present somewhere in the hook list. */
@@ -47,9 +54,23 @@ function hasCommand(hookList, command) {
   );
 }
 
+/** Remove legacy hook commands that may have been installed by older versions. */
+function removeLegacyHooks(existing) {
+  if (!existing.hooks) return;
+  for (const event of Object.keys(existing.hooks)) {
+    if (!Array.isArray(existing.hooks[event])) continue;
+    existing.hooks[event] = existing.hooks[event].filter(entry => {
+      if (!Array.isArray(entry.hooks)) return true;
+      entry.hooks = entry.hooks.filter(h => !LEGACY_COMMANDS.includes(h.command));
+      return entry.hooks.length > 0;
+    });
+  }
+}
+
 /** Deep-merge our hooks into existing settings object (mutates `existing`). */
 function mergeHooks(existing) {
   if (!existing.hooks) existing.hooks = {};
+  removeLegacyHooks(existing);
 
   for (const [event, entries] of Object.entries(OUR_HOOKS)) {
     if (!existing.hooks[event]) {
@@ -65,23 +86,12 @@ function mergeHooks(existing) {
   }
 }
 
-// ── Copy hook scripts ─────────────────────────────────────────────────────────
-// Copies Node.js lock scripts from the package into .claude/scripts/
-// so the hook commands (node .claude/scripts/file-lock.js) resolve correctly.
-const SCRIPTS_SRC = path.join(__dirname, '..', '.claude', 'scripts');
-const SCRIPTS_DST = path.join(ROOT, '.claude', 'scripts');
-const HOOK_SCRIPTS = ['file-lock.js', 'file-unlock.js'];
-
-function copyHookScripts() {
+// Ensure hook scripts directory exists (scripts are shipped in .claude/scripts/)
+function ensureScriptsDir() {
   try {
-    fs.mkdirSync(SCRIPTS_DST, { recursive: true });
-    for (const name of HOOK_SCRIPTS) {
-      const src = path.join(SCRIPTS_SRC, name);
-      const dst = path.join(SCRIPTS_DST, name);
-      if (fs.existsSync(src)) fs.copyFileSync(src, dst);
-    }
+    fs.mkdirSync(path.join(ROOT, '.claude', 'scripts'), { recursive: true });
   } catch (e) {
-    console.warn('[hooks] Could not copy hook scripts:', e.message);
+    console.warn('[hooks] Could not create scripts dir:', e.message);
   }
 }
 
@@ -109,7 +119,7 @@ fs.mkdirSync(LOCKS_DIR, { recursive: true });
 const gitkeep = path.join(LOCKS_DIR, '.gitkeep');
 if (!fs.existsSync(gitkeep)) fs.writeFileSync(gitkeep, '');
 
-// 5. Copy cross-platform Node.js hook scripts
-copyHookScripts();
+// 5. Ensure scripts directory exists
+ensureScriptsDir();
 
 console.log('✓ Claude Code file-lock hooks installed (.claude/settings.json)');

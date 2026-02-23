@@ -64,7 +64,7 @@ class ClaudeCLI {
     this.claudeBin = options.claudeBin || CLAUDE_BIN;
   }
 
-  send({ prompt, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, abortController }) {
+  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, abortController }) {
     const args = ['--print'];
 
     // Session resumption: --resume <sessionId> (not --session-id + --resume separately)
@@ -94,7 +94,29 @@ class ClaudeCLI {
     // Include partial message chunks for real-time streaming
     args.push('--include-partial-messages');
 
-    args.push('-p', prompt);
+    // Handle image/file attachments: save to temp dir, append file paths to prompt
+    // so Claude CLI can read them via its Read tool (CLI has no native content block API)
+    const _tempFiles = [];
+    let finalPrompt = prompt;
+    if (contentBlocks && contentBlocks.length) {
+      const tmpDir = path.join(os.tmpdir(), `claude-att-${Date.now()}`);
+      fs.mkdirSync(tmpDir, { recursive: true });
+      const filePaths = [];
+      for (const block of contentBlocks) {
+        if (block.type === 'image' && block.source?.data) {
+          const ext = (block.source.media_type || 'image/png').split('/')[1] || 'png';
+          const fname = `attachment-${_tempFiles.length + 1}.${ext}`;
+          const fpath = path.join(tmpDir, fname);
+          fs.writeFileSync(fpath, Buffer.from(block.source.data, 'base64'));
+          _tempFiles.push(fpath);
+          filePaths.push(fpath);
+        }
+      }
+      if (filePaths.length) {
+        finalPrompt = `[Attached images — read these files to see the screenshots/images the user shared:\n${filePaths.map(f => `- ${f}`).join('\n')}\n]\n\n${prompt}`;
+      }
+    }
+    args.push('-p', finalPrompt);
 
     // Unset CLAUDECODE to allow nested invocation from dev environment.
     // Unset ANTHROPIC_API_KEY so the CLI subprocess uses Max subscription
@@ -127,6 +149,8 @@ class ClaudeCLI {
     let globalTimer = null;
     // Track MCP config path locally so error handler can also clean it up
     let mcpPath = mcpConfigPath;
+    // Track temp attachment files for cleanup
+    let attFiles = _tempFiles.slice();
 
     proc.stdout.on('data', (chunk) => {
       buffer += stdoutDecoder.write(chunk);
@@ -174,6 +198,8 @@ class ClaudeCLI {
         try { this._handle(JSON.parse(buffer), h); } catch { try { if (h.onText) h.onText(buffer); } catch {} }
       }
       if (mcpPath) { try { fs.unlinkSync(mcpPath); } catch {} mcpPath = null; }
+      for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
+      attFiles = [];
       if (code !== 0 && stderrBuf.trim() && h.onError) {
         // Filter out known non-error noise (MCP loading messages) line-by-line,
         // then report any remaining real error lines to the caller.
@@ -192,8 +218,10 @@ class ClaudeCLI {
     proc.on('error', (err) => {
       if (globalTimer) { clearTimeout(globalTimer); globalTimer = null; }
       if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
-      // Clean up MCP config even when the process fails to start
+      // Clean up MCP config and temp attachments even when the process fails to start
       if (mcpPath) { try { fs.unlinkSync(mcpPath); } catch {} mcpPath = null; }
+      for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
+      attFiles = [];
       // Wrapped in try-catch for the same reason as in 'close': onDone must always fire.
       try { if (h.onError) h.onError(`Failed to start claude: ${err.message}. Binary: ${this.claudeBin}`); } catch {}
       if (h.onDone) h.onDone(detectedSid);
