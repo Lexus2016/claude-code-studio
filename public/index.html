@@ -112,6 +112,25 @@ body::after {
 #versionBadge { font-size: 11px; color: var(--muted); cursor: default; letter-spacing: .3px; }
 #versionBadge.update { color: var(--orange); cursor: pointer; text-decoration: underline dotted; }
 
+/* ─── Rate limit badge ─── */
+#rlBadge { display:none; position:relative; align-items:center; gap:5px; padding:3px 9px; border-radius:6px; font-size:12px; font-weight:600; cursor:default; user-select:none; background:rgba(245,158,11,.15); border:1px solid rgba(245,158,11,.45); color:#f59e0b; transition:background .2s,border-color .2s; }
+#rlBadge.rl-crit { background:rgba(239,68,68,.15); border-color:rgba(239,68,68,.45); color:#ef4444; }
+#rlBadge .rl-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; animation:rlPulse 1.8s ease-in-out infinite; }
+@keyframes rlPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.45;transform:scale(.8)} }
+#rlBadge .rl-label { white-space:nowrap; }
+#rlTooltip { display:none; position:absolute; top:100%; right:0; margin-top:6px; width:275px; background:#1a1f2e; border:1px solid rgba(245,158,11,.35); border-radius:10px; padding:13px 15px; z-index:9999; box-shadow:0 8px 32px rgba(0,0,0,.55); font-size:12.5px; line-height:1.55; }
+/* Bridge: transparent 6px area above tooltip keeps #rlBadge:hover true while mouse travels down */
+#rlTooltip::before { content:''; position:absolute; top:-6px; left:0; right:0; height:6px; }
+#rlBadge:hover #rlTooltip { display:block; }
+#rlTooltip .rl-tt-title { font-weight:700; font-size:13px; color:var(--text); margin-bottom:9px; display:flex; align-items:center; gap:6px; }
+#rlTooltip .rl-tt-row { display:flex; justify-content:space-between; align-items:center; padding:3px 0; border-bottom:1px solid rgba(255,255,255,.05); }
+#rlTooltip .rl-tt-row:last-child { border-bottom:none; }
+#rlTooltip .rl-tt-key { color:var(--muted); }
+#rlTooltip .rl-tt-val { color:var(--text); font-weight:600; text-align:right; }
+#rlTooltip .rl-bar { height:5px; border-radius:3px; background:rgba(255,255,255,.1); margin:8px 0 5px; overflow:hidden; }
+#rlTooltip .rl-bar-fill { height:100%; border-radius:3px; background:#f59e0b; transition:width .4s; }
+#rlTooltip .rl-bar-fill.rl-crit { background:#ef4444; }
+
 /* ─── File browser action buttons ─── */
 .fii .fdl, .fii .fpe { opacity: 0; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 1px 4px; border-radius: 3px; transition: opacity .1s, color .1s; flex-shrink: 0; line-height: 1; }
 .fii:hover .fdl, .fii:hover .fpe { opacity: .7; }
@@ -265,13 +284,17 @@ body::after {
 /* ─── Markdown styles inside .msg ─── */
 .msg strong { font-weight: 700; color: var(--text); }
 .msg em { font-style: italic; color: #c9d1d9; }
-.msg h1, .msg h2, .msg h3 { font-weight: 700; margin: 12px 0 6px; color: var(--text); }
+.msg h1, .msg h2, .msg h3, .msg h4, .msg h5, .msg h6 { font-weight: 700; margin: 12px 0 6px; color: var(--text); }
 .msg h1 { font-size: 21px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
 .msg h2 { font-size: 18px; }
 .msg h3 { font-size: 16px; }
+.msg h4 { font-size: 14.5px; }
+.msg h5 { font-size: 14px; color: var(--muted); }
+.msg h6 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .msg p { margin: 6px 0; }
 .msg ul, .msg ol { margin: 6px 0 6px 20px; }
 .msg li { margin: 3px 0; }
+.msg li > ul, .msg li > ol { margin-top: 3px; margin-bottom: 1px; }
 .msg code { background: rgba(110,118,129,.18); padding: 2px 6px; border-radius: 5px; font-family: 'SF Mono', Consolas, 'Courier New', monospace; font-size: 13.5px; color: #e6a77b; }
 .msg pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 9px; margin: 10px 0; overflow: hidden; }
 .msg pre .pre-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--s3); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); }
@@ -449,6 +472,7 @@ body::after {
 /* ─── Retry indicators ─── */
 .retry-badge { font-size:11px; color:var(--text-dim); opacity:.65; margin-top:3px; letter-spacing:.01em; }
 .msg-retry-indicator { margin:2px 12px 6px; font-size:11px; color:var(--text-dim); opacity:.6; }
+.msg-interrupted { margin:4px 12px 6px; font-size:11px; color:var(--yellow,#e5c07b); opacity:.8; }
 
 /* ─── Input area ─── */
 .ia { padding: 12px 16px; background: var(--s1); border-top: 1px solid var(--border); }
@@ -523,6 +547,19 @@ body::after {
 .modal-footer button { padding: 7px 18px; border-radius: 7px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; }
 .save-notice { color: var(--green); font-size: 12px; }
 .cfg-path { font-size: 11px; color: var(--muted); padding: 0 2px 10px; font-family: 'SF Mono', Consolas, monospace; letter-spacing: .2px; display: flex; align-items: center; gap: 6px; }
+
+/* ─── MCP Settings: env key-value editor ─── */
+.mcp-cfg-label { font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px }
+.mcp-cfg-input { background:var(--s2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:7px;font-size:13px;outline:none;width:100%;font-family:'SF Mono',Consolas,monospace;transition:border .15s }
+.mcp-cfg-input:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,106,239,.1) }
+.mcp-cfg-input::placeholder { color:var(--muted);opacity:.6 }
+.env-kv-row { display:flex;gap:8px;align-items:center }
+.env-kv-key { flex:0 0 40%;min-width:0 }
+.env-kv-val { flex:1;min-width:0 }
+.env-kv-del { background:none;border:1px solid var(--border);color:var(--muted);width:32px;height:34px;border-radius:7px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s }
+.env-kv-del:hover { color:var(--red, #f87171);border-color:var(--red, #f87171);background:rgba(248,113,113,.08) }
+.env-add-btn { background:none;border:1px dashed var(--border);color:var(--muted);padding:8px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;width:100%;transition:all .15s;margin-top:4px }
+.env-add-btn:hover { border-color:var(--accent);color:var(--accent) }
 
 /* ─── Toast notifications ─── */
 #toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--s3); border: 1px solid var(--border); color: var(--text); padding: 9px 18px; border-radius: 10px; font-size: 13px; z-index: 200; pointer-events: none; opacity: 0; transition: opacity .25s; box-shadow: var(--shadow); white-space: nowrap; }
@@ -695,6 +732,10 @@ body::after {
 }
 .mw:hover .reply-btn { opacity: .6; }
 .reply-btn:hover { color: var(--text); opacity: 1 !important; background: var(--s2); }
+/* User messages: shift action buttons left past the 34px avatar padding so they stay inside the bubble */
+.mw.user .cpb   { right: 39px; } /* 34px avatar + 5px gap */
+.mw.user .cpmd  { right: 72px; } /* 34px avatar + 38px original */
+.mw.user .reply-btn { right: 39px; } /* same shift as .cpb */
 
 /* ─── Reply preview bar (above textarea) ─── */
 .reply-preview {
@@ -756,6 +797,8 @@ body::after {
   .mw.assistant::before { width: 22px; height: 22px; font-size: 8px; }
   .mw.user { padding-right: 28px; }
   .mw.user::after { width: 22px; height: 22px; font-size: 7px; }
+  .mw.user .cpb, .mw.user .reply-btn { right: 33px; } /* 28px avatar + 5px on mobile */
+  .mw.user .cpmd { right: 66px; } /* 28px avatar + 38px on mobile */
   .toolbar { gap: 5px; padding: 5px 10px; }
   .tb-group .label { display: none; }
   .hdr { padding: 8px 12px; }
@@ -782,7 +825,7 @@ body::after {
 <div class="left" id="leftPanel">
   <div class="left-inner">
     <div class="sec">
-      <div class="sec-title" onclick="toggleSec('proj')">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('proj')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('proj')}">
         <span data-i18n="sec.projects">Проекти</span>
         <span class="badge" id="projCount"></span>
       </div>
@@ -793,7 +836,7 @@ body::after {
     </div>
 
     <div class="sec">
-      <div class="sec-title" onclick="toggleSec('hist')">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('hist')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('hist')}">
         <span data-i18n="sec.chats">Чати</span> <span class="badge" id="histCount">0</span>
       </div>
       <div class="sec-body" id="histBody">
@@ -802,7 +845,7 @@ body::after {
     </div>
 
     <div class="sec">
-      <div class="sec-title" onclick="toggleSec('mcp')">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('mcp')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('mcp')}">
         <span data-i18n="sec.mcp">MCP</span>
         <span class="badge" id="mcpCount">0</span>
       </div>
@@ -810,10 +853,14 @@ body::after {
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="mcp.hint">Увімкніть інструменти, які Claude може використовувати в цьому чаті.</div>
         <div id="mcpList"></div>
         <button class="add-btn" onclick="showMcpForm()" data-i18n="mcp.add">＋ Додати MCP-сервер</button>
+        <div style="display:flex;gap:5px;margin-top:4px">
+          <button class="bg" onclick="openMcpImport()" style="flex:1;font-size:11px;padding:5px 6px;display:inline-flex;align-items:center;justify-content:center;gap:4px" data-i18n-title="mcp.import.title" title="Імпортувати MCP з JSON файлу (Claude Desktop формат)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="mcp.import.btn">Імпорт</span></button>
+          <button class="bg" onclick="exportMcp()" style="flex:1;font-size:11px;padding:5px 6px;display:inline-flex;align-items:center;justify-content:center;gap:4px" data-i18n-title="mcp.export.title" title="Експортувати всі MCP у JSON файл"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> <span data-i18n="mcp.export.btn">Експорт</span></button>
+        </div>
         <div id="mcpForm" style="display:none" class="af">
           <select id="mcpType" onchange="updateMcpFormType()">
-            <option value="stdio">stdio (команда)</option>
-            <option value="sse">SSE (URL потік)</option>
+            <option value="stdio" data-i18n="mcp.type.stdio">stdio (команда)</option>
+            <option value="sse" data-i18n="mcp.type.sse">SSE (URL потік)</option>
             <option value="http">HTTP (REST)</option>
           </select>
           <input id="mcpId" data-i18n-ph="mcp.id" placeholder="ID (напр. my-server)">
@@ -836,7 +883,7 @@ body::after {
     </div>
 
     <div class="sec">
-      <div class="sec-title" onclick="toggleSec('skills')">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('skills')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('skills')}">
         <span data-i18n="sec.skills">Навички</span>
         <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
           <span class="badge" id="skillsCount">0</span>
@@ -855,7 +902,7 @@ body::after {
 </div>
 
 <!-- LEFT PANEL TAB -->
-<div class="panel-tab panel-tab-left active" onclick="toggle('leftPanel')" data-tip="Сховати/показати ліву панель" data-i18n-tip="tip.panels.left">
+<div class="panel-tab panel-tab-left active" role="button" tabindex="0" aria-label="Toggle left panel" onclick="toggle('leftPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('leftPanel')}" data-tip="Сховати/показати ліву панель" data-i18n-tip="tip.panels.left">
   <div class="panel-tab-inner">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
   </div>
@@ -866,26 +913,39 @@ body::after {
   <div class="hdr">
     <div class="hdr-l">
       <div class="logo">CC</div>
-      <nav class="nav-sw" aria-label="Навігація між розділами">
-        <a class="nav-sw-btn active" href="/" data-tip="Чат">
+      <nav class="nav-sw" aria-label="Навігація між розділами" data-i18n-aria="nav.aria">
+        <a class="nav-sw-btn active" href="/" data-tip="Чат" data-i18n-tip="nav.chat.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
           Chat
         </a>
-        <a class="nav-sw-btn" href="/kanban" data-tip="Kanban дошка">
+        <a class="nav-sw-btn" href="/kanban" data-tip="Kanban дошка" data-i18n-tip="nav.kanban.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
           Kanban
         </a>
       </nav>
       <div class="hdr-meta">
-        <span class="status-dot warn" id="statusEl">Підключення...</span>
+        <span class="status-dot warn" id="statusEl" data-i18n="status.connecting">Підключення...</span>
         <span id="activeProjLabel"></span>
-        <span id="versionBadge" title="Перевірка версії..."></span>
+        <span id="versionBadge" data-i18n-title="ver.checking" title="Перевірка версії..."></span>
       </div>
     </div>
     <div class="hdr-btns">
+      <div id="rlBadge">
+        <span class="rl-dot"></span>
+        <span class="rl-label" id="rlBadgeLabel">Max ⚠</span>
+        <div id="rlTooltip">
+          <div class="rl-tt-title"><span id="rl-tt-icon">⚠️</span> <span id="rl-tt-title-text" data-i18n="rl.title.warn">Наближається ліміт</span></div>
+          <div class="rl-bar"><div class="rl-bar-fill" id="rl-bar-fill"></div></div>
+          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.type">Тип</span><span class="rl-tt-val" id="rl-tt-type">—</span></div>
+          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.used">Використано</span><span class="rl-tt-val" id="rl-tt-used">—</span></div>
+          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.left">Залишилось</span><span class="rl-tt-val" id="rl-tt-left">—</span></div>
+          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.reset">Скидання</span><span class="rl-tt-val" id="rl-tt-reset">—</span></div>
+          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.via">Через</span><span class="rl-tt-val" id="rl-tt-countdown">—</span></div>
+        </div>
+      </div>
       <button class="hb" onclick="newSession()" data-tip="Новий чат" data-i18n-tip="tip.new">&#xFF0B; <span data-i18n="btn.new">Чат</span></button>
       <button class="hb" onclick="openCfgEditor()" data-tip="Налаштування" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
-      <select class="lang-sel" id="langSel" onchange="setLang(this.value)" data-tip="Мова інтерфейсу">
+      <select class="lang-sel" id="langSel" onchange="setLang(this.value)" aria-label="Interface language" data-tip="Мова інтерфейсу" data-i18n-tip="tip.lang">
         <option value="en">EN</option>
         <option value="uk">UK</option>
         <option value="ru">RU</option>
@@ -1000,7 +1060,7 @@ body::after {
 </div>
 
 <!-- RIGHT PANEL TAB (left side of right panel) -->
-<div class="panel-tab panel-tab-right active" onclick="toggle('rightPanel')" data-tip="Сховати/показати праву панель" data-i18n-tip="tip.panels.right">
+<div class="panel-tab panel-tab-right active" role="button" tabindex="0" aria-label="Toggle right panel" onclick="toggle('rightPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('rightPanel')}" data-tip="Сховати/показати праву панель" data-i18n-tip="tip.panels.right">
   <div class="panel-tab-inner">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
   </div>
@@ -1039,15 +1099,60 @@ body::after {
 
 <!-- MCP Settings Modal -->
 <div class="modal-overlay hidden" id="mcpSettingsModal" onclick="if(event.target===this)closeMcpSettings()">
-  <div class="modal" style="width:440px;max-height:72vh">
+  <div class="modal" style="width:580px;max-height:85vh">
     <div class="modal-hdr">
-      <h2 id="mcpSettingsTitle" style="font-size:14px">⚙ MCP</h2>
+      <h2 id="mcpSettingsTitle" style="font-size:16px;font-weight:700">⚙ MCP</h2>
       <button class="modal-close" onclick="closeMcpSettings()">✕</button>
     </div>
-    <div class="modal-body" id="mcpSettingsBody" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto"></div>
+    <div class="modal-body" id="mcpSettingsBody" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;overflow-y:auto"></div>
     <div class="modal-footer">
       <button class="bg" onclick="closeMcpSettings()" data-i18n="mcp.cfg.cancel">Скасувати</button>
       <button class="bp" onclick="saveMcpSettings()" data-i18n="mcp.cfg.save">Зберегти</button>
+    </div>
+  </div>
+</div>
+
+<!-- MCP Import Modal -->
+<div class="modal-overlay hidden" id="mcpImportModal" onclick="if(event.target===this)closeMcpImport()">
+  <div class="modal" style="width:500px;max-height:82vh">
+    <div class="modal-hdr">
+      <h2 style="font-size:14px;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="mcp.import.modal.title">Імпорт MCP серверів</span></h2>
+      <button class="modal-close" onclick="closeMcpImport()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto">
+      <div style="font-size:12px;color:var(--muted);line-height:1.6">
+        Підтримується формат <strong>Claude Desktop</strong> (<code>claude_desktop_config.json</code>) та будь-який JSON вигляду <code style="font-size:11px">{"mcpServers":{...}}</code>
+      </div>
+      <div id="mcpImportDrop"
+           style="border:2px dashed var(--border);border-radius:8px;padding:18px 12px;text-align:center;cursor:pointer;transition:border-color .15s"
+           onclick="$i('mcpImportFile').click()"
+           ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+           ondragleave="this.style.borderColor='var(--border)'"
+           ondrop="event.preventDefault();this.style.borderColor='var(--border)';handleMcpImportDrop(event)">
+        <div style="font-size:13px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:8px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg><span data-i18n="mcp.import.drop">Перетягніть .json файл або натисніть для вибору</span></div>
+        <input type="file" id="mcpImportFile" accept=".json" style="display:none" onchange="handleMcpImportFile(this)">
+      </div>
+      <div style="text-align:center;font-size:11px;color:var(--muted);margin:-2px 0" data-i18n="mcp.import.or">— або вставте JSON вручну —</div>
+      <textarea id="mcpImportJson"
+                placeholder='{"mcpServers":{"my-server":{"command":"npx","args":["my-mcp"],"env":{"API_KEY":"value"}}}}'
+                style="background:var(--s2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:11px;outline:none;width:100%;font-family:monospace;min-height:90px;resize:vertical;transition:border .15s"
+                oninput="mcpImportPreviewClear()"></textarea>
+      <div id="mcpImportError" style="display:none;font-size:12px;color:var(--orange);padding:7px 10px;background:var(--s2);border-radius:6px;border:1px solid var(--orange)"></div>
+      <div id="mcpImportPreview" style="display:none;flex-direction:column;gap:6px">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">
+          <span data-i18n="mcp.import.found">Знайдено серверів:</span> <span id="mcpImportCount" style="color:var(--text)">0</span>
+        </div>
+        <div id="mcpImportList" style="display:flex;flex-direction:column;gap:3px;max-height:200px;overflow-y:auto"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px 10px;background:var(--s2);border-radius:6px">
+        <input type="checkbox" id="mcpImportReplace">
+        <span data-i18n="mcp.import.replace">Замінити існуючі кастомні сервери (інакше — злиття)</span>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="bg" onclick="closeMcpImport()" data-i18n="mcp.cfg.cancel">Скасувати</button>
+      <button class="bg" onclick="previewMcpImport()" style="margin-left:auto" data-i18n="mcp.import.preview.btn">👁 Перегляд</button>
+      <button class="bp" onclick="doMcpImport()" id="mcpImportBtn" disabled data-i18n="mcp.import.do">Імпортувати</button>
     </div>
   </div>
 </div>
@@ -1088,27 +1193,27 @@ body::after {
       <div style="padding:14px;color:var(--muted);text-align:center;font-size:12px" data-i18n="toast.loading">Завантаження...</div>
     </div>
     <div class="proj-name-row">
-      <span style="font-size:12px;color:var(--muted);white-space:nowrap">Назва:</span>
+      <span style="font-size:12px;color:var(--muted);white-space:nowrap" data-i18n="dir.name.label">Назва:</span>
       <input id="projNameInput" data-i18n-ph="dir.proj_name" placeholder="Назва проекту (авто якщо порожньо)">
     </div>
     <div class="dir-footer">
       <label>
         <input type="checkbox" id="gitInitChk">
-        git init (якщо ще не репозиторій)
+        <span data-i18n="dir.git.init">git init (якщо ще не репозиторій)</span>
       </label>
       <div style="flex:1"></div>
       <button class="bg" onclick="closeDirModal()" style="padding:6px 14px" data-i18n="dir.cancel">Cancel</button>
-      <button class="bp" onclick="selectDir()" style="padding:6px 14px">＋ Додати проект</button>
+      <button class="bp" onclick="selectDir()" style="padding:6px 14px" data-i18n="proj.add">＋ Додати проект</button>
     </div>
   </div>
 </div>
 
 <!-- Confirm Stop Modal -->
 <div class="confirm-overlay hidden" id="confirmStopModal" onclick="if(event.target===this)cancelStop()">
-  <div class="confirm-dialog">
+  <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmStopTitle">
     <div class="cd-icon">⏹</div>
-    <h3 data-i18n="confirm.stop.h">Stop task?</h3>
-    <p>Виконання агента буде перервано.</p>
+    <h3 id="confirmStopTitle" data-i18n="confirm.stop.h">Stop task?</h3>
+    <p data-i18n="confirm.stop.desc">Виконання агента буде перервано.</p>
     <div class="confirm-actions">
       <button class="cd-btn-cancel" onclick="cancelStop()" data-i18n="confirm.stop.cancel">Cancel</button>
       <button class="cd-btn-stop" id="confirmStopBtn" onclick="doStop()" data-i18n="confirm.stop.yes">Yes, stop</button>
@@ -1126,9 +1231,9 @@ body::after {
 let ws = null, isGen = false, curEl = null, curTxt = '', currentSessionId = null, generatingTabId = null;
 let replyTo = null; // { id, role, content }
 let openTabs = [], activeTabId = null;
-const tabState = {}; // per-tab: { curEl, curTxt, currentSessionId, generating, draft }
+const tabState = {}; // per-tab: { curEl, curTxt, currentSessionId, generating, draft, agentStatus }
 function getTS(id) {
-  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', currentSessionId: null, generating: false, draft: '' };
+  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', currentSessionId: null, generating: false, draft: '', agentStatus: '' };
   return tabState[id];
 }
 let config = { mcpServers: {}, skills: {} };
@@ -1215,7 +1320,7 @@ const TRANSLATIONS = {
     'queue.label':'У черзі','queue.edit.title':'Редагувати повідомлення','queue.del.title':'Видалити з черги',
     'agents.title':'Активні агенти',
     'sess.delete.confirm':'Видалити сесію?','sess.delete.tasks':'Видалити сесію?\n\nДо неї прив\'язано завдань у Kanban: {n}. Вони також будуть видалені.','sess.load.err':'Помилка завантаження сесії',
-    'mcp.active':'● Активний у чаті','mcp.inactive':'○ Вимкнений','mcp.del.title':'Видалити сервер',
+    'mcp.active':'● Активний у чаті','mcp.inactive':'○ Вимкнений','mcp.del.title':'Видалити сервер','mcp.del.confirm':'Видалити сервер',
     'mcp.cfg.tip':'Налаштування','mcp.cfg.warn':'Потрібна конфігурація',
     'mcp.toggle.on':'Клік — вимкнути','mcp.toggle.off':'Клік — увімкнути',
     'mcp.cfg.api_warn':'⚠ Вкажіть API ключі для активації',
@@ -1237,6 +1342,38 @@ const TRANSLATIONS = {
     'welcome.prompt.1':'Поясни цей код крок за кроком','welcome.prompt.2':'Знайди та виправ помилки','welcome.prompt.3':'Напиши unit-тести','welcome.prompt.4':'Спроектуй архітектуру',
     'toast.task_resumed':'Задачу відновлено','toast.task_lost':'З\'єднання втрачено, вивід недоступний','toast.task_retry':'retry',
     'session.copy_id':'Скопіювати ID сесії Claude','session.open_claude':'Відкрити в Claude Code',
+    'stream.interrupted':'Відповідь була перервана',
+    'rl.title.warn':'Наближається ліміт','rl.title.crit':'Ліміт вичерпується!',
+    'rl.key.type':'Тип','rl.key.used':'Використано','rl.key.left':'Залишилось','rl.key.reset':'Скидання','rl.key.via':'Через',
+    'rl.reset.done':'вже скинуто','rl.time.h':'г','rl.time.m':'хв',
+    'queue.badge':'{n} у черзі',
+    'ver.current':'Поточна версія','ver.update':'Доступне оновлення {tag}!\nЗапустіть: npx github:Lexus2016/claude-code-studio','ver.latest':' — остання версія ✓','ver.checking':'Перевірка версії...',
+    'status.connecting':'Підключення...',
+    'toast.cmd_copied':'✓ Команду скопійовано','toast.json_req':'Потрібен .json файл','toast.json_enter':'Введіть або завантажте JSON',
+    'toast.mcp_imported':'✓ Імпортовано {n} MCP серверів','toast.mcp_import_err':'Помилка імпорту: ','toast.mcp_export_err':'Помилка експорту',
+    'skill.toggle.on':'Клік — вимкнути skill','skill.toggle.off':'Клік — додати skill до системного промпту',
+    'files.empty':'Порожньо','files.view':'Переглянути',
+    'proj.empty':'Немає проектів. Додайте директорію для роботи з Claude Code.',
+    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban дошка','nav.aria':'Навігація між розділами','tip.lang':'Мова інтерфейсу',
+    'mcp.import.btn':'Імпорт','mcp.import.title':'Імпортувати MCP з JSON файлу (Claude Desktop формат)',
+    'mcp.export.btn':'Експорт','mcp.export.title':'Експортувати всі MCP у JSON файл','mcp.replace.title':'Замінить існуючий',
+    'mcp.type.stdio':'stdio (команда)','mcp.type.sse':'SSE (URL потік)',
+    'mcp.import.modal.title':'Імпорт MCP серверів',
+    'mcp.import.drop':'Перетягніть .json файл або натисніть для вибору',
+    'mcp.import.or':'— або вставте JSON вручну —',
+    'mcp.import.found':'Знайдено серверів:',
+    'mcp.import.replace':'Замінити існуючі кастомні сервери (інакше — злиття)',
+    'mcp.import.preview.btn':'👁 Перегляд',
+    'mcp.import.do':'Імпортувати',
+    'dir.name.label':'Назва:',
+    'dir.git.init':'git init (якщо ще не репозиторій)',
+    'confirm.stop.desc':'Виконання агента буде перервано.',
+    'rl.type.five_hour':'5-годинний','rl.type.seven_day':'7-денний',
+    'proj.generating':'Генерація у фоні...',
+    'mcp.parse.no_servers':'Не вдалося знайти MCP сервери. Очікується {"mcpServers":{...}} або сумісний формат.',
+    'mcp.parse.empty':'Список серверів порожній',
+    'mcp.cfg.env_json_err':'Невірний формат ENV JSON',
+    'agent.planning':'🧠 Планування...','agent.fallback_single':'⚠️ Перехід до одиночного режиму','agent.done':'✅ Всі агенти завершили','agent.circular_deps':'⚠️ Кругова залежність між агентами',
   },
   en: {
     'sec.proactive':'Status',
@@ -1286,7 +1423,7 @@ const TRANSLATIONS = {
     'queue.label':'In queue','queue.edit.title':'Edit message','queue.del.title':'Remove from queue',
     'agents.title':'Active agents',
     'sess.delete.confirm':'Delete session?','sess.delete.tasks':'Delete session?\n\nLinked Kanban tasks: {n}. They will also be deleted.','sess.load.err':'Error loading session',
-    'mcp.active':'● Active in chat','mcp.inactive':'○ Disabled','mcp.del.title':'Remove server',
+    'mcp.active':'● Active in chat','mcp.inactive':'○ Disabled','mcp.del.title':'Remove server','mcp.del.confirm':'Remove server',
     'mcp.cfg.tip':'Settings','mcp.cfg.warn':'Configuration required',
     'mcp.toggle.on':'Click to disable','mcp.toggle.off':'Click to enable',
     'mcp.cfg.api_warn':'⚠ Set API keys to enable',
@@ -1308,6 +1445,38 @@ const TRANSLATIONS = {
     'welcome.prompt.1':'Explain this code step by step','welcome.prompt.2':'Find and fix bugs','welcome.prompt.3':'Write unit tests','welcome.prompt.4':'Design the architecture',
     'toast.task_resumed':'Task resumed','toast.task_lost':'Connection lost, output unavailable','toast.task_retry':'retry',
     'session.copy_id':'Copy Claude session ID','session.open_claude':'Open in Claude Code',
+    'stream.interrupted':'Response was interrupted',
+    'rl.title.warn':'Limit approaching','rl.title.crit':'Limit critical!',
+    'rl.key.type':'Type','rl.key.used':'Used','rl.key.left':'Left','rl.key.reset':'Resets','rl.key.via':'In',
+    'rl.reset.done':'already reset','rl.time.h':'h','rl.time.m':'m',
+    'queue.badge':'{n} in queue',
+    'ver.current':'Current version','ver.update':'Update available {tag}!\nRun: npx github:Lexus2016/claude-code-studio','ver.latest':' — latest ✓','ver.checking':'Checking version...',
+    'status.connecting':'Connecting...',
+    'toast.cmd_copied':'✓ Command copied','toast.json_req':'.json file required','toast.json_enter':'Enter or upload JSON',
+    'toast.mcp_imported':'✓ {n} MCP servers imported','toast.mcp_import_err':'Import error: ','toast.mcp_export_err':'Export error',
+    'skill.toggle.on':'Click to disable skill','skill.toggle.off':'Click to add skill to system prompt',
+    'files.empty':'Empty','files.view':'Preview',
+    'proj.empty':'No projects. Add a directory to work with Claude Code.',
+    'nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.aria':'Navigation','tip.lang':'Interface language',
+    'mcp.import.btn':'Import','mcp.import.title':'Import MCP from JSON file (Claude Desktop format)',
+    'mcp.export.btn':'Export','mcp.export.title':'Export all MCP to JSON file','mcp.replace.title':'Will replace existing',
+    'mcp.type.stdio':'stdio (command)','mcp.type.sse':'SSE (URL stream)',
+    'mcp.import.modal.title':'Import MCP servers',
+    'mcp.import.drop':'Drag .json file or click to browse',
+    'mcp.import.or':'— or paste JSON manually —',
+    'mcp.import.found':'Servers found:',
+    'mcp.import.replace':'Replace existing custom servers (otherwise — merge)',
+    'mcp.import.preview.btn':'👁 Preview',
+    'mcp.import.do':'Import',
+    'dir.name.label':'Name:',
+    'dir.git.init':'git init (if not already a repository)',
+    'confirm.stop.desc':'Agent execution will be interrupted.',
+    'rl.type.five_hour':'5-hour','rl.type.seven_day':'7-day',
+    'proj.generating':'Generating in background...',
+    'mcp.parse.no_servers':'Could not find MCP servers. Expected {"mcpServers":{...}} or compatible format.',
+    'mcp.parse.empty':'Server list is empty',
+    'mcp.cfg.env_json_err':'Invalid ENV JSON format',
+    'agent.planning':'🧠 Planning...','agent.fallback_single':'⚠️ Falling back to single mode','agent.done':'✅ All agents done','agent.circular_deps':'⚠️ Circular dependency between agents',
   },
   ru: {
     'sec.proactive':'Статус',
@@ -1357,7 +1526,7 @@ const TRANSLATIONS = {
     'queue.label':'В очереди','queue.edit.title':'Редактировать сообщение','queue.del.title':'Удалить из очереди',
     'agents.title':'Активные агенты',
     'sess.delete.confirm':'Удалить сессию?','sess.delete.tasks':'Удалить сессию?\n\nПривязанных задач в Kanban: {n}. Они также будут удалены.','sess.load.err':'Ошибка загрузки сессии',
-    'mcp.active':'● Активен в чате','mcp.inactive':'○ Отключен','mcp.del.title':'Удалить сервер',
+    'mcp.active':'● Активен в чате','mcp.inactive':'○ Отключен','mcp.del.title':'Удалить сервер','mcp.del.confirm':'Удалить сервер',
     'mcp.cfg.tip':'Настройки','mcp.cfg.warn':'Требуется настройка',
     'mcp.toggle.on':'Клик — отключить','mcp.toggle.off':'Клик — включить',
     'mcp.cfg.api_warn':'⚠ Укажите API ключи для активации',
@@ -1379,6 +1548,38 @@ const TRANSLATIONS = {
     'welcome.prompt.1':'Объясни этот код шаг за шагом','welcome.prompt.2':'Найди и исправь ошибки','welcome.prompt.3':'Напиши unit-тесты','welcome.prompt.4':'Спроектируй архитектуру',
     'toast.task_resumed':'Задача возобновлена','toast.task_lost':'Соединение потеряно, вывод недоступен','toast.task_retry':'retry',
     'session.copy_id':'Скопировать ID сессии Claude','session.open_claude':'Открыть в Claude Code',
+    'stream.interrupted':'Ответ был прерван',
+    'rl.title.warn':'Приближается лимит','rl.title.crit':'Лимит исчерпывается!',
+    'rl.key.type':'Тип','rl.key.used':'Использовано','rl.key.left':'Осталось','rl.key.reset':'Сброс','rl.key.via':'Через',
+    'rl.reset.done':'уже сброшен','rl.time.h':'ч','rl.time.m':'м',
+    'queue.badge':'{n} в очереди',
+    'ver.current':'Текущая версия','ver.update':'Доступно обновление {tag}!\nЗапустите: npx github:Lexus2016/claude-code-studio','ver.latest':' — последняя ✓','ver.checking':'Проверка версии...',
+    'status.connecting':'Подключение...',
+    'toast.cmd_copied':'✓ Команда скопирована','toast.json_req':'Требуется .json файл','toast.json_enter':'Введите или загрузите JSON',
+    'toast.mcp_imported':'✓ Импортировано {n} MCP серверов','toast.mcp_import_err':'Ошибка импорта: ','toast.mcp_export_err':'Ошибка экспорта',
+    'skill.toggle.on':'Клик — отключить навык','skill.toggle.off':'Клик — добавить навык в системный промпт',
+    'files.empty':'Пусто','files.view':'Просмотр',
+    'proj.empty':'Нет проектов. Добавьте директорию для работы с Claude Code.',
+    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban доска','nav.aria':'Навигация','tip.lang':'Язык интерфейса',
+    'mcp.import.btn':'Импорт','mcp.import.title':'Импортировать MCP из JSON файла (формат Claude Desktop)',
+    'mcp.export.btn':'Экспорт','mcp.export.title':'Экспортировать все MCP в JSON файл','mcp.replace.title':'Заменит существующий',
+    'mcp.type.stdio':'stdio (команда)','mcp.type.sse':'SSE (URL поток)',
+    'mcp.import.modal.title':'Импорт MCP серверов',
+    'mcp.import.drop':'Перетащите .json файл или нажмите для выбора',
+    'mcp.import.or':'— или вставьте JSON вручную —',
+    'mcp.import.found':'Найдено серверов:',
+    'mcp.import.replace':'Заменить существующие серверы (иначе — слияние)',
+    'mcp.import.preview.btn':'👁 Предпросмотр',
+    'mcp.import.do':'Импортировать',
+    'dir.name.label':'Название:',
+    'dir.git.init':'git init (если ещё не репозиторий)',
+    'confirm.stop.desc':'Выполнение агента будет прервано.',
+    'rl.type.five_hour':'5-часовой','rl.type.seven_day':'7-дневный',
+    'proj.generating':'Генерация в фоне...',
+    'mcp.parse.no_servers':'Не удалось найти MCP серверы. Ожидается {"mcpServers":{...}} или совместимый формат.',
+    'mcp.parse.empty':'Список серверов пуст',
+    'mcp.cfg.env_json_err':'Неверный формат ENV JSON',
+    'agent.planning':'🧠 Планирование...','agent.fallback_single':'⚠️ Переход в одиночный режим','agent.done':'✅ Все агенты завершили','agent.circular_deps':'⚠️ Циклическая зависимость между агентами',
   }
 };
 function t(key) {
@@ -1394,6 +1595,7 @@ function setLang(lang) {
   document.querySelectorAll('[data-i18n-ph]').forEach(el => { const k = el.getAttribute('data-i18n-ph'); if (t[k] !== undefined) el.placeholder = t[k]; });
   document.querySelectorAll('[data-i18n-tip]').forEach(el => { const k = el.getAttribute('data-i18n-tip'); if (t[k] !== undefined) el.setAttribute('data-tip', t[k]); });
   document.querySelectorAll('[data-i18n-title]').forEach(el => { const k = el.getAttribute('data-i18n-title'); if (t[k] !== undefined) el.title = t[k]; });
+  document.querySelectorAll('[data-i18n-aria]').forEach(el => { const k = el.getAttribute('data-i18n-aria'); if (t[k] !== undefined) el.setAttribute('aria-label', t[k]); });
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -1428,6 +1630,39 @@ function escH(s) {
     .replace(/"/g, '&quot;');
 }
 
+// Parse a captured block of list lines (bullet or ordered, any indentation level)
+function parseListBlock(blockText) {
+  const lines = blockText.trimEnd().split('\n')
+    .filter(l => /^\s*(?:[-*+]|\d+\.)\s/.test(l));
+  if (!lines.length) return blockText;
+
+  function getIndent(line) {
+    return (line.match(/^(\s*)/) || [''])[1].length;
+  }
+
+  function buildList(arr) {
+    if (!arr.length) return '';
+    const baseInd = getIndent(arr[0]);
+    const isOl = /^\s*\d+\./.test(arr[0]);
+    const tag = isOl ? 'ol' : 'ul';
+    const items = [];
+    let i = 0;
+    while (i < arr.length) {
+      const ind = getIndent(arr[i]);
+      if (ind < baseInd) break;
+      if (ind > baseInd) { i++; continue; }
+      const text = arr[i].replace(/^\s*(?:[-*+]|\d+\.)\s+/, '');
+      i++;
+      const nested = [];
+      while (i < arr.length && getIndent(arr[i]) > ind) nested.push(arr[i++]);
+      items.push('<li>' + text + (nested.length ? buildList(nested) : '') + '</li>');
+    }
+    return items.length ? `<${tag}>${items.join('')}</${tag}>` : '';
+  }
+
+  return buildList(lines);
+}
+
 function renderMd(text) {
   if (!text) return '';
 
@@ -1443,7 +1678,10 @@ function renderMd(text) {
   text = escH(text);
 
   // 3. Block elements (order matters)
-  // Headers
+  // Headers (h6→h1 order to avoid partial matches)
+  text = text.replace(/^#{6}\s+(.+)$/gm, '<h6>$1</h6>');
+  text = text.replace(/^#{5}\s+(.+)$/gm, '<h5>$1</h5>');
+  text = text.replace(/^#{4}\s+(.+)$/gm, '<h4>$1</h4>');
   text = text.replace(/^#{3}\s+(.+)$/gm, '<h3>$1</h3>');
   text = text.replace(/^#{2}\s+(.+)$/gm, '<h2>$1</h2>');
   text = text.replace(/^#{1}\s+(.+)$/gm, '<h1>$1</h1>');
@@ -1456,17 +1694,9 @@ function renderMd(text) {
     return '<blockquote><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg><span>' + c + '</span></blockquote>';
   });
 
-  // Bullet lists (group consecutive items)
-  text = text.replace(/((?:^[-*+]\s+.+\n?)+)/gm, m => {
-    const items = m.trim().split('\n').map(l => `<li>${l.replace(/^[-*+]\s+/, '')}</li>`).join('');
-    return `<ul>${items}</ul>`;
-  });
-
-  // Ordered lists
-  text = text.replace(/((?:^\d+\.\s+.+\n?)+)/gm, m => {
-    const items = m.trim().split('\n').map(l => `<li>${l.replace(/^\d+\.\s+/, '')}</li>`).join('');
-    return `<ol>${items}</ol>`;
-  });
+  // Lists — bullet and ordered, supports nested indentation via parseListBlock
+  // Append \n so subsequent paragraph text is cleanly separated in step 5
+  text = text.replace(/((?:^[ \t]*(?:[-*+]|\d+\.)\s+.+\n?)+)/gm, m => parseListBlock(m) + '\n');
 
   // 3.5 Tables — header row + separator row + data rows
   text = text.replace(/((?:^\|.+\|\s*\n?)+)/gm, block => {
@@ -1562,7 +1792,10 @@ function copyCode(id, btn) {
 // Uses noCatchUp:true so we don't flood with buffer text for background tabs.
 // When user switches to a tab, loadSess sends subscribe_session without noCatchUp
 // which triggers a full catch-up with current buffer.
+let _subscribingAllTabs = false;
 async function subscribeAllTabs() {
+  if (_subscribingAllTabs) return; // prevent concurrent in-flight calls (e.g. rapid reconnects)
+  _subscribingAllTabs = true;
   try {
     // Fetch session IDs that currently have running tasks (for immediate spinner update)
     const running = await (await fetch('/api/tasks/running-sessions')).json();
@@ -1590,6 +1823,7 @@ async function subscribeAllTabs() {
     if (needTabs) renderTabs();
     if (needProjs) renderProjects();
   } catch (e) { console.error('subscribeAllTabs:', e); }
+  finally { _subscribingAllTabs = false; }
 }
 
 let _reconnectDelay = 1000; // starts at 1 s, doubles up to 30 s
@@ -1598,6 +1832,11 @@ let _intentionalClose = false; // set before navigating away to suppress reconne
 
 function connect() {
   if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+  // Close any existing socket before opening a new one (prevents duplicate event handlers)
+  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+    ws.onclose = null; // suppress onclose reconnect loop — we're reconnecting intentionally
+    ws.close();
+  }
 
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${proto}//${location.host}`);
@@ -1689,12 +1928,16 @@ function handleWsMsg(d) {
     case 'text':
       if (!isVisible) {
         // Accumulate text for background tabs — restored when user switches back
-        const ts = getTS(tabId); ts.curTxt = (ts.curTxt || '') + d.text;
+        // catchUp replaces accumulated text (full replay from server); normal chunks append
+        const ts = getTS(tabId);
+        ts.curTxt = d.catchUp ? d.text : (ts.curTxt || '') + d.text;
         break;
       }
       rmStatus();
+      getTS(tabId).agentStatus = ''; // text has arrived — status no longer relevant
       if (!curEl) { rmW(); curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
-      curTxt += d.text;
+      // catchUp = full replay from server after reconnect → replace, not append
+      if (d.catchUp) { curTxt = d.text; } else { curTxt += d.text; }
       curEl.querySelector('.msg').innerHTML = renderStreaming(curTxt);
       if (d.agent) addAgentBadge(curEl, d.agent);
       scrollBottom();
@@ -1708,9 +1951,12 @@ function handleWsMsg(d) {
       if (!curEl && isVisible) showStatus(t('status.thinking'));
       break;
 
-    case 'agent_status':
-      if (isVisible) showStatus((d.agent ? d.agent + ' · ' : '') + escH(d.status));
+    case 'agent_status': {
+      const _asTxt = (d.agent ? d.agent + ' · ' : '') + escH(d.statusKey ? t(d.statusKey) : d.status);
+      getTS(tabId).agentStatus = _asTxt; // persist for tab-switch restoration
+      if (isVisible) showStatus(_asTxt);
       break;
+    }
 
     case 'status':
       if (isVisible) {
@@ -1724,6 +1970,7 @@ function handleWsMsg(d) {
       break;
 
     case 'done':
+      getTS(tabId).agentStatus = ''; // task finished — clear saved status
       if (isVisible) {
         if (curEl && curTxt) { curEl.querySelector('.msg').innerHTML = renderMd(curTxt); }
         markDone(curEl);
@@ -1758,6 +2005,7 @@ function handleWsMsg(d) {
       break;
 
     case 'error':
+      getTS(tabId).agentStatus = ''; // task errored — clear saved status
       if (isVisible) {
         rmStatus();
         sbHide();
@@ -1778,6 +2026,10 @@ function handleWsMsg(d) {
       if (found?.tab) { found.tab.generating = false; }
       if (isCurrent) { renderTabs(); if (tabId === activeTabId) generatingTabId = null; }
       else renderProjects();
+      break;
+
+    case 'rate_limit':
+      updateRateLimit(d.info);
       break;
 
     case 'session_started':
@@ -1929,6 +2181,80 @@ function setStatus(text, cls) {
   el.className = `status-dot ${cls}`;
 }
 
+// ─── Rate limit badge ────────────────────────────────────────────────────────
+let _rlInfo = null;          // last received rate_limit_info
+let _rlCountdownTimer = null; // interval for live countdown
+
+function updateRateLimit(info) {
+  if (!info) return;
+  // Only show for CLI engine (Max subscription) — status 'allowed' without warning = skip
+  if (info.status === 'allowed' && !info.surpassedThreshold) return;
+
+  _rlInfo = info;
+  const badge  = $i('rlBadge');
+  const isCrit = info.status === 'rejected' || info.utilization >= 0.95;
+  const pct    = Math.round((info.utilization || 0) * 100);
+  const typeMap = { five_hour: t('rl.type.five_hour'), seven_day: t('rl.type.seven_day') };
+  const typeLabel = typeMap[info.rateLimitType] || info.rateLimitType || '—';
+
+  // Badge label
+  $i('rlBadgeLabel').textContent = `Max ${pct}%`;
+  badge.classList.toggle('rl-crit', isCrit);
+
+  // Tooltip fields
+  $i('rl-tt-icon').textContent       = isCrit ? '🚫' : '⚠️';
+  $i('rl-tt-title-text').textContent = isCrit ? t('rl.title.crit') : t('rl.title.warn');
+  $i('rl-tt-type').textContent       = typeLabel;
+  $i('rl-tt-used').textContent       = pct + '%';
+  $i('rl-tt-left').textContent       = (100 - pct) + '%';
+
+  // Progress bar
+  const fill = $i('rl-bar-fill');
+  fill.style.width = pct + '%';
+  fill.classList.toggle('rl-crit', isCrit);
+
+  // Reset date
+  if (info.resetsAt) {
+    const resetsAt = new Date(info.resetsAt * 1000);
+    $i('rl-tt-reset').textContent = resetsAt.toLocaleString('uk-UA', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  } else {
+    $i('rl-tt-reset').textContent = '—';
+  }
+
+  // Show badge
+  badge.style.display = 'flex';
+
+  // Start live countdown (update every 30s)
+  _rlUpdateCountdown();
+  if (_rlCountdownTimer) clearInterval(_rlCountdownTimer);
+  _rlCountdownTimer = setInterval(_rlUpdateCountdown, 30000);
+}
+
+function _rlUpdateCountdown() {
+  if (!_rlInfo) {
+    if (_rlCountdownTimer) { clearInterval(_rlCountdownTimer); _rlCountdownTimer = null; }
+    return;
+  }
+  const badge = $i('rlBadge');
+  if (!badge || badge.style.display === 'none') {
+    if (_rlCountdownTimer) { clearInterval(_rlCountdownTimer); _rlCountdownTimer = null; }
+    return;
+  }
+  const diff = (_rlInfo.resetsAt * 1000) - Date.now();
+  if (diff <= 0) {
+    // Limit reset — hide badge
+    $i('rl-tt-countdown').textContent = t('rl.reset.done');
+    badge.style.display = 'none';
+    if (_rlCountdownTimer) { clearInterval(_rlCountdownTimer); _rlCountdownTimer = null; }
+    _rlInfo = null;
+    return;
+  }
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  $i('rl-tt-countdown').textContent = h > 0 ? `${h}${t('rl.time.h')} ${m}${t('rl.time.m')}` : `${m}${t('rl.time.m')}`;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function setSendStop(generating) {
   const stopBtn = $i('stopBtn');
   if (generating) {
@@ -1941,7 +2267,7 @@ function setSendStop(generating) {
 function updateQueueBadge(n) {
   const b = $i('queueBadge');
   if (!b) return;
-  if (n > 0) { b.textContent = n + ' у черзі'; b.classList.add('visible'); }
+  if (n > 0) { b.textContent = t('queue.badge').replace('{n}', n); b.classList.add('visible'); }
   else { b.classList.remove('visible'); }
 }
 
@@ -2007,6 +2333,7 @@ function addEl(cls) {
 
 function rmW() { const w = msgsEl.querySelector('.welcome'); if (w) w.remove(); }
 function showW() {
+  curEl = null;
   msgsEl.innerHTML = `<div class="welcome"><div class="wi">CC</div><h2>Claude Code Studio</h2><p>${t('welcome.desc')}</p><div class="welcome-prompts"><div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; ${t('welcome.prompt.1')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F41B; ${t('welcome.prompt.2')}</div><div class="wp-card" onclick="setPrompt(this)">&#x2728; ${t('welcome.prompt.3')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; ${t('welcome.prompt.4')}</div></div></div>`;
 }
 
@@ -2084,7 +2411,7 @@ function setReply(btn) {
   const role = mw.classList.contains('user') ? 'user' : 'assistant';
   const content = mw.querySelector('.msg').textContent.trim();
   replyTo = { id, role, content };
-  $i('replyPreviewRole').textContent = role === 'user' ? 'Ви' : 'Claude';
+  $i('replyPreviewRole').textContent = role === 'user' ? t('you.label') : 'Claude';
   $i('replyPreviewText').textContent = content.slice(0, 120) + (content.length > 120 ? '…' : '');
   $i('replyPreview').style.display = 'flex';
   inEl.focus();
@@ -2210,7 +2537,7 @@ async function openInClaude() {
     const r = await fetch(`/api/sessions/${currentSessionId}/open-terminal`, { method: 'POST' });
     const d = await r.json();
     if (!d.ok && d.command) {
-      navigator.clipboard.writeText(d.command).then(() => toast('✓ Команду скопійовано'));
+      navigator.clipboard.writeText(d.command).then(() => toast(t('toast.cmd_copied')));
     }
   } catch {}
 }
@@ -2229,22 +2556,28 @@ function switchTab(id) {
   const tab = openTabs.find(t => t.id === id);
   if (tab?.isNew) {
     currentSessionId = null;
+    // Reset MCP and skills for new tab
+    activeMcp = new Set();
+    activeSkills = new Set();
     msgsEl.innerHTML = ''; showW(); renderProjects();
   } else {
-    loadSess(id);
+    currentSessionId = null; // Clear stale ID immediately — updateSessBar() below will hide the bar
+    loadSess(id);            // async — will set currentSessionId and refresh sessBar when done
   }
   // Restore textarea draft for new tab
   const draft = getTS(id).draft || '';
   inEl.value = draft;
   inEl.style.height = 'auto';
   inEl.style.height = Math.min(inEl.scrollHeight, 130) + 'px';
-  // Update stop button state for new tab
+  // Update stop button state and isGen for new tab
   const newTab = openTabs.find(t => t.id === id);
   if (newTab?.generating) {
+    isGen = true;
     setSendStop(true);
     setStatus(t('status.processing'), 'warn');
     sbShow(t('status.generating'));
   } else {
+    isGen = false;
     setSendStop(false);
     sbHide();
   }
@@ -2263,7 +2596,7 @@ function closeTab(id) {
       const next = openTabs[Math.min(idx, openTabs.length - 1)];
       activeTabId = next.id;
       if (next.isNew) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); renderProjects(); }
-      else loadSess(next.id);
+      else { currentSessionId = null; loadSess(next.id); }
     } else {
       activeTabId = null; currentSessionId = null;
       msgsEl.innerHTML = ''; showW(); renderProjects();
@@ -2282,7 +2615,10 @@ function newTab() {
   currentSessionId = null;
   inEl.value = '';
   inEl.style.height = 'auto';
+  // Keep existing activeMcp as global default for new tab; reset skills
+  activeSkills = new Set();
   msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();
+  renderMcp(); renderSkills();
   userScrolled = false; renderTabs(); saveUIState(); updateSessBar();
 }
 
@@ -2753,7 +3089,7 @@ async function checkVersion() {
     if (!el) return;
     const cur = local.version || '?';
     el.textContent = `v${cur}`;
-    el.title = 'Поточна версія';
+    el.title = t('ver.current');
     try {
       const gh = await fetch('https://api.github.com/repos/Lexus2016/claude-code-studio/releases/latest',
         { headers: { Accept: 'application/vnd.github.v3+json' } }).then(r => r.json());
@@ -2761,10 +3097,10 @@ async function checkVersion() {
       if (latest && latest !== cur) {
         el.textContent = `v${cur} → v${latest} ↑`;
         el.className = 'update';
-        el.title = `Доступне оновлення ${gh.tag_name}!\nЗапустіть: npx github:Lexus2016/claude-code-studio`;
+        el.title = t('ver.update').replace('{tag}', gh.tag_name);
         el.onclick = () => window.open(gh.html_url, '_blank');
       } else if (latest) {
-        el.title = `v${cur} — остання версія ✓`;
+        el.title = `v${cur}${t('ver.latest')}`;
       }
     } catch { /* GitHub API unavailable, keep local version only */ }
   } catch { /* API not ready */ }
@@ -2783,9 +3119,12 @@ async function loadHist() {
       const d = document.createElement('div');
       d.className = `hist-item ${s.id === currentSessionId ? 'active' : ''}`;
       d.dataset.sess = s.id;
+      d.setAttribute('role', 'button');
+      d.setAttribute('tabindex', '0');
       const dt = new Date(s.updated_at).toLocaleDateString(localStorage.getItem('lang') || 'uk', { day: 'numeric', month: 'short' });
       d.innerHTML = `<span class="ht" data-tip="${escH(s.title)}">${escH(s.title)}</span><span class="hd">${dt}</span><button class="del" onclick="event.stopPropagation();delSess('${s.id}')" title="✕">✕</button>`;
       d.onclick = () => openTab(s.id, s.title);
+      d.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTab(s.id, s.title); } };
       el.appendChild(d);
     }
     updateHistSpinners();
@@ -2867,8 +3206,11 @@ async function loadSess(id) {
     if (!r.ok) { closeTab(id); toast(t('toast.sess_not_found'), true); return; }
     const d = await r.json();
     if (id !== activeTabId) return; // tab was switched while parsing — discard stale load
+    curEl = null; curTxt = ''; // Reset streaming state before clearing DOM — prevents stale references
+    msgsEl.removeAttribute('aria-live'); // Suppress screen reader flood during batch history load
     msgsEl.innerHTML = '';
     currentSessionId = id;
+    updateSessBar(); // Refresh session bar with correct data now that currentSessionId is set
     // Sync tab title
     { const t = openTabs.find(x => x.id === id); if (t && d.title) { t.title = d.title; renderTabs(); } }
     // Proactively show spinner if a task is currently running for this session
@@ -2887,7 +3229,15 @@ async function loadSess(id) {
     curProjectId = curWorkdir ? (projects.find(p => p.workdir === curWorkdir)?.id || null) : null;
     renderProjects();
 
-    try { activeMcp = new Set(JSON.parse(d.active_mcp || '[]')); } catch { activeMcp = new Set(); }
+    try {
+      const _smcp = JSON.parse(d.active_mcp || '[]');
+      if (_smcp.length > 0) {
+        // Filter out stale IDs that no longer exist in config (e.g. server was deleted)
+        const valid = _smcp.filter(id => config.mcpServers[id]);
+        if (valid.length > 0) activeMcp = new Set(valid);
+      }
+      // If session has no MCPs saved (or all were stale), keep current global activeMcp
+    } catch { /* keep current activeMcp */ }
     try { activeSkills = new Set(JSON.parse(d.active_skills || '[]')); } catch { activeSkills = new Set(); }
     renderMcp(); renderSkills();
 
@@ -2898,15 +3248,33 @@ async function loadSess(id) {
       _renderMsgAt(i, false);
     }
     _updateLoadMoreBtn();
+    msgsEl.setAttribute('aria-live', 'polite'); // Re-enable after batch load is done
 
-    // Restore in-flight streaming content if tab was generating in background
+    // Restore in-flight streaming content — priority order:
+    // 1. tabState (in-memory, most recent — background tab that was generating)
+    // 2. partial_text from DB (persisted every 5 chunks — survives page refresh)
+    //    Only shown when session is NOT currently streaming (isChatRunning / hasRunningTask),
+    //    because if it IS streaming the WS catch-up (subscribe_session) will replay the buffer.
     const savedTxt = tabState[id]?.curTxt;
     if (savedTxt) {
       curEl = addMsg('assistant');
       curTxt = savedTxt;
       addSpinner(curEl);
       curEl.querySelector('.msg').innerHTML = renderStreaming(curTxt);
+    } else if (d.partial_text && !d.isChatRunning && !d.hasRunningTask) {
+      // Session was interrupted (server crash / killed) — show what was saved to DB
+      const el = addMsg('assistant');
+      el.querySelector('.msg').innerHTML = renderMd(d.partial_text);
+      const badge = document.createElement('div');
+      badge.className = 'msg-interrupted';
+      badge.title = t('stream.interrupted');
+      badge.textContent = '⚠ ' + t('stream.interrupted');
+      el.appendChild(badge);
     }
+
+    // Re-show agent status if this tab is still generating (was cleared by msgsEl.innerHTML = '')
+    const _savedStatus = tabState[id]?.agentStatus;
+    if (_savedStatus) showStatus(_savedStatus);
 
     userScrolled = false;
     scrollBottom();
@@ -2914,9 +3282,10 @@ async function loadSess(id) {
     if (ws && ws.readyState === 1) {
       ws.send(JSON.stringify({ type: 'start_session', sessionId: id, mode: curMode, agentMode: curAgent, model: curModel}));
       ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: id }));
-      // If task was interrupted or still running (server crash / tab reload),
-      // send resume_task so server decides: re-attach proxy (task_resumed) or silent retry (task_interrupted).
-      if (d.last_user_msg && !d.hasRunningTask) {
+      // If task was interrupted (server crash / tab reload), send resume_task so server
+      // decides: re-attach proxy (task_resumed) or silent retry (task_interrupted).
+      // Skip if a direct chat is already running (isChatRunning) — subscribe_session handles that.
+      if (d.last_user_msg && !d.hasRunningTask && !d.isChatRunning) {
         ws.send(JSON.stringify({ type: 'resume_task', sessionId: id, tabId: id }));
         // Mark as generating immediately so the spinner shows before WS round-trip
         const tabObj = openTabs.find(x => x.id === id);
@@ -2935,7 +3304,7 @@ async function delSess(id) {
   } catch {}
   if (!confirm(msg)) return;
   await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
-  try { new BroadcastChannel('kanban').postMessage({ type: 'session_deleted', sessionId: id }); } catch {}
+  try { const bc = new BroadcastChannel('kanban'); bc.postMessage({ type: 'session_deleted', sessionId: id }); bc.close(); } catch {}
   if (openTabs.find(t => t.id === id)) closeTab(id);
   else if (id === currentSessionId) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); }
   loadHist();
@@ -2956,7 +3325,7 @@ async function loadCfg() {
 }
 
 function mkToggle(on) {
-  return `<div class="sw" role="switch" aria-checked="${on}"><div class="sw-track"></div><div class="sw-thumb"></div></div>`;
+  return `<div class="sw" aria-hidden="true"><div class="sw-track"></div><div class="sw-thumb"></div></div>`;
 }
 
 function renderMcp() {
@@ -2970,7 +3339,12 @@ function renderMcp() {
     const div = document.createElement('div');
     div.className = `ci ${on ? 'on' : ''}`;
     div.title = on ? t('mcp.toggle.on') : t('mcp.toggle.off');
+    div.setAttribute('role', 'switch');
+    div.setAttribute('tabindex', '0');
+    div.setAttribute('aria-checked', String(on));
+    div.setAttribute('aria-label', m.label || id);
     div.onclick = () => tMcp(id);
+    div.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tMcp(id); } };
     div.innerHTML = `
       ${mkToggle(on)}
       <div class="inf">
@@ -3005,8 +3379,18 @@ function tMcp(id) {
   }
   if (activeMcp.has(id)) activeMcp.delete(id); else activeMcp.add(id);
   renderMcp(); saveUIState();
+  // Save MCP state to current session immediately (not just on message send)
+  if (currentSessionId) {
+    fetch(`/api/sessions/${currentSessionId}`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({active_mcp: [...activeMcp]})
+    }).catch(e => console.warn('Failed to persist activeMcp to session:', e));
+  }
 }
 async function rMcp(id) {
+  const label = config.mcpServers[id]?.label || id;
+  if (!confirm(`${t('mcp.del.confirm')} "${label}"?`)) return;
   activeMcp.delete(id);
   await fetch(`/api/mcp/${id}`, { method: 'DELETE' });
   delete config.mcpServers[id];
@@ -3049,70 +3433,119 @@ async function addMcp() {
 
 // ─── MCP Settings Modal ─────────────────────────────────────────────────────
 let _mcpCfgId=null, _mcpCfgEnable=false;
-const SKIP_ENV_DISPLAY=new Set(['ENABLE_TOOL_SEARCH','ENABLE_EXPERIMENTAL_MCP_CLI']);
+const SKIP_ENV_DISPLAY=new Set(); // no env vars are hidden from the settings form
+
+function _mcpEnvRow(container, key='', val='') {
+  const row = document.createElement('div');
+  row.className = 'env-kv-row';
+  const isSecret = /KEY|TOKEN|SECRET|PASS/i.test(key);
+  row.innerHTML = `
+    <input type="text" class="mcp-cfg-input env-kv-key" value="${escH(key)}" placeholder="KEY_NAME">
+    <input type="${isSecret?'password':'text'}" class="mcp-cfg-input env-kv-val" value="${escH(val)}" placeholder="value">
+    <button class="env-kv-del" title="Remove" onclick="this.closest('.env-kv-row').remove()">✕</button>`;
+  container.appendChild(row);
+  return row;
+}
 
 function showMcpSettings(id, enableAfter=false) {
   _mcpCfgId=id; _mcpCfgEnable=enableAfter;
   const m=config.mcpServers[id]; if(!m) return;
   $i('mcpSettingsTitle').textContent=`⚙ ${m.label||id}`;
   const body=$i('mcpSettingsBody'); body.innerHTML='';
+
   if (enableAfter) {
     const note=document.createElement('div');
-    note.style.cssText='font-size:12px;color:var(--orange);padding:2px 0 8px;font-weight:600';
+    note.style.cssText='font-size:13px;color:var(--orange);padding:4px 0 10px;font-weight:600';
     note.textContent=t('mcp.cfg.api_warn');
     body.appendChild(note);
   }
+
   const rows=[];
   const PH=/YOUR_[A-Z_]+/;
+
   // URL for http/sse type
   if (m.type==='sse'||m.type==='http') rows.push({source:'url',key:'url',val:m.url||'',label:'URL',secret:false});
   // Headers
   for(const[k,v]of Object.entries(m.headers||{})) rows.push({source:'headers',key:k,val:v,label:`Header: ${k}`,secret:true});
-  // Env vars (skip internal flags)
+  // Env vars that need attention (placeholder or empty secret key) — shown as individual labeled fields
   for(const[k,v]of Object.entries(m.env||{})){
-    if(SKIP_ENV_DISPLAY.has(k)) continue;
-    rows.push({source:'env',key:k,val:v,label:k,secret:/KEY|TOKEN|SECRET|PASS/i.test(k)});
+    if(PH.test(v)||(v===''&&/KEY|TOKEN|SECRET|API/i.test(k))){
+      rows.push({source:'env',key:k,val:v,label:k,secret:/KEY|TOKEN|SECRET|PASS/i.test(k)});
+    }
   }
-  // Args: extract URL query params containing placeholders (e.g. Tavily ?apiKey=YOUR_KEY)
+  // Args: extract URL query params containing placeholders
   if (m.args) {
     m.args.forEach((a,i)=>{
       if(!PH.test(a)) return;
-      // Try to extract query param name containing the placeholder
       const paramRe=/[?&](\w+)=(YOUR_[A-Z_]+)/g;
       let pm;
       while((pm=paramRe.exec(a))!==null){
         const paramName=pm[1], placeholder=pm[2];
-        // prefix = everything up to and including '?paramName='
         const prefixEnd=a.indexOf(placeholder);
         const prefix=a.slice(0,prefixEnd);
         const suffix=a.slice(prefixEnd+placeholder.length);
         rows.push({source:'arg_param',key:`arg_${i}_${paramName}`,val:placeholder,label:paramName,secret:true,argIdx:i,placeholder,prefix,suffix});
       }
-      // If the whole arg is a placeholder (not a URL param)
       if(!a.match(/[?&]\w+=YOUR_[A-Z_]+/)){
         rows.push({source:'arg',key:`arg_${i}`,val:a,label:`Arg[${i}]`,secret:false,argIdx:i});
       }
     });
   }
-  if (rows.length===0) {
-    const empty=document.createElement('div');
-    empty.style.cssText='color:var(--muted);font-size:13px;text-align:center;padding:20px 0';
-    empty.textContent=t('mcp.cfg.no_params');
-    body.appendChild(empty);
-  } else {
+
+  // Render individual labeled fields (URL, headers, placeholder env, args)
+  if (rows.length > 0) {
     rows.forEach(f=>{
       const need=PH.test(f.val)||(f.val===''&&/KEY|TOKEN|SECRET|API/i.test(f.key));
       const row=document.createElement('div');
-      row.style.cssText='display:flex;flex-direction:column;gap:4px';
+      row.style.cssText='display:flex;flex-direction:column;gap:5px';
       const extraAttrs=f.source==='arg_param'
         ? ` data-arg-idx="${f.argIdx}" data-placeholder="${escH(f.placeholder)}" data-prefix="${escH(f.prefix)}" data-suffix="${escH(f.suffix)}"`
         : f.source==='arg' ? ` data-arg-idx="${f.argIdx}"` : '';
-      row.innerHTML=`<label style="font-size:11px;color:${need?'var(--orange)':'var(--muted)'};font-weight:600;text-transform:uppercase;letter-spacing:.4px">${escH(f.label)}${need?' ⚠':''}</label>
+      row.innerHTML=`<label class="mcp-cfg-label">${escH(f.label)}${need?' <span style="color:var(--orange)">⚠</span>':''}</label>
         <input type="${f.secret?'password':'text'}" data-src="${f.source}" data-key="${escH(String(f.key))}" value="${escH(f.val)}"${extraAttrs}
-          style="background:var(--s2);border:1px solid ${need?'var(--orange)':'var(--border)'};color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;outline:none;width:100%;font-family:monospace;transition:border .12s">`;
+          class="mcp-cfg-input" style="${need?'border-color:var(--orange)':''}">`;
       body.appendChild(row);
     });
   }
+
+  // Env key-value editor section
+  const envSection = document.createElement('div');
+  if (rows.length > 0) envSection.style.cssText = 'border-top:1px solid var(--border);padding-top:14px;margin-top:4px';
+  const envHeader = document.createElement('div');
+  envHeader.className = 'mcp-cfg-label';
+  envHeader.innerHTML = `<span>Environment</span><button class="env-add-btn" style="width:auto;padding:3px 10px;margin:0" onclick="this.closest('#mcpSettingsBody').querySelector('#mcpCfgEnvRows')&&_mcpEnvRow(this.closest('#mcpSettingsBody').querySelector('#mcpCfgEnvRows'))">＋ Add</button>`;
+  envSection.appendChild(envHeader);
+
+  const envContainer = document.createElement('div');
+  envContainer.id = 'mcpCfgEnvRows';
+  envContainer.style.cssText = 'display:flex;flex-direction:column;gap:8px';
+  envSection.appendChild(envContainer);
+
+  // Populate with existing env vars (exclude ones already shown as individual placeholder fields)
+  const shownAsField = new Set(rows.filter(r=>r.source==='env').map(r=>r.key));
+  for (const [k, v] of Object.entries(m.env || {})) {
+    if (shownAsField.has(k)) continue;
+    _mcpEnvRow(envContainer, k, v);
+  }
+
+  // "Add" button at bottom (for when list is empty)
+  if (Object.keys(m.env||{}).length === 0 || (Object.keys(m.env||{}).length - shownAsField.size) === 0) {
+    const emptyHint = document.createElement('div');
+    emptyHint.style.cssText = 'font-size:12px;color:var(--muted);padding:4px 0;opacity:.7';
+    emptyHint.textContent = 'No environment variables';
+    emptyHint.id = 'mcpEnvEmpty';
+    envContainer.appendChild(emptyHint);
+    // Remove hint on first add
+    const origAdd = _mcpEnvRow;
+    const container = envContainer;
+    const observer = new MutationObserver(() => {
+      const hint = $i('mcpEnvEmpty');
+      if (hint && container.querySelectorAll('.env-kv-row').length > 0) { hint.remove(); observer.disconnect(); }
+    });
+    observer.observe(container, { childList: true });
+  }
+
+  body.appendChild(envSection);
   $i('mcpSettingsModal').classList.remove('hidden');
 }
 function closeMcpSettings() {
@@ -3135,8 +3568,15 @@ async function saveMcpSettings() {
     else if(src==='arg_param') argChanges.push({argIdx:parseInt(inp.dataset.argIdx),placeholder:inp.dataset.placeholder,prefix:inp.dataset.prefix,suffix:inp.dataset.suffix,newVal:val});
     else if(src==='arg') argDirectChanges.push({argIdx:parseInt(inp.dataset.argIdx),newVal:val});
   }
+  // Read env key-value rows
+  const kvRows = $i('mcpCfgEnvRows')?.querySelectorAll('.env-kv-row') || [];
+  for (const row of kvRows) {
+    const k = row.querySelector('.env-kv-key')?.value?.trim();
+    const v = row.querySelector('.env-kv-val')?.value ?? '';
+    if (k) envU[k] = v;
+  }
   const payload={};
-  if(Object.keys(envU).length) payload.env=envU;
+  payload.env=envU; // always send env (even empty {}) so server can do full replacement
   if(Object.keys(headU).length) payload.headers=headU;
   if(urlU!==undefined) payload.url=urlU;
   // Rebuild args if needed
@@ -3151,7 +3591,7 @@ async function saveMcpSettings() {
     const r=await fetch(`/api/mcp/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     if(m){
-      if(payload.env) m.env={...(m.env||{}),...payload.env};
+      if(payload.env !== undefined) m.env=payload.env;
       if(payload.headers) m.headers={...(m.headers||{}),...payload.headers};
       if(payload.url!==undefined) m.url=payload.url;
       if(payload.args) m.args=payload.args;
@@ -3159,6 +3599,119 @@ async function saveMcpSettings() {
     if(_mcpCfgEnable){activeMcp.add(id);renderMcp();saveUIState();}
     closeMcpSettings(); toast(t('mcp.cfg.saved'));
   }catch(e){toast(t('mcp.cfg.save_err'),true);}
+}
+
+// ─── MCP Import / Export ─────────────────────────────────────────────────
+let _mcpImportData = null;
+
+function openMcpImport() {
+  _mcpImportData = null;
+  $i('mcpImportJson').value = '';
+  $i('mcpImportPreview').style.display = 'none';
+  $i('mcpImportError').style.display = 'none';
+  $i('mcpImportBtn').disabled = true;
+  $i('mcpImportReplace').checked = false;
+  $i('mcpImportModal').classList.remove('hidden');
+}
+function closeMcpImport() {
+  $i('mcpImportModal').classList.add('hidden');
+  _mcpImportData = null;
+}
+function mcpImportPreviewClear() {
+  _mcpImportData = null;
+  $i('mcpImportPreview').style.display = 'none';
+  $i('mcpImportError').style.display = 'none';
+  $i('mcpImportBtn').disabled = true;
+}
+function handleMcpImportFile(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { $i('mcpImportJson').value = e.target.result; previewMcpImport(); };
+  reader.readAsText(file);
+  input.value = '';
+}
+function handleMcpImportDrop(e) {
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.name.toLowerCase().endsWith('.json')) { toast(t('toast.json_req'), true); return; }
+  const reader = new FileReader();
+  reader.onload = ev => { $i('mcpImportJson').value = ev.target.result; previewMcpImport(); };
+  reader.readAsText(file);
+}
+function parseMcpImportJson(raw) {
+  const parsed = JSON.parse(raw);
+  // Format 1: { mcpServers: { id: {...} } } — Claude Desktop & our export format
+  if (parsed.mcpServers && typeof parsed.mcpServers === 'object') return parsed.mcpServers;
+  // Format 2: flat object where values look like server entries
+  const vals = Object.values(parsed);
+  if (vals.length && vals.every(v => v && typeof v === 'object' && (v.command !== undefined || v.url !== undefined || v.type !== undefined))) return parsed;
+  // Format 3: nested — some apps wrap config in another object
+  for (const v of vals) {
+    if (v && typeof v === 'object' && v.mcpServers) return v.mcpServers;
+  }
+  throw new Error(t('mcp.parse.no_servers'));
+}
+function previewMcpImport() {
+  const raw = $i('mcpImportJson').value.trim();
+  const errEl = $i('mcpImportError'), prevEl = $i('mcpImportPreview');
+  errEl.style.display = 'none';
+  if (!raw) { toast(t('toast.json_enter'), true); return; }
+  try {
+    const servers = parseMcpImportJson(raw);
+    const ids = Object.keys(servers);
+    if (!ids.length) throw new Error(t('mcp.parse.empty'));
+    _mcpImportData = servers;
+    $i('mcpImportCount').textContent = ids.length;
+    const listEl = $i('mcpImportList'); listEl.innerHTML = '';
+    for (const [id, m] of Object.entries(servers)) {
+      const div = document.createElement('div');
+      div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 9px;background:var(--s2);border-radius:6px;font-size:12px';
+      const isHttp = m.url || m.type === 'http' || m.type === 'sse';
+      const icon = isHttp
+        ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>`
+        : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`;
+      const desc = m.command ? `${m.command}${m.args?.length ? ' ' + m.args.join(' ') : ''}` : (m.url || '');
+      div.innerHTML = `<span style="display:flex;align-items:center;color:var(--muted)">${icon}</span><div style="flex:1;min-width:0"><div style="font-weight:600">${escH(m.label||id)}</div><div style="color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escH(desc)}">${escH(desc||'—')}</div></div>${config.mcpServers[id]?`<span style="font-size:10px;color:var(--orange)" title="${escH(t('mcp.replace.title'))}">↺</span>`:''}` ;
+      listEl.appendChild(div);
+    }
+    prevEl.style.display = 'flex';
+    $i('mcpImportBtn').disabled = false;
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+    prevEl.style.display = 'none'; _mcpImportData = null; $i('mcpImportBtn').disabled = true;
+  }
+}
+async function doMcpImport() {
+  if (!_mcpImportData) return;
+  const btn = $i('mcpImportBtn');
+  btn.disabled = true;
+  const replace = $i('mcpImportReplace').checked;
+  try {
+    const r = await fetch('/api/mcp/import', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ servers: _mcpImportData, replace })
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Server error');
+    // Reload full config from server to stay in sync with what was actually saved
+    await loadCfg();
+    closeMcpImport();
+    toast(t('toast.mcp_imported').replace('{n}', d.imported));
+  } catch(e) {
+    btn.disabled = false;
+    toast(t('toast.mcp_import_err') + e.message, true);
+  }
+}
+async function exportMcp() {
+  try {
+    const r = await fetch('/api/mcp/export');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'mcp-config.json'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  } catch(e) { toast(t('toast.mcp_export_err'), true); }
 }
 
 const SKILL_CATS = {
@@ -3240,6 +3793,7 @@ function renderSkills() {
   const grouped = {};
   const uncategorized = [];
   for (const [id, s] of Object.entries(config.skills || {})) {
+    if (id === 'auto-mode') continue; // controlled by the ⚡ Auto button, not shown in list
     const cat = s.category || '__custom__';
     if (!grouped[cat]) grouped[cat] = [];
     grouped[cat].push([id, s]);
@@ -3269,8 +3823,13 @@ function renderSkills() {
       if (on) c++;
       const div = document.createElement('div');
       div.className = `ci ${on ? 'on' : ''}`;
-      div.title = on ? 'Клік — вимкнути skill' : 'Клік — додати skill до системного промпту';
+      div.title = on ? t('skill.toggle.on') : t('skill.toggle.off');
+      div.setAttribute('role', 'switch');
+      div.setAttribute('tabindex', '0');
+      div.setAttribute('aria-checked', String(on));
+      div.setAttribute('aria-label', s.label || id);
       div.onclick = () => tSkill(id);
+      div.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tSkill(id); } };
       div.innerHTML = `
         ${mkToggle(on)}
         <div class="inf">
@@ -3285,7 +3844,27 @@ function renderSkills() {
   $i('skillsCount').textContent = c || '';
 }
 
-function tSkill(id) { if (activeSkills.has(id)) activeSkills.delete(id); else activeSkills.add(id); renderSkills(); saveUIState(); }
+function tSkill(id) {
+  const wasActive = activeSkills.has(id);
+  if (wasActive) activeSkills.delete(id); else activeSkills.add(id);
+  // Manually activating a skill turns off Auto mode
+  if (!wasActive && autoSkillsMode) {
+    autoSkillsMode = false;
+    const btn = $i('autoSkillsBtn');
+    if (btn) { btn.classList.remove('active'); btn.title = t('auto.title.off'); }
+    const hint = $i('autoSkillsHint');
+    if (hint) hint.style.display = 'none';
+  }
+  renderSkills(); saveUIState();
+  // Save skills state to current session immediately (mirrors tMcp behaviour)
+  if (currentSessionId) {
+    fetch(`/api/sessions/${currentSessionId}`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({active_skills: [...activeSkills]})
+    }).catch(e => console.warn('Failed to persist activeSkills to session:', e));
+  }
+}
 async function rSkill(id) {
   activeSkills.delete(id);
   await fetch(`/api/skills/${id}`, { method: 'DELETE' });
@@ -3404,28 +3983,28 @@ async function loadFiles(dir = '') {
     const r = await fetch(`/api/files?${_filesQS(dir)}`);
     const d = await r.json();
     if (d.type !== 'dir') return;
-    const t = $i('filesTree');
-    t.innerHTML = '';
+    const treeEl = $i('filesTree');
+    treeEl.innerHTML = '';
 
     if (dir) {
       const b = document.createElement('div');
       b.className = 'fii';
       b.innerHTML = '<span class="fi" style="color:var(--muted)">↑</span><span class="fn">..</span>';
       b.onclick = () => loadFiles(dir.split('/').slice(0, -1).join('/'));
-      t.appendChild(b);
+      treeEl.appendChild(b);
     }
 
     const items = d.items.sort((a, b) => a.type !== b.type ? (a.type === 'dir' ? -1 : 1) : a.name.localeCompare(b.name));
     for (const it of items) {
       const el = document.createElement('div');
       el.className = 'fii';
-      const fileBtns = it.type === 'file' ? `<button class="fpe" onclick="event.stopPropagation();openFilePreview('${escH(it.path)}','${escH(it.name)}')" title="Переглянути">👁</button><button class="fdl" onclick="event.stopPropagation();downloadFile('${escH(it.path)}')" title="Завантажити">⬇</button>` : '';
+      const fileBtns = it.type === 'file' ? `<button class="fpe" onclick="event.stopPropagation();openFilePreview('${escH(it.path)}','${escH(it.name)}')" title="${t('files.view')}">👁</button><button class="fdl" onclick="event.stopPropagation();downloadFile('${escH(it.path)}')" title="${t('fpv.download')}">⬇</button>` : '';
       el.innerHTML = `<span class="fi">${it.type === 'dir' ? '<span style="color:var(--accent2);font-size:13px">▸</span>' : fileIcon(it.name)}</span><span class="fn">${escH(it.name)}</span><span class="fs">${it.size ? fmtSize(it.size) : ''}</span>${fileBtns}`;
       el.onclick = it.type === 'dir' ? () => loadFiles(it.path) : () => openFilePreview(it.path, it.name);
-      t.appendChild(el);
+      treeEl.appendChild(el);
     }
 
-    if (!items.length) t.innerHTML = '<div style="padding:14px;color:var(--muted);text-align:center;font-size:11px">Порожньо</div>';
+    if (!items.length) treeEl.innerHTML = `<div style="padding:14px;color:var(--muted);text-align:center;font-size:11px">${t('files.empty')}</div>`;
   } catch {}
 }
 
@@ -3444,7 +4023,7 @@ async function openFilePreview(relPath, name) {
   $i('fpvTitle').textContent = _fpvName;
   $i('fpvExt').textContent = ext || 'file';
   const body = $i('fpvBody');
-  body.innerHTML = `<div class="fpv-text" style="color:var(--muted)">Завантаження...</div>`;
+  body.innerHTML = `<div class="fpv-text" style="color:var(--muted)">${t('toast.loading')}</div>`;
   $i('filePreviewModal').classList.remove('hidden');
 
   const rawUrl = `/api/files/raw?${_filesQS(relPath)}`;
@@ -3544,7 +4123,7 @@ function renderProjects() {
   document.title = activeProj ? activeProj.name : 'Claude Code Studio';
 
   if (!projects.length) {
-    el.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5">Немає проектів. Додайте директорію для роботи з Claude Code.</div>';
+    el.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5">${t('proj.empty')}</div>`;
     return;
   }
 
@@ -3558,7 +4137,7 @@ function renderProjects() {
     div.title = active ? t('proj.active.title') : t('proj.click.title');
     div.onclick = () => switchProject(p.id);
     const shortPath = p.workdir.length > 38 ? '…' + p.workdir.slice(-36) : p.workdir;
-    const busyDot = busy ? '<span class="proj-busy-dot tab-dot spinning" title="Генерація у фоні..."></span>' : '';
+    const busyDot = busy ? `<span class="proj-busy-dot tab-dot spinning" title="${t('proj.generating')}"></span>` : '';
     div.innerHTML = `
       <div class="inf">
         <div class="nm" data-tip="${escH(p.name)}">${escH(p.name)}${busyDot}</div>

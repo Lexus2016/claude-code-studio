@@ -73,6 +73,15 @@ const CONFIG_PATH = path.join(APP_DIR, 'config.json');
 // ─── Security config ──────────────────────────────────────────────────────────
 // Trust X-Forwarded-For when behind nginx/Caddy (needed for rate limiting)
 if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', 1);
+
+// Brute-force protection on auth mutation endpoints (login / setup)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts, please try again later' },
+});
 // Set secure flag on cookies only when served over HTTPS (behind a proxy)
 const SECURE_COOKIES = process.env.TRUST_PROXY === 'true';
 // Directories that authenticated users may browse/create projects in
@@ -216,14 +225,19 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN retry_count INTEGER DEFAULT 0`); 
 try { db.exec(`ALTER TABLE tasks ADD COLUMN worker_pid INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN attachments TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN engine TEXT`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN partial_text TEXT`); } catch {}
+// Performance indexes — safe to re-run (IF NOT EXISTS)
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); } catch {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_msg_created   ON messages(created_at)`); } catch {}
 
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`),
   updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
-  getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir FROM sessions ORDER BY updated_at DESC LIMIT 100`),
-  getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir FROM sessions WHERE workdir=? ORDER BY updated_at DESC LIMIT 100`),
+  getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions ORDER BY updated_at DESC LIMIT 100`),
+  getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE workdir=? ORDER BY updated_at DESC LIMIT 100`),
   getSession: db.prepare(`SELECT * FROM sessions WHERE id=?`),
   deleteSession: db.prepare(`DELETE FROM sessions WHERE id=?`),
   addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id) VALUES (?,?,?,?,?,?,?)`),
@@ -232,6 +246,7 @@ const stmts = {
   countMsgs: db.prepare(`SELECT COUNT(*) AS total FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool')`),
   setLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=? WHERE id=?`),
   clearLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=NULL, retry_count=0 WHERE id=?`),
+  setPartialText: db.prepare(`UPDATE sessions SET partial_text=? WHERE id=?`),
   getInterrupted: db.prepare(`SELECT id, title, last_user_msg FROM sessions WHERE last_user_msg IS NOT NULL`),
   incrementRetry: db.prepare(`UPDATE sessions SET retry_count = COALESCE(retry_count, 0) + 1 WHERE id=?`),
   // Tasks (Kanban)
@@ -250,6 +265,12 @@ const stmts = {
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
   countTasksBySession: db.prepare(`SELECT COUNT(*) as n FROM tasks WHERE session_id=?`),
   getTasksEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM tasks`),
+  // processQueue hot-path — prepared once, reused every 60 s
+  getTodoTasks:      db.prepare(`SELECT * FROM tasks WHERE status='todo' ORDER BY sort_order ASC, created_at ASC`),
+  getInProgressTasks: db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`),
+  // startTask hot-path
+  setTaskSession:    db.prepare(`UPDATE tasks SET session_id=?, updated_at=datetime('now') WHERE id=?`),
+  setTaskInProgress: db.prepare(`UPDATE tasks SET status='in_progress', updated_at=datetime('now') WHERE id=?`),
   // Stats queries
   activeAgents: db.prepare(`
     SELECT DISTINCT agent_id
@@ -290,14 +311,20 @@ const TASK_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // abort orphaned tasks after 30 mi
 // text/tool/done events to all watchers of that session.
 const sessionWatchers = new Map(); // sessionId → Set<WebSocket>
 const taskBuffers = new Map();     // taskId → accumulated text (for late subscribers)
+const chatBuffers = new Map();     // sessionId → accumulated text for direct chat (for catch-up on reconnect)
 
 function broadcastToSession(sessionId, data) {
   const watchers = sessionWatchers.get(sessionId);
   if (!watchers?.size) return;
   const msg = JSON.stringify(data);
   for (const w of watchers) {
-    if (w.readyState === 1) { try { w.send(msg); } catch {} }
+    if (w.readyState === 1) {
+      try { w.send(msg); } catch { watchers.delete(w); }
+    } else if (w.readyState > 1) {
+      watchers.delete(w); // CLOSING/CLOSED — won't recover
+    }
   }
+  if (!watchers.size) sessionWatchers.delete(sessionId);
 }
 
 // ─── Kanban Task Queue Worker ─────────────────────────────────────────────
@@ -311,15 +338,16 @@ async function startTask(task) {
   taskRunning.add(task.id);
   console.log(`[taskWorker] starting "${task.title}" (${task.id})`);
   try {
-    // Create session if needed
+    // Create session + link task + mark in_progress — all atomic
     let sessionId = task.session_id;
-    if (!sessionId) {
-      sessionId = genId();
-      stmts.createSession.run(sessionId, task.title.substring(0, 200), '[]', '[]', task.mode || 'auto', task.agent_mode || 'single', task.model || 'sonnet', 'cli', task.workdir || null);
-      db.prepare(`UPDATE tasks SET session_id=?, updated_at=datetime('now') WHERE id=?`).run(sessionId, task.id);
-    }
-    // Mark in_progress
-    db.prepare(`UPDATE tasks SET status='in_progress', updated_at=datetime('now') WHERE id=?`).run(task.id);
+    db.transaction(() => {
+      if (!sessionId) {
+        sessionId = genId();
+        stmts.createSession.run(sessionId, task.title.substring(0, 200), '[]', '[]', task.mode || 'auto', task.agent_mode || 'single', task.model || 'sonnet', 'cli', task.workdir || null);
+        stmts.setTaskSession.run(sessionId, task.id);
+      }
+      stmts.setTaskInProgress.run(task.id);
+    })();
     // Build prompt
     const parts = [task.title];
     if (task.description?.trim()) parts.push(task.description.trim());
@@ -386,7 +414,7 @@ async function startTask(task) {
           stmts.addMsg.run(sessionId, 'assistant', 'tool', inp || '', name, null, null);
           broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
         })
-        .onSessionId(sid => { newCid = sid; })
+        .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} }) // persist early so open-terminal works during active task
         .onError(err => {
           hasError = true;
           console.error(`[taskWorker] task ${task.id} error:`, err);
@@ -394,20 +422,26 @@ async function startTask(task) {
           broadcastToSession(sessionId, { type: 'error', error: err.substring(0, 500), tabId: sessionId });
         })
         .onDone(() => {
-          if (newCid) stmts.updateClaudeId.run(newCid, sessionId);
-          if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null);
-          const wasStopped = stoppingTasks.has(task.id);
-          stoppingTasks.delete(task.id);
-          if (!wasStopped) {
-            // Normal completion — set final status
-            db.prepare(`UPDATE tasks SET status=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
-              .run(hasError ? 'cancelled' : 'done', task.id);
-            if (!hasError) db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
-            console.log(`[taskWorker] task ${task.id}: ${hasError ? 'cancelled' : 'done'}`);
-          } else {
-            // Manually stopped — status already set by PUT; just clear worker_pid
-            db.prepare(`UPDATE tasks SET worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(task.id);
-            console.log(`[taskWorker] task ${task.id}: stopped by user`);
+          // Wrap all DB writes in try-catch: a throw here would escape the sync
+          // EventEmitter listener, leaving the Promise pending forever.
+          try {
+            if (newCid) stmts.updateClaudeId.run(newCid, sessionId);
+            if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null);
+            const wasStopped = stoppingTasks.has(task.id);
+            stoppingTasks.delete(task.id);
+            if (!wasStopped) {
+              // Normal completion — set final status
+              db.prepare(`UPDATE tasks SET status=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+                .run(hasError ? 'cancelled' : 'done', task.id);
+              if (!hasError) db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
+              console.log(`[taskWorker] task ${task.id}: ${hasError ? 'cancelled' : 'done'}`);
+            } else {
+              // Manually stopped — status already set by PUT; just clear worker_pid
+              db.prepare(`UPDATE tasks SET worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(task.id);
+              console.log(`[taskWorker] task ${task.id}: stopped by user`);
+            }
+          } catch (e) {
+            console.error(`[taskWorker] task ${task.id} onDone DB error:`, e);
           }
           broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id });
           resolve();
@@ -415,7 +449,9 @@ async function startTask(task) {
     });
   } catch (err) {
     console.error(`[taskWorker] task ${task.id} exception:`, err);
-    db.prepare(`UPDATE tasks SET status='cancelled', updated_at=datetime('now') WHERE id=?`).run(task.id);
+    try { db.prepare(`UPDATE tasks SET status='cancelled', updated_at=datetime('now') WHERE id=?`).run(task.id); } catch {}
+    // Send done so the client doesn't wait forever for an event that will never arrive.
+    if (sessionId) broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id });
   } finally {
     taskBuffers.delete(task.id);
     taskRunning.delete(task.id);
@@ -425,9 +461,9 @@ async function startTask(task) {
 }
 
 function processQueue() {
-  const todo = db.prepare(`SELECT * FROM tasks WHERE status='todo' ORDER BY sort_order ASC, created_at ASC`).all();
+  const todo = stmts.getTodoTasks.all();
   if (!todo.length) return;
-  const inProg = db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`).all();
+  const inProg = stmts.getInProgressTasks.all();
   // Sessions currently occupied (in_progress or just started by taskRunning)
   const occupiedSids = new Set(inProg.filter(t => t.session_id).map(t => t.session_id));
   // Workdir-level lock: prevents two Claude instances from writing to the same directory concurrently
@@ -531,18 +567,30 @@ function buildUserContent(text, attachments = []) {
 // ============================================
 /** Load LOCAL config only — used by write operations (add/delete MCP, upload/delete skill). */
 function loadConfig() { try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch { return { mcpServers:{}, skills:{} }; } }
-function saveConfig(c) { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); }
+function saveConfig(c) {
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2));
+  _mergedConfigCache = null; // invalidate on every write
+}
+
+// In-memory cache for the merged (global + local) config.
+// Hot path: processChat calls loadMergedConfig() on every request — caching
+// eliminates 2× readFileSync per chat turn.
+// Invalidated by saveConfig() and by GET /api/config (which forces a fresh
+// read so the config UI always reflects the current state on disk).
+let _mergedConfigCache = null;
 
 /** Merge global (~/.claude/config.json) + local config.json for read/display/execution.
  *  Local entries override global entries with the same key. */
 function loadMergedConfig() {
+  if (_mergedConfigCache !== null) return _mergedConfigCache;
   let g = {}, l = {};
   try { g = JSON.parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')); } catch {}
   try { l = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
-  return {
+  _mergedConfigCache = {
     mcpServers: { ...(g.mcpServers||{}), ...(l.mcpServers||{}) },
     skills:     { ...(g.skills||{}),     ...(l.skills||{})     },
   };
+  return _mergedConfigCache;
 }
 
 /** Resolve skill file path.
@@ -575,52 +623,87 @@ function runCliSingle(p) {
     const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
     const sp = (mp + (systemPrompt||'')).trim() || undefined;
     const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook'] : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write'];
-    let fullText='', newCid=claudeSessionId;
+    let fullText='', newCid=claudeSessionId, chunkCount=0, _settled=false;
+    // Safety net: Promise must always settle. onDone is the primary settler;
+    // onError is the fallback in case onDone somehow doesn't fire.
+    const _resolve = (cid) => { if (!_settled) { _settled=true; resolve(cid); } };
     const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
 
     // Pass content blocks to CLI when attachments are present (images need vision input)
     const contentBlocks = Array.isArray(userContent) ? userContent : null;
     cli.send({ prompt, contentBlocks, sessionId:claudeSessionId, model, maxTurns:maxTurns||30, systemPrompt:sp, mcpServers, allowedTools:tools, abortController })
-      .onText(t => { fullText+=t; ws.send(JSON.stringify({ type:'text', text:t, ...(tabId ? { tabId } : {}) })); })
+      .onText(t => {
+        fullText += t;
+        // Accumulate in chatBuffers for catch-up replay on reconnect
+        chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + t);
+        ws.send(JSON.stringify({ type:'text', text:t, ...(tabId ? { tabId } : {}) }));
+        // Persist partial text to DB every 5 chunks so page-refresh doesn't lose content
+        if (++chunkCount % 5 === 0) {
+          try { stmts.setPartialText.run(fullText, sessionId); } catch {}
+        }
+      })
       .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
-      .onTool((name, inp) => { ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) })); stmts.addMsg.run(sessionId,'assistant','tool',inp||'',name,null,null); })
-      .onSessionId(sid => { newCid=sid; })
-      .onError(err => { ws.send(JSON.stringify({ type:'error', error:err.substring(0,500), ...(tabId ? { tabId } : {}) })); })
-      .onDone(sid => { if(sid) newCid=sid; if(fullText) stmts.addMsg.run(sessionId,'assistant','text',fullText,null,null,null); resolve(newCid); });
+      .onTool((name, inp) => { ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) })); try { stmts.addMsg.run(sessionId,'assistant','tool',inp||'',name,null,null); } catch {} })
+      .onSessionId(sid => { newCid=sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} }) // persist early so open-terminal works during active chat
+      .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
+      .onError(err => {
+        // ws.send can throw if the socket is already closed — catch to prevent
+        // the exception from propagating back into claude-cli.js and blocking onDone.
+        try { ws.send(JSON.stringify({ type:'error', error:err.substring(0,500), ...(tabId ? { tabId } : {}) })); } catch {}
+        _resolve(newCid); // safety net: settle even if onDone never fires
+      })
+      .onDone(sid => {
+        if(sid) newCid=sid;
+        try { if(fullText) stmts.addMsg.run(sessionId,'assistant','text',fullText,null,null,null); } catch {}
+        // Clear partial text — full message is now saved to messages table
+        try { stmts.setPartialText.run(null, sessionId); } catch {}
+        _resolve(newCid);
+      });
   });
 }
 
 // --- Multi-Agent (CLI only) ---
 async function runMultiAgent(p) {
-  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, tabId } = p;
-  ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'🧠 Планування...', ...(tabId ? { tabId } : {}) }));
+  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, tabId } = p;
+  ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'🧠 Planning...', statusKey:'agent.planning', ...(tabId ? { tabId } : {}) }));
 
-  // Get plan via CLI
+  // Orchestrator is a lightweight planning step — it does NOT resume the main Claude
+  // session because that would pollute the conversation context with a planning prompt.
+  // Instead it runs a fresh, disposable session. The real claude_session_id is only
+  // set when runCliSingle (or agent workers) actually generate user-visible output.
   let planText = '';
   const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${prompt}`;
 
   await new Promise(res => {
+    let _settled = false;
+    const _res = () => { if (!_settled) { _settled = true; res(); } };
     claudeCli.send({ prompt:planPrompt, model, maxTurns:1, allowedTools:[], abortController })
-      .onText(t => { planText+=t; }).onDone(() => res());
+      .onText(t => { planText+=t; })
+      .onError(() => _res())
+      .onDone(() => _res());
   });
 
   let plan = null;
   try { const m = planText.match(/\{[\s\S]*\}/); if (m) plan = JSON.parse(m[0]); } catch {}
 
   if (!plan?.agents?.length) {
-    ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'⚠️ Перехід до одиночного режиму', ...(tabId ? { tabId } : {}) }));
+    ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'⚠️ Falling back to single mode', statusKey:'agent.fallback_single', ...(tabId ? { tabId } : {}) }));
+    // Fallback uses the ORIGINAL claudeSessionId (not the orchestrator's disposable session).
+    // For new sessions claudeSessionId is undefined → runCliSingle creates a fresh session.
     return runCliSingle(p);
   }
 
-  ws.send(JSON.stringify({ type:'text', text:`📋 **${plan.plan}**\n🤖 ${plan.agents.map(a=>`${a.id}(${a.role})`).join(', ')}\n---\n`, ...(tabId ? { tabId } : {}) }));
-  stmts.addMsg.run(sessionId,'assistant','text',`Plan: ${plan.plan}`,null,'orchestrator',null);
+  const planSummaryText = `📋 **${plan.plan}**\n🤖 ${plan.agents.map(a=>`${a.id}(${a.role})`).join(', ')}\n---\n`;
+  chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + planSummaryText);
+  ws.send(JSON.stringify({ type:'text', text: planSummaryText, ...(tabId ? { tabId } : {}) }));
+  try { stmts.addMsg.run(sessionId,'assistant','text',`Plan: ${plan.plan}`,null,'orchestrator',null); } catch {}
 
   const completed = new Set(), results = {};
   const remaining = [...plan.agents];
 
   while (remaining.length) {
     const runnable = remaining.filter(a => (a.depends_on||[]).every(d => completed.has(d)));
-    if (!runnable.length) { ws.send(JSON.stringify({ type:'error', error:'Circular deps', ...(tabId ? { tabId } : {}) })); break; }
+    if (!runnable.length) { ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'Circular deps', statusKey:'agent.circular_deps', ...(tabId ? { tabId } : {}) })); break; }
 
     await Promise.all(runnable.map(async agent => {
       remaining.splice(remaining.indexOf(agent), 1);
@@ -632,24 +715,31 @@ async function runMultiAgent(p) {
       let agentText = '';
 
       await new Promise(res => {
+        let _settled = false;
+        const _res = () => { if (!_settled) { _settled = true; res(); } };
         claudeCli.send({ prompt:agentPrompt, model, maxTurns:Math.min(maxTurns,15), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
-          .onText(t => { agentText+=t; ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); })
-          .onTool((n,i) => { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); stmts.addMsg.run(sessionId,'assistant','tool',i||'',n,agent.id,null); })
-          .onDone(() => res());
+          .onText(t => { agentText+=t; chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + t); try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
+          .onTool((n,i) => { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} try { stmts.addMsg.run(sessionId,'assistant','tool',i||'',n,agent.id,null); } catch {} })
+          .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
+          .onDone(() => _res());
       });
 
       results[agent.id] = agentText;
-      if (agentText) stmts.addMsg.run(sessionId,'assistant','text',agentText,null,agent.id,null);
+      try { if (agentText) stmts.addMsg.run(sessionId,'assistant','text',agentText,null,agent.id,null); } catch {}
       completed.add(agent.id);
       ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`✅ ${agent.role}`, ...(tabId ? { tabId } : {}) }));
     }));
   }
-  ws.send(JSON.stringify({ type:'text', text:'\n---\n✅ Всі агенти завершили\n', ...(tabId ? { tabId } : {}) }));
+  ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'All agents done', statusKey:'agent.done', ...(tabId ? { tabId } : {}) }));
+  // Multi-agent has no single resumable Claude session — each agent ran independently.
+  return null;
 }
 
 // ============================================
 // EXPRESS
 // ============================================
+// CSP disabled: SPA uses inline scripts/styles; all other helmet headers applied
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit:'5mb' }));
 app.use(cookieParser());
 
@@ -750,19 +840,19 @@ app.get('/api/auth/status', (req,res) => {
   res.json({ setupDone, loggedIn, displayName:loggedIn?ad?.displayName:null });
 });
 
-app.post('/api/auth/setup', async (req,res) => {
+app.post('/api/auth/setup', authLimiter, async (req,res) => {
   try {
     const { password, displayName } = req.body;
     const token = await auth.setupUser(password, displayName);
-    res.cookie('token', token, { httpOnly:true, sameSite:'lax', maxAge:30*24*60*60*1000 });
+    res.cookie('token', token, { httpOnly:true, sameSite:'lax', secure:SECURE_COOKIES, maxAge:30*24*60*60*1000 });
     res.json({ ok:true, displayName:displayName||'Admin' });
   } catch(e) { res.status(400).json({ error:e.message }); }
 });
 
-app.post('/api/auth/login', async (req,res) => {
+app.post('/api/auth/login', authLimiter, async (req,res) => {
   try {
     const token = await auth.login(req.body.password);
-    res.cookie('token', token, { httpOnly:true, sameSite:'lax', maxAge:30*24*60*60*1000 });
+    res.cookie('token', token, { httpOnly:true, sameSite:'lax', secure:SECURE_COOKIES, maxAge:30*24*60*60*1000 });
     res.json({ ok:true, displayName:auth.loadAuth()?.displayName });
   } catch(e) { res.status(401).json({ error:e.message }); }
 });
@@ -772,7 +862,7 @@ app.post('/api/auth/logout', (req,res) => { if(req.cookies?.token) auth.revokeTo
 app.post('/api/auth/change-password', async (req,res) => {
   try {
     const token = await auth.changePassword(req.body.oldPassword, req.body.newPassword);
-    res.cookie('token', token, { httpOnly:true, sameSite:'lax', maxAge:30*24*60*60*1000 });
+    res.cookie('token', token, { httpOnly:true, sameSite:'lax', secure:SECURE_COOKIES, maxAge:30*24*60*60*1000 });
     res.json({ ok:true });
   } catch(e) { res.status(400).json({ error:e.message }); }
 });
@@ -860,9 +950,23 @@ app.get('/api/sessions/:id', (req,res) => {
   // Include running-task flag so client can show spinner immediately on load
   const rt = db.prepare(`SELECT id FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`).get(req.params.id);
   s.hasRunningTask = !!rt;
+  // True when a direct-chat streaming session is alive in memory (not a Kanban task)
+  s.isChatRunning = activeTasks.has(req.params.id);
   res.json(s);
 });
-app.put('/api/sessions/:id', (req,res) => { if(req.body.title) stmts.updateTitle.run(req.body.title, req.params.id); res.json({ok:true}); });
+app.put('/api/sessions/:id', (req, res) => {
+  const { title, active_mcp, active_skills } = req.body;
+  if (title) stmts.updateTitle.run(title, req.params.id);
+  if (active_mcp !== undefined || active_skills !== undefined) {
+    db.prepare(`UPDATE sessions SET active_mcp=COALESCE(?,active_mcp),active_skills=COALESCE(?,active_skills),updated_at=datetime('now') WHERE id=?`)
+      .run(
+        active_mcp !== undefined ? JSON.stringify(active_mcp) : null,
+        active_skills !== undefined ? JSON.stringify(active_skills) : null,
+        req.params.id
+      );
+  }
+  res.json({ok:true});
+});
 app.get('/api/sessions/:id/tasks-count', (req,res) => { res.json(stmts.countTasksBySession.get(req.params.id)); });
 app.delete('/api/sessions/:id', (req,res) => { stmts.deleteTasksBySession.run(req.params.id); stmts.deleteSession.run(req.params.id); res.json({ok:true}); });
 app.post('/api/sessions/:id/open-terminal', (req, res) => {
@@ -934,6 +1038,7 @@ app.get('/api/sessions/:id/messages', (req, res) => {
 
 // Config
 app.get('/api/config', (_,res) => {
+  _mergedConfigCache = null; // always fresh for the config UI — disk may have changed externally
   const c = loadMergedConfig();
   // Auto-discover skills from global dir that are not already in config
   if (fs.existsSync(GLOBAL_SKILLS_DIR)) {
@@ -985,13 +1090,62 @@ app.put('/api/mcp/:id', (req,res) => {
     if(!merged.mcpServers[id]) return res.status(404).json({error:'Not found'});
     c.mcpServers[id]={...merged.mcpServers[id]};
   }
-  if(env) c.mcpServers[id].env={...(c.mcpServers[id].env||{}),...env};
+  if(env !== undefined) c.mcpServers[id].env=env; // full replace, not merge — supports deletion
   if(headers) c.mcpServers[id].headers={...(c.mcpServers[id].headers||{}),...headers};
   if(url!==undefined) c.mcpServers[id].url=url;
   if(args) c.mcpServers[id].args=args;
   saveConfig(c); res.json({ok:true});
 });
 app.delete('/api/mcp/:id', (req,res) => { const c=loadConfig(); if(c.mcpServers[req.params.id]?.custom){delete c.mcpServers[req.params.id]; saveConfig(c)} res.json({ok:true}); });
+
+app.post('/api/mcp/import', (req, res) => {
+  const { servers, replace } = req.body;
+  if (!servers || typeof servers !== 'object') return res.status(400).json({ error: 'Invalid servers object' });
+  const c = loadConfig();
+  if (!c.mcpServers) c.mcpServers = {};
+  if (replace) {
+    for (const id of Object.keys(c.mcpServers)) {
+      if (c.mcpServers[id]?.custom) delete c.mcpServers[id];
+    }
+  }
+  const ID_VALID = /^[a-zA-Z0-9_-]{1,64}$/;
+  let imported = 0;
+  for (const [id, m] of Object.entries(servers)) {
+    if (!id || !ID_VALID.test(id) || typeof m !== 'object') continue;
+    const entry = { label: m.label || id, description: m.description || '', enabled: true, custom: true };
+    if (m.type === 'sse' || m.type === 'http' || m.url) {
+      entry.type = m.type || 'http'; entry.url = m.url || ''; entry.headers = m.headers || {}; entry.env = m.env || {};
+    } else {
+      entry.command = m.command || ''; entry.args = m.args || []; entry.env = m.env || {};
+    }
+    c.mcpServers[id] = entry;
+    imported++;
+  }
+  saveConfig(c);
+  res.json({ ok: true, imported });
+});
+
+app.get('/api/mcp/export', (req, res) => {
+  const c = loadMergedConfig();
+  const mcpServers = {};
+  for (const [id, m] of Object.entries(c.mcpServers || {})) {
+    const entry = {};
+    if (m.label && m.label !== id) entry.label = m.label;
+    if (m.description) entry.description = m.description;
+    if (m.type === 'sse' || m.type === 'http' || m.url) {
+      entry.type = m.type || 'http'; entry.url = m.url || '';
+      if (m.headers && Object.keys(m.headers).length) entry.headers = m.headers;
+      if (m.env && Object.keys(m.env).length) entry.env = m.env;
+    } else {
+      entry.command = m.command || ''; entry.args = m.args || [];
+      if (m.env && Object.keys(m.env).length) entry.env = m.env;
+    }
+    mcpServers[id] = entry;
+  }
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', 'attachment; filename="mcp-config.json"');
+  res.json({ mcpServers });
+});
 
 const upload = multer({ dest: path.join(os.tmpdir(), 'skills-upload') });
 app.post('/api/skills/upload', upload.single('file'), (req,res) => {
@@ -1330,8 +1484,8 @@ app.post('/api/project/init', (req, res) => {
 server.on('upgrade', (req, socket, head) => {
   const cookies = {};
   (req.headers.cookie||'').split(';').forEach(c => { const[k,v]=c.trim().split('='); if(k&&v) cookies[k]=v; });
-  const parsed = url.parse(req.url, true);
-  const token = cookies.token || parsed.query.token;
+  const bearerToken = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null;
+  const token = cookies.token || req.headers['x-auth-token'] || bearerToken;
   if (!auth.validateWsToken(token)) { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); socket.destroy(); return; }
   wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
 });
@@ -1365,62 +1519,66 @@ wss.on('connection', (ws) => {
     if (tabId) ws._tabBusy[tabId] = true;
     else ws._busy = true;
 
-    ws.send(queuePayload(tabId));
-
-    // Resolve session: use sessionId from message, or legacy, or create new
-    let localSessionId = msg.sessionId || (tabId ? null : legacySessionId);
-    let localClaudeId  = undefined;
-
-    if (!localSessionId || !stmts.getSession.get(localSessionId)) {
-      localSessionId = genId();
-      stmts.createSession.run(localSessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||null,msg.workdir||null);
-    } else {
-      localClaudeId = stmts.getSession.get(localSessionId)?.claude_session_id || undefined;
-    }
-
-    // For legacy (no tabId) mode, keep WS-level state in sync
-    if (!tabId) { legacySessionId = localSessionId; }
-
-    // Tell client which real session this tab is using (converts temp tab id → real session id)
-    ws.send(JSON.stringify({ type:'session_started', sessionId:localSessionId, tabId }));
-
-    // After session_started, use localSessionId as the effective tabId for all subsequent events.
-    // The client renames the tab from tempId → localSessionId upon receiving session_started,
-    // so further events must carry localSessionId (not the original temp tabId) to be routed correctly.
-    const effectiveTabId = tabId ? localSessionId : null;
-    // Migrate _tabBusy/_tabAbort keys from tempId to real session id
-    if (tabId && tabId !== localSessionId) {
-      ws._tabBusy[localSessionId] = true; delete ws._tabBusy[tabId];
-      if (ws._tabQueue[tabId]) { ws._tabQueue[localSessionId] = ws._tabQueue[tabId]; delete ws._tabQueue[tabId]; }
-    }
-
-    const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false } = msg;
-
-    let replyQuote = '';
-    if (reply_to && reply_to.content) {
-      const snippet = String(reply_to.content).slice(0, 200);
-      replyQuote = `[Replying to: ${reply_to.role || 'user'}: ${snippet}]\n\n`;
-    }
-    const replyToId = reply_to?.id ?? null;
-    const engineMessage = replyQuote + userMessage;
-    const userContent = buildUserContent(engineMessage, attachments);
-
-    if (!retry) {
-      stmts.addMsg.run(localSessionId,'user','text',userMessage,null,null,replyToId);
-    } else {
-      stmts.incrementRetry.run(localSessionId);
-    }
-    stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(sIds),mode,agentMode,model,workdir||null,localSessionId);
-
-    // Auto-title
-    const session = stmts.getSession.get(localSessionId);
-    if (session?.title==='Нова сесія') {
-      const title=userMessage.substring(0,60)+(userMessage.length>60?'...':'');
-      stmts.updateTitle.run(title, localSessionId);
-      ws.send(JSON.stringify({ type:'session_title', sessionId:localSessionId, title, tabId: effectiveTabId }));
-    }
+    // Pre-declared so catch/finally always have scope for busy-state cleanup.
+    // effectiveTabId starts as tabId: if an error is thrown before the real
+    // effectiveTabId (= localSessionId) is computed, finally still resets the
+    // correct _tabBusy key and avoids leaving the tab permanently stuck.
+    let localSessionId = null, localClaudeId = undefined, effectiveTabId = tabId;
 
     try {
+      ws.send(queuePayload(tabId));
+
+      // Resolve session: use sessionId from message, or legacy, or create new
+      localSessionId = msg.sessionId || (tabId ? null : legacySessionId);
+
+      if (!localSessionId || !stmts.getSession.get(localSessionId)) {
+        localSessionId = genId();
+        stmts.createSession.run(localSessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||null,msg.workdir||null);
+      } else {
+        localClaudeId = stmts.getSession.get(localSessionId)?.claude_session_id || undefined;
+      }
+
+      // For legacy (no tabId) mode, keep WS-level state in sync
+      if (!tabId) { legacySessionId = localSessionId; }
+
+      // Tell client which real session this tab is using (converts temp tab id → real session id)
+      ws.send(JSON.stringify({ type:'session_started', sessionId:localSessionId, tabId }));
+
+      // After session_started, use localSessionId as the effective tabId for all subsequent events.
+      // The client renames the tab from tempId → localSessionId upon receiving session_started,
+      // so further events must carry localSessionId (not the original temp tabId) to be routed correctly.
+      effectiveTabId = tabId ? localSessionId : null;
+      // Migrate _tabBusy/_tabAbort keys from tempId to real session id
+      if (tabId && tabId !== localSessionId) {
+        ws._tabBusy[localSessionId] = true; delete ws._tabBusy[tabId];
+        if (ws._tabQueue[tabId]) { ws._tabQueue[localSessionId] = ws._tabQueue[tabId]; delete ws._tabQueue[tabId]; }
+      }
+
+      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false } = msg;
+
+      let replyQuote = '';
+      if (reply_to && reply_to.content) {
+        const snippet = String(reply_to.content).slice(0, 200);
+        replyQuote = `[Replying to: ${reply_to.role || 'user'}: ${snippet}]\n\n`;
+      }
+      const replyToId = reply_to?.id ?? null;
+      const engineMessage = replyQuote + userMessage;
+      const userContent = buildUserContent(engineMessage, attachments);
+
+      if (!retry) {
+        stmts.addMsg.run(localSessionId,'user','text',userMessage,null,null,replyToId);
+      } else {
+        stmts.incrementRetry.run(localSessionId);
+      }
+      stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(sIds),mode,agentMode,model,workdir||null,localSessionId);
+
+      // Auto-title
+      const session = stmts.getSession.get(localSessionId);
+      if (session?.title==='Нова сесія') {
+        const title=userMessage.substring(0,60)+(userMessage.length>60?'...':'');
+        stmts.updateTitle.run(title, localSessionId);
+        ws.send(JSON.stringify({ type:'session_title', sessionId:localSessionId, title, tabId: effectiveTabId }));
+      }
       const config = loadMergedConfig();
       const abortController = new AbortController();
       if (effectiveTabId) ws._tabAbort[effectiveTabId] = abortController;
@@ -1444,26 +1602,28 @@ wss.on('connection', (ws) => {
 
       // Register task in activeTasks so it survives client disconnect/reload
       stmts.setLastUserMsg.run(userMessage, localSessionId);
+      chatBuffers.set(localSessionId, ''); // reset buffer for this session
       activeTasks.set(localSessionId, { proxy, abortController, cleanupTimer: null });
 
       const params = { prompt:engineMessage, userContent, systemPrompt, mcpServers, model, maxTurns, ws: proxy, sessionId:localSessionId, abortController, claudeSessionId:localClaudeId, mode, workdir: workdir || WORKDIR, tabId: effectiveTabId };
 
       let newCid;
       if (agentMode==='multi') {
-        await runMultiAgent(params);
+        newCid = await runMultiAgent(params);
       } else {
         newCid = await runCliSingle(params);
-        if (newCid) { stmts.updateClaudeId.run(newCid, localSessionId); }
       }
+      if (newCid) { stmts.updateClaudeId.run(newCid, localSessionId); }
 
       proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId }));
       proxy.send(JSON.stringify({ type:'files_changed' }));
     } catch(err) {
-      if(err.name==='AbortError') proxy.send(JSON.stringify({ type:'text', text:'\n[Зупинено]', tabId: effectiveTabId }));
+      if(err.name==='AbortError') proxy.send(JSON.stringify({ type:'agent_status', status:'Stopped', statusKey:'status.stopped', tabId: effectiveTabId }));
       else { log.error('chat error', { message: err.message, name: err.name }); proxy.send(JSON.stringify({ type:'error', error:err.message, tabId: effectiveTabId })); }
       proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId }));
     } finally {
       activeTasks.delete(localSessionId);
+      chatBuffers.delete(localSessionId); // cleanup in-memory buffer
       try { stmts.clearLastUserMsg.run(localSessionId); } catch {}
       if (effectiveTabId) {
         ws._tabBusy[effectiveTabId] = false;
@@ -1472,7 +1632,7 @@ wss.on('connection', (ws) => {
         if (tabQ.length > 0) {
           const next = tabQ.shift();
           ws.send(queuePayload(effectiveTabId));
-          processChat(next); // fire and don't await to avoid blocking other tabs
+          processChat(next).catch(err => log.error('processChat tab-queue error', { message: err.message }));
         } else {
           delete ws._tabQueue[effectiveTabId];
           ws.send(JSON.stringify({ type: 'queue_update', tabId: effectiveTabId, pending: 0, items: [] }));
@@ -1483,7 +1643,7 @@ wss.on('connection', (ws) => {
         if (ws._queue.length > 0) {
           const next = ws._queue.shift();
           ws.send(queuePayload(null));
-          await processChat(next);
+          try { await processChat(next); } catch (err) { log.error('processChat legacy-queue error', { message: err.message }); }
         } else {
           ws.send(JSON.stringify({ type: 'queue_update', pending: 0, items: [] }));
         }
@@ -1523,22 +1683,23 @@ wss.on('connection', (ws) => {
           return;
         }
       }
-      processChat(msg); // don't await — allows parallel tabs
+      processChat(msg).catch(err => log.error('processChat error', { message: err.message })); // don't await — allows parallel tabs
       return;
     }
 
     if (msg.type==='stop') {
       const tabId = msg.tabId;
       if (tabId && ws._tabAbort && ws._tabAbort[tabId]) {
+        // Stop specific tab
         if (ws._tabQueue) ws._tabQueue[tabId] = [];
         ws._tabAbort[tabId].abort();
         delete ws._tabAbort[tabId];
-      } else {
+      } else if (!tabId) {
+        // Legacy (no-tab) stop — only abort the legacy controller, leave tab-mode untouched
         ws._queue = [];
         if (ws._abort) ws._abort.abort();
-        if (ws._tabAbort) { Object.values(ws._tabAbort).forEach(ac => { try { ac.abort(); } catch {} }); ws._tabAbort = {}; }
-        if (ws._tabQueue) ws._tabQueue = {};
       }
+      // tabId present but no active controller → tab is idle, nothing to abort
       // Also stop any Kanban task running under this session
       if (tabId) {
         const runningTask = db.prepare(`SELECT id, worker_pid FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`).get(tabId);
@@ -1591,12 +1752,32 @@ wss.on('connection', (ws) => {
               ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: sessionId, prompt: sess.last_user_msg, retryCount: sess.retry_count || 0 }));
             }
           } else {
-            // Chat task is running but WS reconnected — reattach proxy so output resumes.
             const activeTask = activeTasks.get(sessionId);
-            if (activeTask.cleanupTimer) { clearTimeout(activeTask.cleanupTimer); activeTask.cleanupTimer = null; }
-            activeTask.proxy.attach(ws);
-            ws._tabAbort[sessionId] = activeTask.abortController;
-            if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'task_resumed', sessionId, tabId: sessionId }));
+            // Guard: abort() may have been called (timer fired or user stopped) but the
+            // subprocess hasn't exited yet so the entry is still in activeTasks.
+            // Reattaching the proxy to a dying stream would leave the client waiting
+            // forever for output that will never arrive.
+            if (activeTask.abortController.signal.aborted) {
+              // Stream is being killed — treat as interrupted so client can retry.
+              const sess = stmts.getSession.get(sessionId);
+              if (sess?.last_user_msg && ws.readyState === 1) {
+                ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: sessionId, prompt: sess.last_user_msg, retryCount: sess.retry_count || 0 }));
+              }
+            } else {
+              // Chat task is running normally — cancel cleanup timer and reattach proxy.
+              if (activeTask.cleanupTimer) { clearTimeout(activeTask.cleanupTimer); activeTask.cleanupTimer = null; }
+              // Replay ALL accumulated text from the start so the client never has a gap.
+              // chatBuffers holds everything from onText since the session started.
+              const chatBuf = chatBuffers.get(sessionId);
+              if (chatBuf && ws.readyState === 1) {
+                ws.send(JSON.stringify({ type: 'text', text: chatBuf, tabId: sessionId, catchUp: true }));
+              }
+              // Clear proxy buffer — already covered by chatBuf above
+              activeTask.proxy._buffer = [];
+              activeTask.proxy.attach(ws);
+              ws._tabAbort[sessionId] = activeTask.abortController;
+              if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'task_resumed', sessionId, tabId: sessionId }));
+            }
           }
         }
       }
@@ -1607,11 +1788,28 @@ wss.on('connection', (ws) => {
       const { sessionId, tabId } = msg;
       const task = activeTasks.get(sessionId);
       if (task) {
-        // Task is still running — cancel cleanup timer and re-attach to new WS
-        if (task.cleanupTimer) { clearTimeout(task.cleanupTimer); task.cleanupTimer = null; }
-        task.proxy.attach(ws);
-        if (tabId) ws._tabAbort[tabId] = task.abortController;
-        ws.send(JSON.stringify({ type: 'task_resumed', sessionId, tabId }));
+        // Guard: abort() may have been called (user stopped, or idle timer fired) but the
+        // subprocess hasn't exited yet so the entry is still in activeTasks.
+        if (task.abortController.signal.aborted) {
+          const session = stmts.getSession.get(sessionId);
+          if (session?.last_user_msg) {
+            ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId, prompt: session.last_user_msg, retryCount: session.retry_count || 0 }));
+          } else {
+            ws.send(JSON.stringify({ type: 'task_lost', sessionId, tabId }));
+          }
+        } else {
+          // Task is still running — cancel cleanup timer and re-attach to new WS
+          if (task.cleanupTimer) { clearTimeout(task.cleanupTimer); task.cleanupTimer = null; }
+          // Replay all accumulated text before re-attaching so the client has no gap
+          const chatBuf = chatBuffers.get(sessionId);
+          if (chatBuf && ws.readyState === 1) {
+            ws.send(JSON.stringify({ type: 'text', text: chatBuf, tabId: tabId || sessionId, catchUp: true }));
+          }
+          task.proxy._buffer = [];
+          task.proxy.attach(ws);
+          if (tabId) ws._tabAbort[tabId] = task.abortController;
+          ws.send(JSON.stringify({ type: 'task_resumed', sessionId, tabId }));
+        }
       } else {
         // Task not in memory — check if it was interrupted (server crash)
         const session = stmts.getSession.get(sessionId);
@@ -1645,6 +1843,14 @@ wss.on('connection', (ws) => {
     }
     // Abort legacy (no-tab) session tasks only
     if (ws._abort) { ws._abort.abort(); ws._abort = null; }
+    // WS-1: clean up per-tab state — abort CLI runs that are NOT tracked in activeTasks.
+    // Sessions in activeTasks have a 30-min idle timeout and can be reattached on reconnect.
+    for (const [tid, ac] of Object.entries(ws._tabAbort || {})) {
+      if (!activeTasks.has(tid)) { try { ac.abort(); } catch {} }
+    }
+    ws._tabAbort = {};
+    ws._tabBusy  = {};
+    ws._tabQueue = {};
   });
 });
 
@@ -1657,6 +1863,12 @@ server.listen(PORT, () => {
     nodeEnv:   process.env.NODE_ENV || 'development',
     logLevel:  process.env.LOG_LEVEL || 'info',
   });
+});
+
+// Safety net: log unhandled rejections instead of crashing the process.
+// All known async paths have explicit .catch() — this catches any that slipped through.
+process.on('unhandledRejection', (reason) => {
+  log.error('unhandledRejection', { message: reason?.message || String(reason), stack: reason?.stack });
 });
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────
