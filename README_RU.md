@@ -23,6 +23,8 @@ Claude Code Studio — браузерный воркспейс для работ
 
 Смотрите как работает Kanban-доска: создание карточки задачи для нового релиза → Claude Code подхватывает её → выполняет задачу → карточка переходит в «Выполнено». В конце видно GitHub до и после — агент действительно выпустил новую версию.
 
+![Demo GIF](public/videos/new_release_video.gif)
+
 <video src="public/videos/new_release_video.mp4" controls width="100%"></video>
 
 > **Видео не воспроизводится?** [Скачайте и посмотрите напрямую](public/videos/new_release_video.mp4)
