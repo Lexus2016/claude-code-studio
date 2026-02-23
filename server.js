@@ -258,7 +258,7 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,workdir,model,mode,agent_mode,max_turns,attachments) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`),
   updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
@@ -664,20 +664,22 @@ function runCliSingle(p) {
 
 // --- Multi-Agent (CLI only) ---
 async function runMultiAgent(p) {
-  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, tabId } = p;
+  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId } = p;
   ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'🧠 Planning...', statusKey:'agent.planning', ...(tabId ? { tabId } : {}) }));
 
   // Orchestrator is a lightweight planning step — it does NOT resume the main Claude
   // session because that would pollute the conversation context with a planning prompt.
   // Instead it runs a fresh, disposable session. The real claude_session_id is only
   // set when runCliSingle (or agent workers) actually generate user-visible output.
+  const effectiveWorkdir = workdir || WORKDIR;
+  const cli = new ClaudeCLI({ cwd: effectiveWorkdir });
   let planText = '';
   const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${prompt}`;
 
   await new Promise(res => {
     let _settled = false;
     const _res = () => { if (!_settled) { _settled = true; res(); } };
-    claudeCli.send({ prompt:planPrompt, model, maxTurns:1, allowedTools:[], abortController })
+    cli.send({ prompt:planPrompt, model, maxTurns:1, allowedTools:[], abortController })
       .onText(t => { planText+=t; })
       .onError(() => _res())
       .onDone(() => _res());
@@ -717,7 +719,7 @@ async function runMultiAgent(p) {
       await new Promise(res => {
         let _settled = false;
         const _res = () => { if (!_settled) { _settled = true; res(); } };
-        claudeCli.send({ prompt:agentPrompt, model, maxTurns:Math.min(maxTurns,15), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
+        cli.send({ prompt:agentPrompt, model, maxTurns:Math.min(maxTurns,15), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
           .onText(t => { agentText+=t; chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + t); try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
           .onTool((n,i) => { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} try { stmts.addMsg.run(sessionId,'assistant','tool',i||'',n,agent.id,null); } catch {} })
           .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
@@ -888,10 +890,10 @@ app.get('/api/tasks/running-sessions', (req, res) => {
   res.json(rows.map(r => r.session_id));
 });
 app.post('/api/tasks', (req, res) => {
-  const { title='Нова задача', description='', notes='', status='backlog', sort_order=0, workdir=null,
+  const { title='Нова задача', description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
           model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null } = req.body;
   const id = genId();
-  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, workdir||null, model, mode, agent_mode, max_turns, attachments||null);
+  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, session_id||null, workdir||null, model, mode, agent_mode, max_turns, attachments||null);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -1699,6 +1701,8 @@ wss.on('connection', (ws) => {
         ws._queue = [];
         if (ws._abort) ws._abort.abort();
       }
+      // Clear last_user_msg so reconnect doesn't auto-retry a user-stopped task
+      if (tabId) { try { stmts.clearLastUserMsg.run(tabId); } catch {} }
       // tabId present but no active controller → tab is idle, nothing to abort
       // Also stop any Kanban task running under this session
       if (tabId) {
