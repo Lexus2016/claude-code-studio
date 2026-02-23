@@ -38,12 +38,42 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: '${{ steps.version.outputs.VERSION }}',
-              name: 'Claude Code Chat ${{ steps.version.outputs.VERSION }}',
-              body: `## What's Changed\n\n${{ steps.changelog.outputs.CHANGELOG }}\n\n## Installation\n\n\`\`\`bash\n# Run latest version directly\nnpx github:Lexus2016/claude-code-chat\n\n# Or install globally\nnpm install -g github:Lexus2016/claude-code-chat\nclaude-code-chat\n\`\`\`\n\n> Open http://localhost:3000 in your browser`,
-              draft: false,
-              prerelease: false,
-            });
+            const baseTag = '${{ steps.version.outputs.VERSION }}';
+            const body = `## What's Changed\n\n${{ steps.changelog.outputs.CHANGELOG }}\n\n## Installation\n\n\`\`\`bash\n# Run latest version directly\nnpx github:Lexus2016/claude-code-chat\n\n# Or install globally\nnpm install -g github:Lexus2016/claude-code-chat\nclaude-code-chat\n\`\`\`\n\n> Open http://localhost:3000 in your browser`;
+
+            const match = baseTag.match(/^v(\d+)\.(\d+)\.(\d+)$/);
+            if (!match) {
+              core.setFailed(`Invalid version tag: ${baseTag}`);
+              return;
+            }
+            const [, major, minor] = match;
+            let patch = parseInt(match[3]);
+            let tag = baseTag;
+
+            for (let attempt = 0; attempt < 10; attempt++) {
+              try {
+                await github.rest.repos.createRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag_name: tag,
+                  target_commitish: context.sha,
+                  name: 'Claude Code Chat ' + tag,
+                  body,
+                  draft: false,
+                  prerelease: false,
+                });
+                core.info(`Release ${tag} created successfully`);
+                return;
+              } catch (e) {
+                const isAlreadyExists = e.status === 422 &&
+                  e.response?.data?.errors?.some(err => err.code === 'already_exists');
+                if (isAlreadyExists) {
+                  patch++;
+                  tag = `v${major}.${minor}.${patch}`;
+                  core.info(`Release already exists, trying ${tag}...`);
+                } else {
+                  throw e;
+                }
+              }
+            }
+            core.setFailed(`Could not create release after 10 attempts (last tried: ${tag})`);
