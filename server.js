@@ -776,10 +776,15 @@ app.post('/api/internal/ask-user', express.json(), (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { requestId, sessionId, question, options, inputType } = req.body;
+  const { requestId, sessionId, question, questions, options, inputType } = req.body;
   if (!requestId || !sessionId || !question) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
+
+  // Normalize: if new-style `questions` array is present, use it; otherwise wrap legacy fields
+  const normalizedQuestions = Array.isArray(questions) && questions.length
+    ? questions
+    : [{ question, options: options || null, multiSelect: inputType === 'multi_choice' }];
 
   // Set up a timer that auto-resolves if the user doesn't answer
   const timer = setTimeout(() => {
@@ -802,8 +807,7 @@ app.post('/api/internal/ask-user', express.json(), (req, res) => {
       sessionId,
       timer,
       question,
-      options: options || null,
-      inputType: inputType || 'free_text',
+      questions: normalizedQuestions,
     });
   });
 
@@ -814,8 +818,7 @@ app.post('/api/internal/ask-user', express.json(), (req, res) => {
       type: 'ask_user',
       requestId,
       question,
-      options: options || null,
-      inputType: inputType || 'free_text',
+      questions: normalizedQuestions,
       tabId: sessionId,
     });
     try { activeTask.proxy.send(payload); } catch {}
@@ -1911,7 +1914,7 @@ wss.on('connection', (ws) => {
               // Re-send any pending ask_user questions for this session
               for (const [rid, entry] of pendingAskUser) {
                 if (entry.sessionId === sessionId && ws.readyState === 1) {
-                  ws.send(JSON.stringify({ type: 'ask_user', requestId: rid, question: entry.question, options: entry.options, inputType: entry.inputType, tabId: sessionId }));
+                  ws.send(JSON.stringify({ type: 'ask_user', requestId: rid, question: entry.question, questions: entry.questions, tabId: sessionId }));
                 }
               }
             }

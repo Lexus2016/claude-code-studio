@@ -33,13 +33,44 @@ function sendError(id, code, message) {
 
 const ASK_USER_TOOL = {
   name: 'ask_user',
-  description: 'Ask the user a question and wait for their response. Use this when you need clarification, a choice, or any input from the user before proceeding. Execution pauses until the user responds.',
+  description: 'Ask the user a question and wait for their response. Use this when you need clarification, a choice, or any input from the user before proceeding. Execution pauses until the user responds. Supports multiple questions (paginated), rich options with descriptions, and an "Other" free-text fallback on every choice question.',
   inputSchema: {
     type: 'object',
     properties: {
-      question: { type: 'string', description: 'The question to ask' },
-      options: { type: 'array', items: { type: 'string' }, description: 'Predefined options (for single/multi choice)' },
+      question: { type: 'string', description: 'Single question to ask (use "questions" array for multiple)' },
+      options: {
+        type: 'array',
+        items: {
+          oneOf: [
+            { type: 'string' },
+            { type: 'object', properties: { label: { type: 'string' }, description: { type: 'string' } }, required: ['label'] },
+          ],
+        },
+        description: 'Predefined options — strings or {label,description} objects. An "Other" free-text input is always shown.',
+      },
       inputType: { type: 'string', enum: ['free_text', 'single_choice', 'multi_choice'], default: 'free_text', description: 'Type of input expected' },
+      questions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            question: { type: 'string', description: 'The question text' },
+            header: { type: 'string', description: 'Short label (max 12 chars) shown as a badge' },
+            options: {
+              type: 'array',
+              items: {
+                oneOf: [
+                  { type: 'string' },
+                  { type: 'object', properties: { label: { type: 'string' }, description: { type: 'string' } }, required: ['label'] },
+                ],
+              },
+            },
+            multiSelect: { type: 'boolean', default: false, description: 'Allow selecting multiple options' },
+          },
+          required: ['question'],
+        },
+        description: 'Multiple questions shown with pagination. Each supports options with "Other" fallback. Takes priority over single question/options/inputType.',
+      },
     },
     required: ['question'],
   },
@@ -120,18 +151,35 @@ async function handleMessage(msg) {
       }
 
       const args = params?.arguments || {};
-      const question = args.question || 'No question provided';
-      const options = Array.isArray(args.options) ? args.options : undefined;
-      const inputType = args.inputType || (options?.length ? 'single_choice' : 'free_text');
       const requestId = crypto.randomUUID();
+
+      // Normalize into a questions array for uniform handling
+      let questions;
+      if (Array.isArray(args.questions) && args.questions.length) {
+        // Validate: keep only well-formed question objects
+        questions = args.questions.filter(q => q && typeof q === 'object' && q.question);
+      }
+      if (!questions?.length) {
+        // Single-question legacy format → wrap into array
+        const q = args.question || 'No question provided';
+        const opts = Array.isArray(args.options) ? args.options : undefined;
+        const iType = args.inputType || (opts?.length ? 'single_choice' : 'free_text');
+        questions = [{
+          question: q,
+          options: opts,
+          multiSelect: iType === 'multi_choice',
+        }];
+      }
+
+      // Always send top-level question for backward compat with older server.js
+      const question = questions[0]?.question || args.question || 'No question provided';
 
       try {
         const result = await postToServer({
           requestId,
           sessionId: SESSION_ID,
           question,
-          options,
-          inputType,
+          questions,
         });
 
         sendResponse(id, {
