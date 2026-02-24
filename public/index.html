@@ -2489,7 +2489,7 @@ function connect() {
 window.addEventListener('beforeunload', () => { _intentionalClose = true; if (_reconnectTimer) clearTimeout(_reconnectTimer); });
 
 function handleWsMsg(d) {
-  const tabId = d.tabId || (generatingTabId || activeTabId);
+  const tabId = d.tabId || activeTabId;
   // Look up tab across current project AND all background projects
   const found = findTabAcrossProjects(tabId);
   const isCurrent = found ? found.isCurrent : true;
@@ -2723,7 +2723,7 @@ function handleWsMsg(d) {
 
     case 'session_started':
       {
-        const srcId = d.tabId || generatingTabId || activeTabId;
+        const srcId = d.tabId || activeTabId;
         // Search across all projects, not just current
         const sf = findTabAcrossProjects(srcId) || (openTabs.find(x => x.id === srcId) ? { tab: openTabs.find(x => x.id === srcId), tabs: openTabs, isCurrent: true } : null);
         const tab = sf?.tab;
@@ -2742,14 +2742,14 @@ function handleWsMsg(d) {
           saveUIState();
         }
       }
-      if (activeTabId === d.sessionId || (!d.tabId && generatingTabId === d.sessionId)) {
+      if (activeTabId === d.sessionId) {
         currentSessionId = d.sessionId;
       }
       break;
 
     case 'session_title':
       {
-        const titleTabId = d.tabId || generatingTabId || activeTabId;
+        const titleTabId = d.tabId || activeTabId;
         const tf = findTabAcrossProjects(titleTabId);
         if (tf?.tab && d.title) {
           tf.tab.title = d.title;
@@ -3788,6 +3788,8 @@ function switchTab(id) {
     getTS(activeTabId).draft = inEl.value;
     getTS(activeTabId).curTxt = curTxt;
     if (curToolLog.length) getTS(activeTabId)._toolLog = curToolLog.slice();
+    getTS(activeTabId).attachments = [..._attachments];
+    getTS(activeTabId).replyTo = replyTo;
   }
   // Reset streaming state — loadSess will clear msgsEl, making curEl stale
   curEl = null; curTxt = ''; curToolCounts = {}; curToolLog = [];
@@ -3808,6 +3810,16 @@ function switchTab(id) {
   inEl.value = draft;
   inEl.style.height = 'auto';
   inEl.style.height = Math.min(inEl.scrollHeight, 130) + 'px';
+  // Restore attachments and reply-to for new tab
+  _restoreAttachments(getTS(id).attachments);
+  const savedReply = getTS(id).replyTo;
+  if (savedReply) {
+    replyTo = savedReply;
+    $i('replyPreviewRole').textContent = savedReply.role === 'user' ? t('you.label') : 'Claude';
+    const rc = savedReply.content || '';
+    $i('replyPreviewText').textContent = rc.slice(0, 120) + (rc.length > 120 ? '…' : '');
+    $i('replyPreview').style.display = 'flex';
+  } else { clearReply(); }
   // Update stop button state and isGen for new tab
   const newTab = openTabs.find(t => t.id === id);
   if (newTab?.generating) {
@@ -3847,13 +3859,19 @@ function closeTab(id) {
 function newTab() {
   const tempId = 'new-' + Date.now();
   if (!curProjectId) { _onProjectCreated = () => newTab(); openAddProject(); return; }
-  // Save current tab's draft before switching
-  if (activeTabId) getTS(activeTabId).draft = inEl.value;
+  // Save current tab's state before switching
+  if (activeTabId) {
+    getTS(activeTabId).draft = inEl.value;
+    getTS(activeTabId).attachments = [..._attachments];
+    getTS(activeTabId).replyTo = replyTo;
+  }
   openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true });
   activeTabId = tempId;
   currentSessionId = null;
   inEl.value = '';
   inEl.style.height = 'auto';
+  _clearAttachments();
+  clearReply();
   // Keep existing activeMcp as global default for new tab; reset skills
   activeSkills = new Set();
   msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();
@@ -4039,6 +4057,23 @@ function rmChip(id) {
 function _clearAttachments() {
   _attachments = [];
   _getChips().innerHTML = '';
+}
+
+// Restore saved attachments — rebuild chips from saved array
+function _restoreAttachments(saved) {
+  _clearAttachments();
+  if (!saved?.length) return;
+  for (const att of saved) {
+    // Re-add each saved attachment — the _add* functions create new IDs and push to _attachments
+    if (att.type === 'image') {
+      _addImageChip(att.base64, att.mimeType, att.name);
+    } else if (att.local) {
+      _addLocalFileChip(att.name, att.base64, att.mimeType);
+    } else {
+      // Project file — pass the original object (has name, relPath, absPath)
+      _addFileChip({ name: att.name, relPath: att.relPath, absPath: att.absPath });
+    }
+  }
 }
 
 // ─── @ File picker ────────────────────────────────────────────────────────
