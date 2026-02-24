@@ -811,6 +811,46 @@ body::after {
 .ask-user-card .ask-page { display: none; }
 .ask-user-card .ask-page.active { display: block; }
 
+/* ─── Notifications (non-blocking, top-right stacked) ─── */
+#notifContainer {
+  position: fixed; top: 16px; right: 16px; z-index: 250;
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: calc(100vh - 32px); overflow: hidden;
+  pointer-events: none; width: 340px;
+}
+.notif-card {
+  pointer-events: auto;
+  padding: 12px 14px; background: var(--s2); border-radius: var(--r-sm);
+  border-left: 3px solid var(--blue); box-shadow: var(--shadow-md);
+  animation: notifSlideIn .3s ease-out;
+  transition: opacity .3s, transform .3s;
+  position: relative; cursor: default;
+}
+.notif-card.notif-out { opacity: 0; transform: translateX(100%); pointer-events: none; }
+@keyframes notifSlideIn {
+  from { opacity: 0; transform: translateX(60px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.notif-card.notif-info     { border-left-color: var(--blue); }
+.notif-card.notif-warning  { border-left-color: var(--orange); }
+.notif-card.notif-error    { border-left-color: var(--red); }
+.notif-card.notif-milestone{ border-left-color: var(--green); }
+.notif-card.notif-progress { border-left-color: #a78bfa; }
+.notif-header { display: flex; align-items: center; gap: 4px; }
+.notif-icon { font-size: 14px; margin-right: 6px; flex-shrink: 0; }
+.notif-title { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; line-height: 1.35; }
+.notif-close {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 15px; padding: 0 2px; line-height: 1; opacity: 0;
+  transition: opacity .15s, color .15s; flex-shrink: 0;
+}
+.notif-card:hover .notif-close { opacity: 1; }
+.notif-close:hover { color: var(--text); }
+.notif-detail { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+.notif-progress-bar { margin-top: 8px; height: 4px; background: var(--s3); border-radius: 2px; overflow: hidden; }
+.notif-progress-fill { height: 100%; background: #a78bfa; border-radius: 2px; transition: width .4s ease-out; }
+.notif-progress-text { font-size: 11px; color: var(--muted); margin-top: 3px; text-align: right; }
+
 /* ─── Input area ─── */
 .ia { padding: 12px 16px; background: var(--s1); border-top: 1px solid var(--border); }
 .iw { display: flex; align-items: flex-end; gap: 8px; background: var(--s2); border: 1px solid var(--border); border-radius: 12px; padding: 5px 5px 5px 14px; transition: border-color .15s, box-shadow .15s; }
@@ -1560,6 +1600,9 @@ body::after {
 <!-- Toast -->
 <div id="toast"></div>
 
+<!-- Notifications (non-blocking, from notify_user MCP) -->
+<div id="notifContainer"></div>
+
 <script>
 'use strict';
 
@@ -1969,6 +2012,81 @@ function toast(msg, isErr = false, dur = 3000) {
   toastTimer = setTimeout(() => el.className = '', dur);
 }
 
+// ─── Notifications (non-blocking, from notify_user MCP) ──────────────────
+const NOTIF_MAX_VISIBLE = 5;
+const NOTIF_ICONS = { info: 'ℹ️', warning: '⚠️', error: '❌', milestone: '✅', progress: '📊' };
+const NOTIF_DURATIONS = { info: 5000, warning: 15000, error: 0, milestone: 8000, progress: 10000 };
+
+function showNotification(data) {
+  const container = $i('notifContainer');
+  if (!container) return;
+
+  const level = data.level || 'info';
+  const icon = NOTIF_ICONS[level] || 'ℹ️';
+  const dur = NOTIF_DURATIONS[level] ?? 5000;
+
+  // Update existing progress card in-place instead of spawning a new one
+  if (level === 'progress' && data.progress) {
+    const existing = container.querySelector('.notif-card.notif-progress:not(.notif-out)');
+    if (existing) {
+      const pct = data.progress.total > 0 ? Math.min(100, Math.round((data.progress.current / data.progress.total) * 100)) : 0;
+      const fill = existing.querySelector('.notif-progress-fill');
+      const text = existing.querySelector('.notif-progress-text');
+      const titleEl = existing.querySelector('.notif-title');
+      if (fill) fill.style.width = pct + '%';
+      if (text) text.textContent = `${data.progress.current} / ${data.progress.total}`;
+      if (titleEl) titleEl.textContent = data.title || '';
+      if (data.detail) {
+        const det = existing.querySelector('.notif-detail');
+        if (det) det.textContent = data.detail;
+      }
+      return;
+    }
+  }
+
+  const card = document.createElement('div');
+  card.className = `notif-card notif-${level}`;
+  card.dataset.ts = String(data.timestamp || Date.now());
+
+  let html = `<div class="notif-header">`;
+  html += `<span class="notif-icon">${icon}</span>`;
+  html += `<span class="notif-title">${escH(data.title || '')}</span>`;
+  html += `<button class="notif-close" title="Dismiss">&times;</button>`;
+  html += `</div>`;
+
+  if (data.detail) {
+    html += `<div class="notif-detail">${escH(data.detail)}</div>`;
+  }
+
+  if (level === 'progress' && data.progress) {
+    const pct = data.progress.total > 0 ? Math.min(100, Math.round((data.progress.current / data.progress.total) * 100)) : 0;
+    html += `<div class="notif-progress-bar"><div class="notif-progress-fill" style="width:${pct}%"></div></div>`;
+    html += `<div class="notif-progress-text">${data.progress.current} / ${data.progress.total}</div>`;
+  }
+
+  card.innerHTML = html;
+
+  // Dismiss handler
+  const dismiss = () => {
+    card.classList.add('notif-out');
+    setTimeout(() => card.remove(), 300);
+  };
+  card.querySelector('.notif-close').addEventListener('click', dismiss);
+
+  // Auto-dismiss (unless dur === 0 = manual dismiss only)
+  if (dur > 0) setTimeout(dismiss, dur);
+
+  container.appendChild(card);
+
+  // Enforce max visible: remove oldest if over limit
+  const cards = container.querySelectorAll('.notif-card:not(.notif-out)');
+  if (cards.length > NOTIF_MAX_VISIBLE) {
+    const oldest = cards[0];
+    oldest.classList.add('notif-out');
+    setTimeout(() => oldest.remove(), 300);
+  }
+}
+
 // ─── Markdown renderer ───────────────────────────────────────────────────
 function escH(s) {
   return String(s)
@@ -2272,6 +2390,12 @@ function handleWsMsg(d) {
     case 'task_started':
       if (isVisible) {
         rmW();
+        // Show user message (task prompt) before assistant response
+        if (d.prompt) {
+          const um = addMsg('user');
+          um.querySelector('.msg').textContent = d.prompt;
+          applyMsgClamp(um);
+        }
         setStatus('⚙ ' + (d.title || 'Task') + '…', 'warn');
         sbShow('⚙ ' + (d.title || 'Task') + '…');
         if (!curEl) { curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
@@ -2285,6 +2409,12 @@ function handleWsMsg(d) {
     case 'task_retrying': {
       if (isVisible) {
         const rc = d.retryCount || 1;
+        // Show user message (task prompt) if not already visible
+        if (d.prompt && !msgsEl.querySelector('.mw.user')) {
+          const um = addMsg('user');
+          um.querySelector('.msg').textContent = d.prompt;
+          applyMsgClamp(um);
+        }
         const ind = document.createElement('div');
         ind.className = 'msg-retry-indicator';
         ind.textContent = `↩ ${t('toast.task_retry')} #${rc}`;
@@ -2391,6 +2521,10 @@ function handleWsMsg(d) {
 
     case 'files_changed':
       loadFiles();
+      break;
+
+    case 'notification':
+      showNotification(d);
       break;
 
     case 'error':

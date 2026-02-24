@@ -320,6 +320,9 @@ const pendingAskUser = new Map();
 const ASK_USER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const ASK_USER_SECRET = require('crypto').randomBytes(16).toString('hex');
 
+// ─── Notify User (Internal MCP) ──────────────────────────────────────────
+const NOTIFY_SECRET = require('crypto').randomBytes(16).toString('hex');
+
 function broadcastToSession(sessionId, data) {
   const watchers = sessionWatchers.get(sessionId);
   if (!watchers?.size) return;
@@ -399,11 +402,12 @@ async function startTask(task) {
     let fullText = '', newCid = claudeSessionId, hasError = false;
     taskBuffers.set(task.id, '');
     // Notify watchers — use task_retrying for restarts, task_started for first run
+    // Include prompt so client can show user message bubble during live streaming
     if (isRetry) {
       const retryCount = session?.retry_count || 1;
-      broadcastToSession(sessionId, { type: 'task_retrying', taskId: task.id, title: task.title, retryCount, tabId: sessionId });
+      broadcastToSession(sessionId, { type: 'task_retrying', taskId: task.id, title: task.title, prompt, retryCount, tabId: sessionId });
     } else {
-      broadcastToSession(sessionId, { type: 'task_started', taskId: task.id, title: task.title, tabId: sessionId });
+      broadcastToSession(sessionId, { type: 'task_started', taskId: task.id, title: task.title, prompt, tabId: sessionId });
     }
     const stream = cli.send({ prompt, sessionId: claudeSessionId, model: session?.model || task.model || 'sonnet', maxTurns: task.max_turns || 30, abortController: taskAbort });
     // Save subprocess PID so startup recovery can kill orphans on restart
@@ -650,7 +654,7 @@ function runCliSingle(p) {
         }
       })
       .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
-      .onTool((name, inp) => { if (name !== 'ask_user') { ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) })); } try { stmts.addMsg.run(sessionId,'assistant','tool',inp||'',name,null,null,null); } catch {} })
+      .onTool((name, inp) => { if (name !== 'ask_user' && name !== 'notify_user') { ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) })); } try { stmts.addMsg.run(sessionId,'assistant','tool',inp||'',name,null,null,null); } catch {} })
       .onSessionId(sid => { newCid=sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} }) // persist early so open-terminal works during active chat
       .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
       .onError(err => {
@@ -729,7 +733,7 @@ async function runMultiAgent(p) {
         const _res = () => { if (!_settled) { _settled = true; res(); } };
         cli.send({ prompt:agentPrompt, model, maxTurns:Math.min(maxTurns,15), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
           .onText(t => { agentText+=t; chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + t); try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
-          .onTool((n,i) => { if (n !== 'ask_user') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',i||'',n,agent.id,null,null); } catch {} })
+          .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',i||'',n,agent.id,null,null); } catch {} })
           .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
           .onDone(() => _res());
       });
@@ -830,6 +834,40 @@ app.post('/api/internal/ask-user', express.json(), (req, res) => {
   }).catch((err) => {
     res.status(500).json({ error: err.message || 'Internal error' });
   });
+});
+
+// ─── Notify User endpoint (non-blocking, fire-and-forget) ────────────────────
+app.post('/api/internal/notify', express.json(), (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  if (authHeader !== `Bearer ${NOTIFY_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { sessionId, level, title, detail, progress } = req.body;
+  if (!sessionId || !title) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const payload = JSON.stringify({
+    type: 'notification',
+    level: level || 'info',
+    title: String(title).substring(0, 120),
+    detail: detail ? String(detail).substring(0, 500) : '',
+    progress: progress || null,
+    tabId: sessionId,
+    timestamp: Date.now(),
+  });
+
+  // Route via active task proxy (survives WS reconnects)
+  const activeTask = activeTasks.get(sessionId);
+  if (activeTask?.proxy) {
+    try { activeTask.proxy.send(payload); } catch {}
+  }
+
+  // Also broadcast to session watchers (Kanban task viewers)
+  broadcastToSession(sessionId, JSON.parse(payload));
+
+  res.json({ ok: true });
 });
 
 app.use(auth.authMiddleware);
@@ -1666,6 +1704,9 @@ wss.on('connection', (ws) => {
       // Ask User tool instruction
       systemPrompt += `\n\nYou have access to an "ask_user" tool (via MCP server "_ccs_ask_user"). When you need user input BEFORE proceeding — such as choosing between approaches, confirming an action, or clarifying requirements — you MUST call ask_user instead of writing questions as text. The ask_user tool pauses execution and waits for the user's response. Do NOT ask questions in your text output and then continue working — always use the ask_user tool for questions.`;
 
+      // Notify User tool instruction
+      systemPrompt += `\n\nYou have access to a "notify_user" tool (via MCP server "_ccs_notify"). Use it to send non-blocking progress updates to the user. Call notify_user for milestones ("Completed database migration"), warnings ("Rate limit approaching"), errors ("Test suite has 3 failures"), or progress tracking (with current/total steps). Unlike ask_user, notify_user does NOT pause execution — you continue working immediately. Do NOT overuse it: send notifications only for meaningful status changes, not for every minor step.`;
+
       // Always end with a clear status line so the user knows what's happening
       systemPrompt += `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:\n- "✅ Done — [brief summary of what was completed]." when the task is fully finished.\n- "⏳ In progress — [what's happening now and what comes next]." when you're still working and will continue.\n- "❓ Waiting for input — [what you need from the user]." when you need the user to answer or decide something.\n- "⚠️ Blocked — [what went wrong and what's needed to proceed]." when something prevents you from continuing.\nThis status line must always be the very last thing in your response. Never skip it.`;
 
@@ -1688,6 +1729,16 @@ wss.on('connection', (ws) => {
           ASK_USER_SERVER_URL: `http://127.0.0.1:${PORT}`,
           ASK_USER_SESSION_ID: localSessionId,
           ASK_USER_SECRET: ASK_USER_SECRET,
+        },
+      };
+
+      mcpServers['_ccs_notify'] = {
+        command: 'node',
+        args: [path.join(__dirname, 'mcp-notify.js')],
+        env: {
+          NOTIFY_SERVER_URL: `http://127.0.0.1:${PORT}`,
+          NOTIFY_SESSION_ID: localSessionId,
+          NOTIFY_SECRET: NOTIFY_SECRET,
         },
       };
 
