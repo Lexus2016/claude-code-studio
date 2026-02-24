@@ -584,6 +584,30 @@ body::after {
 @keyframes msf-dot-bounce  { 0%,80%,100% { transform: translateY(0); opacity: .5; } 40% { transform: translateY(-3px); opacity: 1; } }
 @keyframes msf-bar-bounce  { 0%,100% { transform: scaleY(1); opacity: .6; } 50% { transform: scaleY(1.5); opacity: 1; } }
 
+/* ─── Tool Activity Bar ─── */
+.tool-activity {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 5px 14px 3px; margin-top: 2px;
+  border-top: 1px solid rgba(139,148,158,.08);
+  animation: status-appear .25s var(--ease-out);
+}
+.tool-activity .ta-icon {
+  font-size: 11px; opacity: .5; flex-shrink: 0;
+}
+.tool-activity .ta-summary {
+  font-size: 11px; font-weight: 600; color: var(--t2); opacity: .55;
+  white-space: nowrap;
+}
+.tool-activity .ta-pills {
+  display: flex; flex-wrap: wrap; gap: 4px;
+}
+.tool-activity .ta-pill {
+  font-size: 10px; font-weight: 500; letter-spacing: .02em;
+  padding: 1px 6px; border-radius: 3px;
+  background: rgba(139,148,158,.08); color: var(--t2); opacity: .6;
+  white-space: nowrap;
+}
+
 /* Legacy: keep spin for any old refs that may exist */
 @keyframes spin { to { transform: rotate(360deg); } }
 /* ─── Streaming cursor ─── */
@@ -1608,6 +1632,7 @@ body::after {
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let ws = null, isGen = false, curEl = null, curTxt = '', currentSessionId = null, generatingTabId = null;
+let curToolCounts = {}; // Track tool usage per streaming message
 let replyTo = null; // { id, role, content }
 let openTabs = [], activeTabId = null;
 const tabState = {}; // per-tab: { curEl, curTxt, currentSessionId, generating, draft, agentStatus }
@@ -1755,6 +1780,7 @@ const TRANSLATIONS = {
     'mcp.cfg.env_json_err':'Невірний формат ENV JSON',
     'agent.planning':'🧠 Планування...','agent.fallback_single':'⚠️ Перехід до одиночного режиму','agent.done':'✅ Всі агенти завершили','agent.circular_deps':'⚠️ Кругова залежність між агентами',
     'msf.working':'Працює','msf.done':'Готово','msf.error':'Помилка','msf.waiting':'Очікування',
+    'ta.calls':'операцій',
     'msf.team':'Команда агентів',
     'hdr.toggle':'Згорнути/розгорнути панель','msg.show_more':'Показати більше','msg.show_less':'Показати менше',
   },
@@ -1862,6 +1888,7 @@ const TRANSLATIONS = {
     'mcp.cfg.env_json_err':'Invalid ENV JSON format',
     'agent.planning':'🧠 Planning...','agent.fallback_single':'⚠️ Falling back to single mode','agent.done':'✅ All agents done','agent.circular_deps':'⚠️ Circular dependency between agents',
     'msf.working':'Working','msf.done':'Done','msf.error':'Error','msf.waiting':'Waiting',
+    'ta.calls':'calls',
     'msf.team':'Agent Team',
     'hdr.toggle':'Collapse/expand header','msg.show_more':'Show more','msg.show_less':'Show less',
   },
@@ -1969,6 +1996,7 @@ const TRANSLATIONS = {
     'mcp.cfg.env_json_err':'Неверный формат ENV JSON',
     'agent.planning':'🧠 Планирование...','agent.fallback_single':'⚠️ Переход в одиночный режим','agent.done':'✅ Все агенты завершили','agent.circular_deps':'⚠️ Циклическая зависимость между агентами',
     'msf.working':'Работает','msf.done':'Готово','msf.error':'Ошибка','msf.waiting':'Ожидание',
+    'ta.calls':'операций',
     'msf.team':'Команда агентов',
     'hdr.toggle':'Свернуть/развернуть панель','msg.show_more':'Показать больше','msg.show_less':'Показать меньше',
   }
@@ -2451,6 +2479,10 @@ function handleWsMsg(d) {
 
     case 'tool':
       if (!curEl && isVisible) showStatus('⚙ ' + (d.tool || 'tool'));
+      // Track tool usage for activity summary on done
+      { const tn = d.tool || 'tool'; curToolCounts[tn] = (curToolCounts[tn] || 0) + 1; }
+      // Also track for background tabs
+      { const ts = getTS(tabId); if (!ts._toolCounts) ts._toolCounts = {}; const tn = d.tool || 'tool'; ts._toolCounts[tn] = (ts._toolCounts[tn] || 0) + 1; }
       break;
 
     case 'thinking':
@@ -2492,8 +2524,13 @@ function handleWsMsg(d) {
       getTS(tabId).agentStatus = ''; // task finished — clear saved status
       if (isVisible) {
         if (curEl && curTxt) { curEl.querySelector('.msg').innerHTML = renderMd(curTxt); applyMsgClamp(curEl); }
+        // Attach tool activity summary if tools were used
+        if (curEl && Object.keys(curToolCounts).length > 0) {
+          _renderToolActivity(curEl, curToolCounts);
+        }
         markDone(curEl);
         curEl = null; curTxt = '';
+        curToolCounts = {}; // reset tool tracking
         // Clear retry badge on successful completion
         { const rb = msgsEl.querySelector('.retry-badge'); if (rb) rb.remove(); }
         if (d.taskId) {
@@ -2511,7 +2548,7 @@ function handleWsMsg(d) {
         }
       }
       // For background tabs: clear saved streaming text (message is now persisted to DB)
-      if (!isVisible) { const ts = getTS(tabId); if (ts) ts.curTxt = ''; }
+      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._toolCounts = {}; } }
       if (found?.tab) { found.tab.generating = false; found.tab.done = true; }
       if (isCurrent) { renderTabs(); if (tabId === activeTabId && !d.taskId) generatingTabId = null; }
       else renderProjects(); // background: remove busy dot from project
@@ -2532,6 +2569,10 @@ function handleWsMsg(d) {
       if (isVisible) {
         rmStatus();
         sbHide();
+        // Attach tool activity even on error — shows what was executed before failure
+        if (curEl && Object.keys(curToolCounts).length > 0) {
+          _renderToolActivity(curEl, curToolCounts);
+        }
         if (curEl) {
           _msfRemove(curEl);
           const ef = _msfCreate('error', t('msf.error'));
@@ -2542,13 +2583,14 @@ function handleWsMsg(d) {
           const em = addMsg('assistant'); em.querySelector('.msg').innerHTML = `<span style="color:var(--red)">${escH(d.error)}</span>`;
           const ef = _msfCreate('error', t('msf.error')); em.appendChild(ef);
         }
+        curToolCounts = {};
         isGen = false;
         setSendStop(false);
         setStatus(t('status.error'), 'err');
         toast(d.error, true, 5000);
       }
       // For background tabs: clear saved streaming text on error
-      if (!isVisible) { const ts = getTS(tabId); if (ts) ts.curTxt = ''; }
+      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._toolCounts = {}; } }
       if (found?.tab) { found.tab.generating = false; }
       if (isCurrent) { renderTabs(); if (tabId === activeTabId) generatingTabId = null; }
       else renderProjects();
@@ -3002,6 +3044,54 @@ function addSpinner(el) {
   const f = _msfCreate('streaming', t('msf.working'));
   el.appendChild(f);
 }
+// Map raw Claude tool names to user-friendly short labels
+const _toolLabels = {
+  Bash:'Bash', View:'Read', Read:'Read', Glob:'Search', Grep:'Search',
+  GlobTool:'Search', GrepTool:'Search', ListDir:'Browse',
+  SearchReplace:'Edit', Edit:'Edit', Write:'Write',
+  ReadNotebook:'Read', NotebookEditCell:'Edit',
+  Task:'Task', TodoWrite:'Todo', WebFetch:'Web', WebSearch:'Web',
+  ToolSearch:'Tools', Skill:'Skill', AskUserQuestion:'Ask',
+};
+function _toolLabel(name) {
+  if (_toolLabels[name]) return _toolLabels[name];
+  // MCP tools: extract readable suffix (e.g. "mcp__playwright__browser_click" → "browser_click")
+  if (name.startsWith('mcp_')) {
+    const parts = name.split('__');
+    return parts[parts.length - 1] || name;
+  }
+  return name;
+}
+
+// Merge tool counts, collapsing labels that map to the same display name
+function _mergeToolCounts(raw) {
+  const merged = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const label = _toolLabel(k);
+    merged[label] = (merged[label] || 0) + v;
+  }
+  return merged;
+}
+
+// Render tool activity bar inside a message wrapper element
+function _renderToolActivity(mw, rawCounts) {
+  if (!mw || !rawCounts || !Object.keys(rawCounts).length) return;
+  // Don't duplicate
+  if (mw.querySelector('.tool-activity')) return;
+  const merged = _mergeToolCounts(rawCounts);
+  const total = Object.values(merged).reduce((a, b) => a + b, 0);
+  const pills = Object.entries(merged).map(([name, cnt]) =>
+    `<span class="ta-pill">${escH(name)}${cnt > 1 ? ' ×' + cnt : ''}</span>`
+  ).join('');
+  const bar = document.createElement('div');
+  bar.className = 'tool-activity';
+  bar.innerHTML = `<span class="ta-icon">⚙</span><span class="ta-summary">${total} ${t('ta.calls')}</span><span class="ta-pills">${pills}</span>`;
+  // Insert before the footer (if present), otherwise append
+  const footer = mw.querySelector('.msg-status-footer');
+  if (footer) mw.insertBefore(bar, footer);
+  else mw.appendChild(bar);
+}
+
 function markDone(el) {
   rmStatus();
   sbHide();
@@ -3486,7 +3576,7 @@ function switchTab(id) {
     getTS(activeTabId).curTxt = curTxt;
   }
   // Reset streaming state — loadSess will clear msgsEl, making curEl stale
-  curEl = null; curTxt = '';
+  curEl = null; curTxt = ''; curToolCounts = {};
   activeTabId = id;
   const tab = openTabs.find(t => t.id === id);
   if (tab?.isNew) {
@@ -4156,6 +4246,10 @@ function _renderMsgAt(idx, prepend = false) {
     w.querySelector('.msg').textContent = m.content;
     if (hasReply) { const a = document.createElement('div'); a.className = 'msg-ack'; a.textContent = '✓'; w.appendChild(a); }
   }
+  // Render tool activity summary for historical assistant messages
+  if (m.role === 'assistant' && m._tools) {
+    _renderToolActivity(w, m._tools);
+  }
   if (m.agent_id) addAgentBadge(w, m.agent_id);
   if (prepend) {
     const firstMsg = msgsEl.querySelector('.mw');
@@ -4213,7 +4307,7 @@ async function loadSess(id) {
     if (!r.ok) { closeTab(id); toast(t('toast.sess_not_found'), true); return; }
     const d = await r.json();
     if (id !== activeTabId) return; // tab was switched while parsing — discard stale load
-    curEl = null; curTxt = ''; // Reset streaming state before clearing DOM — prevents stale references
+    curEl = null; curTxt = ''; curToolCounts = {}; // Reset streaming state before clearing DOM — prevents stale references
     msgsEl.removeAttribute('aria-live'); // Suppress screen reader flood during batch history load
     msgsEl.innerHTML = '';
     currentSessionId = id;
@@ -4248,7 +4342,42 @@ async function loadSess(id) {
     try { activeSkills = new Set(JSON.parse(d.active_skills || '[]')); } catch { activeSkills = new Set(); }
     renderMcp(); renderSkills();
 
-    _allMsgs = (d.messages || []).filter(m => m.type !== 'tool');
+    // Build display messages, attaching tool activity counts to each assistant text message.
+    // Multi-agent: tools grouped by agent_id (tools may arrive before/after text in any order).
+    // Single mode: forward-scan for consecutive tool rows without agent_id.
+    {
+      const raw = d.messages || [];
+      _allMsgs = [];
+      // Pre-compute tool counts per agent_id for multi-agent sessions
+      const _agentTools = {};
+      for (const m of raw) {
+        if (m.type === 'tool' && m.agent_id) {
+          if (!_agentTools[m.agent_id]) _agentTools[m.agent_id] = {};
+          const tn = m.tool_name || 'tool';
+          _agentTools[m.agent_id][tn] = (_agentTools[m.agent_id][tn] || 0) + 1;
+        }
+      }
+      for (let i = 0; i < raw.length; i++) {
+        const m = raw[i];
+        if (m.type === 'tool') continue;
+        if (m.role === 'assistant' && m.type === 'text') {
+          if (m.agent_id && _agentTools[m.agent_id]) {
+            // Multi-agent: all tools for this agent (regardless of DB order)
+            m._tools = _agentTools[m.agent_id];
+          } else if (!m.agent_id) {
+            // Single mode: look forward for consecutive tool rows (skip any with agent_id)
+            const tc = {};
+            for (let j = i + 1; j < raw.length; j++) {
+              if (raw[j].type !== 'tool' || raw[j].agent_id) break;
+              const tn = raw[j].tool_name || 'tool';
+              tc[tn] = (tc[tn] || 0) + 1;
+            }
+            if (Object.keys(tc).length) m._tools = tc;
+          }
+        }
+        _allMsgs.push(m);
+      }
+    }
     _shownFrom = Math.max(0, _allMsgs.length - MSG_PAGE);
 
     for (let i = _shownFrom; i < _allMsgs.length; i++) {

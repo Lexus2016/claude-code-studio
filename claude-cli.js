@@ -53,9 +53,12 @@ const MAX_LINE_BUFFER = 10 * 1024 * 1024; // 10 MB
 
 // CLI uses short aliases — claude binary resolves them internally
 const MODEL_MAP = {
-  'opus':   'claude-opus-4-6',
-  'sonnet': 'claude-sonnet-4-6',
-  'haiku':  'claude-haiku-4-5',
+  // 'opus':   'claude-opus-4-6',
+  // 'sonnet': 'claude-sonnet-4-6',
+  // 'haiku':  'claude-haiku-4-5',
+  'opus':   'opus',
+  'sonnet': 'sonnet',
+  'haiku':  'haiku',
 };
 
 class ClaudeCLI {

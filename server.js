@@ -164,6 +164,63 @@ const CLAUDE_MAX_LIMITS = {
 };
 
 // ============================================
+// DATABASE MAINTENANCE SETTINGS
+// ============================================
+const SESSION_TTL_DAYS      = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);      // delete sessions older than N days
+const CLEANUP_INTERVAL_HOURS = parseInt(process.env.CLEANUP_INTERVAL_HOURS || '24', 10); // run cleanup every N hours
+
+// ============================================
+// DATABASE MAINTENANCE FUNCTIONS
+// ============================================
+
+/**
+ * Delete sessions older than SESSION_TTL_DAYS.
+ * Messages are auto-deleted via ON DELETE CASCADE.
+ */
+function cleanOldSessions() {
+  try {
+    const cutoff = `datetime('now', '-${SESSION_TTL_DAYS} days')`;
+    const result = db.prepare(`DELETE FROM sessions WHERE updated_at < ${cutoff}`).run();
+    if (result.changes > 0) {
+      log.info(`[cleanup] Deleted ${result.changes} sessions older than ${SESSION_TTL_DAYS} days`);
+    }
+    return result.changes;
+  } catch (err) {
+    log.error('[cleanup] Failed to clean old sessions:', err.message);
+    return 0;
+  }
+}
+
+/**
+ * Run WAL checkpoint to merge WAL file into main database.
+ * Prevents unbounded WAL growth and keeps DB file compact.
+ */
+function checkpointDatabase() {
+  try {
+    // TRUNCATE mode: blocks writers briefly but fully resets WAL file
+    const result = db.pragma('wal_checkpoint(TRUNCATE)');
+    if (result[0]?.checkpointed > 0) {
+      log.info(`[cleanup] WAL checkpoint: moved ${result[0].checkpointed} pages to main DB`);
+    }
+    return result;
+  } catch (err) {
+    log.error('[cleanup] WAL checkpoint failed:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Full cleanup routine: old sessions + checkpoint.
+ */
+function runDatabaseMaintenance() {
+  const deleted = cleanOldSessions();
+  if (deleted > 0) {
+    // Only checkpoint if we actually deleted something
+    checkpointDatabase();
+  }
+}
+
+// ============================================
 // DATABASE
 // ============================================
 const db = new Database(DB_PATH);
@@ -1310,6 +1367,10 @@ function cleanOldUploads() {
 cleanOldUploads();                             // run once on startup
 setInterval(cleanOldUploads, 30 * 60 * 1000); // then every 30 min
 
+// Database maintenance: sessions cleanup + WAL checkpoint
+runDatabaseMaintenance();                                            // run once on startup
+setInterval(runDatabaseMaintenance, CLEANUP_INTERVAL_HOURS * 60 * 60 * 1000); // every N hours
+
 app.post('/api/upload', fileUpload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
   try {
@@ -1751,7 +1812,21 @@ wss.on('connection', (ws) => {
       chatBuffers.set(localSessionId, ''); // reset buffer for this session
       activeTasks.set(localSessionId, { proxy, abortController, cleanupTimer: null });
 
-      const params = { prompt:engineMessage, userContent, systemPrompt, mcpServers, model, maxTurns, ws: proxy, sessionId:localSessionId, abortController, claudeSessionId:localClaudeId, mode, workdir: workdir || WORKDIR, tabId: effectiveTabId };
+      const params = {
+        prompt: engineMessage,
+        userContent,
+        systemPrompt,
+        mcpServers,
+        model,
+        maxTurns,
+        ws: proxy,
+        sessionId: localSessionId,
+        abortController,
+        claudeSessionId: localClaudeId,
+        mode,
+        workdir: workdir || WORKDIR,
+        tabId: effectiveTabId,
+      };
 
       let newCid;
       if (agentMode==='multi') {
