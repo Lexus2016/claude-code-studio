@@ -383,14 +383,16 @@ async function startTask(task) {
       } catch (e) { console.error('[taskWorker] attachments write error:', e); }
     }
     const prompt = parts.join('\n\n');
-    // Check if this is a restart (user message already exists in session)
-    const existingUserMsg = db.prepare(`SELECT id FROM messages WHERE session_id=? AND role='user' LIMIT 1`).get(sessionId);
-    const isRetry = !!existingUserMsg;
+    // Check if this is a restart: only skip saving if the LAST user message
+    // has the exact same prompt (crash recovery). Previously checked for ANY
+    // user message which broke when a new task reused an existing session.
+    const lastUserMsg = db.prepare(`SELECT id, content FROM messages WHERE session_id=? AND role='user' ORDER BY id DESC LIMIT 1`).get(sessionId);
+    const isRetry = lastUserMsg && lastUserMsg.content === prompt;
     if (!isRetry) {
-      // First run — save user message normally
+      // New task or different prompt — save user message
       stmts.addMsg.run(sessionId, 'user', 'text', prompt, null, null, null, null);
     } else {
-      // Restart after crash — increment retry counter, don't duplicate user message
+      // Restart after crash with same prompt — increment retry counter, don't duplicate
       stmts.incrementRetry.run(sessionId);
     }
     // Resume existing claude session if any
