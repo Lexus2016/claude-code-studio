@@ -1695,6 +1695,10 @@ wss.on('connection', (ws) => {
     if (tabId) ws._tabBusy[tabId] = true;
     else ws._busy = true;
 
+    // Track OUR abort controller so finally can detect if a stop+new processChat
+    // happened while we were running (stale finally must not reset _tabBusy).
+    let myAbortController = null;
+
     // Pre-declared so catch/finally always have scope for busy-state cleanup.
     // effectiveTabId starts as tabId: if an error is thrown before the real
     // effectiveTabId (= localSessionId) is computed, finally still resets the
@@ -1758,6 +1762,7 @@ wss.on('connection', (ws) => {
       }
       const config = loadMergedConfig();
       const abortController = new AbortController();
+      myAbortController = abortController;
       if (effectiveTabId) ws._tabAbort[effectiveTabId] = abortController;
       else ws._abort = abortController;
 
@@ -1854,7 +1859,13 @@ wss.on('connection', (ws) => {
         }
       }
       try { stmts.clearLastUserMsg.run(localSessionId); } catch {}
-      if (effectiveTabId) {
+      // Detect stale finally: if a stop happened, ws._tabAbort was deleted or replaced
+      // by a new processChat. In that case, another processChat now owns this tab — our
+      // cleanup would stomp on its _tabBusy flag. Skip cleanup and let the new owner handle it.
+      const isStale = myAbortController !== null && (effectiveTabId
+        ? ws._tabAbort?.[effectiveTabId] !== myAbortController
+        : ws._abort !== myAbortController);
+      if (!isStale && effectiveTabId) {
         ws._tabBusy[effectiveTabId] = false;
         delete ws._tabAbort[effectiveTabId];
         const tabQ = ws._tabQueue[effectiveTabId] || [];
@@ -1866,7 +1877,7 @@ wss.on('connection', (ws) => {
           delete ws._tabQueue[effectiveTabId];
           ws.send(JSON.stringify({ type: 'queue_update', tabId: effectiveTabId, pending: 0, items: [] }));
         }
-      } else {
+      } else if (!isStale) {
         ws._busy = false;
         ws._abort = null;
         if (ws._queue.length > 0) {
@@ -1919,7 +1930,11 @@ wss.on('connection', (ws) => {
     if (msg.type==='stop') {
       const tabId = msg.tabId;
       if (tabId && ws._tabAbort && ws._tabAbort[tabId]) {
-        // Stop specific tab
+        // Stop specific tab — immediately mark as not busy so the next chat
+        // message is processed directly instead of being queued (race condition fix).
+        // The stale finally guard in processChat prevents the old finally from
+        // resetting _tabBusy after a new processChat has already started.
+        ws._tabBusy[tabId] = false;
         if (ws._tabQueue) ws._tabQueue[tabId] = [];
         ws._tabAbort[tabId].abort();
         delete ws._tabAbort[tabId];
