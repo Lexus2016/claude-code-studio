@@ -1955,6 +1955,47 @@ wss.on('connection', (ws) => {
       }
     }
 
+    // ─── Queue management: remove / edit ────────────────────────────────────
+    if (msg.type === 'queue_remove') {
+      const { queueId, tabId: rmTabId } = msg;
+      if (queueId) {
+        // Remove from per-tab queue
+        for (const [tid, queue] of Object.entries(ws._tabQueue || {})) {
+          const idx = queue.findIndex(m => m.queueId === queueId);
+          if (idx !== -1) {
+            queue.splice(idx, 1);
+            ws.send(JSON.stringify({ type: 'queue_removed', queueId, tabId: tid }));
+            ws.send(queuePayload(tid));
+            break;
+          }
+        }
+        // Also check legacy queue
+        const li = ws._queue.findIndex(m => m.queueId === queueId);
+        if (li !== -1) {
+          ws._queue.splice(li, 1);
+          ws.send(JSON.stringify({ type: 'queue_removed', queueId }));
+          ws.send(queuePayload(null));
+        }
+      }
+      return;
+    }
+
+    if (msg.type === 'queue_edit') {
+      const { queueId, text } = msg;
+      if (queueId && text != null) {
+        // Update in per-tab queues
+        for (const queue of Object.values(ws._tabQueue || {})) {
+          const item = queue.find(m => m.queueId === queueId);
+          if (item) { item.text = text; break; }
+        }
+        // Also check legacy queue
+        const legacyItem = ws._queue.find(m => m.queueId === queueId);
+        if (legacyItem) legacyItem.text = text;
+        ws.send(JSON.stringify({ type: 'queue_edited', queueId }));
+      }
+      return;
+    }
+
     // ─── Ask User responses ──────────────────────────────────────────────────
     if (msg.type === 'ask_user_response') {
       const entry = pendingAskUser.get(msg.requestId);
