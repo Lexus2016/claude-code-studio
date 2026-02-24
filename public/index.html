@@ -611,6 +611,74 @@ body::after {
   white-space: nowrap;
 }
 
+/* ─── Live Tool Activity (during & after generation) ─── */
+.tool-live {
+  margin: 4px 14px 2px; padding: 0;
+  border-radius: 6px; background: rgba(139,148,158,.03);
+  border: 1px solid rgba(139,148,158,.07);
+  animation: status-appear .2s var(--ease-out);
+  overflow: hidden;
+}
+.tool-live-header {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; color: var(--t2); opacity: .55;
+  cursor: pointer; user-select: none;
+  padding: 5px 10px;
+  transition: background .15s;
+}
+.tool-live-header:hover { background: rgba(139,148,158,.05); }
+.tool-live-header .tl-arrow {
+  font-size: 8px; transition: transform .15s; display: inline-block; flex-shrink: 0;
+}
+.tool-live-header .tl-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  animation: tl-pulse 1.2s ease-in-out infinite; flex-shrink: 0;
+}
+@keyframes tl-pulse { 0%,100% { opacity: .3; } 50% { opacity: 1; } }
+.tool-live.done .tl-dot { display: none; }
+.tool-live.collapsed .tl-arrow { transform: rotate(-90deg); }
+.tool-live.collapsed .tool-live-body { display: none; }
+.tool-live-body {
+  max-height: 220px; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: rgba(139,148,158,.12) transparent;
+  padding: 0 10px 6px;
+}
+.tool-live-list { display: flex; flex-direction: column; gap: 0; }
+.tool-live-item {
+  border-bottom: 1px solid rgba(139,148,158,.04);
+  padding: 3px 0;
+}
+.tool-live-item:last-child { border-bottom: none; }
+.tl-row {
+  display: flex; align-items: baseline; gap: 6px;
+  cursor: pointer; padding: 1px 2px; border-radius: 3px;
+  transition: background .1s;
+}
+.tl-row:hover { background: rgba(139,148,158,.05); }
+.tl-row .tl-name {
+  flex-shrink: 0; font-weight: 600; color: var(--accent); opacity: .6;
+  font-size: 10.5px; min-width: 42px;
+}
+.tl-row .tl-brief {
+  color: var(--t2); opacity: .45;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 10px; flex: 1; min-width: 0;
+}
+.tl-row .tl-chevron {
+  font-size: 8px; opacity: .3; flex-shrink: 0; transition: transform .12s;
+}
+.tl-detail {
+  display: none; margin: 2px 0 2px 48px; padding: 4px 8px;
+  background: rgba(0,0,0,.15); border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 10px; line-height: 1.45; color: var(--t2); opacity: .55;
+  white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: rgba(139,148,158,.12) transparent;
+}
+.tool-live-item.expanded .tl-detail { display: block; }
+.tool-live-item.expanded .tl-chevron { transform: rotate(90deg); opacity: .5; }
+
 /* Legacy: keep spin for any old refs that may exist */
 @keyframes spin { to { transform: rotate(360deg); } }
 /* ─── Streaming cursor ─── */
@@ -1636,6 +1704,7 @@ body::after {
 // ─── State ───────────────────────────────────────────────────────────────────
 let ws = null, isGen = false, curEl = null, curTxt = '', currentSessionId = null, generatingTabId = null;
 let curToolCounts = {}; // Track tool usage per streaming message
+let curToolLog = []; // Track tool calls with details for live display
 let replyTo = null; // { id, role, content }
 let openTabs = [], activeTabId = null;
 const tabState = {}; // per-tab: { curEl, curTxt, currentSessionId, generating, draft, agentStatus }
@@ -1783,7 +1852,7 @@ const TRANSLATIONS = {
     'mcp.cfg.env_json_err':'Невірний формат ENV JSON',
     'agent.planning':'🧠 Планування...','agent.fallback_single':'⚠️ Перехід до одиночного режиму','agent.done':'✅ Всі агенти завершили','agent.circular_deps':'⚠️ Кругова залежність між агентами',
     'msf.working':'Працює','msf.done':'Готово','msf.error':'Помилка','msf.waiting':'Очікування',
-    'ta.calls':'операцій',
+    'ta.calls':'операцій','ta.activity':'Активність',
     'msf.team':'Команда агентів',
     'hdr.toggle':'Згорнути/розгорнути панель','msg.show_more':'Показати більше','msg.show_less':'Показати менше',
   },
@@ -1891,7 +1960,7 @@ const TRANSLATIONS = {
     'mcp.cfg.env_json_err':'Invalid ENV JSON format',
     'agent.planning':'🧠 Planning...','agent.fallback_single':'⚠️ Falling back to single mode','agent.done':'✅ All agents done','agent.circular_deps':'⚠️ Circular dependency between agents',
     'msf.working':'Working','msf.done':'Done','msf.error':'Error','msf.waiting':'Waiting',
-    'ta.calls':'calls',
+    'ta.calls':'calls','ta.activity':'Activity',
     'msf.team':'Agent Team',
     'hdr.toggle':'Collapse/expand header','msg.show_more':'Show more','msg.show_less':'Show less',
   },
@@ -1999,7 +2068,7 @@ const TRANSLATIONS = {
     'mcp.cfg.env_json_err':'Неверный формат ENV JSON',
     'agent.planning':'🧠 Планирование...','agent.fallback_single':'⚠️ Переход в одиночный режим','agent.done':'✅ Все агенты завершили','agent.circular_deps':'⚠️ Циклическая зависимость между агентами',
     'msf.working':'Работает','msf.done':'Готово','msf.error':'Ошибка','msf.waiting':'Ожидание',
-    'ta.calls':'операций',
+    'ta.calls':'операций','ta.activity':'Активность',
     'msf.team':'Команда агентов',
     'hdr.toggle':'Свернуть/развернуть панель','msg.show_more':'Показать больше','msg.show_less':'Показать меньше',
   }
@@ -2490,11 +2559,21 @@ function handleWsMsg(d) {
       break;
 
     case 'tool':
-      if (!curEl && isVisible) showStatus('⚙ ' + (d.tool || 'tool'));
       // Track tool usage for activity summary on done
       { const tn = d.tool || 'tool'; curToolCounts[tn] = (curToolCounts[tn] || 0) + 1; }
       // Also track for background tabs
       { const ts = getTS(tabId); if (!ts._toolCounts) ts._toolCounts = {}; const tn = d.tool || 'tool'; ts._toolCounts[tn] = (ts._toolCounts[tn] || 0) + 1; }
+      // Live tool activity panel — show what Claude Code is doing
+      if (isVisible) {
+        if (!curEl) { rmW(); rmStatus(); curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
+        curToolLog.push({ tool: d.tool || 'tool', brief: _toolInputBrief(d.tool, d.input), input: d.input || '' });
+        _renderToolLive(curEl, curToolLog);
+        scrollBottom();
+      } else {
+        // Background tab — accumulate tool log for restoration on tab switch
+        const ts = getTS(tabId); if (!ts._toolLog) ts._toolLog = [];
+        ts._toolLog.push({ tool: d.tool || 'tool', brief: _toolInputBrief(d.tool, d.input), input: d.input || '' });
+      }
       break;
 
     case 'thinking':
@@ -2536,13 +2615,15 @@ function handleWsMsg(d) {
       getTS(tabId).agentStatus = ''; // task finished — clear saved status
       if (isVisible) {
         if (curEl && curTxt) { curEl.querySelector('.msg').innerHTML = renderMd(curTxt); applyMsgClamp(curEl); }
-        // Attach tool activity summary if tools were used
-        if (curEl && Object.keys(curToolCounts).length > 0) {
+        // Finalize tool activity: if live panel exists, keep it (collapsed + done); otherwise show pills summary
+        if (curEl && curEl.querySelector('.tool-live')) {
+          _finalizeToolLive(curEl);
+        } else if (curEl && Object.keys(curToolCounts).length > 0) {
           _renderToolActivity(curEl, curToolCounts);
         }
         markDone(curEl);
         curEl = null; curTxt = '';
-        curToolCounts = {}; // reset tool tracking
+        curToolCounts = {}; curToolLog = []; // reset tool tracking
         // Clear retry badge on successful completion
         { const rb = msgsEl.querySelector('.retry-badge'); if (rb) rb.remove(); }
         if (d.taskId) {
@@ -2560,7 +2641,7 @@ function handleWsMsg(d) {
         }
       }
       // For background tabs: clear saved streaming text (message is now persisted to DB)
-      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._toolCounts = {}; } }
+      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._toolCounts = {}; ts._toolLog = []; } }
       if (found?.tab) { found.tab.generating = false; found.tab.done = true; }
       if (isCurrent) { renderTabs(); if (tabId === activeTabId && !d.taskId) generatingTabId = null; }
       else renderProjects(); // background: remove busy dot from project
@@ -2581,8 +2662,10 @@ function handleWsMsg(d) {
       if (isVisible) {
         rmStatus();
         sbHide();
-        // Attach tool activity even on error — shows what was executed before failure
-        if (curEl && Object.keys(curToolCounts).length > 0) {
+        // Finalize tool activity on error — keep live panel if exists, otherwise show pills
+        if (curEl && curEl.querySelector('.tool-live')) {
+          _finalizeToolLive(curEl);
+        } else if (curEl && Object.keys(curToolCounts).length > 0) {
           _renderToolActivity(curEl, curToolCounts);
         }
         if (curEl) {
@@ -2595,14 +2678,14 @@ function handleWsMsg(d) {
           const em = addMsg('assistant'); em.querySelector('.msg').innerHTML = `<span style="color:var(--red)">${escH(d.error)}</span>`;
           const ef = _msfCreate('error', t('msf.error')); em.appendChild(ef);
         }
-        curToolCounts = {};
+        curToolCounts = {}; curToolLog = [];
         isGen = false;
         setSendStop(false);
         setStatus(t('status.error'), 'err');
         toast(d.error, true, 5000);
       }
       // For background tabs: clear saved streaming text on error
-      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._toolCounts = {}; } }
+      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._toolCounts = {}; ts._toolLog = []; } }
       if (found?.tab) { found.tab.generating = false; }
       if (isCurrent) { renderTabs(); if (tabId === activeTabId) generatingTabId = null; }
       else renderProjects();
@@ -3083,6 +3166,124 @@ function _mergeToolCounts(raw) {
     merged[label] = (merged[label] || 0) + v;
   }
   return merged;
+}
+
+// ─── Live Tool Activity (during generation) ─────────────────────────────────
+
+// Shorten a file path to last 2-3 segments for compact display
+function _shortenPath(p) {
+  if (!p || p.length < 50) return p;
+  const parts = p.split('/').filter(Boolean);
+  if (parts.length > 3) return '…/' + parts.slice(-3).join('/');
+  return p;
+}
+
+// Extract readable summary from tool input JSON
+function _toolInputBrief(toolName, inputStr) {
+  if (!inputStr) return '';
+  try {
+    const inp = JSON.parse(inputStr);
+    // File operations
+    if (inp.file_path) return _shortenPath(inp.file_path);
+    if (inp.command) { const c = inp.command; return c.length > 120 ? c.substring(0, 120) + '…' : c; }
+    if (inp.pattern) {
+      let s = inp.pattern;
+      if (inp.path) s += '  in ' + _shortenPath(inp.path);
+      if (inp.glob) s += '  ' + inp.glob;
+      return s.length > 120 ? s.substring(0, 120) + '…' : s;
+    }
+    if (inp.path) return _shortenPath(inp.path);
+    if (inp.query) return inp.query.length > 100 ? inp.query.substring(0, 100) + '…' : inp.query;
+    if (inp.url) return inp.url.length > 100 ? inp.url.substring(0, 100) + '…' : inp.url;
+    if (inp.description) return inp.description.length > 100 ? inp.description.substring(0, 100) + '…' : inp.description;
+    if (inp.prompt) return inp.prompt.length > 80 ? inp.prompt.substring(0, 80) + '…' : inp.prompt;
+    // Generic: first non-empty short string value
+    for (const v of Object.values(inp)) {
+      if (typeof v === 'string' && v.length > 0 && v.length < 200) {
+        return v.length > 100 ? v.substring(0, 100) + '…' : v;
+      }
+    }
+  } catch {
+    // Not valid JSON — use raw string
+    if (inputStr.length > 100) return inputStr.substring(0, 100) + '…';
+    return inputStr;
+  }
+  return '';
+}
+
+// Render/update live tool activity panel inside message wrapper
+// Panel is collapsed by default — user clicks to expand and see details
+function _renderToolLive(mw, log) {
+  if (!mw || !log.length) return;
+  let panel = mw.querySelector('.tool-live');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.className = 'tool-live collapsed'; // collapsed by default
+    const header = document.createElement('div');
+    header.className = 'tool-live-header';
+    header.innerHTML = `<span class="tl-arrow">▼</span><span class="tl-dot"></span><span class="tl-count"></span>`;
+    header.onclick = () => { panel.classList.toggle('collapsed'); };
+    panel.appendChild(header);
+    const body = document.createElement('div');
+    body.className = 'tool-live-body';
+    const list = document.createElement('div');
+    list.className = 'tool-live-list';
+    body.appendChild(list);
+    panel.appendChild(body);
+    // Insert before footer (spinner) if present
+    const footer = mw.querySelector('.msg-status-footer');
+    if (footer) mw.insertBefore(panel, footer);
+    else mw.appendChild(panel);
+  }
+  // Update header count
+  panel.querySelector('.tl-count').textContent = `${t('ta.activity')} · ${log.length}`;
+  // Add only new items (incremental)
+  const list = panel.querySelector('.tool-live-list');
+  const existing = list.children.length;
+  for (let i = existing; i < log.length; i++) {
+    const item = document.createElement('div');
+    item.className = 'tool-live-item';
+    const entry = log[i];
+    const briefHtml = entry.brief ? `<span class="tl-brief" title="${escH(entry.brief)}">${escH(entry.brief)}</span>` : '';
+    const chevronHtml = entry.input ? '<span class="tl-chevron">▶</span>' : '';
+    const row = document.createElement('div');
+    row.className = 'tl-row';
+    row.innerHTML = `<span class="tl-name">${escH(_toolLabel(entry.tool))}</span>${briefHtml}${chevronHtml}`;
+    item.appendChild(row);
+    // Expandable detail (raw input) — only if we have input data
+    if (entry.input) {
+      const detail = document.createElement('div');
+      detail.className = 'tl-detail';
+      // Try to pretty-print JSON, fallback to raw string
+      try { detail.textContent = JSON.stringify(JSON.parse(entry.input), null, 2); }
+      catch { detail.textContent = entry.input; }
+      item.appendChild(detail);
+      row.onclick = () => { item.classList.toggle('expanded'); };
+    }
+    list.appendChild(item);
+  }
+  // Auto-scroll body to bottom when expanded
+  if (!panel.classList.contains('collapsed')) {
+    const body = panel.querySelector('.tool-live-body');
+    if (body) body.scrollTop = body.scrollHeight;
+  }
+}
+
+// Mark live tool panel as done (keep it, just remove pulse animation)
+function _finalizeToolLive(mw) {
+  if (!mw) return;
+  const panel = mw.querySelector('.tool-live');
+  if (panel) {
+    panel.classList.add('done');
+    if (!panel.classList.contains('collapsed')) panel.classList.add('collapsed');
+  }
+}
+
+// Remove live tool panel from message wrapper (used on error cleanup)
+function _removeToolLive(mw) {
+  if (!mw) return;
+  const panel = mw.querySelector('.tool-live');
+  if (panel) panel.remove();
 }
 
 // Render tool activity bar inside a message wrapper element
@@ -3586,9 +3787,10 @@ function switchTab(id) {
   if (activeTabId) {
     getTS(activeTabId).draft = inEl.value;
     getTS(activeTabId).curTxt = curTxt;
+    if (curToolLog.length) getTS(activeTabId)._toolLog = curToolLog.slice();
   }
   // Reset streaming state — loadSess will clear msgsEl, making curEl stale
-  curEl = null; curTxt = ''; curToolCounts = {};
+  curEl = null; curTxt = ''; curToolCounts = {}; curToolLog = [];
   activeTabId = id;
   const tab = openTabs.find(t => t.id === id);
   if (tab?.isNew) {
@@ -4319,7 +4521,7 @@ async function loadSess(id) {
     if (!r.ok) { closeTab(id); toast(t('toast.sess_not_found'), true); return; }
     const d = await r.json();
     if (id !== activeTabId) return; // tab was switched while parsing — discard stale load
-    curEl = null; curTxt = ''; curToolCounts = {}; // Reset streaming state before clearing DOM — prevents stale references
+    curEl = null; curTxt = ''; curToolCounts = {}; curToolLog = []; // Reset streaming state before clearing DOM — prevents stale references
     msgsEl.removeAttribute('aria-live'); // Suppress screen reader flood during batch history load
     msgsEl.innerHTML = '';
     currentSessionId = id;
@@ -4418,6 +4620,13 @@ async function loadSess(id) {
       curTxt = savedTxt;
       addSpinner(curEl);
       curEl.querySelector('.msg').innerHTML = renderStreaming(curTxt);
+      // Restore live tool activity from background tab state
+      const savedLog = tabState[id]?._toolLog;
+      if (savedLog?.length) {
+        curToolLog = savedLog.slice();
+        curToolCounts = tabState[id]?._toolCounts || {};
+        _renderToolLive(curEl, curToolLog);
+      }
     } else if (d.partial_text && !d.isChatRunning && !d.hasRunningTask) {
       // Session was interrupted (server crash / killed) — show what was saved to DB
       const el = addMsg('assistant');
