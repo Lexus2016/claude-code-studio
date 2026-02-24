@@ -285,6 +285,7 @@ body::after {
 /* ─── Markdown styles inside .msg ─── */
 .msg strong { font-weight: 700; color: var(--text); }
 .msg em { font-style: italic; color: #c9d1d9; }
+.msg del { color: var(--muted); text-decoration: line-through; }
 .msg h1, .msg h2, .msg h3, .msg h4, .msg h5, .msg h6 { font-weight: 700; margin: 12px 0 6px; color: var(--text); }
 .msg h1 { font-size: 21px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
 .msg h2 { font-size: 18px; }
@@ -315,6 +316,8 @@ body::after {
 .msg td { color: var(--text); }
 .msg td:first-child, .msg th:first-child { padding-left: 16px; }
 .msg td:last-child, .msg th:last-child { padding-right: 16px; }
+.msg > :first-child { margin-top: 0; }
+.msg > :last-child { margin-bottom: 0; }
 
 /* ─── Copy button ─── */
 .cpb { position: absolute; top: 5px; right: 5px; opacity: 0; background: var(--s3); border: 1px solid var(--border); color: var(--muted); padding: 3px 8px; border-radius: 5px; cursor: pointer; font-size: 11px; transition: opacity .15s; }
@@ -2199,6 +2202,14 @@ function renderMd(text) {
   // 2. Escape remaining HTML
   text = escH(text);
 
+  // 2.5. Extract inline code BEFORE bold/italic to protect underscores in filenames
+  const inlineCodes = [];
+  text = text.replace(/`([^`\n]+)`/g, (_, code) => {
+    const idx = inlineCodes.length;
+    inlineCodes.push(code);
+    return `\x04ICODE${idx}\x05`;
+  });
+
   // 3. Block elements (order matters)
   // Headers (h6→h1 order to avoid partial matches)
   text = text.replace(/^#{6}\s+(.+)$/gm, '<h6>$1</h6>');
@@ -2211,9 +2222,10 @@ function renderMd(text) {
   // Horizontal rule
   text = text.replace(/^(?:---|\*\*\*|___)\s*$/gm, '<hr>');
 
-  // Blockquote
-  text = text.replace(/^&gt;\s*(.+)$/gm, function(_, c) {
-    return '<blockquote><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg><span>' + c + '</span></blockquote>';
+  // Blockquote — merge consecutive > lines into single block
+  text = text.replace(/((?:^&gt;\s*.+\n?)+)/gm, block => {
+    const lines = block.trim().split('\n').map(l => l.replace(/^&gt;\s*/, ''));
+    return '<blockquote><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg><span>' + lines.join('<br>') + '</span></blockquote>';
   });
 
   // Lists — bullet and ordered, supports nested indentation via parseListBlock
@@ -2241,19 +2253,19 @@ function renderMd(text) {
   text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   // Bold
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  text = text.replace(/(?<!\w)__(.+?)__(?![\w]|\.\w)/g, '<strong>$1</strong>');
   // Italic
   text = text.replace(/\*(?!\s)(.+?)(?<!\s)\*/g, '<em>$1</em>');
-  text = text.replace(/_(?!\s)(.+?)(?<!\s)_/g, '<em>$1</em>');
+  text = text.replace(/(?<!\w)_(?!\s|_)(.+?)(?<!\s)_(?![\w]|\.\w)/g, '<em>$1</em>');
   // Strikethrough
   text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
-  // Inline code
-  text = text.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // Restore inline code (was extracted in step 2.5)
+  text = text.replace(/\x04ICODE(\d+)\x05/g, (_, i) => `<code>${inlineCodes[+i]}</code>`);
   // Links
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
 
   // 5. Paragraphs — wrap lines that aren't block elements
-  const blockTags = /^<(?:h[1-6]|ul|ol|li|hr|blockquote|pre|div)/;
+  const blockTags = /^<(?:h[1-6]|ul|ol|li|hr|blockquote|pre|div)|^\x02BLOCK\d+\x03/;
   const lines = text.split('\n');
   const out = [];
   let para = [];

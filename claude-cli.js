@@ -276,10 +276,15 @@ class ClaudeCLI {
       h._deltaBlocks = new Set();
     }
 
-    // New text content block starting after other blocks (e.g. after tool_use) — inject paragraph separator
-    // so the post-tool text doesn't run together with the pre-tool text.
-    if (data.type === 'content_block_start' && data.content_block?.type === 'text' && (data.index ?? 0) > 0 && h.onText) {
-      h.onText('\n\n');
+    // Inject paragraph separator between text blocks so post-tool text doesn't
+    // run together with pre-tool text. Covers both:
+    // - Same-turn: text(index:0) → tool(index:1) → text(index:2) — index > 0
+    // - Cross-turn: turn1 text → tool → turn2 text(index:0) — index resets to 0
+    // Using _hasEmittedText flag to detect cross-turn boundaries.
+    if (data.type === 'content_block_start' && data.content_block?.type === 'text' && h.onText) {
+      if (h._hasEmittedText) {
+        h.onText('\n\n');
+      }
     }
 
     // Handle streaming delta events (Anthropic API streaming format used by newer CLI versions)
@@ -287,6 +292,7 @@ class ClaudeCLI {
       const idx = data.index ?? 0;
       if (data.delta.type === 'text_delta' && data.delta.text && h.onText) {
         h._deltaBlocks.add(idx);
+        h._hasEmittedText = true;
         h.onText(data.delta.text);
       } else if (data.delta.type === 'thinking_delta' && data.delta.thinking && h.onThinking) {
         h._deltaBlocks.add(idx);
@@ -301,7 +307,7 @@ class ClaudeCLI {
       for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i];
         const streamed = h._deltaBlocks.has(i);
-        if (b.type === 'text' && b.text && h.onText && !streamed) h.onText(b.text);
+        if (b.type === 'text' && b.text && h.onText && !streamed) { h._hasEmittedText = true; h.onText(b.text); }
         else if (b.type === 'thinking' && b.thinking && h.onThinking && !streamed) h.onThinking(b.thinking);
         else if (b.type === 'tool_use' && h.onTool) {
           h.onTool(b.name, typeof b.input === 'string' ? b.input : JSON.stringify(b.input, null, 2));
