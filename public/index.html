@@ -119,9 +119,9 @@ body::after {
 #rlBadge .rl-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; animation:rlPulse 1.8s ease-in-out infinite; }
 @keyframes rlPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.45;transform:scale(.8)} }
 #rlBadge .rl-label { white-space:nowrap; }
-#rlTooltip { display:none; position:absolute; bottom:100%; right:0; margin-bottom:6px; width:275px; background:#1a1f2e; border:1px solid rgba(245,158,11,.35); border-radius:10px; padding:13px 15px; z-index:9999; box-shadow:0 8px 32px rgba(0,0,0,.55); font-size:12.5px; line-height:1.55; }
-/* Bridge: transparent 6px area below tooltip keeps #rlBadge:hover true while mouse travels up */
-#rlTooltip::after { content:''; position:absolute; bottom:-6px; left:0; right:0; height:6px; }
+#rlTooltip { display:none; position:absolute; top:100%; right:0; margin-top:6px; width:275px; background:#1a1f2e; border:1px solid rgba(245,158,11,.35); border-radius:10px; padding:13px 15px; z-index:99999; box-shadow:0 8px 32px rgba(0,0,0,.55); font-size:12.5px; line-height:1.55; }
+/* Bridge: transparent 6px area above tooltip keeps #rlBadge:hover true while mouse travels down */
+#rlTooltip::after { content:''; position:absolute; top:-6px; left:0; right:0; height:6px; }
 #rlBadge:hover #rlTooltip { display:block; }
 #rlTooltip .rl-tt-title { font-weight:700; font-size:13px; color:var(--text); margin-bottom:9px; display:flex; align-items:center; gap:6px; }
 #rlTooltip .rl-tt-row { display:flex; justify-content:space-between; align-items:center; padding:3px 0; border-bottom:1px solid rgba(255,255,255,.05); }
@@ -664,8 +664,8 @@ body::after {
 .wp-card:hover { background: var(--s3); border-color: rgba(124,106,239,.4); color: var(--text); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
 
 /* ─── Collapsible header ─── */
-.hdr-collapse-zone { overflow: hidden; transition: max-height .3s var(--ease-out), opacity .2s; max-height: 200px; opacity: 1; }
-.hdr-collapse-zone.collapsed { max-height: 0; opacity: 0; pointer-events: none; }
+.hdr-collapse-zone { overflow: visible; transition: max-height .3s var(--ease-out), opacity .2s; max-height: 200px; opacity: 1; }
+.hdr-collapse-zone.collapsed { overflow: hidden; max-height: 0; opacity: 0; pointer-events: none; }
 .hdr-toggle { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex-shrink: 0; background: var(--s2); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; color: var(--muted); transition: all .15s; margin: 3px 4px 3px 6px; }
 .hdr-toggle:hover { color: var(--accent2); border-color: var(--accent); background: var(--s3); }
 .hdr-toggle svg { width: 11px; height: 11px; transition: transform .25s var(--ease-out); }
@@ -771,6 +771,45 @@ body::after {
   border: 1px solid rgba(63,185,80,.25); border-radius: var(--r-sm); font-size: 13px; color: var(--green);
 }
 .ask-user-card.ask-answered .ask-answer-display { display: block; }
+/* "Other" free-text row on choice questions */
+.ask-user-card .ask-other-row {
+  display: flex; gap: 8px; align-items: center; margin-top: 6px;
+  padding: 8px 12px; background: var(--s3); border: 1px solid var(--border);
+  border-radius: var(--r-sm); cursor: pointer; transition: border-color .15s, background .15s;
+}
+.ask-user-card .ask-other-row:hover { border-color: var(--accent); background: rgba(124,106,239,.08); }
+.ask-user-card .ask-other-row.selected { border-color: var(--accent); background: rgba(124,106,239,.12); }
+.ask-user-card .ask-other-radio { accent-color: var(--accent); width: 16px; height: 16px; flex-shrink: 0; }
+.ask-user-card .ask-other-input {
+  flex: 1; padding: 4px 8px; background: transparent; border: 1px solid var(--border);
+  border-radius: var(--r-sm); color: var(--text); font-size: 13px; outline: none;
+  transition: border-color .15s;
+}
+.ask-user-card .ask-other-input:focus { border-color: var(--accent); }
+.ask-user-card .ask-other-input::placeholder { color: var(--muted); }
+/* Rich option with description */
+.ask-user-card .ask-opt-content { display: flex; flex-direction: column; gap: 1px; }
+.ask-user-card .ask-opt-desc { font-size: 12px; color: var(--muted); line-height: 1.3; }
+/* Header badge */
+.ask-user-card .ask-header {
+  display: inline-block; font-size: 11px; font-weight: 600; color: var(--accent);
+  padding: 2px 8px; background: rgba(124,106,239,.1); border-radius: 10px;
+  margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px;
+}
+/* Pagination controls */
+.ask-user-card .ask-pagination {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+}
+.ask-user-card .ask-page-btn {
+  padding: 4px 10px; background: var(--s3); border: 1px solid var(--border);
+  border-radius: var(--r-sm); color: var(--text); font-size: 12px; cursor: pointer;
+  transition: border-color .15s;
+}
+.ask-user-card .ask-page-btn:hover { border-color: var(--accent); }
+.ask-user-card .ask-page-btn:disabled { opacity: .3; cursor: default; pointer-events: none; }
+.ask-user-card .ask-page-indicator { font-size: 12px; color: var(--muted); }
+.ask-user-card .ask-page { display: none; }
+.ask-user-card .ask-page.active { display: block; }
 
 /* ─── Input area ─── */
 .ia { padding: 12px 16px; background: var(--s1); border-top: 1px solid var(--border); }
@@ -1638,7 +1677,7 @@ const TRANSLATIONS = {
     'toast.read_err':'Не вдалося прочитати: ','toast.err_prefix':'Помилка: ','dir.proj_name':'Назва проекту (авто якщо порожньо)',
     'welcome.prompt.1':'Поясни цей код крок за кроком','welcome.prompt.2':'Знайди та виправ помилки','welcome.prompt.3':'Напиши unit-тести','welcome.prompt.4':'Спроектуй архітектуру',
     'toast.task_resumed':'Задачу відновлено','toast.task_lost':'З\'єднання втрачено, вивід недоступний','toast.task_retry':'retry',
-    'ask.submit':'Надіслати відповідь','ask.skip':'Пропустити','ask.answered':'Відповідь','ask.skipped':'Пропущено','ask.timer':'Залишилось',
+    'ask.submit':'Надіслати відповідь','ask.skip':'Пропустити','ask.answered':'Відповідь','ask.skipped':'Пропущено','ask.timer':'Залишилось','ask.other':'Інше...','ask.prev':'← Назад','ask.next':'Далі →',
     'session.copy_id':'Скопіювати ID сесії Claude','session.open_claude':'Відкрити в Claude Code',
     'stream.interrupted':'Відповідь була перервана',
     'rl.title.warn':'Наближається ліміт','rl.title.crit':'Ліміт вичерпується!',
@@ -1745,7 +1784,7 @@ const TRANSLATIONS = {
     'toast.read_err':'Failed to read: ','toast.err_prefix':'Error: ','dir.proj_name':'Project name (auto if empty)',
     'welcome.prompt.1':'Explain this code step by step','welcome.prompt.2':'Find and fix bugs','welcome.prompt.3':'Write unit tests','welcome.prompt.4':'Design the architecture',
     'toast.task_resumed':'Task resumed','toast.task_lost':'Connection lost, output unavailable','toast.task_retry':'retry',
-    'ask.submit':'Send Answer','ask.skip':'Skip','ask.answered':'Answer','ask.skipped':'Skipped','ask.timer':'Remaining',
+    'ask.submit':'Send Answer','ask.skip':'Skip','ask.answered':'Answer','ask.skipped':'Skipped','ask.timer':'Remaining','ask.other':'Other...','ask.prev':'← Back','ask.next':'Next →',
     'session.copy_id':'Copy Claude session ID','session.open_claude':'Open in Claude Code',
     'stream.interrupted':'Response was interrupted',
     'rl.title.warn':'Limit approaching','rl.title.crit':'Limit critical!',
@@ -1852,7 +1891,7 @@ const TRANSLATIONS = {
     'toast.read_err':'Не удалось прочитать: ','toast.err_prefix':'Ошибка: ','dir.proj_name':'Название проекта (авто если пусто)',
     'welcome.prompt.1':'Объясни этот код шаг за шагом','welcome.prompt.2':'Найди и исправь ошибки','welcome.prompt.3':'Напиши unit-тесты','welcome.prompt.4':'Спроектируй архитектуру',
     'toast.task_resumed':'Задача возобновлена','toast.task_lost':'Соединение потеряно, вывод недоступен','toast.task_retry':'retry',
-    'ask.submit':'Отправить ответ','ask.skip':'Пропустить','ask.answered':'Ответ','ask.skipped':'Пропущено','ask.timer':'Осталось',
+    'ask.submit':'Отправить ответ','ask.skip':'Пропустить','ask.answered':'Ответ','ask.skipped':'Пропущено','ask.timer':'Осталось','ask.other':'Другое...','ask.prev':'← Назад','ask.next':'Далее →',
     'session.copy_id':'Скопировать ID сессии Claude','session.open_claude':'Открыть в Claude Code',
     'stream.interrupted':'Ответ был прерван',
     'rl.title.warn':'Приближается лимит','rl.title.crit':'Лимит исчерпывается!',
@@ -2842,34 +2881,90 @@ function markDone(el) {
 
 // Smart scroll: don't scroll if user scrolled up
 // ─── Ask User Card ───────────────────────────────────────────────────────────
+
+// Helper: extract label/description from option (string or {label,description} object)
+function _askOptLabel(opt) { return typeof opt === 'string' ? opt : (opt?.label || ''); }
+function _askOptDesc(opt) { return (opt != null && typeof opt === 'object') ? (opt.description || '') : ''; }
+
 function renderAskUserCard(data) {
-  const { requestId, question, options, inputType } = data;
+  const { requestId } = data;
   // Validate requestId is a UUID to prevent XSS injection
   if (!requestId || !/^[a-f0-9-]{36}$/.test(requestId)) return;
   // Deduplicate — don't render if card already exists
   if (document.querySelector(`.ask-user-card[data-rid="${requestId}"]`)) return;
 
+  // Normalize into questions array (backward compat with old question/options/inputType format)
+  let questions;
+  if (Array.isArray(data.questions) && data.questions.length) {
+    questions = data.questions;
+  } else {
+    const opts = data.options;
+    const iType = data.inputType || (opts?.length ? 'single_choice' : 'free_text');
+    questions = [{ question: data.question, options: opts || null, multiSelect: iType === 'multi_choice' }];
+  }
+
   const card = document.createElement('div');
   card.className = 'ask-user-card';
   card.dataset.rid = requestId;
+  card._askPageIndex = 0;
+  card._askQuestions = questions;
 
-  const type = inputType || (options?.length ? 'single_choice' : 'free_text');
+  let html = '';
 
-  let html = `<div class="ask-q">${renderMd(question)}</div>`;
+  // Pagination controls (only if multiple questions)
+  if (questions.length > 1) {
+    html += `<div class="ask-pagination">`;
+    html += `<button class="ask-page-btn ask-prev" disabled>${t('ask.prev')}</button>`;
+    html += `<span class="ask-page-indicator">1 / ${questions.length}</span>`;
+    html += `<button class="ask-page-btn ask-next">${t('ask.next')}</button>`;
+    html += `</div>`;
+  }
 
-  if ((type === 'single_choice' || type === 'multi_choice') && options?.length) {
-    const inputKind = type === 'multi_choice' ? 'checkbox' : 'radio';
-    html += '<div class="ask-options">';
-    for (let i = 0; i < options.length; i++) {
-      html += `<label class="ask-opt"><input type="${inputKind}" name="ask_${requestId}" value="${escH(options[i])}"${i === 0 && type === 'single_choice' ? ' checked' : ''}> <span>${escH(options[i])}</span></label>`;
+  // Render each question as a page
+  for (let qi = 0; qi < questions.length; qi++) {
+    const q = questions[qi];
+    const hasOpts = Array.isArray(q.options) && q.options.length > 0;
+    const isMulti = !!q.multiSelect;
+    const inputKind = isMulti ? 'checkbox' : 'radio';
+
+    html += `<div class="ask-page${qi === 0 ? ' active' : ''}" data-page="${qi}">`;
+
+    // Header badge
+    if (q.header) {
+      html += `<div class="ask-header">${escH(q.header)}</div>`;
     }
-    html += '</div>';
+
+    // Question text
+    html += `<div class="ask-q">${renderMd(q.question || '')}</div>`;
+
+    if (hasOpts) {
+      // Render option buttons
+      html += '<div class="ask-options">';
+      for (let oi = 0; oi < q.options.length; oi++) {
+        const lbl = _askOptLabel(q.options[oi]);
+        const desc = _askOptDesc(q.options[oi]);
+        html += `<label class="ask-opt"><input type="${inputKind}" name="ask_${requestId}_${qi}" value="${escH(lbl)}">`;
+        if (desc) {
+          html += ` <span class="ask-opt-content"><span>${escH(lbl)}</span><span class="ask-opt-desc">${escH(desc)}</span></span>`;
+        } else {
+          html += ` <span>${escH(lbl)}</span>`;
+        }
+        html += `</label>`;
+      }
+
+      // "Other" free-text row
+      html += `<div class="ask-other-row"><input type="${inputKind}" class="ask-other-radio" name="ask_${requestId}_${qi}" value="__other__"><input type="text" class="ask-other-input" placeholder="${escH(t('ask.other'))}"></div>`;
+
+      html += '</div>';
+    } else {
+      // Pure free_text
+      html += `<textarea class="ask-text" placeholder="..." rows="2"></textarea>`;
+    }
+
+    html += `</div>`; // .ask-page
   }
 
-  if (type === 'free_text' || !options?.length) {
-    html += `<textarea class="ask-text" placeholder="..." rows="2"></textarea>`;
-  }
-
+  // Buttons + timer
   html += `<div class="ask-btns">`;
   html += `<button class="ask-submit">${t('ask.submit')}</button>`;
   html += `<button class="ask-skip">${t('ask.skip')}</button>`;
@@ -2879,23 +2974,87 @@ function renderAskUserCard(data) {
 
   card.innerHTML = html;
 
-  // Attach event listeners (not inline onclick — prevents XSS)
+  // ── Event listeners ──
+
+  // Submit / Skip
   card.querySelector('.ask-submit').addEventListener('click', () => askUserSubmit(requestId));
   card.querySelector('.ask-skip').addEventListener('click', () => askUserCancel(requestId));
-  // Toggle selected class on option labels
-  card.querySelectorAll('.ask-opt').forEach(opt => opt.addEventListener('click', () => opt.classList.toggle('selected')));
+
+  // Pagination
+  if (questions.length > 1) {
+    const prevBtn = card.querySelector('.ask-prev');
+    const nextBtn = card.querySelector('.ask-next');
+    const indicator = card.querySelector('.ask-page-indicator');
+    const pages = card.querySelectorAll('.ask-page');
+
+    const showPage = (idx) => {
+      card._askPageIndex = idx;
+      pages.forEach((p, i) => p.classList.toggle('active', i === idx));
+      prevBtn.disabled = idx === 0;
+      nextBtn.disabled = idx === questions.length - 1;
+      indicator.textContent = `${idx + 1} / ${questions.length}`;
+      // Focus textarea on the active page if it has one
+      const activeTa = pages[idx]?.querySelector('.ask-text');
+      if (activeTa) activeTa.focus();
+    };
+    prevBtn.addEventListener('click', () => showPage(Math.max(0, card._askPageIndex - 1)));
+    nextBtn.addEventListener('click', () => showPage(Math.min(questions.length - 1, card._askPageIndex + 1)));
+  }
+
+  // Option toggle: visual selected class + handle "Other" row interaction
+  card.querySelectorAll('.ask-page').forEach(page => {
+    const opts = page.querySelectorAll('.ask-opt');
+    const otherRow = page.querySelector('.ask-other-row');
+    const otherRadio = otherRow?.querySelector('.ask-other-radio');
+    const otherInput = otherRow?.querySelector('.ask-other-input');
+    const isMulti = page.querySelector('input[type="checkbox"]') !== null;
+
+    // Click on a predefined option
+    opts.forEach(opt => {
+      opt.addEventListener('click', () => {
+        if (!isMulti) {
+          // Single-select: deselect all including "Other"
+          opts.forEach(o => o.classList.remove('selected'));
+          if (otherRow) { otherRow.classList.remove('selected'); if (otherInput) otherInput.value = ''; }
+          opt.classList.add('selected');
+        } else {
+          opt.classList.toggle('selected');
+        }
+      });
+    });
+
+    // "Other" row interaction
+    if (otherRow && otherRadio && otherInput) {
+      const selectOther = () => {
+        if (!isMulti) {
+          opts.forEach(o => { o.classList.remove('selected'); o.querySelector('input').checked = false; });
+        }
+        otherRadio.checked = true;
+        otherRow.classList.add('selected');
+      };
+      otherRow.addEventListener('click', (e) => {
+        if (e.target !== otherInput) { selectOther(); otherInput.focus(); }
+      });
+      otherInput.addEventListener('focus', selectOther);
+      otherInput.addEventListener('input', () => { if (otherInput.value) selectOther(); });
+      otherInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); askUserSubmit(requestId); }
+      });
+    }
+  });
 
   msgsEl.appendChild(card);
   scrollBottom();
 
-  // Focus text input if free_text
-  const ta = card.querySelector('.ask-text');
-  if (ta) {
-    ta.focus();
+  // Attach Enter-to-submit on ALL textareas (not just first page)
+  card.querySelectorAll('.ask-text').forEach(ta => {
     ta.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); askUserSubmit(requestId); }
     });
-  }
+  });
+  // Focus the first page's textarea
+  const firstTa = card.querySelector('.ask-page.active .ask-text');
+  if (firstTa) firstTa.focus();
 
   // Start countdown timer
   const timerEl = card.querySelector('.ask-timer');
@@ -2912,27 +3071,79 @@ function renderAskUserCard(data) {
   }
 }
 
+// Collect answer from a single .ask-page element
+function _askCollectPageAnswer(page) {
+  // Free-text page
+  const ta = page.querySelector('.ask-text');
+  if (ta) return ta.value.trim();
+
+  // Choice page — check for "Other" selection first
+  const otherRadio = page.querySelector('.ask-other-radio');
+  const otherInput = page.querySelector('.ask-other-input');
+  if (otherRadio?.checked && otherInput?.value.trim()) {
+    // For multi-select, also collect checked predefined options
+    const isMulti = page.querySelector('input[type="checkbox"]') !== null;
+    if (isMulti) {
+      const checked = [...page.querySelectorAll('.ask-opt input:checked')].map(c => c.value);
+      checked.push(otherInput.value.trim());
+      return checked.join(', ');
+    }
+    return otherInput.value.trim();
+  }
+
+  // Collect checked predefined options
+  const checked = [...page.querySelectorAll('.ask-opt input:checked')].map(c => c.value);
+  return checked.join(', ');
+}
+
 function askUserSubmit(requestId) {
   const card = document.querySelector(`.ask-user-card[data-rid="${requestId}"]`);
   if (!card || card.classList.contains('ask-answered')) return;
 
+  const pages = card.querySelectorAll('.ask-page');
   let answer = '';
-  const ta = card.querySelector('.ask-text');
-  if (ta) {
-    answer = ta.value.trim();
+
+  if (pages.length <= 1) {
+    // Single question — plain string answer (backward compat)
+    answer = _askCollectPageAnswer(pages[0]);
   } else {
-    // Collect checked options
-    const checked = card.querySelectorAll('input:checked');
-    const vals = [...checked].map(c => c.value);
-    answer = vals.join(', ');
+    // Multiple questions — collect all, format as structured JSON
+    const parts = [];
+    let allEmpty = true;
+    pages.forEach((page, i) => {
+      const q = card._askQuestions?.[i]?.question || '';
+      const a = _askCollectPageAnswer(page);
+      if (a) allEmpty = false;
+      parts.push(`Q: ${q}\nA: ${a || '—'}`);
+    });
+    if (allEmpty) return;
+    answer = parts.join('\n\n');
   }
-  if (!answer) return;
+
+  if (!answer) {
+    // Visual feedback: highlight empty "Other" input or textarea on the active page
+    const activePage = card.querySelector('.ask-page.active') || card.querySelector('.ask-page');
+    const emptyOther = activePage?.querySelector('.ask-other-row.selected .ask-other-input');
+    const emptyTa = activePage?.querySelector('.ask-text');
+    const target = emptyOther || emptyTa;
+    if (target) { target.style.borderColor = '#f85149'; target.focus(); setTimeout(() => { target.style.borderColor = ''; }, 2000); }
+    return;
+  }
 
   ws.send(JSON.stringify({ type: 'ask_user_response', requestId, answer }));
 
   // Mark as answered
   card.classList.add('ask-answered');
-  card.querySelector('.ask-answer-display').textContent = `${t('ask.answered')}: ${answer}`;
+  // Show summary
+  let displayText = '';
+  if (pages.length <= 1) {
+    displayText = `${t('ask.answered')}: ${answer}`;
+  } else {
+    // Extract just the A: lines for compact display
+    const aLines = answer.split('\n').filter(l => l.startsWith('A: ')).map(l => l.slice(3));
+    displayText = `${t('ask.answered')}: ${aLines.join(' · ')}`;
+  }
+  card.querySelector('.ask-answer-display').textContent = displayText;
   if (card._askInterval) clearInterval(card._askInterval);
 }
 
@@ -3210,6 +3421,7 @@ function newTab() {
   msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();
   renderMcp(); renderSkills();
   userScrolled = false; renderTabs(); saveUIState(); updateSessBar();
+  inEl.focus();
 }
 
 function toggle(id) {
@@ -3910,6 +4122,15 @@ async function loadSess(id) {
     }
     _updateLoadMoreBtn();
     msgsEl.setAttribute('aria-live', 'polite'); // Re-enable after batch load is done
+
+    // Restore done checkmark on last assistant message if tab finished generating
+    const tabDone = openTabs.find(x => x.id === id);
+    if (tabDone?.done && !d.hasRunningTask && !d.isChatRunning) {
+      const lastAssist = [...msgsEl.querySelectorAll('.mw.assistant')].pop();
+      if (lastAssist && !_msfGet(lastAssist)) {
+        lastAssist.appendChild(_msfCreate('done', t('msf.done')));
+      }
+    }
 
     // Restore in-flight streaming content — priority order:
     // 1. tabState (in-memory, most recent — background tab that was generating)
