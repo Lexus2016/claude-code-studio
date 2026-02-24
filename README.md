@@ -87,7 +87,7 @@ npx github:Lexus2016/claude-code-studio@latest
 
 ```bash
 npm install -g github:Lexus2016/claude-code-studio
-claude-code-chat
+claude-code-studio
 ```
 
 **Update:**

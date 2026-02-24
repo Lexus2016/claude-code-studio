@@ -3,7 +3,7 @@ version: '3.8'
 services:
   claude-chat:
     build: .
-    container_name: claude-code-chat
+    container_name: claude-code-studio
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"

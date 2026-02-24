@@ -39,7 +39,7 @@ jobs:
         with:
           script: |
             const baseTag = '${{ steps.version.outputs.VERSION }}';
-            const body = `## What's Changed\n\n${{ steps.changelog.outputs.CHANGELOG }}\n\n## Installation\n\n\`\`\`bash\n# Run latest version directly\nnpx github:Lexus2016/claude-code-chat\n\n# Or install globally\nnpm install -g github:Lexus2016/claude-code-chat\nclaude-code-chat\n\`\`\`\n\n> Open http://localhost:3000 in your browser`;
+            const body = `## What's Changed\n\n${{ steps.changelog.outputs.CHANGELOG }}\n\n## Installation\n\n\`\`\`bash\n# Run latest version directly\nnpx github:Lexus2016/claude-code-studio\n\n# Or install globally\nnpm install -g github:Lexus2016/claude-code-studio\nclaude-code-studio\n\`\`\`\n\n> Open http://localhost:3000 in your browser`;
 
             const match = baseTag.match(/^v(\d+)\.(\d+)\.(\d+)$/);
             if (!match) {
@@ -57,7 +57,7 @@ jobs:
                   repo: context.repo.repo,
                   tag_name: tag,
                   target_commitish: context.sha,
-                  name: 'Claude Code Chat ' + tag,
+                  name: 'Claude Code Studio ' + tag,
                   body,
                   draft: false,
                   prerelease: false,
