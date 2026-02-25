@@ -141,6 +141,7 @@ git pull && docker compose up -d --build
 | 💬 **Real-time Chat** | Talk to Claude, see responses stream in as it thinks and works |
 | 📋 **Kanban Board** | Create task cards → Claude runs them automatically, one by one or in parallel |
 | 👥 **Multi-Agent Mode** | Claude spawns a team of specialized agents and coordinates them for big tasks |
+| ↗️ **Fork Conversation** | Continue any message in a new chat with full context — perfect for multi-agent sessions |
 | ⚡ **MCP Servers** | Connect external tools (databases, GitHub, Slack, etc.) so Claude can use them |
 | 🧠 **Skills** | Upload `.md` files that tell Claude how to work in your specific domain |
 | 📁 **File Browser** | Browse your project files, preview them, attach with `@filename` in chat |
@@ -150,6 +151,42 @@ git pull && docker compose up -d --build
 | 🔒 **Auth** | Password login + 30-day session tokens. Your data stays on your machine |
 | 🌍 **i18n** | Interface in English, Ukrainian, or Russian (auto-detected) |
 | 🐳 **Docker** | Deploy anywhere with the included Dockerfile and docker-compose |
+
+---
+
+## Why Claude Code Studio?
+
+You could use `claude` in a terminal. So why use this?
+
+### 🖱️ Visual > Terminal
+
+| Terminal | Claude Code Studio |
+|----------|-------------------|
+| Type long commands | Click buttons, drag cards |
+| Scroll through text | See live progress in cards |
+| No task management | Built-in Kanban board |
+| One session at a time | Multiple parallel sessions |
+| Copy-paste screenshots | Paste directly in chat |
+| Remember context yourself | Sessions saved automatically |
+
+### ⚡ Productivity Boost
+
+- **Kanban board**: Queue 10 tasks, walk away, come back to all done
+- **Multi-agent**: Big task? Claude spawns a team and coordinates them
+- **Fork conversations**: Branch off from any point without losing context
+- **Projects**: Switch between codebases without losing your place
+- **Session persistence**: Come back tomorrow, continue exactly where you were
+
+### 🎯 Built for Workflows
+
+Terminal is great for quick questions. But when you have:
+- Multiple tasks to track
+- Long-running operations
+- Screenshots to analyze
+- Parallel work streams
+- A team that needs visibility
+
+...you need a **dashboard**, not a command line.
 
 ---
 

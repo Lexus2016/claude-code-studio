@@ -816,20 +816,19 @@ async function runMultiAgent(p) {
   const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId } = p;
   ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'🧠 Planning...', statusKey:'agent.planning', ...(tabId ? { tabId } : {}) }));
 
-  // Orchestrator is a lightweight planning step — it does NOT resume the main Claude
-  // session because that would pollute the conversation context with a planning prompt.
-  // Instead it runs a fresh, disposable session. The real claude_session_id is only
-  // set when runCliSingle (or agent workers) actually generate user-visible output.
   const effectiveWorkdir = workdir || WORKDIR;
   const cli = new ClaudeCLI({ cwd: effectiveWorkdir });
   let planText = '';
+  // Orchestrator gets existing session context via --resume if available
   const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${prompt}`;
+  let currentSessionId = claudeSessionId || null;
 
   await new Promise(res => {
     let _settled = false;
     const _res = () => { if (!_settled) { _settled = true; res(); } };
-    cli.send({ prompt:planPrompt, model, maxTurns:1, allowedTools:[], abortController })
+    cli.send({ prompt:planPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], abortController })
       .onText(t => { planText+=t; })
+      .onSessionId(sid => { currentSessionId = sid; })
       .onError(() => _res())
       .onDone(() => _res());
   });
@@ -839,8 +838,6 @@ async function runMultiAgent(p) {
 
   if (!plan?.agents?.length) {
     ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'⚠️ Falling back to single mode', statusKey:'agent.fallback_single', ...(tabId ? { tabId } : {}) }));
-    // Fallback uses the ORIGINAL claudeSessionId (not the orchestrator's disposable session).
-    // For new sessions claudeSessionId is undefined → runCliSingle creates a fresh session.
     return runCliSingle(p);
   }
 
@@ -853,6 +850,7 @@ async function runMultiAgent(p) {
   const completed = new Set(), results = {};
   const remaining = [...plan.agents];
 
+  // Run agents with session context
   while (remaining.length) {
     const runnable = remaining.filter(a => (a.depends_on||[]).every(d => completed.has(d)));
     if (!runnable.length) { ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'Circular deps', statusKey:'agent.circular_deps', ...(tabId ? { tabId } : {}) })); break; }
@@ -862,7 +860,6 @@ async function runMultiAgent(p) {
       ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`🔄 ${agent.role}`, ...(tabId ? { tabId } : {}) }));
       const depCtx = (agent.depends_on||[]).map(d => results[d] ? `\n[${d}]:${results[d].substring(0,2000)}` : '').join('');
       const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
-      // Compact system prompt for sub-agents: role only, no skills (saves ~3,000+ tokens per agent)
       const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.`;
       const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'];
       let agentText = '';
@@ -870,9 +867,11 @@ async function runMultiAgent(p) {
       await new Promise(res => {
         let _settled = false;
         const _res = () => { if (!_settled) { _settled = true; res(); } };
-        cli.send({ prompt:agentPrompt, model, maxTurns:Math.min(maxTurns,15), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
+        // Agent resumes session to maintain context
+        cli.send({ prompt:agentPrompt, sessionId: currentSessionId, model, maxTurns:Math.min(maxTurns,15), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
           .onText(t => { agentText+=t; chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + t); try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
           .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,10000),n,agent.id,null,null); } catch {} })
+          .onSessionId(sid => { currentSessionId = sid; })
           .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
           .onDone(() => _res());
       });
@@ -883,9 +882,35 @@ async function runMultiAgent(p) {
       ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`✅ ${agent.role}`, ...(tabId ? { tabId } : {}) }));
     }));
   }
+
+  // Summarizer agent: synthesizes results and provides final session_id for resume
+  ws.send(JSON.stringify({ type:'agent_status', agent:'summarizer', status:'📝 Synthesizing results...', ...(tabId ? { tabId } : {}) }));
+  const summaryPrompt = `You are a coordinator. Synthesize the results from all agents and provide a concise summary.
+
+AGENT RESULTS:
+${Object.entries(results).map(([id, text]) => `【${id}】\n${(text||'No output').substring(0,3000)}`).join('\n\n')}
+
+Provide a clear summary of what was accomplished. Be concise.`;
+
+  let summaryText = '';
+  await new Promise(res => {
+    let _settled = false;
+    const _res = () => { if (!_settled) { _settled = true; res(); } };
+    cli.send({ prompt:summaryPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], abortController })
+      .onText(t => { summaryText+=t; chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + t); try { ws.send(JSON.stringify({ type:'text', text:t, agent:'summarizer', ...(tabId ? { tabId } : {}) })); } catch {} })
+      .onSessionId(sid => { currentSessionId = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
+      .onError(() => _res())
+      .onDone(() => _res());
+  });
+
+  if (summaryText) {
+    try { stmts.addMsg.run(sessionId,'assistant','text',summaryText,null,'summarizer',null,null); } catch {}
+  }
+  ws.send(JSON.stringify({ type:'agent_status', agent:'summarizer', status:'✅ Summary complete', ...(tabId ? { tabId } : {}) }));
   ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'All agents done', statusKey:'agent.done', ...(tabId ? { tabId } : {}) }));
-  // Multi-agent has no single resumable Claude session — each agent ran independently.
-  return null;
+
+  // Return session_id for future resume
+  return currentSessionId;
 }
 
 // ============================================
