@@ -113,6 +113,52 @@ body::after {
 #versionBadge { font-size: 11px; color: var(--muted); cursor: default; letter-spacing: .3px; }
 #versionBadge.update { color: var(--orange); cursor: pointer; text-decoration: underline dotted; }
 
+/* ─── Project dropdown in header ─── */
+.proj-dd-wrap { position: relative; display: none; }
+.proj-dd-wrap.visible { display: inline-block; }
+.proj-dd-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: var(--accent2);
+  background: rgba(124,106,239,.1); border: 1px solid rgba(124,106,239,.25);
+  border-radius: 6px; padding: 3px 10px; cursor: pointer;
+  max-width: 200px; transition: all .15s; font-family: inherit;
+}
+.proj-dd-btn:hover { background: rgba(124,106,239,.18); border-color: var(--accent); }
+.proj-dd-btn.open { background: rgba(124,106,239,.2); border-color: var(--accent); }
+.proj-dd-btn .proj-dd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-dd-btn .proj-dd-arrow { font-size: 9px; opacity: .6; transition: transform .2s; flex-shrink: 0; }
+.proj-dd-btn.open .proj-dd-arrow { transform: rotate(180deg); opacity: 1; }
+.proj-dd-menu {
+  position: absolute; top: 100%; left: 0; margin-top: 6px;
+  min-width: 240px; max-width: 320px;
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: var(--r-md); box-shadow: var(--shadow-lg);
+  z-index: 1000; opacity: 0; visibility: hidden;
+  transform: translateY(-6px); transition: all .18s var(--ease-out);
+}
+.proj-dd-menu.open { opacity: 1; visibility: visible; transform: translateY(0); }
+.proj-dd-search { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.proj-dd-search input {
+  width: 100%; background: var(--s3); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 10px; font-size: 12px; color: var(--text);
+  outline: none; font-family: inherit;
+}
+.proj-dd-search input:focus { border-color: var(--accent); }
+.proj-dd-list { max-height: 280px; overflow-y: auto; padding: 4px 0; }
+.proj-dd-list::-webkit-scrollbar { width: 4px; }
+.proj-dd-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.proj-dd-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 12px; cursor: pointer; transition: background .1s;
+}
+.proj-dd-item:hover { background: var(--s3); }
+.proj-dd-item.active { background: var(--abg); }
+.proj-dd-item .proj-dd-item-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proj-dd-item .proj-dd-item-path { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proj-dd-item.active .proj-dd-item-name { color: var(--accent2); }
+.proj-dd-item.active::before { content: '●'; position: absolute; left: 8px; color: var(--accent); font-size: 8px; }
+.proj-dd-empty { padding: 16px 12px; text-align: center; color: var(--muted); font-size: 12px; }
+
 /* ─── Rate limit badge ─── */
 #rlBadge { display:none; position:relative; align-items:center; gap:5px; padding:3px 9px; border-radius:6px; font-size:12px; font-weight:600; cursor:default; user-select:none; background:rgba(245,158,11,.15); border:1px solid rgba(245,158,11,.45); color:#f59e0b; transition:background .2s,border-color .2s; }
 #rlBadge.rl-crit { background:rgba(239,68,68,.15); border-color:rgba(239,68,68,.45); color:#ef4444; }
@@ -255,7 +301,7 @@ body::after {
 /* ─── Message bubbles ─── */
 .msg { line-height: 1.75; font-size: var(--msg-font, 15.5px); word-break: break-word; }
 .mw.user .msg { background: var(--user-msg); padding: 10px 15px; border-radius: 14px 14px 4px 14px; white-space: pre-wrap; border: 1px solid rgba(124,106,239,.3); }
-.mw.assistant .msg { background: var(--s2); padding: 13px 16px; border-radius: 14px 14px 14px 4px; border: 1px solid var(--border); }
+.mw.assistant .msg { background: var(--s2); padding: 13px 16px; border-radius: 14px 14px 14px 4px; border: 1px solid var(--border); white-space: pre-wrap; }
 
 /* ─── Assistant message avatar marker ─── */
 .mw.assistant { padding-left: 34px; }
@@ -1388,7 +1434,19 @@ body::after {
         </a>
       </nav>
       <div class="hdr-meta">
-        <span id="activeProjLabel"></span>
+        <span id="activeProjLabel" style="display:none"></span>
+        <div class="proj-dd-wrap" id="projDdWrap">
+          <button class="proj-dd-btn" id="projDdBtn" onclick="toggleProjDropdown()">
+            <span class="proj-dd-name" id="projDdName">Проект</span>
+            <span class="proj-dd-arrow">▼</span>
+          </button>
+          <div class="proj-dd-menu" id="projDdMenu">
+            <div class="proj-dd-search">
+              <input type="text" id="projDdSearch" data-i18n-ph="proj.search" placeholder="Пошук проекту..." oninput="filterProjDropdown(this.value)">
+            </div>
+            <div class="proj-dd-list" id="projDdList"></div>
+          </div>
+        </div>
         <span id="versionBadge" data-i18n-title="ver.checking" title="Перевірка версії..."></span>
       </div>
     </div>
@@ -1818,6 +1876,7 @@ const TRANSLATIONS = {
     'skill.toggle.on':'Клік — вимкнути skill','skill.toggle.off':'Клік — додати skill до системного промпту',
     'files.empty':'Порожньо','files.view':'Переглянути',
     'proj.empty':'Немає проектів. Додайте директорію для роботи з Claude Code.',
+    'proj.search':'Пошук проекту...','search.empty':'Не знайдено',
     'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban дошка','nav.aria':'Навігація між розділами','tip.lang':'Мова інтерфейсу',
     'mcp.import.btn':'Імпорт','mcp.import.title':'Імпортувати MCP з JSON файлу (Claude Desktop формат)',
     'mcp.export.btn':'Експорт','mcp.export.title':'Експортувати всі MCP у JSON файл','mcp.replace.title':'Замінить існуючий',
@@ -1927,6 +1986,7 @@ const TRANSLATIONS = {
     'skill.toggle.on':'Click to disable skill','skill.toggle.off':'Click to add skill to system prompt',
     'files.empty':'Empty','files.view':'Preview',
     'proj.empty':'No projects. Add a directory to work with Claude Code.',
+    'proj.search':'Search project...','search.empty':'Not found',
     'nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.aria':'Navigation','tip.lang':'Interface language',
     'mcp.import.btn':'Import','mcp.import.title':'Import MCP from JSON file (Claude Desktop format)',
     'mcp.export.btn':'Export','mcp.export.title':'Export all MCP to JSON file','mcp.replace.title':'Will replace existing',
@@ -2036,6 +2096,7 @@ const TRANSLATIONS = {
     'skill.toggle.on':'Клик — отключить навык','skill.toggle.off':'Клик — добавить навык в системный промпт',
     'files.empty':'Пусто','files.view':'Просмотр',
     'proj.empty':'Нет проектов. Добавьте директорию для работы с Claude Code.',
+    'proj.search':'Поиск проекта...','search.empty':'Не найдено',
     'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban доска','nav.aria':'Навигация','tip.lang':'Язык интерфейса',
     'mcp.import.btn':'Импорт','mcp.import.title':'Импортировать MCP из JSON файла (формат Claude Desktop)',
     'mcp.export.btn':'Экспорт','mcp.export.title':'Экспортировать все MCP в JSON файл','mcp.replace.title':'Заменит существующий',
@@ -2246,7 +2307,10 @@ function reformatInlineNumberedItems(text) {
 function renderMd(text) {
   if (!text) return '';
 
-  // 0. Reformat inline numbered items into proper markdown list
+  // 0. Normalize line endings (\r\n → \n)
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // 0.5. Reformat inline numbered items into proper markdown list
   text = reformatInlineNumberedItems(text);
 
   // 1. Extract and protect code blocks
@@ -5169,29 +5233,121 @@ const SKILL_CATS = {
 };
 
 const SKILL_TRIGGERS = {
-  'backend':            ['backend', 'api endpoint', 'server', 'node.js', 'express', 'fastify', 'endpoint', 'rest api', 'crud', 'migration', 'transaction', 'queue', 'http server'],
-  'api-designer':       ['graphql', 'grpc', 'swagger', 'openapi', 'api versioning', 'api design', 'api contract', 'rest design', 'api spec'],
-  'frontend':           ['react', 'vue', 'angular', 'component', 'jsx', 'tsx', 'css', 'html', 'browser', 'dom', 'state management', 'hook', 'redux', 'tailwind', 'responsive'],
-  'fullstack':          ['full stack', 'fullstack', 'entire feature', 'end to end', 'build a page', 'build a form', 'build an app', 'build a screen', 'full feature'],
-  'devops':             ['docker', 'kubernetes', 'k8s', 'deploy', 'aws', 'gcp', 'azure', 'terraform', 'ci/cd', 'pipeline', 'container', 'nginx', 'helm', 'infrastructure', 'monitoring'],
-  'postgres-wizard':    ['postgres', 'postgresql', 'index', 'query optimization', 'explain analyze', 'partitioning', 'vacuum', 'slow query'],
-  'data-engineer':      ['data pipeline', 'etl', 'spark', 'airflow', 'dbt', 'data warehouse', 'data lake', 'kafka', 'transform data', 'data quality', 'cdc', 'batch processing'],
-  'llm-architect':      ['llm', 'chatgpt', 'claude api', 'openai', 'anthropic', 'agent', 'langchain', 'chatbot', 'ai product', 'ai application', 'ai system'],
-  'prompt-engineer':    ['prompt', 'system prompt', 'few-shot', 'chain of thought', 'instruction tuning', 'jailbreak', 'context window', 'token limit'],
-  'rag-engineer':       ['rag', 'vector', 'embedding', 'retrieval', 'semantic search', 'pinecone', 'chroma', 'weaviate', 'chunk', 'knowledge base', 'vector db'],
-  'security':           ['security', 'vulnerability', 'xss', 'sql injection', 'csrf', 'owasp', 'exploit', 'pentest', 'attack', 'breach', 'sanitize', 'threat model'],
-  'auth-specialist':    ['auth', 'login', 'oauth', 'jwt', 'token', 'session', 'password', 'sso', 'saml', 'mfa', 'permission', 'rbac', 'roles'],
-  'debugging-master':   ['debug', 'bug', 'error', 'fix', 'issue', 'problem', 'crash', 'exception', 'stacktrace', 'not working', 'broken', 'fails', 'investigate error'],
-  'code-quality':       ['refactor', 'clean code', 'solid', 'technical debt', 'maintainable', 'readable', 'code smell', 'coupling', 'cohesion'],
-  'code-review':        ['review', 'pull request', ' pr ', 'code review', 'feedback on code', 'review this'],
-  'system-designer':    ['architecture', 'system design', 'scalable', 'distributed', 'microservices', 'high availability', 'design pattern', 'cap theorem', 'event driven'],
-  'ui-design':          ['ui design', 'visual design', 'color palette', 'typography', 'layout', 'figma', 'design system', 'component library', 'style guide', 'pixel'],
-  'ux-design':          ['ux', 'user experience', 'usability', 'wireframe', 'prototype', 'user flow', 'journey map', 'onboarding', 'user research', 'usability test'],
-  'product-management': ['product', 'roadmap', 'prioritize', 'user story', 'requirements', 'sprint', 'backlog', 'product manager', 'feature request', 'rice'],
-  'docs-engineer':      ['documentation', 'readme', 'tutorial', 'guide', 'api docs', 'onboarding doc', 'wiki', 'write docs'],
-  'technical-writer':   ['technical writing', 'blog post', 'article', 'write about', 'explain how', 'technical article'],
-  'investment-banking': ['dcf', 'lbo', 'valuation', 'financial model', 'investment', 'equity research', 'merger', 'acquisition', 'm&a', 'ebitda', 'wacc', 'comps', 'ipo', 'private equity', 'ic memo', 'investment committee'],
-  'researcher':         ['research', 'investigate', 'find information', 'competitive analysis', 'market research', 'analyze market', 'due diligence', 'landscape analysis', 'find and analyze'],
+  'backend': [
+    'backend', 'api endpoint', 'server', 'node.js', 'express', 'fastify', 'endpoint', 'rest api', 'crud', 'migration', 'transaction', 'queue', 'http server',
+    'бекенд', 'сервер', 'ендпоінт', 'апі', 'міграці', 'транзакці', 'черга',
+    'бэкенд', 'эндпоинт', 'миграци', 'транзакци', 'очередь'
+  ],
+  'api-designer': [
+    'graphql', 'grpc', 'swagger', 'openapi', 'api versioning', 'api design', 'api contract', 'rest design', 'api spec',
+    'графкл', 'апі дизайн', 'версіонування апі', 'контракт апі', 'специфікаці',
+    'графкл', 'дизайн апи', 'версиони', 'контракт', 'спецификаци'
+  ],
+  'frontend': [
+    'react', 'vue', 'angular', 'component', 'jsx', 'tsx', 'css', 'html', 'browser', 'dom', 'state management', 'hook', 'redux', 'tailwind', 'responsive',
+    'фронтенд', 'компонент', 'браузер', 'стан', 'хук', 'адаптив',
+    'фронтенд', 'состояние', 'адаптив'
+  ],
+  'fullstack': [
+    'full stack', 'fullstack', 'entire feature', 'end to end', 'build a page', 'build a form', 'build an app', 'build a screen', 'full feature',
+    'фулстек', 'повний стек', 'всю функці', 'від початку до кінця', 'зроби сторінк', 'зроби форм', 'ціла функці',
+    'фулстек', 'полный стек', 'всю функци', 'от начала до конца', 'сделай страниц', 'целая функци'
+  ],
+  'devops': [
+    'docker', 'kubernetes', 'k8s', 'deploy', 'aws', 'gcp', 'azure', 'terraform', 'ci/cd', 'pipeline', 'container', 'nginx', 'helm', 'infrastructure', 'monitoring',
+    'депло', 'контейнер', 'інфраструктур', 'моніторинг', 'пайплайн',
+    'деплой', 'инфраструктур', 'мониторинг', 'пайплайн'
+  ],
+  'postgres-wizard': [
+    'postgres', 'postgresql', 'index', 'query optimization', 'explain analyze', 'partitioning', 'vacuum', 'slow query',
+    'постгрес', 'індекс', 'оптимізаці запит', 'повільн запит', 'партиціонуванн', 'вакуум',
+    'постгрес', 'индекс', 'оптимизац запрос', 'медлен запрос', 'партици'
+  ],
+  'data-engineer': [
+    'data pipeline', 'etl', 'spark', 'airflow', 'dbt', 'data warehouse', 'data lake', 'kafka', 'transform data', 'data quality', 'cdc', 'batch processing',
+    'пайплайн дан', 'сховищ дан', 'озеро дан', 'якість дан', 'трансформ',
+    'пайплайн данн', 'хранилище данн', 'озеро данн', 'качество данн', 'трансформ'
+  ],
+  'llm-architect': [
+    'llm', 'chatgpt', 'claude api', 'openai', 'anthropic', 'agent', 'langchain', 'chatbot', 'ai product', 'ai application', 'ai system',
+    'ллам', 'чажпт', 'агент', 'чатбот', 'штучний інтелект', 'продукт штучного інтелекту', 'застосунок зі штучним інтелектом',
+    'ллам', 'агент', 'чатбот', 'искусствен интелект', 'продукт искусс'
+  ],
+  'prompt-engineer': [
+    'prompt', 'system prompt', 'few-shot', 'chain of thought', 'instruction tuning', 'jailbreak', 'context window', 'token limit',
+    'промпт', 'системний промпт', 'ланцюжок думок', 'інструкці', 'контекстне вікно', 'ліміт токен',
+    'промпт', 'системный промпт', 'цепочк мысл', 'инструкци', 'контекстное окно', 'лимит токен'
+  ],
+  'rag-engineer': [
+    'rag', 'vector', 'embedding', 'retrieval', 'semantic search', 'pinecone', 'chroma', 'weaviate', 'chunk', 'knowledge base', 'vector db',
+    'раг', 'вектор', 'ембединг', 'ретривал', 'семантичний пошук', 'база знань', 'база знан',
+    'раг', 'вектор', 'эмбединг', 'ретривал', 'семантический поиск', 'база знаний'
+  ],
+  'security': [
+    'security', 'vulnerability', 'xss', 'sql injection', 'csrf', 'owasp', 'exploit', 'pentest', 'attack', 'breach', 'sanitize', 'threat model',
+    'безпек', 'вразливіст', 'ін\'єкці', 'експлоіт', 'пентест', 'атака', 'загроз', 'санітайз', 'вразлив',
+    'безопасност', 'уязвимост', 'инъекци', 'эксплоит', 'пентест', 'атака', 'угроз', 'уязвим'
+  ],
+  'auth-specialist': [
+    'auth', 'login', 'oauth', 'jwt', 'token', 'session', 'password', 'sso', 'saml', 'mfa', 'permission', 'rbac', 'roles',
+    'авторизаці', 'логін', 'аутентифікаці', 'токен', 'сесі', 'пароль', 'дозвіл', 'рол', 'мфа', 'двохфакторн',
+    'авторизац', 'логин', 'аутентификац', 'токен', 'сесси', 'пароль', 'разрешен', 'рол', 'двухфакторн'
+  ],
+  'debugging-master': [
+    'debug', 'bug', 'error', 'fix', 'issue', 'problem', 'crash', 'exception', 'stacktrace', 'not working', 'broken', 'fails', 'investigate error',
+    'дебаг', 'баг', 'помилк', 'проблем', 'краш', 'екзепшн', 'стектрейс', 'не працює', 'полам', 'злама', 'виправ', 'дослідж помилк',
+    'дебаг', 'баг', 'ошибк', 'проблем', 'краш', 'эксепшн', 'стектрейс', 'не работает', 'слома', 'исправ', 'исследу ошибк'
+  ],
+  'code-quality': [
+    'refactor', 'clean code', 'solid', 'technical debt', 'maintainable', 'readable', 'code smell', 'coupling', 'cohesion',
+    'рефакторинг', 'чистий код', 'технічний борг', 'читабельн', 'зв\'язніст', 'когезі', 'код смелл', 'якість код',
+    'рефакторинг', 'чистый код', 'технический долг', 'читаемост', 'связност', 'когези', 'качество код'
+  ],
+  'code-review': [
+    'review', 'pull request', ' pr ', 'code review', 'feedback on code', 'review this',
+    'рев\'ю', 'ревю', 'пул реквест', 'перевір код', 'перевірити код', 'подивись код', 'подивитись код', 'огляд код',
+    'ревью', 'пул реквест', 'проверь код', 'проверить код', 'посмотри код', 'обзор код'
+  ],
+  'system-designer': [
+    'architecture', 'system design', 'scalable', 'distributed', 'microservices', 'high availability', 'design pattern', 'cap theorem', 'event driven',
+    'архітектур', 'дизайн систем', 'масштабов', 'розподілен', 'мікросервіс', 'відмовостійкіст', 'паттерн', 'евент дривен', 'поді',
+    'архитектур', 'дизайн систем', 'масштабиру', 'распредел', 'микросервис', 'отказоустойчив', 'паттерн', 'событийно-ориентиров'
+  ],
+  'ui-design': [
+    'ui design', 'visual design', 'color palette', 'typography', 'layout', 'figma', 'design system', 'component library', 'style guide', 'pixel',
+    'юі дизайн', 'візуальн дизай', 'кольоров палітр', 'типографі', 'лейаут', 'фігма', 'дизайн систем', 'компонент бібліотек', 'стайл гайд', 'піксел',
+    'юи дизайн', 'визуальн дизай', 'цветов палитр', 'типографи', 'дизайн систем', 'библиотек компонент', 'стайл гайд', 'пиксел'
+  ],
+  'ux-design': [
+    'ux', 'user experience', 'usability', 'wireframe', 'prototype', 'user flow', 'journey map', 'onboarding', 'user research', 'usability test',
+    'юкз', 'користувацьк досвід', 'юзабіліт', 'вайрфрейм', 'прототип', 'юзер флоу', 'джорні меп', 'онбординг', 'дослідж користувач', 'юзабіліт тест',
+    'юкс', 'пользовательск опыт', 'юзабилит', 'вайрфрейм', 'прототип', 'юзер флоу', 'джорни меп', 'онбординг', 'исследован пользоват'
+  ],
+  'product-management': [
+    'product', 'roadmap', 'prioritize', 'user story', 'requirements', 'sprint', 'backlog', 'product manager', 'feature request', 'rice',
+    'продукт', 'роадмеп', 'пріоритиз', 'юзер сторі', 'вимог', 'спринт', 'беклог', 'продакт менеджер', 'пр', 'запит на функці',
+    'роадмап', 'приоритиз', 'юзер стори', 'требован', 'продакт менеджер', 'запрос на функци'
+  ],
+  'docs-engineer': [
+    'documentation', 'readme', 'tutorial', 'guide', 'api docs', 'onboarding doc', 'wiki', 'write docs',
+    'документаці', 'рідмі', 'туторіал', 'гайд', 'посібник', 'інструкці', 'вікі', 'напиш докум', 'написат докум',
+    'документаци', 'ридми', 'туториал', 'гайд', 'пособие', 'инструкци', 'вики', 'напиш документ'
+  ],
+  'technical-writer': [
+    'technical writing', 'blog post', 'article', 'write about', 'explain how', 'technical article',
+    'технічн пис', 'блог пост', 'статт', 'напиш про', 'поясн як', 'технічн статт',
+    'техническ пис', 'блог пост', 'стать', 'напиш про', 'объясн как', 'техническ стать'
+  ],
+  'investment-banking': [
+    'dcf', 'lbo', 'valuation', 'financial model', 'investment', 'equity research', 'merger', 'acquisition', 'm&a', 'ebitda', 'wacc', 'comps', 'ipo', 'private equity', 'ic memo', 'investment committee',
+    'дисконтованих грошових поток', 'фінансов модел', 'інвестиці', 'злитт', 'поглинанн', 'ебітда', 'вацц', 'приватн еквіт', 'оцінк', 'комп',
+    'дисконтированн денежн поток', 'финансов модел', 'инвестици', 'слиян', 'поглощен', 'ебитда', 'вацц', 'частн эквити', 'оценк'
+  ],
+  'researcher': [
+    'research', 'investigate', 'find information', 'competitive analysis', 'market research', 'analyze market', 'due diligence', 'landscape analysis', 'find and analyze',
+    'дослід', 'розслід', 'знайд інформаці', 'конкурентн аналіз', 'ринк', 'аналіз ринк', 'дью ділайдженс', 'ландшафтн аналіз', 'пошук інформаці', 'пошукай',
+    'исслед', 'расслед', 'найди информац', 'конкурентн анализ', 'рын', 'анализ рынка', 'дью дилайдженс', 'ландшафтн анализ', 'поиск информац'
+  ],
 };
 
 function autoSelectSkills(text) {
@@ -5555,7 +5711,7 @@ function renderProjects() {
   el.innerHTML = '';
   $i('projCount').textContent = projects.length || '';
 
-  // Update active project label in header + sessBar
+  // Update active project label in header + sessBar + dropdown
   const activeProj = curProjectId ? projects.find(p => p.id === curProjectId) : null;
   const activeProjLabel = $i('activeProjLabel');
   if (activeProjLabel) {
@@ -5563,6 +5719,19 @@ function renderProjects() {
     else { activeProjLabel.textContent = ''; activeProjLabel.removeAttribute('data-tip'); activeProjLabel.style.display = 'none'; }
   }
   document.title = activeProj ? activeProj.name : 'Claude Code Studio';
+
+  // Update header dropdown
+  const ddWrap = $i('projDdWrap');
+  const ddName = $i('projDdName');
+  if (ddWrap && ddName) {
+    if (activeProj) {
+      ddName.textContent = activeProj.name;
+      ddWrap.classList.add('visible');
+    } else {
+      ddWrap.classList.remove('visible');
+    }
+  }
+  renderProjDropdownList();
 
   if (!projects.length) {
     el.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5">${t('proj.empty')}</div>`;
@@ -5590,6 +5759,76 @@ function renderProjects() {
     el.appendChild(div);
   }
 }
+
+// ─── Project dropdown in header ────────────────────────────────────────────
+let _projDdOpen = false;
+
+function toggleProjDropdown() {
+  _projDdOpen = !_projDdOpen;
+  const btn = $i('projDdBtn');
+  const menu = $i('projDdMenu');
+  btn?.classList.toggle('open', _projDdOpen);
+  menu?.classList.toggle('open', _projDdOpen);
+  if (_projDdOpen) {
+    $i('projDdSearch')?.focus();
+    renderProjDropdownList();
+  }
+}
+
+function closeProjDropdown() {
+  _projDdOpen = false;
+  $i('projDdBtn')?.classList.remove('open');
+  $i('projDdMenu')?.classList.remove('open');
+}
+
+function renderProjDropdownList(filter = '') {
+  const list = $i('projDdList');
+  if (!list) return;
+
+  const filtered = filter
+    ? projects.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()) || p.workdir.toLowerCase().includes(filter.toLowerCase()))
+    : projects;
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="proj-dd-empty">${filter ? t('search.empty') || 'Не знайдено' : t('proj.empty')}</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(p => {
+    const active = p.id === curProjectId;
+    const shortPath = p.workdir.length > 45 ? '…' + p.workdir.slice(-43) : p.workdir;
+    return `
+      <div class="proj-dd-item${active ? ' active' : ''}" onclick="selectProjFromDropdown('${p.id}')">
+        <div class="proj-dd-item-name">${active ? '● ' : ''}${escH(p.name)}</div>
+        <div class="proj-dd-item-path">${escH(shortPath)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function filterProjDropdown(value) {
+  renderProjDropdownList(value);
+}
+
+function selectProjFromDropdown(id) {
+  closeProjDropdown();
+  if (id !== curProjectId) {
+    switchProject(id);
+  }
+}
+
+// Close dropdown on click outside
+document.addEventListener('click', e => {
+  if (_projDdOpen && !e.target.closest('.proj-dd-wrap')) {
+    closeProjDropdown();
+  }
+});
+
+// Keyboard navigation for dropdown
+document.addEventListener('keydown', e => {
+  if (!_projDdOpen) return;
+  if (e.key === 'Escape') { closeProjDropdown(); e.preventDefault(); }
+});
 
 // ─── Per-project tab save/restore ────────────────────────────────────────
 const PROJ_TABS_KEY = pid => `cc_ptabs_${pid || '__none'}`;
