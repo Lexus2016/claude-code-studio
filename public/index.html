@@ -789,6 +789,13 @@ body::after {
 .msg-interrupted { margin:4px 12px 6px; font-size:11px; color:var(--yellow,#e5c07b); opacity:.8; }
 .msg-done-badge { margin:6px 14px 2px; padding:5px 10px; font-size:11.5px; color:var(--green,#98c379); opacity:.75; border-top:1px solid rgba(139,148,158,.06); }
 
+/* ─── Message timestamps ─── */
+.msg-time { display:flex; align-items:center; gap:6px; margin:3px 2px 0; font-size:10.5px; color:var(--muted); opacity:.55; line-height:1; user-select:none; transition:opacity .15s; }
+.mw:hover .msg-time { opacity:.85; }
+.mw.user .msg-time { justify-content:flex-end; }
+.mw.assistant .msg-time { justify-content:flex-start; }
+.msg-time .mt-duration { color:var(--green,#98c379); font-weight:500; }
+
 /* ─── Ask User Card ─── */
 .ask-user-card {
   margin: 10px 12px; padding: 16px 18px; background: var(--s2); border: 1px solid var(--accent);
@@ -939,7 +946,7 @@ body::after {
 .qd-edit:hover { color: var(--accent2); }
 .qd-del:hover { color: var(--red); }
 .queue-editor { display: flex; flex-direction: column; gap: 5px; margin: 4px 0 2px; }
-.queue-edit-area { width: 100%; box-sizing: border-box; background: var(--s2); border: 1px solid var(--accent); border-radius: 8px; color: var(--text); font-size: 14px; font-family: inherit; padding: 7px 10px; resize: none; outline: none; min-height: 58px; line-height: 1.55; }
+.queue-edit-area { width: 100%; box-sizing: border-box; background: var(--s2); border: 1px solid var(--accent); border-radius: 8px; color: var(--text); font-size: 14px; font-family: inherit; padding: 10px 12px; resize: vertical; outline: none; min-height: 80px; max-height: 60vh; line-height: 1.55; }
 .queue-edit-area:focus { box-shadow: 0 0 0 2px rgba(124,106,239,.18); }
 .queue-edit-btns { display: flex; gap: 6px; justify-content: flex-end; }
 .qe-save { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 4px 13px; font-size: 12px; font-family: inherit; cursor: pointer; transition: background .12s; }
@@ -3595,7 +3602,7 @@ function setReply(btn) {
   const mw = btn.closest('.mw');
   const id = mw.dataset.msgId || null;
   const role = mw.classList.contains('user') ? 'user' : 'assistant';
-  const content = mw.querySelector('.msg').textContent.trim();
+  const content = mw.querySelector('.msg').textContent.trim().slice(0, 200);
   replyTo = { id, role, content };
   $i('replyPreviewRole').textContent = role === 'user' ? t('you.label') : 'Claude';
   $i('replyPreviewText').textContent = content.slice(0, 120) + (content.length > 120 ? '…' : '');
@@ -4290,7 +4297,7 @@ function editQueuedMsg(btn) {
 
   const ta = editor.querySelector('.queue-edit-area');
   ta.style.height = 'auto';
-  ta.style.height = Math.min(ta.scrollHeight, 180) + 'px';
+  ta.style.height = Math.min(ta.scrollHeight, 400) + 'px';
   ta.focus();
   ta.setSelectionRange(ta.value.length, ta.value.length);
 }
@@ -5534,6 +5541,12 @@ function switchProject(id) {
 
   // Persist current project's live tab state to memory before switching away
   if (curProjectId) {
+    // Save current tab's input draft, attachments & reply-to so they aren't lost
+    if (activeTabId) {
+      getTS(activeTabId).draft = inEl.value;
+      getTS(activeTabId).attachments = [..._attachments];
+      getTS(activeTabId).replyTo = replyTo;
+    }
     projectTabs[curProjectId] = openTabs;
     projectActiveTab[curProjectId] = activeTabId;
   }
@@ -5543,6 +5556,8 @@ function switchProject(id) {
     curProjectId = null; curWorkdir = null;
     openTabs = []; activeTabId = null; currentSessionId = null;
     msgsEl.innerHTML = ''; showW(); renderTabs();
+    inEl.value = ''; inEl.style.height = 'auto';
+    _clearAttachments(); clearReply();
     renderProjects(); saveUIState(); loadHist(); updateSessBar();
     toast(t('proj.deactivated'));
     return;
@@ -5568,17 +5583,44 @@ function switchProject(id) {
   }
 
   // Update UI for the newly active project
+  // CRITICAL: Always clear currentSessionId immediately when switching projects.
+  // loadSess is async — without this, a stale sessionId from the old project
+  // could leak into a chat message sent before loadSess completes.
+  currentSessionId = null;
+  curEl = null; curTxt = ''; curToolCounts = {}; curToolLog = [];
   renderTabs();
   if (activeTabId) {
     const tab = openTabs.find(t => t.id === activeTabId);
-    if (tab?.isNew) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); }
+    if (tab?.isNew) { msgsEl.innerHTML = ''; showW(); }
     else loadSess(activeTabId);
     // Sync send/stop button to this tab's generating state
     if (tab?.generating) { isGen = true; generatingTabId = activeTabId; setSendStop(true); }
     else { isGen = false; generatingTabId = null; setSendStop(false); }
   } else {
-    currentSessionId = null; msgsEl.innerHTML = ''; showW();
+    msgsEl.innerHTML = ''; showW();
     isGen = false; generatingTabId = null; setSendStop(false);
+  }
+
+  // Restore input draft, attachments & reply-to for the target tab (or clear if no tab)
+  if (activeTabId) {
+    const draft = getTS(activeTabId).draft || '';
+    inEl.value = draft;
+    inEl.style.height = 'auto';
+    inEl.style.height = Math.min(inEl.scrollHeight, 130) + 'px';
+    _restoreAttachments(getTS(activeTabId).attachments);
+    const savedReply = getTS(activeTabId).replyTo;
+    if (savedReply) {
+      replyTo = savedReply;
+      $i('replyPreviewRole').textContent = savedReply.role === 'user' ? t('you.label') : 'Claude';
+      const rc = savedReply.content || '';
+      $i('replyPreviewText').textContent = rc.slice(0, 120) + (rc.length > 120 ? '…' : '');
+      $i('replyPreview').style.display = 'flex';
+    } else { clearReply(); }
+  } else {
+    inEl.value = '';
+    inEl.style.height = 'auto';
+    _clearAttachments();
+    clearReply();
   }
 
   renderProjects(); saveUIState(); loadHist(); loadFiles(''); updateSessBar();

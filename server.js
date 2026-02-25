@@ -440,6 +440,7 @@ async function startTask(task) {
       } catch (e) { console.error('[taskWorker] attachments write error:', e); }
     }
     const prompt = parts.join('\n\n');
+    const _taskStartedAt = Date.now();
     // Check if this is a restart: only skip saving if the LAST user message
     // has the exact same prompt (crash recovery). Previously checked for ANY
     // user message which broke when a new task reused an existing session.
@@ -513,7 +514,7 @@ async function startTask(task) {
           } catch (e) {
             console.error(`[taskWorker] task ${task.id} onDone DB error:`, e);
           }
-          broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id });
+          broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id, duration: Date.now() - _taskStartedAt });
           resolve();
         });
     });
@@ -521,7 +522,7 @@ async function startTask(task) {
     console.error(`[taskWorker] task ${task.id} exception:`, err);
     try { db.prepare(`UPDATE tasks SET status='cancelled', updated_at=datetime('now') WHERE id=?`).run(task.id); } catch {}
     // Send done so the client doesn't wait forever for an event that will never arrive.
-    if (sessionId) broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id });
+    if (sessionId) broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id, duration: Date.now() - _taskStartedAt });
   } finally {
     taskBuffers.delete(task.id);
     taskRunning.delete(task.id);
@@ -640,6 +641,8 @@ function loadConfig() { try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'ut
 function saveConfig(c) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2));
   _mergedConfigCache = null; // invalidate on every write
+  _skillContentCache.clear(); // skill files may have changed
+  _systemPromptCache.clear(); // prompts depend on skill content
 }
 
 // In-memory cache for the merged (global + local) config.
@@ -674,6 +677,82 @@ function resolveSkillFile(file) {
   const appPath = path.join(APP_DIR, file);
   if (fs.existsSync(appPath)) return appPath;
   return path.join(__dirname, file);
+}
+
+// ─── Skill content cache (avoids fs.readFileSync on every chat turn) ─────────
+// Key: resolved file path → { content, mtimeMs }
+// Invalidated when file mtime changes. saveConfig() clears entire cache.
+const _skillContentCache = new Map();
+function getSkillContent(filePath) {
+  try {
+    const stat = fs.statSync(filePath);
+    const cached = _skillContentCache.get(filePath);
+    if (cached && cached.mtimeMs >= stat.mtimeMs) return cached.content;
+    const content = fs.readFileSync(filePath, 'utf-8');
+    _skillContentCache.set(filePath, { content, mtimeMs: stat.mtimeMs });
+    return content;
+  } catch { return ''; }
+}
+
+// ─── System prompt builder with caching ──────────────────────────────────────
+// Caches assembled system prompt by sorted skill IDs → avoids repeated string
+// concatenation + disk reads on every chat turn with the same skill set.
+const _systemPromptCache = new Map();
+const MAX_PROMPT_CACHE_SIZE = 32;
+
+// Base instructions (always included) — kept concise to save tokens
+const BASE_SYSTEM_INSTRUCTIONS = `When you are answering a specific question or task that is one of several questions or tasks in the user's message, begin your response with a short quote (1–2 lines) of that specific question or task formatted as a markdown blockquote:
+> <original question or task text>
+Then provide your answer below it. Do not add the blockquote if the message contains only a single question or task.`;
+
+// Internal MCP tool instructions — compact versions (~140 tokens vs original ~240)
+const ASK_USER_INSTRUCTION = `\n\nYou have access to an "ask_user" tool (via MCP server "_ccs_ask_user"). When you need user input BEFORE proceeding — such as choosing between approaches, confirming an action, or clarifying requirements — you MUST call ask_user instead of writing questions as text. The ask_user tool pauses execution and waits for the user's response. Do NOT ask questions in your text output and then continue working — always use the ask_user tool for questions.`;
+
+const NOTIFY_USER_INSTRUCTION = `\n\nYou have access to a "notify_user" tool (via MCP server "_ccs_notify"). Use it to send non-blocking progress updates to the user. Call notify_user for milestones ("Completed database migration"), warnings ("Rate limit approaching"), errors ("Test suite has 3 failures"), or progress tracking (with current/total steps). Unlike ask_user, notify_user does NOT pause execution — you continue working immediately. Do NOT overuse it: send notifications only for meaningful status changes, not for every minor step.`;
+
+// Status line + tool call instructions (~100 tokens vs original ~170)
+const STATUS_LINE_INSTRUCTION = `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:
+- "✅ Done — [brief summary of what was completed]." when the task is fully finished.
+- "⏳ In progress — [what's happening now and what comes next]." when you're still working and will continue.
+- "❓ Waiting for input — [what you need from the user]." when you need the user to answer or decide something.
+- "⚠️ Blocked — [what went wrong and what's needed to proceed]." when something prevents you from continuing.
+This status line must always be the very last thing in your response. Never skip it.`;
+
+const TOOL_CALL_INSTRUCTION = `\n\nCRITICAL: After finishing tool calls (Read, Bash, Edit, Write, Grep, etc.), you MUST write a final text response with the status line. NEVER end your turn on a tool call without a text summary. The user cannot see tool results — they only see your text. If you called tools, summarize what you found or did in 1-3 sentences, then add the "---" status line.`;
+
+/**
+ * Build system prompt for a chat turn.
+ * Caches by sorted skill IDs to avoid rebuilding identical prompts.
+ * @param {string[]} skillIds - active skill IDs
+ * @param {object} config - merged config with skills definitions
+ * @returns {string} assembled system prompt
+ */
+function buildSystemPrompt(skillIds, config) {
+  const cacheKey = [...skillIds].sort().join('|');
+  const cached = _systemPromptCache.get(cacheKey);
+  if (cached) return cached;
+
+  let prompt = BASE_SYSTEM_INSTRUCTIONS;
+
+  for (const sid of skillIds) {
+    const s = config.skills[sid];
+    if (!s) continue;
+    const content = getSkillContent(resolveSkillFile(s.file));
+    if (content) prompt += `\n\n--- SKILL: ${s.label} ---\n${content}`;
+  }
+
+  prompt += ASK_USER_INSTRUCTION;
+  prompt += NOTIFY_USER_INSTRUCTION;
+  prompt += STATUS_LINE_INSTRUCTION;
+  prompt += TOOL_CALL_INSTRUCTION;
+
+  // Evict oldest if cache full
+  if (_systemPromptCache.size >= MAX_PROMPT_CACHE_SIZE) {
+    const oldest = _systemPromptCache.keys().next().value;
+    _systemPromptCache.delete(oldest);
+  }
+  _systemPromptCache.set(cacheKey, prompt);
+  return prompt;
 }
 
 // ============================================
@@ -713,7 +792,7 @@ function runCliSingle(p) {
         }
       })
       .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
-      .onTool((name, inp) => { if (name !== 'ask_user' && name !== 'notify_user') { ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) })); } try { stmts.addMsg.run(sessionId,'assistant','tool',inp||'',name,null,null,null); } catch {} })
+      .onTool((name, inp) => { if (name !== 'ask_user' && name !== 'notify_user') { ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) })); } try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {} })
       .onSessionId(sid => { newCid=sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} }) // persist early so open-terminal works during active chat
       .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
       .onError(err => {
@@ -781,9 +860,10 @@ async function runMultiAgent(p) {
     await Promise.all(runnable.map(async agent => {
       remaining.splice(remaining.indexOf(agent), 1);
       ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`🔄 ${agent.role}`, ...(tabId ? { tabId } : {}) }));
-      const depCtx = (agent.depends_on||[]).map(d => results[d] ? `\n[${d}]:${results[d].substring(0,500)}` : '').join('');
+      const depCtx = (agent.depends_on||[]).map(d => results[d] ? `\n[${d}]:${results[d].substring(0,2000)}` : '').join('');
       const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
-      const agentSp = `You are ${agent.role}. ${systemPrompt||''}`;
+      // Compact system prompt for sub-agents: role only, no skills (saves ~3,000+ tokens per agent)
+      const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.`;
       const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'];
       let agentText = '';
 
@@ -792,7 +872,7 @@ async function runMultiAgent(p) {
         const _res = () => { if (!_settled) { _settled = true; res(); } };
         cli.send({ prompt:agentPrompt, model, maxTurns:Math.min(maxTurns,15), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
           .onText(t => { agentText+=t; chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + t); try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
-          .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',i||'',n,agent.id,null,null); } catch {} })
+          .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,10000),n,agent.id,null,null); } catch {} })
           .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
           .onDone(() => _res());
       });
@@ -1704,6 +1784,7 @@ wss.on('connection', (ws) => {
     // effectiveTabId (= localSessionId) is computed, finally still resets the
     // correct _tabBusy key and avoids leaving the tab permanently stuck.
     let localSessionId = null, localClaudeId = undefined, effectiveTabId = tabId;
+    const _chatStartedAt = Date.now();
 
     try {
       ws.send(queuePayload(tabId));
@@ -1711,11 +1792,23 @@ wss.on('connection', (ws) => {
       // Resolve session: use sessionId from message, or legacy, or create new
       localSessionId = msg.sessionId || (tabId ? null : legacySessionId);
 
-      if (!localSessionId || !stmts.getSession.get(localSessionId)) {
+      // Single DB lookup — reused for workdir check, existence check, claude_session_id, and auto-title
+      let existSess = localSessionId ? stmts.getSession.get(localSessionId) : null;
+
+      // Validate workdir: if the session belongs to a different project, don't reuse it.
+      if (existSess && msg.workdir && existSess.workdir && existSess.workdir !== msg.workdir) {
+        log.warn('workdir mismatch — refusing to reuse session from different project', { sessionId: localSessionId, sessionWorkdir: existSess.workdir, msgWorkdir: msg.workdir });
+        localSessionId = null;
+        existSess = null;
+      }
+
+      let isNewSession = false;
+      if (!localSessionId || !existSess) {
         localSessionId = genId();
         stmts.createSession.run(localSessionId,'Нова сесія','[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||null,msg.workdir||null);
+        isNewSession = true;
       } else {
-        localClaudeId = stmts.getSession.get(localSessionId)?.claude_session_id || undefined;
+        localClaudeId = existSess.claude_session_id || undefined;
       }
 
       // For legacy (no tabId) mode, keep WS-level state in sync
@@ -1753,9 +1846,8 @@ wss.on('connection', (ws) => {
       }
       stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(sIds),mode,agentMode,model,workdir||null,localSessionId);
 
-      // Auto-title
-      const session = stmts.getSession.get(localSessionId);
-      if (session?.title==='Нова сесія') {
+      // Auto-title (reuses existSess from initial lookup — no extra DB query)
+      if (isNewSession || existSess?.title==='Нова сесія') {
         const title=userMessage.substring(0,60)+(userMessage.length>60?'...':'');
         stmts.updateTitle.run(title, localSessionId);
         ws.send(JSON.stringify({ type:'session_title', sessionId:localSessionId, title, tabId: effectiveTabId }));
@@ -1766,19 +1858,8 @@ wss.on('connection', (ws) => {
       if (effectiveTabId) ws._tabAbort[effectiveTabId] = abortController;
       else ws._abort = abortController;
 
-      let systemPrompt = `When you are answering a specific question or task that is one of several questions or tasks in the user's message, begin your response with a short quote (1–2 lines) of that specific question or task formatted as a markdown blockquote:\n> <original question or task text>\nThen provide your answer below it. Do not add the blockquote if the message contains only a single question or task.`;
-      for (const sid of sIds) { const s=config.skills[sid]; if(s) try{systemPrompt+=`\n\n--- SKILL: ${s.label} ---\n${fs.readFileSync(resolveSkillFile(s.file),'utf-8')}`}catch{} }
-
-      // Ask User tool instruction
-      systemPrompt += `\n\nYou have access to an "ask_user" tool (via MCP server "_ccs_ask_user"). When you need user input BEFORE proceeding — such as choosing between approaches, confirming an action, or clarifying requirements — you MUST call ask_user instead of writing questions as text. The ask_user tool pauses execution and waits for the user's response. Do NOT ask questions in your text output and then continue working — always use the ask_user tool for questions.`;
-
-      // Notify User tool instruction
-      systemPrompt += `\n\nYou have access to a "notify_user" tool (via MCP server "_ccs_notify"). Use it to send non-blocking progress updates to the user. Call notify_user for milestones ("Completed database migration"), warnings ("Rate limit approaching"), errors ("Test suite has 3 failures"), or progress tracking (with current/total steps). Unlike ask_user, notify_user does NOT pause execution — you continue working immediately. Do NOT overuse it: send notifications only for meaningful status changes, not for every minor step.`;
-
-      // Always end with a clear status line so the user knows what's happening
-      systemPrompt += `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:\n- "✅ Done — [brief summary of what was completed]." when the task is fully finished.\n- "⏳ In progress — [what's happening now and what comes next]." when you're still working and will continue.\n- "❓ Waiting for input — [what you need from the user]." when you need the user to answer or decide something.\n- "⚠️ Blocked — [what went wrong and what's needed to proceed]." when something prevents you from continuing.\nThis status line must always be the very last thing in your response. Never skip it.`;
-      // Reinforce: after tool calls, always write a final text summary
-      systemPrompt += `\n\nCRITICAL: After finishing tool calls (Read, Bash, Edit, Write, Grep, etc.), you MUST write a final text response with the status line. NEVER end your turn on a tool call without a text summary. The user cannot see tool results — they only see your text. If you called tools, summarize what you found or did in 1-3 sentences, then add the "---" status line.`;
+      // Build system prompt — cached by skill combination, skill files cached in memory
+      const systemPrompt = buildSystemPrompt(sIds, config);
 
       const mcpServers = {};
       for (const mid of mIds) {
@@ -1843,12 +1924,12 @@ wss.on('connection', (ws) => {
       }
       if (newCid) { stmts.updateClaudeId.run(newCid, localSessionId); }
 
-      proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId }));
+      proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt }));
       proxy.send(JSON.stringify({ type:'files_changed' }));
     } catch(err) {
       if(err.name==='AbortError') proxy.send(JSON.stringify({ type:'agent_status', status:'Stopped', statusKey:'status.stopped', tabId: effectiveTabId }));
       else { log.error('chat error', { message: err.message, name: err.name }); proxy.send(JSON.stringify({ type:'error', error:err.message, tabId: effectiveTabId })); }
-      proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId }));
+      proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt }));
     } finally {
       activeTasks.delete(localSessionId);
       chatBuffers.delete(localSessionId); // cleanup in-memory buffer

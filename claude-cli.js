@@ -2,6 +2,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 const { StringDecoder } = require('string_decoder');
 
 // Resolve claude binary — cross-platform (macOS, Linux, Windows)
@@ -61,6 +62,44 @@ const MODEL_MAP = {
   'haiku':  'haiku',
 };
 
+// ─── MCP config file cache ──────────────────────────────────────────────────
+// Reuses temp files by content hash instead of creating/deleting per request.
+// Key: SHA-256 hash of JSON content → { path, refCount }
+// Files are cleaned up when no references remain (process exit or explicit clear).
+const _mcpConfigCache = new Map();
+
+function getMcpConfigPath(mcpServers) {
+  const json = JSON.stringify({ mcpServers });
+  const hash = crypto.createHash('sha256').update(json).digest('hex').slice(0, 16);
+  const cached = _mcpConfigCache.get(hash);
+  if (cached) {
+    cached.refCount++;
+    return { path: cached.path, hash, isNew: false };
+  }
+  const filePath = path.join(os.tmpdir(), `mcp-${hash}.json`);
+  fs.writeFileSync(filePath, json);
+  _mcpConfigCache.set(hash, { path: filePath, refCount: 1 });
+  return { path: filePath, hash, isNew: true };
+}
+
+function releaseMcpConfig(hash) {
+  if (!hash) return;
+  const cached = _mcpConfigCache.get(hash);
+  if (!cached) return;
+  cached.refCount--;
+  if (cached.refCount <= 0) {
+    try { fs.unlinkSync(cached.path); } catch {}
+    _mcpConfigCache.delete(hash);
+  }
+}
+
+// Cleanup all cached MCP files on process exit
+process.on('exit', () => {
+  for (const [, entry] of _mcpConfigCache) {
+    try { fs.unlinkSync(entry.path); } catch {}
+  }
+});
+
 class ClaudeCLI {
   constructor(options = {}) {
     this.cwd = options.cwd || process.cwd();
@@ -80,11 +119,13 @@ class ClaudeCLI {
     // allowedTools: pass each tool as separate arg (variadic)
     if (allowedTools?.length) args.push('--allowedTools', ...allowedTools);
 
-    // MCP config file
+    // MCP config file (cached by content hash — avoids write/delete per request)
+    let mcpConfigHash = null;
     let mcpConfigPath = null;
     if (mcpServers && Object.keys(mcpServers).length > 0) {
-      mcpConfigPath = path.join(os.tmpdir(), `mcp-${Date.now()}.json`);
-      fs.writeFileSync(mcpConfigPath, JSON.stringify({ mcpServers }));
+      const mcp = getMcpConfigPath(mcpServers);
+      mcpConfigPath = mcp.path;
+      mcpConfigHash = mcp.hash;
       args.push('--mcp-config', mcpConfigPath);
     }
 
@@ -150,8 +191,8 @@ class ClaudeCLI {
     let sigkillTimer = null;
     // Global timeout — kills subprocess if it doesn't finish within MAX_SUBPROCESS_MS
     let globalTimer = null;
-    // Track MCP config path locally so error handler can also clean it up
-    let mcpPath = mcpConfigPath;
+    // Track MCP config hash for ref-counted cleanup
+    let mcpHash = mcpConfigHash;
     // Track temp attachment files for cleanup
     let attFiles = _tempFiles.slice();
 
@@ -200,7 +241,7 @@ class ClaudeCLI {
       if (buffer.trim()) {
         try { this._handle(JSON.parse(buffer), h); } catch { try { if (h.onText) h.onText(buffer); } catch {} }
       }
-      if (mcpPath) { try { fs.unlinkSync(mcpPath); } catch {} mcpPath = null; }
+      releaseMcpConfig(mcpHash); mcpHash = null;
       for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
       attFiles = [];
       if (code !== 0 && stderrBuf.trim() && h.onError) {
@@ -222,7 +263,7 @@ class ClaudeCLI {
       if (globalTimer) { clearTimeout(globalTimer); globalTimer = null; }
       if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
       // Clean up MCP config and temp attachments even when the process fails to start
-      if (mcpPath) { try { fs.unlinkSync(mcpPath); } catch {} mcpPath = null; }
+      releaseMcpConfig(mcpHash); mcpHash = null;
       for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
       attFiles = [];
       // Wrapped in try-catch for the same reason as in 'close': onDone must always fire.
