@@ -1189,6 +1189,17 @@ body::after {
 .mw.user .cpmd  { right: 72px; } /* 34px avatar + 38px original */
 .mw.user .reply-btn { right: 39px; } /* same shift as .cpb */
 
+/* ─── Fork button (continue in new chat) ─── */
+.fork-btn {
+  position: absolute; top: 55px; right: 5px;
+  opacity: 0; background: var(--s3); border: 1px solid var(--border);
+  color: var(--muted); padding: 3px 7px; border-radius: 5px;
+  cursor: pointer; font-size: 12px; line-height: 1; transition: opacity .15s;
+}
+.mw:hover .fork-btn { opacity: .6; }
+.fork-btn:hover { color: var(--text); opacity: 1 !important; background: var(--s2); }
+.mw.user .fork-btn { right: 39px; top: 55px; }
+
 /* ─── Reply preview bar (above textarea) ─── */
 .reply-preview {
   display: flex; align-items: center; gap: 8px;
@@ -1752,6 +1763,7 @@ const TRANSLATIONS = {
     'copy.code':'Копіювати',
     'copy.msg':'Копіювати',
     'msg.reply':'Відповісти',
+    'fork.title':'Продовжити в новому чаті',
     'tab.new':'Новий чат',
     'you.label':'Ви',
     'err.stop.switch':'Зупиніть агента перед переключенням',
@@ -1860,6 +1872,7 @@ const TRANSLATIONS = {
     'copy.code':'Copy',
     'copy.msg':'Copy',
     'msg.reply':'Reply',
+    'fork.title':'Continue in new chat',
     'tab.new':'New chat',
     'you.label':'You',
     'err.stop.switch':'Stop agent before switching',
@@ -1968,6 +1981,7 @@ const TRANSLATIONS = {
     'copy.code':'Копировать',
     'copy.msg':'Копировать',
     'msg.reply':'Ответить',
+    'fork.title':'Продолжить в новом чате',
     'tab.new':'Новый чат',
     'you.label':'Вы',
     'err.stop.switch':'Остановите агента перед переключением',
@@ -3003,7 +3017,8 @@ function addMsg(role, opts = {}) {
     const preview = escH((opts.replyQuote.quotedContent || '').slice(0, 120) + (opts.replyQuote.quotedContent?.length > 120 ? '…' : ''));
     quoteHtml = `<div class="msg-reply-quote"><span class="rq-role">${escH(roleName)}</span><span class="rq-text">${preview}</span></div>`;
   }
-  w.innerHTML = `${quoteHtml}<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>`;
+  const forkBtn = role === 'assistant' ? `<button class="fork-btn" onclick="forkFromMsg(this)" title="${t('fork.title')}">↗</button>` : '';
+  w.innerHTML = `${quoteHtml}<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>${forkBtn}`;
   msgsEl.appendChild(w);
   scrollBottom();
   return w;
@@ -3615,6 +3630,41 @@ function clearReply() {
   $i('replyPreview').style.display = 'none';
 }
 
+// ─── Fork conversation (continue in new chat with context) ───
+function forkFromMsg(btn) {
+  const mw = btn.closest('.mw.assistant');
+  if (!mw) return;
+
+  // Find the previous user message
+  let userMsg = mw.previousElementSibling;
+  while (userMsg && !userMsg.classList.contains('user')) {
+    userMsg = userMsg.previousElementSibling;
+  }
+
+  const userText = userMsg ? userMsg.querySelector('.msg')?.textContent?.trim() || '' : '';
+  const agentText = mw.querySelector('.msg')?.textContent?.trim() || '';
+
+  // Build context summary
+  const userPreview = userText.slice(0, 300);
+  const agentPreview = agentText.slice(0, 500);
+  const contextMsg = `[Context from previous conversation]
+User asked: "${userPreview}${userText.length > 300 ? '…' : ''}"
+Agent was working on: "${agentPreview}${agentText.length > 500 ? '…' : ''}"
+
+Continue from here:`;
+
+  // Create new tab and insert context
+  newTab();
+
+  // Small delay to ensure tab is ready
+  setTimeout(() => {
+    inEl.value = contextMsg;
+    inEl.focus();
+    // Move cursor to end
+    inEl.setSelectionRange(contextMsg.length, contextMsg.length);
+  }, 50);
+}
+
 // ─── Tabs ─────────────────────────────────────────────────────────────────
 function renderTabs() {
   const bar = $i('tabsBar'); if (!bar) return;
@@ -3839,8 +3889,12 @@ function newTab() {
   inEl.style.height = 'auto';
   _clearAttachments();
   clearReply();
-  // Keep existing activeMcp as global default for new tab; reset skills
+  // Reset skills and mode settings for new tab — new chat = clean slate
   activeSkills = new Set();
+  curAgent = 'single';
+  curMode = 'auto';
+  syncBtn('agent', 'single');
+  syncBtn('mode', 'auto');
   msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();
   renderMcp(); renderSkills();
   userScrolled = false; renderTabs(); saveUIState(); updateSessBar();
@@ -4448,7 +4502,8 @@ function _renderMsgAt(idx, prepend = false) {
       histQuoteHtml = `<div class="msg-reply-quote"><span class="rq-role">${escH(roleName)}</span><span class="rq-text">${preview}</span></div>`;
     }
   }
-  w.innerHTML = `${histQuoteHtml}<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>`;
+  const forkBtn = m.role === 'assistant' ? `<button class="fork-btn" onclick="forkFromMsg(this)" title="${t('fork.title')}">↗</button>` : '';
+  w.innerHTML = `${histQuoteHtml}<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>${forkBtn}`;
   // Render saved attachments (images/files) as chips above message text
   if (m.attachments) {
     try {
