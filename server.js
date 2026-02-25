@@ -1777,6 +1777,8 @@ wss.on('connection', (ws) => {
 
       // Always end with a clear status line so the user knows what's happening
       systemPrompt += `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:\n- "✅ Done — [brief summary of what was completed]." when the task is fully finished.\n- "⏳ In progress — [what's happening now and what comes next]." when you're still working and will continue.\n- "❓ Waiting for input — [what you need from the user]." when you need the user to answer or decide something.\n- "⚠️ Blocked — [what went wrong and what's needed to proceed]." when something prevents you from continuing.\nThis status line must always be the very last thing in your response. Never skip it.`;
+      // Reinforce: after tool calls, always write a final text summary
+      systemPrompt += `\n\nCRITICAL: After finishing tool calls (Read, Bash, Edit, Write, Grep, etc.), you MUST write a final text response with the status line. NEVER end your turn on a tool call without a text summary. The user cannot see tool results — they only see your text. If you called tools, summarize what you found or did in 1-3 sentences, then add the "---" status line.`;
 
       const mcpServers = {};
       for (const mid of mIds) {

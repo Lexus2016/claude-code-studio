@@ -435,34 +435,6 @@ body::after {
   width: 0%;
 }
 
-/* ─── Sticky status bar ─── */
-#statusBar {
-  display: flex; align-items: center; gap: 10px;
-  padding: 0 20px;
-  background: var(--s1);
-  border-top: 1px solid transparent;
-  font-size: 12px; color: var(--muted);
-  max-height: 0; overflow: hidden; opacity: 0;
-  transition: max-height .22s ease, opacity .18s ease, padding .22s ease, border-color .22s ease;
-  flex-shrink: 0;
-}
-#statusBar.sb-active {
-  max-height: 36px; opacity: 1;
-  padding: 7px 20px;
-  border-top-color: var(--border);
-}
-#statusBar .sb-spin {
-  width: 11px; height: 11px;
-  border: 1.5px solid rgba(124,106,239,.2);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin .65s linear infinite;
-  flex-shrink: 0;
-}
-#statusBar .sb-txt {
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  opacity: .82; max-width: 520px;
-}
 
 /* ─── Message status footer ─── */
 .msg-status-footer {
@@ -815,6 +787,7 @@ body::after {
 .retry-badge { font-size:11px; color:var(--text-dim); opacity:.65; margin-top:3px; letter-spacing:.01em; }
 .msg-retry-indicator { margin:2px 12px 6px; font-size:11px; color:var(--text-dim); opacity:.6; }
 .msg-interrupted { margin:4px 12px 6px; font-size:11px; color:var(--yellow,#e5c07b); opacity:.8; }
+.msg-done-badge { margin:6px 14px 2px; padding:5px 10px; font-size:11.5px; color:var(--green,#98c379); opacity:.75; border-top:1px solid rgba(139,148,158,.06); }
 
 /* ─── Ask User Card ─── */
 .ask-user-card {
@@ -1482,11 +1455,6 @@ body::after {
   </div>
 
   <button id="scrollBtn" onclick="scrollToBottom()" data-i18n-title="scroll.down" title="Scroll to bottom">↓</button>
-
-  <div id="statusBar">
-    <span class="sb-spin"></span>
-    <span class="sb-txt" id="sbTxt"></span>
-  </div>
 
   <div class="ia" style="position:relative">
     <!-- Hidden file input for local file attachment -->
@@ -2506,7 +2474,6 @@ function handleWsMsg(d) {
           applyMsgClamp(um);
         }
         setStatus('⚙ ' + (d.title || 'Task') + '…', 'warn');
-        sbShow('⚙ ' + (d.title || 'Task') + '…');
         if (!curEl) { curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
       }
       if (found?.tab) {
@@ -2529,7 +2496,6 @@ function handleWsMsg(d) {
         ind.textContent = `↩ ${t('toast.task_retry')} #${rc}`;
         $i('messages')?.appendChild(ind);
         setStatus('⚙ ' + (d.title || 'Task') + '…', 'warn');
-        sbShow('⚙ ' + (d.title || 'Task') + '…');
         if (!curEl) { curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
         scrollBottom();
       }
@@ -2602,7 +2568,6 @@ function handleWsMsg(d) {
 
     case 'status':
       if (isVisible) {
-        sbShow(t('status.generating'));
         setStatus(`CLI · ${d.mode || ''} · ${d.model || ''}`, 'warn');
         setSendStop(true);
       }
@@ -2621,14 +2586,23 @@ function handleWsMsg(d) {
         } else if (curEl && Object.keys(curToolCounts).length > 0) {
           _renderToolActivity(curEl, curToolCounts);
         }
+        // If agent didn't write a status line, show a "Done" badge so user knows it's finished
+        if (curEl && curTxt && !/---\s*\n\s*[✅⏳❓⚠️]/.test(curTxt) && !/✅\s*Done/.test(curTxt)) {
+          const badge = document.createElement('div');
+          badge.className = 'msg-done-badge';
+          // Build short summary from tool activity
+          const tc = Object.keys(curToolCounts).length;
+          const total = tc ? Object.values(curToolCounts).reduce((a,b) => a+b, 0) : 0;
+          badge.textContent = total > 0 ? `✅ ${t('msf.done')} — ${total} ${t('ta.calls')}` : `✅ ${t('msf.done')}`;
+          const footer = curEl.querySelector('.msg-status-footer');
+          if (footer) curEl.insertBefore(badge, footer); else curEl.appendChild(badge);
+        }
         markDone(curEl);
         curEl = null; curTxt = '';
         curToolCounts = {}; curToolLog = []; // reset tool tracking
         // Clear retry badge on successful completion
         { const rb = msgsEl.querySelector('.retry-badge'); if (rb) rb.remove(); }
         if (d.taskId) {
-          // Task worker done — hide status bar, don't touch user chat state
-          sbHide();
           setStatus(t('status.connected'), 'ok');
         } else {
           if (activeTabId === generatingTabId) {
@@ -2661,7 +2635,6 @@ function handleWsMsg(d) {
       getTS(tabId).agentStatus = ''; // task errored — clear saved status
       if (isVisible) {
         rmStatus();
-        sbHide();
         // Finalize tool activity on error — keep live panel if exists, otherwise show pills
         if (curEl && curEl.querySelector('.tool-live')) {
           _finalizeToolLive(curEl);
@@ -3108,16 +3081,6 @@ function showStatus(txt) {
 }
 function rmStatus() { const el = msgsEl.querySelector('.agent-status'); if (el) el.remove(); }
 
-// ─── Sticky status bar helpers ───
-function sbShow(txt) {
-  $i('sbTxt').textContent = txt;
-  $i('statusBar').classList.add('sb-active');
-}
-function sbHide() {
-  const bar = $i('statusBar');
-  bar.classList.remove('sb-active');
-  setTimeout(() => { if (!bar.classList.contains('sb-active')) $i('sbTxt').textContent = ''; }, 250);
-}
 
 function _msfCreate(state, labelText) {
   const f = document.createElement('div');
@@ -3307,7 +3270,6 @@ function _renderToolActivity(mw, rawCounts) {
 
 function markDone(el) {
   rmStatus();
-  sbHide();
   if (!el) return;
   _msfRemove(el);
   if (!_msfGet(el)) {
@@ -3826,11 +3788,9 @@ function switchTab(id) {
     isGen = true;
     setSendStop(true);
     setStatus(t('status.processing'), 'warn');
-    sbShow(t('status.generating'));
   } else {
     isGen = false;
     setSendStop(false);
-    sbHide();
   }
   renderTabs(); saveUIState();
   updateSessBar();
@@ -4593,7 +4553,9 @@ async function loadSess(id) {
 
     // Build display messages, attaching tool activity counts to each assistant text message.
     // Multi-agent: tools grouped by agent_id (tools may arrive before/after text in any order).
-    // Single mode: forward-scan for consecutive tool rows without agent_id.
+    // Single mode: backward-scan for consecutive tool rows preceding the text message.
+    // (Tools are saved to DB as they stream, text is saved last in onDone — so tools always
+    //  have lower DB ids than their corresponding assistant text message.)
     {
       const raw = d.messages || [];
       _allMsgs = [];
@@ -4614,9 +4576,9 @@ async function loadSess(id) {
             // Multi-agent: all tools for this agent (regardless of DB order)
             m._tools = _agentTools[m.agent_id];
           } else if (!m.agent_id) {
-            // Single mode: look forward for consecutive tool rows (skip any with agent_id)
+            // Single mode: scan backward for consecutive tool rows before this text message
             const tc = {};
-            for (let j = i + 1; j < raw.length; j++) {
+            for (let j = i - 1; j >= 0; j--) {
               if (raw[j].type !== 'tool' || raw[j].agent_id) break;
               const tn = raw[j].tool_name || 'tool';
               tc[tn] = (tc[tn] || 0) + 1;
@@ -5612,11 +5574,11 @@ function switchProject(id) {
     if (tab?.isNew) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); }
     else loadSess(activeTabId);
     // Sync send/stop button to this tab's generating state
-    if (tab?.generating) { isGen = true; generatingTabId = activeTabId; setSendStop(true); sbShow(t('status.generating')); }
-    else { isGen = false; generatingTabId = null; setSendStop(false); sbHide(); }
+    if (tab?.generating) { isGen = true; generatingTabId = activeTabId; setSendStop(true); }
+    else { isGen = false; generatingTabId = null; setSendStop(false); }
   } else {
     currentSessionId = null; msgsEl.innerHTML = ''; showW();
-    isGen = false; generatingTabId = null; setSendStop(false); sbHide();
+    isGen = false; generatingTabId = null; setSendStop(false);
   }
 
   renderProjects(); saveUIState(); loadHist(); loadFiles(''); updateSessBar();
