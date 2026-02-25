@@ -4195,7 +4195,7 @@ async function send() {
     }
   }
 
-  const msgEl = addMsg('user');
+  const msgEl = addMsg('user', replyTo ? { replyQuote: { quotedRole: replyTo.role, quotedContent: replyTo.content } } : {});
   // Show file/image chips in message bubble
   if (attSnapshot.length) {
     const chipsDiv = document.createElement('div');
@@ -4438,7 +4438,17 @@ function _renderMsgAt(idx, prepend = false) {
   const w = document.createElement('div');
   w.className = `mw ${m.role}`;
   if (m.id) w.dataset.msgId = String(m.id);
-  w.innerHTML = `<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>`;
+  // Build reply quote from reply_to_id (history re-hydration)
+  let histQuoteHtml = '';
+  if (m.reply_to_id) {
+    const refMsg = _allMsgs.find(x => x.id === m.reply_to_id);
+    if (refMsg) {
+      const roleName = refMsg.role === 'user' ? t('you.label') : 'Claude';
+      const preview = escH((refMsg.content || '').slice(0, 120) + (refMsg.content?.length > 120 ? '…' : ''));
+      histQuoteHtml = `<div class="msg-reply-quote"><span class="rq-role">${escH(roleName)}</span><span class="rq-text">${preview}</span></div>`;
+    }
+  }
+  w.innerHTML = `${histQuoteHtml}<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>`;
   // Render saved attachments (images/files) as chips above message text
   if (m.attachments) {
     try {
