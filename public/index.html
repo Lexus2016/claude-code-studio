@@ -3116,14 +3116,23 @@ function doStop() {
   // Immediately reset client-side generating state (don't wait for server 'done')
   const activeTab = openTabs.find(t => t.id === activeTabId);
   if (activeTab) { activeTab.generating = false; renderTabs(); }
-  if (activeTabId && tabState[activeTabId]) {
-    tabState[activeTabId].generating = false;
-    tabState[activeTabId].curEl = null;
-    tabState[activeTabId].curTxt = '';
+  // Remove spinner from current streaming message and show "Stopped" state
+  if (streaming.el) {
+    _msfRemove(streaming.el);
+    streaming.el.appendChild(_msfCreate('error', t('status.stopped')));
+    // Finalize any partial text
+    if (streaming.txt) {
+      streaming.el.querySelector('.msg').innerHTML = renderMd(streaming.txt);
+    }
+    // Finalize tool activity panel if present
+    if (streaming.el.querySelector('.tool-live')) _finalizeToolLive(streaming.el);
   }
+  streaming.reset();
+  isGen = false;
+  generatingTabId = null;
   setSendStop(false);
-  setStatus(t('status.stopped'), 'ok');
   rmStatus();
+  setStatus(t('status.stopped'), 'ok');
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'stop', tabId: activeTabId }));
 }
 function stopAgent() { confirmStop(); }
