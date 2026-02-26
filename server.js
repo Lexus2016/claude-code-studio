@@ -284,10 +284,17 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN attachments TEXT`); } catch {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN attachments TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN engine TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN partial_text TEXT`); } catch {}
+// Task Dispatch: chain dependencies + auto-recovery columns
+try { db.exec(`ALTER TABLE tasks ADD COLUMN depends_on TEXT`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN chain_id TEXT`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN source_session_id TEXT`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN failure_reason TEXT`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN task_retry_count INTEGER DEFAULT 0`); } catch {}
 // Performance indexes — safe to re-run (IF NOT EXISTS)
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_msg_created   ON messages(created_at)`); } catch {}
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_chain    ON tasks(chain_id)`); } catch {}
 
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
@@ -316,8 +323,8 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`),
-  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,updated_at=datetime('now') WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
@@ -326,6 +333,7 @@ const stmts = {
   // processQueue hot-path — prepared once, reused every 60 s
   getTodoTasks:      db.prepare(`SELECT * FROM tasks WHERE status='todo' ORDER BY sort_order ASC, created_at ASC`),
   getInProgressTasks: db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`),
+  getTasksByChain:   db.prepare(`SELECT * FROM tasks WHERE chain_id=? ORDER BY sort_order ASC`),
   // startTask hot-path
   setTaskSession:    db.prepare(`UPDATE tasks SET session_id=?, updated_at=datetime('now') WHERE id=?`),
   setTaskInProgress: db.prepare(`UPDATE tasks SET status='in_progress', updated_at=datetime('now') WHERE id=?`),
@@ -405,9 +413,11 @@ async function startTask(task) {
   if (taskRunning.has(task.id)) return;
   taskRunning.add(task.id);
   console.log(`[taskWorker] starting "${task.title}" (${task.id})`);
+  let _retryBackoffMs = 0; // Set by auto-retry logic, used by finally for processQueue delay
+  let sessionId = task.session_id;
+  let _taskStartedAt = Date.now();
   try {
     // Create session + link task + mark in_progress — all atomic
-    let sessionId = task.session_id;
     db.transaction(() => {
       if (!sessionId) {
         sessionId = genId();
@@ -440,8 +450,18 @@ async function startTask(task) {
         }
       } catch (e) { console.error('[taskWorker] attachments write error:', e); }
     }
+    // Chain task: add dependency context as safety net (primary context via --resume)
+    if (task.depends_on) {
+      try {
+        const deps = JSON.parse(task.depends_on);
+        const depNames = deps.map(depId => { const dep = stmts.getTask.get(depId); return dep ? dep.title : null; }).filter(Boolean);
+        if (depNames.length) {
+          parts.push(`---\nPrevious tasks completed: ${depNames.join(', ')}\nTheir results are in your session context via --resume.`);
+        }
+      } catch {}
+    }
     const prompt = parts.join('\n\n');
-    const _taskStartedAt = Date.now();
+    _taskStartedAt = Date.now(); // reset to accurate time after prompt building
     // Check if this is a restart: only skip saving if the LAST user message
     // has the exact same prompt (crash recovery). Previously checked for ANY
     // user message which broke when a new task reused an existing session.
@@ -539,16 +559,53 @@ async function startTask(task) {
       const wasStopped = stoppingTasks.has(task.id);
       stoppingTasks.delete(task.id);
       if (!wasStopped) {
-        // Only mark 'done' when agent explicitly succeeded — never on error_max_turns or other stops
         const isSuccess = lastTaskResult?.subtype === 'success' && !hasError;
-        db.prepare(`UPDATE tasks SET status=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
-          .run(isSuccess ? 'done' : 'cancelled', task.id);
-        if (isSuccess) db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
-        console.log(`[taskWorker] task ${task.id}: ${isSuccess ? 'done' : 'cancelled (agent did not complete: ' + (lastTaskResult?.subtype || 'unknown') + ')'}`);
+        const isRateLimited = hasError && (fullText.includes('rate_limit') || fullText.includes('overloaded') || fullText.includes('Too many'));
+        const MAX_CHAIN_RETRIES = 2;
+
+        if (isSuccess) {
+          // ✅ Success
+          db.prepare(`UPDATE tasks SET status='done', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+            .run(task.id);
+          db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
+          log.info(`[taskWorker] task ${task.id}: done`);
+        } else if (task.chain_id && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
+          // 🔄 Auto-retry for chain tasks — don't give up on first failure
+          const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
+          _retryBackoffMs = isRateLimited ? Math.min(60000 * ((task.task_retry_count || 0) + 1), 300000) : 3000;
+          db.prepare(`UPDATE tasks SET status='todo', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+            .run(reason, task.id);
+          log.warn(`[taskWorker] task ${task.id}: chain retry ${(task.task_retry_count||0)+1}/${MAX_CHAIN_RETRIES}, reason: ${reason}, backoff: ${_retryBackoffMs}ms`);
+          if (task.source_session_id) {
+            broadcastToSession(task.source_session_id, {
+              type: 'notification', level: 'warn',
+              title: `Retrying: "${task.title}"`,
+              detail: `Attempt ${(task.task_retry_count||0)+2}/${MAX_CHAIN_RETRIES+1}${isRateLimited ? '. Rate limited, backing off.' : ''}`,
+              chainTaskId: task.id, chainStatus: 'retry',
+            });
+          }
+        } else {
+          // ❌ Failed — retries exhausted or not a chain task
+          const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
+          db.prepare(`UPDATE tasks SET status='cancelled', failure_reason=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+            .run(reason, task.id);
+          log.error(`[taskWorker] task ${task.id}: cancelled (${reason}, subtype: ${lastTaskResult?.subtype || 'unknown'})`);
+          // Notify source chat about the failed task
+          if (task.source_session_id) {
+            broadcastToSession(task.source_session_id, {
+              type: 'notification', level: 'error',
+              title: `Task failed: "${task.title}"`,
+              detail: task.chain_id ? `Retries exhausted (${reason}). Dependent tasks will be cancelled.` : reason,
+              chainTaskId: task.id, chainStatus: 'cancelled',
+            });
+          }
+          // Cascade cancel of dependents happens in next processQueue() run
+        }
       } else {
-        // Manually stopped — status already set by PUT; just clear worker_pid
-        db.prepare(`UPDATE tasks SET worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(task.id);
-        console.log(`[taskWorker] task ${task.id}: stopped by user`);
+        // User manually stopped — mark as user_cancelled, cascade will follow
+        db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='user_cancelled', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+          .run(task.id);
+        log.info(`[taskWorker] task ${task.id}: stopped by user`);
       }
     } catch (e) {
       console.error(`[taskWorker] task ${task.id} onDone DB error:`, e);
@@ -556,14 +613,23 @@ async function startTask(task) {
     broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id, duration: Date.now() - _taskStartedAt });
   } catch (err) {
     console.error(`[taskWorker] task ${task.id} exception:`, err);
-    try { db.prepare(`UPDATE tasks SET status='cancelled', updated_at=datetime('now') WHERE id=?`).run(task.id); } catch {}
+    try {
+      // Exception: auto-retry for chain tasks, cancel for non-chain
+      if (task.chain_id && (task.task_retry_count || 0) < 2) {
+        db.prepare(`UPDATE tasks SET status='todo', failure_reason='exception', task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(task.id);
+        _retryBackoffMs = 5000;
+        log.warn(`[taskWorker] task ${task.id}: exception → auto-retry`);
+      } else {
+        db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='exception', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(task.id);
+      }
+    } catch {}
     // Send done so the client doesn't wait forever for an event that will never arrive.
     if (sessionId) broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id, duration: Date.now() - _taskStartedAt });
   } finally {
     taskBuffers.delete(task.id);
     taskRunning.delete(task.id);
     runningTaskAborts.delete(task.id);
-    setTimeout(processQueue, 500);
+    setTimeout(processQueue, _retryBackoffMs || 500);
   }
 }
 
@@ -581,6 +647,38 @@ function processQueue() {
   const startedWorkdirs = new Set();
   for (const task of todo) {
     if (taskRunning.has(task.id)) continue;
+    // Dependency gate: check depends_on before starting chain tasks
+    if (task.depends_on) {
+      try {
+        const deps = JSON.parse(task.depends_on);
+        if (deps.length) {
+          const failedDep = deps.find(depId => {
+            const dep = stmts.getTask.get(depId);
+            return dep && dep.status === 'cancelled';
+          });
+          if (failedDep) {
+            // Cascade cancel: dependency failed, this task can't run
+            db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='dep_failed', notes=?, updated_at=datetime('now') WHERE id=?`)
+              .run(`Blocked: dependency ${failedDep} failed`, task.id);
+            log.warn('Task cascade-cancelled', { taskId: task.id, failedDep });
+            if (task.source_session_id) {
+              broadcastToSession(task.source_session_id, {
+                type: 'notification', level: 'warn',
+                title: `Task cancelled: "${task.title}"`,
+                detail: 'Dependency failed',
+                chainTaskId: task.id, chainStatus: 'cancelled',
+              });
+            }
+            continue;
+          }
+          const allDone = deps.every(depId => {
+            const dep = stmts.getTask.get(depId);
+            return dep && dep.status === 'done';
+          });
+          if (!allDone) continue; // deps not ready yet
+        }
+      } catch (e) { log.error('depends_on parse error', { taskId: task.id, error: e.message }); }
+    }
     // Workdir lock: skip if another task is already running in the same directory
     if (task.workdir && (occupiedWorkdirs.has(task.workdir) || startedWorkdirs.has(task.workdir))) continue;
     if (task.session_id) {
@@ -619,7 +717,12 @@ setTimeout(() => {
     // Step 2: Determine if the task actually completed.
     // Assistant text is only written to DB on onDone — so its presence means success.
     let newStatus = 'todo'; // default: retry (task was interrupted)
-    if (task.session_id) {
+    if (task.chain_id) {
+      // Chain task: ALWAYS retry. Shared session has messages from other tasks in the
+      // chain, so the "has assistant message" heuristic gives false positives.
+      // --resume will recover full context from the shared Claude session.
+      newStatus = 'todo';
+    } else if (task.session_id) {
       const assistantMsg = db.prepare(
         `SELECT id FROM messages WHERE session_id=? AND role='assistant' AND type='text' LIMIT 1`
       ).get(task.session_id);
@@ -1274,9 +1377,10 @@ app.get('/api/tasks/running-sessions', (req, res) => {
 });
 app.post('/api/tasks', (req, res) => {
   const { title='Нова задача', description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
-          model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null } = req.body;
+          model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
+          depends_on=null, chain_id=null, source_session_id=null } = req.body;
   const id = genId();
-  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, session_id||null, workdir||null, model, mode, agent_mode, max_turns, attachments||null);
+  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, session_id||null, workdir||null, model, mode, agent_mode, max_turns, attachments||null, depends_on||null, chain_id||null, source_session_id||null);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -1288,7 +1392,8 @@ app.put('/api/tasks/:id', (req, res) => {
           status=task.status, sort_order=task.sort_order,
           session_id=task.session_id, workdir=task.workdir,
           model=task.model||'sonnet', mode=task.mode||'auto', agent_mode=task.agent_mode||'single',
-          max_turns=task.max_turns||30, attachments=task.attachments } = req.body;
+          max_turns=task.max_turns||30, attachments=task.attachments,
+          depends_on=task.depends_on, chain_id=task.chain_id, source_session_id=task.source_session_id } = req.body;
   // Stop running process when task is moved away from in_progress
   if (task.status === 'in_progress' && status !== 'in_progress') {
     const ctrl = runningTaskAborts.get(req.params.id);
@@ -1306,6 +1411,7 @@ app.put('/api/tasks/:id', (req, res) => {
     String(notes||'').substring(0,2000),
     status, sort_order, session_id || null, workdir || null,
     model, mode, agent_mode, max_turns, attachments || null,
+    depends_on || null, chain_id || null, source_session_id || null,
     req.params.id
   );
   const updated = stmts.getTask.get(req.params.id);
@@ -1314,6 +1420,98 @@ app.put('/api/tasks/:id', (req, res) => {
 });
 app.delete('/api/tasks/:id', (req, res) => {
   stmts.deleteTask.run(req.params.id); res.json({ ok: true });
+});
+
+// ─── Task Dispatch (Chat → Kanban chain) ─────────────────────────────────
+app.post('/api/tasks/dispatch', (req, res) => {
+  const {
+    plan_description,
+    tasks: planTasks,
+    workdir,
+    model = 'sonnet',
+    source_session_id,
+    claude_session_id,
+  } = req.body;
+
+  if (!planTasks?.length) return res.status(400).json({ error: 'No tasks provided' });
+  if (planTasks.length > 10) return res.status(400).json({ error: 'Max 10 tasks per dispatch' });
+
+  // Circular dependency detection (DFS)
+  // Validate dependency references exist + detect cycles
+  const validIds = new Set(planTasks.map(t => t.id));
+  for (const t of planTasks) {
+    for (const dep of (t.depends_on || [])) {
+      if (!validIds.has(dep)) return res.status(400).json({ error: `Unknown dependency: ${dep}` });
+    }
+  }
+  const adj = {};
+  for (const t of planTasks) adj[t.id] = t.depends_on || [];
+  const _visited = new Set(), _stack = new Set();
+  function _hasCycle(node) {
+    if (_stack.has(node)) return true;
+    if (_visited.has(node)) return false;
+    _visited.add(node); _stack.add(node);
+    for (const dep of (adj[node] || [])) { if (_hasCycle(dep)) return true; }
+    _stack.delete(node);
+    return false;
+  }
+  if (planTasks.some(t => _hasCycle(t.id))) {
+    return res.status(400).json({ error: 'Circular dependency detected in plan' });
+  }
+
+  const chainId = genId();
+
+  // Inherit MCP + skills from source session
+  const source = source_session_id ? stmts.getSession.get(source_session_id) : null;
+  const chainSessionId = genId();
+  stmts.createSession.run(
+    chainSessionId,
+    (plan_description || 'Task chain').substring(0, 200),
+    source?.active_mcp || '[]',
+    source?.active_skills || '[]',
+    'auto', 'single', model, 'cli',
+    workdir || null
+  );
+
+  // Inherit Claude session from source chat → first task resumes with full context
+  if (claude_session_id) {
+    stmts.updateClaudeId.run(claude_session_id, chainSessionId);
+  }
+
+  // First pass: assign real IDs to all tasks (handles forward references in depends_on)
+  const idMap = {};
+  for (const t of planTasks) idMap[t.id] = genId();
+  const createdTasks = [];
+
+  db.transaction(() => {
+    for (let i = 0; i < planTasks.length; i++) {
+      const t = planTasks[i];
+      const taskId = idMap[t.id];
+      const realDeps = (t.depends_on || []).map(d => idMap[d]).filter(Boolean);
+
+      stmts.createTask.run(
+        taskId,
+        (t.title || t.role || 'Subtask').substring(0, 200),
+        (t.description || t.task || '').substring(0, 2000),
+        '',            // notes
+        'todo',
+        i,             // sort_order preserves plan ordering
+        chainSessionId,
+        workdir || null,
+        model,
+        'auto', 'single', 30,
+        null,          // attachments
+        realDeps.length ? JSON.stringify(realDeps) : null,
+        chainId,
+        source_session_id || null
+      );
+      createdTasks.push(stmts.getTask.get(taskId));
+    }
+  })();
+
+  setImmediate(processQueue);
+  log.info('Tasks dispatched', { chainId, count: createdTasks.length, workdir });
+  res.json({ chain_id: chainId, session_id: chainSessionId, tasks: createdTasks });
 });
 
 // Sessions
@@ -2326,6 +2524,137 @@ wss.on('connection', (ws) => {
           ws.send(queuePayload(sessionId));
         }
       }
+      return;
+    }
+
+    // ─── Task Dispatch: decompose + dispatch to Kanban ─────────────────────
+    if (msg.type === 'dispatch_plan') {
+      (async () => {
+        try {
+          const { text, plan, agents, sessionId, workdir, model, tabId } = msg;
+          let finalPlan, finalAgents;
+
+          if (plan && agents?.length) {
+            // Mode 1: Plan already provided (from agent_plan card "📋 Kanban" button)
+            finalPlan = plan;
+            finalAgents = agents;
+          } else if (text) {
+            // Mode 2: Decompose first (from "Plan" agent mode)
+            ws.send(JSON.stringify({ type: 'agent_status', agent: 'orchestrator', status: 'Planning...', statusKey: 'agent.planning', ...(tabId ? { tabId } : {}) }));
+
+            const effectiveWorkdir = workdir || WORKDIR;
+            const cli = new ClaudeCLI({ cwd: effectiveWorkdir });
+            const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${text}`;
+
+            const session = sessionId ? stmts.getSession.get(sessionId) : null;
+            let planText = '';
+
+            await new Promise(resolve => {
+              let done = false;
+              cli.send({ prompt: planPrompt, sessionId: session?.claude_session_id, model: model || 'sonnet', maxTurns: 1, allowedTools: [] })
+                .onText(t => { planText += t; })
+                .onError(() => { if (!done) { done = true; resolve(); } })
+                .onDone(() => { if (!done) { done = true; resolve(); } });
+            });
+
+            try {
+              const m = planText.match(/\{[\s\S]*\}/);
+              const parsed = m ? JSON.parse(m[0]) : null;
+              finalPlan = parsed?.plan;
+              finalAgents = parsed?.agents;
+            } catch {}
+
+            if (!finalAgents?.length) {
+              ws.send(JSON.stringify({ type: 'error', error: 'Failed to decompose task into subtasks', ...(tabId ? { tabId } : {}) }));
+              return;
+            }
+
+            // Show plan in chat
+            ws.send(JSON.stringify({ type: 'agent_plan', plan: finalPlan, agents: finalAgents.map(a => ({ id: a.id, role: a.role, task: a.task })), dispatched: true, ...(tabId ? { tabId } : {}) }));
+            try { if (sessionId) stmts.addMsg.run(sessionId, 'assistant', 'text', `Plan: ${finalPlan}`, null, 'orchestrator', null, null); } catch {}
+          } else {
+            ws.send(JSON.stringify({ type: 'error', error: 'No plan or text provided for dispatch', ...(tabId ? { tabId } : {}) }));
+            return;
+          }
+
+          // Circular dependency check
+          const adj = {};
+          for (const a of finalAgents) adj[a.id] = a.depends_on || [];
+          const _v = new Set(), _s = new Set();
+          function _cyc(n) { if (_s.has(n)) return true; if (_v.has(n)) return false; _v.add(n); _s.add(n); for (const d of (adj[n]||[])) { if (_cyc(d)) return true; } _s.delete(n); return false; }
+          if (finalAgents.some(a => _cyc(a.id))) {
+            ws.send(JSON.stringify({ type: 'error', error: 'Circular dependency detected in plan', ...(tabId ? { tabId } : {}) }));
+            return;
+          }
+
+          // Create chain session + tasks
+          const chainId = genId();
+          const source = sessionId ? stmts.getSession.get(sessionId) : null;
+          const chainSessionId = genId();
+          stmts.createSession.run(
+            chainSessionId,
+            (finalPlan || 'Task chain').substring(0, 200),
+            source?.active_mcp || '[]',
+            source?.active_skills || '[]',
+            'auto', 'single', model || 'sonnet', 'cli',
+            workdir || null
+          );
+          if (source?.claude_session_id) {
+            stmts.updateClaudeId.run(source.claude_session_id, chainSessionId);
+          }
+
+          // First pass: assign real IDs (handles forward references in depends_on)
+          const idMap = {};
+          for (const a of finalAgents) idMap[a.id] = genId();
+          const created = [];
+
+          db.transaction(() => {
+            for (let i = 0; i < finalAgents.length; i++) {
+              const a = finalAgents[i];
+              const taskId = idMap[a.id];
+              const realDeps = (a.depends_on || []).map(d => idMap[d]).filter(Boolean);
+              stmts.createTask.run(
+                taskId,
+                (a.role || 'Subtask').substring(0, 200),
+                (a.task || '').substring(0, 2000),
+                '', 'todo', i, chainSessionId, workdir || null,
+                model || 'sonnet', 'auto', 'single', 30, null,
+                realDeps.length ? JSON.stringify(realDeps) : null,
+                chainId, sessionId || null
+              );
+              created.push(stmts.getTask.get(taskId));
+            }
+          })();
+
+          setImmediate(processQueue);
+
+          // Notify client
+          ws.send(JSON.stringify({
+            type: 'notification', level: 'success',
+            title: 'Dispatched to Kanban',
+            detail: `${created.length} tasks created`,
+            ...(tabId ? { tabId } : {}),
+          }));
+
+          // Send chain info so frontend can render progress widget
+          ws.send(JSON.stringify({
+            type: 'chain_dispatched',
+            chain_id: chainId,
+            session_id: chainSessionId,
+            tasks: created.map(t => ({ id: t.id, title: t.title, status: t.status, depends_on: t.depends_on })),
+            ...(tabId ? { tabId } : {}),
+          }));
+
+          // Auto-watch the chain session to stream results back to source chat
+          if (!sessionWatchers.has(chainSessionId)) sessionWatchers.set(chainSessionId, new Set());
+          sessionWatchers.get(chainSessionId).add(ws);
+
+          log.info('Plan dispatched via WS', { chainId, count: created.length });
+        } catch (e) {
+          log.error('dispatch_plan error', { error: e.message });
+          ws.send(JSON.stringify({ type: 'error', error: `Dispatch failed: ${e.message}`, ...(msg.tabId ? { tabId: msg.tabId } : {}) }));
+        }
+      })();
       return;
     }
 

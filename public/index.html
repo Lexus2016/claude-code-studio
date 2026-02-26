@@ -517,7 +517,32 @@ body::after {
   transition: width .4s var(--ease-out);
   width: 0%;
 }
+.atc-dispatch-btn {
+  background: rgba(124,106,239,.12); color: var(--accent);
+  border: 1px solid rgba(124,106,239,.22); border-radius: 6px;
+  padding: 2px 10px; font-size: 10.5px; cursor: pointer;
+  font-weight: 600; transition: all .15s; margin-left: auto; white-space: nowrap;
+}
+.atc-dispatch-btn:hover { background: rgba(124,106,239,.25); border-color: rgba(124,106,239,.4); }
+.atc-dispatch-btn:disabled { opacity: .5; cursor: default; }
 
+/* ─── Chain progress card (dispatched tasks) ─── */
+.chain-progress-card {
+  align-self: flex-start; background: var(--s2);
+  border: 1px solid rgba(63,185,80,.15); border-radius: 12px;
+  padding: 10px 14px; max-width: 400px; margin: 4px 0;
+  animation: status-appear .25s var(--ease-out);
+}
+.chain-progress-card .cpc-title { font-size: 12px; font-weight: 700; color: var(--green); margin-bottom: 6px; }
+.chain-progress-card .cpc-tasks { display: flex; flex-direction: column; gap: 3px; }
+.chain-progress-card .cpc-task { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text); opacity: .8; }
+.chain-progress-card .cpc-task .cpc-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: .4; flex-shrink: 0; }
+.chain-progress-card .cpc-task.cpc-done .cpc-dot { background: var(--green); opacity: 1; }
+.chain-progress-card .cpc-task.cpc-running .cpc-dot { background: var(--accent); opacity: 1; animation: pulse-dot 1.4s ease-in-out infinite; }
+.chain-progress-card .cpc-task.cpc-failed .cpc-dot { background: var(--red); opacity: 1; }
+.chain-progress-card .cpc-task.cpc-retry .cpc-dot { background: var(--warn, #d29922); opacity: 1; }
+.chain-progress-card .cpc-bar { margin-top: 6px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.05); overflow: hidden; }
+.chain-progress-card .cpc-bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--accent), var(--green)); transition: width .4s var(--ease-out); width: 0%; }
 
 /* ─── Message status footer ─── */
 .msg-status-footer {
@@ -1552,6 +1577,7 @@ body::after {
       <span class="label" data-i18n="tb.agent">Агент</span>
       <button class="tb-btn on" data-v="single" onclick="setOpt(this,'agent')">Single</button>
       <button class="tb-btn" data-v="multi" onclick="setOpt(this,'agent')">Multi</button>
+      <button class="tb-btn" data-v="dispatch" onclick="setOpt(this,'agent')">Plan</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -2674,6 +2700,8 @@ function handleWsMsg(d) {
 
   switch (d.type) {
     case 'task_started':
+      // Update chain progress widget if this task belongs to a dispatched chain
+      if (d.taskId) _chainProgressUpdate(d.taskId, 'in_progress');
       if (isVisible) {
         rmW();
         // Show user message (task prompt) before assistant response
@@ -2692,6 +2720,7 @@ function handleWsMsg(d) {
       break;
 
     case 'task_retrying': {
+      if (d.taskId) _chainProgressUpdate(d.taskId, 'retry');
       if (isVisible) {
         const rc = d.retryCount || 1;
         // Show user message (task prompt) if not already visible
@@ -2755,7 +2784,7 @@ function handleWsMsg(d) {
 
     case 'agent_plan':
       if (isVisible && d.agents?.length) {
-        _atcRender(d.plan || '', d.agents);
+        _atcRender(d.plan || '', d.agents, d.dispatched || false);
       }
       break;
 
@@ -2784,6 +2813,12 @@ function handleWsMsg(d) {
       break;
 
     case 'done':
+      // Update chain progress: check if this task completed or failed
+      if (d.taskId && _chainData) {
+        const ct = _chainData.tasks.find(x => x.id === d.taskId);
+        // If task status wasn't already updated to 'retry' by notification, mark as done
+        if (ct && ct.status === 'in_progress') _chainProgressUpdate(d.taskId, 'done');
+      }
       getTS(tabId).agentStatus = ''; // task finished — clear saved status
       if (isVisible) {
         if (streaming.el && streaming.txt) { streaming.el.querySelector('.msg').innerHTML = renderMd(streaming.txt); applyMsgClamp(streaming.el); }
@@ -2835,9 +2870,17 @@ function handleWsMsg(d) {
       break;
 
     case 'notification':
+      // Update chain progress widget from chain task notifications
+      if (d.chainTaskId && d.chainStatus) _chainProgressUpdate(d.chainTaskId, d.chainStatus);
       // Only show notification if it belongs to the current tab
       if (isVisible || !d.tabId) {
         showNotification(d);
+      }
+      break;
+
+    case 'chain_dispatched':
+      if (isVisible && d.tasks?.length) {
+        _chainProgressRender(d.chain_id, d.tasks);
       }
       break;
 
@@ -3374,20 +3417,22 @@ function addEl(cls) {
 
 // ─── Agent team card ───
 let _atcAgents = new Map(); // track agent states per current generation
-function _atcRender(planText, agents) {
+let _atcPlanData = null;    // stored for dispatch button
+function _atcRender(planText, agents, dispatched) {
   // Remove any existing card
   const old = msgsEl.querySelector('.agent-team-card');
   if (old) old.remove();
   _atcAgents.clear();
+  _atcPlanData = { plan: planText, agents };
   agents.forEach(a => _atcAgents.set(a.id, { ...a, state: 'pending' }));
 
   const card = document.createElement('div');
   card.className = 'agent-team-card';
   card.innerHTML = `
     <div class="atc-header">
-      <div class="atc-icon">🤖</div>
+      <div class="atc-icon">${dispatched ? '📋' : '🤖'}</div>
       <div>
-        <div class="atc-title">${escH(t('msf.team'))}</div>
+        <div class="atc-title">${dispatched ? 'Plan → Kanban' : escH(t('msf.team'))}</div>
         <div class="atc-plan" title="${escH(planText)}">${escH(planText)}</div>
       </div>
     </div>
@@ -3404,9 +3449,24 @@ function _atcRender(planText, agents) {
     <div class="atc-footer">
       <span class="atc-count">0/${agents.length}</span>
       <div class="atc-progress"><div class="atc-progress-bar"></div></div>
+      ${dispatched ? '' : '<button class="atc-dispatch-btn" onclick="_atcDispatch()">📋 Kanban</button>'}
     </div>`;
   msgsEl.appendChild(card);
   scrollBottom();
+}
+function _atcDispatch() {
+  if (!_atcPlanData || !ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({
+    type: 'dispatch_plan',
+    plan: _atcPlanData.plan,
+    agents: _atcPlanData.agents,
+    sessionId: currentSessionId,
+    tabId: activeTabId,
+    workdir: curWorkdir || undefined,
+    model: curModel,
+  }));
+  const btn = document.querySelector('.atc-dispatch-btn');
+  if (btn) { btn.textContent = '✅ Sent'; btn.disabled = true; }
 }
 function _atcUpdate(agentId, state) {
   const card = msgsEl.querySelector('.agent-team-card');
@@ -3429,6 +3489,61 @@ function _atcUpdate(agentId, state) {
   const barEl = card.querySelector('.atc-progress-bar');
   if (countEl) countEl.textContent = `${done}/${total}`;
   if (barEl) barEl.style.width = `${Math.round((done / total) * 100)}%`;
+}
+
+// ─── Chain progress card (dispatched tasks tracking) ────────────────────
+let _chainData = null; // { chain_id, session_id, tasks }
+function _chainProgressRender(chainId, tasks) {
+  _chainData = { chain_id: chainId, tasks };
+  const old = msgsEl.querySelector('.chain-progress-card');
+  if (old) old.remove();
+  const card = document.createElement('div');
+  card.className = 'chain-progress-card';
+  card.dataset.chainId = chainId;
+  card.innerHTML = `
+    <div class="cpc-title">📋 Kanban Chain — ${tasks.length} tasks</div>
+    <div class="cpc-tasks">
+      ${tasks.map(t => `
+        <div class="cpc-task" data-task-id="${escH(t.id)}">
+          <span class="cpc-dot"></span>
+          <span class="cpc-name">${escH(t.title)}</span>
+          <span class="cpc-status" style="font-size:10px;color:var(--muted);margin-left:auto">todo</span>
+        </div>
+      `).join('')}
+    </div>
+    <div class="cpc-bar"><div class="cpc-bar-fill"></div></div>
+    <div style="margin-top:6px;text-align:right">
+      <a href="/kanban" target="_blank" style="font-size:10px;color:var(--accent);text-decoration:none;opacity:.7">Open Kanban →</a>
+    </div>`;
+  msgsEl.appendChild(card);
+  scrollBottom();
+}
+function _chainProgressUpdate(taskId, status) {
+  const card = msgsEl.querySelector('.chain-progress-card');
+  if (!card || !_chainData) return;
+  const row = card.querySelector(`[data-task-id="${taskId}"]`);
+  if (row) {
+    row.classList.remove('cpc-done', 'cpc-running', 'cpc-failed', 'cpc-retry');
+    const statusEl = row.querySelector('.cpc-status');
+    if (status === 'in_progress') { row.classList.add('cpc-running'); if (statusEl) statusEl.textContent = 'running'; }
+    else if (status === 'done') { row.classList.add('cpc-done'); if (statusEl) statusEl.textContent = 'done'; }
+    else if (status === 'cancelled') { row.classList.add('cpc-failed'); if (statusEl) statusEl.textContent = 'failed'; }
+    else if (status === 'retry') { row.classList.add('cpc-retry'); if (statusEl) statusEl.textContent = 'retrying'; }
+  }
+  // Update task state in _chainData
+  const t = _chainData.tasks.find(x => x.id === taskId);
+  if (t) t.status = status;
+  // Update progress bar
+  const total = _chainData.tasks.length;
+  const done = _chainData.tasks.filter(x => x.status === 'done').length;
+  const bar = card.querySelector('.cpc-bar-fill');
+  if (bar) bar.style.width = `${Math.round((done / total) * 100)}%`;
+  // Update title
+  const title = card.querySelector('.cpc-title');
+  if (title) {
+    const failed = _chainData.tasks.filter(x => x.status === 'cancelled').length;
+    title.textContent = `📋 Kanban Chain — ${done}/${total} done${failed ? `, ${failed} failed` : ''}`;
+  }
 }
 
 function rmW() { const w = msgsEl.querySelector('.welcome'); if (w) w.remove(); }
@@ -4827,20 +4942,31 @@ async function send() {
     }
   }
 
-  ws.send(JSON.stringify({
-    type: 'chat', text: txt || ' ',
-    tabId: activeTabId,
-    sessionId: currentSessionId || undefined,
-    attachments: msgAttachments.length ? msgAttachments : undefined,
-    queueId,
-    reply_to: currentReply || undefined,
-    skills: [...activeSkills],
-    mcpServers: [...activeMcp],
-    mode: curMode, agentMode: curAgent,
-    model: curModel,
-    maxTurns: parseInt($i('maxTurns').value) || 30,
-    workdir: curWorkdir || undefined,
-  }));
+  if (curAgent === 'dispatch') {
+    // Plan mode: decompose → dispatch to Kanban (not run in chat)
+    ws.send(JSON.stringify({
+      type: 'dispatch_plan', text: txt || ' ',
+      tabId: activeTabId,
+      sessionId: currentSessionId || undefined,
+      model: curModel,
+      workdir: curWorkdir || undefined,
+    }));
+  } else {
+    ws.send(JSON.stringify({
+      type: 'chat', text: txt || ' ',
+      tabId: activeTabId,
+      sessionId: currentSessionId || undefined,
+      attachments: msgAttachments.length ? msgAttachments : undefined,
+      queueId,
+      reply_to: currentReply || undefined,
+      skills: [...activeSkills],
+      mcpServers: [...activeMcp],
+      mode: curMode, agentMode: curAgent,
+      model: curModel,
+      maxTurns: parseInt($i('maxTurns').value) || 30,
+      workdir: curWorkdir || undefined,
+    }));
+  }
 }
 
 function newSession() { newTab(); }
