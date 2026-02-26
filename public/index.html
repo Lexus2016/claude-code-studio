@@ -196,6 +196,15 @@ body::after {
 #rlTooltip .rl-bar-fill { height:100%; border-radius:3px; background:#f59e0b; transition:width .4s; }
 #rlTooltip .rl-bar-fill.rl-crit { background:#ef4444; }
 
+/* ─── Rate limit rejected modal ─── */
+#rlRejectedModal .confirm-dialog { width: 360px; }
+#rlRejectedModal .cd-icon { font-size: 36px; }
+#rlRejectedModal .rl-modal-countdown { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 8px 16px; border-radius: 8px; background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.25); color: #ef4444; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
+#rlRejectedModal .rl-modal-countdown .rl-cd-label { font-size: 12px; font-weight: 500; color: var(--muted); }
+#rlRejectedModal .rl-modal-type { display: inline-block; padding: 2px 8px; border-radius: 4px; background: rgba(245,158,11,.15); color: #f59e0b; font-size: 11px; font-weight: 600; margin-bottom: 10px; }
+.cd-btn-ok { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(99,102,241,.35); }
+.cd-btn-ok:hover { filter: brightness(1.15); box-shadow: 0 3px 12px rgba(99,102,241,.5); }
+
 /* ─── File browser action buttons ─── */
 .fii .fdl, .fii .fpe { opacity: 0; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 1px 4px; border-radius: 3px; transition: opacity .1s, color .1s; flex-shrink: 0; line-height: 1; }
 .fii:hover .fdl, .fii:hover .fpe { opacity: .7; }
@@ -1791,6 +1800,23 @@ body::after {
   </div>
 </div>
 
+<!-- Rate Limit Rejected Modal -->
+<div class="confirm-overlay hidden" id="rlRejectedModal" onclick="if(event.target===this)closeRlModal()">
+  <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="rlModalTitle">
+    <div class="cd-icon">🚫</div>
+    <div class="rl-modal-type" id="rlModalType">—</div>
+    <h3 id="rlModalTitle">Ліміт вичерпано</h3>
+    <p id="rlModalDesc">Ваш ліміт Claude Max вичерпано.</p>
+    <div class="rl-modal-countdown">
+      <span class="rl-cd-label" data-i18n="rl.modal.reset">Скидання через:</span>
+      <span id="rlModalTimer">—</span>
+    </div>
+    <div class="confirm-actions" style="margin-top:18px">
+      <button class="cd-btn-ok" onclick="closeRlModal()" data-i18n="rl.modal.ok">Зрозуміло</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div id="toast"></div>
 
@@ -1937,7 +1963,10 @@ const TRANSLATIONS = {
     'stream.interrupted':'Відповідь була перервана',
     'rl.title.warn':'Наближається ліміт','rl.title.crit':'Ліміт вичерпується!',
     'rl.key.type':'Тип','rl.key.used':'Використано','rl.key.left':'Залишилось','rl.key.reset':'Скидання','rl.key.via':'Через',
-    'rl.reset.done':'вже скинуто','rl.time.h':'г','rl.time.m':'хв',
+    'rl.reset.done':'вже скинуто','rl.time.h':'г','rl.time.m':'хв','rl.time.s':'с',
+    'rl.toast.80':'⚠️ {type} ліміт: використано 80%','rl.toast.90':'🔶 {type} ліміт: залишилось 10%!','rl.toast.95':'🚫 {type} ліміт майже вичерпано!',
+    'rl.modal.title':'Ліміт вичерпано','rl.modal.desc':'Ваш {type} ліміт Claude Max вичерпано. Нові запити заблоковані до скидання.','rl.modal.reset':'Скидання через:','rl.modal.ok':'Зрозуміло',
+    'rl.notify.title':'Claude Max — ліміт','rl.notify.body':'{type} ліміт: використано {pct}%',
     'queue.badge':'{n} у черзі',
     'ver.current':'Поточна версія','ver.update':'Доступне оновлення {tag}!\nЗапустіть: npx github:Lexus2016/claude-code-studio','ver.latest':' — остання версія ✓','ver.checking':'Перевірка версії...',
     'status.connecting':'Підключення...',
@@ -2048,7 +2077,10 @@ const TRANSLATIONS = {
     'stream.interrupted':'Response was interrupted',
     'rl.title.warn':'Limit approaching','rl.title.crit':'Limit critical!',
     'rl.key.type':'Type','rl.key.used':'Used','rl.key.left':'Left','rl.key.reset':'Resets','rl.key.via':'In',
-    'rl.reset.done':'already reset','rl.time.h':'h','rl.time.m':'m',
+    'rl.reset.done':'already reset','rl.time.h':'h','rl.time.m':'m','rl.time.s':'s',
+    'rl.toast.80':'⚠️ {type} limit: 80% used','rl.toast.90':'🔶 {type} limit: only 10% left!','rl.toast.95':'🚫 {type} limit almost exhausted!',
+    'rl.modal.title':'Limit exhausted','rl.modal.desc':'Your {type} Claude Max limit has been exhausted. New requests are blocked until reset.','rl.modal.reset':'Resets in:','rl.modal.ok':'Got it',
+    'rl.notify.title':'Claude Max — limit','rl.notify.body':'{type} limit: {pct}% used',
     'queue.badge':'{n} in queue',
     'ver.current':'Current version','ver.update':'Update available {tag}!\nRun: npx github:Lexus2016/claude-code-studio','ver.latest':' — latest ✓','ver.checking':'Checking version...',
     'status.connecting':'Connecting...',
@@ -2159,7 +2191,10 @@ const TRANSLATIONS = {
     'stream.interrupted':'Ответ был прерван',
     'rl.title.warn':'Приближается лимит','rl.title.crit':'Лимит исчерпывается!',
     'rl.key.type':'Тип','rl.key.used':'Использовано','rl.key.left':'Осталось','rl.key.reset':'Сброс','rl.key.via':'Через',
-    'rl.reset.done':'уже сброшен','rl.time.h':'ч','rl.time.m':'м',
+    'rl.reset.done':'уже сброшен','rl.time.h':'ч','rl.time.m':'м','rl.time.s':'с',
+    'rl.toast.80':'⚠️ {type} лимит: использовано 80%','rl.toast.90':'🔶 {type} лимит: осталось 10%!','rl.toast.95':'🚫 {type} лимит почти исчерпан!',
+    'rl.modal.title':'Лимит исчерпан','rl.modal.desc':'Ваш {type} лимит Claude Max исчерпан. Новые запросы заблокированы до сброса.','rl.modal.reset':'Сброс через:','rl.modal.ok':'Понятно',
+    'rl.notify.title':'Claude Max — лимит','rl.notify.body':'{type} лимит: использовано {pct}%',
     'queue.badge':'{n} в очереди',
     'ver.current':'Текущая версия','ver.update':'Доступно обновление {tag}!\nЗапустите: npx github:Lexus2016/claude-code-studio','ver.latest':' — последняя ✓','ver.checking':'Проверка версии...',
     'status.connecting':'Подключение...',
@@ -3045,9 +3080,21 @@ function setStatus(text, cls) {
   el.className = `status-dot ${cls}`;
 }
 
-// ─── Rate limit badge ────────────────────────────────────────────────────────
-let _rlInfo = null;          // last received rate_limit_info
-let _rlCountdownTimer = null; // interval for live countdown
+// ─── Rate limit badge + alerts ───────────────────────────────────────────────
+const RL_STORAGE_KEY      = 'rl_info';
+const RL_THRESHOLDS       = [80, 90, 95]; // toast alert thresholds (%)
+const RL_NOTIFY_COOLDOWN  = 5 * 60 * 1000; // 5 min between browser notifications
+let _rlInfo               = null;         // last received rate_limit_info
+let _rlCountdownTimer     = null;         // interval for live countdown
+let _rlLastAlertedPct     = 0;           // highest threshold already toasted (avoids spam)
+let _rlLastNotifyTs       = 0;           // timestamp of last browser notification
+let _rlModalShown         = false;        // true while rejected modal is visible
+let _rlModalTimer         = null;         // interval for modal countdown
+
+function _rlTypeLabel(info) {
+  const map = { five_hour: t('rl.type.five_hour'), seven_day: t('rl.type.seven_day') };
+  return map[info.rateLimitType] || info.rateLimitType || '';
+}
 
 function updateRateLimit(info) {
   if (!info) return;
@@ -3055,11 +3102,34 @@ function updateRateLimit(info) {
   if (info.status === 'allowed' && !info.surpassedThreshold) return;
 
   _rlInfo = info;
-  const badge  = $i('rlBadge');
-  const isCrit = info.status === 'rejected' || info.utilization >= 0.95;
   const pct    = Math.round((info.utilization || 0) * 100);
-  const typeMap = { five_hour: t('rl.type.five_hour'), seven_day: t('rl.type.seven_day') };
-  const typeLabel = typeMap[info.rateLimitType] || info.rateLimitType || '—';
+  const isCrit = info.status === 'rejected' || pct >= 95;
+
+  // ── Persist to localStorage (survives reload) ──
+  _rlSave(info);
+
+  // ── Threshold toast alerts ──
+  _rlCheckThresholds(info, pct);
+
+  // ── Rejected → blocking modal ──
+  if (info.status === 'rejected' && !_rlModalShown) {
+    _rlShowModal(info);
+  }
+
+  // ── Browser notification (background tab, 5min cooldown) ──
+  if (pct >= 90 && document.hidden && (Date.now() - _rlLastNotifyTs > RL_NOTIFY_COOLDOWN)) {
+    _rlBrowserNotify(info, pct);
+    _rlLastNotifyTs = Date.now();
+  }
+
+  // ── Update badge UI ──
+  _rlRenderBadge(info, pct, isCrit);
+}
+
+// ── Badge rendering (extracted for reuse on restore) ──
+function _rlRenderBadge(info, pct, isCrit) {
+  const badge  = $i('rlBadge');
+  const typeLabel = _rlTypeLabel(info) || '—';
 
   // Badge label
   $i('rlBadgeLabel').textContent = `Max ${pct}%`;
@@ -3094,6 +3164,100 @@ function updateRateLimit(info) {
   _rlCountdownTimer = setInterval(_rlUpdateCountdown, 30000);
 }
 
+// ── Threshold toast alerts (fire once per threshold per escalation) ──
+function _rlCheckThresholds(info, pct) {
+  const typeLabel = _rlTypeLabel(info);
+
+  for (const threshold of RL_THRESHOLDS) {
+    if (pct >= threshold && _rlLastAlertedPct < threshold) {
+      const key = `rl.toast.${threshold}`;
+      const msg = t(key).replace('{type}', typeLabel);
+      const isErr = threshold >= 95;
+      const dur = threshold >= 95 ? 10000 : threshold >= 90 ? 8000 : 5000;
+      toast(msg, isErr, dur);
+      _rlLastAlertedPct = threshold;
+    }
+  }
+  // Reset when utilization drops (limit was reset)
+  if (pct < 80) _rlLastAlertedPct = 0;
+}
+
+// ── Rejected modal with live countdown ──
+function _rlShowModal(info) {
+  _rlModalShown = true;
+  const modal = $i('rlRejectedModal');
+  const typeLabel = _rlTypeLabel(info);
+
+  $i('rlModalType').textContent = typeLabel;
+  $i('rlModalTitle').textContent = t('rl.modal.title');
+  $i('rlModalDesc').textContent = t('rl.modal.desc').replace('{type}', typeLabel);
+  modal.classList.remove('hidden');
+
+  // Live countdown inside modal (every 1s for precision)
+  const updateTimer = () => {
+    if (!_rlInfo || !_rlInfo.resetsAt) { $i('rlModalTimer').textContent = '—'; return; }
+    const diff = (_rlInfo.resetsAt * 1000) - Date.now();
+    if (diff <= 0) {
+      $i('rlModalTimer').textContent = t('rl.reset.done');
+      closeRlModal();
+      return;
+    }
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    $i('rlModalTimer').textContent = h > 0
+      ? `${h}${t('rl.time.h')} ${String(m).padStart(2,'0')}${t('rl.time.m')} ${String(s).padStart(2,'0')}${t('rl.time.s')}`
+      : `${m}${t('rl.time.m')} ${String(s).padStart(2,'0')}${t('rl.time.s')}`;
+  };
+  updateTimer();
+  if (_rlModalTimer) clearInterval(_rlModalTimer);
+  _rlModalTimer = setInterval(updateTimer, 1000);
+}
+
+function closeRlModal() {
+  $i('rlRejectedModal').classList.add('hidden');
+  _rlModalShown = false;
+  if (_rlModalTimer) { clearInterval(_rlModalTimer); _rlModalTimer = null; }
+}
+
+// ── Browser Notification API (background tab) ──
+function _rlBrowserNotify(info, pct) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission(); // non-blocking, result used on next call
+    return;
+  }
+  if (Notification.permission !== 'granted') return;
+  const typeLabel = _rlTypeLabel(info);
+  const body = t('rl.notify.body').replace('{type}', typeLabel).replace('{pct}', pct);
+  try { new Notification(t('rl.notify.title'), { body, icon: '/favicon.ico', tag: 'rl-alert' }); } catch {}
+}
+
+// ── localStorage persistence ──
+function _rlSave(info) {
+  try { localStorage.setItem(RL_STORAGE_KEY, JSON.stringify(info)); } catch {}
+}
+
+function _rlRestore() {
+  try {
+    const raw = localStorage.getItem(RL_STORAGE_KEY);
+    if (!raw) return;
+    const info = JSON.parse(raw);
+    if (!info || !info.resetsAt) return;
+    // If reset time has passed — clean up and skip
+    if (info.resetsAt * 1000 <= Date.now()) {
+      localStorage.removeItem(RL_STORAGE_KEY);
+      return;
+    }
+    // Restore badge silently (no toast, no modal — just the visual indicator)
+    _rlInfo = info;
+    const pct = Math.round((info.utilization || 0) * 100);
+    const isCrit = info.status === 'rejected' || pct >= 95;
+    _rlLastAlertedPct = pct >= 95 ? 95 : pct >= 90 ? 90 : pct >= 80 ? 80 : 0;
+    _rlRenderBadge(info, pct, isCrit);
+  } catch {}
+}
+
 function _rlUpdateCountdown() {
   if (!_rlInfo) {
     if (_rlCountdownTimer) { clearInterval(_rlCountdownTimer); _rlCountdownTimer = null; }
@@ -3106,11 +3270,13 @@ function _rlUpdateCountdown() {
   }
   const diff = (_rlInfo.resetsAt * 1000) - Date.now();
   if (diff <= 0) {
-    // Limit reset — hide badge
+    // Limit reset — hide badge, clear storage
     $i('rl-tt-countdown').textContent = t('rl.reset.done');
     badge.style.display = 'none';
     if (_rlCountdownTimer) { clearInterval(_rlCountdownTimer); _rlCountdownTimer = null; }
     _rlInfo = null;
+    _rlLastAlertedPct = 0;
+    try { localStorage.removeItem(RL_STORAGE_KEY); } catch {}
     return;
   }
   const h = Math.floor(diff / 3600000);
@@ -6487,6 +6653,7 @@ document.addEventListener('mouseout', () => {
 // ─── Init ─────────────────────────────────────────────────────────────────
 setLang(localStorage.getItem('lang') || 'uk');
 restoreUIState();
+_rlRestore(); // Restore rate limit badge from localStorage if still active
 {
   const btn = $i('autoSkillsBtn');
   if (btn) {

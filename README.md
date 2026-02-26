@@ -149,6 +149,7 @@ git pull && docker compose up -d --build
 | 🗂 **Projects** | Separate projects with their own working directories and chat history |
 | 🔄 **Auto-Continue** | Agent hits the turn limit? It automatically resumes and keeps working (up to 3 times) |
 | 💾 **History** | All sessions saved to SQLite — resume any conversation where you left off |
+| 📊 **Rate Limit Alerts** | Toast warnings at 80/90/95%, blocking modal when exhausted, live countdown to reset |
 | 🔒 **Auth** | Password login + 30-day session tokens. Your data stays on your machine |
 | 🌍 **i18n** | Interface in English, Ukrainian, or Russian (auto-detected) |
 | 🐳 **Docker** | Deploy anywhere with the included Dockerfile and docker-compose |
