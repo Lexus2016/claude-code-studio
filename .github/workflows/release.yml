@@ -41,39 +41,24 @@ jobs:
             const baseTag = '${{ steps.version.outputs.VERSION }}';
             const body = `## What's Changed\n\n${{ steps.changelog.outputs.CHANGELOG }}\n\n## Installation\n\n\`\`\`bash\n# Run latest version directly\nnpx github:Lexus2016/claude-code-studio\n\n# Or install globally\nnpm install -g github:Lexus2016/claude-code-studio\nclaude-code-studio\n\`\`\`\n\n> Open http://localhost:3000 in your browser`;
 
-            const match = baseTag.match(/^v(\d+)\.(\d+)\.(\d+)$/);
-            if (!match) {
-              core.setFailed(`Invalid version tag: ${baseTag}`);
-              return;
-            }
-            const [, major, minor] = match;
-            let patch = parseInt(match[3]);
-            let tag = baseTag;
-
-            for (let attempt = 0; attempt < 10; attempt++) {
-              try {
-                await github.rest.repos.createRelease({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  tag_name: tag,
-                  target_commitish: context.sha,
-                  name: 'Claude Code Studio ' + tag,
-                  body,
-                  draft: false,
-                  prerelease: false,
-                });
-                core.info(`Release ${tag} created successfully`);
-                return;
-              } catch (e) {
-                const isAlreadyExists = e.status === 422 &&
-                  e.response?.data?.errors?.some(err => err.code === 'already_exists');
-                if (isAlreadyExists) {
-                  patch++;
-                  tag = `v${major}.${minor}.${patch}`;
-                  core.info(`Release already exists, trying ${tag}...`);
-                } else {
-                  throw e;
-                }
+            try {
+              await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: baseTag,
+                target_commitish: context.sha,
+                name: 'Claude Code Studio ' + baseTag,
+                body,
+                draft: false,
+                prerelease: false,
+              });
+              core.info(`Release ${baseTag} created successfully`);
+            } catch (e) {
+              const isAlreadyExists = e.status === 422 &&
+                e.response?.data?.errors?.some(err => err.code === 'already_exists');
+              if (isAlreadyExists) {
+                core.info(`Release ${baseTag} already exists — skipping (was likely created manually)`);
+              } else {
+                throw e;
               }
             }
-            core.setFailed(`Could not create release after 10 attempts (last tried: ${tag})`);

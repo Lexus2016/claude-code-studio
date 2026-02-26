@@ -1055,7 +1055,10 @@ async function runMultiAgent(p) {
   chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + planSummaryText);
   ws.send(JSON.stringify({ type:'text', text: planSummaryText, ...(tabId ? { tabId } : {}) }));
   ws.send(JSON.stringify({ type:'agent_plan', plan: plan.plan, agents: plan.agents.map(a => ({ id: a.id, role: a.role, task: a.task })), ...(tabId ? { tabId } : {}) }));
-  try { stmts.addMsg.run(sessionId,'assistant','text',`Plan: ${plan.plan}`,null,'orchestrator',null,null); } catch {}
+  try {
+    const _apJson = JSON.stringify({ plan: plan.plan, agents: plan.agents.map(a => ({ id: a.id, role: a.role, task: a.task })), dispatched: false });
+    stmts.addMsg.run(sessionId,'assistant','agent_plan',_apJson,null,'orchestrator',null,null);
+  } catch {}
 
   const completed = new Set(), results = {};
   const remaining = [...plan.agents];
@@ -1473,10 +1476,8 @@ app.post('/api/tasks/dispatch', (req, res) => {
     workdir || null
   );
 
-  // Inherit Claude session from source chat → first task resumes with full context
-  if (claude_session_id) {
-    stmts.updateClaudeId.run(claude_session_id, chainSessionId);
-  }
+  // Chain gets its OWN Claude session — first task starts fresh,
+  // subsequent tasks --resume from the chain's session (NOT the source chat's).
 
   // First pass: assign real IDs to all tasks (handles forward references in depends_on)
   const idMap = {};
@@ -1535,6 +1536,18 @@ app.get('/api/sessions/:id', (req,res) => {
   s.hasRunningTask = !!rt;
   // True when a direct-chat streaming session is alive in memory (not a Kanban task)
   s.isChatRunning = activeTasks.has(req.params.id);
+  // Include chain tasks dispatched FROM this session (for chain progress widget restoration)
+  const chainTasks = db.prepare(`SELECT id, title, status, depends_on, chain_id FROM tasks WHERE source_session_id=? ORDER BY sort_order ASC`).all(req.params.id);
+  if (chainTasks.length) {
+    // Group by chain_id (a session could have dispatched multiple chains)
+    const chains = {};
+    for (const t of chainTasks) {
+      if (!t.chain_id) continue;
+      if (!chains[t.chain_id]) chains[t.chain_id] = [];
+      chains[t.chain_id].push({ id: t.id, title: t.title, status: t.status, depends_on: t.depends_on });
+    }
+    s.chains = chains;
+  }
   res.json(s);
 });
 app.put('/api/sessions/:id', (req, res) => {
@@ -2534,6 +2547,11 @@ wss.on('connection', (ws) => {
           const { text, plan, agents, sessionId, workdir, model, tabId } = msg;
           let finalPlan, finalAgents;
 
+          // Save user's dispatch text to DB (so it survives page refresh)
+          if (text && sessionId) {
+            try { stmts.addMsg.run(sessionId, 'user', 'text', text, null, null, null, null); } catch {}
+          }
+
           if (plan && agents?.length) {
             // Mode 1: Plan already provided (from agent_plan card "📋 Kanban" button)
             finalPlan = plan;
@@ -2569,12 +2587,25 @@ wss.on('connection', (ws) => {
               return;
             }
 
-            // Show plan in chat
+            // Show plan in chat & save as agent_plan message (restorable on refresh)
             ws.send(JSON.stringify({ type: 'agent_plan', plan: finalPlan, agents: finalAgents.map(a => ({ id: a.id, role: a.role, task: a.task })), dispatched: true, ...(tabId ? { tabId } : {}) }));
-            try { if (sessionId) stmts.addMsg.run(sessionId, 'assistant', 'text', `Plan: ${finalPlan}`, null, 'orchestrator', null, null); } catch {}
+            try {
+              if (sessionId) {
+                const agentPlanJson = JSON.stringify({ plan: finalPlan, agents: finalAgents.map(a => ({ id: a.id, role: a.role, task: a.task })), dispatched: true });
+                stmts.addMsg.run(sessionId, 'assistant', 'agent_plan', agentPlanJson, null, 'orchestrator', null, null);
+              }
+            } catch {}
           } else {
             ws.send(JSON.stringify({ type: 'error', error: 'No plan or text provided for dispatch', ...(tabId ? { tabId } : {}) }));
             return;
+          }
+
+          // Save agent_plan to DB for Mode 1 (plan from 📋 Kanban button — wasn't saved above)
+          if (plan && agents?.length && sessionId) {
+            try {
+              const agentPlanJson = JSON.stringify({ plan: finalPlan, agents: finalAgents.map(a => ({ id: a.id, role: a.role, task: a.task })), dispatched: true });
+              stmts.addMsg.run(sessionId, 'assistant', 'agent_plan', agentPlanJson, null, 'orchestrator', null, null);
+            } catch {}
           }
 
           // Circular dependency check
@@ -2599,9 +2630,9 @@ wss.on('connection', (ws) => {
             'auto', 'single', model || 'sonnet', 'cli',
             workdir || null
           );
-          if (source?.claude_session_id) {
-            stmts.updateClaudeId.run(source.claude_session_id, chainSessionId);
-          }
+          // Chain gets its OWN Claude session — first task starts fresh,
+          // subsequent tasks --resume from the chain's session (NOT the source chat's).
+          // Sharing claude_session_id with source chat causes context mixing chaos.
 
           // First pass: assign real IDs (handles forward references in depends_on)
           const idMap = {};

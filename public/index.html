@@ -3497,21 +3497,31 @@ function _chainProgressRender(chainId, tasks) {
   _chainData = { chain_id: chainId, tasks };
   const old = msgsEl.querySelector('.chain-progress-card');
   if (old) old.remove();
+  const doneCount = tasks.filter(x => x.status === 'done').length;
+  const failedCount = tasks.filter(x => x.status === 'cancelled').length;
+  const pct = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
+  const titleText = doneCount || failedCount
+    ? `📋 Kanban Chain — ${doneCount}/${tasks.length} done${failedCount ? `, ${failedCount} failed` : ''}`
+    : `📋 Kanban Chain — ${tasks.length} tasks`;
   const card = document.createElement('div');
   card.className = 'chain-progress-card';
   card.dataset.chainId = chainId;
   card.innerHTML = `
-    <div class="cpc-title">📋 Kanban Chain — ${tasks.length} tasks</div>
+    <div class="cpc-title">${titleText}</div>
     <div class="cpc-tasks">
-      ${tasks.map(t => `
-        <div class="cpc-task" data-task-id="${escH(t.id)}">
+      ${tasks.map(t => {
+        const st = t.status || 'todo';
+        const cls = st === 'done' ? 'cpc-done' : st === 'in_progress' ? 'cpc-running' : st === 'cancelled' ? 'cpc-failed' : '';
+        const label = st === 'in_progress' ? 'running' : st === 'cancelled' ? 'failed' : st;
+        return `
+        <div class="cpc-task ${cls}" data-task-id="${escH(t.id)}">
           <span class="cpc-dot"></span>
           <span class="cpc-name">${escH(t.title)}</span>
-          <span class="cpc-status" style="font-size:10px;color:var(--muted);margin-left:auto">todo</span>
-        </div>
-      `).join('')}
+          <span class="cpc-status" style="font-size:10px;color:var(--muted);margin-left:auto">${label}</span>
+        </div>`;
+      }).join('')}
     </div>
-    <div class="cpc-bar"><div class="cpc-bar-fill"></div></div>
+    <div class="cpc-bar"><div class="cpc-bar-fill" style="width:${pct}%"></div></div>
     <div style="margin-top:6px;text-align:right">
       <a href="/kanban" target="_blank" style="font-size:10px;color:var(--accent);text-decoration:none;opacity:.7">Open Kanban →</a>
     </div>`;
@@ -5136,6 +5146,46 @@ function formatMsgTime(isoStr) {
 
 function _renderMsgAt(idx, prepend = false) {
   const m = _allMsgs[idx];
+  // Render agent_plan messages as inline cards (not as regular messages)
+  if (m._agentPlan) {
+    const ap = m._agentPlan;
+    const card = document.createElement('div');
+    card.className = 'agent-team-card';
+    if (m.id) card.dataset.msgId = String(m.id);
+    const agents = ap.agents || [];
+    card.innerHTML = `
+      <div class="atc-header">
+        <div class="atc-icon">${ap.dispatched ? '📋' : '🤖'}</div>
+        <div>
+          <div class="atc-title">${ap.dispatched ? 'Plan → Kanban' : escH(t('msf.team'))}</div>
+          <div class="atc-plan" title="${escH(ap.plan || '')}">${escH(ap.plan || '')}</div>
+        </div>
+      </div>
+      <div class="atc-agents">
+        ${agents.map(a => `
+          <div class="atc-row" data-agent-id="${escH(a.id)}">
+            <span class="atc-dot"></span>
+            <span class="atc-id">${escH(a.id)}</span>
+            <span class="atc-role">${escH(a.role || '')}</span>
+            <span class="atc-task">${escH(a.task || '')}</span>
+          </div>
+        `).join('')}
+      </div>
+      <div class="atc-footer">
+        <span class="atc-count">${ap.dispatched ? '✅' : `0/${agents.length}`}</span>
+        <div class="atc-progress"><div class="atc-progress-bar" style="width:${ap.dispatched ? '100%' : '0%'}"></div></div>
+      </div>`;
+    // Restore _atcPlanData for potential re-dispatch
+    _atcPlanData = { plan: ap.plan, agents };
+    if (prepend) {
+      const firstMsg = msgsEl.querySelector('.mw, .agent-team-card');
+      if (firstMsg) msgsEl.insertBefore(card, firstMsg);
+      else msgsEl.prepend(card);
+    } else {
+      msgsEl.appendChild(card);
+    }
+    return card;
+  }
   const hasReply = _allMsgs.slice(idx + 1).some(x => x.role === 'assistant');
   const w = document.createElement('div');
   w.className = `mw ${m.role}`;
@@ -5172,7 +5222,43 @@ function _renderMsgAt(idx, prepend = false) {
       }
     } catch {}
   }
-  if (m.role === 'assistant') {
+  if (m.role === 'assistant' && m.type === 'agent_plan') {
+    // Render as interactive agent plan card (restored from DB)
+    try {
+      const pd = JSON.parse(m.content);
+      if (pd.agents?.length) {
+        const cardHtml = `
+          <div class="agent-team-card" style="margin:0">
+            <div class="atc-header">
+              <div class="atc-icon">${pd.dispatched ? '📋' : '🤖'}</div>
+              <div>
+                <div class="atc-title">${pd.dispatched ? 'Plan → Kanban' : escH(t('msf.team'))}</div>
+                <div class="atc-plan" title="${escH(pd.plan || '')}">${escH(pd.plan || '')}</div>
+              </div>
+            </div>
+            <div class="atc-agents">
+              ${pd.agents.map(a => `
+                <div class="atc-row atc-done" data-agent-id="${escH(a.id)}">
+                  <span class="atc-dot"></span>
+                  <span class="atc-id">${escH(a.id)}</span>
+                  <span class="atc-role">${escH(a.role)}</span>
+                  <span class="atc-task">${escH(a.task || '')}</span>
+                </div>
+              `).join('')}
+            </div>
+            <div class="atc-footer">
+              <span class="atc-count">${pd.agents.length}/${pd.agents.length}</span>
+              <div class="atc-progress"><div class="atc-progress-bar" style="width:100%"></div></div>
+            </div>
+          </div>`;
+        w.querySelector('.msg').innerHTML = cardHtml;
+      } else {
+        w.querySelector('.msg').innerHTML = renderMd(m.content);
+      }
+    } catch {
+      w.querySelector('.msg').innerHTML = renderMd(m.content);
+    }
+  } else if (m.role === 'assistant') {
     w.querySelector('.msg').innerHTML = renderMd(m.content);
   } else {
     w.querySelector('.msg').textContent = m.content;
@@ -5184,7 +5270,7 @@ function _renderMsgAt(idx, prepend = false) {
   }
   // Add "Done" footer for completed assistant messages in history
   // Show on the last assistant msg before a user msg or end of conversation
-  if (m.role === 'assistant') {
+  if (m.role === 'assistant' && m.type !== 'agent_plan') {
     const next = _allMsgs[idx + 1];
     if (!next || next.role === 'user') {
       w.appendChild(_msfCreate('done', t('msf.done')));
@@ -5302,6 +5388,15 @@ async function loadSess(id) {
       for (let i = 0; i < raw.length; i++) {
         const m = raw[i];
         if (m.type === 'tool') continue;
+        // agent_plan messages: parse JSON content and mark for card rendering
+        if (m.type === 'agent_plan') {
+          try {
+            const parsed = JSON.parse(m.content);
+            m._agentPlan = parsed; // { plan, agents, dispatched }
+          } catch {}
+          _allMsgs.push(m);
+          continue;
+        }
         if (m.role === 'assistant' && m.type === 'text') {
           if (m.agent_id && _agentTools[m.agent_id]) {
             // Multi-agent: all tools for this agent (regardless of DB order)
@@ -5334,6 +5429,13 @@ async function loadSess(id) {
       const lastAssist = [...msgsEl.querySelectorAll('.mw.assistant')].pop();
       if (lastAssist && !_msfGet(lastAssist)) {
         lastAssist.appendChild(_msfCreate('done', t('msf.done')));
+      }
+    }
+
+    // Restore chain progress widget(s) from server-side task data
+    if (d.chains) {
+      for (const [chainId, tasks] of Object.entries(d.chains)) {
+        _chainProgressRender(chainId, tasks);
       }
     }
 
