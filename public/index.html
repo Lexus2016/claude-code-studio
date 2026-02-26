@@ -4858,6 +4858,14 @@ function _renderMsgAt(idx, prepend = false) {
   if (m.role === 'assistant' && m._tools) {
     _renderToolActivity(w, m._tools);
   }
+  // Add "Done" footer for completed assistant messages in history
+  // Show on the last assistant msg before a user msg or end of conversation
+  if (m.role === 'assistant') {
+    const next = _allMsgs[idx + 1];
+    if (!next || next.role === 'user') {
+      w.appendChild(_msfCreate('done', t('msf.done')));
+    }
+  }
   if (m.agent_id) addAgentBadge(w, m.agent_id);
   if (prepend) {
     const firstMsg = msgsEl.querySelector('.mw');
