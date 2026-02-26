@@ -377,9 +377,6 @@ const pendingAskUser = new Map();
 const ASK_USER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const ASK_USER_SECRET = require('crypto').randomBytes(16).toString('hex');
 
-// ─── CLI Ask Tool ──────────────────────────────────────────────────────────
-// Pending CLI Ask tool questions: requestId → { sessionId, ws, resolved }
-let pendingCliAsks = new Map();
 
 // ─── Notify User (Internal MCP) ──────────────────────────────────────────
 const NOTIFY_SECRET = require('crypto').randomBytes(16).toString('hex');
@@ -802,35 +799,13 @@ function runCliSingle(p) {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
           return;
         }
-        // Debug: log all tool names to find Ask tool
-        if (name.toLowerCase().includes('ask') || name.toLowerCase().includes('question')) {
-          log.info('Ask-like tool detected', { name, inputPreview: (inp||'').substring(0, 200) });
+        // AskUserQuestion is Claude CLI's internal tool — handled by the CLI itself
+        // (auto-resolved with --dangerously-skip-permissions). Don't show to web UI user.
+        if (name === 'AskUserQuestion') {
+          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
+          return;
         }
-        // Handle Ask tool from Claude Code CLI - render as interactive question card
-        // Match: "Ask", "mcp__Ask", or tools with "ask" in name (but not ask_user/notify_user which are already filtered)
-        if (name === 'Ask' || name === 'mcp__Ask' || (name.toLowerCase().includes('ask') && !name.includes('ask_user'))) {
-          try {
-            const askData = typeof inp === 'string' ? JSON.parse(inp) : inp;
-            // Generate a unique request ID for this ask
-            const askRequestId = `ask-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-            // Store pending ask for response handling
-            if (!pendingCliAsks) pendingCliAsks = new Map();
-            pendingCliAsks.set(askRequestId, { sessionId, ws, resolved: false });
-            // Send to client for rendering
-            ws.send(JSON.stringify({
-              type: 'ask_tool',
-              requestId: askRequestId,
-              question: askData.question || askData.prompt || '',
-              options: askData.options || [],
-              tabId
-            }));
-          } catch (e) {
-            // If parsing fails, show as regular tool
-            ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
-          }
-        } else {
-          ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
-        }
+        ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
         try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
       })
       .onSessionId(sid => { newCid=sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} }) // persist early so open-terminal works during active chat
@@ -1108,70 +1083,6 @@ app.get('/api/health', (_, res) => {
 });
 
 // Test endpoint to simulate Ask tool (for UI testing)
-app.post('/api/test/ask-tool', express.json(), (req, res) => {
-  const { sessionId, question, options } = req.body;
-  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
-
-  // Find active WebSocket for this session
-  const task = activeTasks.get(sessionId);
-  const ws = task?.proxy;
-  if (!ws) return res.status(404).json({ error: 'No active session' });
-
-  const askRequestId = `ask-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  ws.send(JSON.stringify({
-    type: 'ask_tool',
-    requestId: askRequestId,
-    question: question || 'Which option do you prefer?',
-    options: options || ['Option A', 'Option B', 'Option C'],
-    tabId: sessionId
-  }));
-
-  res.json({ ok: true, requestId: askRequestId });
-});
-
-// Test endpoint to simulate MCP ask_user (for UI testing)
-app.post('/api/test/ask-user', express.json(), (req, res) => {
-  const { sessionId, question, questions, options, inputType } = req.body;
-  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
-
-  // Find active WebSocket for this session
-  const task = activeTasks.get(sessionId);
-  const ws = task?.proxy;
-  if (!ws) return res.status(404).json({ error: 'No active session' });
-
-  const requestId = crypto.randomUUID();
-
-  // Build payload matching MCP ask_user format
-  const payload = {
-    type: 'ask_user',
-    requestId,
-    tabId: sessionId
-  };
-
-  // Single question format
-  if (question) {
-    payload.question = question;
-    if (options) payload.options = options;
-    if (inputType) payload.inputType = inputType;
-  }
-
-  // Multiple questions format (paginated)
-  if (questions && Array.isArray(questions)) {
-    payload.questions = questions;
-  }
-
-  // Default if nothing specified
-  if (!question && !questions) {
-    payload.question = 'What would you like to do?';
-    payload.options = ['Option A', 'Option B', 'Option C'];
-    payload.inputType = 'single_choice';
-  }
-
-  ws.send(JSON.stringify(payload));
-  res.json({ ok: true, requestId, payload });
-});
-
 // Stats
 app.get('/api/stats', (req, res) => {
   const sessionId = req.query.session_id || null;
@@ -2241,18 +2152,6 @@ wss.on('connection', (ws) => {
         clearTimeout(entry.timer);
         pendingAskUser.delete(msg.requestId);
         entry.resolve({ answer: '[Skipped by user]' });
-      }
-      return;
-    }
-
-    // ─── CLI Ask Tool responses ───────────────────────────────────────────────
-    if (msg.type === 'ask_tool_response') {
-      const entry = pendingCliAsks.get(msg.requestId);
-      if (entry && !entry.resolved) {
-        entry.resolved = true;
-        pendingCliAsks.delete(msg.requestId);
-        // The answer will be sent as the next user message in the chat
-        // This is handled client-side by adding the answer to the input
       }
       return;
     }
