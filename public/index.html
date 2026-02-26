@@ -108,8 +108,7 @@ body::after {
 .sec-body { padding: 4px 8px 10px; }
 .sec-body.collapsed { display: none; }
 
-/* ─── Active project label + version badge in header ─── */
-#activeProjLabel { font-size: 12px; color: var(--accent2); background: rgba(124,106,239,.1); border: 1px solid rgba(124,106,239,.25); border-radius: 4px; padding: 2px 8px; display: none; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ─── Version badge in header ─── */
 #versionBadge { font-size: 11px; color: var(--muted); cursor: default; letter-spacing: .3px; }
 #versionBadge.update { color: var(--orange); cursor: pointer; text-decoration: underline dotted; }
 
@@ -117,47 +116,66 @@ body::after {
 .proj-dd-wrap { position: relative; display: none; }
 .proj-dd-wrap.visible { display: inline-block; }
 .proj-dd-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 600; color: var(--accent2);
-  background: rgba(124,106,239,.1); border: 1px solid rgba(124,106,239,.25);
-  border-radius: 6px; padding: 3px 10px; cursor: pointer;
-  max-width: 200px; transition: all .15s; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--accent2);
+  background: linear-gradient(135deg, rgba(124,106,239,.15) 0%, rgba(124,106,239,.08) 100%);
+  border: 1px solid rgba(124,106,239,.35);
+  border-radius: 8px; padding: 6px 14px; cursor: pointer;
+  max-width: 280px; transition: all .2s ease; font-family: inherit;
+  box-shadow: 0 2px 8px rgba(124,106,239,.12);
 }
-.proj-dd-btn:hover { background: rgba(124,106,239,.18); border-color: var(--accent); }
-.proj-dd-btn.open { background: rgba(124,106,239,.2); border-color: var(--accent); }
+.proj-dd-btn:hover {
+  background: linear-gradient(135deg, rgba(124,106,239,.22) 0%, rgba(124,106,239,.12) 100%);
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(124,106,239,.2);
+  transform: translateY(-1px);
+}
+.proj-dd-btn.open {
+  background: linear-gradient(135deg, rgba(124,106,239,.25) 0%, rgba(124,106,239,.15) 100%);
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px rgba(124,106,239,.25);
+}
+.proj-dd-btn .proj-dd-icon { font-size: 14px; flex-shrink: 0; }
 .proj-dd-btn .proj-dd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.proj-dd-btn .proj-dd-arrow { font-size: 9px; opacity: .6; transition: transform .2s; flex-shrink: 0; }
+.proj-dd-btn .proj-dd-arrow { font-size: 10px; opacity: .6; transition: transform .2s; flex-shrink: 0; }
 .proj-dd-btn.open .proj-dd-arrow { transform: rotate(180deg); opacity: 1; }
 .proj-dd-menu {
-  position: absolute; top: 100%; left: 0; margin-top: 6px;
-  min-width: 240px; max-width: 320px;
+  position: absolute; top: 100%; left: 0; margin-top: 8px;
+  min-width: 300px; max-width: 400px;
   background: var(--s2); border: 1px solid var(--border);
-  border-radius: var(--r-md); box-shadow: var(--shadow-lg);
+  border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.35), 0 0 0 1px rgba(124,106,239,.1);
   z-index: 1000; opacity: 0; visibility: hidden;
-  transform: translateY(-6px); transition: all .18s var(--ease-out);
+  transform: translateY(-8px); transition: all .2s var(--ease-out);
+  overflow: hidden;
 }
 .proj-dd-menu.open { opacity: 1; visibility: visible; transform: translateY(0); }
-.proj-dd-search { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.proj-dd-search { padding: 12px; border-bottom: 1px solid var(--border); background: rgba(124,106,239,.05); }
 .proj-dd-search input {
   width: 100%; background: var(--s3); border: 1px solid var(--border);
-  border-radius: 6px; padding: 6px 10px; font-size: 12px; color: var(--text);
-  outline: none; font-family: inherit;
+  border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--text);
+  outline: none; font-family: inherit; transition: border-color .15s, box-shadow .15s;
 }
-.proj-dd-search input:focus { border-color: var(--accent); }
-.proj-dd-list { max-height: 280px; overflow-y: auto; padding: 4px 0; }
-.proj-dd-list::-webkit-scrollbar { width: 4px; }
-.proj-dd-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.proj-dd-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.15); }
+.proj-dd-list { max-height: 320px; overflow-y: auto; padding: 6px 0; }
+.proj-dd-list::-webkit-scrollbar { width: 6px; }
+.proj-dd-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.proj-dd-list::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 .proj-dd-item {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 8px 12px; cursor: pointer; transition: background .1s;
+  position: relative;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 10px 16px; cursor: pointer; transition: background .12s;
+  border-left: 3px solid transparent;
 }
 .proj-dd-item:hover { background: var(--s3); }
-.proj-dd-item.active { background: var(--abg); }
-.proj-dd-item .proj-dd-item-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.proj-dd-item .proj-dd-item-path { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proj-dd-item.active {
+  background: rgba(124,106,239,.1);
+  border-left-color: var(--accent);
+}
+.proj-dd-item .proj-dd-item-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; }
+.proj-dd-item .proj-dd-item-path { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 22px; }
 .proj-dd-item.active .proj-dd-item-name { color: var(--accent2); }
-.proj-dd-item.active::before { content: '●'; position: absolute; left: 8px; color: var(--accent); font-size: 8px; }
-.proj-dd-empty { padding: 16px 12px; text-align: center; color: var(--muted); font-size: 12px; }
+.proj-dd-item.active .proj-dd-item-name::before { content: '●'; color: var(--accent); font-size: 8px; flex-shrink: 0; }
+.proj-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
 
 /* ─── Rate limit badge ─── */
 #rlBadge { display:none; position:relative; align-items:center; gap:5px; padding:3px 9px; border-radius:6px; font-size:12px; font-weight:600; cursor:default; user-select:none; background:rgba(245,158,11,.15); border:1px solid rgba(245,158,11,.45); color:#f59e0b; transition:background .2s,border-color .2s; }
@@ -287,7 +305,7 @@ body::after {
 .dot-auto { background: var(--orange); }
 
 /* ─── Messages ─── */
-.msgs { flex: 1; overflow-y: auto; padding: 20px 18px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+.msgs { flex: 1; overflow-y: auto; padding: 12px 18px 40px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; scroll-padding-bottom: 40px; }
 .msgs::-webkit-scrollbar { width: 4px; }
 .msgs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
@@ -302,6 +320,16 @@ body::after {
 .msg { line-height: 1.75; font-size: var(--msg-font, 15.5px); word-break: break-word; }
 .mw.user .msg { background: var(--user-msg); padding: 10px 15px; border-radius: 14px 14px 4px 14px; white-space: pre-wrap; border: 1px solid rgba(124,106,239,.3); }
 .mw.assistant .msg { background: var(--s2); padding: 13px 16px; border-radius: 14px 14px 14px 4px; border: 1px solid var(--border); white-space: pre-wrap; }
+
+/* ─── Message timestamp ─── */
+.msg-time {
+  font-size: 10px; color: var(--muted); opacity: .7;
+  margin-top: 4px; text-align: right; user-select: none;
+  transition: opacity .15s;
+}
+.mw:hover .msg-time { opacity: 1; }
+.mw.user .msg-time { text-align: right; }
+.mw.assistant .msg-time { text-align: left; }
 
 /* ─── Assistant message avatar marker ─── */
 .mw.assistant { padding-left: 34px; }
@@ -1246,6 +1274,18 @@ body::after {
 .fork-btn:hover { color: var(--text); opacity: 1 !important; background: var(--s2); }
 .mw.user .fork-btn { right: 39px; top: 55px; }
 
+/* ─── Use as input button (copy message to input field) ─── */
+.use-btn {
+  position: absolute; top: 55px; right: 5px;
+  opacity: 0; background: var(--s3); border: 1px solid var(--border);
+  color: var(--muted); padding: 3px 7px; border-radius: 5px;
+  cursor: pointer; font-size: 12px; line-height: 1; transition: opacity .15s;
+}
+.mw:hover .use-btn { opacity: .6; }
+.use-btn:hover { color: var(--text); opacity: 1 !important; background: var(--s2); }
+.mw.user .use-btn { right: 39px; top: 55px; }
+.mw.assistant .use-btn { top: 80px; } /* below fork-btn */
+
 /* ─── Reply preview bar (above textarea) ─── */
 .reply-preview {
   display: flex; align-items: center; gap: 8px;
@@ -1300,7 +1340,7 @@ body::after {
   .panel-tab { width: 32px; }
   .panel-tab-inner { width: 32px; height: 48px; }
   /* Center area adjustments */
-  .msgs { padding: 12px 10px; }
+  .msgs { padding: 12px 10px 40px; }
   .mw { max-width: 94%; }
   .mw.assistant { padding-left: 28px; }
   .mw.assistant::before { width: 22px; height: 22px; font-size: 8px; }
@@ -1434,9 +1474,9 @@ body::after {
         </a>
       </nav>
       <div class="hdr-meta">
-        <span id="activeProjLabel" style="display:none"></span>
         <div class="proj-dd-wrap" id="projDdWrap">
           <button class="proj-dd-btn" id="projDdBtn" onclick="toggleProjDropdown()">
+            <span class="proj-dd-icon">📁</span>
             <span class="proj-dd-name" id="projDdName">Проект</span>
             <span class="proj-dd-arrow">▼</span>
           </button>
@@ -1746,16 +1786,30 @@ body::after {
 'use strict';
 
 // ─── State ───────────────────────────────────────────────────────────────────
-let ws = null, isGen = false, curEl = null, curTxt = '', currentSessionId = null, generatingTabId = null;
-let curToolCounts = {}; // Track tool usage per streaming message
-let curToolLog = []; // Track tool calls with details for live display
+let ws = null, isGen = false, currentSessionId = null, generatingTabId = null;
 let replyTo = null; // { id, role, content }
 let openTabs = [], activeTabId = null;
-const tabState = {}; // per-tab: { curEl, curTxt, currentSessionId, generating, draft, agentStatus }
+const tabState = {}; // per-tab: { curEl, curTxt, currentSessionId, generating, draft, agentStatus, _toolCounts, _toolLog }
 function getTS(id) {
-  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', currentSessionId: null, generating: false, draft: '', agentStatus: '' };
+  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', currentSessionId: null, generating: false, draft: '', agentStatus: '', _toolCounts: {}, _toolLog: [] };
   return tabState[id];
 }
+
+// ─── Streaming state proxy (isolated per-tab) ────────────────────────────────
+// CRITICAL: These provide transparent access to the ACTIVE tab's streaming state.
+// Using this proxy ensures tab isolation — switching tabs mid-stream won't mix messages.
+// Usage: `streaming.el` reads/writes curEl property of active tab's tabState.
+const streaming = {
+  get el() { return getTS(activeTabId).curEl; },
+  set el(v) { getTS(activeTabId).curEl = v; },
+  get txt() { return getTS(activeTabId).curTxt; },
+  set txt(v) { getTS(activeTabId).curTxt = v; },
+  get toolCounts() { return getTS(activeTabId)._toolCounts; },
+  set toolCounts(v) { getTS(activeTabId)._toolCounts = v; },
+  get toolLog() { return getTS(activeTabId)._toolLog; },
+  set toolLog(v) { getTS(activeTabId)._toolLog = v; },
+  reset() { const s = getTS(activeTabId); s.curEl = null; s.curTxt = ''; s._toolCounts = {}; s._toolLog = []; },
+};
 let config = { mcpServers: {}, skills: {} };
 let activeMcp = new Set(), activeSkills = new Set();
 let autoSkillsMode = true; // ON by default; user can disable
@@ -1822,6 +1876,7 @@ const TRANSLATIONS = {
     'copy.msg':'Копіювати',
     'msg.reply':'Відповісти',
     'fork.title':'Продовжити в новому чаті',
+    'use.input':'Вставити в поле вводу',
     'tab.new':'Новий чат',
     'you.label':'Ви',
     'err.stop.switch':'Зупиніть агента перед переключенням',
@@ -1932,6 +1987,7 @@ const TRANSLATIONS = {
     'copy.msg':'Copy',
     'msg.reply':'Reply',
     'fork.title':'Continue in new chat',
+    'use.input':'Insert into input field',
     'tab.new':'New chat',
     'you.label':'You',
     'err.stop.switch':'Stop agent before switching',
@@ -2042,6 +2098,7 @@ const TRANSLATIONS = {
     'copy.msg':'Копировать',
     'msg.reply':'Ответить',
     'fork.title':'Продолжить в новом чате',
+    'use.input':'Вставить в поле ввода',
     'tab.new':'Новый чат',
     'you.label':'Вы',
     'err.stop.switch':'Остановите агента перед переключением',
@@ -2559,7 +2616,7 @@ function handleWsMsg(d) {
           applyMsgClamp(um);
         }
         setStatus('⚙ ' + (d.title || 'Task') + '…', 'warn');
-        if (!curEl) { curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
+        if (!streaming.el) { streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
       }
       if (found?.tab) {
         found.tab.generating = true;
@@ -2581,7 +2638,7 @@ function handleWsMsg(d) {
         ind.textContent = `↩ ${t('toast.task_retry')} #${rc}`;
         $i('messages')?.appendChild(ind);
         setStatus('⚙ ' + (d.title || 'Task') + '…', 'warn');
-        if (!curEl) { curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
+        if (!streaming.el) { streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
         scrollBottom();
       }
       if (found?.tab) {
@@ -2601,24 +2658,22 @@ function handleWsMsg(d) {
       }
       rmStatus();
       getTS(tabId).agentStatus = ''; // text has arrived — status no longer relevant
-      if (!curEl) { rmW(); curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
+      if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
       // catchUp = full replay from server after reconnect → replace, not append
-      if (d.catchUp) { curTxt = d.text; } else { curTxt += d.text; }
-      curEl.querySelector('.msg').innerHTML = renderStreaming(curTxt);
-      if (d.agent) addAgentBadge(curEl, d.agent);
+      if (d.catchUp) { streaming.txt = d.text; } else { streaming.txt += d.text; }
+      streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
+      if (d.agent) addAgentBadge(streaming.el, d.agent);
       scrollBottom();
       break;
 
     case 'tool':
-      // Track tool usage for activity summary on done
-      { const tn = d.tool || 'tool'; curToolCounts[tn] = (curToolCounts[tn] || 0) + 1; }
-      // Also track for background tabs
+      // Track tool usage for activity summary on done — ALWAYS use tabId, not activeTabId
       { const ts = getTS(tabId); if (!ts._toolCounts) ts._toolCounts = {}; const tn = d.tool || 'tool'; ts._toolCounts[tn] = (ts._toolCounts[tn] || 0) + 1; }
       // Live tool activity panel — show what Claude Code is doing
       if (isVisible) {
-        if (!curEl) { rmW(); rmStatus(); curEl = addMsg('assistant'); curTxt = ''; addSpinner(curEl); }
-        curToolLog.push({ tool: d.tool || 'tool', brief: _toolInputBrief(d.tool, d.input), input: d.input || '' });
-        _renderToolLive(curEl, curToolLog);
+        if (!streaming.el) { rmW(); rmStatus(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
+        streaming.toolLog.push({ tool: d.tool || 'tool', brief: _toolInputBrief(d.tool, d.input), input: d.input || '' });
+        _renderToolLive(streaming.el, streaming.toolLog);
         scrollBottom();
       } else {
         // Background tab — accumulate tool log for restoration on tab switch
@@ -2628,7 +2683,7 @@ function handleWsMsg(d) {
       break;
 
     case 'thinking':
-      if (!curEl && isVisible) showStatus(t('status.thinking'));
+      if (!streaming.el && isVisible) showStatus(t('status.thinking'));
       break;
 
     case 'agent_plan':
@@ -2664,27 +2719,27 @@ function handleWsMsg(d) {
     case 'done':
       getTS(tabId).agentStatus = ''; // task finished — clear saved status
       if (isVisible) {
-        if (curEl && curTxt) { curEl.querySelector('.msg').innerHTML = renderMd(curTxt); applyMsgClamp(curEl); }
+        if (streaming.el && streaming.txt) { streaming.el.querySelector('.msg').innerHTML = renderMd(streaming.txt); applyMsgClamp(streaming.el); }
         // Finalize tool activity: if live panel exists, keep it (collapsed + done); otherwise show pills summary
-        if (curEl && curEl.querySelector('.tool-live')) {
-          _finalizeToolLive(curEl);
-        } else if (curEl && Object.keys(curToolCounts).length > 0) {
-          _renderToolActivity(curEl, curToolCounts);
+        if (streaming.el && streaming.el.querySelector('.tool-live')) {
+          _finalizeToolLive(streaming.el);
+        } else if (streaming.el && Object.keys(streaming.toolCounts).length > 0) {
+          _renderToolActivity(streaming.el, streaming.toolCounts);
         }
         // If agent didn't write a status line, show a "Done" badge so user knows it's finished
-        if (curEl && curTxt && !/---\s*\n\s*[✅⏳❓⚠️]/.test(curTxt) && !/✅\s*Done/.test(curTxt)) {
+        if (streaming.el && streaming.txt && !/---\s*\n\s*[✅⏳❓⚠️]/.test(streaming.txt) && !/✅\s*Done/.test(streaming.txt)) {
           const badge = document.createElement('div');
           badge.className = 'msg-done-badge';
           // Build short summary from tool activity
-          const tc = Object.keys(curToolCounts).length;
-          const total = tc ? Object.values(curToolCounts).reduce((a,b) => a+b, 0) : 0;
+          const tc = Object.keys(streaming.toolCounts).length;
+          const total = tc ? Object.values(streaming.toolCounts).reduce((a,b) => a+b, 0) : 0;
           badge.textContent = total > 0 ? `✅ ${t('msf.done')} — ${total} ${t('ta.calls')}` : `✅ ${t('msf.done')}`;
-          const footer = curEl.querySelector('.msg-status-footer');
-          if (footer) curEl.insertBefore(badge, footer); else curEl.appendChild(badge);
+          const footer = streaming.el.querySelector('.msg-status-footer');
+          if (footer) streaming.el.insertBefore(badge, footer); else streaming.el.appendChild(badge);
         }
-        markDone(curEl);
-        curEl = null; curTxt = '';
-        curToolCounts = {}; curToolLog = []; // reset tool tracking
+        markDone(streaming.el);
+        streaming.el = null; streaming.txt = '';
+        streaming.toolCounts = {}; streaming.toolLog = []; // reset tool tracking
         // Clear retry badge on successful completion
         { const rb = msgsEl.querySelector('.retry-badge'); if (rb) rb.remove(); }
         if (d.taskId) {
@@ -2713,7 +2768,10 @@ function handleWsMsg(d) {
       break;
 
     case 'notification':
-      showNotification(d);
+      // Only show notification if it belongs to the current tab
+      if (isVisible || !d.tabId) {
+        showNotification(d);
+      }
       break;
 
     case 'error':
@@ -2721,22 +2779,22 @@ function handleWsMsg(d) {
       if (isVisible) {
         rmStatus();
         // Finalize tool activity on error — keep live panel if exists, otherwise show pills
-        if (curEl && curEl.querySelector('.tool-live')) {
-          _finalizeToolLive(curEl);
-        } else if (curEl && Object.keys(curToolCounts).length > 0) {
-          _renderToolActivity(curEl, curToolCounts);
+        if (streaming.el && streaming.el.querySelector('.tool-live')) {
+          _finalizeToolLive(streaming.el);
+        } else if (streaming.el && Object.keys(streaming.toolCounts).length > 0) {
+          _renderToolActivity(streaming.el, streaming.toolCounts);
         }
-        if (curEl) {
-          _msfRemove(curEl);
+        if (streaming.el) {
+          _msfRemove(streaming.el);
           const ef = _msfCreate('error', t('msf.error'));
-          curEl.appendChild(ef);
-          curEl.querySelector('.msg').innerHTML += `<br><span style="color:var(--red)">${escH(d.error)}</span>`;
+          streaming.el.appendChild(ef);
+          streaming.el.querySelector('.msg').innerHTML += `<br><span style="color:var(--red)">${escH(d.error)}</span>`;
         }
         else {
           const em = addMsg('assistant'); em.querySelector('.msg').innerHTML = `<span style="color:var(--red)">${escH(d.error)}</span>`;
           const ef = _msfCreate('error', t('msf.error')); em.appendChild(ef);
         }
-        curToolCounts = {}; curToolLog = [];
+        streaming.toolCounts = {}; streaming.toolLog = [];
         isGen = false;
         setSendStop(false);
         setStatus(t('status.error'), 'err');
@@ -2761,6 +2819,17 @@ function handleWsMsg(d) {
         const ts = getTS(tabId);
         if (!ts._pendingAskUser) ts._pendingAskUser = [];
         ts._pendingAskUser.push(d);
+      }
+      break;
+
+    case 'ask_tool':
+      // CLI Ask tool - renders as interactive question card, answer sent as user message
+      if (isVisible) {
+        renderAskToolCard(d);
+      } else {
+        const ts = getTS(tabId);
+        if (!ts._pendingAskTool) ts._pendingAskTool = [];
+        ts._pendingAskTool.push(d);
       }
       break;
 
@@ -3082,7 +3151,8 @@ function addMsg(role, opts = {}) {
     quoteHtml = `<div class="msg-reply-quote"><span class="rq-role">${escH(roleName)}</span><span class="rq-text">${preview}</span></div>`;
   }
   const forkBtn = role === 'assistant' ? `<button class="fork-btn" onclick="forkFromMsg(this)" title="${t('fork.title')}">↗</button>` : '';
-  w.innerHTML = `${quoteHtml}<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>${forkBtn}`;
+  const useBtn = `<button class="use-btn" onclick="useAsInput(this)" title="${t('use.input')}">↓</button>`;
+  w.innerHTML = `${quoteHtml}<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>${forkBtn}${useBtn}`;
   msgsEl.appendChild(w);
   scrollBottom();
   return w;
@@ -3156,7 +3226,7 @@ function _atcUpdate(agentId, state) {
 
 function rmW() { const w = msgsEl.querySelector('.welcome'); if (w) w.remove(); }
 function showW() {
-  curEl = null;
+  streaming.el = null;
   msgsEl.innerHTML = `<div class="welcome"><div class="wi">CC</div><h2>Claude Code Studio</h2><p>${t('welcome.desc')}</p><div class="welcome-prompts"><div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; ${t('welcome.prompt.1')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F41B; ${t('welcome.prompt.2')}</div><div class="wp-card" onclick="setPrompt(this)">&#x2728; ${t('welcome.prompt.3')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; ${t('welcome.prompt.4')}</div></div></div>`;
 }
 
@@ -3644,12 +3714,164 @@ function askUserCancel(requestId) {
   if (card._askInterval) clearInterval(card._askInterval);
 }
 
+// ─── Ask Tool Card (CLI Ask tool) ────────────────────────────────────────────
+function renderAskToolCard(data) {
+  const { requestId, question, options } = data;
+  // Validate requestId format (ask-{timestamp}-{random})
+  if (!requestId || !/^ask-\d+-[a-z0-9]+$/.test(requestId)) return;
+  // Deduplicate
+  if (document.querySelector(`.ask-tool-card[data-rid="${requestId}"]`)) return;
+
+  const card = document.createElement('div');
+  card.className = 'ask-user-card ask-tool-card'; // reuse ask-user-card styles
+  card.dataset.rid = requestId;
+
+  const hasOptions = Array.isArray(options) && options.length > 0;
+
+  let html = `<div class="ask-page active">`;
+  html += `<div class="ask-q">${renderMd(question || '')}</div>`;
+
+  if (hasOptions) {
+    html += '<div class="ask-options">';
+    for (const opt of options) {
+      const lbl = typeof opt === 'string' ? opt : (opt?.label || opt);
+      const desc = (opt != null && typeof opt === 'object') ? (opt.description || '') : '';
+      html += `<label class="ask-opt"><input type="radio" name="ask_tool_${requestId}" value="${escH(lbl)}">`;
+      if (desc) {
+        html += ` <span class="ask-opt-content"><span>${escH(lbl)}</span><span class="ask-opt-desc">${escH(desc)}</span></span>`;
+      } else {
+        html += ` <span>${escH(lbl)}</span>`;
+      }
+      html += `</label>`;
+    }
+    // "Other" option
+    html += `<div class="ask-other-row"><input type="radio" class="ask-other-radio" name="ask_tool_${requestId}" value="__other__"><input type="text" class="ask-other-input" placeholder="${escH(t('ask.other'))}"></div>`;
+    html += '</div>';
+  } else {
+    html += `<textarea class="ask-text" placeholder="..." rows="2"></textarea>`;
+  }
+
+  html += `</div>`;
+
+  // Buttons
+  html += `<div class="ask-btns">`;
+  html += `<button class="ask-submit">${t('ask.submit')}</button>`;
+  html += `<button class="ask-skip">${t('ask.skip')}</button>`;
+  html += `</div>`;
+  html += `<div class="ask-answer-display"></div>`;
+
+  card.innerHTML = html;
+
+  // Event listeners for option selection
+  const opts = card.querySelectorAll('.ask-opt');
+  const otherRow = card.querySelector('.ask-other-row');
+  const otherRadio = otherRow?.querySelector('.ask-other-radio');
+  const otherInput = otherRow?.querySelector('.ask-other-input');
+
+  opts.forEach(opt => {
+    opt.addEventListener('click', () => {
+      opts.forEach(o => o.classList.remove('selected'));
+      if (otherRow) { otherRow.classList.remove('selected'); if (otherInput) otherInput.value = ''; }
+      opt.classList.add('selected');
+    });
+  });
+
+  if (otherRow && otherRadio && otherInput) {
+    const selectOther = () => {
+      opts.forEach(o => { o.classList.remove('selected'); o.querySelector('input').checked = false; });
+      otherRadio.checked = true;
+      otherRow.classList.add('selected');
+    };
+    otherRow.addEventListener('click', (e) => {
+      if (e.target !== otherInput) { selectOther(); otherInput.focus(); }
+    });
+    otherInput.addEventListener('focus', selectOther);
+    otherInput.addEventListener('input', () => { if (otherInput.value) selectOther(); });
+    otherInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submitAskTool(requestId); }
+    });
+  }
+
+  // Submit / Skip handlers
+  card.querySelector('.ask-submit').addEventListener('click', () => submitAskTool(requestId));
+  card.querySelector('.ask-skip').addEventListener('click', () => skipAskTool(requestId));
+
+  // Enter to submit on textarea
+  const ta = card.querySelector('.ask-text');
+  if (ta) {
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitAskTool(requestId); }
+    });
+  }
+
+  msgsEl.appendChild(card);
+  scrollBottom();
+
+  // Focus input
+  if (ta) ta.focus();
+  else if (otherInput) otherInput.focus();
+}
+
+function submitAskTool(requestId) {
+  const card = document.querySelector(`.ask-tool-card[data-rid="${requestId}"]`);
+  if (!card || card.classList.contains('ask-answered')) return;
+
+  let answer = '';
+
+  // Check for textarea (free text mode)
+  const ta = card.querySelector('.ask-text');
+  if (ta) {
+    answer = ta.value.trim();
+  } else {
+    // Check for "Other" selection
+    const otherRadio = card.querySelector('.ask-other-radio');
+    const otherInput = card.querySelector('.ask-other-input');
+    if (otherRadio?.checked && otherInput?.value.trim()) {
+      answer = otherInput.value.trim();
+    } else {
+      // Collect selected option
+      const checked = card.querySelector('.ask-opt input:checked');
+      answer = checked?.value || '';
+    }
+  }
+
+  if (!answer) {
+    // Visual feedback
+    const emptyOther = card.querySelector('.ask-other-row.selected .ask-other-input');
+    const emptyTa = card.querySelector('.ask-text');
+    const target = emptyOther || emptyTa;
+    if (target) { target.style.borderColor = '#f85149'; target.focus(); setTimeout(() => { target.style.borderColor = ''; }, 2000); }
+    return;
+  }
+
+  // Send response to server
+  ws.send(JSON.stringify({ type: 'ask_tool_response', requestId, answer }));
+
+  // Mark as answered
+  card.classList.add('ask-answered');
+  card.querySelector('.ask-answer-display').textContent = `${t('ask.answered')}: ${answer}`;
+
+  // Also send as user message so Claude sees the answer
+  sendChat(answer);
+}
+
+function skipAskTool(requestId) {
+  const card = document.querySelector(`.ask-tool-card[data-rid="${requestId}"]`);
+  if (!card || card.classList.contains('ask-answered')) return;
+
+  ws.send(JSON.stringify({ type: 'ask_tool_response', requestId, answer: '[Skipped]' }));
+
+  card.classList.add('ask-answered');
+  card.querySelector('.ask-answer-display').textContent = t('ask.skipped');
+  card.style.borderColor = 'var(--muted)';
+}
+
 function scrollBottom() {
-  if (!userScrolled) msgsEl.scrollTop = msgsEl.scrollHeight;
+  if (!userScrolled) msgsEl.scrollTo({ top: msgsEl.scrollHeight, behavior: 'instant' });
 }
 function scrollToBottom() {
   userScrolled = false;
-  msgsEl.scrollTop = msgsEl.scrollHeight;
+  msgsEl.scrollTo({ top: msgsEl.scrollHeight, behavior: 'instant' });
 }
 
 function setPrompt(el) {
@@ -3661,7 +3883,7 @@ function setPrompt(el) {
 const _scrollBtn = document.getElementById('scrollBtn');
 msgsEl.addEventListener('scroll', () => {
   const fromBottom = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight;
-  userScrolled = fromBottom > 60;
+  userScrolled = fromBottom > 150;
   if (_scrollBtn) {
     if (fromBottom > 300) _scrollBtn.classList.add('visible');
     else _scrollBtn.classList.remove('visible');
@@ -3692,6 +3914,20 @@ function setReply(btn) {
 function clearReply() {
   replyTo = null;
   $i('replyPreview').style.display = 'none';
+}
+
+// ─── Use message as input (copy to textarea) ───
+function useAsInput(btn) {
+  const mw = btn.closest('.mw');
+  if (!mw) return;
+  const msgEl = mw.querySelector('.msg');
+  if (!msgEl) return;
+  // Get text content and set to input
+  inEl.value = msgEl.textContent.trim();
+  inEl.focus();
+  // Auto-resize textarea
+  inEl.style.height = 'auto';
+  inEl.style.height = Math.min(inEl.scrollHeight, 200) + 'px';
 }
 
 // ─── Fork conversation (continue in new chat with context) ───
@@ -3868,14 +4104,17 @@ function switchTab(id) {
   if (activeTabId === id) return;
   // Save state for current tab before switching
   if (activeTabId) {
-    getTS(activeTabId).draft = inEl.value;
-    getTS(activeTabId).curTxt = curTxt;
-    if (curToolLog.length) getTS(activeTabId)._toolLog = curToolLog.slice();
-    getTS(activeTabId).attachments = [..._attachments];
-    getTS(activeTabId).replyTo = replyTo;
+    const oldTS = getTS(activeTabId);
+    oldTS.draft = inEl.value;
+    oldTS.curTxt = streaming.txt; // Save via proxy (reads from old activeTabId)
+    if (streaming.toolLog.length) oldTS._toolLog = streaming.toolLog.slice();
+    oldTS.attachments = [..._attachments];
+    oldTS.replyTo = replyTo;
   }
-  // Reset streaming state — loadSess will clear msgsEl, making curEl stale
-  curEl = null; curTxt = ''; curToolCounts = {}; curToolLog = [];
+  // Reset streaming state for OLD tab BEFORE changing activeTabId
+  const oldTS = getTS(activeTabId);
+  oldTS.curEl = null; oldTS.curTxt = ''; oldTS._toolCounts = {}; oldTS._toolLog = [];
+  // NOW switch to new tab
   activeTabId = id;
   const tab = openTabs.find(t => t.id === id);
   if (tab?.isNew) {
@@ -3918,7 +4157,7 @@ function switchTab(id) {
 }
 
 function closeTab(id) {
-  if (isGen && activeTabId === id) { isGen = false; setSendStop(false); generatingTabId = null; curEl = null; }
+  if (isGen && activeTabId === id) { isGen = false; setSendStop(false); generatingTabId = null; streaming.el = null; }
   const idx = openTabs.findIndex(t => t.id === id);
   if (idx === -1) return;
   openTabs.splice(idx, 1);
@@ -4550,6 +4789,18 @@ let _allMsgs = [];   // all messages for current session (in memory)
 let _shownFrom = 0;  // index in _allMsgs from which messages are rendered
 const _retryingSessions = new Set(); // prevents duplicate retries from resume_task + subscribe_session
 
+// Format message timestamp: "25.02 14:32" or "14:32" if today
+function formatMsgTime(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const now = new Date();
+  const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  const time = d.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+  if (isToday) return time;
+  const date = d.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
+  return `${date} ${time}`;
+}
+
 function _renderMsgAt(idx, prepend = false) {
   const m = _allMsgs[idx];
   const hasReply = _allMsgs.slice(idx + 1).some(x => x.role === 'assistant');
@@ -4567,7 +4818,10 @@ function _renderMsgAt(idx, prepend = false) {
     }
   }
   const forkBtn = m.role === 'assistant' ? `<button class="fork-btn" onclick="forkFromMsg(this)" title="${t('fork.title')}">↗</button>` : '';
-  w.innerHTML = `${histQuoteHtml}<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>${forkBtn}`;
+  const useBtn = `<button class="use-btn" onclick="useAsInput(this)" title="${t('use.input')}">↓</button>`;
+  // Format timestamp
+  const timeHtml = m.created_at ? `<div class="msg-time">${formatMsgTime(m.created_at)}</div>` : '';
+  w.innerHTML = `${histQuoteHtml}<div class="msg"></div>${timeHtml}<button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>${forkBtn}${useBtn}`;
   // Render saved attachments (images/files) as chips above message text
   if (m.attachments) {
     try {
@@ -4652,7 +4906,7 @@ async function loadSess(id) {
     if (!r.ok) { closeTab(id); toast(t('toast.sess_not_found'), true); return; }
     const d = await r.json();
     if (id !== activeTabId) return; // tab was switched while parsing — discard stale load
-    curEl = null; curTxt = ''; curToolCounts = {}; curToolLog = []; // Reset streaming state before clearing DOM — prevents stale references
+    streaming.el = null; streaming.txt = ''; streaming.toolCounts = {}; streaming.toolLog = []; // Reset streaming state before clearing DOM — prevents stale references
     msgsEl.removeAttribute('aria-live'); // Suppress screen reader flood during batch history load
     msgsEl.innerHTML = '';
     currentSessionId = id;
@@ -4749,16 +5003,16 @@ async function loadSess(id) {
     //    because if it IS streaming the WS catch-up (subscribe_session) will replay the buffer.
     const savedTxt = tabState[id]?.curTxt;
     if (savedTxt) {
-      curEl = addMsg('assistant');
-      curTxt = savedTxt;
-      addSpinner(curEl);
-      curEl.querySelector('.msg').innerHTML = renderStreaming(curTxt);
+      streaming.el = addMsg('assistant');
+      streaming.txt = savedTxt;
+      addSpinner(streaming.el);
+      streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
       // Restore live tool activity from background tab state
       const savedLog = tabState[id]?._toolLog;
       if (savedLog?.length) {
-        curToolLog = savedLog.slice();
-        curToolCounts = tabState[id]?._toolCounts || {};
-        _renderToolLive(curEl, curToolLog);
+        streaming.toolLog = savedLog.slice();
+        streaming.toolCounts = tabState[id]?._toolCounts || {};
+        _renderToolLive(streaming.el, streaming.toolLog);
       }
     } else if (d.partial_text && !d.isChatRunning && !d.hasRunningTask) {
       // Session was interrupted (server crash / killed) — show what was saved to DB
@@ -4781,9 +5035,13 @@ async function loadSess(id) {
       for (const askData of _askTs._pendingAskUser) renderAskUserCard(askData);
       _askTs._pendingAskUser = [];
     }
+    // Also render pending ask_tool cards
+    if (_askTs?._pendingAskTool?.length) {
+      for (const askData of _askTs._pendingAskTool) renderAskToolCard(askData);
+      _askTs._pendingAskTool = [];
+    }
 
     userScrolled = false;
-    scrollBottom();
 
     if (ws && ws.readyState === 1) {
       ws.send(JSON.stringify({ type: 'start_session', sessionId: id, mode: curMode, agentMode: curAgent, model: curModel}));
@@ -4799,6 +5057,12 @@ async function loadSess(id) {
       }
     }
     loadHist();
+    document.getElementById('input').focus();
+    // Scroll to bottom after all layout and focus changes are complete
+    setTimeout(() => {
+      userScrolled = false;
+      msgsEl.scrollTo({ top: msgsEl.scrollHeight, behavior: 'instant' });
+    }, 100);
   } catch (e) { console.error('loadSess:', e); toast(t('sess.load.err'), true); }
 }
 
@@ -5711,13 +5975,8 @@ function renderProjects() {
   el.innerHTML = '';
   $i('projCount').textContent = projects.length || '';
 
-  // Update active project label in header + sessBar + dropdown
+  // Update header dropdown
   const activeProj = curProjectId ? projects.find(p => p.id === curProjectId) : null;
-  const activeProjLabel = $i('activeProjLabel');
-  if (activeProjLabel) {
-    if (activeProj) { activeProjLabel.textContent = activeProj.name; activeProjLabel.setAttribute('data-tip', activeProj.name + '\n' + activeProj.workdir); activeProjLabel.style.display = 'inline-block'; }
-    else { activeProjLabel.textContent = ''; activeProjLabel.removeAttribute('data-tip'); activeProjLabel.style.display = 'none'; }
-  }
   document.title = activeProj ? activeProj.name : 'Claude Code Studio';
 
   // Update header dropdown
@@ -5891,7 +6150,7 @@ function switchProject(id) {
   // loadSess is async — without this, a stale sessionId from the old project
   // could leak into a chat message sent before loadSess completes.
   currentSessionId = null;
-  curEl = null; curTxt = ''; curToolCounts = {}; curToolLog = [];
+  streaming.el = null; streaming.txt = ''; streaming.toolCounts = {}; streaming.toolLog = [];
   renderTabs();
   if (activeTabId) {
     const tab = openTabs.find(t => t.id === activeTabId);

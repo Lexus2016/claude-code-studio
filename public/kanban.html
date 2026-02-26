@@ -66,52 +66,79 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .proj-dd-wrap { position: relative; display: none; }
 .proj-dd-wrap.visible { display: inline-block; }
 .proj-dd-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 600; color: var(--accent2);
-  background: rgba(124,106,239,.1); border: 1px solid rgba(124,106,239,.25);
-  border-radius: 6px; padding: 3px 10px; cursor: pointer;
-  max-width: 200px; transition: all .15s; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--accent2);
+  background: linear-gradient(135deg, rgba(124,106,239,.15) 0%, rgba(124,106,239,.08) 100%);
+  border: 1px solid rgba(124,106,239,.35);
+  border-radius: 8px; padding: 6px 14px; cursor: pointer;
+  max-width: 280px; transition: all .2s ease; font-family: inherit;
+  box-shadow: 0 2px 8px rgba(124,106,239,.12);
 }
-.proj-dd-btn:hover { background: rgba(124,106,239,.18); border-color: var(--accent); }
-.proj-dd-btn.open { background: rgba(124,106,239,.2); border-color: var(--accent); }
+.proj-dd-btn:hover {
+  background: linear-gradient(135deg, rgba(124,106,239,.22) 0%, rgba(124,106,239,.12) 100%);
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(124,106,239,.2);
+  transform: translateY(-1px);
+}
+.proj-dd-btn.open {
+  background: linear-gradient(135deg, rgba(124,106,239,.25) 0%, rgba(124,106,239,.15) 100%);
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px rgba(124,106,239,.25);
+}
+.proj-dd-btn .proj-dd-icon { font-size: 14px; flex-shrink: 0; }
 .proj-dd-btn .proj-dd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.proj-dd-btn .proj-dd-arrow { font-size: 9px; opacity: .6; transition: transform .2s; flex-shrink: 0; }
+.proj-dd-btn .proj-dd-arrow { font-size: 10px; opacity: .6; transition: transform .2s; flex-shrink: 0; }
 .proj-dd-btn.open .proj-dd-arrow { transform: rotate(180deg); opacity: 1; }
 .proj-dd-menu {
-  position: absolute; top: 100%; left: 0; margin-top: 6px;
-  min-width: 240px; max-width: 320px;
+  position: absolute; top: 100%; left: 0; margin-top: 8px;
+  min-width: 300px; max-width: 400px;
   background: var(--s2); border: 1px solid var(--border);
-  border-radius: var(--r-md); box-shadow: var(--shadow-xl);
+  border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.35), 0 0 0 1px rgba(124,106,239,.1);
   z-index: 1000; opacity: 0; visibility: hidden;
-  transform: translateY(-6px); transition: all .18s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(-8px); transition: all .2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
 }
 .proj-dd-menu.open { opacity: 1; visibility: visible; transform: translateY(0); }
-.proj-dd-search { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.proj-dd-search { padding: 12px; border-bottom: 1px solid var(--border); background: rgba(124,106,239,.05); }
 .proj-dd-search input {
   width: 100%; background: var(--s3); border: 1px solid var(--border);
-  border-radius: 6px; padding: 6px 10px; font-size: 12px; color: var(--text);
-  outline: none; font-family: inherit;
+  border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--text);
+  outline: none; font-family: inherit; transition: border-color .15s, box-shadow .15s;
 }
-.proj-dd-search input:focus { border-color: var(--accent); }
-.proj-dd-list { max-height: 280px; overflow-y: auto; padding: 4px 0; }
-.proj-dd-list::-webkit-scrollbar { width: 4px; }
-.proj-dd-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.proj-dd-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.15); }
+.proj-dd-list { max-height: 320px; overflow-y: auto; padding: 6px 0; }
+.proj-dd-list::-webkit-scrollbar { width: 6px; }
+.proj-dd-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.proj-dd-list::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 .proj-dd-item {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 8px 12px; cursor: pointer; transition: background .1s;
+  position: relative;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 10px 16px; cursor: pointer; transition: background .12s;
+  border-left: 3px solid transparent;
 }
 .proj-dd-item:hover { background: var(--s3); }
-.proj-dd-item.active { background: var(--abg); }
-.proj-dd-item .proj-dd-item-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.proj-dd-item .proj-dd-item-path { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proj-dd-item.active {
+  background: rgba(124,106,239,.1);
+  border-left-color: var(--accent);
+}
+.proj-dd-item .proj-dd-item-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; }
+.proj-dd-item .proj-dd-item-path { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 22px; }
 .proj-dd-item.active .proj-dd-item-name { color: var(--accent2); }
-.proj-dd-empty { padding: 16px 12px; text-align: center; color: var(--muted); font-size: 12px; }
+.proj-dd-item.active .proj-dd-item-name::before { content: '●'; color: var(--accent); font-size: 8px; flex-shrink: 0; }
+.proj-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
 
-/* ─── Project selector strip ─── */
-.proj-bar{ display:flex; align-items:center; gap:10px; padding:9px 16px; background:var(--s1); border-bottom:1px solid var(--border); flex-shrink:0; }
-.proj-label{ font-size:11.5px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.6px; white-space:nowrap; }
-.proj-sel{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-sm); color:var(--text); font-size:13px; padding:4px 10px; cursor:pointer; font-family:inherit; max-width:280px; }
-.proj-sel:focus{ outline:none; border-color:var(--accent); }
+/* ─── Stats bar ─── */
+.proj-bar{ display:flex; align-items:center; gap:16px; padding:8px 16px; background:var(--s1); border-bottom:1px solid var(--border); flex-shrink:0; }
+.kb-stats{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.kb-stat{ display:flex; align-items:center; gap:5px; font-size:12px; }
+.kb-stat-dot{ width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.kb-stat-num{ font-weight:700; color:var(--text); min-width:16px; }
+.kb-stat-lbl{ color:var(--muted); font-size:11px; }
+.kb-stat-spacer{ width:1px; height:14px; background:var(--border); margin:0 4px; }
+.kb-progress{ display:flex; align-items:center; gap:6px; }
+.kb-progress-bar{ width:60px; height:4px; background:var(--s3); border-radius:2px; overflow:hidden; }
+.kb-progress-fill{ height:100%; background:var(--green); border-radius:2px; transition:width .3s; }
+.kb-progress-pct{ font-size:11px; font-weight:600; color:var(--green); min-width:32px; }
 .refresh-ts{ font-size:11px; color:var(--muted); margin-left:auto; }
 @keyframes spin{ to{ transform:rotate(360deg); } }
 .spinning{ display:inline-block; width:12px; height:12px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; }
@@ -261,6 +288,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
     <div class="hdr-meta">
       <div class="proj-dd-wrap" id="projDdWrap">
         <button class="proj-dd-btn" id="projDdBtn" onclick="toggleProjDropdown()">
+          <span class="proj-dd-icon">📁</span>
           <span class="proj-dd-name" id="projDdName">Проект</span>
           <span class="proj-dd-arrow">▼</span>
         </button>
@@ -284,12 +312,11 @@ textarea.inp{ resize:vertical; min-height:80px; }
   </div>
 </div>
 
-<!-- Project selector bar -->
+<!-- Stats bar -->
 <div class="proj-bar">
-  <span class="proj-label" id="projLabel">Проект:</span>
-  <select class="proj-sel" id="projSel" onchange="onProjChange()">
-    <option value="" id="allProjOpt">— Всі проекти —</option>
-  </select>
+  <div class="kb-stats" id="kbStats">
+    <!-- Stats rendered by updateStats() -->
+  </div>
   <span class="refresh-ts" id="refreshTs2"></span>
   <span style="flex:1"></span>
   <span class="status-dot ok" id="kbStatusEl">Connected</span>
@@ -425,8 +452,6 @@ fetch('/api/version').then(r=>r.json()).then(d=>{
 }).catch(()=>{});
 document.getElementById('addBtnLabel').textContent=t('hdr.add');
 document.getElementById('kbStatusEl').textContent=t('hdr.connected');
-document.getElementById('projLabel').textContent=t('proj.label');
-document.getElementById('allProjOpt').textContent=t('proj.all');
 document.getElementById('cancelBtn').textContent=t('confirm.cancel');
 document.querySelector('.nav-sw').setAttribute('aria-label', t('nav.aria'));
 document.querySelector('a.nav-sw-btn[href="/"]').setAttribute('data-tip', t('nav.chat'));
@@ -482,36 +507,22 @@ async function apiFetch(url,opts={}){
 // ─── Projects ─────────────────────────────────────────────────────────────
 async function loadProjects(){
   try{const r=await apiFetch('/api/projects');projects=await r.json();}catch{projects=[];}
-  const sel=$i('projSel');
-  while(sel.options.length>1)sel.remove(1);
-  for(const p of projects){
-    const opt=document.createElement('option');
-    opt.value=p.workdir||p.id;
-    opt.textContent=p.name||p.workdir||p.id;
-    opt.dataset.workdir=p.workdir||'';
-    sel.appendChild(opt);
-  }
+  renderProjDropdownList('');
   try{
     const s=JSON.parse(localStorage.getItem('cc_ui_state')||'null');
     if(s?.curWorkdir){
-      const opts=[...sel.options];
-      const found=opts.find(o=>o.value===s.curWorkdir||o.dataset.workdir===s.curWorkdir);
-      if(found)sel.value=found.value;
+      const found=projects.find(p=>p.workdir===s.curWorkdir||p.id===s.curWorkdir);
+      if(found)curWorkdir=found.workdir||found.id;
     }
   }catch{}
-  onProjChange(false);
+  updateProjDropdownBtn();
+  refresh(true);
 }
 
 function onProjChange(doRefresh=true){
-  const sel=$i('projSel');
-  const opt=sel.options[sel.selectedIndex];
-  curWorkdir=opt?.value||null;
   const addBtn=$i('addBtn');
   if(addBtn){addBtn.disabled=!curWorkdir;addBtn.title=curWorkdir?'':t('toast.no_project');}
-
-  // Update header dropdown
   updateProjDropdownBtn();
-
   if(doRefresh)refresh(true);
 }
 
@@ -539,12 +550,11 @@ function closeProjDropdown() {
 function updateProjDropdownBtn() {
   const ddWrap = $i('projDdWrap');
   const ddName = $i('projDdName');
-  const sel = $i('projSel');
-  const opt = sel?.options[sel.selectedIndex];
 
   if (ddWrap && ddName) {
-    if (opt && opt.value) {
-      ddName.textContent = opt.textContent;
+    if (curWorkdir) {
+      const proj = projects.find(p => p.workdir === curWorkdir || p.id === curWorkdir);
+      ddName.textContent = proj?.name || curWorkdir;
       ddWrap.classList.add('visible');
     } else {
       ddName.textContent = t('proj.all').replace('— ', '');
@@ -572,11 +582,8 @@ function renderProjDropdownList(filter = '') {
     return;
   }
 
-  const sel = $i('projSel');
-  const curVal = sel?.value || '';
-
   list.innerHTML = filtered.map(p => {
-    const active = p.isAll ? !curVal : (p.workdir === curVal || p.id === curVal);
+    const active = p.isAll ? !curWorkdir : (p.workdir === curWorkdir || p.id === curWorkdir);
     const shortPath = p.workdir && p.workdir.length > 45 ? '…' + p.workdir.slice(-43) : p.workdir;
     return `
       <div class="proj-dd-item${active ? ' active' : ''}" onclick="selectProjFromDropdown('${escH(p.workdir || p.id)}', ${p.isAll})">
@@ -593,14 +600,12 @@ function filterProjDropdown(value) {
 
 function selectProjFromDropdown(workdir, isAll) {
   closeProjDropdown();
-  const sel = $i('projSel');
-  if (isAll) {
-    sel.value = '';
-  } else {
-    const opts = [...sel.options];
-    const found = opts.find(o => o.value === workdir || o.dataset.workdir === workdir);
-    if (found) sel.value = found.value;
-  }
+  curWorkdir = isAll ? null : workdir;
+  try {
+    const s = JSON.parse(localStorage.getItem('cc_ui_state') || '{}');
+    s.curWorkdir = curWorkdir;
+    localStorage.setItem('cc_ui_state', JSON.stringify(s));
+  } catch {}
   onProjChange(true);
 }
 
@@ -657,6 +662,51 @@ function startAutoRefresh(){
   refreshTimer=setTimeout(async()=>{await refresh(false);startAutoRefresh();},delay);
 }
 
+// ─── Stats ─────────────────────────────────────────────────────────────────
+function updateStats(){
+  const el=$i('kbStats');
+  if(!el)return;
+  const counts={backlog:0,todo:0,in_progress:0,done:0,cancelled:0};
+  for(const tk of tasks)counts[tk.status]=(counts[tk.status]||0)+1;
+  const total=tasks.length;
+  const completed=counts.done;
+  const active=counts.todo+counts.in_progress;
+  const pct=total>0?Math.round((completed/total)*100):0;
+
+  el.innerHTML=`
+    <div class="kb-stat">
+      <span class="kb-stat-num">${total}</span>
+      <span class="kb-stat-lbl">всього</span>
+    </div>
+    <div class="kb-stat-spacer"></div>
+    <div class="kb-stat">
+      <div class="kb-stat-dot dot-backlog"></div>
+      <span class="kb-stat-num">${counts.backlog}</span>
+      <span class="kb-stat-lbl">backlog</span>
+    </div>
+    <div class="kb-stat">
+      <div class="kb-stat-dot dot-todo"></div>
+      <span class="kb-stat-num">${counts.todo}</span>
+      <span class="kb-stat-lbl">todo</span>
+    </div>
+    <div class="kb-stat">
+      <div class="kb-stat-dot dot-in_progress"></div>
+      <span class="kb-stat-num">${counts.in_progress}</span>
+      <span class="kb-stat-lbl">в процесі</span>
+    </div>
+    <div class="kb-stat-spacer"></div>
+    <div class="kb-stat">
+      <div class="kb-stat-dot dot-done"></div>
+      <span class="kb-stat-num">${counts.done}</span>
+      <span class="kb-stat-lbl">виконано</span>
+    </div>
+    <div class="kb-progress">
+      <div class="kb-progress-bar"><div class="kb-progress-fill" style="width:${pct}%"></div></div>
+      <span class="kb-progress-pct">${pct}%</span>
+    </div>
+  `;
+}
+
 // ─── Board Render ─────────────────────────────────────────────────────────
 function renderBoard(){
   const board=$i('board');board.innerHTML='';
@@ -664,6 +714,7 @@ function renderBoard(){
     const colTasks=tasks.filter(tk=>tk.status===col.id).sort((a,b)=>a.sort_order-b.sort_order);
     board.appendChild(makeColumn(col,colTasks));
   }
+  updateStats();
 }
 function makeColumn(col,colTasks){
   const el=document.createElement('div');el.className='col';
