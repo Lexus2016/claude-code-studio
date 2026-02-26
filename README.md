@@ -141,6 +141,7 @@ git pull && docker compose up -d --build
 | 💬 **Real-time Chat** | Talk to Claude, see responses stream in as it thinks and works |
 | 📋 **Kanban Board** | Create task cards → Claude runs them automatically, one by one or in parallel |
 | 👥 **Multi-Agent Mode** | Claude spawns a team of specialized agents and coordinates them for big tasks |
+| 🚀 **Task Dispatch** | Decompose a plan into chained Kanban tasks with dependencies — auto-retry on failure |
 | ↗️ **Fork Conversation** | Continue any message in a new chat with full context — perfect for multi-agent sessions |
 | ⚡ **MCP Servers** | Connect external tools (databases, GitHub, Slack, etc.) so Claude can use them |
 | 🧠 **Skills** | Upload `.md` files that tell Claude how to work in your specific domain |
