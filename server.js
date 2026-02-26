@@ -470,55 +470,90 @@ async function startTask(task) {
     } else {
       broadcastToSession(sessionId, { type: 'task_started', taskId: task.id, title: task.title, prompt, tabId: sessionId });
     }
-    const stream = cli.send({ prompt, sessionId: claudeSessionId, model: session?.model || task.model || 'sonnet', maxTurns: task.max_turns || 30, abortController: taskAbort });
-    // Save subprocess PID so startup recovery can kill orphans on restart
-    if (stream.process?.pid) {
-      db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
+    // Auto-continue loop: keep resuming until agent completes or budget exhausted
+    let taskContinueCount = 0;
+    let currentTaskPrompt = prompt;
+    let currentTaskCid = claudeSessionId;
+    let lastTaskResult = null;
+    const effectiveTaskMaxTurns = task.max_turns || 30;
+
+    while (true) {
+      lastTaskResult = null;
+      hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
+      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, abortController: taskAbort });
+      // Save subprocess PID so startup recovery can kill orphans on restart
+      if (stream.process?.pid) {
+        db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
+      }
+      await new Promise(resolve => {
+        stream
+          .onText(t => {
+            fullText += t;
+            taskBuffers.set(task.id, (taskBuffers.get(task.id) || '') + t);
+            broadcastToSession(sessionId, { type: 'text', text: t, tabId: sessionId });
+          })
+          .onTool((name, inp) => {
+            try { stmts.addMsg.run(sessionId, 'assistant', 'tool', inp || '', name, null, null, null); } catch {}
+            broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
+          })
+          .onSessionId(sid => { newCid = sid; currentTaskCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
+          .onResult(r => { lastTaskResult = r; })
+          .onError(err => {
+            hasError = true;
+            console.error(`[taskWorker] task ${task.id} error:`, err);
+            try { stmts.addMsg.run(sessionId, 'assistant', 'text', `❌ ${err.substring(0, 500)}`, null, null, null, null); } catch {}
+            broadcastToSession(sessionId, { type: 'error', error: err.substring(0, 500), tabId: sessionId });
+          })
+          .onDone(sid => {
+            if (sid) { newCid = sid; currentTaskCid = sid; }
+            resolve();
+          });
+      });
+
+      // ✅ Success — agent finished naturally
+      if (lastTaskResult?.subtype === 'success') break;
+      // 💰 Budget limit — can't continue
+      if (lastTaskResult?.subtype === 'error_max_budget_usd') break;
+      // 🛑 User stopped or aborted
+      if (taskAbort?.signal?.aborted || stoppingTasks.has(task.id)) break;
+      // 🔄 Auto-continue budget exhausted
+      if (taskContinueCount >= MAX_AUTO_CONTINUES) {
+        console.log(`[taskWorker] task ${task.id}: auto-continue budget exhausted (${MAX_AUTO_CONTINUES})`);
+        break;
+      }
+
+      // 🔄 Auto-continue — agent stopped but didn't finish
+      taskContinueCount++;
+      console.log(`[taskWorker] task ${task.id}: auto-continuing (${taskContinueCount}/${MAX_AUTO_CONTINUES}), reason: ${lastTaskResult?.subtype || 'unknown'}`);
+      const notice = `\n⏳ Auto-continuing (${taskContinueCount}/${MAX_AUTO_CONTINUES})...\n`;
+      fullText += notice;
+      taskBuffers.set(task.id, (taskBuffers.get(task.id) || '') + notice);
+      broadcastToSession(sessionId, { type: 'text', text: notice, tabId: sessionId });
+      currentTaskPrompt = 'Continue where you left off. Complete the remaining work.';
     }
-    await new Promise(resolve => {
-      stream
-        .onText(t => {
-          fullText += t;
-          taskBuffers.set(task.id, (taskBuffers.get(task.id) || '') + t);
-          broadcastToSession(sessionId, { type: 'text', text: t, tabId: sessionId });
-        })
-        .onTool((name, inp) => {
-          stmts.addMsg.run(sessionId, 'assistant', 'tool', inp || '', name, null, null, null);
-          broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
-        })
-        .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} }) // persist early so open-terminal works during active task
-        .onError(err => {
-          hasError = true;
-          console.error(`[taskWorker] task ${task.id} error:`, err);
-          stmts.addMsg.run(sessionId, 'assistant', 'text', `❌ ${err.substring(0, 500)}`, null, null, null, null);
-          broadcastToSession(sessionId, { type: 'error', error: err.substring(0, 500), tabId: sessionId });
-        })
-        .onDone(() => {
-          // Wrap all DB writes in try-catch: a throw here would escape the sync
-          // EventEmitter listener, leaving the Promise pending forever.
-          try {
-            if (newCid) stmts.updateClaudeId.run(newCid, sessionId);
-            if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null);
-            const wasStopped = stoppingTasks.has(task.id);
-            stoppingTasks.delete(task.id);
-            if (!wasStopped) {
-              // Normal completion — set final status
-              db.prepare(`UPDATE tasks SET status=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
-                .run(hasError ? 'cancelled' : 'done', task.id);
-              if (!hasError) db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
-              console.log(`[taskWorker] task ${task.id}: ${hasError ? 'cancelled' : 'done'}`);
-            } else {
-              // Manually stopped — status already set by PUT; just clear worker_pid
-              db.prepare(`UPDATE tasks SET worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(task.id);
-              console.log(`[taskWorker] task ${task.id}: stopped by user`);
-            }
-          } catch (e) {
-            console.error(`[taskWorker] task ${task.id} onDone DB error:`, e);
-          }
-          broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id, duration: Date.now() - _taskStartedAt });
-          resolve();
-        });
-    });
+
+    // After loop: persist text and determine task status
+    try {
+      if (newCid) stmts.updateClaudeId.run(newCid, sessionId);
+      if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null);
+      const wasStopped = stoppingTasks.has(task.id);
+      stoppingTasks.delete(task.id);
+      if (!wasStopped) {
+        // Only mark 'done' when agent explicitly succeeded — never on error_max_turns or other stops
+        const isSuccess = lastTaskResult?.subtype === 'success' && !hasError;
+        db.prepare(`UPDATE tasks SET status=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+          .run(isSuccess ? 'done' : 'cancelled', task.id);
+        if (isSuccess) db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
+        console.log(`[taskWorker] task ${task.id}: ${isSuccess ? 'done' : 'cancelled (agent did not complete: ' + (lastTaskResult?.subtype || 'unknown') + ')'}`);
+      } else {
+        // Manually stopped — status already set by PUT; just clear worker_pid
+        db.prepare(`UPDATE tasks SET worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(task.id);
+        console.log(`[taskWorker] task ${task.id}: stopped by user`);
+      }
+    } catch (e) {
+      console.error(`[taskWorker] task ${task.id} onDone DB error:`, e);
+    }
+    broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id, duration: Date.now() - _taskStartedAt });
   } catch (err) {
     console.error(`[taskWorker] task ${task.id} exception:`, err);
     try { db.prepare(`UPDATE tasks SET status='cancelled', updated_at=datetime('now') WHERE id=?`).run(task.id); } catch {}
@@ -766,41 +801,46 @@ function saveProjects(p) { const d=path.dirname(PROJECTS_FILE); if(!fs.existsSyn
 // EXECUTION ENGINES
 // ============================================
 
-// --- CLI Single Agent ---
-function runCliSingle(p) {
-  return new Promise((resolve, reject) => {
-    const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, workdir, tabId } = p;
-    const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
-    const sp = (mp + (systemPrompt||'')).trim() || undefined;
-    const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook'] : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write'];
-    let fullText='', newCid=claudeSessionId, chunkCount=0, _settled=false;
-    // Safety net: Promise must always settle. onDone is the primary settler;
-    // onError is the fallback in case onDone somehow doesn't fire.
-    const _resolve = (cid) => { if (!_settled) { _settled=true; resolve(cid); } };
-    const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
+// Maximum number of auto-continue attempts when agent hits --max-turns limit.
+// Each continue resumes the session, giving the agent another maxTurns window.
+const MAX_AUTO_CONTINUES = 3;
 
-    // Pass content blocks to CLI when attachments are present (images need vision input)
-    const contentBlocks = Array.isArray(userContent) ? userContent : null;
-    cli.send({ prompt, contentBlocks, sessionId:claudeSessionId, model, maxTurns:maxTurns||30, systemPrompt:sp, mcpServers, allowedTools:tools, abortController })
+// --- CLI Single Agent ---
+async function runCliSingle(p) {
+  const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, workdir, tabId } = p;
+  const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
+  const sp = (mp + (systemPrompt||'')).trim() || undefined;
+  const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook'] : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write'];
+  const effectiveMaxTurns = maxTurns || 30;
+  let fullText = '', newCid = claudeSessionId, chunkCount = 0;
+  let currentPrompt = prompt;
+  let continueCount = 0;
+  // First invocation carries attachments; subsequent auto-continues do not
+  let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
+
+  const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
+
+  // Run a single CLI invocation and return { resultData, sid }
+  const runOnce = (runPrompt, contentBlocks, resumeId) => new Promise((resolve) => {
+    let resultData = null;
+    let _done = false;
+    const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid }); } };
+
+    cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController })
       .onText(t => {
         fullText += t;
-        // Accumulate in chatBuffers for catch-up replay on reconnect
         chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + t);
         ws.send(JSON.stringify({ type:'text', text:t, ...(tabId ? { tabId } : {}) }));
-        // Persist partial text to DB every 5 chunks so page-refresh doesn't lose content
         if (++chunkCount % 5 === 0) {
           try { stmts.setPartialText.run(fullText, sessionId); } catch {}
         }
       })
       .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
       .onTool((name, inp) => {
-        // Skip internal MCP tools - they have their own handling
         if (name === 'ask_user' || name === 'notify_user') {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
           return;
         }
-        // AskUserQuestion is Claude CLI's internal tool — handled by the CLI itself
-        // (auto-resolved with --dangerously-skip-permissions). Don't show to web UI user.
         if (name === 'AskUserQuestion') {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
           return;
@@ -808,22 +848,74 @@ function runCliSingle(p) {
         ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
         try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
       })
-      .onSessionId(sid => { newCid=sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} }) // persist early so open-terminal works during active chat
+      .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
       .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
+      .onResult(r => { resultData = r; })
       .onError(err => {
-        // ws.send can throw if the socket is already closed — catch to prevent
-        // the exception from propagating back into claude-cli.js and blocking onDone.
+        // Don't resolve here — let onDone be the sole resolver (matches taskWorker pattern).
+        // This ensures resultData is fully populated before the loop checks it.
         try { ws.send(JSON.stringify({ type:'error', error:err.substring(0,500), ...(tabId ? { tabId } : {}) })); } catch {}
-        _resolve(newCid); // safety net: settle even if onDone never fires
       })
       .onDone(sid => {
-        if(sid) newCid=sid;
-        try { if(fullText) stmts.addMsg.run(sessionId,'assistant','text',fullText,null,null,null,null); } catch {}
-        // Clear partial text — full message is now saved to messages table
-        try { stmts.setPartialText.run(null, sessionId); } catch {}
-        _resolve(newCid);
+        if (sid) newCid = sid;
+        _finish(newCid);
       });
   });
+
+  // Main loop: run agent, auto-continue until it finishes successfully or budget exhausted
+  let lastResult = null;
+  while (true) {
+    const { resultData } = await runOnce(currentPrompt, currentContentBlocks, newCid);
+    lastResult = resultData;
+
+    // ✅ Success — agent finished naturally
+    if (resultData?.subtype === 'success') break;
+
+    // 💰 Budget exceeded — hard limit, cannot continue
+    if (resultData?.subtype === 'error_max_budget_usd') {
+      const notice = '\n\n⚠️ **Budget limit reached** — agent stopped.\n\n';
+      fullText += notice;
+      chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + notice);
+      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+      break;
+    }
+
+    // 🛑 User aborted
+    if (abortController?.signal?.aborted) break;
+
+    // 🔄 Auto-continue budget exhausted
+    if (continueCount >= MAX_AUTO_CONTINUES) {
+      const notice = `\n\n⚠️ **Agent did not complete** after ${MAX_AUTO_CONTINUES} auto-continues. Continue manually if needed.\n\n`;
+      fullText += notice;
+      chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + notice);
+      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+      break;
+    }
+
+    // 🔄 Auto-continue: agent stopped but didn't finish
+    continueCount++;
+
+    if (resultData?.subtype === 'error_max_turns') {
+      // Max-turns hit — notify user explicitly
+      log.info('auto-continue (max_turns)', { sessionId, attempt: continueCount, maxAttempts: MAX_AUTO_CONTINUES, turnsUsed: resultData.num_turns });
+      const notice = `\n\n---\n⏳ **Auto-continuing** (${continueCount}/${MAX_AUTO_CONTINUES}) — hit ${effectiveMaxTurns}-turn limit, resuming...\n\n`;
+      fullText += notice;
+      chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + notice);
+      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+    } else {
+      // Any other non-success stop (error_during_execution, process crash, etc.) — auto-continue silently
+      log.info('auto-continue (non-success)', { sessionId, attempt: continueCount, subtype: resultData?.subtype || 'unknown' });
+    }
+
+    // Resume session with continuation prompt — no attachments on subsequent runs
+    currentPrompt = 'Continue where you left off. Complete the remaining work.';
+    currentContentBlocks = null;
+  }
+
+  // Persist final text and clean up
+  try { if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null); } catch {}
+  try { stmts.setPartialText.run(null, sessionId); } catch {}
+  return { cid: newCid, completed: lastResult?.subtype === 'success' };
 }
 
 // --- Multi-Agent (CLI only) ---
@@ -883,7 +975,7 @@ async function runMultiAgent(p) {
         let _settled = false;
         const _res = () => { if (!_settled) { _settled = true; res(); } };
         // Agent resumes session to maintain context
-        cli.send({ prompt:agentPrompt, sessionId: currentSessionId, model, maxTurns:Math.min(maxTurns,15), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
+        cli.send({ prompt:agentPrompt, sessionId: currentSessionId, model, maxTurns:Math.min(maxTurns||30, 50), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
           .onText(t => { agentText+=t; chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + t); try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
           .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,10000),n,agent.id,null,null); } catch {} })
           .onSessionId(sid => { currentSessionId = sid; })
@@ -1961,7 +2053,8 @@ wss.on('connection', (ws) => {
       if (agentMode==='multi') {
         newCid = await runMultiAgent(params);
       } else {
-        newCid = await runCliSingle(params);
+        const result = await runCliSingle(params);
+        newCid = result.cid;
       }
       if (newCid) { stmts.updateClaudeId.run(newCid, localSessionId); }
 

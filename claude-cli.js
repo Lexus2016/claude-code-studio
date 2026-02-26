@@ -183,7 +183,7 @@ class ClaudeCLI {
     // Close stdin immediately (non-interactive)
     proc.stdin.end();
 
-    const h = { onText: null, onTool: null, onDone: null, onError: null, onSessionId: null, onThinking: null, onRateLimit: null, _deltaBlocks: new Set() };
+    const h = { onText: null, onTool: null, onDone: null, onError: null, onSessionId: null, onThinking: null, onRateLimit: null, onResult: null, _deltaBlocks: new Set() };
     const stdoutDecoder = new StringDecoder('utf8');
     const stderrDecoder = new StringDecoder('utf8');
     let buffer = '', stderrBuf = '', detectedSid = sessionId || null;
@@ -307,6 +307,7 @@ class ClaudeCLI {
       onSessionId(fn) { h.onSessionId = fn; return this; },
       onThinking(fn) { h.onThinking = fn; return this; },
       onRateLimit(fn) { h.onRateLimit = fn; return this; },
+      onResult(fn) { h.onResult = fn; return this; },
       process: proc,
     };
   }
@@ -358,6 +359,11 @@ class ClaudeCLI {
     // Rate limit event
     if (data.type === 'rate_limit_event' && data.rate_limit_info && h.onRateLimit) {
       h.onRateLimit(data.rate_limit_info);
+    }
+    // Result message — emitted at end of stream with session_id, subtype, num_turns etc.
+    // subtype: "success" | "error_max_turns" | "error_during_execution" | "error_max_budget_usd" | ...
+    if (data.type === 'result' && h.onResult) {
+      h.onResult(data);
     }
     // Session ID in result messages
     if (data.session_id && h.onSessionId) h.onSessionId(data.session_id);

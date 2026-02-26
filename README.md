@@ -147,6 +147,7 @@ git pull && docker compose up -d --build
 | 📁 **File Browser** | Browse your project files, preview them, attach with `@filename` in chat |
 | 🖼 **Vision** | Paste screenshots from clipboard — Claude can see and analyze images |
 | 🗂 **Projects** | Separate projects with their own working directories and chat history |
+| 🔄 **Auto-Continue** | Agent hits the turn limit? It automatically resumes and keeps working (up to 3 times) |
 | 💾 **History** | All sessions saved to SQLite — resume any conversation where you left off |
 | 🔒 **Auth** | Password login + 30-day session tokens. Your data stays on your machine |
 | 🌍 **i18n** | Interface in English, Ukrainian, or Russian (auto-detected) |
@@ -175,6 +176,7 @@ You could use `claude` in a terminal. So why use this?
 - **Multi-agent**: Big task? Claude spawns a team and coordinates them
 - **Fork conversations**: Branch off from any point without losing context
 - **Projects**: Switch between codebases without losing your place
+- **Auto-continue**: Agent hits the turn limit mid-task? It resumes automatically — no manual intervention
 - **Session persistence**: Come back tomorrow, continue exactly where you were
 
 ### 🎯 Built for Workflows
