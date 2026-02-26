@@ -878,7 +878,22 @@ body::after {
 }
 @keyframes askSlideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 .ask-user-card .ask-q { font-size: 14.5px; line-height: 1.5; margin-bottom: 12px; color: var(--text); }
-.ask-user-card .ask-q p { margin: 0; }
+.ask-user-card .ask-q p { margin: 0 0 6px; }
+.ask-user-card .ask-q p:last-child { margin-bottom: 0; }
+.ask-user-card .ask-q strong { font-weight: 700; color: var(--text); }
+.ask-user-card .ask-q em { font-style: italic; color: #c9d1d9; }
+.ask-user-card .ask-q h1, .ask-user-card .ask-q h2, .ask-user-card .ask-q h3,
+.ask-user-card .ask-q h4, .ask-user-card .ask-q h5, .ask-user-card .ask-q h6 { font-weight: 700; margin: 10px 0 5px; color: var(--text); }
+.ask-user-card .ask-q h1 { font-size: 19px; } .ask-user-card .ask-q h2 { font-size: 17px; } .ask-user-card .ask-q h3 { font-size: 15px; }
+.ask-user-card .ask-q ul, .ask-user-card .ask-q ol { margin: 6px 0 6px 20px; }
+.ask-user-card .ask-q li { margin: 3px 0; }
+.ask-user-card .ask-q li > ul, .ask-user-card .ask-q li > ol { margin-top: 3px; margin-bottom: 1px; }
+.ask-user-card .ask-q code { background: rgba(110,118,129,.18); padding: 2px 6px; border-radius: 5px; font-family: 'SF Mono', Consolas, 'Courier New', monospace; font-size: 13px; color: #e6a77b; }
+.ask-user-card .ask-q pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 9px; margin: 8px 0; overflow: hidden; }
+.ask-user-card .ask-q pre code { background: none; padding: 10px 14px; border-radius: 0; font-size: 13px; color: var(--text); display: block; overflow-x: auto; line-height: 1.6; }
+.ask-user-card .ask-q a { color: var(--accent2); text-decoration: none; }
+.ask-user-card .ask-q a:hover { text-decoration: underline; }
+.ask-user-card .ask-q blockquote { border-left: 3px solid #3a4560; padding: 6px 12px; margin: 6px 0; background: rgba(20,27,42,.75); border-radius: 0 8px 8px 0; color: #8a9bba; font-style: italic; }
 .ask-user-card .ask-options { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .ask-user-card .ask-opt {
   display: flex; align-items: center; gap: 8px; padding: 8px 12px;
@@ -2411,20 +2426,37 @@ function renderMd(text) {
   // Append \n so subsequent paragraph text is cleanly separated in step 5
   text = text.replace(/((?:^[ \t]*(?:[-*+]|\d+\.)\s+.+\n?)+)/gm, m => parseListBlock(m) + '\n');
 
+  // 3.4 Split inline table headers: move pipe-delimited header from end of text line to its own line
+  // Handles LLM output like "some text | Header1 | Header2 |\n|---|---|"
+  text = text.replace(/(\S)[ \t]+(\|(?:[^|\n]+\|){2,})[ \t]*\n([ \t]*\|[\s\-:|]+\|)/gm, '$1\n$2\n$3');
+
   // 3.5 Tables — header row + separator row + data rows
   text = text.replace(/((?:^\|.+\|\s*\n?)+)/gm, block => {
     const rows = block.trim().split('\n');
     if (rows.length < 2) return block;
-    // Validate separator row (only |, -, :, spaces)
-    if (!/^\|[\s\-:|]+\|/.test(rows[1])) return block;
     const parseRow = row => row.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
-    const headers = parseRow(rows[0]);
-    const dataRows = rows.slice(2).filter(r => r.trim());
-    const thead = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>`;
-    const tbody = dataRows.length
-      ? `<tbody>${dataRows.map(r => `<tr>${parseRow(r).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`
-      : '';
-    return `<div class="table-wrap"><table>${thead}${tbody}</table></div>`;
+    const isSep = r => /^\|[\s\-:|]+\|$/.test(r.trim());
+
+    // Standard: header + separator + data
+    if (isSep(rows[1])) {
+      const headers = parseRow(rows[0]);
+      const dataRows = rows.slice(2).filter(r => r.trim());
+      const thead = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>`;
+      const tbody = dataRows.length
+        ? `<tbody>${dataRows.map(r => `<tr>${parseRow(r).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`
+        : '';
+      return `<div class="table-wrap"><table>${thead}${tbody}</table></div>`;
+    }
+
+    // Fallback: separator is first row (header was on the preceding text line, not captured)
+    if (isSep(rows[0])) {
+      const dataRows = rows.slice(1).filter(r => r.trim());
+      if (!dataRows.length) return block;
+      const tbody = `<tbody>${dataRows.map(r => `<tr>${parseRow(r).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`;
+      return `<div class="table-wrap"><table>${tbody}</table></div>`;
+    }
+
+    return block;
   });
 
   // 4. Inline elements
