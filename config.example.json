@@ -136,6 +136,24 @@
       "file": "skills/devops.md",
       "category": "engineering"
     },
+    "docker": {
+      "label": "🐋 Docker & Containers",
+      "description": "Multi-stage builds, Compose, image optimization, container security",
+      "file": "skills/docker.md",
+      "category": "engineering"
+    },
+    "sysadmin": {
+      "label": "🖥️ Linux Sysadmin",
+      "description": "Remote server management, systemd, nginx, firewall, disk, security hardening",
+      "file": "skills/sysadmin.md",
+      "category": "engineering"
+    },
+    "kubernetes": {
+      "label": "☸️ Kubernetes",
+      "description": "Deployments, services, ingress, HPA, secrets, production K8s patterns",
+      "file": "skills/kubernetes.md",
+      "category": "engineering"
+    },
     "postgres-wizard": {
       "label": "🗄️ PostgreSQL Wizard",
       "description": "Query optimization, indexing, schema design, billions of rows",
