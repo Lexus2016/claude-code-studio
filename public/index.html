@@ -239,6 +239,10 @@ body::after {
 .ci .cfg { opacity: 0; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 3px 6px; border-radius: 4px; transition: opacity .12s, color .12s; flex-shrink: 0; }
 .ci:hover .cfg { opacity: .6; }
 .ci .cfg:hover { opacity: 1 !important; color: var(--accent2); background: rgba(124,106,239,.1); }
+.ci .ren { opacity: 0; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 3px 6px; border-radius: 4px; transition: opacity .12s, color .12s; flex-shrink: 0; }
+.ci:hover .ren { opacity: .6; }
+.ci .ren:hover { opacity: 1 !important; color: var(--accent2); background: rgba(124,106,239,.1); }
+.proj-rename-input { font-size: 13px; font-weight: 600; font-family: inherit; color: var(--text); background: var(--s2); border: 1px solid var(--accent); border-radius: 5px; padding: 1px 6px; outline: none; width: 100%; min-width: 0; }
 .ci .warn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--orange); flex-shrink: 0; margin-right: -4px; }
 .af select { background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 6px 9px; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; cursor: pointer; transition: border .12s; }
 .af select:focus { border-color: var(--accent); }
@@ -1200,6 +1204,40 @@ body::after {
 .proj-name-row { padding: 8px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
 .proj-name-row input { flex: 1; background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 5px 9px; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; }
 
+/* ─── Remote SSH Project UI ─── */
+.proj-type-toggle { display:flex; gap:6px; padding:10px 16px 0; }
+.proj-type-btn { flex:1; padding:7px 0; border:1px solid var(--s2); border-radius:8px; background:var(--bg); color:var(--muted); font-size:12px; cursor:pointer; transition:all .15s; font-family:inherit; }
+.proj-type-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+.proj-type-btn:hover:not(.active) { border-color:var(--accent2); color:var(--text); }
+.remote-form { padding:12px 16px; display:flex; flex-direction:column; gap:10px; }
+.rh-form-row { display:flex; align-items:center; gap:8px; }
+.rh-label { font-size:12px; color:var(--muted); white-space:nowrap; min-width:110px; }
+.rh-form-row input, .rh-form-row select { flex:1; background:var(--s2); border:1px solid var(--border); color:var(--text); padding:5px 9px; border-radius:6px; font-size:12px; font-family:inherit; outline:none; transition:border .12s; }
+.rh-form-row input:focus, .rh-form-row select:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(124,106,239,.15); }
+.rh-test-result { font-size:12px; min-height:18px; padding:2px 0; }
+.rh-test-result.ok { color:#22c55e; }
+.rh-test-result.err { color:var(--red); }
+.rh-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:var(--r); font-size:13px; border:1px solid transparent; transition:background .12s; margin-bottom:2px; }
+.rh-item:hover { background:var(--s2); box-shadow:inset 2px 0 0 rgba(124,106,239,.3); }
+.rh-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); flex-shrink:0; transition:background .3s; }
+.rh-dot.ok { background:#22c55e; }
+.rh-dot.err { background:#ef4444; }
+.rh-item .inf { flex:1; min-width:0; }
+.rh-item .inf .nm { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }
+.rh-item .inf .ds { font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+.rh-item .rm { opacity:0; background:none; border:none; color:var(--red); cursor:pointer; font-size:14px; padding:3px 6px; border-radius:4px; transition:opacity .12s; flex-shrink:0; }
+.rh-item:hover .rm { opacity:.45; }
+.rh-item .rm:hover { opacity:1 !important; background:rgba(248,81,73,.1); }
+.rh-item .cfg { opacity:0; background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px; padding:3px 6px; border-radius:4px; transition:opacity .12s, color .12s; flex-shrink:0; }
+.rh-item:hover .cfg { opacity:.6; }
+.rh-item .cfg:hover { opacity:1 !important; color:var(--accent2); background:rgba(124,106,239,.1); }
+.ssh-host-modal { width:480px; }
+.ssh-host-form { padding:16px; display:flex; flex-direction:column; gap:12px; }
+.ssh-host-form label { font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+.ssh-host-form input { width:100%; background:var(--s2); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:6px; font-size:12px; font-family:inherit; outline:none; box-sizing:border-box; transition:border .12s; }
+.ssh-host-form input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(124,106,239,.15); }
+.remote-badge { display:inline-flex; align-items:center; gap:3px; font-size:10px; color:var(--accent2); background:rgba(124,106,239,.12); border-radius:4px; padding:1px 5px; margin-left:4px; flex-shrink:0; }
+
 /* ─── Confirm Stop Dialog ─── */
 .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; z-index: 300; backdrop-filter: blur(4px); animation: fadeUp .12s ease; }
 .confirm-dialog { background: var(--s1); border: 1px solid var(--border); border-radius: 14px; padding: 28px 32px 24px; width: 320px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,.65); text-align: center; }
@@ -1430,6 +1468,18 @@ body::after {
       <div class="sec-body" id="projBody">
         <div id="projList"></div>
         <button class="add-btn" onclick="openAddProject()" data-i18n="proj.add">＋ Додати проект</button>
+      </div>
+    </div>
+
+    <!-- SSH Hosts section -->
+    <div class="sec">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('sshHosts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('sshHosts')}">
+        <span>🌐 SSH Хости</span>
+        <span class="badge" id="sshHostCount"></span>
+      </div>
+      <div class="sec-body" id="sshHostsBody">
+        <div id="sshHostList"></div>
+        <button class="add-btn" onclick="openAddHostModal()">＋ Додати SSH хост</button>
       </div>
     </div>
 
@@ -1791,24 +1841,108 @@ body::after {
       <h2 data-i18n="dir.title">Новий проект</h2>
       <button class="modal-close" onclick="closeDirModal()">✕</button>
     </div>
-    <div class="dir-path-bar">
-      <span class="path-text" id="dirCurrentPath">/</span>
+
+    <!-- Local / Remote toggle -->
+    <div class="proj-type-toggle">
+      <button class="proj-type-btn active" id="projTypeLocal" onclick="setProjType('local')">📁 Локальний</button>
+      <button class="proj-type-btn" id="projTypeRemote" onclick="setProjType('remote')">🌐 Віддалений SSH</button>
     </div>
-    <div class="dir-list" id="dirList">
-      <div style="padding:14px;color:var(--muted);text-align:center;font-size:12px" data-i18n="toast.loading">Завантаження...</div>
+
+    <!-- LOCAL section -->
+    <div id="projLocalSection">
+      <div class="dir-path-bar">
+        <span class="path-text" id="dirCurrentPath">/</span>
+      </div>
+      <div class="dir-list" id="dirList">
+        <div style="padding:14px;color:var(--muted);text-align:center;font-size:12px" data-i18n="toast.loading">Завантаження...</div>
+      </div>
     </div>
+
+    <!-- REMOTE section -->
+    <div id="projRemoteSection" style="display:none">
+      <div class="remote-form">
+        <div class="rh-form-row">
+          <span class="rh-label">SSH Хост:</span>
+          <select id="remoteHostSelect" style="flex:1">
+            <option value="">— оберіть хост —</option>
+          </select>
+          <button class="bg" onclick="openAddHostModal()" style="padding:5px 10px;font-size:12px;flex-shrink:0">＋ Новий</button>
+        </div>
+        <div class="rh-form-row">
+          <span class="rh-label">Шлях на сервері:</span>
+          <input id="remoteWorkdirInput" placeholder="/home/user/myproject" style="flex:1">
+        </div>
+        <div class="rh-form-row">
+          <span class="rh-label"></span>
+          <button class="bg" onclick="testSelectedHost()" style="padding:5px 12px;font-size:12px">🔌 Тест з'єднання</button>
+          <div class="rh-test-result" id="remoteTestResult"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="proj-name-row">
       <span style="font-size:12px;color:var(--muted);white-space:nowrap" data-i18n="dir.name.label">Назва:</span>
       <input id="projNameInput" data-i18n-ph="dir.proj_name" placeholder="Назва проекту (авто якщо порожньо)">
     </div>
     <div class="dir-footer">
-      <label>
+      <label id="gitInitLabel">
         <input type="checkbox" id="gitInitChk">
         <span data-i18n="dir.git.init">git init (якщо ще не репозиторій)</span>
       </label>
       <div style="flex:1"></div>
       <button class="bg" onclick="closeDirModal()" style="padding:6px 14px" data-i18n="dir.cancel">Cancel</button>
       <button class="bp" onclick="selectDir()" style="padding:6px 14px" data-i18n="proj.add">＋ Додати проект</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add SSH Host Modal -->
+<div class="modal-overlay hidden" id="sshHostModal" onclick="if(event.target===this)closeSshHostModal()">
+  <div class="modal ssh-host-modal">
+    <div class="modal-hdr">
+      <h2 id="sshHostModalTitle">🌐 Додати SSH хост</h2>
+      <button class="modal-close" onclick="closeSshHostModal()">✕</button>
+    </div>
+    <div class="ssh-host-form">
+      <div>
+        <label>Назва хоста *</label>
+        <input id="sshHostLabel" placeholder="Мій продакшн сервер">
+      </div>
+      <div>
+        <label>Хост (user@host або host) *</label>
+        <input id="sshHostHost" placeholder="deploy@eu.myserver.com">
+      </div>
+      <div class="rh-form-row" style="gap:12px">
+        <div style="flex:1">
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">Порт</label>
+          <input id="sshHostPort" type="number" placeholder="22" value="22" style="width:100%;box-sizing:border-box">
+        </div>
+        <div style="flex:3">
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">Метод автентифікації</label>
+          <div style="display:flex;gap:6px">
+            <button class="proj-type-btn active" id="sshAuthBtnKey" onclick="setAuthType('key')" style="flex:1;padding:5px 0;font-size:11px">🔑 SSH ключ</button>
+            <button class="proj-type-btn" id="sshAuthBtnPwd" onclick="setAuthType('pwd')" style="flex:1;padding:5px 0;font-size:11px">🔐 Пароль</button>
+          </div>
+        </div>
+      </div>
+      <div id="sshHostKeyRow">
+        <label>Шлях до SSH ключа (необов'язково)</label>
+        <input id="sshHostKey" placeholder="~/.ssh/id_rsa">
+      </div>
+      <div id="sshHostPasswordRow" class="hidden">
+        <label>Пароль</label>
+        <input id="sshHostPassword" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;padding:2px 0">
+        💡 SSH ключ: без пароля або доданий у ssh-agent. Перше підключення автоматично підтвердить fingerprint. Пароль зберігається у відкритому вигляді — рекомендуємо використовувати ключ.
+      </div>
+      <div class="rh-test-result" id="sshHostTestResult"></div>
+    </div>
+    <div class="dir-footer">
+      <button class="bg" onclick="testNewSshHost()" style="padding:6px 14px">🔌 Тест</button>
+      <div style="flex:1"></div>
+      <button class="bg" onclick="closeSshHostModal()" style="padding:6px 14px">Скасувати</button>
+      <button class="bp" id="sshHostSaveBtn" onclick="saveNewSshHost()" style="padding:6px 14px">＋ Зберегти хост</button>
     </div>
   </div>
 </div>
@@ -1957,7 +2091,7 @@ const TRANSLATIONS = {
     'proj.delete.confirm':'Видалити проект "{{name}}"?\n\nДиректорія НЕ буде видалена.',
     'proj.active':'● Активний','proj.inactive':'○ Не активний',
     'proj.active.title':'Активний проект','proj.click.title':'Клік — активувати',
-    'proj.del.title':'Видалити проект',
+    'proj.del.title':'Видалити проект','proj.rename.title':'Перейменувати проект',
     'chip.remove':'Видалити',
     'attach.file':'Додати файл (📎)',
     'queue.label':'У черзі','queue.edit.title':'Редагувати повідомлення','queue.del.title':'Видалити з черги',
@@ -2071,7 +2205,7 @@ const TRANSLATIONS = {
     'proj.delete.confirm':'Delete project "{{name}}"?\n\nThe directory will NOT be deleted.',
     'proj.active':'● Active','proj.inactive':'○ Inactive',
     'proj.active.title':'Active project','proj.click.title':'Click to activate',
-    'proj.del.title':'Delete project',
+    'proj.del.title':'Delete project','proj.rename.title':'Rename project',
     'chip.remove':'Remove',
     'attach.file':'Attach file (📎)',
     'queue.label':'In queue','queue.edit.title':'Edit message','queue.del.title':'Remove from queue',
@@ -2185,7 +2319,7 @@ const TRANSLATIONS = {
     'proj.delete.confirm':'Удалить проект "{{name}}"?\n\nДиректория НЕ будет удалена.',
     'proj.active':'● Активен','proj.inactive':'○ Не активен',
     'proj.active.title':'Активный проект','proj.click.title':'Клик — активировать',
-    'proj.del.title':'Удалить проект',
+    'proj.del.title':'Удалить проект','proj.rename.title':'Переименовать проект',
     'chip.remove':'Удалить',
     'attach.file':'Прикрепить файл (📎)',
     'queue.label':'В очереди','queue.edit.title':'Редактировать сообщение','queue.del.title':'Удалить из очереди',
@@ -6275,7 +6409,7 @@ async function saveCfg() {
 }
 
 function closeCfg() { $i('cfgModal').classList.add('hidden'); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFpv(); closeCfg(); closeDirModal(); cancelStop(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFpv(); closeCfg(); closeDirModal(); cancelStop(); closeSshHostModal(); } });
 
 // ─── File Browser ─────────────────────────────────────────────────────────
 function _filesQS(relPath) {
@@ -6287,6 +6421,11 @@ async function loadFiles(dir = '') {
   try {
     const r = await fetch(`/api/files?${_filesQS(dir)}`);
     const d = await r.json();
+    if (d.type === 'remote') {
+      const treeEl = $i('filesTree');
+      if (treeEl) treeEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 4px;line-height:1.6">🌐 Remote project —<br>file browser not available</div>';
+      return;
+    }
     if (d.type !== 'dir') return;
     const treeEl = $i('filesTree');
     treeEl.innerHTML = '';
@@ -6451,12 +6590,14 @@ function renderProjects() {
     div.onclick = () => switchProject(p.id);
     const shortPath = p.workdir.length > 38 ? '…' + p.workdir.slice(-36) : p.workdir;
     const busyDot = busy ? `<span class="proj-busy-dot tab-dot spinning" title="${t('proj.generating')}"></span>` : '';
+    const remoteBadge = p.isRemote ? `<span class="remote-badge" title="${escH(p.remoteHost||'')}">🌐 SSH</span>` : '';
     div.innerHTML = `
       <div class="inf">
-        <div class="nm" data-tip="${escH(p.name)}">${escH(p.name)}${busyDot}</div>
-        <div class="ds" data-tip="${escH(p.workdir)}">${escH(shortPath)}</div>
+        <div class="nm" data-tip="${escH(p.name)}">${escH(p.name)}${busyDot}${remoteBadge}</div>
+        <div class="ds" data-tip="${escH(p.isRemote ? (p.remoteHost||'') + ':' + p.workdir : p.workdir)}">${escH(shortPath)}</div>
         <div class="st">${active ? t('proj.active') : t('proj.inactive')}</div>
       </div>
+      <button class="ren" onclick="event.stopPropagation();renameProject('${p.id}',this)" title="${t('proj.rename.title')}">✏</button>
       <button class="rm" onclick="event.stopPropagation();delProject('${p.id}')" title="${t('proj.del.title')}">✕</button>`;
     el.appendChild(div);
   }
@@ -6499,9 +6640,10 @@ function renderProjDropdownList(filter = '') {
   list.innerHTML = filtered.map(p => {
     const active = p.id === curProjectId;
     const shortPath = p.workdir.length > 45 ? '…' + p.workdir.slice(-43) : p.workdir;
+    const rhLabel = p.isRemote ? `<span style="font-size:10px;color:var(--accent2);margin-left:4px">🌐 ${escH(p.remoteHost||'SSH')}</span>` : '';
     return `
       <div class="proj-dd-item${active ? ' active' : ''}" onclick="selectProjFromDropdown('${p.id}')">
-        <div class="proj-dd-item-name">${active ? '● ' : ''}${escH(p.name)}</div>
+        <div class="proj-dd-item-name">${active ? '● ' : ''}${escH(p.name)}${rhLabel}</div>
         <div class="proj-dd-item-path">${escH(shortPath)}</div>
       </div>
     `;
@@ -6651,12 +6793,69 @@ async function delProject(id) {
   renderProjects(); saveUIState();
 }
 
+async function renameProject(id, btnEl) {
+  const p = projects.find(pr => pr.id === id);
+  if (!p) return;
+  const item = btnEl.closest('.ci');
+  const nmEl = item?.querySelector('.nm');
+  if (!nmEl) return;
+  const oldName = p.name;
+  let committed = false;
+
+  // Replace name div with inline input
+  const input = document.createElement('input');
+  input.className = 'proj-rename-input';
+  input.value = oldName;
+  input.onclick = e => e.stopPropagation();
+  nmEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  const commit = async () => {
+    if (committed) return;
+    committed = true;
+    const newName = input.value.trim();
+    if (!newName || newName === oldName) { renderProjects(); return; }
+    const r = await fetch(`/api/projects/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName })
+    });
+    if (r.ok) {
+      p.name = newName;
+      // Sync dropdown header if this is the active project
+      if (id === curProjectId) {
+        const ddName = $i('projDdName');
+        if (ddName) ddName.textContent = newName;
+      }
+    }
+    renderProjects();
+  };
+
+  const cancel = () => {
+    if (committed) return;
+    committed = true;
+    renderProjects();
+  };
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+  // blur fires after keydown — setTimeout lets Escape cancel before commit runs
+  input.addEventListener('blur', () => setTimeout(commit, 150));
+}
+
 // ─── Directory browser ───────────────────────────────────────────────────
 function openAddProject() {
   $i('dirModal').classList.remove('hidden');
   $i('gitInitChk').checked = false;
   $i('projNameInput').value = '';
   dirBrowsePath = null;
+  // Reset to local mode
+  setProjType('local');
+  // Load remote hosts in background for if user switches to remote
+  loadRemoteHosts();
   browseDirs(null);
 }
 
@@ -6725,6 +6924,27 @@ function highlightSelected(el) {
 }
 
 async function selectDir() {
+  // Remote project
+  if (curProjType === 'remote') {
+    const rhId = $i('remoteHostSelect')?.value;
+    const remoteWorkdir = ($i('remoteWorkdirInput')?.value || '').trim();
+    if (!rhId) { toast('Оберіть SSH хост', true); return; }
+    if (!remoteWorkdir) { toast('Вкажіть шлях на сервері', true); return; }
+    const name = ($i('projNameInput').value.trim()) || remoteWorkdir.split('/').filter(Boolean).pop() || remoteWorkdir;
+    const r = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, workdir: remoteWorkdir, isRemote: true, remoteHostId: rhId, remoteWorkdir }),
+    });
+    const d = await r.json();
+    if (!d.ok) { toast((d.error || 'Помилка'), true); return; }
+    await loadProjectsList();
+    if (d.id) switchProject(d.id);
+    closeDirModal();
+    if (_onProjectCreated) { const cb = _onProjectCreated; _onProjectCreated = null; cb(); }
+    return;
+  }
+  // Local project
   if (!dirBrowsePath) { toast(t('toast.select_dir'), true); return; }
   const name = ($i('projNameInput').value.trim()) || dirBrowsePath.split('/').filter(Boolean).pop() || dirBrowsePath;
   const gitInit = $i('gitInitChk').checked;
@@ -6747,6 +6967,199 @@ async function selectDir() {
 
 function closeDirModal() {
   $i('dirModal').classList.add('hidden');
+}
+
+// ─── Remote SSH Project Type Toggle ──────────────────────────────────────
+let curProjType = 'local';
+
+function setProjType(type) {
+  curProjType = type;
+  $i('projTypeLocal').classList.toggle('active', type === 'local');
+  $i('projTypeRemote').classList.toggle('active', type === 'remote');
+  $i('projLocalSection').style.display = type === 'local' ? '' : 'none';
+  $i('projRemoteSection').style.display = type === 'remote' ? 'block' : 'none';
+  const gitLbl = $i('gitInitLabel');
+  if (gitLbl) gitLbl.style.display = type === 'local' ? '' : 'none';
+  if (type === 'remote') renderRemoteHostSelect();
+}
+
+// ─── Remote SSH Hosts ─────────────────────────────────────────────────────
+let remoteHosts = [];
+let _editingHostId = null;
+
+async function loadRemoteHosts() {
+  try {
+    const r = await fetch('/api/remote-hosts');
+    if (!r.ok) return;
+    remoteHosts = await r.json();
+    renderRemoteHostsList();
+    renderRemoteHostSelect();
+    const cnt = $i('sshHostCount');
+    if (cnt) cnt.textContent = remoteHosts.length || '';
+  } catch(e) { console.error('loadRemoteHosts:', e); }
+}
+
+function renderRemoteHostsList() {
+  const el = $i('sshHostList');
+  if (!el) return;
+  if (!remoteHosts.length) {
+    el.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 2px;line-height:1.5">Немає налаштованих SSH хостів</div>`;
+    return;
+  }
+  el.innerHTML = remoteHosts.map(h => {
+    const hostInfo = h.host + (h.port && h.port != 22 ? ':' + h.port : '');
+    return `
+    <div class="rh-item">
+      <span class="rh-dot" id="rh-dot-${h.id}"></span>
+      <div class="inf">
+        <div class="nm" data-tip="${escH(h.label)}">${escH(h.label)}</div>
+        <div class="ds" data-tip="${escH(hostInfo)}">${escH(hostInfo)}</div>
+      </div>
+      <button class="cfg" onclick="testRemoteHost('${h.id}')" title="Тест з'єднання">⚡</button>
+      <button class="cfg" onclick="editRemoteHost('${h.id}')" title="Редагувати">✏</button>
+      <button class="rm"  onclick="deleteRemoteHost('${h.id}')" title="Видалити">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function renderRemoteHostSelect() {
+  const sel = $i('remoteHostSelect');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">— оберіть хост —</option>` +
+    remoteHosts.map(h => `<option value="${h.id}"${h.id === cur ? ' selected' : ''}>${escH(h.label)} (${escH(h.host)})</option>`).join('');
+}
+
+async function testRemoteHost(id) {
+  const dot = $i(`rh-dot-${id}`);
+  if (dot) { dot.className = 'rh-dot'; dot.title = 'Перевірка...'; }
+  try {
+    const r = await fetch(`/api/remote-hosts/${id}/test`, { method: 'POST' });
+    const d = await r.json();
+    if (dot) { dot.className = 'rh-dot ' + (d.ok ? 'ok' : 'err'); dot.title = d.ok ? `OK (${d.latencyMs}ms)` : (d.error || 'Помилка'); }
+    toast(d.ok ? `✓ ${d.message} (${d.latencyMs}ms)` : `✗ ${d.error}`, !d.ok);
+  } catch(e) {
+    if (dot) { dot.className = 'rh-dot err'; dot.title = 'Помилка'; }
+  }
+}
+
+async function deleteRemoteHost(id) {
+  const h = remoteHosts.find(x => x.id === id);
+  if (!confirm(`Видалити хост "${h?.label || id}"?`)) return;
+  await fetch(`/api/remote-hosts/${id}`, { method: 'DELETE' });
+  await loadRemoteHosts();
+  toast('✓ Хост видалено');
+}
+
+async function testSelectedHost() {
+  const id = $i('remoteHostSelect')?.value;
+  if (!id) { toast('Оберіть хост', true); return; }
+  const res = $i('remoteTestResult');
+  if (res) { res.textContent = '⏳ Перевірка...'; res.className = 'rh-test-result'; }
+  try {
+    const r = await fetch(`/api/remote-hosts/${id}/test`, { method: 'POST' });
+    const d = await r.json();
+    if (res) { res.textContent = d.ok ? `✓ ${d.message} (${d.latencyMs}ms)` : `✗ ${d.error}`; res.className = 'rh-test-result ' + (d.ok ? 'ok' : 'err'); }
+  } catch(e) {
+    if (res) { res.textContent = '✗ Помилка підключення'; res.className = 'rh-test-result err'; }
+  }
+}
+
+// ─── Add SSH Host Modal ───────────────────────────────────────────────────
+function openAddHostModal() {
+  _editingHostId = null;
+  $i('sshHostModalTitle').textContent = '🌐 Додати SSH хост';
+  $i('sshHostSaveBtn').textContent = '＋ Зберегти хост';
+  $i('sshHostLabel').value = '';
+  $i('sshHostHost').value = '';
+  $i('sshHostPort').value = '22';
+  $i('sshHostKey').value = '';
+  $i('sshHostPassword').value = '';
+  $i('sshHostTestResult').textContent = '';
+  $i('sshHostTestResult').className = 'rh-test-result';
+  setAuthType('key');
+  $i('sshHostModal').classList.remove('hidden');
+  setTimeout(() => $i('sshHostLabel')?.focus(), 80);
+}
+
+function closeSshHostModal() {
+  $i('sshHostModal').classList.add('hidden');
+}
+
+function setAuthType(type) {
+  const isKey = type === 'key';
+  $i('sshAuthBtnKey').classList.toggle('active', isKey);
+  $i('sshAuthBtnPwd').classList.toggle('active', !isKey);
+  $i('sshHostKeyRow').classList.toggle('hidden', !isKey);
+  $i('sshHostPasswordRow').classList.toggle('hidden', isKey);
+}
+
+async function editRemoteHost(id) {
+  const h = remoteHosts.find(x => x.id === id);
+  if (!h) return;
+  _editingHostId = id;
+  $i('sshHostModalTitle').textContent = '✏️ Редагувати SSH хост';
+  $i('sshHostSaveBtn').textContent = '💾 Оновити хост';
+  $i('sshHostLabel').value = h.label || '';
+  $i('sshHostHost').value = h.host || '';
+  $i('sshHostPort').value = h.port || 22;
+  $i('sshHostTestResult').textContent = '';
+  $i('sshHostTestResult').className = 'rh-test-result';
+  // Determine auth type: if host has password marker use pwd mode, otherwise key mode
+  const hasPwd = h.password && h.password !== '***' && h.password !== '';
+  setAuthType(hasPwd ? 'pwd' : 'key');
+  $i('sshHostKey').value = hasPwd ? '' : (h.sshKeyPath || '');
+  $i('sshHostPassword').value = hasPwd ? '' : '';  // never pre-fill password for security
+  $i('sshHostModal').classList.remove('hidden');
+  setTimeout(() => $i('sshHostLabel')?.focus(), 80);
+}
+
+async function testNewSshHost() {
+  const host = $i('sshHostHost').value.trim();
+  const port = $i('sshHostPort').value || 22;
+  const usePwd = $i('sshAuthBtnPwd').classList.contains('active');
+  const sshKeyPath = usePwd ? '' : $i('sshHostKey').value.trim();
+  const password = usePwd ? $i('sshHostPassword').value : '';
+  if (!host) { toast('Вкажіть хост', true); return; }
+  const res = $i('sshHostTestResult');
+  res.textContent = '⏳ Підключення...'; res.className = 'rh-test-result';
+  try {
+    const r = await fetch('/api/remote-hosts/test-new', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host, port: Number(port), sshKeyPath, password }),
+    });
+    const d = await r.json();
+    res.textContent = d.ok ? `✓ ${d.message} (${d.latencyMs}ms)` : `✗ ${d.error}`;
+    res.className = 'rh-test-result ' + (d.ok ? 'ok' : 'err');
+  } catch(e) {
+    res.textContent = '✗ Помилка підключення'; res.className = 'rh-test-result err';
+  }
+}
+
+async function saveNewSshHost() {
+  const label = $i('sshHostLabel').value.trim();
+  const host = $i('sshHostHost').value.trim();
+  const port = Number($i('sshHostPort').value) || 22;
+  const usePwd = $i('sshAuthBtnPwd').classList.contains('active');
+  const sshKeyPath = usePwd ? '' : $i('sshHostKey').value.trim();
+  const password = usePwd ? $i('sshHostPassword').value : '';
+  if (!label) { toast('Вкажіть назву', true); return; }
+  if (!host) { toast('Вкажіть хост', true); return; }
+  const isEdit = !!_editingHostId;
+  const url = isEdit ? `/api/remote-hosts/${_editingHostId}` : '/api/remote-hosts';
+  const r = await fetch(url, {
+    method: isEdit ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label, host, port, sshKeyPath, password }),
+  });
+  const d = await r.json();
+  if (!d.ok) { toast(d.error || 'Помилка', true); return; }
+  await loadRemoteHosts();
+  closeSshHostModal();
+  toast(`✓ Хост "${label}" ${isEdit ? 'оновлено' : 'збережено'}`);
+  // If project dialog is open and on remote tab, update the select
+  if (curProjType === 'remote') renderRemoteHostSelect();
 }
 
 // ─── Persist UI state across page refreshes ──────────────────────────────
@@ -6775,7 +7188,7 @@ function saveUIState() {
       autoSkillsMode,
       curWorkdir, curProjectId,
       panels: { left: c('leftPanel'), right: c('rightPanel') },
-      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), proj: c('projBody') },
+      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody') },
       openTabs: openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
       activeTabId: openTabs.find(t => t.id === activeTabId && !t.isNew) ? activeTabId : null,
       allProjTabs,
@@ -6804,7 +7217,7 @@ function restoreUIState() {
       setPanel('rightPanel', s.panels.right);
     }
     if (s.sections) {
-      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', proj: 'projBody' };
+      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', proj: 'projBody', sshHosts: 'sshHostsBody' };
       for (const [k, elId] of Object.entries(secs)) {
         const el = $i(elId);
         if (!el) continue;
@@ -6894,6 +7307,7 @@ _rlRestore(); // Restore rate limit badge from localStorage if still active
 renderTabs();
 loadCfg();
 loadProjectsList();
+loadRemoteHosts();
 connect();
 checkVersion();
 // Handle ?open_session=<id> from Kanban board links

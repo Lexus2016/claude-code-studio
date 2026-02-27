@@ -13,6 +13,12 @@ data/chats.db-wal
 # Projects config (user-specific paths)
 data/projects.json
 
+# SSH hosts (contains encrypted passwords)
+data/remote-hosts.json
+
+# SSH encryption key — NEVER commit this; without it encrypted passwords are unrecoverable
+data/hosts.key
+
 # Uploads
 data/uploads/
 

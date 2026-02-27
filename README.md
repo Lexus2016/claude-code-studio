@@ -148,6 +148,7 @@ git pull && docker compose up -d --build
 | 📁 **File Browser** | Browse your project files, preview them, attach with `@filename` in chat |
 | 🖼 **Vision** | Paste screenshots from clipboard — Claude can see and analyze images |
 | 🗂 **Projects** | Separate projects with their own working directories and chat history |
+| 🌐 **Remote SSH Projects** | Connect to remote servers, create projects there, run Claude commands on remote machines |
 | 🔄 **Auto-Continue** | Agent hits the turn limit? It automatically resumes and keeps working (up to 3 times) |
 | 💾 **History** | All sessions saved to SQLite — resume any conversation where you left off |
 | 📊 **Rate Limit Alerts** | Toast warnings at 80/90/95%, blocking modal when exhausted, live countdown to reset |
@@ -232,6 +233,123 @@ Card 2 waits for Card 1 to finish, then runs with full context of what was built
 
 ---
 
+## Remote Access: For Developers & Server Administrators
+
+Claude Code Studio connects to remote servers over SSH and runs Claude Code there — as if it were local. **All commands execute on the remote machine.** This opens two distinct use cases:
+
+### 👨‍💻 For Developers — Remote Projects
+
+Work on code that lives on a powerful remote machine (staging server, GPU box, cloud VPS) without leaving your browser:
+
+| Scenario | Benefit |
+|----------|---------|
+| **Powerful build machines** | Compile, train, test on GPU/high-RAM servers — your laptop stays fast |
+| **Staging/production parity** | Run Claude Code in the same environment where code will actually run |
+| **Always-on background agent** | Leave a task running on the server overnight — check results in the morning |
+| **Team shared workspace** | One Claude Code Studio instance, multiple teammates, same project visibility |
+
+### 🖥️ For Server Administrators — Remote Server Control
+
+This is where Claude Code Studio becomes something no sysadmin tool has offered before: **a conversational interface to your entire server fleet.**
+
+Install Claude Code on each server you manage. Add them as SSH hosts. Now, instead of SSH-ing into servers and running commands manually, you open a browser and **talk to Claude Code running directly on the server**.
+
+| What you delegate to Claude | What Claude does on the server |
+|-----------------------------|-------------------------------|
+| "Update nginx to 1.27 and reload" | Checks current version, updates package, tests config, reloads service |
+| "Check disk usage and clean old logs" | Runs `df`, finds large/old files, removes safely, reports freed space |
+| "Deploy the new release and rollback if health check fails" | Pulls, builds, restarts, health-checks, auto-rolls back on failure |
+| "What's consuming CPU right now?" | Runs `top`/`htop`, analyzes, explains, suggests fixes |
+| "Rotate the API keys in all config files" | Finds all occurrences, updates atomically, restarts affected services |
+| "Set up a cron job to backup the database nightly" | Writes script, sets up cron, verifies it's registered |
+
+**The result:** You manage your entire server fleet from one browser tab. No terminal juggling. No SSH sessions. Just a conversation.
+
+```
+Traditional sysadmin session:         Claude Code Studio session:
+────────────────────────────          ──────────────────────────────────
+ssh user@prod-eu-01                   Open browser
+sudo apt update && apt upgrade -y     Type: "Update all packages on prod-eu-01,
+sudo systemctl restart nginx               check for errors, and send me a summary"
+sudo journalctl -u nginx -n 50        Claude: runs it, shows output, flags issues
+exit
+ssh user@prod-eu-02                   Type: "Do the same on prod-eu-02 and prod-us-01"
+... repeat for every server ...       Claude: runs in parallel on both servers
+```
+
+### Quick Setup
+
+**Step 0 — Prepare the remote server (one-time):**
+
+Use the bundled setup scripts to install and configure Claude Code on the remote machine:
+
+```bash
+# Ubuntu / Debian / RHEL / CentOS (run as root):
+curl -fsSL https://raw.githubusercontent.com/Lexus2016/claude-code-studio/main/install/setup-linux.sh | bash
+
+# macOS:
+curl -fsSL https://raw.githubusercontent.com/Lexus2016/claude-code-studio/main/install/setup-macos.sh | bash
+
+# Windows (PowerShell as Administrator):
+irm https://raw.githubusercontent.com/Lexus2016/claude-code-studio/main/install/setup-windows.ps1 | iex
+```
+
+Each script installs Node.js, Claude Code CLI, configures authentication, and creates a workspace. See [`install/README.md`](install/README.md) for details.
+
+**Steps:**
+
+1. **Add the remote host** (one-time per server)
+   - Left sidebar → ⚙️ Settings → **Remote Hosts**
+   - Click **+ Add Host** → enter hostname, port, SSH key
+   - Click **Test Connection** to verify
+
+2. **Create a Remote Project**
+   - Left sidebar → 🗂 Projects → **+ New Project**
+   - Select **Remote** type → choose the SSH host
+   - Enter the directory path on the remote server
+   - Click **Create**
+
+3. **Work normally**
+   - Chat, Kanban board, file browser — all operations run on the remote machine
+   - Sessions and history are stored locally in Claude Code Studio
+
+### Example: Managing 5 Production Servers
+
+```
+Goal: update nginx on all 5 servers and verify.
+
+1. Add 5 hosts: prod-eu-01 ... prod-eu-05 via Settings → Remote Hosts
+2. Create a Remote Project for each server pointing to /etc/nginx
+3. Open 5 Kanban cards in parallel:
+   → "Update nginx to 1.27, test config, reload, run health check"
+4. All 5 run simultaneously. Watch live output per server.
+5. Any failure → card stays in "In Progress" with error details
+
+Result: 5 servers updated and verified in ~3 minutes, zero manual SSH.
+```
+
+### Example: GPU Server for ML Tasks
+
+```
+You have a beefy ML server (GPU, 256GB RAM).
+Claude Code Studio on your laptop can't handle training tasks locally.
+
+→ Add remote host: ml-server.internal
+→ Create Remote Project → /home/ml/projects
+→ Chat: "Download the dataset, preprocess it, train the model"
+→ Claude runs on ml-server: uses GPU, accesses data locally, completes fast
+→ You see live output streaming in your browser — laptop runs normally
+```
+
+### SSH Security
+
+- **Passwords encrypted at rest:** SSH passwords are stored using AES-256-GCM encryption — never in plain text. The encryption key lives in `data/hosts.key` (never committed to git)
+- **SSH keys stored locally:** Key files stay on your disk; only used at connection time, never copied or stored elsewhere
+- **No key forwarding:** Keys are used only for establishing the connection
+- **Connection testing:** Always test your connection before creating projects
+
+---
+
 ## Multi-Instance Safety (File Locks)
 
 If you run multiple Claude Code processes on the same project at the same time, they might try to edit the same file simultaneously — which can cause data loss.
@@ -298,6 +416,7 @@ Each project has its own working directory. Sessions are scoped to projects.
 - Auth tokens: 32-byte random hex, 30-day expiry, server-side storage
 - WebSocket protected by `httpOnly` cookie
 - API keys never sent to the browser
+- **SSH passwords encrypted with AES-256-GCM** — key stored in `data/hosts.key`, never in the database
 - Helmet.js security headers on all responses
 - Rate limiting on login endpoints
 
@@ -321,6 +440,7 @@ claude-code-studio/
 ├── server.js           ← main server (Express + WebSocket)
 ├── auth.js             ← login, password hashing, session tokens
 ├── claude-cli.js       ← spawns claude subprocess, parses output stream
+├── claude-ssh.js       ← SSH remote execution (ssh2, password encrypted at rest)
 ├── config.json         ← MCP servers + skills catalog
 ├── public/
 │   ├── index.html      ← entire frontend (single file: HTML + CSS + JS)

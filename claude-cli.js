@@ -133,7 +133,8 @@ class ClaudeCLI {
     args.push('--dangerously-skip-permissions');
 
     // Stream JSON for structured output parsing
-    args.push('--output-format', 'stream-json');
+    // --verbose is required alongside --output-format stream-json since CLI ≥ 1.0.x
+    args.push('--output-format', 'stream-json', '--verbose');
 
     // Include partial message chunks for real-time streaming
     args.push('--include-partial-messages');

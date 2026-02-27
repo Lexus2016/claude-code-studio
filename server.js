@@ -6,6 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const url = require('url');
 const { execSync, spawn: spawnProc } = require('child_process');
+const crypto = require('crypto');
 const multer = require('multer');
 const Database = require('better-sqlite3');
 const cookieParser = require('cookie-parser');
@@ -13,6 +14,8 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
+const ClaudeSSH = require('./claude-ssh');
+const { testSshConnection } = require('./claude-ssh');
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
 {
@@ -94,6 +97,8 @@ const ALLOWED_BROWSE_ROOTS = [
 const SKILLS_DIR = path.join(APP_DIR, 'skills');
 const DB_PATH = path.join(APP_DIR, 'data', 'chats.db');
 const PROJECTS_FILE = path.join(APP_DIR, 'data', 'projects.json');
+const REMOTE_HOSTS_FILE = path.join(APP_DIR, 'data', 'remote-hosts.json');
+const HOSTS_KEY_FILE    = path.join(APP_DIR, 'data', 'hosts.key');
 const UPLOADS_DIR   = path.join(APP_DIR, 'data', 'uploads');
 
 // Category map for bundled skills — used when skill is auto-discovered (not in config)
@@ -290,6 +295,8 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN chain_id TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN source_session_id TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN failure_reason TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN task_retry_count INTEGER DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_host TEXT`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
 // Performance indexes — safe to re-run (IF NOT EXISTS)
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
@@ -900,6 +907,44 @@ function buildSystemPrompt(skillIds, config) {
 function loadProjects() { try { return JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8')); } catch { return []; } }
 function saveProjects(p) { const d=path.dirname(PROJECTS_FILE); if(!fs.existsSync(d)) fs.mkdirSync(d,{recursive:true}); fs.writeFileSync(PROJECTS_FILE, JSON.stringify(p, null, 2)); }
 
+function loadRemoteHosts() { try { return JSON.parse(fs.readFileSync(REMOTE_HOSTS_FILE, 'utf-8')); } catch { return []; } }
+function saveRemoteHosts(h) { const d=path.dirname(REMOTE_HOSTS_FILE); if(!fs.existsSync(d)) fs.mkdirSync(d,{recursive:true}); fs.writeFileSync(REMOTE_HOSTS_FILE, JSON.stringify(h, null, 2)); }
+
+// ─── SSH password encryption (AES-256-GCM, persistent key) ───────────────────
+// Key is generated once and stored in data/hosts.key (600 perms).
+// Stored format: "enc:<base64(16-byte-IV + 16-byte-authTag + ciphertext)>"
+// Prefix "enc:" enables backward compatibility with existing plaintext entries.
+function _loadOrCreateHostsKey() {
+  try { const k = fs.readFileSync(HOSTS_KEY_FILE); if (k.length === 32) return k; } catch {}
+  const k = crypto.randomBytes(32);
+  const d = path.dirname(HOSTS_KEY_FILE);
+  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(HOSTS_KEY_FILE, k, { mode: 0o600 });
+  return k;
+}
+const HOSTS_ENCRYPT_KEY = _loadOrCreateHostsKey();
+
+function encryptPassword(plain) {
+  if (!plain) return '';
+  const iv  = crypto.randomBytes(16);
+  const c   = crypto.createCipheriv('aes-256-gcm', HOSTS_ENCRYPT_KEY, iv);
+  const enc = Buffer.concat([c.update(plain, 'utf8'), c.final()]);
+  return 'enc:' + Buffer.concat([iv, c.getAuthTag(), enc]).toString('base64');
+}
+
+function decryptPassword(stored) {
+  if (!stored) return '';
+  if (!stored.startsWith('enc:')) return stored; // backward compat: plaintext
+  try {
+    const buf = Buffer.from(stored.slice(4), 'base64');
+    const d = crypto.createDecipheriv('aes-256-gcm', HOSTS_ENCRYPT_KEY, buf.subarray(0, 16));
+    d.setAuthTag(buf.subarray(16, 32));
+    return d.update(buf.subarray(32)).toString('utf8') + d.final('utf8');
+  } catch { return ''; }
+}
+
+// testSshConnection is now exported from claude-ssh.js (uses ssh2 library, supports password auth)
+
 // ============================================
 // EXECUTION ENGINES
 // ============================================
@@ -1016,6 +1061,85 @@ async function runCliSingle(p) {
   }
 
   // Persist final text and clean up
+  try { if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null); } catch {}
+  try { stmts.setPartialText.run(null, sessionId); } catch {}
+  return { cid: newCid, completed: lastResult?.subtype === 'success' };
+}
+
+// --- SSH Remote Agent ---
+async function runSshSingle(p) {
+  const { prompt, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
+  const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
+  const sp = (mp + (systemPrompt||'')).trim() || undefined;
+  const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook'] : ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'];
+  const effectiveMaxTurns = maxTurns || 30;
+  let fullText = '', newCid = claudeSessionId, chunkCount = 0;
+  let currentPrompt = prompt;
+  let continueCount = 0;
+
+  const ssh = new ClaudeSSH({ host: remoteHost, workdir: remoteWorkdir, sshKeyPath, password, port });
+
+  const runOnce = (runPrompt, resumeId) => new Promise((resolve) => {
+    let resultData = null;
+    let _done = false;
+    const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid }); } };
+
+    ssh.send({ prompt: runPrompt, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, allowedTools: tools, abortController })
+      .onText(t => {
+        fullText += t;
+        chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + t);
+        ws.send(JSON.stringify({ type:'text', text:t, ...(tabId ? { tabId } : {}) }));
+        if (++chunkCount % 5 === 0) {
+          try { stmts.setPartialText.run(fullText, sessionId); } catch {}
+        }
+      })
+      .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
+      .onTool((name, inp) => {
+        ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
+        try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
+      })
+      .onSessionId(sid => { newCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
+      .onRateLimit(info => { ws.send(JSON.stringify({ type:'rate_limit', info, ...(tabId ? { tabId } : {}) })); })
+      .onResult(r => { resultData = r; })
+      .onError(err => {
+        try { ws.send(JSON.stringify({ type:'error', error:err.substring(0,500), ...(tabId ? { tabId } : {}) })); } catch {}
+      })
+      .onDone(sid => {
+        if (sid) newCid = sid;
+        _finish(newCid);
+      });
+  });
+
+  let lastResult = null;
+  while (true) {
+    const { resultData } = await runOnce(currentPrompt, newCid);
+    lastResult = resultData;
+    if (resultData?.subtype === 'success') break;
+    if (resultData?.subtype === 'error_max_budget_usd') {
+      const notice = '\n\n⚠️ **Budget limit reached** — agent stopped.\n\n';
+      fullText += notice;
+      chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + notice);
+      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+      break;
+    }
+    if (abortController?.signal?.aborted) break;
+    if (continueCount >= MAX_AUTO_CONTINUES) {
+      const notice = `\n\n⚠️ **Agent did not complete** after ${MAX_AUTO_CONTINUES} auto-continues.\n\n`;
+      fullText += notice;
+      chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + notice);
+      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+      break;
+    }
+    continueCount++;
+    if (resultData?.subtype === 'error_max_turns') {
+      const notice = `\n\n---\n⏳ **Auto-continuing** (${continueCount}/${MAX_AUTO_CONTINUES}) — resuming on remote...\n\n`;
+      fullText += notice;
+      chatBuffers.set(sessionId, (chatBuffers.get(sessionId) || '') + notice);
+      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+    }
+    currentPrompt = 'Continue where you left off. Complete the remaining work.';
+  }
+
   try { if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null); } catch {}
   try { stmts.setPartialText.run(null, sessionId); } catch {}
   return { cid: newCid, completed: lastResult?.subtype === 'success' };
@@ -1869,20 +1993,23 @@ app.post('/api/claude-md', (req,res) => {
 // Files browser
 // Resolve the effective workspace for /api/files and /api/files/download.
 // Priority: ?workdir= query param (must match a registered project) → global WORKDIR.
+// Returns null if workdir is unknown, or { workdir, isRemote } object.
 function resolveFilesWorkdir(reqWorkdir) {
   if (reqWorkdir) {
     const projects = loadProjects();
     const match = projects.find(p => path.resolve(p.workdir) === path.resolve(reqWorkdir));
-    if (match) return path.resolve(match.workdir);
+    if (match) return { workdir: path.resolve(match.workdir), isRemote: !!match.isRemote };
     return null; // not a registered project — deny
   }
-  return path.resolve(WORKDIR);
+  return { workdir: path.resolve(WORKDIR), isRemote: false };
 }
 
 app.get('/api/files', (req,res) => {
   const dir=req.query.path||'';
-  const workdirReal = resolveFilesWorkdir(req.query.workdir);
-  if (!workdirReal) return res.status(403).json({error:'Workdir not in registered projects'});
+  const resolved = resolveFilesWorkdir(req.query.workdir);
+  if (!resolved) return res.status(403).json({error:'Workdir not in registered projects'});
+  if (resolved.isRemote) return res.json({type:'remote'}); // remote FS can't be browsed locally
+  const workdirReal = resolved.workdir;
   const fp=path.resolve(workdirReal,dir);
   if(fp!==workdirReal && !fp.startsWith(workdirReal+path.sep)) return res.status(403).json({error:'Denied'});
   try{
@@ -1902,8 +2029,10 @@ app.get('/api/files', (req,res) => {
 
 app.get('/api/files/download', (req,res) => {
   const fp_rel = req.query.path || '';
-  const workdirReal = resolveFilesWorkdir(req.query.workdir);
-  if (!workdirReal) return res.status(403).json({error:'Workdir not in registered projects'});
+  const resolved = resolveFilesWorkdir(req.query.workdir);
+  if (!resolved) return res.status(403).json({error:'Workdir not in registered projects'});
+  if (resolved.isRemote) return res.status(400).json({error:'File download not available for remote projects'});
+  const workdirReal = resolved.workdir;
   const fp = path.resolve(workdirReal, fp_rel);
   if (fp !== workdirReal && !fp.startsWith(workdirReal + path.sep)) return res.status(403).json({error:'Denied'});
   try {
@@ -1917,8 +2046,10 @@ app.get('/api/files/download', (req,res) => {
 
 app.get('/api/files/raw', (req, res) => {
   const fp_rel = req.query.path || '';
-  const workdirReal = resolveFilesWorkdir(req.query.workdir);
-  if (!workdirReal) return res.status(403).json({error:'Workdir not in registered projects'});
+  const resolved = resolveFilesWorkdir(req.query.workdir);
+  if (!resolved) return res.status(403).json({error:'Workdir not in registered projects'});
+  if (resolved.isRemote) return res.status(400).json({error:'Raw file access not available for remote projects'});
+  const workdirReal = resolved.workdir;
   const fp = path.resolve(workdirReal, fp_rel);
   if (fp !== workdirReal && !fp.startsWith(workdirReal + path.sep)) return res.status(403).json({error:'Denied'});
   try {
@@ -2018,11 +2149,25 @@ app.get('/api/project-files/read', (req, res) => {
 app.get('/api/projects', (_,res) => res.json(loadProjects()));
 
 app.post('/api/projects', (req,res) => {
-  const { name, workdir, gitInit } = req.body;
+  const { name, workdir, gitInit, isRemote=false, remoteHostId='', remoteWorkdir='', sshKeyPath='', port=22 } = req.body;
   if (!name || !workdir) return res.status(400).json({ error:'name and workdir required' });
   try {
-    if (!fs.existsSync(workdir)) fs.mkdirSync(workdir, { recursive:true });
     const actions = [];
+    if (isRemote) {
+      // Remote project: workdir is the path on the remote server — don't create locally
+      const hosts = loadRemoteHosts();
+      const rh = hosts.find(h => h.id === remoteHostId);
+      if (!rh) return res.status(400).json({ error:'Remote host not found. Add a host first.' });
+      const projects = loadProjects();
+      const existing = projects.find(p => p.workdir === workdir && p.remoteHostId === remoteHostId);
+      if (existing) { existing.name = name; saveProjects(projects); return res.json({ ok:true, id:existing.id, actions, updated:true }); }
+      const id = 'proj-' + genId();
+      projects.push({ id, name, workdir, isRemote:true, remoteHostId, remoteHost: rh.host, sshKeyPath: rh.sshKeyPath||'', password: rh.password||'', port: rh.port||Number(port)||22, createdAt:new Date().toISOString() });
+      saveProjects(projects);
+      return res.json({ ok:true, id, actions });
+    }
+    // Local project (existing behavior)
+    if (!fs.existsSync(workdir)) fs.mkdirSync(workdir, { recursive:true });
     if (gitInit && !fs.existsSync(path.join(workdir,'.git'))) {
       try { execSync('git init', { cwd:workdir, stdio:'pipe' }); actions.push('git init'); }
       catch(e) { return res.json({ ok:true, id:null, actions, gitError:(e.stderr?.toString()||e.message).trim() }); }
@@ -2037,9 +2182,75 @@ app.post('/api/projects', (req,res) => {
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
+app.patch('/api/projects/:id', (req,res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error:'name required' });
+  const projects = loadProjects();
+  const p = projects.find(p => p.id === req.params.id);
+  if (!p) return res.status(404).json({ error:'not found' });
+  p.name = name.trim();
+  saveProjects(projects);
+  res.json({ ok:true });
+});
+
 app.delete('/api/projects/:id', (req,res) => {
   saveProjects(loadProjects().filter(p => p.id !== req.params.id));
   res.json({ ok:true });
+});
+
+// ─── Remote SSH Hosts CRUD ────────────────────────────────────────────────────
+app.get('/api/remote-hosts', (_,res) => res.json(
+  loadRemoteHosts().map(h => ({ ...h, password: h.password ? '***' : '' }))
+));
+
+app.post('/api/remote-hosts', (req,res) => {
+  const { label, host, port=22, sshKeyPath='', password='' } = req.body;
+  if (!label || !host) return res.status(400).json({ error:'label and host required' });
+  const hosts = loadRemoteHosts();
+  const id = 'rh-' + genId();
+  const entry = { id, label, host, port: Number(port)||22, sshKeyPath: sshKeyPath||'', password: encryptPassword(password||''), createdAt: new Date().toISOString() };
+  hosts.push(entry);
+  saveRemoteHosts(hosts);
+  // Don't expose password in response
+  res.json({ ok:true, id, host: { ...entry, password: entry.password ? '***' : '' } });
+});
+
+app.put('/api/remote-hosts/:id', (req,res) => {
+  const { label, host, port=22, sshKeyPath='', password } = req.body;
+  const hosts = loadRemoteHosts();
+  const idx = hosts.findIndex(h => h.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error:'Not found' });
+  // If password not sent (undefined), keep existing encrypted value; if sent, encrypt the new value
+  const newPassword = password === undefined ? (hosts[idx].password || '') : encryptPassword(password || '');
+  hosts[idx] = { ...hosts[idx], label, host, port: Number(port)||22, sshKeyPath: sshKeyPath||'', password: newPassword };
+  saveRemoteHosts(hosts);
+  res.json({ ok:true, host: { ...hosts[idx], password: hosts[idx].password ? '***' : '' } });
+});
+
+app.delete('/api/remote-hosts/:id', (req,res) => {
+  saveRemoteHosts(loadRemoteHosts().filter(h => h.id !== req.params.id));
+  res.json({ ok:true });
+});
+
+// Test SSH connection — for new (unsaved) host (must be before /:id/test)
+app.post('/api/remote-hosts/test-new', async (req,res) => {
+  const { host, port=22, sshKeyPath='', password='' } = req.body;
+  if (!host) return res.status(400).json({ error:'host required' });
+  try {
+    const result = await testSshConnection({ host, port: Number(port)||22, sshKeyPath, password });
+    res.json({ ok:true, message:'Connection successful', latencyMs: result.latencyMs });
+  } catch(e) { res.status(400).json({ error: e.message||'Connection failed' }); }
+});
+
+// Test SSH connection — for saved host
+app.post('/api/remote-hosts/:id/test', async (req,res) => {
+  const hosts = loadRemoteHosts();
+  const rh = hosts.find(h => h.id === req.params.id);
+  if (!rh) return res.status(404).json({ error:'Host not found' });
+  try {
+    const result = await testSshConnection({ host: rh.host, port: rh.port||22, sshKeyPath: rh.sshKeyPath||'', password: decryptPassword(rh.password)||'' });
+    res.json({ ok:true, message:'Connection successful', latencyMs: result.latencyMs });
+  } catch(e) { res.status(400).json({ error: e.message||'Connection failed' }); }
 });
 
 // Directory browser — list directories at given path (no restriction to WORKDIR)
@@ -2261,7 +2472,22 @@ wss.on('connection', (ws) => {
       };
 
       let newCid;
-      if (agentMode==='multi') {
+      // Check if the active project is a remote SSH project
+      const _activeProj = loadProjects().find(p => p.workdir === (workdir || WORKDIR) && p.isRemote);
+      if (_activeProj) {
+        // Route to SSH engine — runs claude on remote server
+        const sshResult = await runSshSingle({
+          ...params,
+          remoteHost:   _activeProj.remoteHost,
+          remoteWorkdir: _activeProj.workdir,
+          sshKeyPath:   _activeProj.sshKeyPath || '',
+          password:     decryptPassword(_activeProj.password) || '',
+          port:         _activeProj.port || 22,
+        });
+        newCid = sshResult.cid;
+        // Track remote host on session for UI indicators
+        try { db.prepare(`UPDATE sessions SET remote_host=? WHERE id=?`).run(_activeProj.remoteHost, localSessionId); } catch {}
+      } else if (agentMode==='multi') {
         newCid = await runMultiAgent(params);
       } else {
         const result = await runCliSingle(params);
