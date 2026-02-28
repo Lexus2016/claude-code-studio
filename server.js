@@ -297,6 +297,7 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN failure_reason TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN task_retry_count INTEGER DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_host TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN sort_order REAL`); } catch {}
 // Performance indexes — safe to re-run (IF NOT EXISTS)
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
@@ -308,8 +309,8 @@ const stmts = {
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`),
   updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
-  getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions ORDER BY updated_at DESC LIMIT 100`),
-  getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE workdir=? ORDER BY updated_at DESC LIMIT 100`),
+  getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
+  getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE workdir=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSession: db.prepare(`SELECT * FROM sessions WHERE id=?`),
   deleteSession: db.prepare(`DELETE FROM sessions WHERE id=?`),
   addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments) VALUES (?,?,?,?,?,?,?,?)`),
@@ -467,7 +468,7 @@ async function startTask(task) {
         }
       } catch {}
     }
-    const prompt = parts.join('\n\n');
+    const prompt = parts.join('\n\n') + TASK_VERIFICATION_SUFFIX;
     _taskStartedAt = Date.now(); // reset to accurate time after prompt building
     // Check if this is a restart: only skip saving if the LAST user message
     // has the exact same prompt (crash recovery). Previously checked for ANY
@@ -556,7 +557,7 @@ async function startTask(task) {
       fullText += notice;
       taskBuffers.set(task.id, (taskBuffers.get(task.id) || '') + notice);
       broadcastToSession(sessionId, { type: 'text', text: notice, tabId: sessionId });
-      currentTaskPrompt = 'Continue where you left off. Complete the remaining work.';
+      currentTaskPrompt = 'Continue where you left off. Complete the remaining work. When finished, run the MANDATORY POST-TASK VERIFICATION from your original instructions.';
     }
 
     // After loop: persist text and determine task status
@@ -806,8 +807,9 @@ function loadMergedConfig() {
   try { g = JSON.parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')); } catch {}
   try { l = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch {}
   _mergedConfigCache = {
-    mcpServers: { ...(g.mcpServers||{}), ...(l.mcpServers||{}) },
-    skills:     { ...(g.skills||{}),     ...(l.skills||{})     },
+    mcpServers:    { ...(g.mcpServers||{}), ...(l.mcpServers||{}) },
+    skills:        { ...(g.skills||{}),     ...(l.skills||{})     },
+    slashCommands: [...(l.slashCommands||[])],
   };
   return _mergedConfigCache;
 }
@@ -865,6 +867,38 @@ const STATUS_LINE_INSTRUCTION = `\n\nIMPORTANT: Always end your response with a 
 This status line must always be the very last thing in your response. Never skip it.`;
 
 const TOOL_CALL_INSTRUCTION = `\n\nCRITICAL: After finishing tool calls (Read, Bash, Edit, Write, Grep, etc.), you MUST write a final text response with the status line. NEVER end your turn on a tool call without a text summary. The user cannot see tool results — they only see your text. If you called tools, summarize what you found or did in 1-3 sentences, then add the "---" status line.`;
+
+// Mandatory verification suffix — appended to every Kanban task prompt.
+// Stays in context on --resume turns because it is part of the first user message.
+const TASK_VERIFICATION_SUFFIX = `
+
+---
+## MANDATORY POST-TASK VERIFICATION
+
+After completing all work above, run this verification loop BEFORE finishing:
+
+### Step 1 — Requirements Audit
+Re-read the task and list every requirement explicitly (numbered).
+
+### Step 2 — Proof of Completion
+For each requirement: run a command or inspect output that PROVES it is satisfied.
+Do NOT skip — execute actual commands and show the output.
+
+### Step 3 — Fix & Re-verify
+If any check fails: fix it immediately, then re-run the exact check to confirm it passes.
+
+### Step 4 — Self-Audit
+Ask: "If a senior engineer reviews this right now, would they approve without any changes?"
+If the answer is no — fix the issues first.
+
+### Verification Report (required, always at the end)
+\`\`\`
+VERIFICATION:
+✅ [requirement 1]: [command / output as proof]
+✅ [requirement 2]: [command / output as proof]
+❌ [requirement N]: ISSUE FOUND → FIXED: [what was done] → ✅ confirmed
+FINAL: ✅ All requirements verified [/ ⚠️ N issues found and fixed]
+\`\`\``;
 
 /**
  * Build system prompt for a chat turn.
@@ -1651,6 +1685,14 @@ app.post('/api/sessions', (req, res) => {
   res.json(stmts.getSession.get(id));
 });
 app.get('/api/sessions/interrupted', (req, res) => { res.json(stmts.getInterrupted.all()); });
+app.post('/api/sessions/reorder', (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'no ids' });
+  const update = db.prepare(`UPDATE sessions SET sort_order=? WHERE id=?`);
+  const tx = db.transaction(() => { ids.forEach((id, i) => update.run(i, String(id))); });
+  tx();
+  res.json({ ok: true });
+});
 app.get('/api/sessions/:id', (req,res) => {
   const s = stmts.getSession.get(req.params.id);
   if (!s) return res.status(404).json({ error: 'Not found' });
@@ -1883,6 +1925,42 @@ app.post('/api/skills/upload', upload.single('file'), (req,res) => {
   const c=loadConfig(); c.skills[id]={label:req.body.label||`📄 ${name}`,description:req.body.description||'Custom',file:destFile,custom:true}; saveConfig(c); res.json({ok:true,id});
 });
 app.delete('/api/skills/:id', (req,res) => { const c=loadConfig(); const s=c.skills[req.params.id]; if(s?.custom){try{fs.unlinkSync(path.join(APP_DIR,s.file))}catch{} delete c.skills[req.params.id]; saveConfig(c)} res.json({ok:true}); });
+
+// ============================================
+// SLASH COMMANDS CRUD
+// ============================================
+app.post('/api/commands', (req, res) => {
+  const { name, text } = req.body;
+  if (!name || !text) return res.status(400).json({ error: 'name and text required' });
+  const c = loadConfig();
+  if (!c.slashCommands) c.slashCommands = [];
+  const id = Date.now().toString();
+  const safeName = name.startsWith('/') ? name : '/' + name;
+  c.slashCommands.push({ id, name: safeName, text });
+  saveConfig(c);
+  res.json({ ok: true, id });
+});
+
+app.put('/api/commands/:id', (req, res) => {
+  const { name, text } = req.body;
+  if (!name || !text) return res.status(400).json({ error: 'name and text required' });
+  const c = loadConfig();
+  if (!c.slashCommands) c.slashCommands = [];
+  const cmd = c.slashCommands.find(cmd => cmd.id === req.params.id);
+  if (!cmd) return res.status(404).json({ error: 'Not found' });
+  cmd.name = name.startsWith('/') ? name : '/' + name;
+  cmd.text = text;
+  saveConfig(c);
+  res.json({ ok: true });
+});
+
+app.delete('/api/commands/:id', (req, res) => {
+  const c = loadConfig();
+  if (!c.slashCommands) c.slashCommands = [];
+  c.slashCommands = c.slashCommands.filter(cmd => cmd.id !== req.params.id);
+  saveConfig(c);
+  res.json({ ok: true });
+});
 
 // ============================================
 // FILE UPLOAD  (images / text / PDF)
@@ -2189,6 +2267,17 @@ app.post('/api/projects', (req,res) => {
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
+app.post('/api/projects/reorder', (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'no ids' });
+  const all = loadProjects();
+  const byId = Object.fromEntries(all.map(p => [p.id, p]));
+  const ordered = ids.map(id => byId[id]).filter(Boolean);
+  const inSet = new Set(ids);
+  all.filter(p => !inSet.has(p.id)).forEach(p => ordered.push(p));
+  saveProjects(ordered);
+  res.json({ ok: true });
+});
 app.patch('/api/projects/:id', (req,res) => {
   const { name } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error:'name required' });
@@ -2325,7 +2414,7 @@ wss.on('connection', (ws) => {
       type: 'queue_update',
       tabId,
       pending: queue.length,
-      items: queue.map(m => ({ id: m._queueId, queueId: m.queueId || null, text: m.text || '' })),
+      items: queue.map(m => ({ id: m._queueId, queueId: m.queueId || null, text: m.text || '', attachments: m.attachments || [] })),
     });
   }
 

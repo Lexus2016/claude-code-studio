@@ -195,6 +195,8 @@ body::after {
 #rlTooltip .rl-bar { height:5px; border-radius:3px; background:rgba(255,255,255,.1); margin:8px 0 5px; overflow:hidden; }
 #rlTooltip .rl-bar-fill { height:100%; border-radius:3px; background:#f59e0b; transition:width .4s; }
 #rlTooltip .rl-bar-fill.rl-crit { background:#ef4444; }
+#rlBadge .rl-dismiss { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:3px; border:none; background:transparent; color:currentColor; opacity:.55; cursor:pointer; padding:0; font-size:13px; line-height:1; margin-left:1px; }
+#rlBadge .rl-dismiss:hover { opacity:1; background:rgba(255,255,255,.12); }
 
 /* ─── Rate limit rejected modal ─── */
 #rlRejectedModal .confirm-dialog { width: 360px; }
@@ -244,6 +246,12 @@ body::after {
 .ci .ren:hover { opacity: 1 !important; color: var(--accent2); background: rgba(124,106,239,.1); }
 .proj-rename-input { font-size: 13px; font-weight: 600; font-family: inherit; color: var(--text); background: var(--s2); border: 1px solid var(--accent); border-radius: 5px; padding: 1px 6px; outline: none; width: 100%; min-width: 0; }
 .ci .warn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--orange); flex-shrink: 0; margin-right: -4px; }
+/* ─── Projects drag-and-drop ─── */
+.ci .proj-drag-handle { opacity: 0; color: var(--muted); cursor: grab; font-size: 11px; padding: 0 2px; flex-shrink: 0; transition: opacity .12s; user-select: none; letter-spacing: -1px; line-height: 1; align-self: center; }
+.ci:hover .proj-drag-handle { opacity: .45; }
+.ci.dragging { opacity: .35; }
+.ci.drag-over-top { box-shadow: 0 -2px 0 0 var(--accent) !important; }
+.ci.drag-over-bottom { box-shadow: 0 2px 0 0 var(--accent) !important; }
 .af select { background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 6px 9px; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; cursor: pointer; transition: border .12s; }
 .af select:focus { border-color: var(--accent); }
 #mcpStdioFields, #mcpUrlFields { display: flex; flex-direction: column; gap: 6px; }
@@ -284,6 +292,13 @@ body::after {
 .hist-selmode .hist-item .del { display: none !important; }
 .hist-selmode .hist-item { cursor: default; }
 .hist-selmode .hist-item.selected { background: var(--abg) !important; }
+/* ─── History drag-and-drop ─── */
+.hist-item .drag-handle { opacity: 0; color: var(--muted); cursor: grab; font-size: 11px; padding: 0 2px; flex-shrink: 0; transition: opacity .12s; user-select: none; letter-spacing: -1px; line-height: 1; }
+.hist-item:hover .drag-handle { opacity: .45; }
+.hist-item.dragging { opacity: .35; background: var(--s2); }
+.hist-item.drag-over-top { box-shadow: 0 -2px 0 0 var(--accent); }
+.hist-item.drag-over-bottom { box-shadow: 0 2px 0 0 var(--accent); }
+.hist-selmode .hist-item .drag-handle { display: none; }
 .hist-bulk-bar { display: none; padding: 5px 8px; gap: 5px; border-top: 1px solid var(--border); margin-top: 2px; }
 .hist-bulk-bar.visible { display: flex; align-items: center; }
 .hist-bulk-bar .bulk-info { font-size: 11px; color: var(--muted); flex: 1; }
@@ -829,7 +844,15 @@ body::after {
 .att-chip .chip-rm { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 0 0 2px; font-size: 13px; line-height: 1; flex-shrink: 0; transition: color .1s; }
 .att-chip .chip-rm:hover { color: var(--red); }
 .att-chip.chip-img { padding: 3px 8px 3px 3px; gap: 6px; }
-.att-chip.chip-img img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; display: block; }
+.att-chip.chip-img img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; display: block; cursor: zoom-in; }
+
+/* ─── Image chip hover preview ─── */
+#imgChipPreview {
+  position: fixed; z-index: 9999; pointer-events: none; display: none;
+  background: var(--s1); border: 1px solid var(--border); border-radius: 10px;
+  padding: 5px; box-shadow: 0 8px 32px rgba(0,0,0,.55);
+}
+#imgChipPreview img { display: block; max-width: 320px; max-height: 260px; object-fit: contain; border-radius: 7px; }
 
 /* ─── @ File picker popup ─── */
 .at-popup {
@@ -848,6 +871,11 @@ body::after {
 .at-item .at-dir { color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 .at-item .at-icon { font-size: 14px; flex-shrink: 0; }
 .at-empty { padding: 12px; text-align: center; color: var(--muted); font-size: 11px; }
+/* Slash commands popup — larger, easier to read */
+#slashPopup .at-popup-hdr { padding: 9px 14px; font-size: 13px; }
+#slashPopup .at-item { padding: 10px 14px; font-size: 14px; gap: 10px; }
+#slashPopup .at-item .at-name { font-size: 14px; }
+#slashPopup .at-item .at-dir { font-size: 12px; margin-top: 3px; white-space: normal; line-height: 1.4; }
 .at-loading { padding: 12px; text-align: center; color: var(--muted); font-size: 11px; }
 
 /* ─── Welcome ─── */
@@ -981,12 +1009,16 @@ body::after {
 .ask-user-card .ask-skip:hover { color: var(--text); border-color: var(--muted); }
 .ask-user-card .ask-timer { font-size: 11px; color: var(--muted); margin-left: auto; }
 .ask-user-card.ask-answered {
-  border-color: var(--green); opacity: .7; pointer-events: none;
+  border-color: var(--green); opacity: .75; pointer-events: none;
+  padding: 10px 14px; transition: padding .2s;
 }
 .ask-user-card.ask-answered .ask-btns { display: none; }
 .ask-user-card.ask-answered .ask-timer { display: none; }
+.ask-user-card.ask-answered .ask-page { display: none; }
+.ask-user-card.ask-answered .ask-header { display: none; }
+.ask-user-card.ask-answered .ask-pagination { display: none; }
 .ask-user-card .ask-answer-display {
-  display: none; margin-top: 10px; padding: 8px 12px; background: rgba(63,185,80,.08);
+  display: none; padding: 6px 10px; background: rgba(63,185,80,.08);
   border: 1px solid rgba(63,185,80,.25); border-radius: var(--r-sm); font-size: 13px; color: var(--green);
 }
 .ask-user-card.ask-answered .ask-answer-display { display: block; }
@@ -1194,6 +1226,8 @@ body::after {
 /* ─── History hover accent ─── */
 .hist-item { transition: background .12s, box-shadow .12s; }
 .hist-item:hover { background: var(--s2); box-shadow: inset 2px 0 0 rgba(124,106,239,.3); }
+.hist-item.drag-over-top:hover { box-shadow: 0 -2px 0 0 var(--accent); }
+.hist-item.drag-over-bottom:hover { box-shadow: 0 2px 0 0 var(--accent); }
 
 /* ─── Language selector ─── */
 .lang-sel { background: var(--s2); border: 1px solid var(--border); color: var(--text); padding: 3px 8px; border-radius: 6px; font-size: 12px; outline: none; cursor: pointer; font-weight: 500; }
@@ -1491,26 +1525,29 @@ body::after {
     <!-- SSH Hosts section -->
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('sshHosts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('sshHosts')}">
-        <span>🌐 SSH Хости</span>
+        <span data-i18n="sec.sshHosts">SSH Хости</span>
         <span class="badge" id="sshHostCount"></span>
       </div>
       <div class="sec-body" id="sshHostsBody">
         <div id="sshHostList"></div>
-        <button class="add-btn" onclick="openAddHostModal()">＋ Додати SSH хост</button>
+        <button class="add-btn" onclick="openAddHostModal()" data-i18n="ssh.add">＋ Додати SSH хост</button>
       </div>
     </div>
 
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('hist')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('hist')}">
-        <span><span data-i18n="sec.chats">Чати</span> <span class="badge" id="histCount">0</span></span>
-        <button class="hist-select-btn" id="histSelBtn" onclick="event.stopPropagation();toggleHistSelect()" title="Вибрати кілька">☑</button>
+        <span data-i18n="sec.chats">Чати</span>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+          <span class="badge" id="histCount">0</span>
+          <button class="hist-select-btn" id="histSelBtn" onclick="event.stopPropagation();toggleHistSelect()" data-i18n-title="hist.sel.title" title="Вибрати кілька">☑</button>
+        </div>
       </div>
       <div class="sec-body" id="histBody">
         <div class="hist-list" id="histList"></div>
         <div class="hist-bulk-bar" id="histBulkBar">
-          <span class="bulk-info" id="histBulkInfo">0 вибрано</span>
-          <button class="bulk-all" onclick="selectAllHist()">Всі</button>
-          <button class="bulk-del" id="histBulkDel" onclick="delSelectedHist()" disabled>Видалити</button>
+          <span class="bulk-info" id="histBulkInfo" data-i18n="bulk.info">0 вибрано</span>
+          <button class="bulk-all" onclick="selectAllHist()" data-i18n="bulk.all">Всі</button>
+          <button class="bulk-del" id="histBulkDel" onclick="delSelectedHist()" disabled data-i18n="bulk.del">Видалити</button>
         </div>
       </div>
     </div>
@@ -1569,6 +1606,26 @@ body::after {
         <input type="file" id="skillUpload" accept=".md,.txt" style="display:none" onchange="uploadSkill(this)">
       </div>
     </div>
+
+    <div class="sec">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('cmds')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('cmds')}">
+        <span data-i18n="sec.cmds">/ Команди</span>
+        <span class="badge" id="cmdsCount"></span>
+      </div>
+      <div class="sec-body" id="cmdsBody">
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="cmds.hint">Слеш-команди — шорткати до промптів. Набирайте / в чаті.</div>
+        <div id="cmdsList"></div>
+        <div id="cmdForm" style="display:none" class="af">
+          <input id="cmdName" data-i18n-ph="cmd.name.ph" placeholder="/назва (напр. /check)" autocomplete="off">
+          <textarea id="cmdText" data-i18n-ph="cmd.text.ph" placeholder="Повний текст промпту..." style="min-height:60px;resize:vertical;font-family:inherit;font-size:12px;padding:6px 8px;background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text);outline:none"></textarea>
+          <div class="fr">
+            <button class="bp" id="cmdSaveBtn" onclick="saveCommand()">Add</button>
+            <button class="bg" onclick="cancelCmdForm()">✕</button>
+          </div>
+        </div>
+        <button class="add-btn" onclick="openCmdForm()" data-i18n="cmd.add.new">＋ Додати команду</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1616,6 +1673,7 @@ body::after {
       <div id="rlBadge">
         <span class="rl-dot"></span>
         <span class="rl-label" id="rlBadgeLabel">Max ⚠</span>
+        <button class="rl-dismiss" onclick="event.stopPropagation();_rlClear()" title="Закрити">×</button>
         <div id="rlTooltip">
           <div class="rl-tt-title"><span id="rl-tt-icon">⚠️</span> <span id="rl-tt-title-text" data-i18n="rl.title.warn">Наближається ліміт</span></div>
           <div class="rl-bar"><div class="rl-bar-fill" id="rl-bar-fill"></div></div>
@@ -1705,6 +1763,11 @@ body::after {
         <input id="atSearch" data-i18n-ph="at.search" placeholder="Search file..." autocomplete="off" oninput="onAtSearch(this.value)">
       </div>
       <div class="at-popup-list" id="atList"></div>
+    </div>
+    <!-- Slash commands popup -->
+    <div class="at-popup hidden" id="slashPopup">
+      <div class="at-popup-hdr"><span>⚡</span><span data-i18n="cmds.popup.hdr" style="flex:1;font-size:12px;color:var(--text)">Команди</span></div>
+      <div class="at-popup-list" id="slashList"></div>
     </div>
     <!-- Attachment chips (files + screenshots) -->
     <div class="att-chips" id="attChips"></div>
@@ -1867,8 +1930,8 @@ body::after {
 
     <!-- Local / Remote toggle -->
     <div class="proj-type-toggle">
-      <button class="proj-type-btn active" id="projTypeLocal" onclick="setProjType('local')">📁 Локальний</button>
-      <button class="proj-type-btn" id="projTypeRemote" onclick="setProjType('remote')">🌐 Віддалений SSH</button>
+      <button class="proj-type-btn active" id="projTypeLocal" onclick="setProjType('local')" data-i18n="proj.type.local">📁 Локальний</button>
+      <button class="proj-type-btn" id="projTypeRemote" onclick="setProjType('remote')" data-i18n="proj.type.remote">🌐 Віддалений SSH</button>
     </div>
 
     <!-- LOCAL section -->
@@ -1885,19 +1948,19 @@ body::after {
     <div id="projRemoteSection" style="display:none">
       <div class="remote-form">
         <div class="rh-form-row">
-          <span class="rh-label">SSH Хост:</span>
+          <span class="rh-label" data-i18n="dir.ssh_host">SSH Хост:</span>
           <select id="remoteHostSelect" style="flex:1">
             <option value="">— оберіть хост —</option>
           </select>
-          <button class="bg" onclick="openAddHostModal()" style="padding:5px 10px;font-size:12px;flex-shrink:0">＋ Новий</button>
+          <button class="bg" onclick="openAddHostModal()" style="padding:5px 10px;font-size:12px;flex-shrink:0" data-i18n="dir.remote.add_new">＋ Новий</button>
         </div>
         <div class="rh-form-row">
-          <span class="rh-label">Шлях на сервері:</span>
+          <span class="rh-label" data-i18n="dir.remote.path">Шлях на сервері:</span>
           <input id="remoteWorkdirInput" placeholder="/home/user/myproject" style="flex:1">
         </div>
         <div class="rh-form-row">
           <span class="rh-label"></span>
-          <button class="bg" onclick="testSelectedHost()" style="padding:5px 12px;font-size:12px">🔌 Тест з'єднання</button>
+          <button class="bg" onclick="testSelectedHost()" style="padding:5px 12px;font-size:12px" data-i18n="dir.remote.test">🔌 Тест з'єднання</button>
           <div class="rh-test-result" id="remoteTestResult"></div>
         </div>
       </div>
@@ -1923,49 +1986,49 @@ body::after {
 <div class="modal-overlay hidden" id="sshHostModal" onclick="if(event.target===this)closeSshHostModal()">
   <div class="modal ssh-host-modal">
     <div class="modal-hdr">
-      <h2 id="sshHostModalTitle">🌐 Додати SSH хост</h2>
+      <h2 id="sshHostModalTitle" data-i18n="ssh.modal.add.title">🌐 Додати SSH хост</h2>
       <button class="modal-close" onclick="closeSshHostModal()">✕</button>
     </div>
     <div class="ssh-host-form">
       <div>
-        <label>Назва хоста *</label>
-        <input id="sshHostLabel" placeholder="Мій продакшн сервер">
+        <label data-i18n="ssh.modal.label">Назва хоста *</label>
+        <input id="sshHostLabel" data-i18n-ph="ssh.modal.label.ph" placeholder="Мій продакшн сервер">
       </div>
       <div>
-        <label>Хост (user@host або host) *</label>
+        <label data-i18n="ssh.modal.host">Хост (user@host або host) *</label>
         <input id="sshHostHost" placeholder="deploy@eu.myserver.com">
       </div>
       <div class="rh-form-row" style="gap:12px">
         <div style="flex:1">
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">Порт</label>
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" data-i18n="ssh.modal.port">Порт</label>
           <input id="sshHostPort" type="number" placeholder="22" value="22" style="width:100%;box-sizing:border-box">
         </div>
         <div style="flex:3">
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">Метод автентифікації</label>
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" data-i18n="ssh.modal.auth">Метод автентифікації</label>
           <div style="display:flex;gap:6px">
-            <button class="proj-type-btn active" id="sshAuthBtnKey" onclick="setAuthType('key')" style="flex:1;padding:5px 0;font-size:11px">🔑 SSH ключ</button>
-            <button class="proj-type-btn" id="sshAuthBtnPwd" onclick="setAuthType('pwd')" style="flex:1;padding:5px 0;font-size:11px">🔐 Пароль</button>
+            <button class="proj-type-btn active" id="sshAuthBtnKey" onclick="setAuthType('key')" style="flex:1;padding:5px 0;font-size:11px" data-i18n="ssh.modal.auth.key">🔑 SSH ключ</button>
+            <button class="proj-type-btn" id="sshAuthBtnPwd" onclick="setAuthType('pwd')" style="flex:1;padding:5px 0;font-size:11px" data-i18n="ssh.modal.auth.pwd">🔐 Пароль</button>
           </div>
         </div>
       </div>
       <div id="sshHostKeyRow">
-        <label>Шлях до SSH ключа (необов'язково)</label>
+        <label data-i18n="ssh.modal.keypath">Шлях до SSH ключа (необов'язково)</label>
         <input id="sshHostKey" placeholder="~/.ssh/id_rsa">
       </div>
       <div id="sshHostPasswordRow" class="hidden">
-        <label>Пароль</label>
+        <label data-i18n="ssh.modal.password">Пароль</label>
         <input id="sshHostPassword" type="password" placeholder="••••••••" autocomplete="current-password">
       </div>
-      <div style="font-size:11px;color:var(--muted);line-height:1.5;padding:2px 0">
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;padding:2px 0" data-i18n="ssh.modal.tip">
         💡 SSH ключ: без пароля або доданий у ssh-agent. Перше підключення автоматично підтвердить fingerprint. Пароль зберігається у відкритому вигляді — рекомендуємо використовувати ключ.
       </div>
       <div class="rh-test-result" id="sshHostTestResult"></div>
     </div>
     <div class="dir-footer">
-      <button class="bg" onclick="testNewSshHost()" style="padding:6px 14px">🔌 Тест</button>
+      <button class="bg" onclick="testNewSshHost()" style="padding:6px 14px" data-i18n="ssh.modal.test">🔌 Тест</button>
       <div style="flex:1"></div>
-      <button class="bg" onclick="closeSshHostModal()" style="padding:6px 14px">Скасувати</button>
-      <button class="bp" id="sshHostSaveBtn" onclick="saveNewSshHost()" style="padding:6px 14px">＋ Зберегти хост</button>
+      <button class="bg" onclick="closeSshHostModal()" style="padding:6px 14px" data-i18n="ssh.modal.cancel">Скасувати</button>
+      <button class="bp" id="sshHostSaveBtn" onclick="saveNewSshHost()" style="padding:6px 14px" data-i18n="ssh.modal.save">＋ Зберегти хост</button>
     </div>
   </div>
 </div>
@@ -2002,6 +2065,9 @@ body::after {
 
 <!-- Toast -->
 <div id="toast"></div>
+
+<!-- Image chip hover preview -->
+<div id="imgChipPreview"><img id="imgChipPreviewImg" src="" alt=""></div>
 
 <!-- Notifications (non-blocking, from notify_user MCP) -->
 <div id="notifContainer"></div>
@@ -2183,6 +2249,34 @@ const TRANSLATIONS = {
     'ta.calls':'операцій','ta.activity':'Активність',
     'msf.team':'Команда агентів',
     'hdr.toggle':'Згорнути/розгорнути панель','msg.show_more':'Показати більше','msg.show_less':'Показати менше',
+    'sec.cmds':'/ Команди','cmds.hint':'Слеш-команди — шорткати до промптів. Набирайте / в чаті.',
+    'cmd.name.ph':'/назва (напр. /check)','cmd.text.ph':'Повний текст промпту...','cmd.add.btn':'Додати','cmd.save.btn':'Зберегти',
+    'cmd.add.new':'＋ Додати команду','cmd.edit.title':'Редагувати','cmd.del.title':'Видалити','cmd.del.confirm':'Видалити команду',
+    'cmd.err.empty':'Введіть назву та текст команди','toast.cmd_added':'✓ Команду додано','toast.cmd_updated':'✓ Команду оновлено',
+    'cmds.popup.hdr':'Команди',
+    'sec.sshHosts':'SSH Хости',
+    'ssh.add':'＋ Додати SSH хост',
+    'ssh.no_hosts':'Немає налаштованих SSH хостів',
+    'ssh.del.title':'Видалити','ssh.edit.title':'Редагувати','ssh.test.title':'Тест з\'єднання',
+    'ssh.del.confirm':'Видалити хост "{name}"?','ssh.deleted':'✓ Хост видалено',
+    'ssh.modal.add.title':'🌐 Додати SSH хост','ssh.modal.edit.title':'✏️ Редагувати SSH хост',
+    'ssh.modal.save':'＋ Зберегти хост','ssh.modal.update':'💾 Оновити хост',
+    'ssh.modal.label':'Назва хоста *','ssh.modal.label.ph':'Мій продакшн сервер',
+    'ssh.modal.host':'Хост (user@host або host) *','ssh.modal.port':'Порт',
+    'ssh.modal.auth':'Метод автентифікації','ssh.modal.auth.key':'🔑 SSH ключ','ssh.modal.auth.pwd':'🔐 Пароль',
+    'ssh.modal.keypath':'Шлях до SSH ключа (необов\'язково)','ssh.modal.password':'Пароль',
+    'ssh.modal.tip':'💡 SSH ключ: без пароля або доданий у ssh-agent. Перше підключення автоматично підтвердить fingerprint. Пароль зберігається у відкритому вигляді — рекомендуємо використовувати ключ.',
+    'ssh.modal.test':'🔌 Тест','ssh.modal.cancel':'Скасувати',
+    'ssh.testing':'Перевірка...','ssh.connecting':'⏳ Підключення...','ssh.conn_err':'✗ Помилка підключення',
+    'ssh.err.no_host':'Вкажіть хост','ssh.err.no_label':'Вкажіть назву','ssh.err':'Помилка',
+    'ssh.saved':'✓ Хост "{name}" збережено','ssh.updated':'✓ Хост "{name}" оновлено',
+    'ssh.select.ph':'— оберіть хост —','ssh.sel.err':'Оберіть хост',
+    'bulk.info':'{n} вибрано','bulk.all':'Всі','bulk.deselect':'Зняти всі','bulk.del':'Видалити',
+    'hist.sel.title':'Вибрати кілька','toast.del_err':'Помилка видалення',
+    'proj.type.local':'📁 Локальний','proj.type.remote':'🌐 Віддалений SSH',
+    'dir.ssh_host':'SSH Хост:','dir.remote.path':'Шлях на сервері:',
+    'dir.remote.test':'🔌 Тест з\'єднання','dir.remote.add_new':'＋ Новий',
+    'dir.remote.err.no_host':'Оберіть SSH хост','dir.remote.err.no_path':'Вкажіть шлях на сервері',
   },
   en: {
     'sec.proactive':'Status',
@@ -2297,6 +2391,34 @@ const TRANSLATIONS = {
     'ta.calls':'calls','ta.activity':'Activity',
     'msf.team':'Agent Team',
     'hdr.toggle':'Collapse/expand header','msg.show_more':'Show more','msg.show_less':'Show less',
+    'sec.cmds':'/ Commands','cmds.hint':'Slash commands — shortcuts to prompts. Type / in chat.',
+    'cmd.name.ph':'/name (e.g. /check)','cmd.text.ph':'Full prompt text...','cmd.add.btn':'Add','cmd.save.btn':'Save',
+    'cmd.add.new':'＋ Add command','cmd.edit.title':'Edit','cmd.del.title':'Delete','cmd.del.confirm':'Delete command',
+    'cmd.err.empty':'Enter name and prompt text','toast.cmd_added':'✓ Command added','toast.cmd_updated':'✓ Command updated',
+    'cmds.popup.hdr':'Commands',
+    'sec.sshHosts':'SSH Hosts',
+    'ssh.add':'＋ Add SSH host',
+    'ssh.no_hosts':'No SSH hosts configured',
+    'ssh.del.title':'Delete','ssh.edit.title':'Edit','ssh.test.title':'Test connection',
+    'ssh.del.confirm':'Delete host "{name}"?','ssh.deleted':'✓ Host removed',
+    'ssh.modal.add.title':'🌐 Add SSH host','ssh.modal.edit.title':'✏️ Edit SSH host',
+    'ssh.modal.save':'＋ Save host','ssh.modal.update':'💾 Update host',
+    'ssh.modal.label':'Host name *','ssh.modal.label.ph':'My production server',
+    'ssh.modal.host':'Host (user@host or host) *','ssh.modal.port':'Port',
+    'ssh.modal.auth':'Authentication method','ssh.modal.auth.key':'🔑 SSH key','ssh.modal.auth.pwd':'🔐 Password',
+    'ssh.modal.keypath':'SSH key path (optional)','ssh.modal.password':'Password',
+    'ssh.modal.tip':'💡 SSH key: no passphrase or added to ssh-agent. First connection will auto-confirm the fingerprint. Password is stored in plain text — we recommend using a key.',
+    'ssh.modal.test':'🔌 Test','ssh.modal.cancel':'Cancel',
+    'ssh.testing':'Testing...','ssh.connecting':'⏳ Connecting...','ssh.conn_err':'✗ Connection error',
+    'ssh.err.no_host':'Enter host','ssh.err.no_label':'Enter name','ssh.err':'Error',
+    'ssh.saved':'✓ Host "{name}" saved','ssh.updated':'✓ Host "{name}" updated',
+    'ssh.select.ph':'— select host —','ssh.sel.err':'Select a host',
+    'bulk.info':'{n} selected','bulk.all':'All','bulk.deselect':'Deselect all','bulk.del':'Delete',
+    'hist.sel.title':'Select multiple','toast.del_err':'Delete error',
+    'proj.type.local':'📁 Local','proj.type.remote':'🌐 Remote SSH',
+    'dir.ssh_host':'SSH Host:','dir.remote.path':'Server path:',
+    'dir.remote.test':'🔌 Test connection','dir.remote.add_new':'＋ New',
+    'dir.remote.err.no_host':'Select SSH host','dir.remote.err.no_path':'Enter server path',
   },
   ru: {
     'sec.proactive':'Статус',
@@ -2411,6 +2533,34 @@ const TRANSLATIONS = {
     'ta.calls':'операций','ta.activity':'Активность',
     'msf.team':'Команда агентов',
     'hdr.toggle':'Свернуть/развернуть панель','msg.show_more':'Показать больше','msg.show_less':'Показать меньше',
+    'sec.cmds':'/ Команды','cmds.hint':'Слеш-команды — шорткаты к промптам. Набирайте / в чате.',
+    'cmd.name.ph':'/название (напр. /check)','cmd.text.ph':'Полный текст промпта...','cmd.add.btn':'Добавить','cmd.save.btn':'Сохранить',
+    'cmd.add.new':'＋ Добавить команду','cmd.edit.title':'Редактировать','cmd.del.title':'Удалить','cmd.del.confirm':'Удалить команду',
+    'cmd.err.empty':'Введите название и текст команды','toast.cmd_added':'✓ Команда добавлена','toast.cmd_updated':'✓ Команда обновлена',
+    'cmds.popup.hdr':'Команды',
+    'sec.sshHosts':'SSH Хосты',
+    'ssh.add':'＋ Добавить SSH хост',
+    'ssh.no_hosts':'Нет настроенных SSH хостов',
+    'ssh.del.title':'Удалить','ssh.edit.title':'Редактировать','ssh.test.title':'Тест подключения',
+    'ssh.del.confirm':'Удалить хост "{name}"?','ssh.deleted':'✓ Хост удалён',
+    'ssh.modal.add.title':'🌐 Добавить SSH хост','ssh.modal.edit.title':'✏️ Редактировать SSH хост',
+    'ssh.modal.save':'＋ Сохранить хост','ssh.modal.update':'💾 Обновить хост',
+    'ssh.modal.label':'Имя хоста *','ssh.modal.label.ph':'Мой продакшн сервер',
+    'ssh.modal.host':'Хост (user@host или host) *','ssh.modal.port':'Порт',
+    'ssh.modal.auth':'Метод аутентификации','ssh.modal.auth.key':'🔑 SSH ключ','ssh.modal.auth.pwd':'🔐 Пароль',
+    'ssh.modal.keypath':'Путь к SSH ключу (необязательно)','ssh.modal.password':'Пароль',
+    'ssh.modal.tip':'💡 SSH ключ: без пароля или добавлен в ssh-agent. Первое подключение автоматически подтвердит fingerprint. Пароль хранится в открытом виде — рекомендуем использовать ключ.',
+    'ssh.modal.test':'🔌 Тест','ssh.modal.cancel':'Отмена',
+    'ssh.testing':'Проверка...','ssh.connecting':'⏳ Подключение...','ssh.conn_err':'✗ Ошибка подключения',
+    'ssh.err.no_host':'Укажите хост','ssh.err.no_label':'Укажите имя','ssh.err':'Ошибка',
+    'ssh.saved':'✓ Хост "{name}" сохранён','ssh.updated':'✓ Хост "{name}" обновлён',
+    'ssh.select.ph':'— выберите хост —','ssh.sel.err':'Выберите хост',
+    'bulk.info':'{n} выбрано','bulk.all':'Все','bulk.deselect':'Снять все','bulk.del':'Удалить',
+    'hist.sel.title':'Выбрать несколько','toast.del_err':'Ошибка удаления',
+    'proj.type.local':'📁 Локальный','proj.type.remote':'🌐 Удалённый SSH',
+    'dir.ssh_host':'SSH Хост:','dir.remote.path':'Путь на сервере:',
+    'dir.remote.test':'🔌 Тест подключения','dir.remote.add_new':'＋ Новый',
+    'dir.remote.err.no_host':'Выберите SSH хост','dir.remote.err.no_path':'Укажите путь на сервере',
   }
 };
 function t(key) {
@@ -3020,6 +3170,8 @@ function handleWsMsg(d) {
       else renderProjects(); // background: remove busy dot from project
       loadHist();
       if (tabId === activeTabId) updateSessBar();
+      // If rate-limit badge shows 'rejected' but message completed — limit must have reset
+      if (_rlInfo && _rlInfo.status === 'rejected') _rlClear();
       break;
 
     case 'files_changed':
@@ -3177,6 +3329,17 @@ function handleWsMsg(d) {
             const w = addMsg('user');
             w.dataset.queueId = item.queueId;
             w.querySelector('.msg').textContent = item.text || '';
+            // Restore attachment chips if any
+            if (item.attachments?.length) {
+              const chipsDiv = document.createElement('div');
+              chipsDiv.className = 'att-chips';
+              chipsDiv.style.cssText = 'padding:4px 0 2px';
+              chipsDiv.innerHTML = item.attachments.map(a => a.type && a.type.startsWith('image/')
+                ? `<div class="att-chip chip-img"><img src="data:${a.type};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name||'image')}</span></div>`
+                : `<div class="att-chip"><span class="chip-icon">📄</span><span class="chip-name">${escH(a.name||'file')}</span></div>`
+              ).join('');
+              w.insertBefore(chipsDiv, w.querySelector('.msg'));
+            }
             const qb = document.createElement('div');
             qb.className = 'msg-queued';
             qb.innerHTML = `<span class="mq-label">${t('queue.label')}</span><button class="qd-btn qd-edit" onclick="editQueuedMsg(this)" title="${t('queue.edit.title')}">✏</button><button class="qd-btn qd-del" onclick="deleteQueuedMsg(this)" title="${t('queue.del.title')}">✕</button>`;
@@ -3298,8 +3461,11 @@ function _rlTypeLabel(info) {
 
 function updateRateLimit(info) {
   if (!info) return;
-  // Only show for CLI engine (Max subscription) — status 'allowed' without warning = skip
-  if (info.status === 'allowed' && !info.surpassedThreshold) return;
+  // If allowed and below threshold — clear stale badge if one was shown, then exit
+  if (info.status === 'allowed' && !info.surpassedThreshold) {
+    if (_rlInfo) _rlClear(); // limit was reset — remove stale badge
+    return;
+  }
 
   _rlInfo = info;
   const pct    = Math.round((info.utilization || 0) * 100);
@@ -3472,16 +3638,22 @@ function _rlUpdateCountdown() {
   if (diff <= 0) {
     // Limit reset — hide badge, clear storage
     $i('rl-tt-countdown').textContent = t('rl.reset.done');
-    badge.style.display = 'none';
-    if (_rlCountdownTimer) { clearInterval(_rlCountdownTimer); _rlCountdownTimer = null; }
-    _rlInfo = null;
-    _rlLastAlertedPct = 0;
-    try { localStorage.removeItem(RL_STORAGE_KEY); } catch {}
+    _rlClear();
     return;
   }
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
   $i('rl-tt-countdown').textContent = h > 0 ? `${h}${t('rl.time.h')} ${m}${t('rl.time.m')}` : `${m}${t('rl.time.m')}`;
+}
+// ── Clear badge + state (limit reset or dropped below threshold) ──
+function _rlClear() {
+  const badge = $i('rlBadge');
+  if (badge) badge.style.display = 'none';
+  if (_rlCountdownTimer) { clearInterval(_rlCountdownTimer); _rlCountdownTimer = null; }
+  _rlInfo = null;
+  _rlLastAlertedPct = 0;
+  closeRlModal();
+  try { localStorage.removeItem(RL_STORAGE_KEY); } catch {}
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -4957,18 +5129,33 @@ function onAtSearch(query) {
   _atTimer = setTimeout(() => _fetchAtFiles(query), 180);
 }
 
-// Input: watch for @ trigger
+// Input: watch for @ and / triggers
 inEl.addEventListener('input', () => {
   const val = inEl.value, cur = inEl.selectionStart;
   const before = val.slice(0, cur);
+
+  // @ file picker
   const atIdx = before.lastIndexOf('@');
   if (atIdx >= 0) {
     const afterAt = before.slice(atIdx + 1);
     if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
+      if (_slashOpen) _closeSlashPopup();
       _openAtPopup(afterAt); return;
     }
   }
   if (!$i('atPopup').classList.contains('hidden')) _closeAtPopup();
+
+  // / slash commands
+  if ((config.slashCommands || []).length) {
+    const slashIdx = before.lastIndexOf('/');
+    if (slashIdx >= 0 && (slashIdx === 0 || /[\s]/.test(val[slashIdx - 1]))) {
+      const afterSlash = before.slice(slashIdx + 1);
+      if (!afterSlash.includes(' ') && !afterSlash.includes('\n')) {
+        _openSlashPopup(afterSlash); return;
+      }
+    }
+  }
+  if (_slashOpen) _closeSlashPopup();
 });
 
 // Keyboard navigation inside @ popup
@@ -4980,10 +5167,20 @@ inEl.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === 'Tab') && _atActiveIdx >= 0) { e.preventDefault(); selectAtFile(_atActiveIdx); return; }
 });
 
-// Close popup on click outside
+// Keyboard navigation inside slash popup
+inEl.addEventListener('keydown', e => {
+  if (!_slashOpen) return;
+  if (e.key === 'Escape') { _closeSlashPopup(); e.preventDefault(); return; }
+  if (e.key === 'ArrowDown') { e.preventDefault(); _slashActiveIdx = Math.min(_slashActiveIdx + 1, _slashMatches.length - 1); _renderSlashList(); $i('slashList').querySelector('.active')?.scrollIntoView({ block: 'nearest' }); return; }
+  if (e.key === 'ArrowUp') { e.preventDefault(); _slashActiveIdx = Math.max(_slashActiveIdx - 1, 0); _renderSlashList(); return; }
+  if ((e.key === 'Enter' || e.key === 'Tab') && _slashActiveIdx >= 0) { e.preventDefault(); _selectSlashCmd(_slashMatches[_slashActiveIdx]); return; }
+});
+
+// Close popups on click outside
 document.addEventListener('click', e => {
   const popup = $i('atPopup');
   if (popup && !popup.classList.contains('hidden') && !popup.contains(e.target) && e.target !== inEl) _closeAtPopup();
+  if (_slashOpen && !$i('slashPopup').contains(e.target) && e.target !== inEl) _closeSlashPopup();
 });
 
 // ─── Clipboard paste (screenshots) ───────────────────────────────────────
@@ -5227,6 +5424,7 @@ inEl.addEventListener('input', () => {
 inEl.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) {
     if (!$i('atPopup').classList.contains('hidden')) return; // let @ handler deal with it
+    if (_slashOpen) return; // let slash handler deal with it
     e.preventDefault(); send();
   }
 });
@@ -5264,6 +5462,48 @@ async function checkVersion() {
 let histSelectMode = false;
 const histSelected = new Set();
 
+// ─── Drag-and-drop helpers ────────────────────────────────────────────────
+let _dragHistEl = null;
+
+function _initHistDrag(el, container) {
+  el.addEventListener('dragstart', e => {
+    _dragHistEl = el;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', el.dataset.sess);
+    requestAnimationFrame(() => el.classList.add('dragging'));
+  });
+  el.addEventListener('dragend', () => {
+    el.classList.remove('dragging');
+    container.querySelectorAll('.hist-item').forEach(i => i.classList.remove('drag-over-top', 'drag-over-bottom'));
+    _dragHistEl = null;
+  });
+  el.addEventListener('dragover', e => {
+    if (!_dragHistEl || el === _dragHistEl) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = el.getBoundingClientRect();
+    container.querySelectorAll('.hist-item').forEach(i => i.classList.remove('drag-over-top', 'drag-over-bottom'));
+    el.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
+  });
+  el.addEventListener('drop', async e => {
+    e.preventDefault();
+    if (!_dragHistEl || el === _dragHistEl) return;
+    const rect = el.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    container.querySelectorAll('.hist-item').forEach(i => i.classList.remove('drag-over-top', 'drag-over-bottom'));
+    if (before) container.insertBefore(_dragHistEl, el);
+    else el.after(_dragHistEl);
+    const ids = [...container.querySelectorAll('.hist-item[data-sess]')].map(i => i.dataset.sess);
+    try {
+      await fetch('/api/sessions/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      });
+    } catch (err) { console.error('reorder:', err); }
+  });
+}
+
 async function loadHist() {
   try {
     const el = $i('histList');
@@ -5280,12 +5520,14 @@ async function loadHist() {
       d.dataset.sess = s.id;
       d.setAttribute('role', 'button');
       d.setAttribute('tabindex', '0');
+      if (!histSelectMode) d.setAttribute('draggable', 'true');
       const dt = new Date(s.updated_at).toLocaleDateString(localStorage.getItem('lang') || 'uk', { day: 'numeric', month: 'short' });
-      d.innerHTML = `<input type="checkbox" class="hist-chk" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();toggleSessCheck('${s.id}',this)"><span class="ht" data-tip="${escH(s.title)}">${escH(s.title)}</span><span class="hd">${dt}</span><button class="del" onclick="event.stopPropagation();delSess('${s.id}')" title="✕">✕</button>`;
+      d.innerHTML = `<span class="drag-handle" onclick="event.stopPropagation()" title="Перетягнути">⠿</span><input type="checkbox" class="hist-chk" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();toggleSessCheck('${s.id}',this)"><span class="ht" data-tip="${escH(s.title)}">${escH(s.title)}</span><span class="hd">${dt}</span><button class="del" onclick="event.stopPropagation();delSess('${s.id}')" title="✕">✕</button>`;
       if (histSelectMode) {
         d.onclick = (e) => { const chk = d.querySelector('.hist-chk'); chk.checked = !chk.checked; toggleSessCheck(s.id, chk); };
       } else {
         d.onclick = () => openTab(s.id, s.title);
+        _initHistDrag(d, el);
       }
       d.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); histSelectMode ? d.click() : openTab(s.id, s.title); } };
       el.appendChild(d);
@@ -5726,12 +5968,12 @@ function updateHistBulkBar() {
   const info = $i('histBulkInfo');
   const del = $i('histBulkDel');
   const allBtn = document.querySelector('#histBulkBar .bulk-all');
-  if (info) info.textContent = `${n} вибрано`;
+  if (info) info.textContent = t('bulk.info').replace('{n}', n);
   if (del) del.disabled = n === 0;
   if (allBtn) {
     const items = $i('histList') ? $i('histList').querySelectorAll('.hist-item[data-sess]') : [];
     const allSel = items.length > 0 && [...items].every(i => histSelected.has(String(i.dataset.sess)));
-    allBtn.textContent = allSel ? 'Зняти всі' : 'Всі';
+    allBtn.textContent = allSel ? t('bulk.deselect') : t('bulk.all');
   }
 }
 
@@ -5750,7 +5992,12 @@ function selectAllHist() {
 async function delSelectedHist() {
   const ids = [...histSelected];
   if (ids.length === 0) return;
-  if (!confirm(`Видалити ${ids.length} чат${ids.length === 1 ? '' : ids.length < 5 ? 'и' : 'ів'}?`)) return;
+  const lang = localStorage.getItem('lang') || 'uk';
+  let confirmMsg;
+  if (lang === 'en') confirmMsg = `Delete ${ids.length} chat${ids.length === 1 ? '' : 's'}?`;
+  else if (lang === 'ru') confirmMsg = `Удалить ${ids.length} чат${ids.length === 1 ? '' : ids.length < 5 ? 'а' : 'ов'}?`;
+  else confirmMsg = `Видалити ${ids.length} чат${ids.length === 1 ? '' : ids.length < 5 ? 'и' : 'ів'}?`;
+  if (!confirm(confirmMsg)) return;
   const btn = $i('histBulkDel');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
@@ -5764,8 +6011,8 @@ async function delSelectedHist() {
     updateHistBulkBar();
     loadHist();
   } catch (e) {
-    toast('Помилка видалення', true);
-    if (btn) { btn.disabled = false; btn.textContent = 'Видалити'; }
+    toast(t('toast.del_err'), true);
+    if (btn) { btn.disabled = false; btn.textContent = t('bulk.del'); }
   }
 }
 
@@ -5777,6 +6024,7 @@ async function loadCfg() {
     config = await r.json();
     renderMcp();
     renderSkills();
+    renderCommands();
   } catch (e) {
     console.error('loadCfg:', e);
     toast(t('toast.cfg_load_err'), true);
@@ -6451,6 +6699,135 @@ async function uploadSkill(input) {
   else toast(t('toast.err_prefix') + (d.error || '?'), true);
 }
 
+// ─── Slash Commands ───────────────────────────────────────────────────────
+let _slashMatches = [], _slashActiveIdx = -1, _slashOpen = false;
+let _editingCmdId = null; // null = add mode, string = edit mode
+
+function renderCommands() {
+  const el = $i('cmdsList'); el.innerHTML = '';
+  const cmds = [...(config.slashCommands || [])].sort((a, b) => a.name.localeCompare(b.name));
+  $i('cmdsCount').textContent = cmds.length || '';
+  for (const cmd of cmds) {
+    const div = document.createElement('div');
+    div.className = 'ci'; div.style.cursor = 'default';
+    div.innerHTML = `
+      <div class="inf" style="flex:1;min-width:0">
+        <div class="nm" style="color:var(--accent)">${escH(cmd.name)}</div>
+        <div class="ds" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(cmd.text)}</div>
+      </div>
+      <button class="cfg" onclick="editCommand('${escH(cmd.id)}')" title="${t('cmd.edit.title')}">✏️</button>
+      <button class="rm" onclick="rCommand('${escH(cmd.id)}')" title="${t('cmd.del.title')}">✕</button>`;
+    el.appendChild(div);
+  }
+}
+
+function openCmdForm(id) {
+  _editingCmdId = id || null;
+  const form = $i('cmdForm'), btn = $i('cmdSaveBtn');
+  if (id) {
+    const cmd = (config.slashCommands || []).find(c => c.id === id);
+    if (!cmd) return;
+    $i('cmdName').value = cmd.name;
+    $i('cmdText').value = cmd.text;
+    btn.textContent = t('cmd.save.btn');
+  } else {
+    $i('cmdName').value = '';
+    $i('cmdText').value = '';
+    btn.textContent = t('cmd.add.btn');
+  }
+  form.style.display = 'flex';
+  $i('cmdName').focus();
+}
+
+function cancelCmdForm() {
+  $i('cmdForm').style.display = 'none';
+  _editingCmdId = null;
+}
+
+function editCommand(id) { openCmdForm(id); }
+
+async function saveCommand() {
+  let name = $i('cmdName').value.trim();
+  const text = $i('cmdText').value.trim();
+  if (!name || !text) { toast(t('cmd.err.empty'), true); return; }
+  if (!name.startsWith('/')) name = '/' + name;
+
+  if (_editingCmdId) {
+    // UPDATE
+    const r = await fetch(`/api/commands/${_editingCmdId}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name, text })
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(t('toast.err_prefix') + (d.error || '?'), true); return; }
+    const cmd = (config.slashCommands || []).find(c => c.id === _editingCmdId);
+    if (cmd) { cmd.name = name; cmd.text = text; }
+    toast(t('toast.cmd_updated'));
+  } else {
+    // CREATE
+    const r = await fetch('/api/commands', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name, text })
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(t('toast.err_prefix') + (d.error || '?'), true); return; }
+    if (!config.slashCommands) config.slashCommands = [];
+    config.slashCommands.push({ id: d.id, name, text });
+    toast(t('toast.cmd_added'));
+  }
+  cancelCmdForm();
+  renderCommands();
+}
+
+async function rCommand(id) {
+  const cmd = (config.slashCommands || []).find(c => c.id === id);
+  if (!confirm(`${t('cmd.del.confirm')} "${cmd?.name || id}"?`)) return;
+  await fetch(`/api/commands/${id}`, { method: 'DELETE' });
+  config.slashCommands = (config.slashCommands || []).filter(c => c.id !== id);
+  if (_editingCmdId === id) cancelCmdForm();
+  renderCommands();
+}
+
+// Slash autocomplete helpers
+function _openSlashPopup(query) {
+  const all = config.slashCommands || [];
+  _slashMatches = all.filter(c => c.name.startsWith('/' + query)).sort((a, b) => a.name.localeCompare(b.name));
+  if (!_slashMatches.length) { _closeSlashPopup(); return; }
+  _slashOpen = true; _slashActiveIdx = 0;
+  $i('slashPopup').classList.remove('hidden');
+  _renderSlashList();
+}
+
+function _closeSlashPopup() {
+  $i('slashPopup').classList.add('hidden');
+  _slashOpen = false; _slashMatches = []; _slashActiveIdx = -1;
+}
+
+function _renderSlashList() {
+  const list = $i('slashList'); list.innerHTML = '';
+  _slashMatches.forEach((cmd, i) => {
+    const item = document.createElement('div');
+    item.className = 'at-item' + (i === _slashActiveIdx ? ' active' : '');
+    item.innerHTML = `<div class="at-info">
+      <span class="at-name" style="color:var(--accent)">${escH(cmd.name)}</span>
+      <span class="at-dir">${escH(cmd.text.length > 72 ? cmd.text.slice(0, 72) + '…' : cmd.text)}</span>
+    </div>`;
+    item.onmousedown = e => { e.preventDefault(); _selectSlashCmd(cmd); };
+    list.appendChild(item);
+  });
+}
+
+function _selectSlashCmd(cmd) {
+  const val = inEl.value, cur = inEl.selectionStart;
+  const slashIdx = val.lastIndexOf('/', cur - 1);
+  inEl.value = val.slice(0, slashIdx) + cmd.text + val.slice(cur);
+  const pos = slashIdx + cmd.text.length;
+  inEl.selectionStart = inEl.selectionEnd = pos;
+  _closeSlashPopup(); inEl.focus();
+  inEl.style.height = 'auto';
+  inEl.style.height = Math.min(inEl.scrollHeight, 120) + 'px';
+}
+
 // ─── Config Editor ────────────────────────────────────────────────────────
 const CFG_TABS_BASE = [
   { id: 'config.json', label: 'config.json' },
@@ -6678,6 +7055,51 @@ async function loadProjectsList() {
   } catch(e) { console.error('loadProjectsList:', e); }
 }
 
+// ─── Projects drag-and-drop ───────────────────────────────────────────────
+let _dragProjEl = null;
+
+function _initProjDrag(el, container) {
+  el.addEventListener('dragstart', e => {
+    _dragProjEl = el;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', el.dataset.proj);
+    requestAnimationFrame(() => el.classList.add('dragging'));
+  });
+  el.addEventListener('dragend', () => {
+    el.classList.remove('dragging');
+    container.querySelectorAll('.ci[data-proj]').forEach(i => i.classList.remove('drag-over-top', 'drag-over-bottom'));
+    _dragProjEl = null;
+  });
+  el.addEventListener('dragover', e => {
+    if (!_dragProjEl || el === _dragProjEl) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = el.getBoundingClientRect();
+    container.querySelectorAll('.ci[data-proj]').forEach(i => i.classList.remove('drag-over-top', 'drag-over-bottom'));
+    el.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
+  });
+  el.addEventListener('drop', async e => {
+    e.preventDefault();
+    if (!_dragProjEl || el === _dragProjEl) return;
+    const rect = el.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    container.querySelectorAll('.ci[data-proj]').forEach(i => i.classList.remove('drag-over-top', 'drag-over-bottom'));
+    if (before) container.insertBefore(_dragProjEl, el);
+    else el.after(_dragProjEl);
+    const ids = [...container.querySelectorAll('.ci[data-proj]')].map(i => i.dataset.proj);
+    // Sync in-memory projects array to new order
+    const byId = Object.fromEntries(projects.map(p => [p.id, p]));
+    projects = ids.map(id => byId[id]).filter(Boolean);
+    try {
+      await fetch('/api/projects/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      });
+    } catch (err) { console.error('proj reorder:', err); }
+  });
+}
+
 function renderProjects() {
   const el = $i('projList');
   if (!el) return;
@@ -6714,11 +7136,14 @@ function renderProjects() {
     const div = document.createElement('div');
     div.className = `ci${active ? ' on' : ''}`;
     div.title = active ? t('proj.active.title') : t('proj.click.title');
+    div.dataset.proj = p.id;
+    div.setAttribute('draggable', 'true');
     div.onclick = () => switchProject(p.id);
     const shortPath = p.workdir.length > 38 ? '…' + p.workdir.slice(-36) : p.workdir;
     const busyDot = busy ? `<span class="proj-busy-dot tab-dot spinning" title="${t('proj.generating')}"></span>` : '';
     const remoteBadge = p.isRemote ? `<span class="remote-badge" title="${escH(p.remoteHost||'')}">🌐 SSH</span>` : '';
     div.innerHTML = `
+      <span class="proj-drag-handle" onclick="event.stopPropagation()" title="Перетягнути">⠿</span>
       <div class="inf">
         <div class="nm" data-tip="${escH(p.name)}">${escH(p.name)}${busyDot}${remoteBadge}</div>
         <div class="ds" data-tip="${escH(p.isRemote ? (p.remoteHost||'') + ':' + p.workdir : p.workdir)}">${escH(shortPath)}</div>
@@ -6726,6 +7151,7 @@ function renderProjects() {
       </div>
       <button class="ren" onclick="event.stopPropagation();renameProject('${p.id}',this)" title="${t('proj.rename.title')}">✏</button>
       <button class="rm" onclick="event.stopPropagation();delProject('${p.id}')" title="${t('proj.del.title')}">✕</button>`;
+    _initProjDrag(div, el);
     el.appendChild(div);
   }
 }
@@ -7055,8 +7481,8 @@ async function selectDir() {
   if (curProjType === 'remote') {
     const rhId = $i('remoteHostSelect')?.value;
     const remoteWorkdir = ($i('remoteWorkdirInput')?.value || '').trim();
-    if (!rhId) { toast('Оберіть SSH хост', true); return; }
-    if (!remoteWorkdir) { toast('Вкажіть шлях на сервері', true); return; }
+    if (!rhId) { toast(t('dir.remote.err.no_host'), true); return; }
+    if (!remoteWorkdir) { toast(t('dir.remote.err.no_path'), true); return; }
     const name = ($i('projNameInput').value.trim()) || remoteWorkdir.split('/').filter(Boolean).pop() || remoteWorkdir;
     const r = await fetch('/api/projects', {
       method: 'POST',
@@ -7064,7 +7490,7 @@ async function selectDir() {
       body: JSON.stringify({ name, workdir: remoteWorkdir, isRemote: true, remoteHostId: rhId, remoteWorkdir }),
     });
     const d = await r.json();
-    if (!d.ok) { toast((d.error || 'Помилка'), true); return; }
+    if (!d.ok) { toast((d.error || t('ssh.err')), true); return; }
     await loadProjectsList();
     if (d.id) switchProject(d.id);
     closeDirModal();
@@ -7130,7 +7556,7 @@ function renderRemoteHostsList() {
   const el = $i('sshHostList');
   if (!el) return;
   if (!remoteHosts.length) {
-    el.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 2px;line-height:1.5">Немає налаштованих SSH хостів</div>`;
+    el.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 2px;line-height:1.5">${t('ssh.no_hosts')}</div>`;
     return;
   }
   el.innerHTML = remoteHosts.map(h => {
@@ -7142,9 +7568,9 @@ function renderRemoteHostsList() {
         <div class="nm" data-tip="${escH(h.label)}">${escH(h.label)}</div>
         <div class="ds" data-tip="${escH(hostInfo)}">${escH(hostInfo)}</div>
       </div>
-      <button class="cfg" onclick="testRemoteHost('${h.id}')" title="Тест з'єднання">⚡</button>
-      <button class="cfg" onclick="editRemoteHost('${h.id}')" title="Редагувати">✏</button>
-      <button class="rm"  onclick="deleteRemoteHost('${h.id}')" title="Видалити">✕</button>
+      <button class="cfg" onclick="testRemoteHost('${h.id}')" title="${t('ssh.test.title')}">⚡</button>
+      <button class="cfg" onclick="editRemoteHost('${h.id}')" title="${t('ssh.edit.title')}">✏</button>
+      <button class="rm"  onclick="deleteRemoteHost('${h.id}')" title="${t('ssh.del.title')}">✕</button>
     </div>`;
   }).join('');
 }
@@ -7153,50 +7579,50 @@ function renderRemoteHostSelect() {
   const sel = $i('remoteHostSelect');
   if (!sel) return;
   const cur = sel.value;
-  sel.innerHTML = `<option value="">— оберіть хост —</option>` +
+  sel.innerHTML = `<option value="">${t('ssh.select.ph')}</option>` +
     remoteHosts.map(h => `<option value="${h.id}"${h.id === cur ? ' selected' : ''}>${escH(h.label)} (${escH(h.host)})</option>`).join('');
 }
 
 async function testRemoteHost(id) {
   const dot = $i(`rh-dot-${id}`);
-  if (dot) { dot.className = 'rh-dot'; dot.title = 'Перевірка...'; }
+  if (dot) { dot.className = 'rh-dot'; dot.title = t('ssh.testing'); }
   try {
     const r = await fetch(`/api/remote-hosts/${id}/test`, { method: 'POST' });
     const d = await r.json();
-    if (dot) { dot.className = 'rh-dot ' + (d.ok ? 'ok' : 'err'); dot.title = d.ok ? `OK (${d.latencyMs}ms)` : (d.error || 'Помилка'); }
+    if (dot) { dot.className = 'rh-dot ' + (d.ok ? 'ok' : 'err'); dot.title = d.ok ? `OK (${d.latencyMs}ms)` : (d.error || t('ssh.err')); }
     toast(d.ok ? `✓ ${d.message} (${d.latencyMs}ms)` : `✗ ${d.error}`, !d.ok);
   } catch(e) {
-    if (dot) { dot.className = 'rh-dot err'; dot.title = 'Помилка'; }
+    if (dot) { dot.className = 'rh-dot err'; dot.title = t('ssh.err'); }
   }
 }
 
 async function deleteRemoteHost(id) {
   const h = remoteHosts.find(x => x.id === id);
-  if (!confirm(`Видалити хост "${h?.label || id}"?`)) return;
+  if (!confirm(t('ssh.del.confirm').replace('{name}', h?.label || id))) return;
   await fetch(`/api/remote-hosts/${id}`, { method: 'DELETE' });
   await loadRemoteHosts();
-  toast('✓ Хост видалено');
+  toast(t('ssh.deleted'));
 }
 
 async function testSelectedHost() {
   const id = $i('remoteHostSelect')?.value;
-  if (!id) { toast('Оберіть хост', true); return; }
+  if (!id) { toast(t('ssh.sel.err'), true); return; }
   const res = $i('remoteTestResult');
-  if (res) { res.textContent = '⏳ Перевірка...'; res.className = 'rh-test-result'; }
+  if (res) { res.textContent = t('ssh.testing'); res.className = 'rh-test-result'; }
   try {
     const r = await fetch(`/api/remote-hosts/${id}/test`, { method: 'POST' });
     const d = await r.json();
     if (res) { res.textContent = d.ok ? `✓ ${d.message} (${d.latencyMs}ms)` : `✗ ${d.error}`; res.className = 'rh-test-result ' + (d.ok ? 'ok' : 'err'); }
   } catch(e) {
-    if (res) { res.textContent = '✗ Помилка підключення'; res.className = 'rh-test-result err'; }
+    if (res) { res.textContent = t('ssh.conn_err'); res.className = 'rh-test-result err'; }
   }
 }
 
 // ─── Add SSH Host Modal ───────────────────────────────────────────────────
 function openAddHostModal() {
   _editingHostId = null;
-  $i('sshHostModalTitle').textContent = '🌐 Додати SSH хост';
-  $i('sshHostSaveBtn').textContent = '＋ Зберегти хост';
+  $i('sshHostModalTitle').textContent = t('ssh.modal.add.title');
+  $i('sshHostSaveBtn').textContent = t('ssh.modal.save');
   $i('sshHostLabel').value = '';
   $i('sshHostHost').value = '';
   $i('sshHostPort').value = '22';
@@ -7225,8 +7651,8 @@ async function editRemoteHost(id) {
   const h = remoteHosts.find(x => x.id === id);
   if (!h) return;
   _editingHostId = id;
-  $i('sshHostModalTitle').textContent = '✏️ Редагувати SSH хост';
-  $i('sshHostSaveBtn').textContent = '💾 Оновити хост';
+  $i('sshHostModalTitle').textContent = t('ssh.modal.edit.title');
+  $i('sshHostSaveBtn').textContent = t('ssh.modal.update');
   $i('sshHostLabel').value = h.label || '';
   $i('sshHostHost').value = h.host || '';
   $i('sshHostPort').value = h.port || 22;
@@ -7247,9 +7673,9 @@ async function testNewSshHost() {
   const usePwd = $i('sshAuthBtnPwd').classList.contains('active');
   const sshKeyPath = usePwd ? '' : $i('sshHostKey').value.trim();
   const password = usePwd ? $i('sshHostPassword').value : '';
-  if (!host) { toast('Вкажіть хост', true); return; }
+  if (!host) { toast(t('ssh.err.no_host'), true); return; }
   const res = $i('sshHostTestResult');
-  res.textContent = '⏳ Підключення...'; res.className = 'rh-test-result';
+  res.textContent = t('ssh.connecting'); res.className = 'rh-test-result';
   try {
     const r = await fetch('/api/remote-hosts/test-new', {
       method: 'POST',
@@ -7260,7 +7686,7 @@ async function testNewSshHost() {
     res.textContent = d.ok ? `✓ ${d.message} (${d.latencyMs}ms)` : `✗ ${d.error}`;
     res.className = 'rh-test-result ' + (d.ok ? 'ok' : 'err');
   } catch(e) {
-    res.textContent = '✗ Помилка підключення'; res.className = 'rh-test-result err';
+    res.textContent = t('ssh.conn_err'); res.className = 'rh-test-result err';
   }
 }
 
@@ -7271,8 +7697,8 @@ async function saveNewSshHost() {
   const usePwd = $i('sshAuthBtnPwd').classList.contains('active');
   const sshKeyPath = usePwd ? '' : $i('sshHostKey').value.trim();
   const password = usePwd ? $i('sshHostPassword').value : '';
-  if (!label) { toast('Вкажіть назву', true); return; }
-  if (!host) { toast('Вкажіть хост', true); return; }
+  if (!label) { toast(t('ssh.err.no_label'), true); return; }
+  if (!host) { toast(t('ssh.err.no_host'), true); return; }
   const isEdit = !!_editingHostId;
   const url = isEdit ? `/api/remote-hosts/${_editingHostId}` : '/api/remote-hosts';
   const r = await fetch(url, {
@@ -7281,10 +7707,10 @@ async function saveNewSshHost() {
     body: JSON.stringify({ label, host, port, sshKeyPath, password }),
   });
   const d = await r.json();
-  if (!d.ok) { toast(d.error || 'Помилка', true); return; }
+  if (!d.ok) { toast(d.error || t('ssh.err'), true); return; }
   await loadRemoteHosts();
   closeSshHostModal();
-  toast(`✓ Хост "${label}" ${isEdit ? 'оновлено' : 'збережено'}`);
+  toast((isEdit ? t('ssh.updated') : t('ssh.saved')).replace('{name}', label));
   // If project dialog is open and on remote tab, update the select
   if (curProjType === 'remote') renderRemoteHostSelect();
 }
@@ -7315,7 +7741,7 @@ function saveUIState() {
       autoSkillsMode,
       curWorkdir, curProjectId,
       panels: { left: c('leftPanel'), right: c('rightPanel') },
-      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody') },
+      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), cmds: c('cmdsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody') },
       openTabs: openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
       activeTabId: openTabs.find(t => t.id === activeTabId && !t.isNew) ? activeTabId : null,
       allProjTabs,
@@ -7344,7 +7770,7 @@ function restoreUIState() {
       setPanel('rightPanel', s.panels.right);
     }
     if (s.sections) {
-      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', proj: 'projBody', sshHosts: 'sshHostsBody' };
+      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', proj: 'projBody', sshHosts: 'sshHostsBody' };
       for (const [k, elId] of Object.entries(secs)) {
         const el = $i(elId);
         if (!el) continue;
@@ -7437,6 +7863,37 @@ loadProjectsList();
 loadRemoteHosts();
 connect();
 checkVersion();
+// ─── Image chip hover preview ───
+{
+  const _prev = $i('imgChipPreview');
+  const _prevImg = $i('imgChipPreviewImg');
+
+  function _posPreview(e) {
+    const pw = _prev.offsetWidth || 330, ph = _prev.offsetHeight || 270;
+    let x = e.clientX + 16, y = e.clientY - ph - 12;
+    if (y < 8) y = e.clientY + 20;
+    if (x + pw > window.innerWidth - 8) x = e.clientX - pw - 16;
+    _prev.style.left = x + 'px';
+    _prev.style.top  = y + 'px';
+  }
+
+  document.addEventListener('mouseover', e => {
+    const chip = e.target.closest('.att-chip.chip-img');
+    if (!chip) return;
+    const src = chip.querySelector('img')?.src;
+    if (!src) return;
+    _prevImg.src = src;
+    _prev.style.display = 'block';
+    _posPreview(e);
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (_prev.style.display === 'none') return;
+    if (e.target.closest('.att-chip.chip-img')) { _posPreview(e); return; }
+    _prev.style.display = 'none';
+  });
+}
+
 // Handle ?open_session=<id> from Kanban board links
 {
   const qs = new URLSearchParams(location.search);
