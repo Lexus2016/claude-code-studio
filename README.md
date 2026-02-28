@@ -1,3 +1,5 @@
+![Claude Code Studio](public/screenshots/cover.png)
+
 # Claude Code Studio
 
 **The browser interface for Claude Code.** Chat with AI, run tasks automatically, and manage your work — all from one tab, without touching the terminal.
@@ -6,37 +8,55 @@
 
 ---
 
-## What is Claude Code Studio?
+## What is this?
 
-Claude Code is Anthropic's AI that can actually write code, run commands, edit files, and ship features — not just talk about them.
+Claude Code is Anthropic's AI that writes code, runs commands, edits files, and ships features — not just talks about them. It's genuinely powerful.
 
-The problem: it lives in your terminal. For a lot of people, that's a barrier. And even for developers, the terminal has limits — no task board, no parallel sessions, no visual file browser, no way to paste a screenshot.
+The problem: it lives in your terminal. And the terminal has limits.
 
-**Claude Code Studio is the missing UI.** You open it in your browser, and your AI starts working.
+**Context gets lost.** Switch projects, and you lose your place. Come back tomorrow and you're scrolling through history to remember where you were.
+
+**Parallel work is painful.** Want Claude working on three things at once? That means three terminal tabs, three sessions, three things to manage manually.
+
+**No visibility.** Queue five tasks and walk away. Two hours later — which ones finished? Which ones failed? You're reading scrollback to find out.
+
+**Screenshots and files are clunky.** "Look at this error" means uploading an image somewhere, getting a URL, pasting it. It works, but it's friction.
+
+Claude Code Studio is the missing interface. You open it in your browser, and your AI starts working.
 
 ---
 
-## What does it actually do?
+## Terminal vs Web UI
+
+![Workflow comparison](public/screenshots/workflow-comparison.png)
+
+The difference isn't just visual. A web interface changes how you think about delegating work to AI — from one-off prompts to a queue of managed tasks.
+
+---
+
+## What it actually does
 
 ### 💬 Chat that does things
 
-Not a chatbot. When you type "refactor this function and add tests", Claude opens files, edits them, runs the tests, fixes errors, and reports back — in real time, right in the chat.
+Not a chatbot. When you type "refactor this function and add tests", Claude opens files, edits them, runs the tests, fixes errors, and reports back — in real time, right in the chat. Paste a screenshot with Ctrl+V and Claude sees it.
 
-### 📋 Kanban board for your tasks
+### 📋 Kanban board for your AI tasks
 
-Create a card. Describe what you want. Move it to "To Do". Claude picks it up automatically and starts working. You can queue 10 tasks, walk away, come back to all of them done.
+Create a card. Describe what you want. Move it to "To Do". Claude picks it up automatically and starts working.
 
-![Demo GIF](public/videos/new_release_video.gif)
+![Kanban workflow](public/screenshots/kanban-diagram.png)
 
-> **Can't see the video?** [Download it directly](public/videos/new_release_video.mp4)
+Queue 10 tasks, walk away, come back to all of them done. Cards can run **in parallel** (independent tasks) or **sequentially** (linked sessions, so Claude remembers what the previous task built).
+
+![Kanban screenshot](public/screenshots/03-kanban.png)
 
 ### ⚡ Slash commands — your personal shortcuts
 
-Type `/` in the chat input and a menu appears with your saved prompts. Pick one, hit Enter — done.
+Type `/` in the chat input and a menu appears with your saved prompts. Pick one, hit Enter.
 
-Instead of typing "Do a thorough code review: readability, performance, security, and adherence to best practices. Point out issues with severity levels" every time, you just type `/review`.
+Instead of typing "Do a thorough code review: readability, performance, security, and adherence to best practices. Point out issues with severity levels" every time — you just type `/review`.
 
-**8 commands ready to use out of the box:**
+**8 commands ready out of the box:**
 
 | Command | What it does |
 |---------|-------------|
@@ -49,19 +69,15 @@ Instead of typing "Do a thorough code review: readability, performance, security
 | `/docs` | Write documentation with examples and gotchas |
 | `/optimize` | Find bottlenecks, propose improvements, estimate gains |
 
-You can edit these, delete them, and add your own. As many as you want.
+Add your own, edit them, delete them. As many as you want.
 
 ### 👥 Multiple agents working at once
 
-Big task? Claude doesn't work alone. It creates a team of specialized agents, assigns subtasks, and coordinates the work — like a project manager with infinite interns.
-
-### 🖼 Paste a screenshot, get an answer
-
-Press Ctrl+V in the chat. Claude sees the image and responds. Useful for UI feedback, error screenshots, diagrams — anything visual.
+For complex tasks, Claude doesn't work alone. It creates a team of specialized agents, assigns subtasks, and coordinates the work. You see all agents working in parallel, each with its own output stream.
 
 ### 🌐 Remote servers over SSH
 
-Add a remote server, create a project pointing to a directory on that server, and Claude works there — as if it were local. Useful for GPU machines, staging servers, or server administration without SSH sessions.
+Add a remote server, create a project pointing to a directory on it, and Claude works there — as if local. Useful for GPU machines, staging environments, or managing a server fleet without SSH sessions.
 
 ### 💾 Everything is saved
 
@@ -69,13 +85,33 @@ Sessions, chats, task history — all stored locally in SQLite. Come back tomorr
 
 ---
 
-## Screenshots
+## Who is it for?
 
-### Chat
+**Individual developers** — manage multiple projects, queue tasks, resume sessions days later without losing context.
+
+**Teams** — shared Claude Code Studio instance with project visibility, Kanban showing what's being worked on, session history as an audit trail.
+
+**System administrators** — manage your server fleet from one browser tab. Delegate routine tasks ("check disk usage and clean logs", "update nginx on all 5 servers and verify"). Run operations in parallel across machines.
+
+**ML / AI engineers** — run Claude on powerful remote GPU servers. Queue training jobs and preprocessing tasks. Check results from your laptop.
+
+---
+
+## What it doesn't do
+
+To be clear about the scope:
+
+- It doesn't add capabilities to Claude Code — it provides an interface for them
+- It's not a SaaS — you run it locally, your data stays on your machine
+- It doesn't replace your IDE — it manages Claude sessions
+
+This isn't a product trying to lock you in. It's infrastructure you can own.
+
+---
+
+## Chat interface
+
 ![Chat Interface](public/screenshots/02-main-chat.png)
-
-### Kanban Board
-![Kanban Board](public/screenshots/03-kanban.png)
 
 ---
 
@@ -136,11 +172,12 @@ docker compose up -d --build
 | 🖼 Vision | Paste screenshots — Claude sees and analyzes them |
 | 🗂 Projects | Separate workspaces with their own file directories |
 | 🌐 Remote SSH | Work on remote servers as if they were local |
+| 🔒 File locks | Multiple agents on same codebase — no conflicts |
 | 💾 History | Everything saved to SQLite, resume anytime |
 | 📊 Rate limit alerts | Warnings at 80/90/95%, live countdown to reset |
 | 🔒 Auth | Password login, 30-day tokens, data stays on your machine |
 | 🌍 3 languages | English, Ukrainian, Russian (auto-detected) |
-| 🐳 Docker | Deploy anywhere with Dockerfile + compose |
+| 🐳 Docker | Deploy anywhere |
 
 ---
 
@@ -153,14 +190,14 @@ For developers who want to understand or modify how it works.
 Single Node.js process. No build step. No TypeScript. No framework.
 
 ```
-server.js        — Express HTTP + WebSocket
-auth.js          — bcrypt passwords, 32-byte session tokens
-claude-cli.js    — spawns `claude` subprocess, parses JSON stream
+server.js         — Express HTTP + WebSocket
+auth.js           — bcrypt passwords, 32-byte session tokens
+claude-cli.js     — spawns `claude` subprocess, parses JSON stream
 public/index.html — entire frontend (HTML + CSS + JS in one file)
-config.json      — MCP server definitions + skills catalog
-data/chats.db    — SQLite: sessions + messages
-skills/          — .md skill files loaded into system prompt
-workspace/       — Claude's working directory
+config.json       — MCP server definitions + skills catalog
+data/chats.db     — SQLite: sessions + messages
+skills/           — .md skill files loaded into system prompt
+workspace/        — Claude's working directory
 ```
 
 ### Environment variables
