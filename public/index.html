@@ -2249,7 +2249,7 @@ const TRANSLATIONS = {
     'hdr.toggle':'Згорнути/розгорнути панель','msg.show_more':'Показати більше','msg.show_less':'Показати менше',
     'sec.cmds':'/ Команди','cmds.hint':'Слеш-команди — шорткати до промптів. Набирайте / в чаті.',
     'cmd.name.ph':'/назва (напр. /check)','cmd.text.ph':'Повний текст промпту...','cmd.add.btn':'Додати','cmd.save.btn':'Зберегти',
-    'cmd.add.new':'＋ Додати команду','cmd.edit.title':'Редагувати','cmd.del.title':'Видалити','cmd.del.confirm':'Видалити команду',
+    'cmd.add.new':'＋ Додати команду','cmd.insert.title':'Вставити в чат','cmd.edit.title':'Редагувати','cmd.del.title':'Видалити','cmd.del.confirm':'Видалити команду',
     'cmd.err.empty':'Введіть назву та текст команди','toast.cmd_added':'✓ Команду додано','toast.cmd_updated':'✓ Команду оновлено',
     'cmds.popup.hdr':'Команди',
     'sec.sshHosts':'SSH Хости',
@@ -2391,7 +2391,7 @@ const TRANSLATIONS = {
     'hdr.toggle':'Collapse/expand header','msg.show_more':'Show more','msg.show_less':'Show less',
     'sec.cmds':'/ Commands','cmds.hint':'Slash commands — shortcuts to prompts. Type / in chat.',
     'cmd.name.ph':'/name (e.g. /check)','cmd.text.ph':'Full prompt text...','cmd.add.btn':'Add','cmd.save.btn':'Save',
-    'cmd.add.new':'＋ Add command','cmd.edit.title':'Edit','cmd.del.title':'Delete','cmd.del.confirm':'Delete command',
+    'cmd.add.new':'＋ Add command','cmd.insert.title':'Insert into chat','cmd.edit.title':'Edit','cmd.del.title':'Delete','cmd.del.confirm':'Delete command',
     'cmd.err.empty':'Enter name and prompt text','toast.cmd_added':'✓ Command added','toast.cmd_updated':'✓ Command updated',
     'cmds.popup.hdr':'Commands',
     'sec.sshHosts':'SSH Hosts',
@@ -2533,7 +2533,7 @@ const TRANSLATIONS = {
     'hdr.toggle':'Свернуть/развернуть панель','msg.show_more':'Показать больше','msg.show_less':'Показать меньше',
     'sec.cmds':'/ Команды','cmds.hint':'Слеш-команды — шорткаты к промптам. Набирайте / в чате.',
     'cmd.name.ph':'/название (напр. /check)','cmd.text.ph':'Полный текст промпта...','cmd.add.btn':'Добавить','cmd.save.btn':'Сохранить',
-    'cmd.add.new':'＋ Добавить команду','cmd.edit.title':'Редактировать','cmd.del.title':'Удалить','cmd.del.confirm':'Удалить команду',
+    'cmd.add.new':'＋ Добавить команду','cmd.insert.title':'Вставить в чат','cmd.edit.title':'Редактировать','cmd.del.title':'Удалить','cmd.del.confirm':'Удалить команду',
     'cmd.err.empty':'Введите название и текст команды','toast.cmd_added':'✓ Команда добавлена','toast.cmd_updated':'✓ Команда обновлена',
     'cmds.popup.hdr':'Команды',
     'sec.sshHosts':'SSH Хосты',
@@ -6707,14 +6707,21 @@ function renderCommands() {
   $i('cmdsCount').textContent = cmds.length;
   for (const cmd of cmds) {
     const div = document.createElement('div');
-    div.className = 'ci'; div.style.cursor = 'default';
+    div.className = 'ci';
+    div.title = t('cmd.insert.title');
     div.innerHTML = `
       <div class="inf" style="flex:1;min-width:0">
         <div class="nm" style="color:var(--accent)">${escH(cmd.name)}</div>
         <div class="ds" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-tip="${escH(cmd.text)}">${escH(cmd.text)}</div>
       </div>
-      <button class="cfg" onclick="editCommand('${escH(cmd.id)}')" title="${t('cmd.edit.title')}">✏️</button>
-      <button class="rm" onclick="rCommand('${escH(cmd.id)}')" title="${t('cmd.del.title')}">✕</button>`;
+      <button class="cfg" onclick="event.stopPropagation();editCommand('${escH(cmd.id)}')" title="${t('cmd.edit.title')}">✏️</button>
+      <button class="rm" onclick="event.stopPropagation();rCommand('${escH(cmd.id)}')" title="${t('cmd.del.title')}">✕</button>`;
+    div.addEventListener('click', () => {
+      inEl.value = cmd.text;
+      inEl.focus();
+      inEl.selectionStart = inEl.selectionEnd = inEl.value.length;
+      inEl.dispatchEvent(new Event('input'));
+    });
     el.appendChild(div);
   }
 }
