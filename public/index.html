@@ -1196,7 +1196,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 #globalTip {
   position: fixed; z-index: 9999; pointer-events: none;
   padding: 6px 11px; background: #1a2235; border: 1px solid rgba(255,255,255,.13);
-  border-radius: 8px; font-size: 12px; line-height: 1.5; max-width: 280px;
+  border-radius: 8px; font-size: 12px; line-height: 1.5; max-width: 360px;
   white-space: normal; color: var(--text);
   box-shadow: 0 4px 20px rgba(0,0,0,.55), 0 1px 4px rgba(0,0,0,.3);
   opacity: 0; transition: opacity .12s ease; word-break: break-word;
@@ -6708,11 +6708,11 @@ function renderCommands() {
   for (const cmd of cmds) {
     const div = document.createElement('div');
     div.className = 'ci';
-    div.title = t('cmd.insert.title');
+    div.dataset.tip = cmd.text;
     div.innerHTML = `
       <div class="inf" style="flex:1;min-width:0">
         <div class="nm" style="color:var(--accent)">${escH(cmd.name)}</div>
-        <div class="ds" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-tip="${escH(cmd.text)}">${escH(cmd.text)}</div>
+        <div class="ds" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(cmd.text)}</div>
       </div>
       <button class="cfg" onclick="event.stopPropagation();editCommand('${escH(cmd.id)}')" title="${t('cmd.edit.title')}">✏️</button>
       <button class="rm" onclick="event.stopPropagation();rCommand('${escH(cmd.id)}')" title="${t('cmd.del.title')}">✕</button>`;
