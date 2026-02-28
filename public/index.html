@@ -1287,6 +1287,22 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .ssh-host-form input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(124,106,239,.15); }
 .remote-badge { display:inline-flex; align-items:center; gap:3px; font-size:10px; color:var(--accent2); background:rgba(124,106,239,.12); border-radius:4px; padding:1px 5px; margin-left:4px; flex-shrink:0; }
 
+/* ─── Telegram Remote Access ─── */
+.tg-section { padding: 0 2px; }
+.tg-status-dot { font-size: 10px; color: var(--muted); }
+.tg-status-dot.online { color: #4ade80; }
+.tg-toggle { position:relative; display:inline-block; width:36px; height:20px; flex-shrink:0; }
+.tg-toggle input { opacity:0; width:0; height:0; }
+.tg-toggle-slider { position:absolute; cursor:pointer; inset:0; background:var(--s2); border:1px solid var(--border); border-radius:20px; transition:.2s; }
+.tg-toggle-slider:before { content:''; position:absolute; height:14px; width:14px; left:2px; bottom:2px; background:var(--muted); border-radius:50%; transition:.2s; }
+.tg-toggle input:checked + .tg-toggle-slider { background:var(--accent); border-color:var(--accent); }
+.tg-toggle input:checked + .tg-toggle-slider:before { transform:translateX(16px); background:#fff; }
+.tg-device { display:flex; align-items:center; justify-content:space-between; padding:4px 6px; border-radius:6px; background:var(--s1); margin-bottom:4px; }
+.tg-device-name { font-size:12px; color:var(--text); }
+.tg-device-meta { font-size:10px; color:var(--muted); }
+.tg-device-rm { background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px; padding:2px 6px; border-radius:4px; }
+.tg-device-rm:hover { background:rgba(255,80,80,.15); color:#f66; }
+
 /* ─── Confirm Stop Dialog ─── */
 .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; z-index: 300; backdrop-filter: blur(4px); animation: fadeUp .12s ease; }
 .confirm-dialog { background: var(--s1); border: 1px solid var(--border); border-radius: 14px; padding: 28px 32px 24px; width: 320px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,.65); text-align: center; }
@@ -1624,6 +1640,57 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         <button class="add-btn" onclick="openCmdForm()" data-i18n="cmd.add.new">＋ Додати команду</button>
       </div>
     </div>
+
+    <!-- Telegram Remote Access -->
+    <div class="sec">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('tg')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('tg')}">
+        <span data-i18n="sec.telegram">Telegram</span>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+          <span class="tg-status-dot" id="tgStatusDot">●</span>
+          <span class="badge" id="tgCount">0</span>
+        </div>
+      </div>
+      <div class="sec-body" id="tgBody">
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="tg.hint">Керуйте Studio віддалено через Telegram-бота.</div>
+
+        <!-- Bot Token -->
+        <div class="tg-section">
+          <label style="font-size:11px;color:var(--muted)" data-i18n="tg.token">Bot Token (від @BotFather):</label>
+          <div style="display:flex;gap:4px;margin-top:4px">
+            <input id="tgBotToken" type="password" placeholder="123456:ABC-DEF..." style="flex:1;font-size:11px;padding:5px 8px;background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:monospace">
+            <button class="bp" id="tgStartBtn" onclick="tgStartBot()" style="padding:5px 10px;font-size:11px;white-space:nowrap" data-i18n="tg.start">▶ Запустити</button>
+          </div>
+          <div class="tg-bot-info" id="tgBotInfo" style="display:none;font-size:11px;color:var(--accent2);margin-top:4px"></div>
+        </div>
+
+        <!-- Lock Mode Toggle -->
+        <div class="tg-section" style="margin-top:8px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:12px" data-i18n="tg.accept_new">Нові підключення:</span>
+          <label class="tg-toggle" title="Дозволити/заборонити нові підключення">
+            <input type="checkbox" id="tgAcceptNew" onchange="tgToggleAccept(this.checked)" checked>
+            <span class="tg-toggle-slider"></span>
+          </label>
+        </div>
+
+        <!-- Pairing -->
+        <div id="tgPairingSection" style="margin-top:8px">
+          <button class="add-btn" id="tgPairBtn" onclick="tgGenerateCode()" data-i18n="tg.pair">🔗 Підключити Telegram</button>
+          <div id="tgPairingCode" style="display:none;text-align:center;margin-top:10px">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px" data-i18n="tg.pair.hint">Введіть цей код у Telegram-боті:</div>
+            <div id="tgCodeDisplay" style="font-size:28px;font-weight:800;letter-spacing:4px;color:var(--accent);font-family:monospace;padding:12px;background:var(--s1);border-radius:8px;border:2px dashed var(--accent)"></div>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px">⏱ <span id="tgCodeTimer">5:00</span></div>
+            <button class="bg" onclick="tgCancelPairing()" style="margin-top:6px;font-size:11px;padding:4px 10px" data-i18n="tg.pair.cancel">Скасувати</button>
+          </div>
+        </div>
+
+        <!-- Connected Devices -->
+        <div style="margin-top:10px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px" data-i18n="tg.devices">Підключені пристрої:</div>
+          <div id="tgDeviceList" style="font-size:12px;color:var(--muted)">—</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -2197,7 +2264,7 @@ const TRANSLATIONS = {
     'skills.auto_hint':'⚡ Навички обираються автоматично по тексту задачі',
     'auto.title.on':'⚡ Auto-Skills: увімкнено — клік для вимкнення',
     'auto.title.off':'⚡ Auto-Skills: вимкнено — клік для увімкнення',
-    'status.connected':'Підключено','status.generating':'Генерація…','status.thinking':'Обдумування...','status.processing':'Обробка...','status.reconnecting':'Перепідключення…','status.stopped':'Зупинено','status.error':'Помилка',
+    'status.connected':'Підключено','status.generating':'Генерація…','status.thinking':'Обдумування...','status.processing':'Обробка...','status.classifying':'⚡ Визначення спеціалістів...','status.reconnecting':'Перепідключення…','status.stopped':'Зупинено','status.error':'Помилка',
     'fpv.download':'Завантажити','fpv.download.title':'Завантажити файл','fpv.share':'Поділитись','fpv.share.title':'Поділитись / Скопіювати посилання','fpv.binary':'Бінарний файл — перегляд недоступний','fpv.img_error':'Помилка завантаження зображення','fpv.load_error':'Помилка завантаження файлу',
     'toast.no_connection':'Немає з\'єднання','toast.sess_not_found':'Сесію не знайдено','toast.cfg_load_err':'Помилка завантаження конфігурації','toast.skill_uploaded':'✓ Скіл завантажено','toast.link_copied':'✓ Посилання скопійовано','toast.select_dir':'Виберіть директорію','toast.link_prompt':'Скопіюйте посилання:',
     'at.no_project':'Оберіть проект, щоб шукати файли','at.searching':'Пошук...','at.search_err':'Помилка пошуку','at.no_files':'Файлів не знайдено',
@@ -2269,6 +2336,15 @@ const TRANSLATIONS = {
     'ssh.err.no_host':'Вкажіть хост','ssh.err.no_label':'Вкажіть назву','ssh.err':'Помилка',
     'ssh.saved':'✓ Хост "{name}" збережено','ssh.updated':'✓ Хост "{name}" оновлено',
     'ssh.select.ph':'— оберіть хост —','ssh.sel.err':'Оберіть хост',
+    'sec.telegram':'Telegram','tg.hint':'Керуйте Studio віддалено через Telegram-бота.',
+    'tg.token':'Bot Token (від @BotFather):','tg.start':'▶ Запустити','tg.stop':'⏹ Зупинити',
+    'tg.accept_new':'Нові підключення:','tg.pair':'🔗 Підключити Telegram',
+    'tg.pair.hint':'Введіть цей код у Telegram-боті:','tg.pair.cancel':'Скасувати',
+    'tg.devices':'Підключені пристрої:','tg.stopped':'⏹ Telegram-бот зупинено',
+    'tg.no_devices':'Немає підключених пристроїв','tg.last_active':'Активність',
+    'tg.paired':'з','tg.device.disconnect':'Відключити пристрій','tg.device.disconnected':'відключено',
+    'tg.err.no_token':'Введіть Bot Token від @BotFather','tg.device.remove_confirm':'Відключити пристрій "{name}"?',
+    'tg.time.now':'щойно','tg.time.min':'{n} хв тому','tg.time.hour':'{n} год тому','tg.time.day':'{n} д тому',
     'bulk.info':'{n} вибрано','bulk.all':'Всі','bulk.deselect':'Зняти всі','bulk.del':'Видалити',
     'hist.sel.title':'Вибрати кілька','toast.del_err':'Помилка видалення',
     'proj.type.local':'📁 Локальний','proj.type.remote':'🌐 Віддалений SSH',
@@ -2339,7 +2415,7 @@ const TRANSLATIONS = {
     'skills.auto_hint':'⚡ Skills are auto-selected based on task text',
     'auto.title.on':'⚡ Auto-Skills: enabled — click to disable',
     'auto.title.off':'⚡ Auto-Skills: disabled — click to enable',
-    'status.connected':'Connected','status.generating':'Generating…','status.thinking':'Thinking...','status.processing':'Processing...','status.reconnecting':'Reconnecting…','status.stopped':'Stopped','status.error':'Error',
+    'status.connected':'Connected','status.generating':'Generating…','status.thinking':'Thinking...','status.processing':'Processing...','status.classifying':'⚡ Classifying specialists...','status.reconnecting':'Reconnecting…','status.stopped':'Stopped','status.error':'Error',
     'fpv.download':'Download','fpv.download.title':'Download file','fpv.share':'Share','fpv.share.title':'Share / Copy link','fpv.binary':'Binary file — preview not available','fpv.img_error':'Image load error','fpv.load_error':'File load error',
     'toast.no_connection':'No connection','toast.sess_not_found':'Session not found','toast.cfg_load_err':'Config load error','toast.skill_uploaded':'✓ Skill uploaded','toast.link_copied':'✓ Link copied','toast.select_dir':'Select a directory','toast.link_prompt':'Copy link:',
     'at.no_project':'Select a project to search files','at.searching':'Searching...','at.search_err':'Search error','at.no_files':'No files found',
@@ -2411,6 +2487,15 @@ const TRANSLATIONS = {
     'ssh.err.no_host':'Enter host','ssh.err.no_label':'Enter name','ssh.err':'Error',
     'ssh.saved':'✓ Host "{name}" saved','ssh.updated':'✓ Host "{name}" updated',
     'ssh.select.ph':'— select host —','ssh.sel.err':'Select a host',
+    'sec.telegram':'Telegram','tg.hint':'Control Studio remotely via Telegram bot.',
+    'tg.token':'Bot Token (from @BotFather):','tg.start':'▶ Start','tg.stop':'⏹ Stop',
+    'tg.accept_new':'New connections:','tg.pair':'🔗 Connect Telegram',
+    'tg.pair.hint':'Enter this code in the Telegram bot:','tg.pair.cancel':'Cancel',
+    'tg.devices':'Connected devices:','tg.stopped':'⏹ Telegram bot stopped',
+    'tg.no_devices':'No connected devices','tg.last_active':'Activity',
+    'tg.paired':'since','tg.device.disconnect':'Disconnect device','tg.device.disconnected':'disconnected',
+    'tg.err.no_token':'Enter Bot Token from @BotFather','tg.device.remove_confirm':'Disconnect device "{name}"?',
+    'tg.time.now':'just now','tg.time.min':'{n}m ago','tg.time.hour':'{n}h ago','tg.time.day':'{n}d ago',
     'bulk.info':'{n} selected','bulk.all':'All','bulk.deselect':'Deselect all','bulk.del':'Delete',
     'hist.sel.title':'Select multiple','toast.del_err':'Delete error',
     'proj.type.local':'📁 Local','proj.type.remote':'🌐 Remote SSH',
@@ -2481,7 +2566,7 @@ const TRANSLATIONS = {
     'skills.auto_hint':'⚡ Навыки выбираются автоматически по тексту задачи',
     'auto.title.on':'⚡ Auto-Skills: включено — клик для отключения',
     'auto.title.off':'⚡ Auto-Skills: отключено — клик для включения',
-    'status.connected':'Подключено','status.generating':'Генерация…','status.thinking':'Обдумывание...','status.processing':'Обработка...','status.reconnecting':'Переподключение…','status.stopped':'Остановлено','status.error':'Ошибка',
+    'status.connected':'Подключено','status.generating':'Генерация…','status.thinking':'Обдумывание...','status.processing':'Обработка...','status.classifying':'⚡ Определение специалистов...','status.reconnecting':'Переподключение…','status.stopped':'Остановлено','status.error':'Ошибка',
     'fpv.download':'Скачать','fpv.download.title':'Скачать файл','fpv.share':'Поделиться','fpv.share.title':'Поделиться / Скопировать ссылку','fpv.binary':'Бинарный файл — предпросмотр недоступен','fpv.img_error':'Ошибка загрузки изображения','fpv.load_error':'Ошибка загрузки файла',
     'toast.no_connection':'Нет соединения','toast.sess_not_found':'Сессия не найдена','toast.cfg_load_err':'Ошибка загрузки конфигурации','toast.skill_uploaded':'✓ Навык загружен','toast.link_copied':'✓ Ссылка скопирована','toast.select_dir':'Выберите директорию','toast.link_prompt':'Скопируйте ссылку:',
     'at.no_project':'Выберите проект для поиска файлов','at.searching':'Поиск...','at.search_err':'Ошибка поиска','at.no_files':'Файлов не найдено',
@@ -2553,6 +2638,15 @@ const TRANSLATIONS = {
     'ssh.err.no_host':'Укажите хост','ssh.err.no_label':'Укажите имя','ssh.err':'Ошибка',
     'ssh.saved':'✓ Хост "{name}" сохранён','ssh.updated':'✓ Хост "{name}" обновлён',
     'ssh.select.ph':'— выберите хост —','ssh.sel.err':'Выберите хост',
+    'sec.telegram':'Telegram','tg.hint':'Управляйте Studio удалённо через Telegram-бота.',
+    'tg.token':'Bot Token (от @BotFather):','tg.start':'▶ Запустить','tg.stop':'⏹ Остановить',
+    'tg.accept_new':'Новые подключения:','tg.pair':'🔗 Подключить Telegram',
+    'tg.pair.hint':'Введите этот код в Telegram-боте:','tg.pair.cancel':'Отмена',
+    'tg.devices':'Подключённые устройства:','tg.stopped':'⏹ Telegram-бот остановлен',
+    'tg.no_devices':'Нет подключённых устройств','tg.last_active':'Активность',
+    'tg.paired':'с','tg.device.disconnect':'Отключить устройство','tg.device.disconnected':'отключено',
+    'tg.err.no_token':'Введите Bot Token от @BotFather','tg.device.remove_confirm':'Отключить устройство "{name}"?',
+    'tg.time.now':'только что','tg.time.min':'{n} мин назад','tg.time.hour':'{n} ч назад','tg.time.day':'{n} д назад',
     'bulk.info':'{n} выбрано','bulk.all':'Все','bulk.deselect':'Снять все','bulk.del':'Удалить',
     'hist.sel.title':'Выбрать несколько','toast.del_err':'Ошибка удаления',
     'proj.type.local':'📁 Локальный','proj.type.remote':'🌐 Удалённый SSH',
@@ -2568,6 +2662,7 @@ function t(key) {
 function setLang(lang) {
   const t = TRANSLATIONS[lang] || TRANSLATIONS.uk;
   localStorage.setItem('lang', lang);
+  fetch('/api/lang', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang }) }).catch(() => {});
   const sel = $i('langSel'); if (sel) sel.value = lang;
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach(el => { const k = el.getAttribute('data-i18n'); if (t[k] !== undefined) el.textContent = t[k]; });
@@ -3107,6 +3202,20 @@ function handleWsMsg(d) {
       break;
     }
 
+    case 'skills_auto': {
+      // Server classified skills via LLM — update UI
+      if (d.skills?.length) {
+        activeSkills = new Set(d.skills);
+        renderSkills(); updateSessBarSkills();
+        const displaySkills = d.skills.filter(id => id !== 'auto-mode');
+        if (displaySkills.length > 0) {
+          const names = displaySkills.map(id => (config.skills[id]?.label || id).replace(/^\S+\s/, '')).join(', ');
+          toast('⚡ ' + names);
+        }
+      }
+      break;
+    }
+
     case 'status':
       if (isVisible) {
         setStatus(`CLI · ${d.mode || ''} · ${d.model || ''}`, 'warn');
@@ -3309,6 +3418,10 @@ function handleWsMsg(d) {
       break;
 
     case 'queue_update': {
+      // Guard: only modify DOM if this queue_update is for the currently visible tab.
+      // Without this check, queue items from Tab A would be rendered into Tab B's chat.
+      const qTabId = d.tabId || null;
+      if (qTabId && qTabId !== activeTabId) break;
       if (Array.isArray(d.items)) {
         const stillQueued = new Set(d.items.map(i => i.queueId).filter(Boolean));
         // Remove badges from items no longer in queue
@@ -3350,6 +3463,9 @@ function handleWsMsg(d) {
 
     case 'queue_removed':
       {
+        // Only modify DOM if this event is for the currently visible tab
+        const qrTabId = d.tabId || null;
+        if (qrTabId && qrTabId !== activeTabId) break;
         const el = msgsEl.querySelector(`.mw[data-queue-id="${CSS.escape(d.queueId)}"]`);
         if (el) { el.style.transition = 'opacity .2s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 200); }
       }
@@ -3359,6 +3475,8 @@ function handleWsMsg(d) {
       break;
 
     case 'queue_start':
+      // Only modify DOM if this event is for the currently visible tab
+      if (d.tabId && d.tabId !== activeTabId) break;
       { const q = msgsEl.querySelector('.msg-queued'); if (q) q.remove(); }
       if (isVisible) {
         isGen = true;
@@ -3369,6 +3487,9 @@ function handleWsMsg(d) {
       break;
 
     case 'session_reset':
+      // Guard: only reset the currently visible tab. Without this, a stale new_session
+      // message could wipe ALL visible content across tabs.
+      if (d.tabId && d.tabId !== activeTabId) break;
       msgsEl.innerHTML = '';
       _allMsgs = []; _shownFrom = 0;
       showW();
@@ -3431,6 +3552,16 @@ function handleWsMsg(d) {
       }
       break;
     }
+
+    case 'telegram_device_paired':
+      toast(`📱 Telegram: ${d.device?.display_name || 'пристрій'} підключено`);
+      tgLoadStatus();
+      tgCancelPairing();
+      break;
+
+    case 'telegram_device_removed':
+      tgLoadStatus();
+      break;
   }
 }
 
@@ -5208,9 +5339,15 @@ async function send() {
   const txt = inEl.value.trim();
   if (!txt && !_attachments.length) return;
 
+  // Clear input IMMEDIATELY before any async work to prevent double-send.
+  // If user presses Enter during an async file fetch, the second send()
+  // will see empty input and return early.
+  inEl.value = '';
+  inEl.style.height = 'auto';
+
   // Require a project before sending the first message in a new session
   if (!curProjectId && !currentSessionId) {
-    _onProjectCreated = () => send();
+    _onProjectCreated = () => { inEl.value = txt; send(); };
     openAddProject();
     return;
   }
@@ -5251,9 +5388,6 @@ async function send() {
     msgEl.querySelector('.msg').before(chipsDiv);
   }
   if (txt) msgEl.querySelector('.msg').textContent = txt;
-
-  inEl.value = '';
-  inEl.style.height = 'auto';
   userScrolled = false;
 
   const queueId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
@@ -5287,24 +5421,8 @@ async function send() {
   const currentReply = replyTo;
   clearReply();
 
-  // Auto-skill selection
-  if (autoSkillsMode && txt && txt.trim().length > 3) {
-    const autoSelected = autoSelectSkills(txt);
-    if (autoSelected.length > 0) {
-      activeSkills = new Set(autoSelected);
-      renderSkills(); updateSessBarSkills();
-      // Filter out the meta-skill from the toast display (it's always included)
-      const displaySkills = autoSelected.filter(id => id !== 'auto-mode');
-      if (displaySkills.length > 0) {
-        const names = displaySkills.map(id => (config.skills[id]?.label || id).replace(/^\S+\s/, '')).join(', ');
-        toast('⚡ ' + names);
-      }
-    } else if (config.skills['auto-mode']) {
-      // No specific skill matched — still apply auto-mode meta-skill for quality
-      activeSkills = new Set(['auto-mode']);
-      renderSkills(); updateSessBarSkills();
-    }
-  }
+  // Auto-skill: server-side LLM classification (no client-side keyword matching)
+  const useAutoSkill = autoSkillsMode && txt && txt.trim().length > 3;
 
   if (curAgent === 'dispatch') {
     // Plan mode: decompose → dispatch to Kanban (not run in chat)
@@ -5324,6 +5442,7 @@ async function send() {
       queueId,
       reply_to: currentReply || undefined,
       skills: [...activeSkills],
+      autoSkill: useAutoSkill,
       mcpServers: [...activeMcp],
       mode: curMode, agentMode: curAgent,
       model: curModel,
@@ -5748,11 +5867,21 @@ async function loadSess(id) {
     updateSessBar(); // Refresh session bar with correct data now that currentSessionId is set
     // Sync tab title
     { const t = openTabs.find(x => x.id === id); if (t && d.title) { t.title = d.title; renderTabs(); } }
-    // Proactively show spinner if a task is currently running for this session
-    // (avoids waiting for WS task_started roundtrip, especially after page refresh)
-    if (d.hasRunningTask) {
+    // Sync tab generating state with server truth:
+    // - Show spinner if a task is currently running (avoids WS roundtrip delay)
+    // - Clear stale spinner if task completed while WS was disconnected (Finding: done
+    //   event lost during disconnect leaves tab.generating=true permanently)
+    {
       const tabObj = openTabs.find(x => x.id === id);
-      if (tabObj) { tabObj.generating = true; renderTabs(); }
+      if (tabObj) {
+        const serverRunning = !!(d.hasRunningTask || d.isChatRunning);
+        if (serverRunning && !tabObj.generating) {
+          tabObj.generating = true; renderTabs();
+        } else if (!serverRunning && tabObj.generating) {
+          tabObj.generating = false; tabObj.done = true; renderTabs();
+          if (activeTabId === id) { isGen = false; generatingTabId = null; setSendStop(false); setStatus(t('status.connected'), 'ok'); }
+        }
+      }
     }
 
     if (d.mode) { curMode = d.mode; syncBtn('mode', d.mode); }
@@ -6431,158 +6560,8 @@ const SKILL_CATS = {
   system:      { en: '⚙️ System', uk: '⚙️ Система', ru: '⚙️ Система' },
 };
 
-const SKILL_TRIGGERS = {
-  'backend': [
-    'backend', 'api endpoint', 'server', 'node.js', 'express', 'fastify', 'endpoint', 'rest api', 'crud', 'migration', 'transaction', 'queue', 'http server',
-    'бекенд', 'сервер', 'ендпоінт', 'апі', 'міграці', 'транзакці', 'черга',
-    'бэкенд', 'эндпоинт', 'миграци', 'транзакци', 'очередь'
-  ],
-  'api-designer': [
-    'graphql', 'grpc', 'swagger', 'openapi', 'api versioning', 'api design', 'api contract', 'rest design', 'api spec',
-    'графкл', 'апі дизайн', 'версіонування апі', 'контракт апі', 'специфікаці',
-    'графкл', 'дизайн апи', 'версиони', 'контракт', 'спецификаци'
-  ],
-  'frontend': [
-    'react', 'vue', 'angular', 'component', 'jsx', 'tsx', 'css', 'html', 'browser', 'dom', 'state management', 'hook', 'redux', 'tailwind', 'responsive',
-    'фронтенд', 'компонент', 'браузер', 'стан', 'хук', 'адаптив',
-    'фронтенд', 'состояние', 'адаптив'
-  ],
-  'fullstack': [
-    'full stack', 'fullstack', 'entire feature', 'end to end', 'build a page', 'build a form', 'build an app', 'build a screen', 'full feature',
-    'фулстек', 'повний стек', 'всю функці', 'від початку до кінця', 'зроби сторінк', 'зроби форм', 'ціла функці',
-    'фулстек', 'полный стек', 'всю функци', 'от начала до конца', 'сделай страниц', 'целая функци'
-  ],
-  'devops': [
-    'docker', 'kubernetes', 'k8s', 'deploy', 'aws', 'gcp', 'azure', 'terraform', 'ci/cd', 'pipeline', 'container', 'nginx', 'helm', 'infrastructure', 'monitoring',
-    'депло', 'контейнер', 'інфраструктур', 'моніторинг', 'пайплайн',
-    'деплой', 'инфраструктур', 'мониторинг', 'пайплайн'
-  ],
-  'postgres-wizard': [
-    'postgres', 'postgresql', 'index', 'query optimization', 'explain analyze', 'partitioning', 'vacuum', 'slow query',
-    'постгрес', 'індекс', 'оптимізаці запит', 'повільн запит', 'партиціонуванн', 'вакуум',
-    'постгрес', 'индекс', 'оптимизац запрос', 'медлен запрос', 'партици'
-  ],
-  'data-engineer': [
-    'data pipeline', 'etl', 'spark', 'airflow', 'dbt', 'data warehouse', 'data lake', 'kafka', 'transform data', 'data quality', 'cdc', 'batch processing',
-    'пайплайн дан', 'сховищ дан', 'озеро дан', 'якість дан', 'трансформ',
-    'пайплайн данн', 'хранилище данн', 'озеро данн', 'качество данн', 'трансформ'
-  ],
-  'llm-architect': [
-    'llm', 'chatgpt', 'claude api', 'openai', 'anthropic', 'agent', 'langchain', 'chatbot', 'ai product', 'ai application', 'ai system',
-    'ллам', 'чажпт', 'агент', 'чатбот', 'штучний інтелект', 'продукт штучного інтелекту', 'застосунок зі штучним інтелектом',
-    'ллам', 'агент', 'чатбот', 'искусствен интелект', 'продукт искусс'
-  ],
-  'prompt-engineer': [
-    'prompt', 'system prompt', 'few-shot', 'chain of thought', 'instruction tuning', 'jailbreak', 'context window', 'token limit',
-    'промпт', 'системний промпт', 'ланцюжок думок', 'інструкці', 'контекстне вікно', 'ліміт токен',
-    'промпт', 'системный промпт', 'цепочк мысл', 'инструкци', 'контекстное окно', 'лимит токен'
-  ],
-  'rag-engineer': [
-    'rag', 'vector', 'embedding', 'retrieval', 'semantic search', 'pinecone', 'chroma', 'weaviate', 'chunk', 'knowledge base', 'vector db',
-    'раг', 'вектор', 'ембединг', 'ретривал', 'семантичний пошук', 'база знань', 'база знан',
-    'раг', 'вектор', 'эмбединг', 'ретривал', 'семантический поиск', 'база знаний'
-  ],
-  'security': [
-    'security', 'vulnerability', 'xss', 'sql injection', 'csrf', 'owasp', 'exploit', 'pentest', 'attack', 'breach', 'sanitize', 'threat model',
-    'безпек', 'вразливіст', 'ін\'єкці', 'експлоіт', 'пентест', 'атака', 'загроз', 'санітайз', 'вразлив',
-    'безопасност', 'уязвимост', 'инъекци', 'эксплоит', 'пентест', 'атака', 'угроз', 'уязвим'
-  ],
-  'auth-specialist': [
-    'auth', 'login', 'oauth', 'jwt', 'token', 'session', 'password', 'sso', 'saml', 'mfa', 'permission', 'rbac', 'roles',
-    'авторизаці', 'логін', 'аутентифікаці', 'токен', 'сесі', 'пароль', 'дозвіл', 'рол', 'мфа', 'двохфакторн',
-    'авторизац', 'логин', 'аутентификац', 'токен', 'сесси', 'пароль', 'разрешен', 'рол', 'двухфакторн'
-  ],
-  'debugging-master': [
-    'debug', 'bug', 'error', 'fix', 'issue', 'problem', 'crash', 'exception', 'stacktrace', 'not working', 'broken', 'fails', 'investigate error',
-    'дебаг', 'баг', 'помилк', 'проблем', 'краш', 'екзепшн', 'стектрейс', 'не працює', 'полам', 'злама', 'виправ', 'дослідж помилк',
-    'дебаг', 'баг', 'ошибк', 'проблем', 'краш', 'эксепшн', 'стектрейс', 'не работает', 'слома', 'исправ', 'исследу ошибк'
-  ],
-  'code-quality': [
-    'refactor', 'clean code', 'solid', 'technical debt', 'maintainable', 'readable', 'code smell', 'coupling', 'cohesion',
-    'рефакторинг', 'чистий код', 'технічний борг', 'читабельн', 'зв\'язніст', 'когезі', 'код смелл', 'якість код',
-    'рефакторинг', 'чистый код', 'технический долг', 'читаемост', 'связност', 'когези', 'качество код'
-  ],
-  'code-review': [
-    'review', 'pull request', ' pr ', 'code review', 'feedback on code', 'review this',
-    'рев\'ю', 'ревю', 'пул реквест', 'перевір код', 'перевірити код', 'подивись код', 'подивитись код', 'огляд код',
-    'ревью', 'пул реквест', 'проверь код', 'проверить код', 'посмотри код', 'обзор код'
-  ],
-  'system-designer': [
-    'architecture', 'system design', 'scalable', 'distributed', 'microservices', 'high availability', 'design pattern', 'cap theorem', 'event driven',
-    'архітектур', 'дизайн систем', 'масштабов', 'розподілен', 'мікросервіс', 'відмовостійкіст', 'паттерн', 'евент дривен', 'поді',
-    'архитектур', 'дизайн систем', 'масштабиру', 'распредел', 'микросервис', 'отказоустойчив', 'паттерн', 'событийно-ориентиров'
-  ],
-  'ui-design': [
-    'ui design', 'visual design', 'color palette', 'typography', 'layout', 'figma', 'design system', 'component library', 'style guide', 'pixel',
-    'юі дизайн', 'візуальн дизай', 'кольоров палітр', 'типографі', 'лейаут', 'фігма', 'дизайн систем', 'компонент бібліотек', 'стайл гайд', 'піксел',
-    'юи дизайн', 'визуальн дизай', 'цветов палитр', 'типографи', 'дизайн систем', 'библиотек компонент', 'стайл гайд', 'пиксел'
-  ],
-  'ux-design': [
-    'ux', 'user experience', 'usability', 'wireframe', 'prototype', 'user flow', 'journey map', 'onboarding', 'user research', 'usability test',
-    'юкз', 'користувацьк досвід', 'юзабіліт', 'вайрфрейм', 'прототип', 'юзер флоу', 'джорні меп', 'онбординг', 'дослідж користувач', 'юзабіліт тест',
-    'юкс', 'пользовательск опыт', 'юзабилит', 'вайрфрейм', 'прототип', 'юзер флоу', 'джорни меп', 'онбординг', 'исследован пользоват'
-  ],
-  'product-management': [
-    'product', 'roadmap', 'prioritize', 'user story', 'requirements', 'sprint', 'backlog', 'product manager', 'feature request', 'rice',
-    'продукт', 'роадмеп', 'пріоритиз', 'юзер сторі', 'вимог', 'спринт', 'беклог', 'продакт менеджер', 'пр', 'запит на функці',
-    'роадмап', 'приоритиз', 'юзер стори', 'требован', 'продакт менеджер', 'запрос на функци'
-  ],
-  'docs-engineer': [
-    'documentation', 'readme', 'tutorial', 'guide', 'api docs', 'onboarding doc', 'wiki', 'write docs',
-    'документаці', 'рідмі', 'туторіал', 'гайд', 'посібник', 'інструкці', 'вікі', 'напиш докум', 'написат докум',
-    'документаци', 'ридми', 'туториал', 'гайд', 'пособие', 'инструкци', 'вики', 'напиш документ'
-  ],
-  'technical-writer': [
-    'technical writing', 'blog post', 'article', 'write about', 'explain how', 'technical article',
-    'технічн пис', 'блог пост', 'статт', 'напиш про', 'поясн як', 'технічн статт',
-    'техническ пис', 'блог пост', 'стать', 'напиш про', 'объясн как', 'техническ стать'
-  ],
-  'investment-banking': [
-    'dcf', 'lbo', 'valuation', 'financial model', 'investment', 'equity research', 'merger', 'acquisition', 'm&a', 'ebitda', 'wacc', 'comps', 'ipo', 'private equity', 'ic memo', 'investment committee',
-    'дисконтованих грошових поток', 'фінансов модел', 'інвестиці', 'злитт', 'поглинанн', 'ебітда', 'вацц', 'приватн еквіт', 'оцінк', 'комп',
-    'дисконтированн денежн поток', 'финансов модел', 'инвестици', 'слиян', 'поглощен', 'ебитда', 'вацц', 'частн эквити', 'оценк'
-  ],
-  'researcher': [
-    'research', 'investigate', 'find information', 'competitive analysis', 'market research', 'analyze market', 'due diligence', 'landscape analysis', 'find and analyze',
-    'дослід', 'розслід', 'знайд інформаці', 'конкурентн аналіз', 'ринк', 'аналіз ринк', 'дью ділайдженс', 'ландшафтн аналіз', 'пошук інформаці', 'пошукай',
-    'исслед', 'расслед', 'найди информац', 'конкурентн анализ', 'рын', 'анализ рынка', 'дью дилайдженс', 'ландшафтн анализ', 'поиск информац'
-  ],
-  'docker': [
-    'dockerfile', 'docker compose', 'docker-compose', 'multi-stage build', 'docker build', 'docker run', 'docker image', 'docker volume', 'docker network', 'docker hub', 'docker registry', 'containerize', '.dockerignore', 'image size', 'image optimization', 'base image', 'container image', 'docker layer', 'docker tag', 'docker push', 'docker pull',
-    'докерфайл', 'докер компоуз', 'мультистейдж', 'образ докер', 'контейнериз', 'оптимізаці образ', 'реєстр докер', 'докер образ', 'докер том', 'докер мережа',
-    'докерфайл', 'докер компоуз', 'мультистейдж', 'образ докер', 'контейнеризац', 'оптимизац образ', 'реестр докер', 'докер образ', 'докер том', 'докер сеть'
-  ],
-  'sysadmin': [
-    'systemd', 'systemctl', 'journalctl', 'server admin', 'linux server', 'manage server', 'remote server', 'administer server', 'ssh key', 'firewall', 'ufw', 'iptables', 'certbot', 'letsencrypt', 'cron job', 'disk usage', 'disk space', 'service management', 'server hardening', 'fail2ban', 'nginx config', 'reverse proxy', 'service restart', 'server setup', 'vps', 'droplet', 'bare metal', 'server monitoring', 'log rotation', 'logrotate', 'server security',
-    'адмін сервер', 'серверн адмін', 'linux сервер', 'керуванн сервер', 'віддален сервер', 'зворотн проксі', 'брандмауер', 'файрвол', 'систем адмін', 'налаштуванн сервер', 'місц на диск', 'розклад задач', 'управлінн служб', 'захист сервер', 'сертифікат',
-    'администр сервер', 'серверн администр', 'linux сервер', 'удален сервер', 'обратн прокси', 'брандмауэр', 'файрвол', 'систем администр', 'настройк сервер', 'место на диск', 'расписан задач', 'управлен служб', 'защит сервер', 'сертификат'
-  ],
-  'kubernetes': [
-    'kubectl', 'kubernetes', 'k8s pod', 'kubernetes deployment', 'helm chart', 'kustomize', 'kubernetes cluster', 'kubeconfig', 'ingress controller', 'horizontal pod autoscal', 'persistent volume', 'kubernetes manifest', 'kubernetes secret', 'kubernetes service', 'kubernetes namespace', 'crashloopbackoff', 'imagepullbackoff', 'pod scheduling', 'node affinity', 'kubernetes operator', 'argocd', 'flux cd',
-    'кубернетес', 'кластер кубернетес', 'хелм чарт', 'маніфест k8s', 'неймспейс k8s', 'деплоймент k8s', 'кубернет поди', 'кубернет сервіс',
-    'кубернетес', 'кластер кубернетес', 'хелм чарт', 'манифест k8s', 'неймспейс k8s', 'деплоймент k8s', 'кубернет поды', 'кубернет сервис'
-  ],
-};
-
-function autoSelectSkills(text) {
-  const t = text.toLowerCase();
-  const scores = {};
-  for (const [id] of Object.entries(config.skills || {})) {
-    if (id === 'auto-mode') continue; // always included separately
-    let score = 0;
-    const triggers = SKILL_TRIGGERS[id] || [];
-    for (const kw of triggers) { if (t.includes(kw)) score += 2; }
-    const descWords = (config.skills[id].description || '').toLowerCase().split(/\W+/).filter(w => w.length > 5);
-    for (const w of descWords) { if (t.includes(w)) score += 1; }
-    if (score > 0) scores[id] = score;
-  }
-  const selected = Object.entries(scores).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([id]) => id);
-  // Always prepend auto-mode meta-skill so Claude knows to embrace specialist roles
-  if (selected.length > 0 && config.skills['auto-mode']) {
-    return ['auto-mode', ...selected];
-  }
-  return selected;
-}
+// Skill classification is now server-side (LLM-based, haiku).
+// SKILL_TRIGGERS and autoSelectSkills() removed — the server classifies via classifySkills().
 
 function toggleAutoSkills() {
   autoSkillsMode = !autoSkillsMode;
@@ -7720,6 +7699,174 @@ async function saveNewSshHost() {
   if (curProjType === 'remote') renderRemoteHostSelect();
 }
 
+// ─── Telegram Remote Access ──────────────────────────────────────────────
+let _tgCodeTimer = null;
+
+async function tgLoadStatus() {
+  try {
+    const r = await fetch('/api/telegram/status');
+    const d = await r.json();
+    const dot = $i('tgStatusDot');
+    if (d.running) {
+      dot.classList.add('online');
+      dot.textContent = '●';
+      $i('tgStartBtn').textContent = t('tg.stop') || '⏹ Зупинити';
+      $i('tgStartBtn').onclick = tgStopBot;
+      if (d.botInfo) {
+        $i('tgBotInfo').style.display = '';
+        $i('tgBotInfo').textContent = `@${d.botInfo.username}`;
+      }
+      if (d.hasToken) $i('tgBotToken').value = '••••••••••••••••';
+    } else {
+      dot.classList.remove('online');
+      $i('tgStartBtn').textContent = t('tg.start') || '▶ Запустити';
+      $i('tgStartBtn').onclick = tgStartBot;
+      $i('tgBotInfo').style.display = 'none';
+    }
+    // Lock mode toggle
+    const acceptCb = $i('tgAcceptNew');
+    acceptCb.checked = d.acceptNewConnections;
+    // Pair button state
+    $i('tgPairBtn').disabled = !d.running || !d.acceptNewConnections;
+    $i('tgPairBtn').style.opacity = (!d.running || !d.acceptNewConnections) ? '.5' : '1';
+    // Devices
+    const devices = d.devices || [];
+    tgRenderDevices(devices);
+    $i('tgCount').textContent = devices.length;
+  } catch {}
+}
+
+async function tgStartBot() {
+  const token = $i('tgBotToken').value.trim();
+  if (!token || token === '••••••••••••••••') {
+    toast(t('tg.err.no_token') || 'Введіть Bot Token від @BotFather', true);
+    return;
+  }
+  $i('tgStartBtn').disabled = true;
+  try {
+    const r = await fetch('/api/telegram/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ botToken: token }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`✅ Telegram-бот запущено: @${d.botInfo?.username || 'bot'}`);
+      tgLoadStatus();
+    } else {
+      toast(`❌ ${d.error}`, true);
+    }
+  } catch (e) {
+    toast(`❌ ${e.message}`, true);
+  } finally {
+    $i('tgStartBtn').disabled = false;
+  }
+}
+
+async function tgStopBot() {
+  try {
+    await fetch('/api/telegram/stop', { method: 'POST' });
+    toast(t('tg.stopped') || '⏹ Telegram-бот зупинено');
+    $i('tgBotToken').value = '';
+    tgLoadStatus();
+  } catch {}
+}
+
+async function tgToggleAccept(checked) {
+  try {
+    await fetch('/api/telegram/accept-connections', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accept: checked }),
+    });
+    $i('tgPairBtn').disabled = !checked;
+    $i('tgPairBtn').style.opacity = checked ? '1' : '.5';
+    if (!checked) tgCancelPairing();
+    toast(checked ? '🔓 Нові підключення дозволено' : '🔒 Нові підключення заблоковано');
+  } catch {}
+}
+
+async function tgGenerateCode() {
+  try {
+    const r = await fetch('/api/telegram/pairing-code', { method: 'POST' });
+    const d = await r.json();
+    if (d.error) { toast(`❌ ${d.error}`, true); return; }
+
+    $i('tgPairingCode').style.display = '';
+    $i('tgCodeDisplay').textContent = d.formattedCode;
+    $i('tgPairBtn').style.display = 'none';
+
+    // Countdown timer
+    const expiresAt = d.expiresAt;
+    if (_tgCodeTimer) clearInterval(_tgCodeTimer);
+    _tgCodeTimer = setInterval(() => {
+      const remaining = Math.max(0, expiresAt - Date.now());
+      if (remaining <= 0) { tgCancelPairing(); return; }
+      const m = Math.floor(remaining / 60000);
+      const s = Math.floor((remaining % 60000) / 1000);
+      $i('tgCodeTimer').textContent = `${m}:${String(s).padStart(2, '0')}`;
+    }, 1000);
+  } catch (e) {
+    toast(`❌ ${e.message}`, true);
+  }
+}
+
+function tgCancelPairing() {
+  $i('tgPairingCode').style.display = 'none';
+  $i('tgPairBtn').style.display = '';
+  if (_tgCodeTimer) { clearInterval(_tgCodeTimer); _tgCodeTimer = null; }
+}
+
+function tgRenderDevices(devices) {
+  const el = $i('tgDeviceList');
+  if (!devices || devices.length === 0) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:11px;padding:4px 0">${t('tg.no_devices')||'No connected devices'}</div>`;
+    return;
+  }
+  el.innerHTML = devices.map(d => {
+    const lastActive = d.last_active ? _tgTimeAgo(d.last_active) : '—';
+    const pairedDate = d.paired_at ? new Date(d.paired_at+'Z').toLocaleDateString() : '';
+    const uname = d.username ? `@${_esc(d.username)}` : '';
+    const notifIcon = d.notifications_enabled ? '🔔' : '🔕';
+    const id = parseInt(d.id,10)||0;
+    const safeName = _esc(d.display_name||'');
+    return `<div class="tg-device">
+      <div style="flex:1;min-width:0">
+        <div class="tg-device-name">📱 ${safeName}</div>
+        <div class="tg-device-meta">${uname}${uname&&pairedDate?' · ':''}${pairedDate?(t('tg.paired')||'since')+' '+pairedDate:''}</div>
+        <div class="tg-device-meta">${notifIcon} ${t('tg.last_active')||'Activity'}: ${lastActive}</div>
+      </div>
+      <button class="tg-device-rm" onclick="tgRemoveDevice(${id},this)" data-name="${safeName}" title="${t('tg.device.disconnect')||'Disconnect device'}">✕</button>
+    </div>`;
+  }).join('');
+}
+
+async function tgRemoveDevice(id, btn) {
+  const name = btn?.dataset?.name || '';
+  const msg = (t('tg.device.remove_confirm')||'Disconnect device "{name}"?').replace('{name}',name);
+  if (!confirm(msg)) return;
+  try {
+    const r = await fetch(`/api/telegram/devices/${id}`, { method:'DELETE' });
+    const d = await r.json();
+    if (d.ok) toast(`📱 ${name||'Device'} — ${t('tg.device.disconnected')||'disconnected'}`);
+    tgLoadStatus();
+  } catch {}
+}
+
+function _tgTimeAgo(iso) {
+  if (!iso) return '';
+  const d = Date.now() - new Date(iso).getTime();
+  if (d < 60000) return t('tg.time.now')||'just now';
+  if (d < 3600000) return (t('tg.time.min')||'{n}m ago').replace('{n}',Math.floor(d/60000));
+  if (d < 86400000) return (t('tg.time.hour')||'{n}h ago').replace('{n}',Math.floor(d/3600000));
+  return (t('tg.time.day')||'{n}d ago').replace('{n}',Math.floor(d/86400000));
+}
+
+function _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// Auto-load Telegram status on page load
+setTimeout(tgLoadStatus, 500);
+
 // ─── Persist UI state across page refreshes ──────────────────────────────
 const LS_KEY = 'cc_ui_state';
 function saveUIState() {
@@ -7746,7 +7893,7 @@ function saveUIState() {
       autoSkillsMode,
       curWorkdir, curProjectId,
       panels: { left: c('leftPanel'), right: c('rightPanel') },
-      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), cmds: c('cmdsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody') },
+      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), cmds: c('cmdsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody'), tg: c('tgBody') },
       openTabs: openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
       activeTabId: openTabs.find(t => t.id === activeTabId && !t.isNew) ? activeTabId : null,
       allProjTabs,
@@ -7775,7 +7922,7 @@ function restoreUIState() {
       setPanel('rightPanel', s.panels.right);
     }
     if (s.sections) {
-      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', proj: 'projBody', sshHosts: 'sshHostsBody' };
+      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', proj: 'projBody', sshHosts: 'sshHostsBody', tg: 'tgBody' };
       for (const [k, elId] of Object.entries(secs)) {
         const el = $i(elId);
         if (!el) continue;
@@ -7851,6 +7998,13 @@ document.addEventListener('mouseout', () => {
 
 // ─── Init ─────────────────────────────────────────────────────────────────
 setLang(localStorage.getItem('lang') || 'uk');
+// Sync lang from server on load
+fetch('/api/lang').then(r => r.json()).then(d => {
+  if (d.lang && d.lang !== localStorage.getItem('lang')) {
+    localStorage.setItem('lang', d.lang);
+    setLang(d.lang);
+  }
+}).catch(() => {});
 restoreUIState();
 _rlRestore(); // Restore rate limit badge from localStorage if still active
 {

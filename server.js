@@ -16,6 +16,7 @@ const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
+const TelegramBot = require('./telegram-bot');
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
 {
@@ -303,6 +304,11 @@ try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); 
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_msg_created   ON messages(created_at)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_chain    ON tasks(chain_id)`); } catch {}
+// Telegram bot: telegram_devices table is created by TelegramBot constructor (single source of truth)
+// Telegram Phase 2: session persistence + message source tracking
+try { db.exec(`ALTER TABLE telegram_devices ADD COLUMN last_session_id TEXT`); } catch(e) {}
+try { db.exec(`ALTER TABLE telegram_devices ADD COLUMN last_workdir TEXT`); } catch(e) {}
+try { db.exec(`ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'web'`); } catch(e) {}
 
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
@@ -314,6 +320,7 @@ const stmts = {
   getSession: db.prepare(`SELECT * FROM sessions WHERE id=?`),
   deleteSession: db.prepare(`DELETE FROM sessions WHERE id=?`),
   addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments) VALUES (?,?,?,?,?,?,?,?)`),
+  addTelegramMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,source) VALUES (?,?,?,?,?,?,?,?,'telegram')`),
   getMsgs: db.prepare(`SELECT * FROM messages WHERE session_id=? ORDER BY id ASC`),
   getMsgsPaginated: db.prepare(`SELECT * FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool') ORDER BY id ASC LIMIT ? OFFSET ?`),
   countMsgs: db.prepare(`SELECT COUNT(*) AS total FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool')`),
@@ -386,6 +393,7 @@ const TASK_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // abort orphaned tasks after 30 mi
 const sessionWatchers = new Map(); // sessionId → Set<WebSocket>
 const taskBuffers = new Map();     // taskId → accumulated text (for late subscribers)
 const chatBuffers = new Map();     // sessionId → accumulated text for direct chat (for catch-up on reconnect)
+const sessionQueues = new Map();   // sessionId → [msg, ...] — queue persistence across WS reconnects (page refresh)
 
 // ─── Ask User (Internal MCP) ─────────────────────────────────────────────
 // Pending user questions: requestId → { resolve, sessionId, timer, question, options, inputType }
@@ -707,8 +715,9 @@ function processQueue() {
     }
   }
 }
-// Run every 60s
-setInterval(processQueue, 60000);
+// Run every 15s (fast enough to pick up unblocked tasks promptly,
+// light enough to be negligible — just two SELECT queries on SQLite)
+setInterval(processQueue, 15000);
 // Kick off on startup — smart recovery for in_progress tasks
 setTimeout(() => {
   const stuck = db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`).all();
@@ -760,6 +769,185 @@ class WsProxy {
   detach() { this._ws = null; }
 }
 
+// ─── Telegram Proxy (duck-typed WsProxy for Telegram bot streaming) ──────────
+class TelegramProxy {
+  constructor(bot, chatId, sessionId) {
+    this._bot = bot;
+    this._chatId = chatId;
+    this._sessionId = sessionId;
+    this._buffer = '';
+    this._progressMsgId = null;
+    this._updateTimer = null;
+    this._lastEditAt = 0;
+    this._toolsUsed = [];
+    this._finished = false;
+  }
+
+  send(raw) {
+    try {
+      const data = JSON.parse(raw);
+      // Also broadcast to web UI watchers
+      broadcastToSession(this._sessionId, data);
+
+      if (data.type === 'text') {
+        this._buffer += (data.text || '');
+        this._scheduleUpdate();
+      } else if (data.type === 'tool_use' || data.type === 'tool') {
+        this._toolsUsed.push(data.tool || data.tool_name || 'tool');
+      } else if (data.type === 'done') {
+        this._finalize(data);
+      } else if (data.type === 'error') {
+        // Track last error but don't finalize — streaming errors are non-fatal.
+        // If the error is followed by 'done', _finalize sends the full response.
+        // If processTelegramChat's catch block sends an error, _sendError handles it.
+        this._lastError = data.error || 'Unknown error';
+        // Only call _sendError if we haven't accumulated any text (pure error response)
+        if (!this._buffer.trim()) {
+          this._sendError(data);
+        }
+      }
+    } catch (e) {
+      console.error('[TelegramProxy] parse error:', e.message);
+    }
+  }
+
+  _scheduleUpdate() {
+    if (this._finished) return;
+    if (this._updateTimer) return;
+    const elapsed = Date.now() - this._lastEditAt;
+    const delay = Math.max(3000 - elapsed, 500);
+    this._updateTimer = setTimeout(() => this._sendProgress(), delay);
+  }
+
+  async _sendProgress() {
+    this._updateTimer = null;
+    if (this._finished) return;
+
+    this._lastEditAt = Date.now();
+
+    let preview = this._buffer;
+    if (preview.length > 3500) {
+      preview = '...\n' + preview.slice(-3500);
+    }
+    preview = this._bot._escHtml(preview);
+
+    const toolLine = this._toolsUsed.length
+      ? `\n🔧 ${this._bot._escHtml(this._toolsUsed.slice(-3).join(', '))}`
+      : '';
+    const text = `⏳ <b>Processing...</b>${toolLine}\n\n${preview}`;
+
+    try {
+      if (this._progressMsgId) {
+        await this._bot._callApi('editMessageText', {
+          chat_id: this._chatId,
+          message_id: this._progressMsgId,
+          text: text.slice(0, 4096),
+          parse_mode: 'HTML'
+        }).catch(() => {
+          return this._bot._callApi('editMessageText', {
+            chat_id: this._chatId,
+            message_id: this._progressMsgId,
+            text: text.replace(/<[^>]+>/g, '').slice(0, 4096)
+          });
+        });
+      } else {
+        const result = await this._bot._sendMessage(this._chatId, text.slice(0, 4096), { parse_mode: 'HTML' });
+        if (result && result.message_id) {
+          this._progressMsgId = result.message_id;
+        }
+      }
+    } catch (e) {
+      if (e.message && e.message.includes('429')) {
+        this._updateTimer = setTimeout(() => this._sendProgress(), 6000);
+      }
+    }
+  }
+
+  async _finalize(data) {
+    if (this._finished) return; // already finalized or errored
+    this._finished = true;
+    if (this._updateTimer) {
+      clearTimeout(this._updateTimer);
+      this._updateTimer = null;
+    }
+
+    // Delete progress message if exists
+    if (this._progressMsgId) {
+      try {
+        await this._bot._callApi('deleteMessage', {
+          chat_id: this._chatId,
+          message_id: this._progressMsgId
+        });
+      } catch (e) { /* ignore */ }
+      this._progressMsgId = null;
+    }
+
+    // Send final response — convert Claude's Markdown to Telegram HTML
+    if (this._buffer.trim()) {
+      const html = this._bot._mdToHtml(this._buffer);
+      const chunks = this._bot._chunkForTelegram(html, MAX_MESSAGE_LENGTH - 100);
+      for (const chunk of chunks) {
+        await this._bot._sendMessage(this._chatId, chunk, { parse_mode: 'HTML' }).catch(() => {
+          return this._bot._sendMessage(this._chatId, chunk.replace(/<[^>]+>/g, ''));
+        });
+      }
+    }
+
+    // Send completion notification with buttons
+    const duration = data.duration ? ` (${Math.round(data.duration / 1000)}s)` : '';
+    const toolsSummary = this._toolsUsed.length ? `\n🔧 Tools: ${this._bot._escHtml([...new Set(this._toolsUsed)].join(', '))}` : '';
+    await this._bot._sendMessage(this._chatId,
+      `✅ <b>Done</b>${duration}${toolsSummary}`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: JSON.stringify({
+          inline_keyboard: [[
+            { text: '💬 Continue', callback_data: 'cm:compose' },
+            { text: '📋 Full Log', callback_data: 'cm:full' },
+            { text: '🏠 Menu', callback_data: 'm:menu' }
+          ]]
+        })
+      }
+    );
+  }
+
+  async _sendError(data) {
+    if (this._finished) return; // already finalized or errored
+    this._finished = true;
+    if (this._updateTimer) {
+      clearTimeout(this._updateTimer);
+      this._updateTimer = null;
+    }
+
+    if (this._progressMsgId) {
+      try {
+        await this._bot._callApi('deleteMessage', {
+          chat_id: this._chatId,
+          message_id: this._progressMsgId
+        });
+      } catch (e) { /* ignore */ }
+    }
+
+    await this._bot._sendMessage(this._chatId,
+      `❌ <b>Error:</b> ${this._bot._escHtml(data.error || 'Unknown error')}`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: JSON.stringify({
+          inline_keyboard: [[
+            { text: '🔄 Retry', callback_data: 'cm:compose' },
+            { text: '🏠 Menu', callback_data: 'm:menu' }
+          ]]
+        })
+      }
+    );
+  }
+
+  get readyState() { return 1; } // WebSocket.OPEN
+}
+
+// Telegram max message length constant (used by TelegramProxy for splitting)
+const MAX_MESSAGE_LENGTH = 4000;
+
 // Build Claude content blocks from text + file attachments.
 // Returns plain string when no attachments, or ContentBlock[] when attachments present.
 function buildUserContent(text, attachments = []) {
@@ -794,18 +982,25 @@ const DEFAULT_SLASH_COMMANDS = [
   { id: 'sc6', name: '/test',     text: 'Write comprehensive tests: happy path, edge cases, and error scenarios. Explain what each test covers.' },
   { id: 'sc7', name: '/docs',     text: 'Write clear documentation: purpose, parameters, return values, usage examples, and any gotchas.' },
   { id: 'sc8', name: '/optimize', text: 'Analyze performance and optimize. Identify bottlenecks, propose improvements, quantify the expected gains.' },
+  { id: 'sc9', name: '/compact',  text: 'Summarize our conversation so far into a concise recap: key decisions made, what was built or changed, current state, and what still needs to be done. Be brief and structured.' },
+  { id: 'sc10', name: '/init',    text: 'Analyze this project and create a CLAUDE.md file in the project root. Include: project overview, tech stack, architecture, key conventions, common commands (build, test, lint), and any gotchas a developer should know. Be thorough but concise.' },
 ];
 
 /** Load LOCAL config only — used by write operations (add/delete MCP, upload/delete skill).
- *  Seeds default slash commands into config.json if the key is absent (fresh install). */
+ *  Seeds default slash commands into config.json on fresh install and after updates:
+ *  only adds defaults whose name is not yet present — never overwrites user commands. */
 function loadConfig() {
   let c;
   try { c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch { c = {}; }
   if (!c.mcpServers)    c.mcpServers    = {};
   if (!c.skills)        c.skills        = {};
-  // Seed defaults only when the key is absent — preserves any user edits
-  if (!Object.prototype.hasOwnProperty.call(c, 'slashCommands')) {
-    c.slashCommands = DEFAULT_SLASH_COMMANDS;
+  if (!c.slashCommands) c.slashCommands = [];
+  // Merge-in any default commands the user doesn't have yet (match by name).
+  // This handles fresh installs AND version upgrades that add new defaults.
+  const existingNames = new Set(c.slashCommands.map(cmd => cmd.name));
+  const toAdd = DEFAULT_SLASH_COMMANDS.filter(def => !existingNames.has(def.name));
+  if (toAdd.length > 0) {
+    c.slashCommands.push(...toAdd);
     try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); } catch {}
   }
   return c;
@@ -958,6 +1153,75 @@ function buildSystemPrompt(skillIds, config) {
   }
   _systemPromptCache.set(cacheKey, prompt);
   return prompt;
+}
+
+// ============================================
+// LLM-BASED TASK CLASSIFIER (haiku)
+// ============================================
+// Single haiku call returns both specialist skills AND a short chat title.
+// Replaces client-side keyword matching + ugly message truncation.
+// Haiku via CLI → ~10-15s (CLI overhead), but runs before main agent.
+const CLASSIFY_TIMEOUT_MS = 30000;
+
+async function classifyTask(userMessage, currentSkills, config, workdir) {
+  const catalog = Object.entries(config.skills || {})
+    .filter(([id]) => id !== 'auto-mode')
+    .map(([id, s]) => `- ${id}: ${(s.label || id).replace(/^\S+\s/, '')} — ${s.description || ''}`)
+    .join('\n');
+
+  const currentCtx = currentSkills.length
+    ? `\nCurrently active: ${currentSkills.filter(id => id !== 'auto-mode').join(', ')}`
+    : '';
+
+  const prompt = `Specialists:\n${catalog}${currentCtx}\n\nUser task: "${userMessage.substring(0, 600)}"`;
+
+  const cli = new ClaudeCLI({ cwd: workdir });
+
+  return new Promise((resolve) => {
+    let fullText = '';
+    let settled = false;
+    const fallback = { skills: [], title: '' };
+    const timer = setTimeout(() => {
+      if (!settled) { settled = true; resolve(fallback); }
+    }, CLASSIFY_TIMEOUT_MS);
+
+    cli.send({
+      prompt,
+      model: 'haiku',
+      maxTurns: 1,
+      allowedTools: ['_none'],
+      mcpServers: {},
+      systemPrompt: 'You are a task classifier. Analyze the user task and:\n1. Select 1-4 most relevant specialist IDs from the list\n2. Generate a short chat title (3-7 words, in the SAME language as user\'s message)\n\nReturn ONLY a JSON object: {"skills":["id1","id2"],"title":"Short title here"}\nNo explanation, no markdown.',
+    })
+    .onText(t => { fullText += t; })
+    .onDone(() => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        const match = fullText.match(/\{[\s\S]*\}/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          const skills = (parsed.skills || []).filter(id => typeof id === 'string' && config.skills[id] && id !== 'auto-mode');
+          const title = typeof parsed.title === 'string' ? parsed.title.trim().substring(0, 80) : '';
+          resolve({
+            skills: skills.length > 0 && config.skills['auto-mode'] ? ['auto-mode', ...skills] : skills,
+            title,
+          });
+          return;
+        }
+        resolve(fallback);
+      } catch {
+        resolve(fallback);
+      }
+    })
+    .onError(() => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(fallback);
+    });
+  });
 }
 
 // ============================================
@@ -1433,6 +1697,23 @@ app.post('/api/internal/notify', express.json(), (req, res) => {
 app.use(auth.authMiddleware);
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ─── Language ─────────────────────────────────────────────────────────────────
+app.get('/api/lang', (req, res) => {
+  const c = loadConfig();
+  res.json({ lang: c.lang || 'uk' });
+});
+
+app.put('/api/lang', express.json(), (req, res) => {
+  const lang = req.body.lang;
+  if (!['uk', 'en', 'ru'].includes(lang)) return res.status(400).json({ error: 'Invalid lang' });
+  const c = loadConfig();
+  c.lang = lang;
+  saveConfig(c);
+  // Update bot language if running
+  if (telegramBot) telegramBot.lang = lang;
+  res.json({ ok: true });
+});
+
 // ─── Health check ─────────────────────────────────────────────────────────────
 // Deep health check: verifies DB connectivity, reports uptime / memory / WS connections.
 // Returns HTTP 503 if any critical subsystem is degraded.
@@ -1755,11 +2036,11 @@ app.put('/api/sessions/:id', (req, res) => {
   res.json({ok:true});
 });
 app.get('/api/sessions/:id/tasks-count', (req,res) => { res.json(stmts.countTasksBySession.get(req.params.id)); });
-app.delete('/api/sessions/:id', (req,res) => { stmts.deleteTasksBySession.run(req.params.id); stmts.deleteSession.run(req.params.id); res.json({ok:true}); });
+app.delete('/api/sessions/:id', (req,res) => { stmts.deleteTasksBySession.run(req.params.id); stmts.deleteSession.run(req.params.id); sessionQueues.delete(req.params.id); res.json({ok:true}); });
 app.post('/api/sessions/bulk-delete', (req,res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'no ids' });
-  const del = db.transaction(() => { for (const id of ids) { stmts.deleteTasksBySession.run(id); stmts.deleteSession.run(id); } });
+  const del = db.transaction(() => { for (const id of ids) { stmts.deleteTasksBySession.run(id); stmts.deleteSession.run(id); sessionQueues.delete(id); } });
   del();
   res.json({ ok: true, deleted: ids.length });
 });
@@ -2411,6 +2692,296 @@ app.post('/api/project/init', (req, res) => {
 });
 
 // ============================================
+// TELEGRAM BOT
+// ============================================
+let telegramBot = null;
+
+// ─── Process a chat message from Telegram ────────────────────────────────────
+// Reuses the same core logic as processChat but without WebSocket dependency.
+async function processTelegramChat({ sessionId, text, userId, chatId, attachments }) {
+  if (!telegramBot) return;
+
+  // Check if session is busy
+  if (activeTasks.has(sessionId)) {
+    await telegramBot._sendMessage(chatId, '⏳ This session is busy. Wait for completion or use /stop.');
+    return;
+  }
+
+  // Load session from DB
+  const session = stmts.getSession.get(sessionId);
+  if (!session) {
+    await telegramBot._sendMessage(chatId, '❌ Session not found.');
+    return;
+  }
+
+  const proxy = new TelegramProxy(telegramBot, chatId, sessionId);
+  const abortController = new AbortController();
+
+  activeTasks.set(sessionId, {
+    proxy,
+    abortController,
+    source: 'telegram',
+    userId,
+    chatId,
+    startedAt: Date.now()
+  });
+  chatBuffers.set(sessionId, '');
+
+  try {
+    // Build user content (with attachments if any)
+    const userContent = buildUserContent(text, attachments || []);
+
+    // Store user message in DB (marked as telegram source)
+    stmts.addTelegramMsg.run(sessionId, 'user', 'text', typeof userContent === 'string' ? userContent : text, null, null, null, null);
+
+    // Load session config
+    const model = session.model || 'sonnet';
+    const mode = session.mode || 'auto';
+    const workdir = session.workdir || WORKDIR;
+
+    // Parse active MCP and skills
+    let mcpIds = [];
+    let skillIds = [];
+    try { mcpIds = JSON.parse(session.active_mcp || '[]'); } catch(e) {}
+    try { skillIds = JSON.parse(session.active_skills || '[]'); } catch(e) {}
+
+    // Build system prompt from skills (same logic as processChat)
+    const config = loadMergedConfig();
+    const systemPrompt = buildSystemPrompt(skillIds, config);
+
+    // Build MCP servers map
+    const mcpServers = {};
+    for (const mid of mcpIds) {
+      const m = config.mcpServers[mid];
+      if (!m) continue;
+      if (m.type === 'http' || m.type === 'sse' || m.url) {
+        mcpServers[mid] = { type: m.type || 'http', url: m.url, ...(m.headers ? { headers: m.headers } : {}), ...(m.env ? { env: expandTildeInObj(m.env) } : {}) };
+      } else {
+        mcpServers[mid] = { command: m.command, args: m.args || [], env: expandTildeInObj(m.env || {}) };
+      }
+    }
+
+    // Internal MCPs (always injected)
+    mcpServers['_ccs_ask_user'] = {
+      command: 'node',
+      args: [path.join(__dirname, 'mcp-ask-user.js')],
+      env: {
+        ASK_USER_SERVER_URL: `http://127.0.0.1:${PORT}`,
+        ASK_USER_SESSION_ID: sessionId,
+        ASK_USER_SECRET: ASK_USER_SECRET,
+      },
+    };
+    mcpServers['_ccs_notify'] = {
+      command: 'node',
+      args: [path.join(__dirname, 'mcp-notify.js')],
+      env: {
+        NOTIFY_SERVER_URL: `http://127.0.0.1:${PORT}`,
+        NOTIFY_SESSION_ID: sessionId,
+        NOTIFY_SECRET: NOTIFY_SECRET,
+      },
+    };
+
+    // Save last user msg for reconnect recovery
+    stmts.setLastUserMsg.run(text, sessionId);
+
+    // Send "thinking" indicator
+    await telegramBot._sendMessage(chatId, '🤔 <b>Thinking...</b>', { parse_mode: 'HTML' });
+
+    const params = {
+      prompt: text,
+      userContent,
+      systemPrompt,
+      mcpServers,
+      model,
+      maxTurns: 30,
+      ws: proxy,
+      sessionId,
+      abortController,
+      claudeSessionId: session.claude_session_id || undefined,
+      mode,
+      workdir,
+    };
+
+    // Check if the active project is a remote SSH project
+    const _activeProj = loadProjects().find(p => p.workdir === workdir && p.isRemote);
+    if (_activeProj) {
+      await runSshSingle({
+        ...params,
+        remoteHost:    _activeProj.remoteHost,
+        remoteWorkdir: _activeProj.workdir,
+        sshKeyPath:    _activeProj.sshKeyPath || '',
+        password:      decryptPassword(_activeProj.password) || '',
+        port:          _activeProj.port || 22,
+      });
+    } else {
+      await runCliSingle(params);
+    }
+
+    proxy.send(JSON.stringify({ type: 'done', duration: Date.now() - activeTasks.get(sessionId)?.startedAt }));
+  } catch (err) {
+    console.error('[processTelegramChat] Error:', err.message);
+    proxy.send(JSON.stringify({ type: 'error', error: err.message }));
+  } finally {
+    activeTasks.delete(sessionId);
+    chatBuffers.delete(sessionId);
+    // Clean up pending ask_user questions for this session
+    for (const [rid, entry] of pendingAskUser) {
+      if (entry.sessionId === sessionId) {
+        clearTimeout(entry.timer);
+        pendingAskUser.delete(rid);
+        entry.resolve({ answer: '[Session ended]' });
+      }
+    }
+    try { stmts.clearLastUserMsg.run(sessionId); } catch {}
+  }
+}
+
+function _attachTelegramListeners(bot) {
+  bot.on('device_paired', (device) => {
+    wss.clients.forEach(ws => {
+      try { ws.send(JSON.stringify({ type: 'telegram_device_paired', device })); } catch {}
+    });
+  });
+  bot.on('device_removed', (data) => {
+    wss.clients.forEach(ws => {
+      try { ws.send(JSON.stringify({ type: 'telegram_device_removed', ...data })); } catch {}
+    });
+  });
+
+  // Phase 2: Process messages sent from Telegram to Claude
+  bot.on('send_message', async ({ sessionId, text, userId, chatId, attachments, callback }) => {
+    try {
+      if (callback) callback({ ok: true });
+      await processTelegramChat({ sessionId, text, userId, chatId, attachments });
+    } catch (err) {
+      console.error('[Telegram] send_message error:', err.message);
+      // Note: callback already called before processTelegramChat — errors are
+      // reported via TelegramProxy._sendError, not via callback
+    }
+  });
+
+  // Phase 2: Stop running task from Telegram
+  bot.on('stop_task', async ({ sessionId, chatId }) => {
+    const task = activeTasks.get(sessionId);
+    if (task && task.abortController) {
+      task.abortController.abort();
+      await bot._sendMessage(chatId, '🛑 Task stopped.');
+    } else {
+      await bot._sendMessage(chatId, 'No active task in this session.');
+    }
+  });
+}
+
+function initTelegramBot() {
+  const c = loadConfig();
+  const tg = c.telegram;
+  if (!tg || !tg.enabled || !tg.botToken) return;
+
+  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk' });
+  telegramBot.acceptNewConnections = tg.acceptNewConnections !== false;
+  _attachTelegramListeners(telegramBot);
+
+  telegramBot.start(tg.botToken).catch(err => {
+    log.error('[telegram] Failed to start bot', { error: err.message });
+    telegramBot = null;
+  });
+}
+
+// ─── Telegram API Endpoints ─────────────────────────────────────────────────
+
+app.get('/api/telegram/status', (_, res) => {
+  const c = loadConfig();
+  const tg = c.telegram || {};
+  res.json({
+    enabled: !!tg.enabled,
+    running: telegramBot?.isRunning() || false,
+    botInfo: telegramBot?.getBotInfo() || null,
+    acceptNewConnections: telegramBot?.acceptNewConnections ?? tg.acceptNewConnections ?? true,
+    hasToken: !!tg.botToken,
+    devices: telegramBot?.getDevices() || [],
+  });
+});
+
+app.post('/api/telegram/start', (req, res) => {
+  const { botToken } = req.body;
+  if (!botToken) return res.status(400).json({ error: 'botToken required' });
+
+  // Save to config
+  const c = loadConfig();
+  if (!c.telegram) c.telegram = {};
+  c.telegram.botToken = botToken;
+  c.telegram.enabled = true;
+  if (c.telegram.acceptNewConnections === undefined) c.telegram.acceptNewConnections = true;
+  saveConfig(c);
+
+  // Stop existing bot if running
+  if (telegramBot) {
+    telegramBot.stop();
+    telegramBot = null;
+  }
+
+  // Start new bot
+  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk' });
+  telegramBot.acceptNewConnections = c.telegram.acceptNewConnections !== false;
+  _attachTelegramListeners(telegramBot);
+
+  telegramBot.start(botToken)
+    .then(botInfo => {
+      res.json({ ok: true, botInfo });
+    })
+    .catch(err => {
+      telegramBot = null;
+      // Don't disable in config — let user fix the token
+      res.status(400).json({ error: err.message });
+    });
+});
+
+app.post('/api/telegram/stop', (_, res) => {
+  if (telegramBot) {
+    telegramBot.stop();
+    telegramBot = null;
+  }
+  const c = loadConfig();
+  if (c.telegram) c.telegram.enabled = false;
+  saveConfig(c);
+  res.json({ ok: true });
+});
+
+app.post('/api/telegram/pairing-code', (_, res) => {
+  if (!telegramBot || !telegramBot.isRunning()) {
+    return res.status(400).json({ error: 'Bot is not running' });
+  }
+  const result = telegramBot.generatePairingCode();
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json(result);
+});
+
+app.delete('/api/telegram/devices/:id', (req, res) => {
+  if (!telegramBot) return res.status(400).json({ error: 'Bot is not running' });
+  const id = parseInt(req.params.id, 10);
+  const removed = telegramBot.removeDevice(id);
+  res.json({ ok: removed });
+});
+
+app.put('/api/telegram/accept-connections', (req, res) => {
+  const { accept } = req.body;
+  if (typeof accept !== 'boolean') return res.status(400).json({ error: 'accept (boolean) required' });
+
+  // Save to config
+  const c = loadConfig();
+  if (!c.telegram) c.telegram = {};
+  c.telegram.acceptNewConnections = accept;
+  saveConfig(c);
+
+  // Apply to running bot
+  if (telegramBot) {
+    telegramBot.acceptNewConnections = accept;
+  }
+
+  res.json({ ok: true, acceptNewConnections: accept });
+});
+
+// ============================================
 // WEBSOCKET
 // ============================================
 server.on('upgrade', (req, socket, head) => {
@@ -2500,10 +3071,10 @@ wss.on('connection', (ws) => {
       // Migrate _tabBusy/_tabAbort keys from tempId to real session id
       if (tabId && tabId !== localSessionId) {
         ws._tabBusy[localSessionId] = true; delete ws._tabBusy[tabId];
-        if (ws._tabQueue[tabId]) { ws._tabQueue[localSessionId] = ws._tabQueue[tabId]; delete ws._tabQueue[tabId]; }
+        if (ws._tabQueue[tabId]) { ws._tabQueue[localSessionId] = ws._tabQueue[tabId]; delete ws._tabQueue[tabId]; sessionQueues.set(localSessionId, ws._tabQueue[localSessionId]); sessionQueues.delete(tabId); }
       }
 
-      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false } = msg;
+      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false, autoSkill=false } = msg;
 
       let replyQuote = '';
       if (reply_to && reply_to.content) {
@@ -2520,22 +3091,47 @@ wss.on('connection', (ws) => {
       } else {
         stmts.incrementRetry.run(localSessionId);
       }
-      stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(sIds),mode,agentMode,model,workdir||null,localSessionId);
 
-      // Auto-title (reuses existSess from initial lookup — no extra DB query)
+      // Load config early — needed for skill classification
+      const config = loadMergedConfig();
+
+      // ─── LLM-based task classification ──────────────────────────────
+      // When autoSkill=true, classify the user message with haiku (~10-15s via CLI).
+      // Returns both specialist skills AND a short chat title in one call.
+      let effectiveSkills = sIds;
+      let classifiedTitle = '';
+      log.info('[classify] autoSkill=%s sIds=%j msgLen=%d', autoSkill, sIds, userMessage.length);
+      if (autoSkill) {
+        try {
+          proxy.send(JSON.stringify({ type:'agent_status', status:'⚡ Classifying task...', statusKey:'status.classifying', tabId: effectiveTabId }));
+          const classification = await classifyTask(userMessage, sIds, config, workdir || WORKDIR);
+          effectiveSkills = classification.skills;
+          classifiedTitle = classification.title;
+          log.info('[classify] skills=%j title=%s', effectiveSkills, classifiedTitle);
+          if (effectiveSkills.length > 0) {
+            proxy.send(JSON.stringify({ type:'skills_auto', skills: effectiveSkills, tabId: effectiveTabId }));
+          }
+        } catch (err) {
+          log.error('[classify] Failed: %s', err.message);
+          effectiveSkills = config.skills['auto-mode'] ? ['auto-mode'] : [];
+        }
+      }
+
+      stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(effectiveSkills),mode,agentMode,model,workdir||null,localSessionId);
+
+      // Auto-title: use LLM-generated title if available, otherwise truncate message
       if (isNewSession || existSess?.title==='Нова сесія') {
-        const title=userMessage.substring(0,60)+(userMessage.length>60?'...':'');
+        const title = classifiedTitle || (userMessage.substring(0,60)+(userMessage.length>60?'...':''));
         stmts.updateTitle.run(title, localSessionId);
         ws.send(JSON.stringify({ type:'session_title', sessionId:localSessionId, title, tabId: effectiveTabId }));
       }
-      const config = loadMergedConfig();
       const abortController = new AbortController();
       myAbortController = abortController;
       if (effectiveTabId) ws._tabAbort[effectiveTabId] = abortController;
       else ws._abort = abortController;
 
       // Build system prompt — cached by skill combination, skill files cached in memory
-      const systemPrompt = buildSystemPrompt(sIds, config);
+      const systemPrompt = buildSystemPrompt(effectiveSkills, config);
 
       const mcpServers = {};
       for (const mid of mIds) {
@@ -2618,10 +3214,35 @@ wss.on('connection', (ws) => {
 
       proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt }));
       proxy.send(JSON.stringify({ type:'files_changed' }));
+      // Notify Telegram (if task was NOT started from Telegram — those get notified via TelegramProxy)
+      if (telegramBot && telegramBot.isRunning()) {
+        const _tgTask = activeTasks.get(localSessionId);
+        if (!_tgTask || _tgTask.source !== 'telegram') {
+          const _tgSess = stmts.getSession.get(localSessionId);
+          telegramBot.notifyTaskComplete({
+            sessionId: localSessionId,
+            title: _tgSess?.title || 'Chat',
+            status: 'done',
+            duration: Date.now() - _chatStartedAt
+          });
+        }
+      }
     } catch(err) {
       if(err.name==='AbortError') proxy.send(JSON.stringify({ type:'agent_status', status:'Stopped', statusKey:'status.stopped', tabId: effectiveTabId }));
       else { log.error('chat error', { message: err.message, name: err.name }); proxy.send(JSON.stringify({ type:'error', error:err.message, tabId: effectiveTabId })); }
       proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt }));
+      // Notify Telegram about error (if task was NOT started from Telegram)
+      if (telegramBot && telegramBot.isRunning() && err.name !== 'AbortError') {
+        const _tgTask = activeTasks.get(localSessionId);
+        if (!_tgTask || _tgTask.source !== 'telegram') {
+          telegramBot.notifyTaskComplete({
+            sessionId: localSessionId,
+            title: stmts.getSession.get(localSessionId)?.title || 'Chat',
+            status: 'error',
+            error: err.message
+          });
+        }
+      }
     } finally {
       activeTasks.delete(localSessionId);
       chatBuffers.delete(localSessionId); // cleanup in-memory buffer
@@ -2646,10 +3267,12 @@ wss.on('connection', (ws) => {
         const tabQ = ws._tabQueue[effectiveTabId] || [];
         if (tabQ.length > 0) {
           const next = tabQ.shift();
+          if (tabQ.length === 0) { delete ws._tabQueue[effectiveTabId]; sessionQueues.delete(effectiveTabId); }
           ws.send(queuePayload(effectiveTabId));
           processChat(next).catch(err => log.error('processChat tab-queue error', { message: err.message }));
         } else {
           delete ws._tabQueue[effectiveTabId];
+          sessionQueues.delete(effectiveTabId);
           ws.send(JSON.stringify({ type: 'queue_update', tabId: effectiveTabId, pending: 0, items: [] }));
         }
       } else if (!isStale) {
@@ -2661,6 +3284,22 @@ wss.on('connection', (ws) => {
           try { await processChat(next); } catch (err) { log.error('processChat legacy-queue error', { message: err.message }); }
         } else {
           ws.send(JSON.stringify({ type: 'queue_update', pending: 0, items: [] }));
+        }
+      } else if (isStale && effectiveTabId) {
+        // Page refresh scenario: task finished on old (closed) WS but queue items
+        // persist in sessionQueues. Trigger dequeue on the live WS that now owns this session.
+        const pendingQueue = sessionQueues.get(effectiveTabId);
+        if (pendingQueue?.length > 0) {
+          setImmediate(() => {
+            const watchers = sessionWatchers.get(effectiveTabId);
+            if (!watchers) return;
+            for (const liveWs of watchers) {
+              if (liveWs.readyState === 1) {
+                liveWs.emit('message', JSON.stringify({ type: '_dequeue_next', tabId: effectiveTabId }));
+                break;
+              }
+            }
+          });
         }
       }
     }
@@ -2678,12 +3317,32 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    // Internal: dequeue next item after page refresh (triggered by stale finally block via setImmediate)
+    // Internal: dequeue next queued message after page refresh or task completion on stale WS.
+    // Triggered via setImmediate + emit('message') because processChat is scoped to each WS connection.
+    if (msg.type === '_dequeue_next') {
+      const tabId = msg.tabId;
+      if (!tabId) return;
+      // Guard: session may have been deleted while dequeue was pending
+      if (!stmts.getSession.get(tabId)) { sessionQueues.delete(tabId); return; }
+      if (ws._tabQueue[tabId]?.length > 0 && !ws._tabBusy[tabId]) {
+        const next = ws._tabQueue[tabId].shift();
+        if (ws._tabQueue[tabId].length === 0) { delete ws._tabQueue[tabId]; sessionQueues.delete(tabId); }
+        ws.send(queuePayload(tabId));
+        processChat(next).catch(err => log.error('processChat dequeue error', { message: err.message }));
+      }
+      return;
+    }
+
     if (msg.type==='chat') {
       const tabId = msg.tabId || null;
       if (tabId) {
         // Per-tab concurrency: queue if this specific tab is busy
         if (ws._tabBusy[tabId]) {
-          if (!ws._tabQueue[tabId]) ws._tabQueue[tabId] = [];
+          if (!ws._tabQueue[tabId]) {
+            ws._tabQueue[tabId] = sessionQueues.get(tabId) || [];
+            sessionQueues.set(tabId, ws._tabQueue[tabId]);
+          }
           msg._queueId = ++ws._queueIdCounter;
           ws._tabQueue[tabId].push(msg);
           ws.send(queuePayload(tabId));
@@ -2711,6 +3370,7 @@ wss.on('connection', (ws) => {
         // resetting _tabBusy after a new processChat has already started.
         ws._tabBusy[tabId] = false;
         if (ws._tabQueue) ws._tabQueue[tabId] = [];
+        sessionQueues.delete(tabId);
         ws._tabAbort[tabId].abort();
         delete ws._tabAbort[tabId];
       } else if (!tabId) {
@@ -2754,6 +3414,7 @@ wss.on('connection', (ws) => {
           const idx = queue.findIndex(m => m.queueId === queueId);
           if (idx !== -1) {
             queue.splice(idx, 1);
+            if (queue.length === 0) sessionQueues.delete(tid);
             ws.send(JSON.stringify({ type: 'queue_removed', queueId, tabId: tid }));
             ws.send(queuePayload(tid));
             break;
@@ -2865,8 +3526,11 @@ wss.on('connection', (ws) => {
               if (chatBuf && ws.readyState === 1) {
                 ws.send(JSON.stringify({ type: 'text', text: chatBuf, tabId: sessionId, catchUp: true }));
               }
-              // Clear proxy buffer — already covered by chatBuf above
-              activeTask.proxy._buffer = [];
+              // Keep non-text events from proxy buffer (tool activity, done, error, status).
+              // Text is already replayed via chatBuf above — discard text/thinking to avoid duplication.
+              activeTask.proxy._buffer = activeTask.proxy._buffer.filter(raw => {
+                try { const d = JSON.parse(raw); return d.type !== 'text' && d.type !== 'thinking'; } catch { return false; }
+              });
               activeTask.proxy.attach(ws);
               ws._tabAbort[sessionId] = activeTask.abortController;
               if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'task_resumed', sessionId, tabId: sessionId }));
@@ -2879,9 +3543,22 @@ wss.on('connection', (ws) => {
             }
           }
         }
+        // Restore queue from persistent storage (survives page refresh / WS reconnect)
+        if (!ws._tabQueue[sessionId]?.length && sessionQueues.has(sessionId) && sessionQueues.get(sessionId).length > 0) {
+          ws._tabQueue[sessionId] = sessionQueues.get(sessionId); // shared ref
+        }
         // Re-send queue state so client can restore queued message badges after tab switch
         if (ws._tabQueue?.[sessionId]?.length > 0 && ws.readyState === 1) {
           ws.send(queuePayload(sessionId));
+          // If the session is idle (task already finished while WS was disconnected),
+          // immediately start processing the first queued item.
+          if (!ws._tabBusy[sessionId] && !activeTasks.has(sessionId)) {
+            setImmediate(() => {
+              if (ws.readyState === 1) {
+                ws.emit('message', JSON.stringify({ type: '_dequeue_next', tabId: sessionId }));
+              }
+            });
+          }
         }
       }
       return;
@@ -3057,7 +3734,11 @@ wss.on('connection', (ws) => {
           if (chatBuf && ws.readyState === 1) {
             ws.send(JSON.stringify({ type: 'text', text: chatBuf, tabId: tabId || sessionId, catchUp: true }));
           }
-          task.proxy._buffer = [];
+          // Keep non-text events (tool, done, error, status) — discard text/thinking
+          // to avoid duplication with chatBuf replay above
+          task.proxy._buffer = task.proxy._buffer.filter(raw => {
+            try { const d = JSON.parse(raw); return d.type !== 'text' && d.type !== 'thinking'; } catch { return false; }
+          });
           task.proxy.attach(ws);
           if (tabId) ws._tabAbort[tabId] = task.abortController;
           ws.send(JSON.stringify({ type: 'task_resumed', sessionId, tabId }));
@@ -3100,11 +3781,27 @@ wss.on('connection', (ws) => {
     for (const [tid, ac] of Object.entries(ws._tabAbort || {})) {
       if (!activeTasks.has(tid)) { try { ac.abort(); } catch {} }
     }
+    // Clean up orphaned sessionQueues entries: if no other watcher and no active task,
+    // the queue will never be processed — remove to prevent memory leak.
+    for (const tid of Object.keys(ws._tabQueue || {})) {
+      const watchers = sessionWatchers.get(tid);
+      const hasOtherWatcher = watchers && [...watchers].some(w => w !== ws && w.readyState === 1);
+      if (!hasOtherWatcher && !activeTasks.has(tid)) {
+        sessionQueues.delete(tid);
+      }
+    }
     ws._tabAbort = {};
     ws._tabBusy  = {};
     ws._tabQueue = {};
   });
 });
+
+// Seed default slash commands on startup so they are available immediately
+// (not deferred until the first config-write operation).
+loadConfig();
+
+// Start Telegram bot if configured
+initTelegramBot();
 
 server.listen(PORT, () => {
   log.info('server started', {
@@ -3114,6 +3811,7 @@ server.listen(PORT, () => {
     setup:     auth.isSetupDone() ? 'done' : 'required',
     nodeEnv:   process.env.NODE_ENV || 'development',
     logLevel:  process.env.LOG_LEVEL || 'info',
+    telegram:  telegramBot?.isRunning() ? 'running' : 'off',
   });
 });
 
@@ -3126,6 +3824,9 @@ process.on('unhandledRejection', (reason) => {
 // ─── Graceful shutdown ────────────────────────────────────────────────────
 function gracefulShutdown(signal) {
   console.log(`\n⚠️  ${signal} received — shutting down gracefully…`);
+
+  // 0. Stop Telegram bot
+  if (telegramBot) { telegramBot.stop(); telegramBot = null; }
 
   // 1. Abort all running Claude subprocesses
   wss.clients.forEach(ws => {

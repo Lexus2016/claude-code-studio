@@ -2,7 +2,7 @@
 
 # Claude Code Studio
 
-**The browser interface for Claude Code.** Chat with AI, run tasks automatically, and manage your work — all from one tab, without touching the terminal.
+**The browser interface for Claude Code CLI.** Chat with AI, run tasks automatically, and manage your work — all from one tab, without touching the terminal.
 
 > Available in: [English](README.md) | [Українська](README_UA.md) | [Русский](README_RU.md)
 
@@ -10,7 +10,7 @@
 
 ## What is this?
 
-Claude Code is Anthropic's AI that writes code, runs commands, edits files, and ships features — not just talks about them. It's genuinely powerful.
+Claude Code CLI is Anthropic's AI that writes code, runs commands, edits files, and ships features — not just talks about them. It's genuinely powerful.
 
 The problem: it lives in your terminal. And the terminal has limits.
 
@@ -70,6 +70,42 @@ Instead of typing "Do a thorough code review: readability, performance, security
 | `/optimize` | Find bottlenecks, propose improvements, estimate gains |
 
 Add your own, edit them, delete them. As many as you want.
+
+### 📱 Telegram Bot — Control Claude from Your Phone
+
+Your laptop is closed. You're at the gym, in a meeting, across the world. But your AI is still working. And now — so are you.
+
+Pair your phone with Claude Code Studio in 30 seconds (6-character code from Settings), and your phone becomes a full remote control:
+
+**Queue & Monitor**
+- `/projects` — browse all your sessions
+- `/chats` — pick up where you left off
+- `/chat` — start a new session right now
+- `/tasks` — see your Kanban board. Which tasks are running? Which are done?
+
+**See Results Instantly**
+- `/last` — show Claude's last action (code written, tests run, files changed)
+- `/full` — get the complete output of the last task
+- Your phone buzzes when each task finishes. Tap the notification to see what Claude built.
+
+**Manage on the Go**
+- `/files`, `/cat` — browse project files and peek at code without opening an editor
+- `/diff` — see exactly what changed in the last commit
+- `/log` — recent git history — who changed what, and when
+- `/new` — start a new task queue
+- `/stop` — stop a running task
+
+**Send Messages, Get Answers Instantly**
+Type a message to Claude directly from Telegram. It streams back to both your phone AND your browser simultaneously. The conversation is unified — continue in Telegram, pick it up on your laptop five minutes later, everything is there.
+
+**Multi-Device Pairing**
+Pair your phone, your tablet, your laptop — all at once. Control the same Claude Code Studio instance from anywhere. Each device gets push notifications when tasks finish, with inline buttons: [View Result] [Continue] [Menu].
+
+**Why This Matters**
+
+You queue 10 refactoring tasks at 9pm. Instead of staring at your laptop, you go to the gym. At 10:15pm, your phone buzzes: "Task 3 complete". You tap [View] and see the changes. You add a comment: "Next, add error handling for the network case." Claude gets it immediately and starts task 4. Two hours later, everything is done. You tap [View Final] and review the full output in Telegram before you even sit at your desk.
+
+No laptop required. No constant monitoring. Just work, delegated.
 
 ### 👥 Multiple agents working at once
 
@@ -163,6 +199,9 @@ docker compose up -d --build
 | 💬 Real-time chat | Responses stream in as Claude thinks and works |
 | 📋 Kanban board | Queue tasks → Claude runs them automatically |
 | ⚡ Slash commands | Saved prompt shortcuts with `/` autocomplete |
+| 📱 Telegram bot | Control Claude from your phone — notifications, commands, live session bridge |
+| 🔔 Push notifications | Task finished? Get a notification with [View] [Continue] buttons |
+| 📡 Session bridge | Send messages from Telegram, responses stream to both phone and browser simultaneously |
 | 👥 Multi-agent mode | Claude spawns a team for complex tasks |
 | 🔄 Auto-continue | Hits turn limit mid-task? Resumes automatically |
 | ↗️ Fork conversation | Continue from any message in a new chat |
@@ -193,6 +232,7 @@ Single Node.js process. No build step. No TypeScript. No framework.
 server.js         — Express HTTP + WebSocket
 auth.js           — bcrypt passwords, 32-byte session tokens
 claude-cli.js     — spawns `claude` subprocess, parses JSON stream
+telegram-bot.js   — Telegram bot: remote control, notifications, session bridge
 public/index.html — entire frontend (HTML + CSS + JS in one file)
 config.json       — MCP server definitions + skills catalog
 data/chats.db     — SQLite: sessions + messages

@@ -120,9 +120,12 @@ class ClaudeCLI {
     if (allowedTools?.length) args.push('--allowedTools', ...allowedTools);
 
     // MCP config file (cached by content hash — avoids write/delete per request)
+    // Pass mcpServers={} to explicitly disable MCP (overrides global config).
+    // Pass mcpServers={...} to use specific servers.
+    // Omit mcpServers to use global defaults.
     let mcpConfigHash = null;
     let mcpConfigPath = null;
-    if (mcpServers && Object.keys(mcpServers).length > 0) {
+    if (mcpServers && typeof mcpServers === 'object') {
       const mcp = getMcpConfigPath(mcpServers);
       mcpConfigPath = mcp.path;
       mcpConfigHash = mcp.hash;
