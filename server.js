@@ -1689,6 +1689,13 @@ app.put('/api/sessions/:id', (req, res) => {
 });
 app.get('/api/sessions/:id/tasks-count', (req,res) => { res.json(stmts.countTasksBySession.get(req.params.id)); });
 app.delete('/api/sessions/:id', (req,res) => { stmts.deleteTasksBySession.run(req.params.id); stmts.deleteSession.run(req.params.id); res.json({ok:true}); });
+app.post('/api/sessions/bulk-delete', (req,res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'no ids' });
+  const del = db.transaction(() => { for (const id of ids) { stmts.deleteTasksBySession.run(id); stmts.deleteSession.run(id); } });
+  del();
+  res.json({ ok: true, deleted: ids.length });
+});
 app.post('/api/sessions/:id/open-terminal', (req, res) => {
   const session = stmts.getSession.get(req.params.id);
   if (!session?.claude_session_id) return res.status(400).json({ error: 'No Claude session ID' });

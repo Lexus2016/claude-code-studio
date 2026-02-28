@@ -275,6 +275,23 @@ body::after {
 .hist-item .del { opacity: 0; background: none; border: none; color: var(--red); cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 3px; }
 .hist-item:hover .del { opacity: .5; }
 .hist-item .del:hover { opacity: 1; }
+/* ─── History bulk selection ─── */
+.hist-select-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 1px 4px; border-radius: 3px; line-height: 1; opacity: .6; flex-shrink: 0; }
+.hist-select-btn:hover { opacity: 1; color: var(--accent); }
+.hist-select-btn.active { color: var(--accent); opacity: 1; }
+.hist-item .hist-chk { width: 14px; height: 14px; flex-shrink: 0; accent-color: var(--accent); cursor: pointer; display: none; }
+.hist-selmode .hist-item .hist-chk { display: block; }
+.hist-selmode .hist-item .del { display: none !important; }
+.hist-selmode .hist-item { cursor: default; }
+.hist-selmode .hist-item.selected { background: var(--abg) !important; }
+.hist-bulk-bar { display: none; padding: 5px 8px; gap: 5px; border-top: 1px solid var(--border); margin-top: 2px; }
+.hist-bulk-bar.visible { display: flex; align-items: center; }
+.hist-bulk-bar .bulk-info { font-size: 11px; color: var(--muted); flex: 1; }
+.hist-bulk-bar .bulk-all { background: none; border: 1px solid var(--border); color: var(--fg); font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+.hist-bulk-bar .bulk-all:hover { border-color: var(--accent); color: var(--accent); }
+.hist-bulk-bar .bulk-del { background: var(--red); border: none; color: #fff; font-size: 11px; padding: 3px 10px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+.hist-bulk-bar .bulk-del:hover { opacity: .85; }
+.hist-bulk-bar .bulk-del:disabled { opacity: .35; cursor: not-allowed; }
 .hist-spin { width: 8px; height: 8px; flex-shrink: 0; margin-right: 4px; }
 
 /* ─── Header ─── */
@@ -1485,10 +1502,16 @@ body::after {
 
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('hist')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('hist')}">
-        <span data-i18n="sec.chats">Чати</span> <span class="badge" id="histCount">0</span>
+        <span><span data-i18n="sec.chats">Чати</span> <span class="badge" id="histCount">0</span></span>
+        <button class="hist-select-btn" id="histSelBtn" onclick="event.stopPropagation();toggleHistSelect()" title="Вибрати кілька">☑</button>
       </div>
       <div class="sec-body" id="histBody">
         <div class="hist-list" id="histList"></div>
+        <div class="hist-bulk-bar" id="histBulkBar">
+          <span class="bulk-info" id="histBulkInfo">0 вибрано</span>
+          <button class="bulk-all" onclick="selectAllHist()">Всі</button>
+          <button class="bulk-del" id="histBulkDel" onclick="delSelectedHist()" disabled>Видалити</button>
+        </div>
       </div>
     </div>
 
@@ -4577,9 +4600,11 @@ function switchTab(id) {
     oldTS.attachments = [..._attachments];
     oldTS.replyTo = replyTo;
   }
-  // Reset streaming state for OLD tab BEFORE changing activeTabId
+  // Clear only the DOM reference for the old tab — curTxt/_toolLog/_toolCounts are kept
+  // so loadSess can restore them when the user switches back while Claude is still running.
+  // The done/error WS handlers clear them when the session finishes in background.
   const oldTS = getTS(activeTabId);
-  oldTS.curEl = null; oldTS.curTxt = ''; oldTS._toolCounts = {}; oldTS._toolLog = [];
+  oldTS.curEl = null;
   // NOW switch to new tab
   activeTabId = id;
   const tab = openTabs.find(t => t.id === id);
@@ -5236,6 +5261,9 @@ async function checkVersion() {
 }
 
 // ─── Session History ──────────────────────────────────────────────────────
+let histSelectMode = false;
+const histSelected = new Set();
+
 async function loadHist() {
   try {
     const el = $i('histList');
@@ -5243,17 +5271,23 @@ async function loadHist() {
     const r = await fetch(`/api/sessions?workdir=${encodeURIComponent(curWorkdir)}`);
     const ss = await r.json();
     el.innerHTML = '';
+    el.classList.toggle('hist-selmode', histSelectMode);
     $i('histCount').textContent = ss.length || '';
     for (const s of ss) {
       const d = document.createElement('div');
-      d.className = `hist-item ${s.id === currentSessionId ? 'active' : ''}`;
+      const isSel = histSelected.has(String(s.id));
+      d.className = `hist-item ${s.id === currentSessionId ? 'active' : ''} ${isSel ? 'selected' : ''}`;
       d.dataset.sess = s.id;
       d.setAttribute('role', 'button');
       d.setAttribute('tabindex', '0');
       const dt = new Date(s.updated_at).toLocaleDateString(localStorage.getItem('lang') || 'uk', { day: 'numeric', month: 'short' });
-      d.innerHTML = `<span class="ht" data-tip="${escH(s.title)}">${escH(s.title)}</span><span class="hd">${dt}</span><button class="del" onclick="event.stopPropagation();delSess('${s.id}')" title="✕">✕</button>`;
-      d.onclick = () => openTab(s.id, s.title);
-      d.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTab(s.id, s.title); } };
+      d.innerHTML = `<input type="checkbox" class="hist-chk" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();toggleSessCheck('${s.id}',this)"><span class="ht" data-tip="${escH(s.title)}">${escH(s.title)}</span><span class="hd">${dt}</span><button class="del" onclick="event.stopPropagation();delSess('${s.id}')" title="✕">✕</button>`;
+      if (histSelectMode) {
+        d.onclick = (e) => { const chk = d.querySelector('.hist-chk'); chk.checked = !chk.checked; toggleSessCheck(s.id, chk); };
+      } else {
+        d.onclick = () => openTab(s.id, s.title);
+      }
+      d.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); histSelectMode ? d.click() : openTab(s.id, s.title); } };
       el.appendChild(d);
     }
     updateHistSpinners();
@@ -5575,23 +5609,33 @@ async function loadSess(id) {
 
     // Restore in-flight streaming content — priority order:
     // 1. tabState (in-memory, most recent — background tab that was generating)
-    // 2. partial_text from DB (persisted every 5 chunks — survives page refresh)
-    //    Only shown when session is NOT currently streaming (isChatRunning / hasRunningTask),
-    //    because if it IS streaming the WS catch-up (subscribe_session) will replay the buffer.
+    // 2. isChatRunning: session is actively running (page refresh) — show spinner,
+    //    WS subscribe_session will replay the buffer and fill in content.
+    // 3. partial_text from DB (persisted every 5 chunks) — shown only when interrupted
+    //    (not running), so we don't conflict with live WS catch-up replay.
     const savedTxt = tabState[id]?.curTxt;
-    if (savedTxt) {
+    const savedLog = tabState[id]?._toolLog;
+    if (savedTxt || savedLog?.length) {
+      // Tab-switch restore: recreate streaming element with accumulated text + tool log
       streaming.el = addMsg('assistant');
-      streaming.txt = savedTxt;
+      streaming.txt = savedTxt || '';
       addSpinner(streaming.el);
-      streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
-      // Restore live tool activity from background tab state
-      const savedLog = tabState[id]?._toolLog;
+      if (savedTxt) streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
+      // Restore live tool activity panel even if there's no text yet (tools-only phase)
       if (savedLog?.length) {
         streaming.toolLog = savedLog.slice();
         streaming.toolCounts = tabState[id]?._toolCounts || {};
         _renderToolLive(streaming.el, streaming.toolLog);
       }
-    } else if (d.partial_text && !d.isChatRunning && !d.hasRunningTask) {
+    } else if (d.isChatRunning) {
+      // Page refresh while Claude is running — pre-create streaming element so the
+      // WS catch-up (subscribe_session) and any incoming tool/text messages have a target.
+      // partial_text (if any) shown as streaming since session is still live.
+      streaming.el = addMsg('assistant');
+      streaming.txt = d.partial_text || '';
+      addSpinner(streaming.el);
+      if (streaming.txt) streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
+    } else if (d.partial_text && !d.hasRunningTask) {
       // Session was interrupted (server crash / killed) — show what was saved to DB
       const el = addMsg('assistant');
       el.querySelector('.msg').innerHTML = renderMd(d.partial_text);
@@ -5655,6 +5699,74 @@ async function delSess(id) {
   if (openTabs.find(t => t.id === id)) closeTab(id);
   else if (id === currentSessionId) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); }
   loadHist();
+}
+
+// ─── History bulk selection ────────────────────────────────────────────────
+function toggleHistSelect() {
+  histSelectMode = !histSelectMode;
+  histSelected.clear();
+  const btn = $i('histSelBtn');
+  const bar = $i('histBulkBar');
+  if (btn) btn.classList.toggle('active', histSelectMode);
+  if (bar) bar.classList.toggle('visible', histSelectMode);
+  updateHistBulkBar();
+  loadHist();
+}
+
+function toggleSessCheck(id, chk) {
+  const sid = String(id);
+  if (chk.checked) histSelected.add(sid); else histSelected.delete(sid);
+  const item = $i('histList').querySelector(`[data-sess="${sid}"]`);
+  if (item) item.classList.toggle('selected', chk.checked);
+  updateHistBulkBar();
+}
+
+function updateHistBulkBar() {
+  const n = histSelected.size;
+  const info = $i('histBulkInfo');
+  const del = $i('histBulkDel');
+  const allBtn = document.querySelector('#histBulkBar .bulk-all');
+  if (info) info.textContent = `${n} вибрано`;
+  if (del) del.disabled = n === 0;
+  if (allBtn) {
+    const items = $i('histList') ? $i('histList').querySelectorAll('.hist-item[data-sess]') : [];
+    const allSel = items.length > 0 && [...items].every(i => histSelected.has(String(i.dataset.sess)));
+    allBtn.textContent = allSel ? 'Зняти всі' : 'Всі';
+  }
+}
+
+function selectAllHist() {
+  const items = $i('histList').querySelectorAll('.hist-item[data-sess]');
+  const allSel = [...items].every(i => histSelected.has(String(i.dataset.sess)));
+  items.forEach(item => {
+    const sid = String(item.dataset.sess);
+    const chk = item.querySelector('.hist-chk');
+    if (allSel) { histSelected.delete(sid); item.classList.remove('selected'); if (chk) chk.checked = false; }
+    else { histSelected.add(sid); item.classList.add('selected'); if (chk) chk.checked = true; }
+  });
+  updateHistBulkBar();
+}
+
+async function delSelectedHist() {
+  const ids = [...histSelected];
+  if (ids.length === 0) return;
+  if (!confirm(`Видалити ${ids.length} чат${ids.length === 1 ? '' : ids.length < 5 ? 'и' : 'ів'}?`)) return;
+  const btn = $i('histBulkDel');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    await fetch('/api/sessions/bulk-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+    try { const bc = new BroadcastChannel('kanban'); ids.forEach(id => bc.postMessage({ type: 'session_deleted', sessionId: id })); bc.close(); } catch {}
+    ids.forEach(id => {
+      if (openTabs.find(t => t.id === id)) closeTab(id);
+      else if (id === currentSessionId) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); }
+    });
+    histSelected.clear();
+    updateHistBulkBar();
+    loadHist();
+  } catch (e) {
+    toast('Помилка видалення', true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Видалити'; }
+  }
 }
 
 // ─── MCP & Skills ─────────────────────────────────────────────────────────
