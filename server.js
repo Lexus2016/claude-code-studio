@@ -783,8 +783,33 @@ function buildUserContent(text, attachments = []) {
 // ============================================
 // CONFIG
 // ============================================
-/** Load LOCAL config only — used by write operations (add/delete MCP, upload/delete skill). */
-function loadConfig() { try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch { return { mcpServers:{}, skills:{} }; } }
+
+/** Default slash commands — seeded into config.json on first run / fresh install. */
+const DEFAULT_SLASH_COMMANDS = [
+  { id: 'sc1', name: '/check',    text: 'Check this step by step: syntax, logic, edge cases, and potential bugs. Be thorough.' },
+  { id: 'sc2', name: '/review',   text: 'Do a thorough code review: readability, performance, security, and adherence to best practices. Point out issues with severity levels (critical / warning / suggestion).' },
+  { id: 'sc3', name: '/fix',      text: 'Find and fix the bug. Explain what caused it and exactly what you changed.' },
+  { id: 'sc4', name: '/explain',  text: 'Explain this code clearly: what it does, how it works, and why it\'s structured this way. Use examples if helpful.' },
+  { id: 'sc5', name: '/refactor', text: 'Refactor this code for clarity and maintainability. Keep the exact same behavior. Show what changed and why.' },
+  { id: 'sc6', name: '/test',     text: 'Write comprehensive tests: happy path, edge cases, and error scenarios. Explain what each test covers.' },
+  { id: 'sc7', name: '/docs',     text: 'Write clear documentation: purpose, parameters, return values, usage examples, and any gotchas.' },
+  { id: 'sc8', name: '/optimize', text: 'Analyze performance and optimize. Identify bottlenecks, propose improvements, quantify the expected gains.' },
+];
+
+/** Load LOCAL config only — used by write operations (add/delete MCP, upload/delete skill).
+ *  Seeds default slash commands into config.json if the key is absent (fresh install). */
+function loadConfig() {
+  let c;
+  try { c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch { c = {}; }
+  if (!c.mcpServers)    c.mcpServers    = {};
+  if (!c.skills)        c.skills        = {};
+  // Seed defaults only when the key is absent — preserves any user edits
+  if (!Object.prototype.hasOwnProperty.call(c, 'slashCommands')) {
+    c.slashCommands = DEFAULT_SLASH_COMMANDS;
+    try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); } catch {}
+  }
+  return c;
+}
 function saveConfig(c) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2));
   _mergedConfigCache = null; // invalidate on every write
