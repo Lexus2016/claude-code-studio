@@ -586,6 +586,15 @@ async function startTask(task) {
             .run(task.id);
           db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
           log.info(`[taskWorker] task ${task.id}: done`);
+          // Notify Telegram about completed task
+          if (telegramBot && telegramBot.isRunning()) {
+            telegramBot.notifyTaskComplete({
+              sessionId,
+              title: task.title || 'Task',
+              status: 'done',
+              duration: Date.now() - _taskStartedAt,
+            }).catch(() => {});
+          }
         } else if (task.chain_id && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure
           const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
@@ -615,6 +624,16 @@ async function startTask(task) {
               detail: task.chain_id ? `Retries exhausted (${reason}). Dependent tasks will be cancelled.` : reason,
               chainTaskId: task.id, chainStatus: 'cancelled',
             });
+          }
+          // Notify Telegram about failed task
+          if (telegramBot && telegramBot.isRunning()) {
+            telegramBot.notifyTaskComplete({
+              sessionId,
+              title: task.title || 'Task',
+              status: 'error',
+              duration: Date.now() - _taskStartedAt,
+              error: reason,
+            }).catch(() => {});
           }
           // Cascade cancel of dependents happens in next processQueue() run
         }

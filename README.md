@@ -88,7 +88,7 @@ Pair your phone with Claude Code Studio in 30 seconds (6-character code from Set
 **See Results Instantly**
 - `/last` — show Claude's last action (code written, tests run, files changed)
 - `/full` — get the complete output of the last task
-- Your phone buzzes when each task finishes. Tap the notification to see what Claude built.
+- **Kanban task notifications** — your phone buzzes when each queued task finishes or fails, with the task name, status, and how long it took. No more checking the browser to see if it's done.
 
 **Manage on the Go**
 - `/files`, `/cat` — browse project files and peek at code without opening an editor

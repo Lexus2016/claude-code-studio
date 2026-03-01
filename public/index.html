@@ -1655,13 +1655,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
     <!-- Tunnel Manager -->
     <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('tunnel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('tunnel')}">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('tunnel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('tunnel')}">
         <span data-i18n="sec.tunnel">Remote Access</span>
         <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
           <span class="tg-status-dot" id="tunnelStatusDot">●</span>
         </div>
       </div>
-      <div class="sec-body" id="tunnelBody">
+      <div class="sec-body collapsed" id="tunnelBody">
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="tn.hint">Відкрийте доступ до Studio через інтернет.</div>
 
         <!-- Provider selector -->
@@ -8240,7 +8240,7 @@ function saveUIState() {
       autoSkillsMode,
       curWorkdir, curProjectId,
       panels: { left: c('leftPanel'), right: c('rightPanel') },
-      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), cmds: c('cmdsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody'), tg: c('tgBody') },
+      sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), cmds: c('cmdsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody'), tunnel: c('tunnelBody'), tg: c('tgBody') },
       openTabs: openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
       activeTabId: openTabs.find(t => t.id === activeTabId && !t.isNew) ? activeTabId : null,
       allProjTabs,
@@ -8269,7 +8269,7 @@ function restoreUIState() {
       setPanel('rightPanel', s.panels.right);
     }
     if (s.sections) {
-      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', proj: 'projBody', sshHosts: 'sshHostsBody', tg: 'tgBody' };
+      const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', proj: 'projBody', sshHosts: 'sshHostsBody', tunnel: 'tunnelBody', tg: 'tgBody' };
       for (const [k, elId] of Object.entries(secs)) {
         const el = $i(elId);
         if (!el) continue;
