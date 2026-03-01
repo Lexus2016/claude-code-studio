@@ -17,6 +17,7 @@ const ClaudeCLI = require('./claude-cli');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
 const TelegramBot = require('./telegram-bot');
+const TunnelManager = require('./tunnel-manager');
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
 {
@@ -771,16 +772,30 @@ class WsProxy {
 
 // ─── Telegram Proxy (duck-typed WsProxy for Telegram bot streaming) ──────────
 class TelegramProxy {
-  constructor(bot, chatId, sessionId) {
+  constructor(bot, chatId, sessionId, userId) {
     this._bot = bot;
     this._chatId = chatId;
     this._sessionId = sessionId;
+    this._userId = userId;
     this._buffer = '';
     this._progressMsgId = null;
     this._updateTimer = null;
     this._lastEditAt = 0;
     this._toolsUsed = [];
     this._finished = false;
+    // Typing indicator — sends "typing..." action every 4s
+    this._typingInterval = setInterval(() => {
+      this._bot._callApi('sendChatAction', { chat_id: this._chatId, action: 'typing' }).catch(() => {});
+    }, 4000);
+    // Send initial typing action immediately
+    this._bot._callApi('sendChatAction', { chat_id: this._chatId, action: 'typing' }).catch(() => {});
+  }
+
+  _stopTyping() {
+    if (this._typingInterval) {
+      clearInterval(this._typingInterval);
+      this._typingInterval = null;
+    }
   }
 
   send(raw) {
@@ -797,18 +812,106 @@ class TelegramProxy {
       } else if (data.type === 'done') {
         this._finalize(data);
       } else if (data.type === 'error') {
-        // Track last error but don't finalize — streaming errors are non-fatal.
-        // If the error is followed by 'done', _finalize sends the full response.
-        // If processTelegramChat's catch block sends an error, _sendError handles it.
         this._lastError = data.error || 'Unknown error';
-        // Only call _sendError if we haven't accumulated any text (pure error response)
         if (!this._buffer.trim()) {
           this._sendError(data);
         }
+      } else if (data.type === 'ask_user') {
+        this._handleAskUser(data);
+      } else if (data.type === 'ask_user_timeout') {
+        this._handleAskUserDismiss(this._bot._t('ask_timeout'));
+      } else if (data.type === 'notification') {
+        this._handleNotification(data);
       }
     } catch (e) {
       console.error('[TelegramProxy] parse error:', e.message);
     }
+  }
+
+  // ─── ask_user: Forward Claude's question to Telegram user ────────────────
+  async _handleAskUser(data) {
+    // Pause progress updates while waiting for user input
+    if (this._updateTimer) {
+      clearTimeout(this._updateTimer);
+      this._updateTimer = null;
+    }
+    this._stopTyping();
+
+    const questions = (Array.isArray(data.questions) && data.questions.length) ? data.questions : [{ question: data.question || '?' }];
+    const q = questions[0];
+    const questionText = q.question || data.question || '?';
+
+    // Store pending state on the bot's user context
+    if (this._userId) {
+      const ctx = this._bot._getContext(this._userId);
+      ctx.pendingAskRequestId = data.requestId;
+      ctx.pendingAskQuestions = questions;
+    }
+
+    // Build message text (i18n-aware)
+    const t = (k, v) => this._bot._t(k, v);
+    let text = `❓ <b>${t('ask_title')}</b>\n\n${this._bot._escHtml(questionText)}`;
+
+    // Build inline keyboard
+    const skipLabel = t('ask_skip_btn');
+    let replyMarkup;
+    if (q.options && q.options.length > 0) {
+      // Options mode: show buttons (truncate label to 64 chars for Telegram display)
+      const rows = q.options.map((opt, i) => ([{
+        text: (typeof opt === 'string' ? opt : (opt.label || opt.value || `Option ${i + 1}`)).substring(0, 64),
+        callback_data: `ask:${i}`
+      }]));
+      rows.push([{ text: skipLabel, callback_data: 'ask:skip' }]);
+      replyMarkup = JSON.stringify({ inline_keyboard: rows });
+      text += `\n\n<i>${t('ask_choose_hint')}</i>`;
+    } else {
+      // Free text mode: prompt user to type
+      replyMarkup = JSON.stringify({
+        inline_keyboard: [[{ text: skipLabel, callback_data: 'ask:skip' }]]
+      });
+      text += `\n\n<i>${t('ask_text_hint')}</i>`;
+    }
+
+    // Delete progress message if exists (show clean question)
+    if (this._progressMsgId) {
+      try {
+        await this._bot._callApi('deleteMessage', { chat_id: this._chatId, message_id: this._progressMsgId });
+      } catch {}
+      this._progressMsgId = null;
+    }
+
+    try {
+      await this._bot._sendMessage(this._chatId, text, { parse_mode: 'HTML', reply_markup: replyMarkup });
+    } catch {
+      // Fallback without HTML
+      await this._bot._sendMessage(this._chatId, text.replace(/<[^>]+>/g, ''), { reply_markup: replyMarkup }).catch(() => {});
+    }
+  }
+
+  // Dismiss ask_user UI (timeout or answered elsewhere)
+  async _handleAskUserDismiss(reason) {
+    if (this._userId) {
+      const ctx = this._bot._getContext(this._userId);
+      ctx.pendingAskRequestId = null;
+      ctx.pendingAskQuestions = null;
+    }
+    await this._bot._sendMessage(this._chatId, reason).catch(() => {});
+    // Resume typing indicator (guard against double-start)
+    if (!this._finished && !this._typingInterval) {
+      this._typingInterval = setInterval(() => {
+        this._bot._callApi('sendChatAction', { chat_id: this._chatId, action: 'typing' }).catch(() => {});
+      }, 4000);
+    }
+  }
+
+  // ─── Notifications: Forward to Telegram ──────────────────────────────────
+  async _handleNotification(data) {
+    const icons = { info: 'ℹ️', warn: '⚠️', error: '❌', success: '✅' };
+    const icon = icons[data.level] || 'ℹ️';
+    const detail = data.detail ? `\n${this._bot._escHtml(data.detail)}` : '';
+    const progress = data.progress ? ` (${data.progress.current}/${data.progress.total})` : '';
+    const text = `${icon} ${this._bot._escHtml(data.title)}${progress}${detail}`;
+    await this._bot._sendMessage(this._chatId, text, { parse_mode: 'HTML' }).catch(() => {});
   }
 
   _scheduleUpdate() {
@@ -866,6 +969,7 @@ class TelegramProxy {
   async _finalize(data) {
     if (this._finished) return; // already finalized or errored
     this._finished = true;
+    this._stopTyping();
     if (this._updateTimer) {
       clearTimeout(this._updateTimer);
       this._updateTimer = null;
@@ -882,13 +986,31 @@ class TelegramProxy {
       this._progressMsgId = null;
     }
 
-    // Send final response — convert Claude's Markdown to Telegram HTML
-    if (this._buffer.trim()) {
-      const html = this._bot._mdToHtml(this._buffer);
-      const chunks = this._bot._chunkForTelegram(html, MAX_MESSAGE_LENGTH - 100);
-      for (const chunk of chunks) {
-        await this._bot._sendMessage(this._chatId, chunk, { parse_mode: 'HTML' }).catch(() => {
-          return this._bot._sendMessage(this._chatId, chunk.replace(/<[^>]+>/g, ''));
+    // Send final response — collapse large messages with preview + "Show full" button
+    const rawLen = this._buffer.trim().length;
+    const isLarge = rawLen > TG_COLLAPSE_THRESHOLD;
+
+    if (rawLen > 0) {
+      if (!isLarge) {
+        // Short response — send in full
+        const html = this._bot._mdToHtml(this._buffer);
+        const chunks = this._bot._chunkForTelegram(html, MAX_MESSAGE_LENGTH - 100);
+        for (const chunk of chunks) {
+          await this._bot._sendMessage(this._chatId, chunk, { parse_mode: 'HTML' }).catch(() => {
+            return this._bot._sendMessage(this._chatId, chunk.replace(/<[^>]+>/g, ''));
+          });
+        }
+      } else {
+        // Large response — send preview only, full available via button
+        const previewRaw = this._buffer.substring(0, TG_PREVIEW_LENGTH);
+        // Truncate at last newline to avoid broken lines/fences
+        const lastNl = previewRaw.lastIndexOf('\n');
+        const cleanPreview = lastNl > TG_PREVIEW_LENGTH / 2 ? previewRaw.substring(0, lastNl) : previewRaw;
+        const previewHtml = this._bot._mdToHtml(cleanPreview);
+        const totalChars = rawLen > 1000 ? `${Math.round(rawLen / 1000)}k` : rawLen;
+        const moreIndicator = `\n\n<i>···  ${totalChars} chars — tap 📄 to expand  ···</i>`;
+        await this._bot._sendMessage(this._chatId, previewHtml + moreIndicator, { parse_mode: 'HTML' }).catch(() => {
+          return this._bot._sendMessage(this._chatId, (cleanPreview + `\n\n···  ${totalChars} chars — tap 📄 to expand  ···`).replace(/<[^>]+>/g, ''));
         });
       }
     }
@@ -896,17 +1018,16 @@ class TelegramProxy {
     // Send completion notification with buttons
     const duration = data.duration ? ` (${Math.round(data.duration / 1000)}s)` : '';
     const toolsSummary = this._toolsUsed.length ? `\n🔧 Tools: ${this._bot._escHtml([...new Set(this._toolsUsed)].join(', '))}` : '';
+    const doneButtons = [
+      { text: '💬 Continue', callback_data: 'cm:compose' },
+      ...(isLarge ? [{ text: '📄 Full', callback_data: 'cm:full' }] : []),
+      { text: '🏠 Menu', callback_data: 'm:menu' }
+    ];
     await this._bot._sendMessage(this._chatId,
       `✅ <b>Done</b>${duration}${toolsSummary}`,
       {
         parse_mode: 'HTML',
-        reply_markup: JSON.stringify({
-          inline_keyboard: [[
-            { text: '💬 Continue', callback_data: 'cm:compose' },
-            { text: '📋 Full Log', callback_data: 'cm:full' },
-            { text: '🏠 Menu', callback_data: 'm:menu' }
-          ]]
-        })
+        reply_markup: JSON.stringify({ inline_keyboard: [doneButtons] })
       }
     );
   }
@@ -914,6 +1035,7 @@ class TelegramProxy {
   async _sendError(data) {
     if (this._finished) return; // already finalized or errored
     this._finished = true;
+    this._stopTyping();
     if (this._updateTimer) {
       clearTimeout(this._updateTimer);
       this._updateTimer = null;
@@ -947,6 +1069,10 @@ class TelegramProxy {
 
 // Telegram max message length constant (used by TelegramProxy for splitting)
 const MAX_MESSAGE_LENGTH = 4000;
+// Threshold for collapsing large responses (raw markdown chars)
+const TG_COLLAPSE_THRESHOLD = 800;
+// Preview length for collapsed responses
+const TG_PREVIEW_LENGTH = 600;
 
 // Build Claude content blocks from text + file attachments.
 // Returns plain string when no attachments, or ContentBlock[] when attachments present.
@@ -2692,9 +2818,49 @@ app.post('/api/project/init', (req, res) => {
 });
 
 // ============================================
+// TUNNEL MANAGER
+// ============================================
+let tunnelManager = null;
+
+function initTunnelManager() {
+  tunnelManager = new TunnelManager({ log, port: PORT });
+
+  tunnelManager.on('url', (url) => {
+    // Notify all WebSocket clients
+    wss.clients.forEach(ws => {
+      try { ws.send(JSON.stringify({ type: 'tunnel_url', url })); } catch {}
+    });
+    // Notify all paired Telegram devices
+    if (telegramBot?.isRunning()) {
+      telegramBot.notifyTunnelUrl(url);
+    }
+  });
+
+  tunnelManager.on('close', (reason) => {
+    wss.clients.forEach(ws => {
+      try { ws.send(JSON.stringify({ type: 'tunnel_closed', reason })); } catch {}
+    });
+    if (telegramBot?.isRunning()) {
+      telegramBot.notifyTunnelClosed();
+    }
+  });
+}
+
+// ============================================
 // TELEGRAM BOT
 // ============================================
 let telegramBot = null;
+
+// Helper: clean up Telegram ask_user state when answered from elsewhere (web UI)
+function _clearTelegramAskState(sessionId) {
+  if (!telegramBot) return;
+  const task = activeTasks.get(sessionId);
+  if (task?.proxy?._userId) {
+    const ctx = telegramBot._getContext(task.proxy._userId);
+    ctx.pendingAskRequestId = null;
+    ctx.pendingAskQuestions = null;
+  }
+}
 
 // ─── Process a chat message from Telegram ────────────────────────────────────
 // Reuses the same core logic as processChat but without WebSocket dependency.
@@ -2714,7 +2880,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
     return;
   }
 
-  const proxy = new TelegramProxy(telegramBot, chatId, sessionId);
+  const proxy = new TelegramProxy(telegramBot, chatId, sessionId, userId);
   const abortController = new AbortController();
 
   activeTasks.set(sessionId, {
@@ -2784,8 +2950,11 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
     // Save last user msg for reconnect recovery
     stmts.setLastUserMsg.run(text, sessionId);
 
-    // Send "thinking" indicator
-    await telegramBot._sendMessage(chatId, '🤔 <b>Thinking...</b>', { parse_mode: 'HTML' });
+    // Send "thinking" indicator and pass message ID to proxy for reuse
+    const thinkingMsg = await telegramBot._sendMessage(chatId, '🤔 <b>Thinking...</b>', { parse_mode: 'HTML' });
+    if (thinkingMsg?.message_id) {
+      proxy._progressMsgId = thinkingMsg.message_id;
+    }
 
     const params = {
       prompt: text,
@@ -2832,6 +3001,12 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
         entry.resolve({ answer: '[Session ended]' });
       }
     }
+    // Clean up pending ask_user state on Telegram bot context
+    if (userId && telegramBot) {
+      const ctx = telegramBot._getContext(userId);
+      ctx.pendingAskRequestId = null;
+      ctx.pendingAskQuestions = null;
+    }
     try { stmts.clearLastUserMsg.run(sessionId); } catch {}
   }
 }
@@ -2848,6 +3023,16 @@ function _attachTelegramListeners(bot) {
     });
   });
 
+  // ask_user responses from Telegram
+  bot.on('ask_user_response', ({ requestId, answer }) => {
+    const entry = pendingAskUser.get(requestId);
+    if (entry) {
+      clearTimeout(entry.timer);
+      pendingAskUser.delete(requestId);
+      entry.resolve({ answer: answer || '[Empty response]' });
+    }
+  });
+
   // Phase 2: Process messages sent from Telegram to Claude
   bot.on('send_message', async ({ sessionId, text, userId, chatId, attachments, callback }) => {
     try {
@@ -2857,6 +3042,64 @@ function _attachTelegramListeners(bot) {
       console.error('[Telegram] send_message error:', err.message);
       // Note: callback already called before processTelegramChat — errors are
       // reported via TelegramProxy._sendError, not via callback
+    }
+  });
+
+  // Active chats query from Telegram status screen
+  bot.on('get_active_chats', (callback) => {
+    const chats = [];
+    for (const [sessionId, task] of activeTasks) {
+      const session = stmts.getSession.get(sessionId);
+      chats.push({
+        sessionId,
+        title: session?.title || 'Untitled',
+        source: task.source || 'web',
+        startedAt: task.startedAt,
+      });
+    }
+    callback(chats);
+  });
+
+  // Tunnel: status query from Telegram
+  bot.on('tunnel_get_status', (callback) => {
+    const status = tunnelManager?.getStatus() || { running: false };
+    callback(status);
+  });
+
+  // Tunnel control from Telegram
+  bot.on('tunnel_start', async ({ chatId }) => {
+    try {
+      if (tunnelManager?.isRunning()) {
+        const s = tunnelManager.getStatus();
+        await bot._sendMessage(chatId, `🟢 Already running:\n${bot._escHtml(s.publicUrl)}`);
+        return;
+      }
+      const c = loadConfig();
+      const provider = c.tunnel?.provider || 'cloudflared';
+      const config = { ngrokAuthtoken: c.tunnel?.ngrokAuthtoken };
+      await bot._sendMessage(chatId, `⏳ Starting ${bot._escHtml(provider)}...`);
+      const { publicUrl } = await tunnelManager.start(provider, config);
+      await bot._sendMessage(chatId, `🟢 Remote Access active!\n\n🔗 ${bot._escHtml(publicUrl)}`);
+    } catch (err) {
+      await bot._sendMessage(chatId, `❌ Error: ${bot._escHtml(err.message)}`);
+    }
+  });
+
+  bot.on('tunnel_stop', async ({ chatId }) => {
+    if (!tunnelManager?.isRunning()) {
+      await bot._sendMessage(chatId, '⚪ Not running.');
+      return;
+    }
+    tunnelManager.stop();
+    await bot._sendMessage(chatId, '⬛ Remote access stopped.');
+  });
+
+  bot.on('tunnel_status', async ({ chatId }) => {
+    const s = tunnelManager?.getStatus();
+    if (s?.running) {
+      await bot._sendMessage(chatId, `🟢 Remote Access active\n\n🔗 ${bot._escHtml(s.publicUrl)}\n⏱ Since: ${bot._escHtml(String(s.startedAt))}`);
+    } else {
+      await bot._sendMessage(chatId, '⚪ Not running.');
     }
   });
 
@@ -2979,6 +3222,80 @@ app.put('/api/telegram/accept-connections', (req, res) => {
   }
 
   res.json({ ok: true, acceptNewConnections: accept });
+});
+
+// ============================================
+// TUNNEL API
+// ============================================
+
+app.get('/api/tunnel/status', (_, res) => {
+  const s = tunnelManager?.getStatus() || { running: false };
+  const c = loadConfig();
+  res.json({
+    running: s.running,
+    provider: s.provider || c.tunnel?.provider || 'cloudflared',
+    publicUrl: s.publicUrl || null,
+    startedAt: s.startedAt || null,
+    pid: s.pid || null,
+    error: s.error || null,
+    savedProvider: c.tunnel?.provider || 'cloudflared',
+    hasNgrokToken: !!c.tunnel?.ngrokAuthtoken,
+  });
+});
+
+app.post('/api/tunnel/start', async (req, res) => {
+  if (tunnelManager?.isRunning()) {
+    return res.json({ ok: true, publicUrl: tunnelManager.getStatus().publicUrl, already: true });
+  }
+
+  const { provider, ngrokAuthtoken } = req.body;
+  const prov = provider || 'cloudflared';
+  if (!['cloudflared', 'ngrok'].includes(prov)) {
+    return res.status(400).json({ error: `Unknown provider: ${prov}` });
+  }
+
+  // Save preferences to config
+  const c = loadConfig();
+  if (!c.tunnel) c.tunnel = {};
+  c.tunnel.provider = prov;
+  if (ngrokAuthtoken) c.tunnel.ngrokAuthtoken = ngrokAuthtoken;
+  saveConfig(c);
+
+  // Initialize manager if not done
+  if (!tunnelManager) initTunnelManager();
+
+  try {
+    const { publicUrl } = await tunnelManager.start(prov, {
+      ngrokAuthtoken: ngrokAuthtoken || c.tunnel.ngrokAuthtoken,
+    });
+    res.json({ ok: true, publicUrl });
+  } catch (err) {
+    const resp = { error: err.message };
+    if (err.installUrl) {
+      resp.installUrl = err.installUrl;
+      resp.installCmd = err.installCmd;
+    }
+    res.status(400).json(resp);
+  }
+});
+
+app.post('/api/tunnel/notify-telegram', async (_, res) => {
+  if (!tunnelManager?.isRunning()) {
+    return res.status(400).json({ error: 'Remote access is not running' });
+  }
+  if (!telegramBot?.isRunning()) {
+    return res.status(400).json({ error: 'Telegram bot is not running' });
+  }
+  const url = tunnelManager.getStatus().publicUrl;
+  await telegramBot.notifyTunnelUrl(url);
+  res.json({ ok: true });
+});
+
+app.post('/api/tunnel/stop', (_, res) => {
+  if (tunnelManager?.isRunning()) {
+    tunnelManager.stop();
+  }
+  res.json({ ok: true });
 });
 
 // ============================================
@@ -3454,6 +3771,8 @@ wss.on('connection', (ws) => {
         clearTimeout(entry.timer);
         pendingAskUser.delete(msg.requestId);
         entry.resolve({ answer: msg.answer || '[Empty response]' });
+        // Clean up Telegram pending ask state (prevents stale intercept swallowing next message)
+        _clearTelegramAskState(entry.sessionId);
       }
       return;
     }
@@ -3464,6 +3783,7 @@ wss.on('connection', (ws) => {
         clearTimeout(entry.timer);
         pendingAskUser.delete(msg.requestId);
         entry.resolve({ answer: '[Skipped by user]' });
+        _clearTelegramAskState(entry.sessionId);
       }
       return;
     }
@@ -3800,6 +4120,9 @@ wss.on('connection', (ws) => {
 // (not deferred until the first config-write operation).
 loadConfig();
 
+// Initialize tunnel manager
+initTunnelManager();
+
 // Start Telegram bot if configured
 initTelegramBot();
 
@@ -3812,6 +4135,7 @@ server.listen(PORT, () => {
     nodeEnv:   process.env.NODE_ENV || 'development',
     logLevel:  process.env.LOG_LEVEL || 'info',
     telegram:  telegramBot?.isRunning() ? 'running' : 'off',
+    tunnel:    tunnelManager?.isRunning() ? tunnelManager.getStatus().publicUrl : 'off',
   });
 });
 
@@ -3825,7 +4149,10 @@ process.on('unhandledRejection', (reason) => {
 function gracefulShutdown(signal) {
   console.log(`\n⚠️  ${signal} received — shutting down gracefully…`);
 
-  // 0. Stop Telegram bot
+  // 0. Stop tunnel first (close external access immediately)
+  if (tunnelManager?.isRunning()) { tunnelManager.stop(); }
+
+  // 0b. Stop Telegram bot
   if (telegramBot) { telegramBot.stop(); telegramBot = null; }
 
   // 1. Abort all running Claude subprocesses

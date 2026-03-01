@@ -148,6 +148,10 @@ const BOT_I18N = {
     'status_conn_off': 'вимкнено',
     'status_devices_short': '📱 Пристроїв: {count}',
     'status_tasks_label': '📋 <b>Задачі</b>',
+    'status_active_chats': '🟢 <b>Активних чатів: {count}</b>',
+    'status_active_none': '⚪ Немає активних чатів',
+    'status_active_source_tg': 'TG',
+    'status_active_source_web': 'Web',
     'status_updated': '<i>Оновлено: {time}</i>',
 
     // Settings
@@ -169,6 +173,17 @@ const BOT_I18N = {
     'files_truncated': '✂️ <i>(скорочено, {len} символів)</i>',
     'files_truncated_short': '✂️ <i>(скорочено)</i>',
 
+    // Ask User
+    'ask_answered': '✅ Відповідь відправлена.',
+    'ask_skipped': '⏭ Пропущено — Claude продовжить самостійно.',
+    'ask_selected': '✅ Обрано: {option}',
+    'ask_no_pending': '💡 Немає активного питання.',
+    'ask_title': 'Claude запитує:',
+    'ask_skip_btn': '⏭ Пропустити',
+    'ask_choose_hint': 'Оберіть варіант або натисніть «Пропустити»:',
+    'ask_text_hint': 'Введіть відповідь текстом або натисніть «Пропустити»:',
+    'ask_timeout': '⏱ Час вичерпано — Claude продовжив самостійно.',
+
     // Errors
     'error_prefix': '❌ Помилка: {msg}',
     'error_unknown_cmd': '❓ Невідома команда: <code>{cmd}</code>\n\nВведіть /help для списку команд.',
@@ -181,7 +196,7 @@ const BOT_I18N = {
     'time_ago_long': 'давно',
 
     // Help
-    'help_text': '📖 <b>Команди Claude Code Studio</b>\n\n<b>Навігація:</b>\n/projects — список проектів\n/project <code><n></code> — вибрати проект\n/chats — чати поточного проекту\n/chat <code><n></code> — відкрити чат\n/back — повернутися назад\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень (5)\n/full — повна остання відповідь\n/tasks — задачі (Kanban)\n/files <code>[path]</code> — файли в workspace\n/cat <code><file></code> — вміст файлу\n/diff — git diff в workspace\n/log <code>[n]</code> — останні git коміти\n\n<b>Дії:</b>\n/new <code>[title]</code> — нова сесія\n/stop — зупинити поточну задачу\n\n<b>Налаштування:</b>\n/status — стан Studio\n/notify <code>on/off</code> — сповіщення\n/unlink — відключити цей пристрій',
+    'help_text': '📖 <b>Команди Claude Code Studio</b>\n\n<b>Навігація:</b>\n/projects — список проектів\n/project <code><n></code> — вибрати проект\n/chats — чати поточного проекту\n/chat <code><n></code> — відкрити чат\n/back — повернутися назад\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень (5)\n/full — повна остання відповідь\n/tasks — задачі (Kanban)\n/files <code>[path]</code> — файли в workspace\n/cat <code><file></code> — вміст файлу\n/diff — git diff в workspace\n/log <code>[n]</code> — останні git коміти\n\n<b>Дії:</b>\n/new <code>[title]</code> — нова сесія\n/stop — зупинити поточну задачу\n\n<b>Remote Access:</b>\n/tunnel — керування доступом\n/url — показати публічний URL\n\n<b>Налаштування:</b>\n/status — стан Studio\n/notify <code>on/off</code> — сповіщення\n/unlink — відключити цей пристрій',
 
     // Back navigation
     'back_to_chats': '↩️ Повернулися до списку чатів. Введіть /chats',
@@ -192,6 +207,16 @@ const BOT_I18N = {
     'notify_on': '🔔 Сповіщення увімкнено.',
     'notify_off': '🔕 Сповіщення вимкнено.',
     'notify_current': '🔔 Сповіщення: <b>{status}</b>\n\n💡 /notify <code>on</code> або /notify <code>off</code>',
+
+    // Remote Access
+    'tn_btn_start': '▶ Увімкнути',
+    'tn_btn_stop': '⏹ Вимкнути',
+    'tn_btn_status': '📊 Статус',
+    'tn_screen_active': '🟢 <b>Remote Access активний</b>\n\n🔗 {url}',
+    'tn_screen_inactive': '⚪ <b>Remote Access</b>\n\nДоступ не запущено. Натисніть "Увімкнути" щоб відкрити доступ до Studio через інтернет.',
+    'tn_not_running': '⚪ Доступ не запущено.',
+    'tn_notify_started': '🟢 <b>Remote Access відкрито</b>\n\n🔗 {url}',
+    'tn_notify_stopped': '⬛ Remote Access закрито.',
 
     // Git
     'git_no_changes': '📊 Немає змін або не git-репозиторій.',
@@ -208,6 +233,26 @@ const BOT_I18N = {
 
     // Attach
     'attach_cleared': '🗑 Вкладення очищено.',
+
+    // Project screen buttons
+    'btn_files': '📁 Файли',
+    'btn_git_log': '📜 Git Log',
+    'btn_diff': '📊 Diff',
+
+    // Compose
+    'compose_prompt': '📝 Надішліть ваше повідомлення:',
+    'compose_select_first_short': '❌ Спочатку виберіть сесію чату',
+
+    // File errors
+    'files_too_large': '❌ Файл занадто великий (макс. 10MB)',
+    'files_download_error': '❌ Неможливо завантажити файл',
+    'files_download_failed': '❌ Завантаження не вдалося',
+    'files_process_error': '❌ Не вдалося обробити файл',
+
+    // Stop / New
+    'error_no_session': '❌ Немає вибраної активної сесії',
+    'stop_sent': '🛑 Сигнал зупинки надіслано...',
+    'new_session_created': '✅ <b>Нову сесію створено</b> (#{id})\n\nНадішліть ваше повідомлення:',
   },
   en: {
     'rate_limit': '⚠️ Too many requests. Please wait a minute.',
@@ -308,6 +353,10 @@ const BOT_I18N = {
     'status_conn_off': 'disabled',
     'status_devices_short': '📱 Devices: {count}',
     'status_tasks_label': '📋 <b>Tasks</b>',
+    'status_active_chats': '🟢 <b>Active chats: {count}</b>',
+    'status_active_none': '⚪ No active chats',
+    'status_active_source_tg': 'TG',
+    'status_active_source_web': 'Web',
     'status_updated': '<i>Updated: {time}</i>',
 
     'settings_title': '⚙ <b>Settings</b>',
@@ -327,6 +376,16 @@ const BOT_I18N = {
     'files_truncated': '✂️ <i>(truncated, {len} characters)</i>',
     'files_truncated_short': '✂️ <i>(truncated)</i>',
 
+    'ask_answered': '✅ Answer sent.',
+    'ask_skipped': '⏭ Skipped — Claude will proceed on its own.',
+    'ask_selected': '✅ Selected: {option}',
+    'ask_no_pending': '💡 No active question.',
+    'ask_title': 'Claude asks:',
+    'ask_skip_btn': '⏭ Skip',
+    'ask_choose_hint': 'Choose an option or tap "Skip":',
+    'ask_text_hint': 'Type your answer or tap "Skip":',
+    'ask_timeout': '⏱ Timed out — Claude proceeded on its own.',
+
     'error_prefix': '❌ Error: {msg}',
     'error_unknown_cmd': '❓ Unknown command: <code>{cmd}</code>\n\nType /help for a list of commands.',
 
@@ -336,7 +395,7 @@ const BOT_I18N = {
     'time_ago_day': '{n}d ago',
     'time_ago_long': 'long ago',
 
-    'help_text': '📖 <b>Claude Code Studio Commands</b>\n\n<b>Navigation:</b>\n/projects — list projects\n/project <code><n></code> — select project\n/chats — chats of current project\n/chat <code><n></code> — open chat\n/back — go back\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages (5)\n/full — full last response\n/tasks — tasks (Kanban)\n/files <code>[path]</code> — files in workspace\n/cat <code><file></code> — file contents\n/diff — git diff in workspace\n/log <code>[n]</code> — recent git commits\n\n<b>Actions:</b>\n/new <code>[title]</code> — new session\n/stop — stop current task\n\n<b>Settings:</b>\n/status — Studio status\n/notify <code>on/off</code> — notifications\n/unlink — unlink this device',
+    'help_text': '📖 <b>Claude Code Studio Commands</b>\n\n<b>Navigation:</b>\n/projects — list projects\n/project <code><n></code> — select project\n/chats — chats of current project\n/chat <code><n></code> — open chat\n/back — go back\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages (5)\n/full — full last response\n/tasks — tasks (Kanban)\n/files <code>[path]</code> — files in workspace\n/cat <code><file></code> — file contents\n/diff — git diff in workspace\n/log <code>[n]</code> — recent git commits\n\n<b>Actions:</b>\n/new <code>[title]</code> — new session\n/stop — stop current task\n\n<b>Remote Access:</b>\n/tunnel — manage remote access\n/url — show public URL\n\n<b>Settings:</b>\n/status — Studio status\n/notify <code>on/off</code> — notifications\n/unlink — unlink this device',
 
     'back_to_chats': '↩️ Back to chat list. Type /chats',
     'back_to_projects': '↩️ Back to project list. Type /projects',
@@ -345,6 +404,16 @@ const BOT_I18N = {
     'notify_on': '🔔 Notifications enabled.',
     'notify_off': '🔕 Notifications disabled.',
     'notify_current': '🔔 Notifications: <b>{status}</b>\n\n💡 /notify <code>on</code> or /notify <code>off</code>',
+
+    // Remote Access
+    'tn_btn_start': '▶ Start',
+    'tn_btn_stop': '⏹ Stop',
+    'tn_btn_status': '📊 Status',
+    'tn_screen_active': '🟢 <b>Remote Access active</b>\n\n🔗 {url}',
+    'tn_screen_inactive': '⚪ <b>Remote Access</b>\n\nNot running. Tap "Start" to expose Studio to the internet.',
+    'tn_not_running': '⚪ Remote access is not running.',
+    'tn_notify_started': '🟢 <b>Remote Access opened</b>\n\n🔗 {url}',
+    'tn_notify_stopped': '⬛ Remote access closed.',
 
     'git_no_changes': '📊 No changes or not a git repository.',
     'git_not_repo': '📊 Not a git repository.',
@@ -358,6 +427,26 @@ const BOT_I18N = {
     'msg_compose_hint': '📝 Type a message — it will be sent to this chat',
 
     'attach_cleared': '🗑 Attachments cleared.',
+
+    // Project screen buttons
+    'btn_files': '📁 Files',
+    'btn_git_log': '📜 Git Log',
+    'btn_diff': '📊 Diff',
+
+    // Compose
+    'compose_prompt': '📝 Send your message:',
+    'compose_select_first_short': '❌ Select a chat session first',
+
+    // File errors
+    'files_too_large': '❌ File too large (max 10MB)',
+    'files_download_error': '❌ Cannot download file',
+    'files_download_failed': '❌ Download failed',
+    'files_process_error': '❌ Failed to process file',
+
+    // Stop / New
+    'error_no_session': '❌ No active session selected',
+    'stop_sent': '🛑 Stop signal sent...',
+    'new_session_created': '✅ <b>New session created</b> (#{id})\n\nSend your message:',
   },
   ru: {
     'rate_limit': '⚠️ Слишком много запросов. Подождите минуту.',
@@ -458,6 +547,10 @@ const BOT_I18N = {
     'status_conn_off': 'отключены',
     'status_devices_short': '📱 Устройств: {count}',
     'status_tasks_label': '📋 <b>Задачи</b>',
+    'status_active_chats': '🟢 <b>Активных чатов: {count}</b>',
+    'status_active_none': '⚪ Нет активных чатов',
+    'status_active_source_tg': 'TG',
+    'status_active_source_web': 'Web',
     'status_updated': '<i>Обновлено: {time}</i>',
 
     'settings_title': '⚙ <b>Настройки</b>',
@@ -477,6 +570,16 @@ const BOT_I18N = {
     'files_truncated': '✂️ <i>(сокращено, {len} символов)</i>',
     'files_truncated_short': '✂️ <i>(сокращено)</i>',
 
+    'ask_answered': '✅ Ответ отправлен.',
+    'ask_skipped': '⏭ Пропущено — Claude продолжит самостоятельно.',
+    'ask_selected': '✅ Выбрано: {option}',
+    'ask_no_pending': '💡 Нет активного вопроса.',
+    'ask_title': 'Claude спрашивает:',
+    'ask_skip_btn': '⏭ Пропустить',
+    'ask_choose_hint': 'Выберите вариант или нажмите «Пропустить»:',
+    'ask_text_hint': 'Введите ответ текстом или нажмите «Пропустить»:',
+    'ask_timeout': '⏱ Время вышло — Claude продолжил самостоятельно.',
+
     'error_prefix': '❌ Ошибка: {msg}',
     'error_unknown_cmd': '❓ Неизвестная команда: <code>{cmd}</code>\n\nВведите /help для списка команд.',
 
@@ -486,7 +589,7 @@ const BOT_I18N = {
     'time_ago_day': '{n} д назад',
     'time_ago_long': 'давно',
 
-    'help_text': '📖 <b>Команды Claude Code Studio</b>\n\n<b>Навигация:</b>\n/projects — список проектов\n/project <code><n></code> — выбрать проект\n/chats — чаты текущего проекта\n/chat <code><n></code> — открыть чат\n/back — вернуться назад\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений (5)\n/full — полный последний ответ\n/tasks — задачи (Kanban)\n/files <code>[path]</code> — файлы в workspace\n/cat <code><file></code> — содержимое файла\n/diff — git diff в workspace\n/log <code>[n]</code> — последние git коммиты\n\n<b>Действия:</b>\n/new <code>[title]</code> — новая сессия\n/stop — остановить текущую задачу\n\n<b>Настройки:</b>\n/status — состояние Studio\n/notify <code>on/off</code> — уведомления\n/unlink — отключить это устройство',
+    'help_text': '📖 <b>Команды Claude Code Studio</b>\n\n<b>Навигация:</b>\n/projects — список проектов\n/project <code><n></code> — выбрать проект\n/chats — чаты текущего проекта\n/chat <code><n></code> — открыть чат\n/back — вернуться назад\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений (5)\n/full — полный последний ответ\n/tasks — задачи (Kanban)\n/files <code>[path]</code> — файлы в workspace\n/cat <code><file></code> — содержимое файла\n/diff — git diff в workspace\n/log <code>[n]</code> — последние git коммиты\n\n<b>Действия:</b>\n/new <code>[title]</code> — новая сессия\n/stop — остановить текущую задачу\n\n<b>Remote Access:</b>\n/tunnel — управление доступом\n/url — показать публичный URL\n\n<b>Настройки:</b>\n/status — состояние Studio\n/notify <code>on/off</code> — уведомления\n/unlink — отключить это устройство',
 
     'back_to_chats': '↩️ Вернулись к списку чатов. Введите /chats',
     'back_to_projects': '↩️ Вернулись к списку проектов. Введите /projects',
@@ -495,6 +598,16 @@ const BOT_I18N = {
     'notify_on': '🔔 Уведомления включены.',
     'notify_off': '🔕 Уведомления отключены.',
     'notify_current': '🔔 Уведомления: <b>{status}</b>\n\n💡 /notify <code>on</code> или /notify <code>off</code>',
+
+    // Remote Access
+    'tn_btn_start': '▶ Включить',
+    'tn_btn_stop': '⏹ Выключить',
+    'tn_btn_status': '📊 Статус',
+    'tn_screen_active': '🟢 <b>Remote Access активен</b>\n\n🔗 {url}',
+    'tn_screen_inactive': '⚪ <b>Remote Access</b>\n\nНе запущен. Нажмите "Включить" чтобы открыть доступ к Studio через интернет.',
+    'tn_not_running': '⚪ Доступ не запущен.',
+    'tn_notify_started': '🟢 <b>Remote Access открыт</b>\n\n🔗 {url}',
+    'tn_notify_stopped': '⬛ Remote Access закрыт.',
 
     'git_no_changes': '📊 Нет изменений или не git-репозиторий.',
     'git_not_repo': '📊 Не git-репозиторий.',
@@ -508,6 +621,26 @@ const BOT_I18N = {
     'msg_compose_hint': '📝 Пишите сообщение — оно пойдёт в этот чат',
 
     'attach_cleared': '🗑 Вложения очищены.',
+
+    // Project screen buttons
+    'btn_files': '📁 Файлы',
+    'btn_git_log': '📜 Git Log',
+    'btn_diff': '📊 Diff',
+
+    // Compose
+    'compose_prompt': '📝 Отправьте ваше сообщение:',
+    'compose_select_first_short': '❌ Сначала выберите сессию чата',
+
+    // File errors
+    'files_too_large': '❌ Файл слишком большой (макс. 10MB)',
+    'files_download_error': '❌ Невозможно скачать файл',
+    'files_download_failed': '❌ Загрузка не удалась',
+    'files_process_error': '❌ Не удалось обработать файл',
+
+    // Stop / New
+    'error_no_session': '❌ Нет выбранной активной сессии',
+    'stop_sent': '🛑 Сигнал остановки отправлен...',
+    'new_session_created': '✅ <b>Новая сессия создана</b> (#{id})\n\nОтправьте ваше сообщение:',
   },
 };
 
@@ -952,6 +1085,17 @@ class TelegramBot extends EventEmitter {
       return this._sendMessage(chatId, newVal ? this._t('notif_on') : this._t('notif_off'));
     }
 
+    // Intercept: if there's a pending ask_user question, any text resolves it
+    const ctx = this._getContext(userId);
+    if (ctx.pendingAskRequestId) {
+      const requestId = ctx.pendingAskRequestId;
+      ctx.pendingAskRequestId = null;
+      ctx.pendingAskQuestions = null;
+      this.emit('ask_user_response', { requestId, answer: text });
+      await this._sendMessage(chatId, this._t('ask_answered'));
+      return;
+    }
+
     // Route commands
     if (text.startsWith('/')) {
       await this._handleCommand(msg);
@@ -1016,9 +1160,8 @@ class TelegramBot extends EventEmitter {
       await this._sendMessage(chatId, this._t('paired_ok', { name: this._escHtml(displayName) }));
 
       // Set persistent Reply Keyboard
-      await this._callApi('sendMessage', {
-        chat_id: chatId,
-        text: this._t('use_menu'),
+      await this._sendMessage(chatId, this._t('use_menu'), {
+        parse_mode: 'HTML',
         reply_markup: JSON.stringify({
           keyboard: [[{ text: this._t('kb_menu') }, { text: this._t('kb_status') }, { text: '🔔' }]],
           resize_keyboard: true,
@@ -1056,7 +1199,7 @@ class TelegramBot extends EventEmitter {
     const cmd = rawCmd.toLowerCase().replace(/@\w+$/, ''); // strip @botname
 
     switch (cmd) {
-      case '/help':    return this._cmdHelp(chatId);
+      case '/help':    return this._cmdHelp(chatId, userId);
       case '/start':   return this._screenMainMenu(chatId, userId); // already authorized
       case '/projects':return this._cmdProjects(chatId, userId);
       case '/project': return this._cmdProject(chatId, userId, args);
@@ -1075,6 +1218,8 @@ class TelegramBot extends EventEmitter {
       case '/new':     return this._cmdNew(chatId, userId, args.join(' '));
       case '/back':    return this._cmdBack(chatId, userId);
       case '/unlink':  return this._cmdUnlink(chatId, userId);
+      case '/tunnel':  return this._cmdTunnel(chatId, userId);
+      case '/url':     return this._cmdUrl(chatId);
       default:
         await this._sendMessage(chatId, this._t('error_unknown_cmd', { cmd }));
     }
@@ -1082,8 +1227,9 @@ class TelegramBot extends EventEmitter {
 
   // ─── Commands ──────────────────────────────────────────────────────────────
 
-  async _cmdHelp(chatId) {
-    await this._sendMessage(chatId, this._t('help_text'));
+  async _cmdHelp(chatId, userId) {
+    await this._showScreen(chatId, userId, this._t('help_text'),
+      [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
   }
 
   async _cmdProjects(chatId, userId) {
@@ -1255,9 +1401,10 @@ class TelegramBot extends EventEmitter {
       }
 
       const sanitized = this._sanitize(lastMsg.content);
+      const converted = this._mdToHtml(sanitized);
 
       // Split into multiple messages if too long
-      const chunks = this._chunkForTelegram(sanitized, MAX_MESSAGE_LENGTH - 100);
+      const chunks = this._chunkForTelegram(converted, MAX_MESSAGE_LENGTH - 100);
       for (let i = 0; i < chunks.length; i++) {
         const prefix = chunks.length > 1 ? `📄 <i>(${i + 1}/${chunks.length})</i>\n\n` : '';
         await this._sendMessage(chatId, prefix + chunks[i]);
@@ -1287,6 +1434,25 @@ class TelegramBot extends EventEmitter {
         taskStatusLine = tasksByStatus.map(t => `${icons[t.status] || '•'} ${t.status}: ${t.n}`).join('\n');
       }
 
+      // Active chats — with timeout fallback if listener not attached
+      const activeChats = await Promise.race([
+        new Promise(resolve => this.emit('get_active_chats', resolve)),
+        new Promise(resolve => setTimeout(() => resolve([]), 500)),
+      ]);
+      let activeSection = '';
+      if (activeChats && activeChats.length > 0) {
+        activeSection = '\n' + this._t('status_active_chats', { count: activeChats.length }) + '\n';
+        for (const ac of activeChats) {
+          const dur = Math.floor((Date.now() - ac.startedAt) / 1000);
+          const durMin = Math.floor(dur / 60);
+          const durSec = dur % 60;
+          const srcLabel = ac.source === 'telegram' ? this._t('status_active_source_tg') : this._t('status_active_source_web');
+          activeSection += `  ⚡ ${this._escHtml(ac.title)} <i>(${durMin}:${String(durSec).padStart(2, '0')}, ${srcLabel})</i>\n`;
+        }
+      } else {
+        activeSection = '\n' + this._t('status_active_none') + '\n';
+      }
+
       await this._sendMessage(chatId,
         this._t('status_title') + '\n\n' +
         this._t('status_uptime', { hours, mins }) + '\n' +
@@ -1294,6 +1460,7 @@ class TelegramBot extends EventEmitter {
         this._t('status_messages', { count: messageCount }) + '\n' +
         this._t('status_tasks_count', { count: taskCount }) + '\n' +
         (taskStatusLine ? `\n${this._t('status_tasks_heading')}\n${taskStatusLine}\n` : '') +
+        activeSection +
         '\n' + this._t('status_devices', { count: devices.length }) + '\n' +
         this._t('status_new_conn', { status: this._acceptNewConnections ? this._t('status_conn_on') : this._t('status_conn_off') }));
     } catch (err) {
@@ -1488,13 +1655,13 @@ class TelegramBot extends EventEmitter {
     const ctx = this._getContext(userId);
     if (ctx.sessionId) {
       ctx.sessionId = null;
-      await this._sendMessage(chatId, this._t('back_to_chats'));
+      return this._screenChats(chatId, userId, 'c:list:0');
     } else if (ctx.projectWorkdir) {
       ctx.projectWorkdir = null;
       ctx.chatList = null;
-      await this._sendMessage(chatId, this._t('back_to_projects'));
+      return this._screenProjects(chatId, userId, 'p:list:0');
     } else {
-      await this._sendMessage(chatId, this._t('back_at_top'));
+      return this._screenMainMenu(chatId, userId);
     }
   }
 
@@ -1505,6 +1672,94 @@ class TelegramBot extends EventEmitter {
     await this._sendMessage(chatId, this._t('unlink_done'));
 
     this.emit('device_removed', { telegram_user_id: userId });
+  }
+
+  // ─── Tunnel Commands ──────────────────────────────────────────────────────
+
+  async _cmdTunnel(chatId, userId) {
+    const keyboard = [
+      [
+        { text: this._t('tn_btn_start'), callback_data: 'tn:start' },
+        { text: this._t('tn_btn_stop'), callback_data: 'tn:stop' },
+      ],
+      [
+        { text: this._t('tn_btn_status'), callback_data: 'tn:status' },
+      ],
+      [{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }],
+    ];
+
+    // Emit to get current status (synchronous handler, timeout as safety net)
+    const statusPromise = new Promise(resolve => {
+      const timer = setTimeout(() => resolve(null), 500);
+      this.emit('tunnel_get_status', (status) => {
+        clearTimeout(timer);
+        resolve(status);
+      });
+    });
+
+    const status = await statusPromise;
+    let text;
+    if (status?.running) {
+      text = this._t('tn_screen_active', { url: status.publicUrl || '—' });
+    } else {
+      text = this._t('tn_screen_inactive');
+    }
+
+    const ctx = this._getContext(userId);
+    if (ctx.screenMsgId && ctx.screenChatId === chatId) {
+      await this._editScreen(chatId, ctx.screenMsgId, text, keyboard);
+    } else {
+      await this._showScreen(chatId, userId, text, keyboard);
+    }
+  }
+
+  async _cmdUrl(chatId) {
+    const statusPromise = new Promise(resolve => {
+      const timer = setTimeout(() => resolve(null), 500);
+      this.emit('tunnel_get_status', (status) => {
+        clearTimeout(timer);
+        resolve(status);
+      });
+    });
+
+    const status = await statusPromise;
+    if (status?.running && status.publicUrl) {
+      await this._sendMessage(chatId, `🔗 ${status.publicUrl}`);
+    } else {
+      await this._sendMessage(chatId, this._t('tn_not_running'));
+    }
+  }
+
+  /**
+   * Notify all paired devices about a new tunnel URL.
+   * Called by server.js when tunnel starts.
+   */
+  async notifyTunnelUrl(url) {
+    if (!this._running) return;
+    const devices = this._stmts.getAllDevices.all();
+    for (const dev of devices) {
+      if (dev.notifications_enabled) {
+        try {
+          await this._sendMessage(dev.telegram_chat_id,
+            this._t('tn_notify_started', { url }));
+        } catch {}
+      }
+    }
+  }
+
+  /**
+   * Notify all paired devices that the tunnel was closed.
+   */
+  async notifyTunnelClosed() {
+    if (!this._running) return;
+    const devices = this._stmts.getAllDevices.all();
+    for (const dev of devices) {
+      if (dev.notifications_enabled) {
+        try {
+          await this._sendMessage(dev.telegram_chat_id, this._t('tn_notify_stopped'));
+        } catch {}
+      }
+    }
   }
 
   // ─── Text Messages (Send to Chat) ─────────────────────────────────────────
@@ -1537,7 +1792,12 @@ class TelegramBot extends EventEmitter {
       attachments,
       callback: async (result) => {
         if (result.error) {
-          await this._sendMessage(chatId, `❌ ${result.error}`);
+          await this._sendMessage(chatId, `❌ ${this._escHtml(result.error)}`, {
+            reply_markup: JSON.stringify({ inline_keyboard: [
+              [{ text: '🔄 ' + this._t('btn_refresh'), callback_data: 'cm:compose' },
+               { text: this._t('btn_back_menu'), callback_data: 'm:menu' }]
+            ]})
+          });
         } else {
           const attachNote = attachments.length > 0 ? ` (+ ${attachments.length} file${attachments.length > 1 ? 's' : ''})` : '';
           await this._sendMessage(chatId, this._t('compose_sent', { note: attachNote }));
@@ -1547,6 +1807,63 @@ class TelegramBot extends EventEmitter {
 
     // Persist context after sending
     this._saveDeviceContext(userId);
+  }
+
+  // ─── Ask User Callback (inline button tap) ────────────────────────────────
+
+  async _handleAskCallback(chatId, userId, msgId, data) {
+    const ctx = this._getContext(userId);
+    const requestId = ctx.pendingAskRequestId;
+
+    if (!requestId) {
+      await this._sendMessage(chatId, this._t('ask_no_pending'));
+      return;
+    }
+
+    const suffix = data.slice(4); // after "ask:"
+
+    if (suffix === 'skip') {
+      // User skipped the question
+      ctx.pendingAskRequestId = null;
+      ctx.pendingAskQuestions = null;
+      this.emit('ask_user_response', { requestId, answer: '[Skipped by user]' });
+      // Edit the question message to show it was skipped
+      try {
+        await this._callApi('editMessageText', {
+          chat_id: chatId,
+          message_id: msgId,
+          text: this._t('ask_skipped'),
+          parse_mode: 'HTML',
+        });
+      } catch {}
+      return;
+    }
+
+    // Option selected by index
+    const idx = parseInt(suffix, 10);
+    if (isNaN(idx) || idx < 0) {
+      await this._sendMessage(chatId, this._t('ask_no_pending'));
+      return;
+    }
+    const questions = ctx.pendingAskQuestions || [];
+    const q = questions[0];
+    const options = q?.options || [];
+    const selected = options[idx];
+    const answer = typeof selected === 'string' ? selected : (selected?.value || selected?.label || `Option ${idx + 1}`);
+
+    ctx.pendingAskRequestId = null;
+    ctx.pendingAskQuestions = null;
+    this.emit('ask_user_response', { requestId, answer });
+
+    // Edit the question message to show what was selected
+    try {
+      await this._callApi('editMessageText', {
+        chat_id: chatId,
+        message_id: msgId,
+        text: this._t('ask_selected', { option: this._escHtml(answer) }),
+        parse_mode: 'HTML',
+      });
+    } catch {}
   }
 
   // ─── Notifications (called from server.js) ────────────────────────────────
@@ -1624,6 +1941,9 @@ class TelegramBot extends EventEmitter {
     ctx.screenChatId = chatId;
 
     try {
+      // ask_user option selection
+      if (data.startsWith('ask:')) return this._handleAskCallback(chatId, userId, msgId, data);
+
       // Route by prefix
       if (data === 'm:menu')       return this._screenMainMenu(chatId, userId);
       if (data === 'm:status')     return this._screenStatus(chatId, userId);
@@ -1639,6 +1959,7 @@ class TelegramBot extends EventEmitter {
       if (data === 't:list' || data === 't:all') return this._screenTasks(chatId, userId, data);
       if (data === 's:menu')       return this._screenSettings(chatId, userId);
       if (data.startsWith('s:'))   return this._routeSettings(chatId, userId, data);
+      if (data.startsWith('tn:'))  return this._routeTunnel(chatId, userId, data);
     } catch (err) {
       this.log.error(`[telegram] Callback error: ${err.message}`);
       await this._editScreen(chatId, msgId, this._t('error_prefix', { msg: this._escHtml(err.message) }), [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
@@ -1666,6 +1987,13 @@ class TelegramBot extends EventEmitter {
       [{ text: this._t('btn_tasks'), callback_data: 't:list' }, { text: this._t('btn_status'), callback_data: 'm:status' }],
       [{ text: this._t('btn_settings'), callback_data: 's:menu' }],
     ];
+
+    if (ctx.sessionId) {
+      const activeSess = this.db.prepare('SELECT title FROM sessions WHERE id=?').get(ctx.sessionId);
+      if (activeSess) {
+        keyboard.unshift([{ text: `✉ ${(activeSess.title || this._t('chat_untitled')).substring(0, 35)}`, callback_data: 'cm:compose' }]);
+      }
+    }
 
     if (ctx.screenMsgId && ctx.screenChatId === chatId) {
       await this._editScreen(chatId, ctx.screenMsgId, lines.join('\n'), keyboard);
@@ -1736,8 +2064,8 @@ class TelegramBot extends EventEmitter {
     const name = ctx.projectWorkdir.split('/').filter(Boolean).pop();
 
     const keyboard = [
-      [{ text: this._t('btn_chats'), callback_data: 'c:list:0' }, { text: '📁 Files', callback_data: 'f:.' }],
-      [{ text: '📜 Git Log', callback_data: 'pm:git' }, { text: '📊 Diff', callback_data: 'pm:diff' }],
+      [{ text: this._t('btn_chats'), callback_data: 'c:list:0' }, { text: this._t('btn_files'), callback_data: 'f:.' }],
+      [{ text: this._t('btn_git_log'), callback_data: 'pm:git' }, { text: this._t('btn_diff'), callback_data: 'pm:diff' }],
       [{ text: this._t('btn_tasks'), callback_data: 't:list' }],
       [{ text: this._t('btn_back_projects'), callback_data: 'p:list' }],
     ];
@@ -2010,9 +2338,15 @@ class TelegramBot extends EventEmitter {
     content = this._mdToHtml(content);
 
     const chunks = this._chunkForTelegram(`${icon} <b>${this._escHtml(msg.role)}</b>\n\n${content}`, MAX_MESSAGE_LENGTH - 100);
-    for (const chunk of chunks) {
-      await this._sendMessage(chatId, chunk, { parse_mode: 'HTML' }).catch(() => {
-        return this._sendMessage(chatId, chunk.replace(/<[^>]+>/g, ''));
+    for (let i = 0; i < chunks.length; i++) {
+      const opts = { parse_mode: 'HTML' };
+      if (i === chunks.length - 1) {
+        opts.reply_markup = JSON.stringify({ inline_keyboard: [
+          [{ text: this._t('btn_back_overview'), callback_data: 'd:overview' }]
+        ]});
+      }
+      await this._sendMessage(chatId, chunks[i], opts).catch(() => {
+        return this._sendMessage(chatId, chunks[i].replace(/<[^>]+>/g, ''), { reply_markup: opts.reply_markup });
       });
     }
   }
@@ -2063,11 +2397,15 @@ class TelegramBot extends EventEmitter {
 
     // Compose in session
     if (data.startsWith('d:compose:')) {
-      const sid = data.split(':')[2];
-      ctx.sessionId = sid;
+      const composeSid = data.split(':')[2];
+      ctx.sessionId = composeSid;
+      const sess = this.db.prepare('SELECT title FROM sessions WHERE id=?').get(composeSid);
+      const title = sess?.title || this._t('chat_untitled');
       ctx.composing = true;
       this._saveDeviceContext(userId);
-      return this._sendMessage(chatId, '📝 Send your message:');
+      return this._showScreen(chatId, userId,
+        `✉ ${this._t('compose_prompt')}\n\n💬 ${this._escHtml(title)}`,
+        [[{ text: this._t('btn_cancel'), callback_data: 'd:overview' }]]);
     }
   }
 
@@ -2298,6 +2636,24 @@ class TelegramBot extends EventEmitter {
         text += '\n' + this._t('status_tasks_label') + '\n' + tasksByStatus.map(t => `  ${icons[t.status]||'•'} ${t.status}: ${t.n}`).join('\n') + '\n';
       }
 
+      // Active chats (running right now) — with timeout fallback if listener not attached
+      const activeChats = await Promise.race([
+        new Promise(resolve => this.emit('get_active_chats', resolve)),
+        new Promise(resolve => setTimeout(() => resolve([]), 500)),
+      ]);
+      if (activeChats && activeChats.length > 0) {
+        text += '\n' + this._t('status_active_chats', { count: activeChats.length }) + '\n';
+        for (const ac of activeChats) {
+          const dur = Math.floor((Date.now() - ac.startedAt) / 1000);
+          const durMin = Math.floor(dur / 60);
+          const durSec = dur % 60;
+          const srcLabel = ac.source === 'telegram' ? this._t('status_active_source_tg') : this._t('status_active_source_web');
+          text += `  ⚡ ${this._escHtml(ac.title)} <i>(${durMin}:${String(durSec).padStart(2, '0')}, ${srcLabel})</i>\n`;
+        }
+      } else {
+        text += '\n' + this._t('status_active_none') + '\n';
+      }
+
       text += '\n' + this._t('status_devices_short', { count: devices.length });
       text += '\n' + this._t('status_new_conn', { status: this._acceptNewConnections ? this._t('status_conn_on') : this._t('status_conn_off') });
       text += '\n' + this._t('status_updated', { time: new Date().toLocaleTimeString() });
@@ -2364,6 +2720,16 @@ class TelegramBot extends EventEmitter {
     }
   }
 
+  async _routeTunnel(chatId, userId, data) {
+    if (data === 'tn:start') {
+      this.emit('tunnel_start', { chatId });
+    } else if (data === 'tn:stop') {
+      this.emit('tunnel_stop', { chatId });
+    } else if (data === 'tn:status') {
+      this.emit('tunnel_status', { chatId });
+    }
+  }
+
   // ─── Media Handling ────────────────────────────────────────────────────────
 
   async _handleMediaMessage(msg) {
@@ -2389,20 +2755,20 @@ class TelegramBot extends EventEmitter {
 
         // Size check (10MB limit)
         if (msg.document.file_size && msg.document.file_size > 10 * 1024 * 1024) {
-          return this._sendMessage(chatId, '❌ File too large (max 10MB)');
+          return this._sendMessage(chatId, this._t('files_too_large'));
         }
       }
 
       // Download file from Telegram
       const fileInfo = await this._callApi('getFile', { file_id: fileId });
       if (!fileInfo || !fileInfo.file_path) {
-        return this._sendMessage(chatId, '❌ Cannot download file');
+        return this._sendMessage(chatId, this._t('files_download_error'));
       }
 
       const fileUrl = `https://api.telegram.org/file/bot${this.token}/${fileInfo.file_path}`;
       const response = await fetch(fileUrl);
       if (!response.ok) {
-        return this._sendMessage(chatId, '❌ Download failed');
+        return this._sendMessage(chatId, this._t('files_download_failed'));
       }
 
       const buffer = Buffer.from(await response.arrayBuffer());
@@ -2453,11 +2819,11 @@ class TelegramBot extends EventEmitter {
           }
         );
       } else {
-        await this._sendMessage(chatId, '❌ Select a chat session first, then send a file.\n\nUse 🏠 Menu → Projects → select a chat.');
+        await this._sendMessage(chatId, this._t('compose_select_first_short'));
       }
     } catch (err) {
       this.log.error(`[telegram] Media handling error: ${err.message}`);
-      await this._sendMessage(chatId, '❌ Failed to process file');
+      await this._sendMessage(chatId, this._t('files_process_error'));
     }
   }
 
@@ -2572,11 +2938,11 @@ class TelegramBot extends EventEmitter {
   async _cmdStop(chatId, userId) {
     const ctx = this._getContext(userId);
     if (!ctx.sessionId) {
-      return this._sendMessage(chatId, '❌ No active session selected');
+      return this._sendMessage(chatId, this._t('error_no_session'));
     }
 
     this.emit('stop_task', { sessionId: ctx.sessionId, chatId });
-    await this._sendMessage(chatId, '🛑 Stop signal sent...');
+    await this._sendMessage(chatId, this._t('stop_sent'));
   }
 
   async _cmdNew(chatId, userId, args) {
@@ -2596,9 +2962,9 @@ class TelegramBot extends EventEmitter {
     ctx.dialogPage = 0;
     this._saveDeviceContext(userId);
 
-    await this._sendMessage(chatId,
-      `✅ <b>New session created</b> (#${this._escHtml(id)})\n\nSend your message:`,
-      { parse_mode: 'HTML' }
+    await this._showScreen(chatId, userId,
+      this._t('new_session_created', { id: this._escHtml(id) }),
+      [[{ text: this._t('btn_cancel'), callback_data: 'd:overview' }]]
     );
   }
 
@@ -2683,6 +3049,8 @@ class TelegramBot extends EventEmitter {
         isStreaming: false,       // whether a response is currently streaming
         streamMsgId: null,        // message ID of streaming progress
         lastNotifiedAt: 0,        // rate limiting for notifications
+        pendingAskRequestId: null,  // ask_user requestId awaiting answer
+        pendingAskQuestions: null,   // ask_user questions array
       });
     }
     return this._userContext.get(userId);

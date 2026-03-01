@@ -94,11 +94,16 @@ Pair your phone with Claude Code Studio in 30 seconds (6-character code from Set
 - `/files`, `/cat` — browse project files and peek at code without opening an editor
 - `/diff` — see exactly what changed in the last commit
 - `/log` — recent git history — who changed what, and when
+- `/tunnel` — start or stop Remote Access right from your phone
+- `/url` — get the current public URL
 - `/new` — start a new task queue
 - `/stop` — stop a running task
 
+**Claude Asks — You Answer from Your Phone**
+Claude sometimes needs your input mid-task: "Should I refactor this function or rewrite it?" With ask_user forwarding, these questions appear instantly in Telegram as inline buttons. Tap your choice, or type a free-text answer — Claude gets it immediately and keeps working. No need to open the browser. You stay in the loop without breaking your flow.
+
 **Send Messages, Get Answers Instantly**
-Type a message to Claude directly from Telegram. It streams back to both your phone AND your browser simultaneously. The conversation is unified — continue in Telegram, pick it up on your laptop five minutes later, everything is there.
+Type a message to Claude directly from Telegram. You see a real-time typing indicator while Claude thinks, and the response streams back to both your phone AND your browser simultaneously. The conversation is unified — continue in Telegram, pick it up on your laptop five minutes later, everything is there.
 
 **Multi-Device Pairing**
 Pair your phone, your tablet, your laptop — all at once. Control the same Claude Code Studio instance from anywhere. Each device gets push notifications when tasks finish, with inline buttons: [View Result] [Continue] [Menu].
@@ -116,6 +121,20 @@ For complex tasks, Claude doesn't work alone. It creates a team of specialized a
 ### 🌐 Remote servers over SSH
 
 Add a remote server, create a project pointing to a directory on it, and Claude works there — as if local. Useful for GPU machines, staging environments, or managing a server fleet without SSH sessions.
+
+### 🔗 Remote Access — Open Your Studio to the World
+
+Your Studio runs on `localhost:3000`. But what if you need to access it from a coffee shop, your phone's browser, or share a link with a teammate?
+
+One click. That's it. Open the **Remote Access** panel in the sidebar, pick a provider — **cloudflared** (no signup, works instantly) or **ngrok** (if you already use it) — and hit Start. You get a public HTTPS URL in seconds.
+
+- **Zero configuration** — cloudflared needs no account, no token, no DNS setup
+- **Secure by default** — your Studio password protects everything, the tunnel is just a pipe
+- **Telegram integration** — the URL is sent straight to your paired Telegram devices with one tap
+- **Start and stop from your phone** — `/tunnel` and `/url` commands in the Telegram bot
+- **Works behind NAT, firewalls, corporate VPNs** — if your machine has internet, it works
+
+Why does this matter? Because your AI doesn't need to be chained to your desk. Start a batch of tasks at home, grab the URL from Telegram, and check results from anywhere.
 
 ### 💾 Everything is saved
 
@@ -201,9 +220,10 @@ docker compose up -d --build
 | 💬 Real-time chat | Responses stream in as Claude thinks and works |
 | 📋 Kanban board | Queue tasks → Claude runs them automatically |
 | ⚡ Slash commands | Saved prompt shortcuts with `/` autocomplete |
-| 📱 Telegram bot | Control Claude from your phone — notifications, commands, live session bridge |
+| 📱 Telegram bot | Control Claude from your phone — notifications, commands, live session bridge, ask_user forwarding |
 | 🔔 Push notifications | Task finished? Get a notification with [View] [Continue] buttons |
 | 📡 Session bridge | Send messages from Telegram, responses stream to both phone and browser simultaneously |
+| ❓ Ask User in Telegram | Claude's questions forwarded to Telegram — answer with buttons or free text |
 | 👥 Multi-agent mode | Claude spawns a team for complex tasks |
 | 🔄 Auto-continue | Hits turn limit mid-task? Resumes automatically |
 | ↗️ Fork conversation | Continue from any message in a new chat |
@@ -213,6 +233,7 @@ docker compose up -d --build
 | 🖼 Vision | Paste screenshots — Claude sees and analyzes them |
 | 🗂 Projects | Separate workspaces with their own file directories |
 | 🌐 Remote SSH | Work on remote servers as if they were local |
+| 🔗 Remote Access | One-click public URL via cloudflared or ngrok — access Studio from anywhere |
 | 🔒 File locks | Multiple agents on same codebase — no conflicts |
 | 💾 History | Everything saved to SQLite, resume anytime |
 | 📊 Rate limit alerts | Warnings at 80/90/95%, live countdown to reset |
