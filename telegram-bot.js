@@ -68,6 +68,7 @@ const BOT_I18N = {
     'btn_tasks': '📋 Задачі',
     'btn_status': '📊 Статус',
     'btn_settings': '⚙ Налаштування',
+    'btn_remote_access': '🌐 Remote Access',
     'btn_back': '← Назад',
     'btn_back_menu': '← Меню',
     'btn_back_projects': '← Проекти',
@@ -279,6 +280,7 @@ const BOT_I18N = {
     'btn_tasks': '📋 Tasks',
     'btn_status': '📊 Status',
     'btn_settings': '⚙ Settings',
+    'btn_remote_access': '🌐 Remote Access',
     'btn_back': '← Back',
     'btn_back_menu': '← Menu',
     'btn_back_projects': '← Projects',
@@ -473,6 +475,7 @@ const BOT_I18N = {
     'btn_tasks': '📋 Задачи',
     'btn_status': '📊 Статус',
     'btn_settings': '⚙ Настройки',
+    'btn_remote_access': '🌐 Remote Access',
     'btn_back': '← Назад',
     'btn_back_menu': '← Меню',
     'btn_back_projects': '← Проекты',
@@ -1985,7 +1988,7 @@ class TelegramBot extends EventEmitter {
     const keyboard = [
       [{ text: this._t('btn_projects'), callback_data: 'p:list' }, { text: this._t('btn_chats'), callback_data: 'c:list:0' }],
       [{ text: this._t('btn_tasks'), callback_data: 't:list' }, { text: this._t('btn_status'), callback_data: 'm:status' }],
-      [{ text: this._t('btn_settings'), callback_data: 's:menu' }],
+      [{ text: this._t('btn_remote_access'), callback_data: 'tn:menu' }, { text: this._t('btn_settings'), callback_data: 's:menu' }],
     ];
 
     if (ctx.sessionId) {
@@ -2721,7 +2724,9 @@ class TelegramBot extends EventEmitter {
   }
 
   async _routeTunnel(chatId, userId, data) {
-    if (data === 'tn:start') {
+    if (data === 'tn:menu') {
+      return this._cmdTunnel(chatId, userId);
+    } else if (data === 'tn:start') {
       this.emit('tunnel_start', { chatId });
     } else if (data === 'tn:stop') {
       this.emit('tunnel_stop', { chatId });
