@@ -94,7 +94,7 @@ Pair your phone with Claude Code Studio in 30 seconds (6-character code from Set
 - `/files`, `/cat` — browse project files and peek at code without opening an editor
 - `/diff` — see exactly what changed in the last commit
 - `/log` — recent git history — who changed what, and when
-- `/tunnel` — start or stop Remote Access right from your phone
+- `/tunnel` — start or stop Remote Access right from your phone (also available as a button in the main menu)
 - `/url` — get the current public URL
 - `/new` — start a new task queue
 - `/stop` — stop a running task
