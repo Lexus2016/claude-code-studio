@@ -1803,7 +1803,12 @@ class TelegramBot extends EventEmitter {
           });
         } else {
           const attachNote = attachments.length > 0 ? ` (+ ${attachments.length} file${attachments.length > 1 ? 's' : ''})` : '';
-          await this._sendMessage(chatId, this._t('compose_sent', { note: attachNote }));
+          await this._sendMessage(chatId, this._t('compose_sent', { note: attachNote }), {
+            reply_markup: JSON.stringify({ inline_keyboard: [[
+              { text: '🛑 Stop', callback_data: 'cm:stop' },
+              { text: '🏠 Menu', callback_data: 'm:menu' },
+            ]] }),
+          });
         }
       },
     });
@@ -2465,6 +2470,9 @@ class TelegramBot extends EventEmitter {
         return this._screenDialog(chatId, userId, { mode: 'overview' });
       }
       return this._screenMainMenu(chatId, userId);
+
+    } else if (action === 'stop') {
+      return this._cmdStop(chatId, userId);
 
     } else if (action === 'back') {
       return this._screenChats(chatId, userId, 'c:list:0');

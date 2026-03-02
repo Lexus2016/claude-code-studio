@@ -7939,17 +7939,22 @@ async function tunnelLoadStatus() {
       $i('tunnelUrlBox').style.display = 'none';
     }
 
-    // Restore saved provider
-    const savedProvider = d.savedProvider || 'cloudflared';
+    // Restore saved provider (validate before CSS selector interpolation)
+    const savedProvider = ['cloudflared', 'ngrok'].includes(d.savedProvider) ? d.savedProvider : 'cloudflared';
     const provRadio = document.querySelector(`input[name="tunnelProvider"][value="${savedProvider}"]`);
     if (provRadio) tunnelSelectProvider(savedProvider);
   } catch {}
 }
 
+let _tunnelStarting = false;
 async function tunnelStart() {
+  // Prevent double-click / rapid re-entry
+  if (_tunnelStarting) return;
+
   // Confirmation dialog
   if (!confirm(t('tn.confirm') || '⚠️ This will expose Studio to the internet. Authentication is required. Continue?')) return;
 
+  _tunnelStarting = true;
   const provider = document.querySelector('input[name="tunnelProvider"]:checked')?.value || 'cloudflared';
   const ngrokAuthtoken = $i('tunnelNgrokToken')?.value?.trim() || undefined;
 
@@ -7977,6 +7982,8 @@ async function tunnelStart() {
     tunnelSetError(errMsg);
     toast(`❌ ${errMsg}`, true);
     tunnelSetBtnState('start');
+  } finally {
+    _tunnelStarting = false;
   }
 }
 

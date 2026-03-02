@@ -127,6 +127,9 @@ class TunnelManager extends EventEmitter {
 
     const proc = this._proc;
     this._proc = null;
+    // Mark as not running BEFORE kill — prevents exit handler from
+    // seeing wasRunning=true and emitting a duplicate 'close' event.
+    this._state.running = false;
 
     // Graceful shutdown
     try { proc.kill('SIGTERM'); } catch {}

@@ -102,8 +102,11 @@ Pair your phone with Claude Code Studio in 30 seconds (6-character code from Set
 **Claude Asks — You Answer from Your Phone**
 Claude sometimes needs your input mid-task: "Should I refactor this function or rewrite it?" With ask_user forwarding, these questions appear instantly in Telegram as inline buttons. Tap your choice, or type a free-text answer — Claude gets it immediately and keeps working. No need to open the browser. You stay in the loop without breaking your flow.
 
+**Inline Stop — One Tap to Cancel**
+Every progress message in Telegram has a built-in [🛑 Stop] button. See Claude going in the wrong direction? Tap it. No commands to type, no menus to navigate — the button is right there, on every "Processing..." update. Combined with [🏠 Menu], you always have full control at your fingertips.
+
 **Send Messages, Get Answers Instantly**
-Type a message to Claude directly from Telegram. You see a real-time typing indicator while Claude thinks, and the response streams back to both your phone AND your browser simultaneously. The conversation is unified — continue in Telegram, pick it up on your laptop five minutes later, everything is there.
+Type a message to Claude directly from Telegram. You see a real-time typing indicator while Claude thinks, and the response streams back to both your phone AND your browser simultaneously. The conversation is unified — continue in Telegram, pick it up on your laptop five minutes later, everything is there. And it works both ways: messages sent from Telegram appear in the web UI in real-time too.
 
 **Multi-Device Pairing**
 Pair your phone, your tablet, your laptop — all at once. Control the same Claude Code Studio instance from anywhere. Each device gets push notifications when tasks finish, with inline buttons: [View Result] [Continue] [Menu].

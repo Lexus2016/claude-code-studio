@@ -958,22 +958,30 @@ class TelegramProxy {
       : '';
     const text = `⏳ <b>Processing...</b>${toolLine}\n\n${preview}`;
 
+    // Inline stop button on progress messages so the user always has controls at the bottom
+    const progressMarkup = JSON.stringify({ inline_keyboard: [[
+      { text: '🛑 Stop', callback_data: 'cm:stop' },
+      { text: '🏠 Menu', callback_data: 'm:menu' },
+    ]] });
+
     try {
       if (this._progressMsgId) {
         await this._bot._callApi('editMessageText', {
           chat_id: this._chatId,
           message_id: this._progressMsgId,
           text: text.slice(0, 4096),
-          parse_mode: 'HTML'
+          parse_mode: 'HTML',
+          reply_markup: progressMarkup,
         }).catch(() => {
           return this._bot._callApi('editMessageText', {
             chat_id: this._chatId,
             message_id: this._progressMsgId,
-            text: text.replace(/<[^>]+>/g, '').slice(0, 4096)
+            text: text.replace(/<[^>]+>/g, '').slice(0, 4096),
+            reply_markup: progressMarkup,
           });
         });
       } else {
-        const result = await this._bot._sendMessage(this._chatId, text.slice(0, 4096), { parse_mode: 'HTML' });
+        const result = await this._bot._sendMessage(this._chatId, text.slice(0, 4096), { parse_mode: 'HTML', reply_markup: progressMarkup });
         if (result && result.message_id) {
           this._progressMsgId = result.message_id;
         }
@@ -2919,6 +2927,13 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
     // Store user message in DB (marked as telegram source)
     stmts.addTelegramMsg.run(sessionId, 'user', 'text', typeof userContent === 'string' ? userContent : text, null, null, null, null);
 
+    // Broadcast user message to web UI watchers (so web chat updates in real-time)
+    broadcastToSession(sessionId, {
+      type: 'task_started',
+      prompt: typeof userContent === 'string' ? userContent : text,
+      source: 'telegram',
+    });
+
     // Load session config
     const model = session.model || 'sonnet';
     const mode = session.mode || 'auto';
@@ -2970,7 +2985,13 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
     stmts.setLastUserMsg.run(text, sessionId);
 
     // Send "thinking" indicator and pass message ID to proxy for reuse
-    const thinkingMsg = await telegramBot._sendMessage(chatId, '🤔 <b>Thinking...</b>', { parse_mode: 'HTML' });
+    const thinkingMsg = await telegramBot._sendMessage(chatId, '🤔 <b>Thinking...</b>', {
+      parse_mode: 'HTML',
+      reply_markup: JSON.stringify({ inline_keyboard: [[
+        { text: '🛑 Stop', callback_data: 'cm:stop' },
+        { text: '🏠 Menu', callback_data: 'm:menu' },
+      ]] }),
+    });
     if (thinkingMsg?.message_id) {
       proxy._progressMsgId = thinkingMsg.message_id;
     }
@@ -3088,7 +3109,8 @@ function _attachTelegramListeners(bot) {
   // Tunnel control from Telegram
   bot.on('tunnel_start', async ({ chatId }) => {
     try {
-      if (tunnelManager?.isRunning()) {
+      if (!tunnelManager) initTunnelManager();
+      if (tunnelManager.isRunning()) {
         const s = tunnelManager.getStatus();
         await bot._sendMessage(chatId, `🟢 Already running:\n${bot._escHtml(s.publicUrl)}`);
         return;
