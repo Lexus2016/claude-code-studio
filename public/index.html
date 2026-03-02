@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Claude Code Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,7 +29,7 @@
   --msg-font: 15px; /* was 15.5px — half-px renders inconsistently on non-retina */
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; overflow: hidden; font-size: 15px; line-height: 1.55; }
+body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; height: 100dvh; display: flex; overflow: hidden; font-size: 15px; line-height: 1.55; }
 
 /* ─── Focus visible (keyboard nav) ─── */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
@@ -1160,7 +1160,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 /* ─── Modal ─── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; animation: fadeUp .15s; backdrop-filter: blur(14px) saturate(150%); }
-.modal { background: var(--s1); border: 1px solid var(--border); border-radius: var(--r-lg); width: 740px; max-width: 92vw; max-height: 86vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-xl); }
+.modal { background: var(--s1); border: 1px solid var(--border); border-radius: var(--r-lg); width: 740px; max-width: 92vw; max-height: 86vh; max-height: 86dvh; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-xl); }
 .modal-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
 .modal-hdr h2 { font-size: 15px; font-weight: 700; }
 .modal-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 20px; padding: 4px; transition: color .12s; line-height: 1; }
@@ -1484,6 +1484,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   background: rgba(0,0,0,.55); backdrop-filter: blur(4px);
 }
 @media (max-width: 800px) {
+  /* Prevent iOS rubber-banding on fixed-layout app */
+  body { overscroll-behavior: none; }
   /* Sidebars: fixed overlay instead of shrinking */
   .left {
     position: fixed; top: 0; left: 0; bottom: 0; z-index: 50;
@@ -1503,9 +1505,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     opacity: 1 !important;
   }
   .right.collapsed { transform: translateX(105%); opacity: 0 !important; pointer-events: none; }
-  /* Panel tabs — bigger touch targets */
-  .panel-tab { width: 32px; }
-  .panel-tab-inner { width: 32px; height: 48px; }
+  /* Panel tabs — touch-friendly targets */
+  .panel-tab { width: 44px; }
+  .panel-tab-inner { width: 44px; height: 56px; }
   /* Center area adjustments */
   .msgs { padding: 12px 10px 40px; }
   .mw { max-width: 94%; }
@@ -1513,25 +1515,54 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   .mw.assistant::before { width: 22px; height: 22px; font-size: 8px; }
   .mw.user { padding-right: 28px; }
   .mw.user::after { width: 22px; height: 22px; font-size: 7px; }
-  .mw.user .cpb, .mw.user .reply-btn { right: 33px; } /* 28px avatar + 5px on mobile */
-  .mw.user .cpmd { right: 66px; } /* 28px avatar + 38px on mobile */
-  .toolbar { gap: 5px; padding: 5px 10px; }
+  .mw.user .cpb, .mw.user .reply-btn { right: 33px; }
+  .mw.user .cpmd { right: 66px; }
+  /* Toolbar: scrollable with gradient fade hint */
+  .toolbar { gap: 5px; padding: 5px 10px; -webkit-mask-image: linear-gradient(to right, transparent 0, black 8px, black calc(100% - 16px), transparent 100%); mask-image: linear-gradient(to right, transparent 0, black 8px, black calc(100% - 16px), transparent 100%); }
   .tb-group .label { display: none; }
+  .tb-btn { min-height: 36px; padding: 6px 12px; }
   .hdr { padding: 8px 12px; }
   .hdr h1 { font-size: 14px; }
-  /* Input area */
-  .ia { padding: 10px 12px; }
+  /* Touch-sized action buttons */
+  .sb { width: 44px; height: 44px; border-radius: 10px; }
+  .attach-btn { width: 44px; height: 44px; }
+  .hb { min-height: 40px; }
+  .hdr-toggle { width: 44px; height: 44px; }
+  .tab-close { width: 24px; height: 24px; font-size: 14px; }
+  /* Input area — font-size ≥ 16px prevents iOS auto-zoom on focus */
+  .ia { padding: 10px 12px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .iw textarea { font-size: 16px; }
+  .af input, .af textarea, .af select { font-size: 16px; }
+  .rh-form-row input, .rh-form-row select { font-size: 16px; }
   /* Tabs bar */
   .tabs-bar { overflow-x: auto; }
   .tab { max-width: 140px; }
+  /* Notifications: fit mobile screen */
+  #notifContainer { width: calc(100vw - 32px); right: 16px; left: 16px; }
+  .notif-close { opacity: 1; }
+  /* Toast: allow wrapping on narrow screens */
+  #toast { white-space: normal; max-width: calc(100vw - 32px); text-align: center; }
+  /* Welcome prompts: single column on narrow */
+  .welcome-prompts { grid-template-columns: 1fr; max-width: 320px; }
+  /* Dropdowns: constrain to viewport */
+  .proj-dd-menu { min-width: auto; max-width: calc(100vw - 32px); }
+  /* Agent/chain cards: constrain */
+  .agent-team-card { max-width: calc(100vw - 60px); }
+  .chain-progress-card { max-width: calc(100vw - 60px); }
+  /* Confirm dialog buttons: touch-sized */
+  .cd-btn-ok, .cd-btn-cancel { min-height: 44px; padding: 10px 20px; }
   /* File preview: full screen on mobile */
-  .fpv-modal { width: 100vw !important; max-width: 100vw !important; height: 100vh !important; max-height: 100vh !important; border-radius: 0 !important; }
+  .fpv-modal { width: 100vw !important; max-width: 100vw !important; height: 100vh !important; height: 100dvh !important; max-height: 100vh !important; max-height: 100dvh !important; border-radius: 0 !important; }
 }
 @media (max-width: 480px) {
   .hdr-btns .hb span { display: none; }
   .hb { padding: 5px 8px; }
-  .nav-sw-btn { padding: 4px 8px; }
+  .nav-sw-btn { padding: 4px 8px; font-size: 12px; }
+  .nav-sw-btn span { display: none; }
   .toolbar { font-size: 12px; }
+  .tb-btn { min-height: 34px; padding: 5px 10px; }
+  .modal { max-height: 92vh; max-height: 92dvh; }
+  .modal .modal-body textarea { min-height: 200px; }
 }
 </style>
 </head>
@@ -1985,7 +2016,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 <!-- MCP Settings Modal -->
 <div class="modal-overlay hidden" id="mcpSettingsModal" onclick="if(event.target===this)closeMcpSettings()">
-  <div class="modal" style="width:580px;max-height:85vh">
+  <div class="modal" style="width:580px;max-height:85vh;max-height:85dvh">
     <div class="modal-hdr">
       <h2 id="mcpSettingsTitle" style="font-size:16px;font-weight:700">⚙ MCP</h2>
       <button class="modal-close" onclick="closeMcpSettings()">✕</button>
@@ -2000,7 +2031,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 <!-- MCP Import Modal -->
 <div class="modal-overlay hidden" id="mcpImportModal" onclick="if(event.target===this)closeMcpImport()">
-  <div class="modal" style="width:500px;max-height:82vh">
+  <div class="modal" style="width:500px;max-height:82vh;max-height:82dvh">
     <div class="modal-hdr">
       <h2 style="font-size:14px;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="mcp.import.modal.title">Імпорт MCP серверів</span></h2>
       <button class="modal-close" onclick="closeMcpImport()">✕</button>
@@ -8300,14 +8331,16 @@ function restoreUIState() {
     if (s.curWorkdir) curWorkdir = s.curWorkdir;
     if (s.curProjectId) curProjectId = s.curProjectId;
     if (s.panels) {
+      const isMobile = window.innerWidth <= 800;
       const setPanel = (id, collapsed) => {
         const el = $i(id); if (!el) return;
         el.classList.toggle('collapsed', !!collapsed);
         const btn = document.querySelector(`[onclick="toggle('${id}')"]`);
         if (btn) btn.classList.toggle('active', !collapsed);
       };
-      setPanel('leftPanel', s.panels.left);
-      setPanel('rightPanel', s.panels.right);
+      // On mobile: always start with sidebars closed regardless of saved state
+      setPanel('leftPanel', isMobile ? true : s.panels.left);
+      setPanel('rightPanel', isMobile ? true : s.panels.right);
     }
     if (s.sections) {
       const secs = { hist: 'histBody', mcp: 'mcpBody', skills: 'skillsBody', cmds: 'cmdsBody', proj: 'projBody', sshHosts: 'sshHostsBody', tunnel: 'tunnelBody', tg: 'tgBody' };
@@ -8350,6 +8383,43 @@ function restoreUIState() {
     }
   } catch {}
 }
+
+// ─── Responsive: collapse sidebars when crossing mobile breakpoint ────────
+let _prevMobile = window.innerWidth <= 800;
+window.addEventListener('resize', () => {
+  const isMobile = window.innerWidth <= 800;
+  if (isMobile && !_prevMobile) {
+    // Crossed into mobile — close both sidebars visually without overwriting saved desktop state
+    const collapse = (id) => {
+      const el = $i(id); if (!el || el.classList.contains('collapsed')) return;
+      el.classList.add('collapsed');
+      const btn = document.querySelector(`[onclick="toggle('${id}')"]`);
+      if (btn) btn.classList.remove('active');
+    };
+    collapse('leftPanel');
+    collapse('rightPanel');
+  }
+  // Remove stale mobile backdrop when going to desktop, restore saved panel state
+  if (!isMobile && _prevMobile) {
+    const bd = $i('mobileBackdrop');
+    if (bd) bd.style.display = 'none';
+    // Re-apply saved desktop panel state
+    try {
+      const s = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+      if (s?.panels) {
+        const restore = (id, collapsed) => {
+          const el = $i(id); if (!el) return;
+          el.classList.toggle('collapsed', !!collapsed);
+          const btn = document.querySelector(`[onclick="toggle('${id}')"]`);
+          if (btn) btn.classList.toggle('active', !collapsed);
+        };
+        restore('leftPanel', s.panels.left);
+        restore('rightPanel', s.panels.right);
+      }
+    } catch {}
+  }
+  _prevMobile = isMobile;
+});
 
 // ─── Global tooltip system ────────────────────────────────────────────────
 const _tipEl = (() => {
