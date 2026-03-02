@@ -7,6 +7,8 @@
 > Available in: [English](README.md) | [Українська](README_UA.md) | [Русский](README_RU.md)
 
 > 📖 [Read on Medium: From Terminal to Dashboard — How Claude Code Studio Changes AI-Assisted Development](https://medium.com/@tiberiy20101/from-terminal-to-dashboard-how-claude-code-studio-changes-ai-assisted-development-749c077469d2)
+>
+> 📖 [Read on Medium: Claude Code Studio — The Remote Access Revolution for AI-Assisted Development](https://medium.com/@tiberiy20101/claude-code-studio-the-remote-access-revolution-for-ai-assisted-development-b6c6dc5a5548)
 
 ---
 
