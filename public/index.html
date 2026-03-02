@@ -870,6 +870,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .at-item .at-icon { font-size: 14px; flex-shrink: 0; }
 .at-empty { padding: 12px; text-align: center; color: var(--muted); font-size: 11px; }
 /* Slash commands popup — larger, easier to read */
+#slashPopup { max-height: 480px; }
 #slashPopup .at-popup-hdr { padding: 9px 14px; font-size: 13px; }
 #slashPopup .at-item { padding: 10px 14px; font-size: 14px; gap: 10px; }
 #slashPopup .at-item .at-name { font-size: 14px; }
@@ -1095,6 +1096,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 }
 .notif-card:hover .notif-close { opacity: 1; }
 .notif-close:hover { color: var(--text); }
+.notif-context { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.3; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+.notif-context .notif-ctx-sep { margin: 0 4px; opacity: 0.5; }
 .notif-detail { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
 .notif-progress-bar { margin-top: 8px; height: 4px; background: var(--s3); border-radius: 2px; overflow: hidden; }
 .notif-progress-fill { height: 100%; background: #a78bfa; border-radius: 2px; transition: width .4s ease-out; }
@@ -1789,6 +1792,10 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
           Kanban
         </a>
+        <a class="nav-sw-btn" href="/schedule" data-tip="Розклад задач" data-i18n-tip="nav.schedule.tip">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Schedule
+        </a>
       </nav>
       <div class="hdr-meta">
         <div class="proj-dd-wrap" id="projDdWrap">
@@ -2363,7 +2370,7 @@ const TRANSLATIONS = {
     'files.empty':'Порожньо','files.view':'Переглянути',
     'proj.empty':'Немає проектів. Додайте директорію для роботи з Claude Code.',
     'proj.search':'Пошук проекту...','search.empty':'Не знайдено',
-    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban дошка','nav.aria':'Навігація між розділами','tip.lang':'Мова інтерфейсу',
+    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban дошка','nav.schedule.tip':'Розклад задач','nav.aria':'Навігація між розділами','tip.lang':'Мова інтерфейсу',
     'mcp.import.btn':'Імпорт','mcp.import.title':'Імпортувати MCP з JSON файлу (Claude Desktop формат)',
     'mcp.export.btn':'Експорт','mcp.export.title':'Експортувати всі MCP у JSON файл','mcp.replace.title':'Замінить існуючий',
     'mcp.type.stdio':'stdio (команда)','mcp.type.sse':'SSE (URL потік)',
@@ -2412,6 +2419,7 @@ const TRANSLATIONS = {
     'sec.tunnel':'Remote Access','tn.hint':'Відкрийте доступ до Studio через інтернет.',
     'tn.provider':'Провайдер:','tn.start':'▶ Запустити','tn.stop':'⏹ Зупинити',
     'tn.starting':'Запуск...','tn.stopping':'Зупинка...','tn.url':'Публічний URL:','tn.copy':'Скопійовано!',
+    'tn.copy.manual':'Виділіть і скопіюйте вручну (Ctrl+C)',
     'tn.stopped':'Доступ зупинено','tn.send_tg':'📤 Telegram',
     'tn.sent_tg':'URL надіслано в Telegram','tn.err.not_installed':'Не встановлено',
     'tn.err.start':'Не вдалося відкрити доступ','tn.err.tg':'Помилка надсилання',
@@ -2523,7 +2531,7 @@ const TRANSLATIONS = {
     'files.empty':'Empty','files.view':'Preview',
     'proj.empty':'No projects. Add a directory to work with Claude Code.',
     'proj.search':'Search project...','search.empty':'Not found',
-    'nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.aria':'Navigation','tip.lang':'Interface language',
+    'nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.schedule.tip':'Schedule','nav.aria':'Navigation','tip.lang':'Interface language',
     'mcp.import.btn':'Import','mcp.import.title':'Import MCP from JSON file (Claude Desktop format)',
     'mcp.export.btn':'Export','mcp.export.title':'Export all MCP to JSON file','mcp.replace.title':'Will replace existing',
     'mcp.type.stdio':'stdio (command)','mcp.type.sse':'SSE (URL stream)',
@@ -2572,6 +2580,7 @@ const TRANSLATIONS = {
     'sec.tunnel':'Remote Access','tn.hint':'Expose Studio to the internet.',
     'tn.provider':'Provider:','tn.start':'▶ Start','tn.stop':'⏹ Stop',
     'tn.starting':'Starting...','tn.stopping':'Stopping...','tn.url':'Public URL:','tn.copy':'Copied!',
+    'tn.copy.manual':'Select and copy manually (Ctrl+C)',
     'tn.stopped':'Remote access stopped','tn.send_tg':'📤 Telegram',
     'tn.sent_tg':'URL sent to Telegram','tn.err.not_installed':'Not installed',
     'tn.err.start':'Failed to start remote access','tn.err.tg':'Failed to send',
@@ -2683,7 +2692,7 @@ const TRANSLATIONS = {
     'files.empty':'Пусто','files.view':'Просмотр',
     'proj.empty':'Нет проектов. Добавьте директорию для работы с Claude Code.',
     'proj.search':'Поиск проекта...','search.empty':'Не найдено',
-    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban доска','nav.aria':'Навигация','tip.lang':'Язык интерфейса',
+    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban доска','nav.schedule.tip':'Расписание','nav.aria':'Навигация','tip.lang':'Язык интерфейса',
     'mcp.import.btn':'Импорт','mcp.import.title':'Импортировать MCP из JSON файла (формат Claude Desktop)',
     'mcp.export.btn':'Экспорт','mcp.export.title':'Экспортировать все MCP в JSON файл','mcp.replace.title':'Заменит существующий',
     'mcp.type.stdio':'stdio (команда)','mcp.type.sse':'SSE (URL поток)',
@@ -2732,6 +2741,7 @@ const TRANSLATIONS = {
     'sec.tunnel':'Remote Access','tn.hint':'Откройте доступ к Studio через интернет.',
     'tn.provider':'Провайдер:','tn.start':'▶ Запустить','tn.stop':'⏹ Остановить',
     'tn.starting':'Запуск...','tn.stopping':'Остановка...','tn.url':'Публичный URL:','tn.copy':'Скопировано!',
+    'tn.copy.manual':'Выделите и скопируйте вручную (Ctrl+C)',
     'tn.stopped':'Доступ остановлен','tn.send_tg':'📤 Telegram',
     'tn.sent_tg':'URL отправлен в Telegram','tn.err.not_installed':'Не установлено',
     'tn.err.start':'Не удалось открыть доступ','tn.err.tg':'Ошибка отправки',
@@ -2836,6 +2846,14 @@ function showNotification(data) {
   html += `<span class="notif-title">${escH(data.title || '')}</span>`;
   html += `<button class="notif-close" title="Dismiss">&times;</button>`;
   html += `</div>`;
+
+  // Show project + session context
+  if (data.projectName || data.sessionTitle) {
+    const parts = [];
+    if (data.projectName) parts.push(escH(data.projectName));
+    if (data.sessionTitle) parts.push(escH(data.sessionTitle));
+    html += `<div class="notif-context">${parts.join('<span class="notif-ctx-sep">&rsaquo;</span>')}</div>`;
+  }
 
   if (data.detail) {
     html += `<div class="notif-detail">${escH(data.detail)}</div>`;
@@ -3496,6 +3514,11 @@ function handleWsMsg(d) {
           }
           if (sf.isCurrent) renderTabs();
           saveUIState();
+        } else if (d.sessionId === activeTabId && streaming.el) {
+          // Existing tab: a new queued message is starting — the previous done should have cleared
+          // streaming.el, but defensively reset it here to prevent stale bubble contamination
+          // (e.g. stop/abort path where done event was lost before the next message dequeued).
+          streaming.el = null; streaming.txt = '';
         }
       }
       if (activeTabId === d.sessionId) {
@@ -6927,7 +6950,7 @@ function _renderSlashList() {
     item.className = 'at-item' + (i === _slashActiveIdx ? ' active' : '');
     item.innerHTML = `<div class="at-info">
       <span class="at-name" style="color:var(--accent)">${escH(cmd.name)}</span>
-      <span class="at-dir">${escH(cmd.text.length > 72 ? cmd.text.slice(0, 72) + '…' : cmd.text)}</span>
+      <span class="at-dir">${escH(cmd.text)}</span>
     </div>`;
     item.onmousedown = e => { e.preventDefault(); _selectSlashCmd(cmd); };
     list.appendChild(item);
@@ -7869,10 +7892,11 @@ function tunnelSetError(msg, opts) {
     el.style.display = '';
     if (opts?.installUrl) {
       const cmdText = opts.installCmd ? `<code style="background:var(--s2);padding:1px 5px;border-radius:3px;font-size:11px;user-select:all">${_esc(opts.installCmd)}</code>` : '';
+      const safeUrl = /^https?:\/\//.test(opts.installUrl) ? _esc(opts.installUrl) : '#';
       el.innerHTML =
         `<div style="margin-bottom:4px">${_esc(msg)}</div>` +
         (cmdText ? `<div style="margin-bottom:4px">${t('tn.install.or')||'або'}: ${cmdText}</div>` : '') +
-        `<a href="${_esc(opts.installUrl)}" target="_blank" rel="noopener" style="color:var(--accent2);font-size:11px;text-decoration:underline">${t('tn.install.link')||'📥 Інструкція з встановлення'} ↗</a>`;
+        `<a href="${safeUrl}" target="_blank" rel="noopener" style="color:var(--accent2);font-size:11px;text-decoration:underline">${t('tn.install.link')||'📥 Інструкція з встановлення'} ↗</a>`;
     } else {
       el.textContent = msg;
     }
@@ -7925,18 +7949,21 @@ async function tunnelLoadStatus() {
     _tunnelRunning = d.running;
 
     if (d.running) {
-      dot.classList.add('online');
+      dot?.classList.add('online');
       tunnelSetBtnState('stop');
       // Show URL
-      $i('tunnelUrlBox').style.display = '';
-      $i('tunnelUrlDisplay').value = d.publicUrl || '';
+      const urlBox = $i('tunnelUrlBox');
+      const urlInput = $i('tunnelUrlDisplay');
+      if (urlBox) urlBox.style.display = '';
+      if (urlInput) urlInput.value = d.publicUrl || '';
       tunnelSetError(null);
       // Show "Send to Telegram" button if Telegram is running
       tunnelUpdateTgButton();
     } else {
-      dot.classList.remove('online');
+      dot?.classList.remove('online');
       tunnelSetBtnState('start');
-      $i('tunnelUrlBox').style.display = 'none';
+      const urlBox = $i('tunnelUrlBox');
+      if (urlBox) urlBox.style.display = 'none';
     }
 
     // Restore saved provider (validate before CSS selector interpolation)
@@ -7999,6 +8026,9 @@ async function tunnelStop() {
   try {
     await fetch('/api/tunnel/stop', { method: 'POST' });
     toast(t('tn.stopped') || '⬛ Remote access stopped');
+    // Set definitive state first, then refresh from server
+    _tunnelRunning = false;
+    tunnelSetBtnState('start');
     tunnelLoadStatus();
   } catch (e) {
     toast(`❌ ${e.message}`, true);
@@ -8007,7 +8037,7 @@ async function tunnelStop() {
 }
 
 function tunnelCopyUrl() {
-  const url = $i('tunnelUrlDisplay').value;
+  const url = $i('tunnelUrlDisplay')?.value;
   if (!url) return;
   navigator.clipboard.writeText(url).then(() => {
     const copyBtn = $i('tunnelCopyBtn');
@@ -8018,6 +8048,10 @@ function tunnelCopyUrl() {
       setTimeout(() => { copyBtn.textContent = orig; copyBtn.style.color = ''; }, 1500);
     }
     toast(t('tn.copy') || '📋 Скопійовано!');
+  }).catch(() => {
+    // Clipboard API unavailable (insecure context) — select text for manual copy
+    $i('tunnelUrlDisplay')?.select();
+    toast(t('tn.copy.manual') || 'Select and copy manually (Ctrl+C)');
   });
 }
 
@@ -8037,7 +8071,7 @@ async function tunnelSendToTelegram() {
   } catch (e) {
     toast(`❌ ${e.message}`, true);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '📤 Telegram'; }
+    if (btn) { btn.disabled = false; btn.textContent = t('tn.send_tg') || '📤 Telegram'; }
   }
 }
 

@@ -297,6 +297,10 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN chain_id TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN source_session_id TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN failure_reason TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN task_retry_count INTEGER DEFAULT 0`); } catch {}
+// Scheduled tasks: time-based triggers + recurring runs
+try { db.exec(`ALTER TABLE tasks ADD COLUMN scheduled_at INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN recurrence TEXT`); } catch {}
+try { db.exec(`ALTER TABLE tasks ADD COLUMN recurrence_end_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_host TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN sort_order REAL`); } catch {}
@@ -339,15 +343,15 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
-  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,updated_at=datetime('now') WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
   countTasksBySession: db.prepare(`SELECT COUNT(*) as n FROM tasks WHERE session_id=?`),
   getTasksEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM tasks`),
   // processQueue hot-path — prepared once, reused every 60 s
-  getTodoTasks:      db.prepare(`SELECT * FROM tasks WHERE status='todo' ORDER BY sort_order ASC, created_at ASC`),
+  getTodoTasks:      db.prepare(`SELECT * FROM tasks WHERE status='todo' AND (scheduled_at IS NULL OR scheduled_at <= unixepoch()) ORDER BY sort_order ASC, created_at ASC`),
   getInProgressTasks: db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`),
   getTasksByChain:   db.prepare(`SELECT * FROM tasks WHERE chain_id=? ORDER BY sort_order ASC`),
   // startTask hot-path
@@ -586,6 +590,8 @@ async function startTask(task) {
             .run(task.id);
           db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
           log.info(`[taskWorker] task ${task.id}: done`);
+          // 🔄 Auto-schedule next occurrence for recurring tasks
+          scheduleNextRun(task);
           // Notify Telegram about completed task
           if (telegramBot && telegramBot.isRunning()) {
             telegramBot.notifyTaskComplete({
@@ -603,11 +609,13 @@ async function startTask(task) {
             .run(reason, task.id);
           log.warn(`[taskWorker] task ${task.id}: chain retry ${(task.task_retry_count||0)+1}/${MAX_CHAIN_RETRIES}, reason: ${reason}, backoff: ${_retryBackoffMs}ms`);
           if (task.source_session_id) {
+            const _ctx = getNotificationContext(task.source_session_id);
             broadcastToSession(task.source_session_id, {
               type: 'notification', level: 'warn',
               title: `Retrying: "${task.title}"`,
               detail: `Attempt ${(task.task_retry_count||0)+2}/${MAX_CHAIN_RETRIES+1}${isRateLimited ? '. Rate limited, backing off.' : ''}`,
               chainTaskId: task.id, chainStatus: 'retry',
+              sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
             });
           }
         } else {
@@ -618,11 +626,13 @@ async function startTask(task) {
           log.error(`[taskWorker] task ${task.id}: cancelled (${reason}, subtype: ${lastTaskResult?.subtype || 'unknown'})`);
           // Notify source chat about the failed task
           if (task.source_session_id) {
+            const _ctx = getNotificationContext(task.source_session_id);
             broadcastToSession(task.source_session_id, {
               type: 'notification', level: 'error',
               title: `Task failed: "${task.title}"`,
               detail: task.chain_id ? `Retries exhausted (${reason}). Dependent tasks will be cancelled.` : reason,
               chainTaskId: task.id, chainStatus: 'cancelled',
+              sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
             });
           }
           // Notify Telegram about failed task
@@ -669,6 +679,38 @@ async function startTask(task) {
   }
 }
 
+// ─── Recurring task scheduler ────────────────────────────────────────────────
+function calcNextRun(scheduled_at, recurrence) {
+  const d = new Date(scheduled_at * 1000);
+  if (recurrence === 'hourly')  d.setHours(d.getHours() + 1);
+  if (recurrence === 'daily')   d.setDate(d.getDate() + 1);
+  if (recurrence === 'weekly')  d.setDate(d.getDate() + 7);
+  if (recurrence === 'monthly') d.setMonth(d.getMonth() + 1);
+  return Math.floor(d.getTime() / 1000);
+}
+
+function scheduleNextRun(task) {
+  if (!task.recurrence || !task.scheduled_at) return;
+  const now = Math.floor(Date.now() / 1000);
+  // Find next future occurrence — handles server downtime gaps gracefully
+  let next = calcNextRun(task.scheduled_at, task.recurrence);
+  while (next <= now) next = calcNextRun(next, task.recurrence);
+  // Respect end date
+  if (task.recurrence_end_at && next > task.recurrence_end_at) {
+    log.info(`[schedule] Recurrence series ended for "${task.title}"`);
+    return;
+  }
+  const newId = genId();
+  stmts.createTask.run(
+    newId, task.title, task.description || '', task.notes || '', 'todo', task.sort_order || 0,
+    task.session_id || null, task.workdir || null, task.model || 'sonnet',
+    task.mode || 'auto', task.agent_mode || 'single', task.max_turns || 30,
+    null, null, null, null,
+    next, task.recurrence, task.recurrence_end_at || null
+  );
+  log.info(`[schedule] Next run queued: "${task.title}" → ${new Date(next * 1000).toISOString()}`);
+}
+
 function processQueue() {
   const todo = stmts.getTodoTasks.all();
   if (!todo.length) return;
@@ -698,11 +740,13 @@ function processQueue() {
               .run(`Blocked: dependency ${failedDep} failed`, task.id);
             log.warn('Task cascade-cancelled', { taskId: task.id, failedDep });
             if (task.source_session_id) {
+              const _ctx = getNotificationContext(task.source_session_id);
               broadcastToSession(task.source_session_id, {
                 type: 'notification', level: 'warn',
                 title: `Task cancelled: "${task.title}"`,
                 detail: 'Dependency failed',
                 chainTaskId: task.id, chainStatus: 'cancelled',
+                sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
               });
             }
             continue;
@@ -1383,6 +1427,28 @@ async function classifyTask(userMessage, currentSkills, config, workdir) {
 function loadProjects() { try { return JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8')); } catch { return []; } }
 function saveProjects(p) { const d=path.dirname(PROJECTS_FILE); if(!fs.existsSync(d)) fs.mkdirSync(d,{recursive:true}); fs.writeFileSync(PROJECTS_FILE, JSON.stringify(p, null, 2)); }
 
+/**
+ * Get notification context (session title + project name) for enriching notification payloads.
+ * @param {string} sessionId - session ID to look up
+ * @returns {{ sessionTitle: string|null, projectName: string|null }}
+ */
+function getNotificationContext(sessionId) {
+  if (!sessionId) return { sessionTitle: null, projectName: null };
+  try {
+    const sess = stmts.getSession.get(sessionId);
+    if (!sess) return { sessionTitle: null, projectName: null };
+    const sessionTitle = (sess.title && sess.title !== 'Нова сесія') ? sess.title : null;
+    let projectName = null;
+    if (sess.workdir) {
+      const proj = loadProjects().find(p => p.workdir === sess.workdir);
+      projectName = proj?.name || null;
+    }
+    return { sessionTitle, projectName };
+  } catch {
+    return { sessionTitle: null, projectName: null };
+  }
+}
+
 function loadRemoteHosts() { try { return JSON.parse(fs.readFileSync(REMOTE_HOSTS_FILE, 'utf-8')); } catch { return []; } }
 function saveRemoteHosts(h) { const d=path.dirname(REMOTE_HOSTS_FILE); if(!fs.existsSync(d)) fs.mkdirSync(d,{recursive:true}); fs.writeFileSync(REMOTE_HOSTS_FILE, JSON.stringify(h, null, 2)); }
 
@@ -1825,6 +1891,7 @@ app.post('/api/internal/notify', express.json(), (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
+  const ctx = getNotificationContext(sessionId);
   const payload = JSON.stringify({
     type: 'notification',
     level: level || 'info',
@@ -1833,6 +1900,8 @@ app.post('/api/internal/notify', express.json(), (req, res) => {
     progress: progress || null,
     tabId: sessionId,
     timestamp: Date.now(),
+    sessionTitle: ctx.sessionTitle,
+    projectName: ctx.projectName,
   });
 
   // Route via active task proxy (survives WS reconnects)
@@ -1978,6 +2047,7 @@ app.post('/api/auth/change-password', async (req,res) => {
 app.get('/setup', (_,res) => { if(auth.isSetupDone()) return res.redirect('/'); res.sendFile(path.join(__dirname,'public','auth.html')); });
 app.get('/login', (_,res) => { if(!auth.isSetupDone()) return res.redirect('/setup'); res.sendFile(path.join(__dirname,'public','auth.html')); });
 app.get('/kanban', (_,res) => res.sendFile(path.join(__dirname,'public','kanban.html')));
+app.get('/schedule', (_,res) => res.sendFile(path.join(__dirname,'public','schedule.html')));
 
 // ─── Tasks (Kanban) ───────────────────────────────────────────────────────
 app.get('/api/tasks', (req, res) => {
@@ -1998,9 +2068,10 @@ app.get('/api/tasks/running-sessions', (req, res) => {
 app.post('/api/tasks', (req, res) => {
   const { title='Нова задача', description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
           model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
-          depends_on=null, chain_id=null, source_session_id=null } = req.body;
+          depends_on=null, chain_id=null, source_session_id=null,
+          scheduled_at=null, recurrence=null, recurrence_end_at=null } = req.body;
   const id = genId();
-  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, session_id||null, workdir||null, model, mode, agent_mode, max_turns, attachments||null, depends_on||null, chain_id||null, source_session_id||null);
+  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, session_id||null, workdir||null, model, mode, agent_mode, max_turns, attachments||null, depends_on||null, chain_id||null, source_session_id||null, scheduled_at||null, recurrence||null, recurrence_end_at||null);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -2013,7 +2084,8 @@ app.put('/api/tasks/:id', (req, res) => {
           session_id=task.session_id, workdir=task.workdir,
           model=task.model||'sonnet', mode=task.mode||'auto', agent_mode=task.agent_mode||'single',
           max_turns=task.max_turns||30, attachments=task.attachments,
-          depends_on=task.depends_on, chain_id=task.chain_id, source_session_id=task.source_session_id } = req.body;
+          depends_on=task.depends_on, chain_id=task.chain_id, source_session_id=task.source_session_id,
+          scheduled_at=task.scheduled_at, recurrence=task.recurrence, recurrence_end_at=task.recurrence_end_at } = req.body;
   // Stop running process when task is moved away from in_progress
   if (task.status === 'in_progress' && status !== 'in_progress') {
     const ctrl = runningTaskAborts.get(req.params.id);
@@ -2032,10 +2104,12 @@ app.put('/api/tasks/:id', (req, res) => {
     status, sort_order, session_id || null, workdir || null,
     model, mode, agent_mode, max_turns, attachments || null,
     depends_on || null, chain_id || null, source_session_id || null,
+    scheduled_at || null, recurrence || null, recurrence_end_at || null,
     req.params.id
   );
   const updated = stmts.getTask.get(req.params.id);
-  if (status === 'todo' && task.status !== 'todo') setImmediate(processQueue);
+  // Trigger queue whenever status is todo (covers "Run now" on scheduled tasks too)
+  if (status === 'todo') setImmediate(processQueue);
   res.json(updated);
 });
 app.delete('/api/tasks/:id', (req, res) => {
@@ -2121,7 +2195,8 @@ app.post('/api/tasks/dispatch', (req, res) => {
         null,          // attachments
         realDeps.length ? JSON.stringify(realDeps) : null,
         chainId,
-        source_session_id || null
+        source_session_id || null,
+        null, null, null  // scheduled_at, recurrence, recurrence_end_at
       );
       createdTasks.push(stmts.getTask.get(taskId));
     }
@@ -2859,7 +2934,7 @@ function initTunnelManager() {
     });
     // Notify all paired Telegram devices
     if (telegramBot?.isRunning()) {
-      telegramBot.notifyTunnelUrl(url);
+      telegramBot.notifyTunnelUrl(url).catch(e => log.error('[tunnel] notifyTunnelUrl failed:', e.message));
     }
   });
 
@@ -2868,7 +2943,7 @@ function initTunnelManager() {
       try { ws.send(JSON.stringify({ type: 'tunnel_closed', reason })); } catch {}
     });
     if (telegramBot?.isRunning()) {
-      telegramBot.notifyTunnelClosed();
+      telegramBot.notifyTunnelClosed().catch(e => log.error('[tunnel] notifyTunnelClosed failed:', e.message));
     }
   });
 }
@@ -3127,20 +3202,28 @@ function _attachTelegramListeners(bot) {
   });
 
   bot.on('tunnel_stop', async ({ chatId }) => {
-    if (!tunnelManager?.isRunning()) {
-      await bot._sendMessage(chatId, '⚪ Not running.');
-      return;
+    try {
+      if (!tunnelManager?.isRunning()) {
+        await bot._sendMessage(chatId, bot._t('tn_not_running'));
+        return;
+      }
+      tunnelManager.stop();
+      await bot._sendMessage(chatId, bot._t('tn_notify_stopped'));
+    } catch (err) {
+      try { await bot._sendMessage(chatId, `❌ ${bot._escHtml(err.message)}`); } catch {}
     }
-    tunnelManager.stop();
-    await bot._sendMessage(chatId, '⬛ Remote access stopped.');
   });
 
   bot.on('tunnel_status', async ({ chatId }) => {
-    const s = tunnelManager?.getStatus();
-    if (s?.running) {
-      await bot._sendMessage(chatId, `🟢 Remote Access active\n\n🔗 ${bot._escHtml(s.publicUrl)}\n⏱ Since: ${bot._escHtml(String(s.startedAt))}`);
-    } else {
-      await bot._sendMessage(chatId, '⚪ Not running.');
+    try {
+      const s = tunnelManager?.getStatus();
+      if (s?.running) {
+        await bot._sendMessage(chatId, `🟢 Remote Access active\n\n🔗 ${bot._escHtml(s.publicUrl)}\n⏱ Since: ${bot._escHtml(String(s.startedAt))}`);
+      } else {
+        await bot._sendMessage(chatId, bot._t('tn_not_running'));
+      }
+    } catch (err) {
+      try { await bot._sendMessage(chatId, `❌ ${bot._escHtml(err.message)}`); } catch {}
     }
   });
 
@@ -3284,9 +3367,13 @@ app.get('/api/tunnel/status', (_, res) => {
   });
 });
 
+let _tunnelStartLock = false;
 app.post('/api/tunnel/start', async (req, res) => {
   if (tunnelManager?.isRunning()) {
     return res.json({ ok: true, publicUrl: tunnelManager.getStatus().publicUrl, already: true });
+  }
+  if (_tunnelStartLock) {
+    return res.status(409).json({ error: 'Tunnel start already in progress' });
   }
 
   const { provider, ngrokAuthtoken } = req.body;
@@ -3305,6 +3392,7 @@ app.post('/api/tunnel/start', async (req, res) => {
   // Initialize manager if not done
   if (!tunnelManager) initTunnelManager();
 
+  _tunnelStartLock = true;
   try {
     const { publicUrl } = await tunnelManager.start(prov, {
       ngrokAuthtoken: ngrokAuthtoken || c.tunnel.ngrokAuthtoken,
@@ -3317,6 +3405,8 @@ app.post('/api/tunnel/start', async (req, res) => {
       resp.installCmd = err.installCmd;
     }
     res.status(400).json(resp);
+  } finally {
+    _tunnelStartLock = false;
   }
 });
 
@@ -3328,8 +3418,12 @@ app.post('/api/tunnel/notify-telegram', async (_, res) => {
     return res.status(400).json({ error: 'Telegram bot is not running' });
   }
   const url = tunnelManager.getStatus().publicUrl;
-  await telegramBot.notifyTunnelUrl(url);
-  res.json({ ok: true });
+  try {
+    await telegramBot.notifyTunnelUrl(url);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to notify Telegram devices' });
+  }
 });
 
 app.post('/api/tunnel/stop', (_, res) => {
@@ -3429,7 +3523,14 @@ wss.on('connection', (ws) => {
       // Migrate _tabBusy/_tabAbort keys from tempId to real session id
       if (tabId && tabId !== localSessionId) {
         ws._tabBusy[localSessionId] = true; delete ws._tabBusy[tabId];
-        if (ws._tabQueue[tabId]) { ws._tabQueue[localSessionId] = ws._tabQueue[tabId]; delete ws._tabQueue[tabId]; sessionQueues.set(localSessionId, ws._tabQueue[localSessionId]); sessionQueues.delete(tabId); }
+        if (ws._tabQueue[tabId]) {
+          const q = ws._tabQueue[tabId];
+          // Fix: update tabId + sessionId in queued messages so they continue in the same session,
+          // not create new ones. Without this, msgs queued before session_started (on a new tab)
+          // had tabId:'new-abc'/sessionId:null and each created a fresh phantom session on dequeue.
+          for (const m of q) { m.tabId = localSessionId; m.sessionId = localSessionId; }
+          ws._tabQueue[localSessionId] = q; delete ws._tabQueue[tabId]; sessionQueues.set(localSessionId, q); sessionQueues.delete(tabId);
+        }
       }
 
       const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false, autoSkill=false } = msg;
@@ -3632,6 +3733,22 @@ wss.on('connection', (ws) => {
           delete ws._tabQueue[effectiveTabId];
           sessionQueues.delete(effectiveTabId);
           ws.send(JSON.stringify({ type: 'queue_update', tabId: effectiveTabId, pending: 0, items: [] }));
+          // Fix: WS-reconnect scenario — old WS had empty queue but a newer WS (page refresh / network blip)
+          // may have restored queue items from sessionQueues into its own _tabQueue (shared-ref).
+          // Since the shared-ref persists after sessionQueues.delete, check sessionWatchers for a live
+          // WS with pending items and fire _dequeue_next on it so the queue isn't stuck.
+          setImmediate(() => {
+            const watchers = sessionWatchers.get(effectiveTabId);
+            if (!watchers) return;
+            for (const liveWs of watchers) {
+              if (liveWs !== ws && liveWs.readyState === 1 &&
+                  liveWs._tabQueue?.[effectiveTabId]?.length > 0 &&
+                  !liveWs._tabBusy?.[effectiveTabId]) {
+                liveWs.emit('message', JSON.stringify({ type: '_dequeue_next', tabId: effectiveTabId }));
+                break;
+              }
+            }
+          });
         }
       } else if (!isStale) {
         ws._busy = false;
@@ -4036,7 +4153,8 @@ wss.on('connection', (ws) => {
                 '', 'todo', i, chainSessionId, workdir || null,
                 model || 'sonnet', 'auto', 'single', 30, null,
                 realDeps.length ? JSON.stringify(realDeps) : null,
-                chainId, sessionId || null
+                chainId, sessionId || null,
+                null, null, null  // scheduled_at, recurrence, recurrence_end_at
               );
               created.push(stmts.getTask.get(taskId));
             }
@@ -4045,11 +4163,13 @@ wss.on('connection', (ws) => {
           setImmediate(processQueue);
 
           // Notify client
+          const _kanbanCtx = tabId ? getNotificationContext(tabId) : { sessionTitle: null, projectName: null };
           ws.send(JSON.stringify({
             type: 'notification', level: 'success',
             title: 'Dispatched to Kanban',
             detail: `${created.length} tasks created`,
             ...(tabId ? { tabId } : {}),
+            sessionTitle: _kanbanCtx.sessionTitle, projectName: _kanbanCtx.projectName,
           }));
 
           // Send chain info so frontend can render progress widget

@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Schedule — Claude Code Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+/* ─── Reset & root ─── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#090d13;--s1:#111620;--s2:#181e2b;--s3:#1f2637;
+  --border:#2a3347;--text:#dce6f5;--muted:#7a8baa;
+  --accent:#7c6aef;--accent2:#a08df5;--abg:rgba(124,106,239,.13);
+  --green:#3fb950;--orange:#e5a435;--red:#f85149;--blue:#58a6ff;
+  --r:10px;--r-sm:6px;--r-md:10px;--r-lg:14px;
+  --shadow:0 4px 24px rgba(0,0,0,.4);
+  --shadow-md:0 4px 16px rgba(0,0,0,.32);
+  --shadow-xl:0 24px 64px rgba(0,0,0,.65);
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',-apple-system,sans-serif;font-size:14px;line-height:1.55}
+/* Subtle noise texture like kanban */
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");opacity:.022}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+/* ─── Header (identical to kanban) ─── */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--s1);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;flex-shrink:0}
+.hdr-l{display:flex;align-items:center;gap:10px}
+.logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent),#a855f7);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:10px;color:white;flex-shrink:0;box-shadow:0 2px 8px rgba(124,106,239,.4)}
+.hdr-btns{display:flex;gap:5px;align-items:center}
+.hdr-meta{display:flex;align-items:center;gap:6px}
+
+/* ─── Nav switcher (identical to kanban) ─── */
+.nav-sw{display:flex;align-items:center;background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:3px;gap:2px}
+.nav-sw-btn{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:6px;font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;transition:all .15s;white-space:nowrap}
+.nav-sw-btn:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.nav-sw-btn.active{background:var(--s2);color:var(--accent2);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+
+/* ─── Header buttons (identical to kanban .hb) ─── */
+.hb{background:var(--s2);border:1px solid var(--border);color:var(--muted);padding:5px 11px;border-radius:7px;cursor:pointer;font-size:13px;transition:all .15s;font-weight:500;font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.hb:hover{color:var(--text);border-color:var(--accent2);background:var(--s3)}
+.hb:active{transform:scale(.95);transition-duration:.07s}
+.hb-primary{background:var(--accent);border:1px solid var(--accent);color:#fff;font-weight:600;box-shadow:0 2px 10px rgba(124,106,239,.35)}
+.hb-primary:hover{background:var(--accent2);border-color:var(--accent2);color:#fff}
+
+/* ─── Project dropdown (kanban pattern) ─── */
+.proj-dd-wrap{position:relative}
+.proj-dd-btn{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--accent2);background:linear-gradient(135deg,rgba(124,106,239,.15) 0%,rgba(124,106,239,.08) 100%);border:1px solid rgba(124,106,239,.35);border-radius:8px;padding:6px 14px;cursor:pointer;max-width:280px;transition:all .2s ease;font-family:inherit;box-shadow:0 2px 8px rgba(124,106,239,.12)}
+.proj-dd-btn:hover{background:linear-gradient(135deg,rgba(124,106,239,.22) 0%,rgba(124,106,239,.12) 100%);border-color:var(--accent);box-shadow:0 4px 12px rgba(124,106,239,.2);transform:translateY(-1px)}
+.proj-dd-btn.open{background:linear-gradient(135deg,rgba(124,106,239,.25) 0%,rgba(124,106,239,.15) 100%);border-color:var(--accent);box-shadow:0 4px 16px rgba(124,106,239,.25)}
+.proj-dd-icon{font-size:14px;flex-shrink:0}
+.proj-dd-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proj-dd-arrow{font-size:10px;opacity:.6;transition:transform .2s;flex-shrink:0}
+.proj-dd-btn.open .proj-dd-arrow{transform:rotate(180deg);opacity:1}
+.proj-dd-menu{position:absolute;top:100%;left:0;margin-top:8px;min-width:300px;max-width:400px;background:var(--s2);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.35),0 0 0 1px rgba(124,106,239,.1);z-index:1000;opacity:0;visibility:hidden;transform:translateY(-8px);transition:all .2s cubic-bezier(.16,1,.3,1);overflow:hidden}
+.proj-dd-menu.open{opacity:1;visibility:visible;transform:translateY(0)}
+.proj-dd-search{padding:12px;border-bottom:1px solid var(--border);background:rgba(124,106,239,.05)}
+.proj-dd-search input{width:100%;background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+.proj-dd-search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,106,239,.15)}
+.proj-dd-list{max-height:320px;overflow-y:auto;padding:6px 0}
+.proj-dd-item{position:relative;display:flex;flex-direction:column;gap:3px;padding:10px 16px;cursor:pointer;transition:background .12s;border-left:3px solid transparent}
+.proj-dd-item:hover{background:var(--s3)}
+.proj-dd-item.active{background:rgba(124,106,239,.1);border-left-color:var(--accent)}
+.proj-dd-item-name{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:8px}
+.proj-dd-item.active .proj-dd-item-name{color:var(--accent2)}
+.proj-dd-item.active .proj-dd-item-name::before{content:'●';color:var(--accent);font-size:8px;flex-shrink:0}
+
+/* ─── Stats bar ─── */
+.stats-bar{display:flex;align-items:center;gap:8px;padding:9px 16px;background:var(--s1);border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0}
+.stat-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid transparent;transition:all .15s;cursor:default}
+.stat-chip-overdue{background:rgba(248,81,73,.1);border-color:rgba(248,81,73,.2);color:var(--red)}
+.stat-chip-today{background:rgba(229,164,53,.1);border-color:rgba(229,164,53,.2);color:var(--orange)}
+.stat-chip-upcoming{background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.2);color:var(--blue)}
+.stat-chip-recurring{background:var(--abg);border-color:rgba(124,106,239,.2);color:var(--accent2)}
+.stat-chip-num{font-size:14px;font-weight:700;min-width:16px;text-align:center}
+.stat-chip svg{opacity:.8;flex-shrink:0}
+.stats-spacer{width:1px;height:16px;background:var(--border);margin:0 2px;flex-shrink:0}
+.refresh-ts{font-size:11px;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:5px}
+.refresh-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse-dot 2s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ─── Agenda layout ─── */
+.agenda{max-width:860px;margin:0 auto;padding:24px 16px 80px;display:flex;flex-direction:column;gap:28px}
+
+/* ─── Section ─── */
+.section{display:flex;flex-direction:column;gap:0}
+.section-hd{display:flex;align-items:center;gap:10px;padding:0 0 12px 0;position:relative}
+.section-hd-label{display:flex;flex-direction:column;gap:1px}
+.section-date{font-size:20px;font-weight:800;color:var(--text);letter-spacing:-.4px;line-height:1.1}
+.section-rel{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding:2px 7px;border-radius:4px;width:fit-content}
+.section-rel-overdue{color:var(--red);background:rgba(248,81,73,.12)}
+.section-rel-today{color:var(--orange);background:rgba(229,164,53,.12)}
+.section-rel-tomorrow{color:var(--blue);background:rgba(88,166,255,.12)}
+.section-rel-upcoming{color:var(--muted);background:var(--s3)}
+.section-rel-recurring{color:var(--accent2);background:var(--abg)}
+.section-count{font-size:11px;font-weight:700;color:var(--muted);background:var(--s3);border:1px solid var(--border);border-radius:10px;padding:2px 8px;margin-left:auto}
+/* Overdue section header red tint */
+.section-hd.overdue-hd{background:linear-gradient(90deg,rgba(248,81,73,.07) 0%,transparent 100%);border-left:3px solid var(--red);padding-left:12px;border-radius:0 var(--r-sm) var(--r-sm) 0;margin-left:-3px}
+
+/* ─── Timeline ─── */
+.timeline{position:relative}
+/* Vertical connector line */
+.timeline::before{content:'';position:absolute;left:28px;top:16px;bottom:16px;width:1px;background:linear-gradient(to bottom,transparent,var(--border) 8%,var(--border) 92%,transparent);pointer-events:none}
+/* Each timeline row wraps dot + time + card */
+.tl-item{position:relative;padding-left:72px;margin-bottom:8px}
+/* Time column */
+.tl-time{position:absolute;left:0;top:0;width:56px;text-align:right;padding-right:18px;display:flex;flex-direction:column;align-items:flex-end;padding-top:13px}
+.tl-time-hm{font-size:15px;font-weight:700;line-height:1;letter-spacing:-.3px}
+.tl-time-hm.overdue{color:var(--red)}
+.tl-time-hm.today{color:var(--orange)}
+.tl-time-hm.upcoming{color:var(--blue)}
+.tl-time-hm.recurring{color:var(--accent2)}
+.tl-time-date{font-size:10px;font-weight:600;color:var(--muted);margin-top:2px;white-space:nowrap;text-align:right}
+/* Timeline dot */
+.tl-dot{position:absolute;left:22px;top:16px;width:13px;height:13px;border-radius:50%;border:2px solid var(--bg);flex-shrink:0;transition:transform .2s,box-shadow .2s}
+.tl-dot-overdue{background:var(--red);box-shadow:0 0 0 3px rgba(248,81,73,.2)}
+.tl-dot-today{background:var(--orange);box-shadow:0 0 0 3px rgba(229,164,53,.2)}
+.tl-dot-upcoming{background:var(--blue);box-shadow:0 0 0 3px rgba(88,166,255,.2)}
+.tl-dot-recurring{background:var(--accent);box-shadow:0 0 0 3px rgba(124,106,239,.2)}
+
+/* ─── Card ─── */
+.agcard{position:relative;background:var(--s2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px 12px 16px;transition:border-color .18s,box-shadow .18s,transform .15s;display:flex;align-items:flex-start;gap:12px}
+.agcard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px 0 0 3px;transition:width .18s}
+.agcard-overdue::before{background:var(--red)}
+.agcard-today::before{background:var(--orange)}
+.agcard-upcoming::before{background:var(--blue)}
+.agcard-recurring::before{background:var(--accent)}
+.agcard:hover{border-color:rgba(124,106,239,.45);box-shadow:0 0 0 1px rgba(124,106,239,.12),0 8px 28px rgba(0,0,0,.35);transform:translateY(-1px)}
+.tl-item:hover .tl-dot{transform:scale(1.25)}
+/* Hover glow per type */
+.agcard-overdue:hover{border-color:rgba(248,81,73,.4);box-shadow:0 0 0 1px rgba(248,81,73,.1),0 8px 28px rgba(248,81,73,.1)}
+.agcard-today:hover{border-color:rgba(229,164,53,.4);box-shadow:0 0 0 1px rgba(229,164,53,.1),0 8px 28px rgba(229,164,53,.1)}
+.agcard-upcoming:hover{border-color:rgba(88,166,255,.35);box-shadow:0 0 0 1px rgba(88,166,255,.08),0 8px 28px rgba(88,166,255,.08)}
+.agcard.running{border-color:rgba(229,164,53,.5);box-shadow:0 0 0 1px rgba(229,164,53,.15),0 4px 20px rgba(229,164,53,.12)}
+
+/* ─── Card body ─── */
+.agcard-body{flex:1;min-width:0}
+.agcard-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px}
+.agcard-desc{font-size:12px;color:var(--muted);margin-bottom:7px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
+.agcard-badges{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+
+/* ─── Badges ─── */
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap;border:1px solid transparent}
+.badge-muted{background:var(--s3);color:var(--muted);border-color:var(--border)}
+.badge-orange{background:rgba(229,164,53,.1);color:var(--orange);border-color:rgba(229,164,53,.2)}
+.badge-red{background:rgba(248,81,73,.1);color:var(--red);border-color:rgba(248,81,73,.2)}
+.badge-blue{background:rgba(88,166,255,.1);color:var(--blue);border-color:rgba(88,166,255,.2)}
+.badge-green{background:rgba(63,185,80,.1);color:var(--green);border-color:rgba(63,185,80,.2)}
+.badge-accent{background:var(--abg);color:var(--accent2);border-color:rgba(124,106,239,.25)}
+
+/* Status dot in badge */
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-todo{background:var(--blue)}
+.dot-in_progress{background:var(--orange)}
+.dot-backlog{background:var(--muted)}
+.dot-done{background:var(--green)}
+.dot-cancelled{background:var(--red)}
+
+/* ─── Card actions ─── */
+.agcard-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;opacity:0;transition:opacity .15s}
+.agcard:hover .agcard-actions{opacity:1}
+
+/* Run now button — premium */
+.btn-run{display:inline-flex;align-items:center;gap:5px;background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green);font-size:12px;font-weight:700;padding:5px 11px;border-radius:var(--r-sm);transition:all .15s;font-family:inherit;letter-spacing:.1px}
+.btn-run:hover{background:rgba(63,185,80,.22);border-color:var(--green);box-shadow:0 2px 10px rgba(63,185,80,.2)}
+.btn-run:active{transform:scale(.96)}
+.btn-run svg{flex-shrink:0}
+
+/* Edit button */
+.btn-edit{display:inline-flex;align-items:center;gap:4px;background:var(--s3);border:1px solid var(--border);color:var(--muted);font-size:12px;font-weight:600;padding:5px 10px;border-radius:var(--r-sm);transition:all .15s;font-family:inherit}
+.btn-edit:hover{color:var(--text);border-color:var(--muted)}
+
+/* ─── Spinning ─── */
+.spinning{display:inline-block;width:10px;height:10px;border:2px solid rgba(229,164,53,.3);border-top-color:var(--orange);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─── Skeleton loader ─── */
+.skel-section{display:flex;flex-direction:column;gap:0;padding-left:72px;position:relative}
+.skel-section::before{content:'';position:absolute;left:28px;top:16px;bottom:16px;width:1px;background:var(--border)}
+.skel-hd{height:40px;background:linear-gradient(90deg,var(--s2) 0%,var(--s3) 50%,var(--s2) 100%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:var(--r-sm);width:140px;margin-bottom:16px}
+.skel-card{height:72px;background:linear-gradient(90deg,var(--s2) 0%,var(--s3) 50%,var(--s2) 100%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:var(--r-md);margin-bottom:8px;border:1px solid var(--border)}
+.skel-card:nth-child(2){animation-delay:.1s}
+.skel-card:nth-child(3){animation-delay:.2s}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ─── Empty state ─── */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;gap:16px;text-align:center}
+.empty-state-svg{opacity:.7;margin-bottom:4px}
+.empty-state-title{font-size:18px;font-weight:700;color:var(--text);letter-spacing:-.3px}
+.empty-state-sub{font-size:13px;color:var(--muted);max-width:320px;line-height:1.6}
+.empty-state-cta{display:inline-flex;align-items:center;gap:7px;background:var(--accent);color:#fff;border:1px solid var(--accent);font-size:13px;font-weight:700;padding:8px 20px;border-radius:var(--r-sm);cursor:pointer;transition:all .15s;font-family:inherit;box-shadow:0 2px 12px rgba(124,106,239,.35);margin-top:4px}
+.empty-state-cta:hover{background:var(--accent2);border-color:var(--accent2);box-shadow:0 4px 20px rgba(124,106,239,.45)}
+
+/* ─── Modal overlay ─── */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+.ov.hidden{display:none}
+.modal{background:var(--s1);border:1px solid var(--border);border-radius:var(--r-lg);width:100%;max-width:560px;max-height:92vh;display:flex;flex-direction:column;box-shadow:var(--shadow-xl)}
+.modal-hd{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.modal-hd-icon{width:28px;height:28px;border-radius:7px;background:var(--abg);border:1px solid rgba(124,106,239,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.modal-hd-title{font-size:15px;font-weight:700;flex:1}
+.modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:2px 6px;border-radius:var(--r-sm);line-height:1;transition:color .1s,background .1s}
+.modal-close:hover{color:var(--text);background:var(--s2)}
+.modal-body{padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px}
+.modal-ft{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+
+/* Form elements */
+.lbl{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+.inp{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:13px;padding:8px 12px;font-family:inherit;transition:border-color .15s,box-shadow .15s;resize:vertical}
+.inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,106,239,.12)}
+.inp::placeholder{color:var(--muted)}
+/* datetime-local custom styling */
+.inp[type="datetime-local"]{color-scheme:dark;appearance:none;-webkit-appearance:none}
+.inp[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(.5) sepia(1) saturate(5) hue-rotate(200deg);cursor:pointer;opacity:.6}
+.inp[type="datetime-local"]::-webkit-calendar-picker-indicator:hover{opacity:1}
+.inp[type="date"]{color-scheme:dark}
+.inp[type="date"]::-webkit-calendar-picker-indicator{filter:invert(.5) sepia(1) saturate(5) hue-rotate(200deg);cursor:pointer;opacity:.6}
+.inp-hint{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}
+.sel{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:13px;padding:8px 12px;font-family:inherit;cursor:pointer;transition:border-color .15s;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a8baa' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.sel:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,106,239,.12)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn-primary{display:inline-flex;align-items:center;gap:6px;background:var(--accent);border:1px solid var(--accent);color:#fff;padding:7px 18px;border-radius:var(--r-sm);font-size:13px;font-weight:600;transition:all .15s;font-family:inherit;box-shadow:0 2px 10px rgba(124,106,239,.3)}
+.btn-primary:hover{background:var(--accent2);border-color:var(--accent2)}
+.btn-ghost{display:inline-flex;align-items:center;gap:6px;background:transparent;border:1px solid var(--border);color:var(--muted);padding:7px 18px;border-radius:var(--r-sm);font-size:13px;font-weight:600;transition:all .15s;font-family:inherit}
+.btn-ghost:hover{color:var(--text);border-color:var(--muted)}
+.btn-danger{background:transparent;border:1px solid var(--red);color:var(--red);padding:7px 18px;border-radius:var(--r-sm);font-size:13px;font-weight:600;transition:all .15s;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
+.btn-danger:hover{background:rgba(248,81,73,.1)}
+
+/* ─── Toast ─── */
+.toast-wrap{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+.toast{background:var(--s1);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 18px;font-size:13px;font-weight:600;color:var(--text);box-shadow:var(--shadow);animation:toast-in .2s cubic-bezier(.16,1,.3,1) forwards;white-space:nowrap}
+.toast.err{border-color:var(--red);color:var(--red);background:rgba(248,81,73,.08)}
+.toast.ok{border-color:var(--green);color:var(--green);background:rgba(63,185,80,.08)}
+@keyframes toast-in{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
+
+/* ─── Responsive ─── */
+@media(max-width:600px){
+  .tl-item{padding-left:56px}
+  .timeline::before{left:18px}
+  .tl-dot{left:12px}
+  .tl-time{width:42px;padding-right:12px}
+  .tl-time-hm{font-size:13px}
+  .tl-time-date{font-size:9px}
+  .hdr-l{gap:6px}
+  .proj-dd-btn{max-width:120px;padding:5px 10px;font-size:12px}
+  .stats-bar{gap:5px}
+  .stat-chip{padding:3px 7px;font-size:11px}
+  .agcard-actions{opacity:1}
+  .section-date{font-size:16px}
+}
+@media(max-width:420px){
+  .grid2{grid-template-columns:1fr}
+}
+.sc-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.sc-seg{display:flex;align-items:center;gap:2px;background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:3px}
+.sc-seg .sc-lbl{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:0 7px;white-space:nowrap}
+.sc-btn{padding:4px 11px;border-radius:6px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;transition:all .12s;white-space:nowrap;font-weight:500;font-family:inherit}
+.sc-btn:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.sc-btn.on{background:var(--accent);color:white;box-shadow:0 1px 6px rgba(124,106,239,.4)}
+.sc-sep{width:1px;height:20px;background:var(--border);margin:0 2px;flex-shrink:0}
+.sc-turns{width:55px;padding:4px 8px;border-radius:6px;background:var(--s2);border:1px solid var(--border);color:var(--text);font-size:13px;text-align:center;font-family:inherit;outline:none}
+.sc-turns:focus{border-color:var(--accent)}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="hdr">
+  <div class="hdr-l">
+    <div class="logo">CCS</div>
+    <nav class="nav-sw" aria-label="Навігація">
+      <a class="nav-sw-btn" href="/">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Chat
+      </a>
+      <a class="nav-sw-btn" href="/kanban">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
+        Kanban
+      </a>
+      <a class="nav-sw-btn active" href="/schedule">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Schedule
+      </a>
+    </nav>
+    <div class="hdr-meta">
+      <div class="proj-dd-wrap" id="projDdWrap">
+        <button class="proj-dd-btn" id="projDdBtn" onclick="toggleProjDd()">
+          <span class="proj-dd-icon">📁</span>
+          <span class="proj-dd-name" id="projDdName">Всі проекти</span>
+          <span class="proj-dd-arrow">▼</span>
+        </button>
+        <div class="proj-dd-menu" id="projDdMenu">
+          <div class="proj-dd-search">
+            <input type="text" id="projDdSearch" placeholder="Пошук…" oninput="filterProj(this.value)">
+          </div>
+          <div class="proj-dd-list" id="projDdList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="hdr-btns">
+    <button class="hb" onclick="refresh()" title="Оновити">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+    </button>
+    <button class="hb hb-primary" id="addBtn" onclick="openAddModal()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span id="addBtnLabel">Задача</span>
+    </button>
+  </div>
+</div>
+
+<!-- Stats bar -->
+<div class="stats-bar">
+  <div class="stat-chip stat-chip-overdue" id="chipOverdue">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span class="stat-chip-num" id="cntOverdue">0</span>
+    <span id="lblStatOverdue">прострочено</span>
+  </div>
+  <div class="stats-spacer"></div>
+  <div class="stat-chip stat-chip-today" id="chipToday">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <span class="stat-chip-num" id="cntToday">0</span>
+    <span id="lblStatToday">сьогодні</span>
+  </div>
+  <div class="stats-spacer"></div>
+  <div class="stat-chip stat-chip-upcoming" id="chipUpcoming">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    <span class="stat-chip-num" id="cntUpcoming">0</span>
+    <span id="lblStatUpcoming">заплановано</span>
+  </div>
+  <div class="stats-spacer"></div>
+  <div class="stat-chip stat-chip-recurring" id="chipRecurring">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+    <span class="stat-chip-num" id="cntRecurring">0</span>
+    <span id="lblStatRecurring">повторюваних</span>
+  </div>
+  <div class="refresh-ts" id="refreshTs">
+    <span class="refresh-dot"></span>
+    <span id="refreshTsText">—</span>
+  </div>
+</div>
+
+<!-- Agenda -->
+<div class="agenda" id="agenda">
+  <!-- skeleton -->
+  <div class="skel-section" id="skeleton">
+    <div class="skel-hd"></div>
+    <div class="skel-card"></div>
+    <div class="skel-card"></div>
+    <div class="skel-hd" style="width:100px;margin-top:8px"></div>
+    <div class="skel-card"></div>
+  </div>
+</div>
+
+<!-- Task modal -->
+<div class="ov hidden" id="taskOv" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-hd">
+      <div class="modal-hd-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </div>
+      <span class="modal-hd-title" id="modalTitle">Нова задача з розкладом</span>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-ft" id="modalFt"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+// ─── i18n ─────────────────────────────────────────────────────────────────
+const lang = localStorage.getItem('lang') || 'uk';
+const TR = {
+  uk: {
+    'page.title': 'Розклад — Claude Code Studio',
+    'nav.chat': 'Chat', 'nav.kanban': 'Kanban', 'nav.schedule': 'Schedule',
+    'nav.aria': 'Навігація між розділами',
+    'hdr.add': 'Задача', 'hdr.refresh': 'Оновити',
+    'proj.all': 'Всі проекти', 'proj.search': 'Пошук…', 'proj.noname': 'Без проекту',
+    'stat.overdue': 'прострочено', 'stat.today': 'сьогодні',
+    'stat.upcoming': 'заплановано', 'stat.recurring': 'повторюваних',
+    'recur.hourly': 'Щогодини', 'recur.daily': 'Щодня',
+    'recur.weekly': 'Щотижня', 'recur.monthly': 'Щомісяця',
+    'time.in': 'за ', 'time.min': ' хв', 'time.hr': ' г', 'time.day': ' д',
+    'sec.overdue': 'Прострочено', 'sec.overdue.rel': 'Прострочено',
+    'sec.today.rel': 'Сьогодні', 'sec.tomorrow.rel': 'Завтра',
+    'sec.this_week': 'Цього тижня', 'sec.this_week.rel': 'Найближчі дні',
+    'sec.later': 'Пізніше', 'sec.later.rel': 'Далекі плани',
+    'sec.recur': 'Повторювані', 'sec.recur.rel': 'Без фіксованої дати',
+    'status.backlog': 'Backlog', 'status.todo': 'Todo',
+    'status.in_progress': 'Виконується', 'status.done': 'Готово', 'status.cancelled': 'Скасовано',
+    'card.running': 'Виконується', 'card.run_now': 'Run now',
+    'card.run_now.title': 'Запустити зараз', 'card.edit.title': 'Редагувати',
+    'empty.title': 'Жодних запланованих задач',
+    'empty.sub': 'Заплануйте першу задачу — Claude запустить її автоматично у вказаний час.',
+    'empty.cta': 'Запланувати задачу',
+    'modal.add': 'Нова задача з розкладом', 'modal.edit': 'Редагувати задачу',
+    'form.title': 'Назва *', 'form.title.ph': 'Що має зробити Claude?',
+    'form.date': 'Дата та час запуску', 'form.date.hint': 'Залиште порожнім для задачі без дати',
+    'form.recur': 'Повторення', 'form.recur.hint': 'Claude буде запускатись автоматично',
+    'form.recur.once': '— одноразово —',
+    'form.recur.end': 'Кінець повторень',
+    'form.recur.end.hint': "Необов'язково — якщо не вказано, повторюється безкінечно",
+    'form.desc': 'Опис', 'form.desc.ph': 'Детальний опис задачі для Claude…',
+    'form.session': "Пов'язана сесія", 'form.session.hint': 'Claude відновить цю сесію',
+    'form.no_session': '— без сесії —',
+    'form.model': 'Модель',
+    'form.model.sonnet': 'Sonnet (за замовч.)', 'form.model.haiku': 'Haiku (швидший)', 'form.model.opus': 'Opus (найпотужніший)',
+    'btn.cancel': 'Скасувати', 'btn.create': 'Створити', 'btn.save': 'Зберегти', 'btn.delete': 'Видалити',
+    'toast.queued': 'Задачу передано у чергу', 'toast.scheduled': 'Задачу заплановано',
+    'toast.saved': 'Збережено', 'toast.deleted': 'Задачу видалено',
+    'toast.err.title': 'Введіть назву задачі',
+    'toast.no_project': 'Спочатку оберіть проєкт',
+    'toast.err.load': 'Помилка завантаження: ', 'toast.err': 'Помилка: ',
+    'confirm.delete': 'Видалити задачу? Цю дію не можна скасувати.',
+    'tasks.count': '{n} задач', 'tasks.count.1': '{n} задача', 'tasks.count.few': '{n} задачи',
+    'form.exec': 'Параметри виконання',
+    'form.exec.mode': 'Режим', 'form.exec.agent': 'Агент',
+    'form.exec.model': 'Модель', 'form.exec.turns': 'Кроки',
+    'locale': 'uk',
+  },
+  en: {
+    'page.title': 'Schedule — Claude Code Studio',
+    'nav.chat': 'Chat', 'nav.kanban': 'Kanban', 'nav.schedule': 'Schedule',
+    'nav.aria': 'Navigation',
+    'hdr.add': 'Task', 'hdr.refresh': 'Refresh',
+    'proj.all': 'All projects', 'proj.search': 'Search…', 'proj.noname': 'No name',
+    'stat.overdue': 'overdue', 'stat.today': 'today',
+    'stat.upcoming': 'upcoming', 'stat.recurring': 'recurring',
+    'recur.hourly': 'Hourly', 'recur.daily': 'Daily',
+    'recur.weekly': 'Weekly', 'recur.monthly': 'Monthly',
+    'time.in': 'in ', 'time.min': 'm', 'time.hr': 'h', 'time.day': 'd',
+    'sec.overdue': 'Overdue', 'sec.overdue.rel': 'Overdue',
+    'sec.today.rel': 'Today', 'sec.tomorrow.rel': 'Tomorrow',
+    'sec.this_week': 'This week', 'sec.this_week.rel': 'Coming days',
+    'sec.later': 'Later', 'sec.later.rel': 'Future plans',
+    'sec.recur': 'Recurring', 'sec.recur.rel': 'No fixed date',
+    'status.backlog': 'Backlog', 'status.todo': 'Todo',
+    'status.in_progress': 'Running', 'status.done': 'Done', 'status.cancelled': 'Cancelled',
+    'card.running': 'Running', 'card.run_now': 'Run now',
+    'card.run_now.title': 'Run now', 'card.edit.title': 'Edit',
+    'empty.title': 'No scheduled tasks',
+    'empty.sub': 'Schedule your first task — Claude will run it automatically at the specified time.',
+    'empty.cta': 'Schedule a task',
+    'modal.add': 'New scheduled task', 'modal.edit': 'Edit task',
+    'form.title': 'Name *', 'form.title.ph': 'What should Claude do?',
+    'form.date': 'Run date & time', 'form.date.hint': 'Leave empty for a task without date',
+    'form.recur': 'Recurrence', 'form.recur.hint': 'Claude will run automatically',
+    'form.recur.once': '— once —',
+    'form.recur.end': 'End recurrence',
+    'form.recur.end.hint': 'Optional — if not specified, runs indefinitely',
+    'form.desc': 'Description', 'form.desc.ph': 'Detailed task description for Claude…',
+    'form.session': 'Linked session', 'form.session.hint': 'Claude will resume this session',
+    'form.no_session': '— no session —',
+    'form.model': 'Model',
+    'form.model.sonnet': 'Sonnet (default)', 'form.model.haiku': 'Haiku (faster)', 'form.model.opus': 'Opus (most powerful)',
+    'btn.cancel': 'Cancel', 'btn.create': 'Create', 'btn.save': 'Save', 'btn.delete': 'Delete',
+    'toast.queued': 'Task queued', 'toast.scheduled': 'Task scheduled',
+    'toast.saved': 'Saved', 'toast.deleted': 'Task deleted',
+    'toast.err.title': 'Enter task title',
+    'toast.no_project': 'Select a project first',
+    'toast.err.load': 'Loading error: ', 'toast.err': 'Error: ',
+    'confirm.delete': 'Delete task? This action cannot be undone.',
+    'tasks.count': '{n} tasks', 'tasks.count.1': '{n} task', 'tasks.count.few': '{n} tasks',
+    'form.exec': 'Execution options',
+    'form.exec.mode': 'Mode', 'form.exec.agent': 'Agent',
+    'form.exec.model': 'Model', 'form.exec.turns': 'Steps',
+    'locale': 'en-GB',
+  },
+  ru: {
+    'page.title': 'Расписание — Claude Code Studio',
+    'nav.chat': 'Чат', 'nav.kanban': 'Kanban', 'nav.schedule': 'Расписание',
+    'nav.aria': 'Навигация',
+    'hdr.add': 'Задача', 'hdr.refresh': 'Обновить',
+    'proj.all': 'Все проекты', 'proj.search': 'Поиск…', 'proj.noname': 'Без проекта',
+    'stat.overdue': 'просрочено', 'stat.today': 'сегодня',
+    'stat.upcoming': 'запланировано', 'stat.recurring': 'повторяющихся',
+    'recur.hourly': 'Каждый час', 'recur.daily': 'Ежедневно',
+    'recur.weekly': 'Еженедельно', 'recur.monthly': 'Ежемесячно',
+    'time.in': 'через ', 'time.min': ' мин', 'time.hr': ' ч', 'time.day': ' д',
+    'sec.overdue': 'Просрочено', 'sec.overdue.rel': 'Просрочено',
+    'sec.today.rel': 'Сегодня', 'sec.tomorrow.rel': 'Завтра',
+    'sec.this_week': 'На этой неделе', 'sec.this_week.rel': 'Ближайшие дни',
+    'sec.later': 'Позже', 'sec.later.rel': 'Далёкие планы',
+    'sec.recur': 'Повторяющиеся', 'sec.recur.rel': 'Без фиксированной даты',
+    'status.backlog': 'Backlog', 'status.todo': 'Todo',
+    'status.in_progress': 'Выполняется', 'status.done': 'Готово', 'status.cancelled': 'Отменено',
+    'card.running': 'Выполняется', 'card.run_now': 'Запустить',
+    'card.run_now.title': 'Запустить сейчас', 'card.edit.title': 'Редактировать',
+    'empty.title': 'Нет запланированных задач',
+    'empty.sub': 'Запланируйте первую задачу — Claude запустит её автоматически в указанное время.',
+    'empty.cta': 'Запланировать задачу',
+    'modal.add': 'Новая задача по расписанию', 'modal.edit': 'Редактировать задачу',
+    'form.title': 'Название *', 'form.title.ph': 'Что должен сделать Claude?',
+    'form.date': 'Дата и время запуска', 'form.date.hint': 'Оставьте пустым для задачи без даты',
+    'form.recur': 'Повторение', 'form.recur.hint': 'Claude будет запускаться автоматически',
+    'form.recur.once': '— одноразово —',
+    'form.recur.end': 'Конец повторений',
+    'form.recur.end.hint': 'Необязательно — если не указано, повторяется бесконечно',
+    'form.desc': 'Описание', 'form.desc.ph': 'Подробное описание задачи для Claude…',
+    'form.session': 'Связанная сессия', 'form.session.hint': 'Claude возобновит эту сессию',
+    'form.no_session': '— без сессии —',
+    'form.model': 'Модель',
+    'form.model.sonnet': 'Sonnet (по умолч.)', 'form.model.haiku': 'Haiku (быстрее)', 'form.model.opus': 'Opus (самый мощный)',
+    'btn.cancel': 'Отмена', 'btn.create': 'Создать', 'btn.save': 'Сохранить', 'btn.delete': 'Удалить',
+    'toast.queued': 'Задача добавлена в очередь', 'toast.scheduled': 'Задача запланирована',
+    'toast.saved': 'Сохранено', 'toast.deleted': 'Задача удалена',
+    'toast.err.title': 'Введите название задачи',
+    'toast.no_project': 'Сначала выберите проект',
+    'toast.err.load': 'Ошибка загрузки: ', 'toast.err': 'Ошибка: ',
+    'confirm.delete': 'Удалить задачу? Это действие нельзя отменить.',
+    'tasks.count': '{n} задач', 'tasks.count.1': '{n} задача', 'tasks.count.few': '{n} задачи',
+    'form.exec': 'Параметры выполнения',
+    'form.exec.mode': 'Режим', 'form.exec.agent': 'Агент',
+    'form.exec.model': 'Модель', 'form.exec.turns': 'Шаги',
+    'locale': 'ru-RU',
+  },
+};
+function t(k) { return (TR[lang]||TR.uk)[k] || k; }
+function taskCount(n) {
+  const key = n === 1 ? 'tasks.count.1' : (n > 1 && n < 5) ? 'tasks.count.few' : 'tasks.count';
+  return t(key).replace('{n}', n);
+}
+function recurLabel(r) { return t('recur.' + r) || r; }
+
+// ─── State ────────────────────────────────────────────────────────────────
+let tasks = [], sessions = [], curWorkdir = null, editingId = null;
+let projects = [];
+const RECUR_NEXT = { hourly: 3600, daily: 86400, weekly: 604800, monthly: 2592000 };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+function $i(id) { return document.getElementById(id); }
+function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function toast(msg, type='') {
+  const el = document.createElement('div');
+  el.className = 'toast' + (type ? ' ' + type : '');
+  el.textContent = msg;
+  $i('toastWrap').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+async function apiFetch(url, opts={}) {
+  const r = await fetch(url, opts);
+  if (r.status === 401) { location.href = '/login'; return; }
+  if (!r.ok) throw new Error(await r.text());
+  return r;
+}
+
+function fmtTime(ts) {
+  if (!ts) return '';
+  return new Date(ts * 1000).toLocaleTimeString(t('locale'), { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtDayShort(ts) {
+  // e.g. "пн 4 бер"
+  if (!ts) return '';
+  return new Date(ts * 1000).toLocaleDateString(t('locale'), { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function fmtDateLong(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  const day = d.toLocaleDateString(t('locale'), { day: 'numeric', month: 'long' });
+  const wd = d.toLocaleDateString(t('locale'), { weekday: 'long' });
+  return { day, wd };
+}
+
+function nextRunLabel(tk) {
+  if (!tk.recurrence) return '';
+  const now = Math.floor(Date.now() / 1000);
+  const base = tk.scheduled_at ? tk.scheduled_at : now;
+  const interval = RECUR_NEXT[tk.recurrence] || 86400;
+  // find next future occurrence
+  let next = base;
+  while (next < now) next += interval;
+  const diff = next - now;
+  if (diff < 3600) return t('time.in') + Math.round(diff/60) + t('time.min');
+  if (diff < 86400) return t('time.in') + Math.round(diff/3600) + t('time.hr');
+  return t('time.in') + Math.round(diff/86400) + t('time.day');
+}
+
+// ─── Project dropdown ──────────────────────────────────────────────────────
+function toggleProjDd() {
+  const btn = $i('projDdBtn');
+  const menu = $i('projDdMenu');
+  const isOpen = menu.classList.contains('open');
+  if (isOpen) {
+    menu.classList.remove('open');
+    btn.classList.remove('open');
+  } else {
+    renderProjList($i('projDdSearch')?.value || '');
+    menu.classList.add('open');
+    btn.classList.add('open');
+    setTimeout(() => $i('projDdSearch')?.focus(), 50);
+  }
+}
+
+document.addEventListener('click', e => {
+  if (!$i('projDdWrap')?.contains(e.target)) {
+    $i('projDdMenu')?.classList.remove('open');
+    $i('projDdBtn')?.classList.remove('open');
+  }
+});
+
+async function loadProjects() {
+  try {
+    const r = await apiFetch('/api/projects');
+    projects = await r.json();
+    // Sync with the same localStorage key that Chat and Kanban use
+    const state = JSON.parse(localStorage.getItem('cc_ui_state') || '{}');
+    if (state.curWorkdir) {
+      const found = projects.find(p => p.workdir === state.curWorkdir || p.id === state.curWorkdir);
+      if (found) curWorkdir = found.workdir || found.id;
+    }
+    renderProjList('');
+    updateProjBtn();
+  } catch {}
+}
+
+function filterProj(q) { renderProjList(q); }
+
+function renderProjList(q) {
+  const lc = q.toLowerCase();
+  const list = $i('projDdList');
+  list.innerHTML = `<div class="proj-dd-item${!curWorkdir?' active':''}" onclick="selectProj(null, true)">
+    <div class="proj-dd-item-name">${t('proj.all')}</div></div>`;
+  for (const p of projects) {
+    const wd = p.workdir || p.id || '';
+    const name = p.name || wd.split('/').pop() || wd || t('proj.noname');
+    if (q && !name.toLowerCase().includes(lc) && !wd.toLowerCase().includes(lc)) continue;
+    const isActive = curWorkdir === wd || curWorkdir === p.id;
+    const safeWd = wd.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    list.innerHTML += `<div class="proj-dd-item${isActive?' active':''}" onclick="selectProj('${safeWd}', false)">
+      <div class="proj-dd-item-name">${escH(name)}</div>
+      ${wd ? `<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(wd)}</div>` : ''}
+    </div>`;
+  }
+}
+
+function selectProj(wd, isAll) {
+  curWorkdir = isAll ? null : (wd || null);
+  // Write to the same key used by Chat and Kanban
+  const state = JSON.parse(localStorage.getItem('cc_ui_state') || '{}');
+  state.curWorkdir = curWorkdir;
+  localStorage.setItem('cc_ui_state', JSON.stringify(state));
+  $i('projDdMenu').classList.remove('open');
+  $i('projDdBtn').classList.remove('open');
+  updateProjBtn();
+  refresh();
+}
+
+function updateProjBtn() {
+  const addBtn = $i('addBtn');
+  if (addBtn) { addBtn.disabled = !curWorkdir; addBtn.title = curWorkdir ? '' : t('toast.no_project'); }
+  if (!curWorkdir) { $i('projDdName').textContent = t('proj.all'); return; }
+  const p = projects.find(p => p.workdir === curWorkdir || p.id === curWorkdir);
+  $i('projDdName').textContent = p?.name || curWorkdir.split('/').pop() || curWorkdir;
+}
+
+// ─── Data loading ─────────────────────────────────────────────────────────
+async function fetchTasks() {
+  const url = curWorkdir ? `/api/tasks?workdir=${encodeURIComponent(curWorkdir)}` : '/api/tasks';
+  const r = await apiFetch(url);
+  return r.json();
+}
+
+async function fetchSessions() {
+  const url = curWorkdir ? `/api/sessions?workdir=${encodeURIComponent(curWorkdir)}` : '/api/sessions';
+  const r = await apiFetch(url);
+  return r.json();
+}
+
+async function refresh() {
+  try {
+    [tasks, sessions] = await Promise.all([fetchTasks(), fetchSessions()]);
+    render();
+    const now = new Date().toLocaleTimeString(t('locale'), { hour: '2-digit', minute: '2-digit' });
+    $i('refreshTsText').textContent = now;
+  } catch(e) { toast(t('toast.err.load') + e.message, 'err'); }
+}
+
+// ─── Bucketing ────────────────────────────────────────────────────────────
+function bucketTasks(allTasks) {
+  const now = Math.floor(Date.now() / 1000);
+  const startOfDay = d => {
+    const x = new Date(d * 1000);
+    x.setHours(0, 0, 0, 0);
+    return Math.floor(x / 1000);
+  };
+  const todayStart = startOfDay(now);
+  const tomorrowStart = todayStart + 86400;
+  const weekEnd = todayStart + 7 * 86400;
+
+  const active = allTasks.filter(t =>
+    (t.scheduled_at != null || t.recurrence != null) &&
+    t.status !== 'done' && t.status !== 'cancelled'
+  );
+
+  const overdue = [], today = [], tomorrow = [], thisWeek = [], later = [], recurOnly = [];
+
+  for (const t of active) {
+    if (!t.scheduled_at && t.recurrence) { recurOnly.push(t); continue; }
+    const sa = t.scheduled_at;
+    if (sa < todayStart)              overdue.push(t);
+    else if (sa < tomorrowStart)      today.push(t);
+    else if (sa < tomorrowStart + 86400) tomorrow.push(t);
+    else if (sa < weekEnd)            thisWeek.push(t);
+    else                              later.push(t);
+  }
+
+  const bySA = (a, b) => (a.scheduled_at||0) - (b.scheduled_at||0);
+  overdue.sort(bySA); today.sort(bySA); tomorrow.sort(bySA);
+  thisWeek.sort(bySA); later.sort(bySA);
+
+  return { overdue, today, tomorrow, thisWeek, later, recurOnly };
+}
+
+// ─── Rendering ────────────────────────────────────────────────────────────
+function render() {
+  $i('skeleton')?.remove();
+
+  const { overdue, today, tomorrow, thisWeek, later, recurOnly } = bucketTasks(tasks);
+
+  // Update stats with animation
+  animateCount('cntOverdue', overdue.length);
+  animateCount('cntToday', today.length);
+  animateCount('cntUpcoming', tomorrow.length + thisWeek.length + later.length);
+  animateCount('cntRecurring', recurOnly.length + tasks.filter(t => t.recurrence && t.scheduled_at).length);
+
+  const total = overdue.length + today.length + tomorrow.length + thisWeek.length + later.length + recurOnly.length;
+
+  if (total === 0) {
+    $i('agenda').innerHTML = renderEmptyState();
+    return;
+  }
+
+  // Build section date headers
+  const todayDate = new Date();
+  const tomorrowDate = new Date(Date.now() + 86400000);
+
+  const sections = [
+    { key:'overdue', date: t('sec.overdue'), rel: t('sec.overdue.rel'), relCls:'overdue', isOverdue:true, tasks:overdue },
+    { key:'today', date: todayDate.toLocaleDateString(t('locale'), {day:'numeric',month:'long'}), dayOfWeek: todayDate.toLocaleDateString(t('locale'), {weekday:'long'}), rel: t('sec.today.rel'), relCls:'today', tasks:today },
+    { key:'tomorrow', date: tomorrowDate.toLocaleDateString(t('locale'), {day:'numeric',month:'long'}), dayOfWeek: tomorrowDate.toLocaleDateString(t('locale'), {weekday:'long'}), rel: t('sec.tomorrow.rel'), relCls:'tomorrow', tasks:tomorrow },
+    { key:'thisWeek', date: t('sec.this_week'), rel: t('sec.this_week.rel'), relCls:'upcoming', tasks:thisWeek },
+    { key:'later', date: t('sec.later'), rel: t('sec.later.rel'), relCls:'upcoming', tasks:later },
+    { key:'recurOnly', date: t('sec.recur'), rel: t('sec.recur.rel'), relCls:'recurring', tasks:recurOnly },
+  ];
+
+  const chunks = sections.filter(s => s.tasks.length > 0);
+  $i('agenda').innerHTML = chunks.map(s => renderSection(s)).join('');
+}
+
+function animateCount(id, target) {
+  const el = $i(id);
+  if (!el) return;
+  const current = parseInt(el.textContent) || 0;
+  if (current === target) return;
+  el.textContent = target;
+}
+
+function renderSection(s) {
+  const { key, date, dayOfWeek, rel, relCls, isOverdue, tasks } = s;
+  const hdCls = isOverdue ? ' overdue-hd' : '';
+  const dayLine = dayOfWeek ? `<div style="font-size:12px;font-weight:500;color:var(--muted);margin-top:2px">${escH(dayOfWeek)}</div>` : '';
+
+  const cards = tasks.map(t => renderCard(t, relCls)).join('');
+
+  return `<div class="section">
+    <div class="section-hd${hdCls}">
+      <div class="section-hd-label">
+        <div class="section-date">${escH(date)}</div>
+        ${dayLine}
+        <div class="section-rel section-rel-${relCls}">${escH(rel)}</div>
+      </div>
+      <div class="section-count">${taskCount(tasks.length)}</div>
+    </div>
+    <div class="timeline">${cards}</div>
+  </div>`;
+}
+
+function renderCard(tk, cls) {
+  const isToday = cls === 'today';
+  const isOverdue = cls === 'overdue';
+  const showHM = isToday || isOverdue;
+  const isRunning = tk.status === 'in_progress';
+  const isRunnable = (isOverdue || isToday) && !isRunning;
+  const sess = sessions.find(s => s.id === tk.session_id);
+
+  // Time display
+  let timeHM = '', timeDate = '';
+  if (tk.scheduled_at) {
+    if (showHM) {
+      timeHM = fmtTime(tk.scheduled_at);
+    } else {
+      // For future sections: show weekday + date
+      const d = new Date(tk.scheduled_at * 1000);
+      timeHM = d.toLocaleDateString(t('locale'), { weekday: 'short', day: 'numeric' });
+      timeDate = d.toLocaleDateString(t('locale'), { month: 'short' });
+    }
+  } else {
+    timeHM = '∞';
+  }
+
+  // Recurrence badge with next run
+  let recurBadge = '';
+  if (tk.recurrence) {
+    const nextRun = nextRunLabel(tk);
+    recurBadge = `<span class="badge badge-accent">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+      ${escH(recurLabel(tk.recurrence))}${nextRun ? ` · ${nextRun}` : ''}
+    </span>`;
+  }
+
+  const statusBadge = isRunning
+    ? `<span class="badge badge-orange"><span class="spinning"></span> ${t('card.running')}</span>`
+    : `<span class="badge badge-muted"><span class="dot dot-${tk.status}"></span> ${statusLabel(tk.status)}</span>`;
+
+  const sessBadge = sess
+    ? `<span class="badge badge-muted" title="${escH(sess.title||sess.id)}">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        ${escH((sess.title||'').substring(0,28))}
+      </span>` : '';
+
+  const modelBadge = tk.model
+    ? `<span class="badge badge-muted">${escH(tk.model)}</span>` : '';
+
+  const runBtn = isRunnable
+    ? `<button class="btn-run" onclick="runNow('${tk.id}')" title="${t('card.run_now.title')}">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        ${t('card.run_now')}
+      </button>` : '';
+
+  const editBtn = `<button class="btn-edit" onclick="openEditModal('${tk.id}')" title="${t('card.edit.title')}">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+  </button>`;
+
+  const runningCls = isRunning ? ' running' : '';
+
+  return `<div class="tl-item">
+    <div class="tl-dot tl-dot-${cls}"></div>
+    <div class="tl-time">
+      <div class="tl-time-hm ${cls}">${escH(timeHM)}</div>
+      ${timeDate ? `<div class="tl-time-date">${escH(timeDate)}</div>` : ''}
+    </div>
+    <div class="agcard agcard-${cls}${runningCls}" id="agcard-${tk.id}">
+      <div class="agcard-body">
+        <div class="agcard-title">${escH(tk.title)}</div>
+        ${tk.description ? `<div class="agcard-desc">${escH(tk.description)}</div>` : ''}
+        <div class="agcard-badges">${statusBadge}${recurBadge}${sessBadge}${modelBadge}</div>
+      </div>
+      <div class="agcard-actions">${runBtn}${editBtn}</div>
+    </div>
+  </div>`;
+}
+
+function statusLabel(s) {
+  const m = { backlog:'status.backlog', todo:'status.todo', in_progress:'status.in_progress', done:'status.done', cancelled:'status.cancelled' };
+  return t(m[s] || s);
+}
+
+function renderEmptyState() {
+  return `<div class="empty-state">
+    <svg class="empty-state-svg" width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="10" y="14" width="60" height="56" rx="8" fill="none" stroke="#2a3347" stroke-width="2"/>
+      <rect x="10" y="14" width="60" height="16" rx="8" fill="#1f2637"/>
+      <rect x="10" y="22" width="60" height="8" fill="#1f2637"/>
+      <line x1="24" y1="8" x2="24" y2="20" stroke="#7c6aef" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="56" y1="8" x2="56" y2="20" stroke="#7c6aef" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="10" y1="30" x2="70" y2="30" stroke="#2a3347" stroke-width="1.5"/>
+      <rect x="20" y="40" width="22" height="4" rx="2" fill="#2a3347"/>
+      <rect x="20" y="50" width="34" height="4" rx="2" fill="#2a3347"/>
+      <rect x="20" y="60" width="16" height="4" rx="2" fill="#2a3347"/>
+      <circle cx="57" cy="57" r="14" fill="#111620" stroke="#2a3347" stroke-width="1.5"/>
+      <line x1="57" y1="50" x2="57" y2="58" stroke="#7c6aef" stroke-width="2" stroke-linecap="round"/>
+      <polyline points="57 58 61 62" stroke="#7c6aef" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <div class="empty-state-title">${t('empty.title')}</div>
+    <div class="empty-state-sub">${t('empty.sub')}</div>
+    <button class="empty-state-cta" onclick="openAddModal()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      ${t('empty.cta')}
+    </button>
+  </div>`;
+}
+
+// ─── Actions ──────────────────────────────────────────────────────────────
+async function runNow(id) {
+  const card = $i(`agcard-${id}`);
+  if (card) card.style.opacity = '.6';
+  try {
+    await apiFetch(`/api/tasks/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'todo', scheduled_at: null }),
+    });
+    toast(t('toast.queued'), 'ok');
+    await refresh();
+  } catch(e) {
+    if (card) card.style.opacity = '';
+    toast(t('toast.err') + e.message, 'err');
+  }
+}
+
+// ─── Modal / Form ─────────────────────────────────────────────────────────
+function buildForm(tk={}) {
+  const sessOpts = `<option value="">${t('form.no_session')}</option>` +
+    sessions.map(s => `<option value="${s.id}"${tk.session_id===s.id?' selected':''}>${escH((s.title||s.id).substring(0,50))}</option>`).join('');
+
+  const dtVal = tk.scheduled_at ? new Date(tk.scheduled_at*1000).toISOString().slice(0,16) : '';
+  const endDtVal = tk.recurrence_end_at ? new Date(tk.recurrence_end_at*1000).toISOString().slice(0,10) : '';
+
+  return `
+    <div>
+      <label class="lbl">${t('form.title')}</label>
+      <input id="fTitle" class="inp" placeholder="${t('form.title.ph')}" value="${escH(tk.title||'')}" maxlength="200">
+    </div>
+    <div class="grid2">
+      <div>
+        <label class="lbl">${t('form.date')}</label>
+        <input id="fScheduledAt" type="datetime-local" class="inp" value="${dtVal}">
+        <div class="inp-hint">${t('form.date.hint')}</div>
+      </div>
+      <div>
+        <label class="lbl">${t('form.recur')}</label>
+        <select id="fRecurrence" class="sel" onchange="onRecurChange()">
+          <option value="">${t('form.recur.once')}</option>
+          <option value="hourly"${tk.recurrence==='hourly'?' selected':''}>${t('recur.hourly')}</option>
+          <option value="daily"${tk.recurrence==='daily'?' selected':''}>${t('recur.daily')}</option>
+          <option value="weekly"${tk.recurrence==='weekly'?' selected':''}>${t('recur.weekly')}</option>
+          <option value="monthly"${tk.recurrence==='monthly'?' selected':''}>${t('recur.monthly')}</option>
+        </select>
+        <div class="inp-hint">${t('form.recur.hint')}</div>
+      </div>
+    </div>
+    <div id="endDateWrap" style="display:${tk.recurrence?'block':'none'}">
+      <label class="lbl">${t('form.recur.end')}</label>
+      <input id="fEndDate" type="date" class="inp" value="${endDtVal}">
+      <div class="inp-hint">${t('form.recur.end.hint')}</div>
+    </div>
+    <div>
+      <label class="lbl">${t('form.desc')}</label>
+      <textarea id="fDesc" class="inp" rows="3" placeholder="${t('form.desc.ph')}" maxlength="2000">${escH(tk.description||'')}</textarea>
+    </div>
+    <div>
+      <label class="lbl">${t('form.session')}</label>
+      <select id="fSession" class="sel">${sessOpts}</select>
+      <div class="inp-hint">${t('form.session.hint')}</div>
+    </div>
+    <div>
+      <label class="lbl">${t('form.exec')}</label>
+      <div class="sc-row">
+        <div class="sc-seg" data-group="mode">
+          <span class="sc-lbl">${t('form.exec.mode')}</span>
+          <button type="button" class="sc-btn${(tk.mode||'auto')==='auto'?' on':''}" data-v="auto" onclick="scOpt(this)">Auto</button>
+          <button type="button" class="sc-btn${tk.mode==='planning'?' on':''}" data-v="planning" onclick="scOpt(this)">Plan</button>
+          <button type="button" class="sc-btn${tk.mode==='task'?' on':''}" data-v="task" onclick="scOpt(this)">Task</button>
+        </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg" data-group="agent_mode">
+          <span class="sc-lbl">${t('form.exec.agent')}</span>
+          <button type="button" class="sc-btn${(tk.agent_mode||'single')==='single'?' on':''}" data-v="single" onclick="scOpt(this)">Single</button>
+          <button type="button" class="sc-btn${tk.agent_mode==='multi'?' on':''}" data-v="multi" onclick="scOpt(this)">Multi</button>
+        </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg" data-group="model">
+          <span class="sc-lbl">${t('form.exec.model')}</span>
+          <button type="button" class="sc-btn${tk.model==='haiku'?' on':''}" data-v="haiku" onclick="scOpt(this)">Haiku</button>
+          <button type="button" class="sc-btn${(tk.model||'sonnet')==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
+          <button type="button" class="sc-btn${tk.model==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
+        </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg">
+          <span class="sc-lbl">${t('form.exec.turns')}</span>
+          <input type="number" class="sc-turns" id="fMaxTurns" value="${tk.max_turns||30}" min="1" max="100">
+        </div>
+      </div>
+    </div>`;
+}
+
+function onRecurChange() {
+  const has = !!$i('fRecurrence').value;
+  $i('endDateWrap').style.display = has ? 'block' : 'none';
+}
+
+function scOpt(btn) {
+  const grp = btn.closest('.sc-seg');
+  if (!grp) return;
+  grp.querySelectorAll('.sc-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+function getScVal(group, fallback) {
+  const btn = document.querySelector(`.sc-seg[data-group="${group}"] .sc-btn.on`);
+  return btn ? btn.dataset.v : fallback;
+}
+
+function openAddModal() {
+  if (!curWorkdir) { toast(t('toast.no_project'), 'err'); return; }
+  editingId = null;
+  $i('modalTitle').textContent = t('modal.add');
+  $i('modalBody').innerHTML = buildForm({ status: 'todo' });
+  $i('modalFt').innerHTML = `
+    <button class="btn-ghost" onclick="closeModal()">${t('btn.cancel')}</button>
+    <button class="btn-primary" onclick="saveTask()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      ${t('btn.create')}
+    </button>`;
+  $i('taskOv').classList.remove('hidden');
+  setTimeout(() => $i('fTitle')?.focus(), 50);
+}
+
+async function openEditModal(id) {
+  const tk = tasks.find(t => t.id === id);
+  if (!tk) return;
+  editingId = id;
+  $i('modalTitle').textContent = t('modal.edit');
+  $i('modalBody').innerHTML = buildForm(tk);
+  $i('modalFt').innerHTML = `
+    <button class="btn-danger" style="margin-right:auto" onclick="deleteTask('${id}')">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+      ${t('btn.delete')}
+    </button>
+    <button class="btn-ghost" onclick="closeModal()">${t('btn.cancel')}</button>
+    <button class="btn-primary" onclick="saveTask()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      ${t('btn.save')}
+    </button>`;
+  $i('taskOv').classList.remove('hidden');
+}
+
+async function saveTask() {
+  const title = ($i('fTitle')?.value || '').trim();
+  if (!title) { toast(t('toast.err.title'), 'err'); $i('fTitle')?.focus(); return; }
+
+  const scheduledAtRaw = $i('fScheduledAt')?.value;
+  const scheduled_at = scheduledAtRaw ? Math.floor(new Date(scheduledAtRaw).getTime() / 1000) : null;
+  const recurrence = $i('fRecurrence')?.value || null;
+  const endDateRaw = $i('fEndDate')?.value;
+  const recurrence_end_at = (recurrence && endDateRaw)
+    ? Math.floor(new Date(endDateRaw + 'T23:59:59').getTime() / 1000) : null;
+
+  const body = {
+    title,
+    description: $i('fDesc')?.value || '',
+    status: 'todo',
+    session_id: $i('fSession')?.value || null,
+    workdir: curWorkdir || null,
+    model: getScVal('model', 'sonnet'),
+    mode: getScVal('mode', 'auto'),
+    agent_mode: getScVal('agent_mode', 'single'),
+    max_turns: parseInt($i('fMaxTurns')?.value) || 30,
+    scheduled_at,
+    recurrence,
+    recurrence_end_at,
+  };
+
+  try {
+    if (!editingId) {
+      await apiFetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      toast(t('toast.scheduled'), 'ok');
+    } else {
+      const orig = tasks.find(x => x.id === editingId);
+      if (orig) body.sort_order = orig.sort_order;
+      await apiFetch(`/api/tasks/${editingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      toast(t('toast.saved'), 'ok');
+    }
+    closeModal();
+    await refresh();
+  } catch(e) { toast(t('toast.err') + e.message, 'err'); }
+}
+
+async function deleteTask(id) {
+  if (!confirm(t('confirm.delete'))) return;
+  try {
+    await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
+    toast(t('toast.deleted'));
+    closeModal();
+    await refresh();
+  } catch(e) { toast(t('toast.err') + e.message, 'err'); }
+}
+
+function closeModal() {
+  $i('taskOv').classList.add('hidden');
+  editingId = null;
+}
+
+// Keyboard: Escape to close modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+// ─── Auto-refresh ─────────────────────────────────────────────────────────
+function startAutoRefresh() {
+  const hasActive = tasks.some(t => t.status === 'in_progress' || t.status === 'todo');
+  setTimeout(async () => {
+    await refresh();
+    startAutoRefresh();
+  }, hasActive ? 10000 : 30000);
+}
+
+// ─── i18n: static HTML ────────────────────────────────────────────────────
+function applyStaticI18n() {
+  document.title = t('page.title');
+  document.querySelector('.nav-sw')?.setAttribute('aria-label', t('nav.aria'));
+  document.querySelector('a.nav-sw-btn[href="/"]')?.childNodes.forEach(n => { if (n.nodeType===3 && n.textContent.trim()) n.textContent = ' ' + t('nav.chat'); });
+  document.querySelector('a.nav-sw-btn[href="/kanban"]')?.childNodes.forEach(n => { if (n.nodeType===3 && n.textContent.trim()) n.textContent = ' ' + t('nav.kanban'); });
+  document.querySelector('a.nav-sw-btn[href="/schedule"]')?.childNodes.forEach(n => { if (n.nodeType===3 && n.textContent.trim()) n.textContent = ' ' + t('nav.schedule'); });
+  document.querySelector('.hb[onclick="refresh()"]')?.setAttribute('title', t('hdr.refresh'));
+  const addLbl = $i('addBtnLabel'); if (addLbl) addLbl.textContent = t('hdr.add');
+  const lo = $i('lblStatOverdue'); if (lo) lo.textContent = ' ' + t('stat.overdue');
+  const lt = $i('lblStatToday'); if (lt) lt.textContent = ' ' + t('stat.today');
+  const lu = $i('lblStatUpcoming'); if (lu) lu.textContent = ' ' + t('stat.upcoming');
+  const lr = $i('lblStatRecurring'); if (lr) lr.textContent = ' ' + t('stat.recurring');
+  const ps = $i('projDdSearch'); if (ps) ps.placeholder = t('proj.search');
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+(async () => {
+  applyStaticI18n();
+  await loadProjects();
+  await refresh();
+  startAutoRefresh();
+})();
+</script>
+</body>
+</html>

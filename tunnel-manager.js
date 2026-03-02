@@ -67,8 +67,13 @@ class TunnelManager extends EventEmitter {
         return;
       }
 
+      // Capture process reference — all handlers guard against stale callbacks
+      // from a previous process after rapid stop/start cycles.
+      const proc = this._proc;
+
       // Listen for URL on stdout/stderr
       const onData = (stream) => (chunk) => {
+        if (this._proc !== proc) return; // stale handler from previous process
         const text = chunk.toString();
         this.log.debug(`[tunnel:${stream}] ${text.trim()}`);
 
@@ -87,10 +92,11 @@ class TunnelManager extends EventEmitter {
         }
       };
 
-      this._proc.stdout?.on('data', onData('stdout'));
-      this._proc.stderr?.on('data', onData('stderr'));
+      proc.stdout?.on('data', onData('stdout'));
+      proc.stderr?.on('data', onData('stderr'));
 
-      this._proc.on('error', (err) => {
+      proc.on('error', (err) => {
+        if (this._proc !== proc) return; // stale handler
         clearTimeout(timeout);
         this.log.error(`[tunnel] Process error: ${err.message}`);
         this._cleanup(err.message);
@@ -100,7 +106,8 @@ class TunnelManager extends EventEmitter {
         }
       });
 
-      this._proc.on('exit', (code, signal) => {
+      proc.on('exit', (code, signal) => {
+        if (this._proc !== proc) return; // stale handler
         clearTimeout(timeout);
         const reason = `Process exited (code=${code}, signal=${signal})`;
         this.log.info(`[tunnel] ${reason}`);
@@ -138,6 +145,7 @@ class TunnelManager extends EventEmitter {
     const forceKill = setTimeout(() => {
       try { proc.kill('SIGKILL'); } catch {}
     }, SHUTDOWN_TIMEOUT);
+    forceKill.unref(); // Don't prevent Node.js from exiting
 
     proc.once('exit', () => clearTimeout(forceKill));
     this._cleanup('Stopped by user');

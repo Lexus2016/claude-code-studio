@@ -1738,7 +1738,7 @@ class TelegramBot extends EventEmitter {
    * Called by server.js when tunnel starts.
    */
   async notifyTunnelUrl(url) {
-    if (!this._running) return;
+    if (!this.running) return;
     const devices = this._stmts.getAllDevices.all();
     for (const dev of devices) {
       if (dev.notifications_enabled) {
@@ -1754,7 +1754,7 @@ class TelegramBot extends EventEmitter {
    * Notify all paired devices that the tunnel was closed.
    */
   async notifyTunnelClosed() {
-    if (!this._running) return;
+    if (!this.running) return;
     const devices = this._stmts.getAllDevices.all();
     for (const dev of devices) {
       if (dev.notifications_enabled) {
@@ -1805,8 +1805,8 @@ class TelegramBot extends EventEmitter {
           const attachNote = attachments.length > 0 ? ` (+ ${attachments.length} file${attachments.length > 1 ? 's' : ''})` : '';
           await this._sendMessage(chatId, this._t('compose_sent', { note: attachNote }), {
             reply_markup: JSON.stringify({ inline_keyboard: [[
-              { text: '🛑 Stop', callback_data: 'cm:stop' },
               { text: '🏠 Menu', callback_data: 'm:menu' },
+              { text: '💬 ' + this._t('btn_back_chats'), callback_data: 'c:list:0' },
             ]] }),
           });
         }
