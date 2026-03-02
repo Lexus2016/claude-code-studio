@@ -51,7 +51,6 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 |------|-------|-------|---------|
 | Install Node.js 20 LTS | ✅ NodeSource | ✅ Homebrew | ✅ winget/choco |
 | Install claude CLI | ✅ npm -g | ✅ npm -g | ✅ npm -g |
-| Configure ANTHROPIC_API_KEY | ✅ /etc/environment | ✅ ~/.zshrc | ✅ System env var |
 | Claude Max login | ✅ claude login | ✅ claude login | ✅ claude login |
 | Create workspace dir | ✅ /workspace | ✅ ~/workspace | ✅ C:\claude-workspace |
 | Configure SSH server | ✅ (pre-existing) | ✅ (System Prefs) | ✅ OpenSSH install |

@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Kanban — Claude Code Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,7 @@
   --shadow-xl: 0 24px 64px rgba(0,0,0,.65);
 }
 *{ margin:0; padding:0; box-sizing:border-box; }
-html,body{ height:100%; overflow:hidden; }
+html,body{ height:100vh; height:100dvh; overflow:hidden; }
 body{
   font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   background:var(--bg); color:var(--text); font-size:14px;
@@ -270,6 +270,32 @@ textarea.inp{ resize:vertical; min-height:80px; }
 /* ─── Toast ─── */
 .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--s3); border:1px solid var(--border); color:var(--text); padding:9px 18px; border-radius:var(--r-md); font-size:13px; font-weight:500; z-index:9999; pointer-events:none; opacity:0; transition:opacity .2s; white-space:nowrap; box-shadow:var(--shadow); }
 .toast.show{ opacity:1; }
+
+/* ─── Responsive / Mobile ─── */
+@media (max-width: 800px) {
+  body { height: 100vh; height: 100dvh; overscroll-behavior: none; }
+  .hdr { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
+  .hdr-l { gap: 6px; flex-wrap: wrap; }
+  .hb span { display: none; }
+  .hb { padding: 5px 8px; min-height: 40px; }
+  .nav-sw-btn { padding: 4px 8px; font-size: 12px; }
+  .nav-sw-btn span { display: none; }
+  .proj-dd-btn { max-width: 120px; padding: 5px 10px; font-size: 12px; }
+  .board { padding: 10px 8px 16px; gap: 8px; }
+  .col { width: 240px; }
+  .modal { max-width: 95vw; max-height: 92vh; max-height: 92dvh; }
+  .grid2 { grid-template-columns: 1fr; }
+  .card-actions { opacity: 1; }
+  /* Prevent iOS auto-zoom on focus (requires ≥ 16px) */
+  .inp, .sel, .proj-dd-search input { font-size: 16px; }
+}
+@media (max-width: 480px) {
+  .col { width: 85vw; }
+  .board { gap: 6px; padding: 8px 6px 14px; scroll-snap-type: x mandatory; }
+  .col { scroll-snap-align: start; }
+  .hdr-meta { display: none; }
+  .kb-progress { display: none; }
+}
 </style>
 </head>
 <body>

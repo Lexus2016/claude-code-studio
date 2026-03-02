@@ -238,6 +238,17 @@ One click. That's it. Open the **Remote Access** panel in the sidebar, pick a pr
 
 Why does this matter? Because your AI doesn't need to be chained to your desk. Start a batch of tasks at home, grab the URL from Telegram, and check results from anywhere.
 
+### 📱 Mobile-Ready — Use It from Your Phone's Browser
+
+Not just Telegram. Open your Studio's public URL (via Remote Access) in any mobile browser — and the full UI works.
+
+- **Touch-optimized** — 44px tap targets, scroll-snap Kanban columns, swipeable panels
+- **iOS-safe** — no auto-zoom on focus, proper viewport handling for notched devices, no rubber-banding
+- **Responsive layout** — sidebars auto-collapse on mobile, restore on desktop. Toolbar scrolls horizontally with fade hints
+- **All pages** — Chat, Kanban, Schedule, Auth — every screen adapts to narrow viewports
+
+You're on a train, your tunnel is running, you open the URL on your phone. Full Kanban board with snap-scrolling columns. Full chat with streaming. Full schedule view. Not a "mobile version" — the real thing, optimized for touch.
+
 ### 💾 Everything is saved
 
 Sessions, chats, task history — all stored locally in SQLite. Come back tomorrow, continue exactly where you left off.
@@ -260,7 +271,7 @@ Sessions, chats, task history — all stored locally in SQLite. Come back tomorr
 
 - **Not a SaaS** — runs on your machine, your data never leaves. No account, no telemetry, no vendor lock-in.
 - **Not an IDE replacement** — it manages Claude sessions. Keep using VS Code, Cursor, or whatever you prefer.
-- **Not a Claude Code fork** — it wraps the official CLI/SDK. When Anthropic ships improvements, you get them automatically.
+- **Not a Claude Code fork** — it wraps the official CLI. When Anthropic ships improvements, you get them automatically.
 
 This is infrastructure you own. MIT licensed, no strings.
 
@@ -277,7 +288,6 @@ This is infrastructure you own. MIT licensed, no strings.
 **Prerequisites:**
 - [Node.js 18+](https://nodejs.org)
 - [Claude Code CLI](https://docs.anthropic.com/en/claude-code) installed and logged in (requires a Claude Pro or Max subscription)
-- **OR** an Anthropic API key — use the SDK engine, no CLI subscription needed
 
 ```bash
 npx github:Lexus2016/claude-code-studio
@@ -358,6 +368,7 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | 🗂 Projects | Separate workspaces with their own file directories |
 | 🌐 Remote SSH | Work on remote servers as if they were local |
 | 🔗 Remote Access | One-click public URL via cloudflared or ngrok — access Studio from anywhere |
+| 📱 Mobile UI | Touch-optimized responsive layout for all pages — Chat, Kanban, Schedule |
 | 🔒 File locks | Multiple agents on same codebase — no conflicts |
 | 💾 History | Everything saved to SQLite, resume anytime |
 | 📊 Rate limit alerts | Warnings at 80/90/95%, live countdown to reset |
@@ -396,20 +407,13 @@ MAX_TASK_WORKERS=5
 CLAUDE_TIMEOUT_MS=1800000
 TRUST_PROXY=false
 LOG_LEVEL=info
-ANTHROPIC_API_KEY=sk-ant-...   # SDK engine only, optional
 ```
-
-### Two engines
-
-- **CLI engine** — spawns `claude` subprocess. Uses your Claude Max subscription. No API key needed.
-- **SDK engine** — calls `@anthropic-ai/claude-code` SDK directly. Requires `ANTHROPIC_API_KEY`.
 
 ### Security
 
 - Passwords: bcrypt, 12 rounds
 - Tokens: 32-byte random hex, 30-day TTL, server-side storage
 - SSH passwords: AES-256-GCM encrypted at rest
-- API keys: never sent to the browser
 - Headers: Helmet.js on all responses
 - File access: path traversal protection on all file operations
 
