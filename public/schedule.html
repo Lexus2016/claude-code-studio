@@ -556,6 +556,20 @@ async function apiFetch(url, opts={}) {
   return r;
 }
 
+// Convert unix epoch to local datetime string for <input type="datetime-local">
+// CRITICAL: Do NOT use toISOString() — it returns UTC, but datetime-local expects local time.
+// Using toISOString() causes: 1) wrong time displayed in edit form, 2) time drift on every re-save.
+function toLocalDatetimeStr(ts) {
+  const d = new Date(ts * 1000);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function toLocalDateStr(ts) {
+  const d = new Date(ts * 1000);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+
 function fmtTime(ts) {
   if (!ts) return '';
   return new Date(ts * 1000).toLocaleTimeString(t('locale'), { hour: '2-digit', minute: '2-digit' });
@@ -917,8 +931,8 @@ function buildForm(tk={}) {
   const sessOpts = `<option value="">${t('form.no_session')}</option>` +
     sessions.map(s => `<option value="${s.id}"${tk.session_id===s.id?' selected':''}>${escH((s.title||s.id).substring(0,50))}</option>`).join('');
 
-  const dtVal = tk.scheduled_at ? new Date(tk.scheduled_at*1000).toISOString().slice(0,16) : '';
-  const endDtVal = tk.recurrence_end_at ? new Date(tk.recurrence_end_at*1000).toISOString().slice(0,10) : '';
+  const dtVal = tk.scheduled_at ? toLocalDatetimeStr(tk.scheduled_at) : '';
+  const endDtVal = tk.recurrence_end_at ? toLocalDateStr(tk.recurrence_end_at) : '';
 
   return `
     <div>
