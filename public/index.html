@@ -1727,7 +1727,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         <!-- Start/Stop button -->
         <div style="margin-top:8px">
           <button class="bp" id="tunnelToggleBtn" onclick="tunnelToggle()" style="width:100%;padding:7px 10px;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px">
-            <span>▶ Запустити</span>
+            <span data-i18n="tn.start">▶ Запустити</span>
           </button>
         </div>
 
@@ -1773,7 +1773,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         <!-- Lock Mode Toggle -->
         <div class="tg-section" style="margin-top:8px;display:flex;align-items:center;justify-content:space-between">
           <span style="font-size:12px" data-i18n="tg.accept_new">Нові підключення:</span>
-          <label class="tg-toggle" title="Дозволити/заборонити нові підключення">
+          <label class="tg-toggle" title="Дозволити/заборонити нові підключення" data-i18n-title="tg.toggle.title">
             <input type="checkbox" id="tgAcceptNew" onchange="tgToggleAccept(this.checked)" checked>
             <span class="tg-toggle-slider"></span>
           </label>
@@ -1849,7 +1849,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <div id="rlBadge">
         <span class="rl-dot"></span>
         <span class="rl-label" id="rlBadgeLabel">Max ⚠</span>
-        <button class="rl-dismiss" onclick="event.stopPropagation();_rlClear()" title="Закрити">×</button>
+        <button class="rl-dismiss" onclick="event.stopPropagation();_rlClear()" title="Закрити" data-i18n-title="cfg.close">×</button>
         <div id="rlTooltip">
           <div class="rl-tt-title"><span id="rl-tt-icon">⚠️</span> <span id="rl-tt-title-text" data-i18n="rl.title.warn">Наближається ліміт</span></div>
           <div class="rl-bar"><div class="rl-bar-fill" id="rl-bar-fill"></div></div>
@@ -2379,7 +2379,7 @@ const TRANSLATIONS = {
     'fpv.download':'Завантажити','fpv.download.title':'Завантажити файл','fpv.share':'Поділитись','fpv.share.title':'Поділитись / Скопіювати посилання','fpv.binary':'Бінарний файл — перегляд недоступний','fpv.img_error':'Помилка завантаження зображення','fpv.load_error':'Помилка завантаження файлу',
     'toast.no_connection':'Немає з\'єднання','toast.sess_not_found':'Сесію не знайдено','toast.cfg_load_err':'Помилка завантаження конфігурації','toast.skill_uploaded':'✓ Скіл завантажено','toast.link_copied':'✓ Посилання скопійовано','toast.select_dir':'Виберіть директорію','toast.link_prompt':'Скопіюйте посилання:',
     'at.no_project':'Оберіть проект, щоб шукати файли','at.searching':'Пошук...','at.search_err':'Помилка пошуку','at.no_files':'Файлів не знайдено',
-    'dir.this_dir':'. (ця директорія)','dir.no_subdirs':'Немає підпапок',
+    'dir.this_dir':'. (ця директорія)','dir.no_subdirs':'Немає підпапок','dir.drives':'💻 Всі диски',
     'toast.read_err':'Не вдалося прочитати: ','toast.err_prefix':'Помилка: ','dir.proj_name':'Назва проекту (авто якщо порожньо)',
     'welcome.prompt.1':'Поясни цей код крок за кроком','welcome.prompt.2':'Знайди та виправ помилки','welcome.prompt.3':'Напиши unit-тести','welcome.prompt.4':'Спроектуй архітектуру',
     'toast.task_resumed':'Задачу відновлено','toast.task_lost':'З\'єднання втрачено, вивід недоступний','toast.task_retry':'retry',
@@ -2459,7 +2459,7 @@ const TRANSLATIONS = {
     'tn.confirm':'⚠️ Це відкриє доступ до Studio через інтернет. Авторизація обов\'язкова. Продовжити?',
     'sec.telegram':'Telegram','tg.hint':'Керуйте Studio віддалено через Telegram-бота.',
     'tg.token':'Bot Token (від @BotFather):','tg.start':'▶ Запустити','tg.stop':'⏹ Зупинити',
-    'tg.accept_new':'Нові підключення:','tg.pair':'🔗 Підключити Telegram',
+    'tg.accept_new':'Нові підключення:','tg.toggle.title':'Дозволити/заборонити нові підключення','tg.pair':'🔗 Підключити Telegram',
     'tg.pair.hint':'Введіть цей код у Telegram-боті:','tg.pair.cancel':'Скасувати',
     'tg.devices':'Підключені пристрої:','tg.stopped':'⏹ Telegram-бот зупинено',
     'tg.no_devices':'Немає підключених пристроїв','tg.last_active':'Активність',
@@ -2540,7 +2540,7 @@ const TRANSLATIONS = {
     'fpv.download':'Download','fpv.download.title':'Download file','fpv.share':'Share','fpv.share.title':'Share / Copy link','fpv.binary':'Binary file — preview not available','fpv.img_error':'Image load error','fpv.load_error':'File load error',
     'toast.no_connection':'No connection','toast.sess_not_found':'Session not found','toast.cfg_load_err':'Config load error','toast.skill_uploaded':'✓ Skill uploaded','toast.link_copied':'✓ Link copied','toast.select_dir':'Select a directory','toast.link_prompt':'Copy link:',
     'at.no_project':'Select a project to search files','at.searching':'Searching...','at.search_err':'Search error','at.no_files':'No files found',
-    'dir.this_dir':'. (this directory)','dir.no_subdirs':'No subdirectories',
+    'dir.this_dir':'. (this directory)','dir.no_subdirs':'No subdirectories','dir.drives':'💻 All Drives',
     'toast.read_err':'Failed to read: ','toast.err_prefix':'Error: ','dir.proj_name':'Project name (auto if empty)',
     'welcome.prompt.1':'Explain this code step by step','welcome.prompt.2':'Find and fix bugs','welcome.prompt.3':'Write unit tests','welcome.prompt.4':'Design the architecture',
     'toast.task_resumed':'Task resumed','toast.task_lost':'Connection lost, output unavailable','toast.task_retry':'retry',
@@ -2620,7 +2620,7 @@ const TRANSLATIONS = {
     'tn.confirm':'⚠️ This will expose Studio to the internet. Authentication is required. Continue?',
     'sec.telegram':'Telegram','tg.hint':'Control Studio remotely via Telegram bot.',
     'tg.token':'Bot Token (from @BotFather):','tg.start':'▶ Start','tg.stop':'⏹ Stop',
-    'tg.accept_new':'New connections:','tg.pair':'🔗 Connect Telegram',
+    'tg.accept_new':'New connections:','tg.toggle.title':'Allow/deny new connections','tg.pair':'🔗 Connect Telegram',
     'tg.pair.hint':'Enter this code in the Telegram bot:','tg.pair.cancel':'Cancel',
     'tg.devices':'Connected devices:','tg.stopped':'⏹ Telegram bot stopped',
     'tg.no_devices':'No connected devices','tg.last_active':'Activity',
@@ -2701,7 +2701,7 @@ const TRANSLATIONS = {
     'fpv.download':'Скачать','fpv.download.title':'Скачать файл','fpv.share':'Поделиться','fpv.share.title':'Поделиться / Скопировать ссылку','fpv.binary':'Бинарный файл — предпросмотр недоступен','fpv.img_error':'Ошибка загрузки изображения','fpv.load_error':'Ошибка загрузки файла',
     'toast.no_connection':'Нет соединения','toast.sess_not_found':'Сессия не найдена','toast.cfg_load_err':'Ошибка загрузки конфигурации','toast.skill_uploaded':'✓ Навык загружен','toast.link_copied':'✓ Ссылка скопирована','toast.select_dir':'Выберите директорию','toast.link_prompt':'Скопируйте ссылку:',
     'at.no_project':'Выберите проект для поиска файлов','at.searching':'Поиск...','at.search_err':'Ошибка поиска','at.no_files':'Файлов не найдено',
-    'dir.this_dir':'. (эта директория)','dir.no_subdirs':'Нет подпапок',
+    'dir.this_dir':'. (эта директория)','dir.no_subdirs':'Нет подпапок','dir.drives':'💻 Все диски',
     'toast.read_err':'Не удалось прочитать: ','toast.err_prefix':'Ошибка: ','dir.proj_name':'Название проекта (авто если пусто)',
     'welcome.prompt.1':'Объясни этот код шаг за шагом','welcome.prompt.2':'Найди и исправь ошибки','welcome.prompt.3':'Напиши unit-тесты','welcome.prompt.4':'Спроектируй архитектуру',
     'toast.task_resumed':'Задача возобновлена','toast.task_lost':'Соединение потеряно, вывод недоступен','toast.task_retry':'retry',
@@ -2781,7 +2781,7 @@ const TRANSLATIONS = {
     'tn.confirm':'⚠️ Это откроет доступ к Studio через интернет. Авторизация обязательна. Продолжить?',
     'sec.telegram':'Telegram','tg.hint':'Управляйте Studio удалённо через Telegram-бота.',
     'tg.token':'Bot Token (от @BotFather):','tg.start':'▶ Запустить','tg.stop':'⏹ Остановить',
-    'tg.accept_new':'Новые подключения:','tg.pair':'🔗 Подключить Telegram',
+    'tg.accept_new':'Новые подключения:','tg.toggle.title':'Разрешить/запретить новые подключения','tg.pair':'🔗 Подключить Telegram',
     'tg.pair.hint':'Введите этот код в Telegram-боте:','tg.pair.cancel':'Отмена',
     'tg.devices':'Подключённые устройства:','tg.stopped':'⏹ Telegram-бот остановлен',
     'tg.no_devices':'Нет подключённых устройств','tg.last_active':'Активность',
@@ -2797,11 +2797,11 @@ const TRANSLATIONS = {
   }
 };
 function t(key) {
-  const lang = localStorage.getItem('lang') || 'uk';
-  return (TRANSLATIONS[lang] || TRANSLATIONS.uk)[key] || key;
+  const lang = localStorage.getItem('lang') || 'en';
+  return (TRANSLATIONS[lang] || TRANSLATIONS.en)[key] || key;
 }
 function setLang(lang) {
-  const t = TRANSLATIONS[lang] || TRANSLATIONS.uk;
+  const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
   localStorage.setItem('lang', lang);
   fetch('/api/lang', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang }) }).catch(() => {});
   const sel = $i('langSel'); if (sel) sel.value = lang;
@@ -7423,15 +7423,11 @@ function switchProject(id) {
     projectActiveTab[curProjectId] = activeTabId;
   }
 
-  // Toggle off if clicking the already-active project
+  // If already-active project is clicked:
+  // — no active tab → open a new chat (e.g. right after project creation)
+  // — has active tab  → do nothing (project is already open and visible)
   if (curProjectId === id) {
-    curProjectId = null; curWorkdir = null;
-    openTabs = []; activeTabId = null; currentSessionId = null;
-    msgsEl.innerHTML = ''; showW(); renderTabs();
-    inEl.value = ''; inEl.style.height = 'auto';
-    _clearAttachments(); clearReply();
-    renderProjects(); saveUIState(); loadHist(); updateSessBar();
-    toast(t('proj.deactivated'));
+    if (!activeTabId) newTab();
     return;
   }
 
@@ -7590,11 +7586,15 @@ async function browseDirs(dirPath) {
     const d = await r.json();
     if (d.error) { toast(d.error, true); return; }
 
-    dirBrowsePath = d.path;
-    $i('dirCurrentPath').textContent = d.path;
-    // Auto-fill name if empty
-    const nameEl = $i('projNameInput');
-    if (!nameEl.value) nameEl.value = d.path.split('/').filter(Boolean).pop() || '';
+    const isDrivesList = d.path === '__drives__';
+    dirBrowsePath = isDrivesList ? null : d.path;
+    $i('dirCurrentPath').textContent = isDrivesList ? t('dir.drives') : d.path;
+
+    // Auto-fill name if empty (skip for drives list)
+    if (!isDrivesList) {
+      const nameEl = $i('projNameInput');
+      if (!nameEl.value) nameEl.value = d.path.split(/[/\\]/).filter(Boolean).pop() || '';
+    }
 
     const list = $i('dirList');
     list.innerHTML = '';
@@ -7603,30 +7603,35 @@ async function browseDirs(dirPath) {
     if (d.parent) {
       const b = document.createElement('div');
       b.className = 'dii';
-      b.innerHTML = '<span class="di" style="color:var(--muted)">↑</span><span class="dn" style="color:var(--muted)">..</span>';
+      const upLabel = d.parent === '__drives__' ? t('dir.drives') : '..';
+      b.innerHTML = `<span class="di" style="color:var(--muted)">↑</span><span class="dn" style="color:var(--muted)">${upLabel}</span>`;
       b.onclick = () => browseDirs(d.parent);
       list.appendChild(b);
     }
 
-    // Current dir as selectable row
-    const self = document.createElement('div');
-    self.className = 'dii selected';
-    self.innerHTML = `<span class="di" style="color:var(--accent2)">▸</span><span class="dn"><strong>${t('dir.this_dir')}</strong></span>`;
-    self.onclick = () => { dirBrowsePath = d.path; $i('dirCurrentPath').textContent = d.path; highlightSelected(self); };
-    list.appendChild(self);
+    // Current dir as selectable row (not shown for drives list)
+    if (!isDrivesList) {
+      const self = document.createElement('div');
+      self.className = 'dii selected';
+      self.innerHTML = `<span class="di" style="color:var(--accent2)">▸</span><span class="dn"><strong>${t('dir.this_dir')}</strong></span>`;
+      self.onclick = () => { dirBrowsePath = d.path; $i('dirCurrentPath').textContent = d.path; highlightSelected(self); };
+      list.appendChild(self);
+    }
 
-    // Subdirectories — single click selects, double click navigates
+    // Drives or subdirectories — single click selects, double click navigates
     for (const it of d.items) {
       const el = document.createElement('div');
       el.className = `dii${it.hidden ? ' hidden-dir' : ''}`;
-      el.innerHTML = `<span class="di" style="color:var(--muted)">▸</span><span class="dn">${escH(it.name)}</span>`;
+      const icon = isDrivesList ? '💾' : '▸';
+      const iconStyle = isDrivesList ? '' : 'color:var(--muted)';
+      el.innerHTML = `<span class="di" style="${iconStyle}">${icon}</span><span class="dn">${escH(it.name)}</span>`;
       el.onclick = () => {
         if (el._t) { clearTimeout(el._t); el._t = null; browseDirs(it.path); }
         else { el._t = setTimeout(() => {
           el._t = null;
           dirBrowsePath = it.path;
           $i('dirCurrentPath').textContent = it.path;
-          $i('projNameInput').value = it.name;
+          if (!isDrivesList) $i('projNameInput').value = it.name;
           highlightSelected(el);
         }, 220); }
       };
@@ -7670,7 +7675,7 @@ async function selectDir() {
   }
   // Local project
   if (!dirBrowsePath) { toast(t('toast.select_dir'), true); return; }
-  const name = ($i('projNameInput').value.trim()) || dirBrowsePath.split('/').filter(Boolean).pop() || dirBrowsePath;
+  const name = ($i('projNameInput').value.trim()) || dirBrowsePath.split(/[/\\]/).filter(Boolean).pop() || dirBrowsePath;
   const gitInit = $i('gitInitChk').checked;
 
   const r = await fetch('/api/projects', {
@@ -8455,7 +8460,7 @@ document.addEventListener('mouseout', () => {
 });
 
 // ─── Init ─────────────────────────────────────────────────────────────────
-setLang(localStorage.getItem('lang') || 'uk');
+setLang(localStorage.getItem('lang') || 'en');
 // Sync lang from server on load
 fetch('/api/lang').then(r => r.json()).then(d => {
   if (d.lang && d.lang !== localStorage.getItem('lang')) {

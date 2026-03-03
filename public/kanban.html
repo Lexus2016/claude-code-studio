@@ -538,6 +538,7 @@ function toast(msg,err=false){
 async function apiFetch(url,opts={}){
   const r=await fetch(url,opts);
   if(r.status===401){location.href='/login';throw new Error('401');}
+  if(!r.ok)throw new Error(await r.text());
   return r;
 }
 
@@ -1134,7 +1135,13 @@ function confirmDelete(id){
   $i('confirmOkBtn').onclick=async()=>{
     try{
       await apiFetch(`/api/tasks/${id}`,{method:'DELETE'});
-      toast(t('toast.deleted'));closeConfirm();await refresh(true);
+      // Optimistically remove card from local state so UI updates immediately
+      tasks=tasks.filter(x=>x.id!==id);
+      renderBoard();
+      toast(t('toast.deleted'));closeConfirm();
+      // Notify other tabs (scheduler, etc.)
+      try{const bc=new BroadcastChannel('tasks');bc.postMessage({type:'task_deleted',id});bc.close();}catch{}
+      await refresh(true);
     }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
   };
   $i('confirmOv').classList.remove('hidden');
@@ -1161,6 +1168,11 @@ document.addEventListener('keydown',e=>{
   try{
     const bc=new BroadcastChannel('kanban');
     bc.onmessage=e=>{if(e.data?.type==='session_deleted')refresh(true);};
+  }catch{}
+  // Listen for task CRUD from other tabs (schedule, etc.)
+  try{
+    const tc=new BroadcastChannel('tasks');
+    tc.onmessage=e=>{if(e.data?.type==='task_deleted'||e.data?.type==='task_changed')refresh(true);};
   }catch{}
 })();
 </script>

@@ -1132,8 +1132,13 @@ async function deleteTask(id) {
   if (!confirm(t('confirm.delete'))) return;
   try {
     await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
+    // Optimistically remove from local state so UI updates immediately
+    tasks = tasks.filter(x => x.id !== id);
+    render();
     toast(t('toast.deleted'));
     closeModal();
+    // Notify other tabs (kanban, etc.)
+    try { const bc = new BroadcastChannel('tasks'); bc.postMessage({ type: 'task_deleted', id }); bc.close(); } catch {}
     await refresh();
   } catch(e) { toast(t('toast.err') + e.message, 'err'); }
 }
@@ -1180,6 +1185,11 @@ function applyStaticI18n() {
   await loadProjects();
   await refresh();
   startAutoRefresh();
+  // Listen for task CRUD from other tabs (kanban, etc.)
+  try {
+    const tc = new BroadcastChannel('tasks');
+    tc.onmessage = e => { if (e.data?.type === 'task_deleted' || e.data?.type === 'task_changed') refresh(); };
+  } catch {}
 })();
 </script>
 </body>

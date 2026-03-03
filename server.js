@@ -1929,12 +1929,22 @@ app.post('/api/internal/notify', express.json(), (req, res) => {
 });
 
 app.use(auth.authMiddleware);
+
+// Prevent browser caching for all API responses.
+// Without this Express sends ETag but no Cache-Control, so browsers may
+// serve stale cached JSON (e.g. task list after a DELETE still contains
+// the deleted item until the heuristic cache expires).
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── Language ─────────────────────────────────────────────────────────────────
 app.get('/api/lang', (req, res) => {
   const c = loadConfig();
-  res.json({ lang: c.lang || 'uk' });
+  res.json({ lang: c.lang || 'en' });
 });
 
 app.put('/api/lang', express.json(), (req, res) => {
@@ -2897,6 +2907,15 @@ app.post('/api/remote-hosts/:id/test', async (req,res) => {
 
 // Directory browser — list directories at given path (no restriction to WORKDIR)
 app.get('/api/browse-dirs', (req, res) => {
+  // Windows: show drive list when explicitly requested OR when no path given (initial open)
+  if (process.platform === 'win32' && (!req.query.path || req.query.path === '__drives__')) {
+    const drives = [];
+    for (let i = 65; i <= 90; i++) { // A–Z
+      const drive = String.fromCharCode(i) + ':\\';
+      try { fs.accessSync(drive); drives.push({ name: String.fromCharCode(i) + ':', path: drive, hidden: false }); } catch {}
+    }
+    return res.json({ path: '__drives__', parent: null, items: drives });
+  }
   const dir = path.resolve(req.query.path || os.homedir());
   try {
     if (!fs.statSync(dir).isDirectory()) return res.status(400).json({ error: 'Not a directory' });
@@ -2909,7 +2928,9 @@ app.get('/api/browse-dirs', (req, res) => {
         return a.name.localeCompare(b.name);
       })
       .map(d => ({ name: d.name, path: path.join(dir, d.name), hidden: d.name.startsWith('.') }));
-    const parent = path.dirname(dir) !== dir ? path.dirname(dir) : null;
+    // On Windows, drive roots have dirname === self; use '__drives__' as virtual parent
+    let parent = path.dirname(dir) !== dir ? path.dirname(dir) : null;
+    if (process.platform === 'win32' && parent === null) parent = '__drives__';
     res.json({ path: dir, parent, items });
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
