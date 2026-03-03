@@ -10,6 +10,8 @@
 >
 > 📖 [Read on Medium: Claude Code Studio — The Remote Access Revolution for AI-Assisted Development](https://medium.com/@tiberiy20101/claude-code-studio-the-remote-access-revolution-for-ai-assisted-development-b6c6dc5a5548)
 
+> **Works on Windows, macOS, and Linux** — zero platform-specific setup.
+
 ---
 
 ## What is this?
@@ -43,6 +45,8 @@ The difference isn't just visual. A web interface changes how you think about de
 ### 💬 Chat that does things
 
 Not a chatbot. When you type "refactor this function and add tests", Claude opens files, edits them, runs the tests, fixes errors, and reports back — in real time, right in the chat. Paste a screenshot with Ctrl+V and Claude sees it.
+
+When Claude asks you a question mid-task, the card collapses into a sleek inline pill after you answer — keeping your chat clean and focused on what matters.
 
 ### 📋 Kanban board for your AI tasks
 
@@ -286,6 +290,7 @@ This is infrastructure you own. MIT licensed, no strings.
 ## Get started in 60 seconds
 
 **Prerequisites:**
+- Windows, macOS, or Linux (all fully supported)
 - [Node.js 18+](https://nodejs.org)
 - [Claude Code CLI](https://docs.anthropic.com/en/claude-code) installed and logged in (requires a Claude Pro or Max subscription)
 
@@ -373,7 +378,9 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | 💾 History | Everything saved to SQLite, resume anytime |
 | 📊 Rate limit alerts | Warnings at 80/90/95%, live countdown to reset |
 | 🔒 Auth | Password login, 30-day tokens, data stays on your machine |
-| 🌍 3 languages | English, Ukrainian, Russian (auto-detected) |
+| 🌍 3 languages | English, Ukrainian, Russian — auto-detected on first visit, switch anytime |
+| 🖥 Cross-platform | Windows, macOS, Linux — no compatibility headaches |
+| 🛡 Security hardened | XSS, path traversal, SQL injection protection built-in |
 | 🐳 Docker | Deploy anywhere |
 
 ---
@@ -416,6 +423,9 @@ LOG_LEVEL=info
 - SSH passwords: AES-256-GCM encrypted at rest
 - Headers: Helmet.js on all responses
 - File access: path traversal protection on all file operations
+- XSS prevention: JavaScript URL filtering in markdown renderer
+- SQL injection: fully parametrized queries, no string interpolation
+- Memory protection: 2MB buffer caps with sliding window, capped message queues
 
 ### Development
 

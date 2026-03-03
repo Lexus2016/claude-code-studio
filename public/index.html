@@ -1021,6 +1021,30 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   border: 1px solid rgba(63,185,80,.25); border-radius: var(--r-sm); font-size: 13px; color: var(--green);
 }
 .ask-user-card.ask-answered .ask-answer-display { display: block; }
+/* Collapse animation for ask cards after answering */
+.ask-user-card.ask-collapsing {
+  overflow: hidden;
+  transition: max-height .3s ease-out, opacity .25s ease-out, margin .3s ease-out, padding .3s ease-out, border-color .2s;
+  max-height: 0 !important; opacity: 0;
+  margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0;
+  border-color: transparent;
+}
+/* Compact inline answer pill that replaces the collapsed card */
+.ask-answer-inline {
+  display: flex; align-items: center; gap: 6px;
+  margin: 4px 12px; padding: 5px 12px;
+  background: rgba(63,185,80,.06); border: 1px solid rgba(63,185,80,.18);
+  border-radius: 16px; font-size: 12px; color: var(--green);
+  animation: askSlideIn .25s var(--ease-out); max-width: 100%;
+}
+.ask-answer-inline.ask-inline-skipped {
+  background: rgba(139,148,158,.06); border-color: rgba(139,148,158,.18); color: var(--muted);
+}
+.ask-answer-inline .ask-inline-label { font-weight: 600; white-space: nowrap; }
+.ask-answer-inline .ask-inline-text {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text); opacity: .85;
+}
 /* "Other" free-text row on choice questions */
 .ask-user-card .ask-other-row {
   display: flex; gap: 8px; align-items: center; margin-top: 6px;
@@ -3537,15 +3561,12 @@ function handleWsMsg(d) {
       break;
 
     case 'ask_user_timeout': {
-      // Server timed out — disable the card
+      // Server timed out — collapse the card
       const _ric = d.requestId;
       if (_ric && /^[a-f0-9-]{36}$/.test(_ric)) {
         const _card = document.querySelector(`.ask-user-card[data-rid="${_ric}"]`);
         if (_card && !_card.classList.contains('ask-answered')) {
-          _card.classList.add('ask-answered');
-          _card.querySelector('.ask-answer-display').textContent = t('ask.skipped') + ' (timeout)';
-          _card.style.borderColor = 'var(--muted)';
-          if (_card._askInterval) clearInterval(_card._askInterval);
+          _collapseAskCard(_card, '', true);
         }
       }
       break;
@@ -4648,6 +4669,30 @@ function _askCollectPageAnswer(page) {
   return checked.join(', ');
 }
 
+// Collapse ask card into a compact inline pill
+function _collapseAskCard(card, displayText, isSkipped) {
+  if (card._askInterval) clearInterval(card._askInterval);
+  // 1. Capture FULL height BEFORE hiding form (ask-answered sets display:none on pages)
+  const h = card.offsetHeight;
+  card.style.maxHeight = h + 'px';
+  card.style.overflow = 'hidden';
+  // 2. Mark as answered (double-submit guard + hides form via CSS, but maxHeight holds space)
+  card.classList.add('ask-answered');
+  // 3. Force reflow so browser records the current maxHeight, then trigger collapse
+  void card.offsetHeight;
+  card.classList.add('ask-collapsing');
+  // 4. After animation, replace with compact inline pill
+  setTimeout(() => {
+    const pill = document.createElement('div');
+    pill.className = 'ask-answer-inline' + (isSkipped ? ' ask-inline-skipped' : '');
+    const icon = isSkipped ? '⏭' : '✓';
+    const label = isSkipped ? t('ask.skipped') : t('ask.answered');
+    pill.innerHTML = `<span class="ask-inline-label">${icon} ${escH(label)}</span><span class="ask-inline-text">${escH(displayText)}</span>`;
+    card.replaceWith(pill);
+    scrollBottom();
+  }, 320);
+}
+
 function askUserSubmit(requestId) {
   const card = document.querySelector(`.ask-user-card[data-rid="${requestId}"]`);
   if (!card || card.classList.contains('ask-answered')) return;
@@ -4656,10 +4701,8 @@ function askUserSubmit(requestId) {
   let answer = '';
 
   if (pages.length <= 1) {
-    // Single question — plain string answer (backward compat)
     answer = _askCollectPageAnswer(pages[0]);
   } else {
-    // Multiple questions — collect all, format as structured JSON
     const parts = [];
     let allEmpty = true;
     pages.forEach((page, i) => {
@@ -4673,7 +4716,6 @@ function askUserSubmit(requestId) {
   }
 
   if (!answer) {
-    // Visual feedback: highlight empty "Other" input or textarea on the active page
     const activePage = card.querySelector('.ask-page.active') || card.querySelector('.ask-page');
     const emptyOther = activePage?.querySelector('.ask-other-row.selected .ask-other-input');
     const emptyTa = activePage?.querySelector('.ask-text');
@@ -4684,19 +4726,15 @@ function askUserSubmit(requestId) {
 
   ws.send(JSON.stringify({ type: 'ask_user_response', requestId, answer }));
 
-  // Mark as answered
-  card.classList.add('ask-answered');
-  // Show summary
+  // Build compact display text
   let displayText = '';
   if (pages.length <= 1) {
-    displayText = `${t('ask.answered')}: ${answer}`;
+    displayText = answer;
   } else {
-    // Extract just the A: lines for compact display
     const aLines = answer.split('\n').filter(l => l.startsWith('A: ')).map(l => l.slice(3));
-    displayText = `${t('ask.answered')}: ${aLines.join(' · ')}`;
+    displayText = aLines.join(' · ');
   }
-  card.querySelector('.ask-answer-display').textContent = displayText;
-  if (card._askInterval) clearInterval(card._askInterval);
+  _collapseAskCard(card, displayText, false);
 }
 
 function askUserCancel(requestId) {
@@ -4704,11 +4742,7 @@ function askUserCancel(requestId) {
   if (!card || card.classList.contains('ask-answered')) return;
 
   ws.send(JSON.stringify({ type: 'ask_user_cancel', requestId }));
-
-  card.classList.add('ask-answered');
-  card.querySelector('.ask-answer-display').textContent = t('ask.skipped');
-  card.style.borderColor = 'var(--muted)';
-  if (card._askInterval) clearInterval(card._askInterval);
+  _collapseAskCard(card, '', true);
 }
 
 // ─── Ask Tool Card (CLI Ask tool) ────────────────────────────────────────────
@@ -4844,9 +4878,8 @@ function submitAskTool(requestId) {
   // Send response to server
   ws.send(JSON.stringify({ type: 'ask_tool_response', requestId, answer }));
 
-  // Mark as answered
-  card.classList.add('ask-answered');
-  card.querySelector('.ask-answer-display').textContent = `${t('ask.answered')}: ${answer}`;
+  // Collapse into compact pill, then send as user message
+  _collapseAskCard(card, answer, false);
 
   // Also send as user message so Claude sees the answer
   sendChat(answer);
@@ -4857,10 +4890,7 @@ function skipAskTool(requestId) {
   if (!card || card.classList.contains('ask-answered')) return;
 
   ws.send(JSON.stringify({ type: 'ask_tool_response', requestId, answer: '[Skipped]' }));
-
-  card.classList.add('ask-answered');
-  card.querySelector('.ask-answer-display').textContent = t('ask.skipped');
-  card.style.borderColor = 'var(--muted)';
+  _collapseAskCard(card, '', true);
 }
 
 function scrollBottom() {
@@ -6055,7 +6085,7 @@ function loadMoreMsgs() {
   const end = _shownFrom;
   // Prepend in reverse order so DOM order stays chronological
   for (let i = end - 1; i >= start; i--) {
-    _renderMsgAt(i, true);
+    try { _renderMsgAt(i, true); } catch (e) { console.error('renderMsg failed at', i, _allMsgs[i], e); }
   }
   _shownFrom = start;
   _updateLoadMoreBtn();
@@ -6072,7 +6102,13 @@ async function loadSess(id) {
     if (!r.ok) { closeTab(id); toast(t('toast.sess_not_found'), true); return; }
     const d = await r.json();
     if (id !== activeTabId) return; // tab was switched while parsing — discard stale load
-    streaming.el = null; streaming.txt = ''; streaming.toolCounts = {}; streaming.toolLog = []; // Reset streaming state before clearing DOM — prevents stale references
+    // ── Save background-accumulated state BEFORE resetting the streaming proxy ──
+    // BUG FIX: streaming.txt = '' writes through proxy to getTS(activeTabId).curTxt,
+    // which destroys accumulated background text before line 6227 can read it.
+    const _bgTxt = tabState[id]?.curTxt || '';
+    const _bgToolLog = tabState[id]?._toolLog ? tabState[id]._toolLog.slice() : null;
+    const _bgToolCounts = tabState[id]?._toolCounts ? {...tabState[id]._toolCounts} : null;
+    streaming.el = null; streaming.txt = ''; streaming.toolCounts = {}; streaming.toolLog = []; // Reset streaming state — stale refs cleared
     msgsEl.removeAttribute('aria-live'); // Suppress screen reader flood during batch history load
     msgsEl.innerHTML = '';
     currentSessionId = id;
@@ -6167,7 +6203,7 @@ async function loadSess(id) {
     _shownFrom = Math.max(0, _allMsgs.length - MSG_PAGE);
 
     for (let i = _shownFrom; i < _allMsgs.length; i++) {
-      _renderMsgAt(i, false);
+      try { _renderMsgAt(i, false); } catch (e) { console.error('renderMsg failed at', i, _allMsgs[i], e); }
     }
     _updateLoadMoreBtn();
     msgsEl.setAttribute('aria-live', 'polite'); // Re-enable after batch load is done
@@ -6189,23 +6225,21 @@ async function loadSess(id) {
     }
 
     // Restore in-flight streaming content — priority order:
-    // 1. tabState (in-memory, most recent — background tab that was generating)
+    // 1. _bgTxt/_bgToolLog (saved before proxy reset — background tab that was generating)
     // 2. isChatRunning: session is actively running (page refresh) — show spinner,
     //    WS subscribe_session will replay the buffer and fill in content.
     // 3. partial_text from DB (persisted every 5 chunks) — shown only when interrupted
     //    (not running), so we don't conflict with live WS catch-up replay.
-    const savedTxt = tabState[id]?.curTxt;
-    const savedLog = tabState[id]?._toolLog;
-    if (savedTxt || savedLog?.length) {
+    if (_bgTxt || _bgToolLog?.length) {
       // Tab-switch restore: recreate streaming element with accumulated text + tool log
       streaming.el = addMsg('assistant');
-      streaming.txt = savedTxt || '';
+      streaming.txt = _bgTxt || '';
       addSpinner(streaming.el);
-      if (savedTxt) streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
+      if (_bgTxt) streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
       // Restore live tool activity panel even if there's no text yet (tools-only phase)
-      if (savedLog?.length) {
-        streaming.toolLog = savedLog.slice();
-        streaming.toolCounts = tabState[id]?._toolCounts || {};
+      if (_bgToolLog?.length) {
+        streaming.toolLog = _bgToolLog.slice();
+        streaming.toolCounts = _bgToolCounts || {};
         _renderToolLive(streaming.el, streaming.toolLog);
       }
     } else if (d.isChatRunning) {
