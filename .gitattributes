@@ -1,0 +1,2 @@
+public/videos/*.gif filter=lfs diff=lfs merge=lfs -text
+public/videos/*.mp4 filter=lfs diff=lfs merge=lfs -text
