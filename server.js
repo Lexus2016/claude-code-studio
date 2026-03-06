@@ -106,6 +106,18 @@ const UPLOADS_DIR   = path.join(APP_DIR, 'data', 'uploads');
 // Category map for bundled skills — used when skill is auto-discovered (not in config)
 const BUNDLED_SKILL_META = {
   'auto-mode':         { label:'🎯 Auto-Skill Mode',           category:'system'      },
+  // ─── BMAD Agents ─────────────────────────────────────────────────────────
+  'bmad-master':       { label:'🧙 BMad Master',               category:'bmad', description:'BMAD orchestrator, workflow routing, agent selection' },
+  'analyst':           { label:'📊 Business Analyst (Mary)',    category:'bmad', description:'Market research, requirements elicitation, product briefs' },
+  'architect':         { label:'🏗️ Architect (Winston)',         category:'bmad', description:'System architecture, tech decisions, implementation readiness' },
+  'developer':         { label:'💻 Developer (Amelia)',         category:'bmad', description:'Story execution, TDD, code implementation, code review' },
+  'product-manager':   { label:'📋 Product Manager (John)',     category:'bmad', description:'PRD creation, epics, stories, stakeholder alignment' },
+  'qa-engineer':       { label:'🧪 QA Engineer (Quinn)',        category:'bmad', description:'Test automation, API testing, E2E testing, coverage' },
+  'scrum-master':      { label:'🏃 Scrum Master (Bob)',         category:'bmad', description:'Sprint planning, story preparation, agile ceremonies' },
+  'tech-writer':       { label:'📚 Tech Writer (Paige)',        category:'bmad', description:'Documentation, Mermaid diagrams, concept explanation' },
+  'ux-designer':       { label:'🎨 UX Designer (Sally)',        category:'bmad', description:'User research, interaction design, UX design specs' },
+  'quick-flow':        { label:'🚀 Quick Flow (Barry)',         category:'bmad', description:'Rapid spec + implementation for solo developers' },
+  // ─── Engineering ─────────────────────────────────────────────────────────
   'backend':           { label:'⚙️ Backend Engineer',           category:'engineering' },
   'api-designer':      { label:'🔌 API Designer',              category:'engineering' },
   'frontend':          { label:'🎨 Frontend Engineer',          category:'engineering' },
@@ -4562,7 +4574,8 @@ initTunnelManager();
 // Start Telegram bot if configured
 initTelegramBot();
 
-server.listen(PORT, () => {
+const HOST = process.env.HOST || '127.0.0.1';
+server.listen(PORT, HOST, () => {
   log.info('server started', {
     port:      PORT,
     url:       `http://localhost:${PORT}`,
