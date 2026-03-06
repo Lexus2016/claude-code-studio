@@ -872,6 +872,132 @@ function scheduleNextRun(task) {
 function processQueue() {
   const todo = stmts.getTodoTasks.all();
   if (!todo.length) return;
+
+  // ── BMAD Sprint Auto-Dispatch: expand BMAD sprint stories into agent chains ──
+  for (const task of todo) {
+    if (task.chain_id) continue; // already part of a chain
+    const bmadMatch = (task.notes || '').match(/\[bmad:([^\]]+)\]/);
+    if (!bmadMatch) continue; // not a BMAD sprint task
+    
+    // Check if story file exists in the project
+    const storyId = bmadMatch[1];
+    const workdir = task.workdir || WORKDIR;
+    
+    // This is a BMAD sprint story — expand into a dispatch chain
+    log.info(`[BMAD] Auto-dispatching sprint story: ${storyId}`);
+    
+    const chainId = genId();
+    const chainSessionId = genId();
+    stmts.createSession.run(
+      chainSessionId, task.title.substring(0, 200),
+      '[]', '[]', 'auto', 'single', task.model || 'sonnet', 'cli', workdir
+    );
+    
+    // Create the BMAD workflow chain: analyze → design → implement → review → verify
+    const subtasks = [
+      {
+        title: `[BMAD Analyst] Research & Requirements — ${storyId}`,
+        description: `<!-- bmad-skills: ["analyst","product-manager"] -->\n` +
+          `You are the BMAD Analyst. Analyze the story requirements for: ${storyId}\n\n` +
+          `Epic context from sprint: ${task.title}\n\n${task.description || ''}\n\n` +
+          `Tasks:\n` +
+          `1. Read the project's _bmad-output/implementation-artifacts/ directory to find story files\n` +
+          `2. If no story file exists for ${storyId}, create one based on the epic file's acceptance criteria\n` +
+          `3. Analyze the existing codebase to understand current architecture and patterns\n` +
+          `4. Document technical requirements, dependencies, and risks\n` +
+          `5. Write your analysis as a comment at the top of the story file\n` +
+          `\nOutput: A clear story file with requirements, acceptance criteria, and technical notes.`,
+        sort: 0,
+      },
+      {
+        title: `[BMAD Architect] Technical Design — ${storyId}`,
+        description: `<!-- bmad-skills: ["architect"] -->\n` +
+          `You are the BMAD Architect. Design the technical approach for: ${storyId}\n\n` +
+          `Tasks:\n` +
+          `1. Read the story file created by the Analyst\n` +
+          `2. Review existing architecture patterns in the codebase\n` +
+          `3. Design the implementation approach: which files to modify/create, data models, API changes\n` +
+          `4. Identify potential issues and edge cases\n` +
+          `5. Create a brief implementation plan as a checklist\n` +
+          `\nOutput: A technical design comment in the story file with implementation plan.`,
+        sort: 1,
+        depends: [0],
+      },
+      {
+        title: `[BMAD Developer] Implementation — ${storyId}`,
+        description: `<!-- bmad-skills: ["developer"] -->\n` +
+          `You are the BMAD Developer. Implement the story: ${storyId}\n\n` +
+          `Tasks:\n` +
+          `1. Read the story file with requirements and technical design\n` +
+          `2. Implement all acceptance criteria following existing code patterns\n` +
+          `3. Write clean, well-documented code\n` +
+          `4. Handle error cases and edge cases identified by the Architect\n` +
+          `5. Run any existing tests to ensure nothing is broken\n` +
+          `\nOutput: Working implementation that satisfies all acceptance criteria.`,
+        sort: 2,
+        depends: [1],
+      },
+      {
+        title: `[BMAD Code Review] Review — ${storyId}`,
+        description: `<!-- bmad-skills: ["code-review","analyst"] -->\n` +
+          `You are the BMAD Code Reviewer. Review the implementation of: ${storyId}\n\n` +
+          `Tasks:\n` +
+          `1. Review all changes made by the Developer\n` +
+          `2. Check against the acceptance criteria in the story file\n` +
+          `3. Verify code quality: naming, patterns, error handling, security\n` +
+          `4. Check for regressions or missed edge cases\n` +
+          `5. Fix any issues found (HIGH severity: fix immediately, MEDIUM: fix, LOW: note)\n` +
+          `\nOutput: Code review summary with issues found and fixes applied.`,
+        sort: 3,
+        depends: [2],
+      },
+      {
+        title: `[BMAD QA] Verification — ${storyId}`,
+        description: `<!-- bmad-skills: ["qa-engineer"] -->\n` +
+          `You are the BMAD QA Engineer. Verify the implementation of: ${storyId}\n\n` +
+          `Tasks:\n` +
+          `1. Read the story acceptance criteria\n` +
+          `2. Write tests for each acceptance criterion\n` +
+          `3. Run the test suite and verify all pass\n` +
+          `4. Check for edge cases and error scenarios\n` +
+          `5. Update the story status to 'done' if all checks pass\n` +
+          `\nOutput: Test results and verification report.`,
+        sort: 4,
+        depends: [3],
+      },
+    ];
+    
+    // Create real task IDs and map dependencies
+    const taskIds = subtasks.map(() => genId());
+    
+    db.transaction(() => {
+      for (let i = 0; i < subtasks.length; i++) {
+        const st = subtasks[i];
+        const realDeps = (st.depends || []).map(d => taskIds[d]);
+        stmts.createTask.run(
+          taskIds[i], st.title.substring(0, 200), st.description.substring(0, 2000),
+          `[bmad:${storyId}] Chain subtask ${i+1}/${subtasks.length}`,
+          'todo', st.sort,
+          chainSessionId, workdir,
+          task.model || 'sonnet', 'auto', 'single', 50, // max_turns 50 for thorough work
+          null, realDeps.length ? JSON.stringify(realDeps) : null,
+          chainId, null, null, null, null
+        );
+      }
+      // Mark the original task as done (it's been expanded into a chain)
+      db.prepare(`UPDATE tasks SET status='done', notes=?, chain_id=?, updated_at=datetime('now') WHERE id=?`)
+        .run(`${task.notes || ''} [expanded to chain: ${chainId}]`, chainId, task.id);
+    })();
+    
+    log.info(`[BMAD] Created dispatch chain for ${storyId}: ${subtasks.length} subtasks, chain=${chainId}`);
+    
+    // Notify connected clients
+    wss.clients.forEach(ws => { try { ws.send(JSON.stringify({ type: 'tasks-changed' })); } catch {} });
+  }
+  
+  // Re-fetch todo after potential expansions
+  const todoRefreshed = stmts.getTodoTasks.all();
+  if (!todoRefreshed.length) return;
   const inProg = stmts.getInProgressTasks.all();
   // Sessions currently occupied (in_progress or just started by taskRunning)
   const occupiedSids = new Set(inProg.filter(t => t.session_id).map(t => t.session_id));
@@ -881,7 +1007,7 @@ function processQueue() {
   let indepRunning = inProg.filter(t => !t.session_id).length;
   const startedSids = new Set();
   const startedWorkdirs = new Set();
-  for (const task of todo) {
+  for (const task of todoRefreshed) {
     if (taskRunning.has(task.id)) continue;
     // Dependency gate: check depends_on before starting chain tasks
     if (task.depends_on) {
