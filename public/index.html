@@ -1196,7 +1196,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .modal-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 20px; padding: 4px; transition: color .12s; line-height: 1; }
 .modal-close:hover { color: var(--text); }
 .modal-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 14px; }
-.modal-tab { padding: 9px 16px; font-size: 13px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: all .15s; font-weight: 500; }
+.modal-tab { padding: 9px 16px; font-size: 13px; cursor: pointer; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; transition: all .15s; font-weight: 500; }
 .modal-tab:hover { color: var(--text); }
 .modal-tab.active { color: var(--accent2); border-bottom-color: var(--accent); }
 .modal-body { flex: 1; overflow: auto; padding: 16px; }
@@ -1219,6 +1219,53 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .env-kv-del:hover { color:var(--red, #f87171);border-color:var(--red, #f87171);background:rgba(248,113,113,.08) }
 .env-add-btn { background:none;border:1px dashed var(--border);color:var(--muted);padding:8px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;width:100%;transition:all .15s;margin-top:4px }
 .env-add-btn:hover { border-color:var(--accent);color:var(--accent) }
+
+/* ─── MCP Add/Edit Modal ─── */
+.mcp-edit-dialog { width: 560px; }
+.mcp-edit-body { display:flex;flex-direction:column;gap:0;padding:20px;overflow-y:auto }
+.mcp-field-group { display:flex;flex-direction:column;gap:6px;margin-bottom:16px }
+.mcp-field-group:last-child { margin-bottom:0 }
+.mcp-field-row { margin-bottom:16px }
+.mcp-two-col { display:grid;grid-template-columns:1fr 1fr;gap:14px }
+.mcp-two-col .mcp-field-group { margin-bottom:0 }
+.mcp-field-label { font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:6px;margin-bottom:0 }
+.mcp-field-required { color:var(--accent2);font-weight:800;font-size:13px;line-height:1 }
+.mcp-field-sublabel { font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted);opacity:.7;font-size:11px;margin-left:2px }
+.mcp-field-hint { font-size:11px;color:var(--muted);opacity:.8;min-height:14px }
+.mcp-field-hint.err { color:var(--red);opacity:1 }
+.mcp-field-input { background:var(--s2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;transition:border-color .15s, box-shadow .15s;width:100% }
+.mcp-field-input:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,106,239,.12) }
+.mcp-field-input:disabled { opacity:.5;cursor:not-allowed;background:var(--s1) }
+.mcp-field-input::placeholder { color:var(--muted);opacity:.55 }
+.mcp-field-mono { font-family:var(--font-mono);font-size:12.5px }
+.mcp-field-textarea { background:var(--s2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;transition:border-color .15s, box-shadow .15s;width:100%;resize:vertical;line-height:1.55 }
+.mcp-field-textarea:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,106,239,.12) }
+.mcp-field-textarea::placeholder { color:var(--muted);opacity:.55 }
+.mcp-type-selector { display:flex;gap:8px }
+.mcp-type-opt { flex:1;cursor:pointer }
+.mcp-type-opt input[type="radio"] { display:none }
+.mcp-type-label { display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:9px;border:1.5px solid var(--border);background:var(--s2);transition:border-color .15s, background .15s, box-shadow .15s;cursor:pointer }
+.mcp-type-opt input:checked + .mcp-type-label { border-color:var(--accent);background:rgba(124,106,239,.1);box-shadow:0 0 0 3px rgba(124,106,239,.1) }
+.mcp-type-icon { font-size:16px;line-height:1;flex-shrink:0 }
+.mcp-type-text { display:flex;flex-direction:column;gap:2px }
+.mcp-type-text strong { font-size:13px;font-weight:700;color:var(--text);font-family:var(--font-mono) }
+.mcp-type-text small { font-size:11px;color:var(--muted);font-weight:400 }
+.mcp-type-opt input:checked + .mcp-type-label .mcp-type-text strong { color:var(--accent2) }
+.mcp-kv-header { display:flex;align-items:center;justify-content:space-between;margin-bottom:8px }
+.mcp-kv-list { display:flex;flex-direction:column;gap:6px;margin-bottom:4px }
+.mcp-kv-list .env-kv-row .env-kv-key { flex:0 0 38% }
+.mcp-kv-list .env-kv-row .env-kv-val { flex:1 }
+#meStdioFields, #meHttpFields { padding-top:4px;border-top:1px solid var(--border);margin-top:0 }
+.mcp-json-hint { font-size:12px;color:var(--muted);line-height:1.55;padding:10px 14px;border-radius:8px;background:rgba(124,106,239,.06);border:1px solid rgba(124,106,239,.15);margin-bottom:12px }
+.mcp-json-area { width:100%;min-height:280px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:14px;border-radius:9px;font-family:var(--font-mono);font-size:12.5px;line-height:1.65;resize:vertical;outline:none;transition:border-color .15s, box-shadow .15s;tab-size:2 }
+.mcp-json-area:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,106,239,.12) }
+.mcp-json-area::placeholder { color:var(--muted);opacity:.5 }
+.mcp-edit-error { font-size:12px;color:var(--red);display:flex;align-items:center;gap:6px;padding:6px 11px;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.25);border-radius:7px;flex:1 }
+.mcp-edit-save-btn { display:inline-flex;align-items:center;gap:6px;padding:8px 20px !important;box-shadow:0 2px 10px rgba(124,106,239,.3);transition:background .15s, box-shadow .15s, transform .07s }
+.mcp-edit-save-btn:hover { background:var(--accent2) !important;box-shadow:0 4px 16px rgba(124,106,239,.45) }
+.mcp-edit-save-btn:active { transform:scale(.97) }
+@keyframes mcpSectionIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+#meStdioFields:not([style*="display: none"]):not([style*="display:none"]), #meHttpFields:not([style*="display: none"]):not([style*="display:none"]) { animation:mcpSectionIn .18s var(--ease-out) }
 
 /* ─── Toast notifications ─── */
 #toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--s3); border: 1px solid var(--border); color: var(--text); padding: 9px 18px; border-radius: 10px; font-size: 13px; z-index: 200; pointer-events: none; opacity: 0; transition: opacity .25s; box-shadow: var(--shadow); white-space: nowrap; }
@@ -1650,32 +1697,10 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <div class="sec-body" id="mcpBody">
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="mcp.hint">Увімкніть інструменти, які Claude може використовувати в цьому чаті.</div>
         <div id="mcpList"></div>
-        <button class="add-btn" onclick="showMcpForm()" data-i18n="mcp.add">＋ Додати MCP-сервер</button>
+        <button class="add-btn" onclick="openMcpModal('add')" data-i18n="mcp.add">＋ Додати MCP-сервер</button>
         <div style="display:flex;gap:5px;margin-top:4px">
           <button class="bg" onclick="openMcpImport()" style="flex:1;font-size:11px;padding:5px 6px;display:inline-flex;align-items:center;justify-content:center;gap:4px" data-i18n-title="mcp.import.title" title="Імпортувати MCP з JSON файлу (Claude Desktop формат)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="mcp.import.btn">Імпорт</span></button>
           <button class="bg" onclick="exportMcp()" style="flex:1;font-size:11px;padding:5px 6px;display:inline-flex;align-items:center;justify-content:center;gap:4px" data-i18n-title="mcp.export.title" title="Експортувати всі MCP у JSON файл"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> <span data-i18n="mcp.export.btn">Експорт</span></button>
-        </div>
-        <div id="mcpForm" style="display:none" class="af">
-          <select id="mcpType" onchange="updateMcpFormType()">
-            <option value="stdio" data-i18n="mcp.type.stdio">stdio (команда)</option>
-            <option value="sse" data-i18n="mcp.type.sse">SSE (URL потік)</option>
-            <option value="http">HTTP (REST)</option>
-          </select>
-          <input id="mcpId" data-i18n-ph="mcp.id" placeholder="ID (напр. my-server)">
-          <input id="mcpLabel" data-i18n-ph="mcp.label" placeholder="Назва">
-          <div id="mcpStdioFields">
-            <input id="mcpCmd" data-i18n-ph="mcp.cmd" placeholder="Команда (напр. npx)">
-            <input id="mcpArgs" data-i18n-ph="mcp.args" placeholder="Аргументи через кому">
-          </div>
-          <div id="mcpUrlFields" style="display:none">
-            <input id="mcpUrl" placeholder="URL (https://...)">
-            <textarea id="mcpHeadersArea" placeholder='{"Authorization":"Bearer TOKEN"}' style="display:none"></textarea>
-          </div>
-          <textarea id="mcpEnv" placeholder='{"KEY":"value"}'></textarea>
-          <div class="fr">
-            <button class="bp" onclick="addMcp()" data-i18n="mcp.add_btn">Додати</button>
-            <button class="bg" onclick="hideMcpForm()">✕</button>
-          </div>
         </div>
       </div>
     </div>
@@ -2104,6 +2129,98 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   </div>
 </div>
 
+<!-- MCP Add/Edit Modal -->
+<div class="modal-overlay hidden" id="mcpEditModal" onclick="if(event.target===this)closeMcpModal()">
+  <div class="modal mcp-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="mcpEditTitle">
+    <div class="modal-hdr">
+      <h2 id="mcpEditTitle" style="font-size:15px;font-weight:700" data-i18n="me.title.add">Add MCP Server</h2>
+      <button class="modal-close" onclick="closeMcpModal()">✕</button>
+    </div>
+    <div class="modal-tabs" id="mcpEditTabs">
+      <button class="modal-tab active" id="mcpTabForm" onclick="switchMcpTab('form')" data-i18n="me.tab.form">Form</button>
+      <button class="modal-tab" id="mcpTabJson" onclick="switchMcpTab('json')" data-i18n="me.tab.json">JSON</button>
+    </div>
+    <div class="modal-body mcp-edit-body">
+      <!-- FORM TAB -->
+      <div id="mcpEditFormPane">
+        <div class="mcp-field-row mcp-two-col">
+          <div class="mcp-field-group">
+            <label class="mcp-field-label" for="meId">Server ID <span class="mcp-field-required">*</span></label>
+            <input type="text" id="meId" class="mcp-field-input mcp-field-mono" placeholder="my-server" autocomplete="off" spellcheck="false">
+            <span class="mcp-field-hint" id="meIdHint"></span>
+          </div>
+          <div class="mcp-field-group">
+            <label class="mcp-field-label" for="meLabel" data-i18n="me.label">Label</label>
+            <input type="text" id="meLabel" class="mcp-field-input" placeholder="My Server" autocomplete="off">
+          </div>
+        </div>
+        <div class="mcp-field-group">
+          <label class="mcp-field-label" for="meDesc" data-i18n="me.desc">Description</label>
+          <input type="text" id="meDesc" class="mcp-field-input" data-i18n-ph="me.desc.ph" placeholder="What does this server do?" autocomplete="off">
+        </div>
+        <div class="mcp-field-group">
+          <label class="mcp-field-label" data-i18n="me.type">Type</label>
+          <div class="mcp-type-selector" id="meTypeSelector">
+            <label class="mcp-type-opt" id="meTypeStdio">
+              <input type="radio" name="meType" value="stdio" checked onchange="switchMcpType(this.value)">
+              <span class="mcp-type-label"><span class="mcp-type-icon">⌨</span><span class="mcp-type-text"><strong>stdio</strong><small data-i18n="me.type.stdio">Local command / process</small></span></span>
+            </label>
+            <label class="mcp-type-opt" id="meTypeHttp">
+              <input type="radio" name="meType" value="http" onchange="switchMcpType(this.value)">
+              <span class="mcp-type-label"><span class="mcp-type-icon">🌐</span><span class="mcp-type-text"><strong>http</strong><small data-i18n="me.type.http">Remote HTTP endpoint</small></span></span>
+            </label>
+          </div>
+        </div>
+        <!-- stdio fields -->
+        <div id="meStdioFields">
+          <div class="mcp-field-group">
+            <label class="mcp-field-label" for="meCmd"><span data-i18n="me.cmd">Command</span> <span class="mcp-field-required">*</span></label>
+            <input type="text" id="meCmd" class="mcp-field-input mcp-field-mono" placeholder="npx" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="mcp-field-group">
+            <label class="mcp-field-label" for="meArgs"><span data-i18n="me.args">Arguments</span> <span class="mcp-field-sublabel" data-i18n="me.args.hint">one per line</span></label>
+            <textarea id="meArgs" class="mcp-field-textarea mcp-field-mono" placeholder="-y&#10;@modelcontextprotocol/server-filesystem&#10;/path/to/dir" rows="3" spellcheck="false"></textarea>
+          </div>
+          <div class="mcp-field-group">
+            <div class="mcp-kv-header"><span class="mcp-field-label" style="margin-bottom:0" data-i18n="me.env">Environment Variables</span></div>
+            <div class="mcp-kv-list" id="meStdioEnvList"></div>
+            <button class="env-add-btn" onclick="addMeKvRow('meStdioEnvList','env')" data-i18n="me.env.add">＋ Add variable</button>
+          </div>
+        </div>
+        <!-- http fields -->
+        <div id="meHttpFields" style="display:none">
+          <div class="mcp-field-group">
+            <label class="mcp-field-label" for="meUrl">URL <span class="mcp-field-required">*</span></label>
+            <input type="url" id="meUrl" class="mcp-field-input mcp-field-mono" placeholder="https://api.example.com/mcp" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="mcp-field-group">
+            <div class="mcp-kv-header"><span class="mcp-field-label" style="margin-bottom:0" data-i18n="me.headers">Headers</span></div>
+            <div class="mcp-kv-list" id="meHttpHeadersList"></div>
+            <button class="env-add-btn" onclick="addMeKvRow('meHttpHeadersList','header')" data-i18n="me.header.add">＋ Add header</button>
+          </div>
+          <div class="mcp-field-group">
+            <div class="mcp-kv-header"><span class="mcp-field-label" style="margin-bottom:0" data-i18n="me.env">Environment Variables</span></div>
+            <div class="mcp-kv-list" id="meHttpEnvList"></div>
+            <button class="env-add-btn" onclick="addMeKvRow('meHttpEnvList','env')" data-i18n="me.env.add">＋ Add variable</button>
+          </div>
+        </div>
+      </div>
+      <!-- JSON TAB -->
+      <div id="mcpEditJsonPane" style="display:none">
+        <div class="mcp-json-hint" data-i18n="me.json.hint">Edit the raw server configuration in JSON. When switching back to Form, the JSON will be parsed and fields populated automatically.</div>
+        <textarea id="meJson" class="mcp-json-area" placeholder='{"type":"stdio","command":"npx","args":["-y","@modelcontextprotocol/server-name"],"env":{}}' spellcheck="false" autocomplete="off"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div id="mcpEditError" class="mcp-edit-error" style="display:none"></div>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="bg" onclick="closeMcpModal()" data-i18n="me.cancel">Cancel</button>
+        <button class="bp mcp-edit-save-btn" id="mcpEditSaveBtn" onclick="saveMcpModal()"><span id="mcpEditSaveBtnLabel" data-i18n="me.save.add">Add Server</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- File Preview Modal -->
 <div class="modal-overlay hidden" id="filePreviewModal" onclick="if(event.target===this)closeFpv()">
   <div class="modal fpv-modal">
@@ -2297,14 +2414,28 @@ function getTS(id) {
 // Usage: `streaming.el` reads/writes curEl property of active tab's tabState.
 const streaming = {
   get el() { return getTS(activeTabId).curEl; },
-  set el(v) { getTS(activeTabId).curEl = v; },
+  set el(v) {
+    const s = getTS(activeTabId);
+    const old = s.curEl;
+    // Auto-clean orphaned "Working..." spinner from previous bubble when reassigning
+    if (old && old !== v) {
+      const f = old.querySelector('.msg-status-footer.state-streaming');
+      if (f) f.remove();
+    }
+    s.curEl = v;
+  },
   get txt() { return getTS(activeTabId).curTxt; },
   set txt(v) { getTS(activeTabId).curTxt = v; },
   get toolCounts() { return getTS(activeTabId)._toolCounts; },
   set toolCounts(v) { getTS(activeTabId)._toolCounts = v; },
   get toolLog() { return getTS(activeTabId)._toolLog; },
   set toolLog(v) { getTS(activeTabId)._toolLog = v; },
-  reset() { const s = getTS(activeTabId); s.curEl = null; s.curTxt = ''; s._toolCounts = {}; s._toolLog = []; },
+  reset() {
+    const s = getTS(activeTabId);
+    // Clean orphaned spinner before clearing ref (bypasses setter)
+    if (s.curEl) { const f = s.curEl.querySelector('.msg-status-footer.state-streaming'); if (f) f.remove(); }
+    s.curEl = null; s.curTxt = ''; s._toolCounts = {}; s._toolLog = [];
+  },
 };
 let config = { mcpServers: {}, skills: {} };
 let activeMcp = new Set(), activeSkills = new Set();
@@ -2504,6 +2635,22 @@ const TRANSLATIONS = {
     'dir.remote.err.no_host':'Оберіть SSH хост','dir.remote.err.no_path':'Вкажіть шлях на сервері',
     'cpc.running':'виконується','cpc.done':'виконано','cpc.failed':'помилка','cpc.retrying':'повтор',
     'mcp.cfg.env':'Змінні оточення','mcp.cfg.env_add':'＋ Додати','mcp.cfg.env_empty':'Немає змінних оточення',
+    'me.title.add':'Додати MCP-сервер','me.title.edit':'Редагування MCP-сервера',
+    'me.tab.form':'Форма','me.tab.json':'JSON',
+    'me.label':'Назва','me.desc':'Опис','me.desc.ph':'Що робить цей сервер?','me.type':'Тип',
+    'me.type.stdio':'Локальна команда / процес','me.type.http':'Віддалений HTTP endpoint',
+    'me.cmd':'Команда','me.args':'Аргументи','me.args.hint':'по одному на рядок',
+    'me.env':'Змінні середовища','me.headers':'Заголовки',
+    'me.env.add':'＋ Додати змінну','me.header.add':'＋ Додати заголовок',
+    'me.json.hint':'Редагуйте конфігурацію сервера в форматі JSON. При перемиканні назад на Форму, JSON буде розпарсений і поля заповнені автоматично.',
+    'me.cancel':'Скасувати','me.save.add':'Додати сервер','me.save.edit':'Зберегти зміни',
+    'me.saving.add':'Додавання…','me.saving.edit':'Збереження…',
+    'me.id.locked':'ID сервера не можна змінити',
+    'me.err.json':'Невалідний JSON — виправте синтаксис.','me.err.json_save':'Невалідний JSON — неможливо зберегти.',
+    'me.err.id_req':'Server ID є обов\'язковим.','me.err.id_fmt':'Server ID може містити тільки літери, цифри, дефіси та підкреслення.',
+    'me.err.id_dup':'Сервер з таким ID вже існує.','me.err.url_req':'URL є обов\'язковим для HTTP серверів.',
+    'me.err.cmd_req':'Команда є обов\'язковою для stdio серверів.','me.err.request':'Помилка запиту — перевірте логи сервера.',
+    'me.toast.added':'MCP-сервер додано.','me.toast.updated':'MCP-сервер оновлено.','me.kv.del':'Видалити',
     'notif.dismiss':'Закрити','msf.plan_kanban':'План → Kanban','msf.open_kanban':'Відкрити Kanban →','msf.sent':'✅ Надіслано',
     'skill.custom_desc':'Користувацький скіл','skill.custom_cat':'🔧 Кастомні',
     'files.remote_unavail':'🌐 Віддалений проект —<br>файловий браузер недоступний',
@@ -2672,6 +2819,22 @@ const TRANSLATIONS = {
     'dir.remote.err.no_host':'Select SSH host','dir.remote.err.no_path':'Enter server path',
     'cpc.running':'running','cpc.done':'done','cpc.failed':'failed','cpc.retrying':'retrying',
     'mcp.cfg.env':'Environment','mcp.cfg.env_add':'＋ Add','mcp.cfg.env_empty':'No environment variables',
+    'me.title.add':'Add MCP Server','me.title.edit':'Edit MCP Server',
+    'me.tab.form':'Form','me.tab.json':'JSON',
+    'me.label':'Label','me.desc':'Description','me.desc.ph':'What does this server do?','me.type':'Type',
+    'me.type.stdio':'Local command / process','me.type.http':'Remote HTTP endpoint',
+    'me.cmd':'Command','me.args':'Arguments','me.args.hint':'one per line',
+    'me.env':'Environment Variables','me.headers':'Headers',
+    'me.env.add':'＋ Add variable','me.header.add':'＋ Add header',
+    'me.json.hint':'Edit the raw server configuration in JSON. When switching back to Form, the JSON will be parsed and fields populated automatically.',
+    'me.cancel':'Cancel','me.save.add':'Add Server','me.save.edit':'Save Changes',
+    'me.saving.add':'Adding…','me.saving.edit':'Saving…',
+    'me.id.locked':'Server ID cannot be changed',
+    'me.err.json':'Invalid JSON — fix the syntax first.','me.err.json_save':'Invalid JSON — cannot save.',
+    'me.err.id_req':'Server ID is required.','me.err.id_fmt':'Server ID may only contain letters, numbers, hyphens, and underscores.',
+    'me.err.id_dup':'A server with this ID already exists.','me.err.url_req':'URL is required for HTTP servers.',
+    'me.err.cmd_req':'Command is required for stdio servers.','me.err.request':'Request failed — check the server logs.',
+    'me.toast.added':'MCP server added.','me.toast.updated':'MCP server updated.','me.kv.del':'Remove',
     'notif.dismiss':'Dismiss','msf.plan_kanban':'Plan → Kanban','msf.open_kanban':'Open Kanban →','msf.sent':'✅ Sent',
     'skill.custom_desc':'Custom skill','skill.custom_cat':'🔧 Custom',
     'files.remote_unavail':'🌐 Remote project —<br>file browser not available',
@@ -2840,6 +3003,22 @@ const TRANSLATIONS = {
     'dir.remote.err.no_host':'Выберите SSH хост','dir.remote.err.no_path':'Укажите путь на сервере',
     'cpc.running':'выполняется','cpc.done':'выполнено','cpc.failed':'ошибка','cpc.retrying':'повтор',
     'mcp.cfg.env':'Переменные окружения','mcp.cfg.env_add':'＋ Добавить','mcp.cfg.env_empty':'Нет переменных окружения',
+    'me.title.add':'Добавить MCP-сервер','me.title.edit':'Редактирование MCP-сервера',
+    'me.tab.form':'Форма','me.tab.json':'JSON',
+    'me.label':'Название','me.desc':'Описание','me.desc.ph':'Что делает этот сервер?','me.type':'Тип',
+    'me.type.stdio':'Локальная команда / процесс','me.type.http':'Удалённый HTTP endpoint',
+    'me.cmd':'Команда','me.args':'Аргументы','me.args.hint':'по одному на строку',
+    'me.env':'Переменные окружения','me.headers':'Заголовки',
+    'me.env.add':'＋ Добавить переменную','me.header.add':'＋ Добавить заголовок',
+    'me.json.hint':'Редактируйте конфигурацию сервера в формате JSON. При переключении обратно на Форму JSON будет распарсен и поля заполнены автоматически.',
+    'me.cancel':'Отмена','me.save.add':'Добавить сервер','me.save.edit':'Сохранить изменения',
+    'me.saving.add':'Добавление…','me.saving.edit':'Сохранение…',
+    'me.id.locked':'ID сервера нельзя изменить',
+    'me.err.json':'Невалидный JSON — исправьте синтаксис.','me.err.json_save':'Невалидный JSON — невозможно сохранить.',
+    'me.err.id_req':'Server ID обязателен.','me.err.id_fmt':'Server ID может содержать только буквы, цифры, дефисы и подчёркивания.',
+    'me.err.id_dup':'Сервер с таким ID уже существует.','me.err.url_req':'URL обязателен для HTTP серверов.',
+    'me.err.cmd_req':'Команда обязательна для stdio серверов.','me.err.request':'Ошибка запроса — проверьте логи сервера.',
+    'me.toast.added':'MCP-сервер добавлен.','me.toast.updated':'MCP-сервер обновлён.','me.kv.del':'Удалить',
     'notif.dismiss':'Закрыть','msf.plan_kanban':'План → Kanban','msf.open_kanban':'Открыть Kanban →','msf.sent':'✅ Отправлено',
     'skill.custom_desc':'Пользовательский навык','skill.custom_cat':'🔧 Кастомные',
     'files.remote_unavail':'🌐 Удалённый проект —<br>файловый браузер недоступен',
@@ -3480,25 +3659,7 @@ function handleWsMsg(d) {
         // ─── Plan Mode: Show "Execute Plan" button ──────────────────────────────
         // When in planning mode and response contains a plan, offer to execute it
         const _planText = streaming.txt; // Save before clearing
-        if (curMode === 'planning' && streaming.el && _planText && _planText.length > 50) {
-          const planKeywords = /##\s*(plan|план|implementation|реалізація|steps|кроки)|\*\*(plan|план|step)\*\*|^\s*[-•]\s+\d+\.|^\s*\d+\.\s+\w+/im;
-          if (planKeywords.test(_planText) || _planText.includes('## ') || _planText.includes('**Step')) {
-            const execBtn = document.createElement('button');
-            execBtn.className = 'execute-plan-btn';
-            execBtn.innerHTML = '▶️ Execute Plan';
-            execBtn.title = 'Switch to Auto mode and execute this plan';
-            execBtn.onclick = () => {
-              // Switch mode to auto
-              curMode = 'auto';
-              syncBtn('mode', 'auto');
-              // Send execution prompt
-              const execPrompt = 'Execute the plan above. Start with step 1.';
-              sendChat(execPrompt);
-              execBtn.remove();
-            };
-            streaming.el.appendChild(execBtn);
-          }
-        }
+        _maybeAttachExecPlanBtn(streaming.el, _planText);
 
         // ─── Text-parsing fallback for automatic plan completion detection ───
         // When in planning mode and response looks done, text-parsing fallback for automatic mode switching
@@ -4508,6 +4669,29 @@ function _renderToolActivity(mw, rawCounts) {
   const footer = mw.querySelector('.msg-status-footer');
   if (footer) mw.insertBefore(bar, footer);
   else mw.appendChild(bar);
+}
+
+// ─── Attach "Execute Plan" button to a plan message ─────────────────────────
+// Reusable: called from both the streaming done handler and loadSess restore.
+// Only attaches if curMode === 'planning' and the text looks like a plan.
+function _maybeAttachExecPlanBtn(el, text) {
+  if (curMode !== 'planning' || !el || !text || text.length <= 50) return;
+  // Don't add if already present
+  if (el.querySelector('.execute-plan-btn')) return;
+  const planKeywords = /##\s*(plan|план|implementation|реалізація|steps|кроки)|\*\*(plan|план|step)\*\*|^\s*[-•]\s+\d+\.|^\s*\d+\.\s+\w+/im;
+  if (!planKeywords.test(text) && !text.includes('## ') && !text.includes('**Step')) return;
+  const execBtn = document.createElement('button');
+  execBtn.className = 'execute-plan-btn';
+  execBtn.innerHTML = '▶️ Execute Plan';
+  execBtn.title = 'Switch to Auto mode and execute this plan';
+  execBtn.onclick = () => {
+    curMode = 'auto';
+    syncBtn('mode', 'auto');
+    const execPrompt = 'Execute the plan above. Start with step 1.';
+    sendChat(execPrompt);
+    execBtn.remove();
+  };
+  el.appendChild(execBtn);
 }
 
 function markDone(el) {
@@ -5662,6 +5846,8 @@ inEl.addEventListener('paste', e => {
 });
 
 // ─── Send / Stop ─────────────────────────────────────────────────────────
+function sendChat(text) { inEl.value = text; send(); }
+
 async function send() {
   if (!ws || ws.readyState !== 1) { toast(t('toast.no_connection'), true); return; }
 
@@ -6309,6 +6495,17 @@ async function loadSess(id) {
       }
     }
 
+    // Restore "Execute Plan" button on last assistant message if session is in planning mode
+    // and not currently generating (button was lost on tab-switch / reload)
+    if (curMode === 'planning' && !d.isChatRunning && !d.hasRunningTask) {
+      const lastAssistEl = [...msgsEl.querySelectorAll('.mw.assistant')].pop();
+      if (lastAssistEl) {
+        // Find the raw text content of the last assistant message for plan detection
+        const lastAssistMsg = [..._allMsgs].reverse().find(m => m.role === 'assistant' && m.type === 'text');
+        if (lastAssistMsg?.content) _maybeAttachExecPlanBtn(lastAssistEl, lastAssistMsg.content);
+      }
+    }
+
     // Restore chain progress widget(s) from server-side task data
     if (d.chains) {
       for (const [chainId, tasks] of Object.entries(d.chains)) {
@@ -6527,7 +6724,7 @@ function renderMcp() {
         <div class="st">${on ? t('mcp.active') : t('mcp.inactive')}</div>
       </div>
       ${missing.length ? `<div class="warn-dot" title="${escH(tipWarn)}"></div>` : ''}
-      <button class="cfg" onclick="event.stopPropagation();showMcpSettings('${id}')" title="${escH(tipCfg)}">⚙</button>
+      <button class="cfg" onclick="event.stopPropagation();openMcpModal('edit','${id}')" title="${escH(tipCfg)}">⚙</button>
       ${m.custom ? `<button class="rm" onclick="event.stopPropagation();rMcp('${id}')" title="${t('mcp.del.title')}">✕</button>` : ''}`;
     el.appendChild(div);
   }
@@ -6549,7 +6746,7 @@ function getMcpMissingFields(m) {
 function tMcp(id) {
   if (!activeMcp.has(id)) {
     const m=config.mcpServers[id];
-    if (m&&getMcpMissingFields(m).length) { showMcpSettings(id,true); return; }
+    if (m&&getMcpMissingFields(m).length) { openMcpModal('edit',id); return; }
   }
   if (activeMcp.has(id)) activeMcp.delete(id); else activeMcp.add(id);
   renderMcp(); saveUIState();
@@ -6570,39 +6767,249 @@ async function rMcp(id) {
   delete config.mcpServers[id];
   renderMcp();
 }
-function showMcpForm() { $i('mcpForm').style.display = 'flex'; }
-function hideMcpForm() { $i('mcpForm').style.display = 'none'; }
-function updateMcpFormType() {
-  const type=$i('mcpType').value, isUrl=type==='sse'||type==='http';
-  $i('mcpStdioFields').style.display=isUrl?'none':'flex';
-  $i('mcpUrlFields').style.display=isUrl?'flex':'none';
-  $i('mcpHeadersArea').style.display=type==='http'?'block':'none';
+// ─── MCP Add/Edit Modal ──────────────────────────────────────────────────────
+let _mcpEditMode = 'add';
+let _mcpEditId = null;
+let _mcpEditTab = 'form';
+
+function openMcpModal(mode, serverId = null) {
+  _mcpEditMode = mode;
+  _mcpEditId = serverId;
+  _mcpEditTab = 'form';
+  const overlay = $i('mcpEditModal');
+  const title = $i('mcpEditTitle');
+  const saveBtn = $i('mcpEditSaveBtnLabel');
+  const idInput = $i('meId');
+  _applyMcpTab('form');
+  _mcpEditSetError(null);
+  if (mode === 'edit' && serverId) {
+    title.textContent = t('me.title.edit');
+    saveBtn.textContent = t('me.save.edit');
+    idInput.disabled = true;
+    idInput.title = t('me.id.locked');
+    _mcpEditPopulate(serverId);
+  } else {
+    title.textContent = t('me.title.add');
+    saveBtn.textContent = t('me.save.add');
+    idInput.disabled = false;
+    idInput.title = '';
+    _mcpEditReset();
+  }
+  overlay.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    (mode === 'add' ? idInput : $i('meLabel')).focus();
+  });
+  overlay._escHandler = (e) => { if (e.key === 'Escape') closeMcpModal(); };
+  document.addEventListener('keydown', overlay._escHandler);
 }
 
-async function addMcp() {
-  const id=$i('mcpId').value.trim(), label=$i('mcpLabel').value.trim();
-  const type=$i('mcpType').value;
-  if (!id) { toast(t('mcp.add.id_req'),true); return; }
-  let body={id, label:label||id, type};
-  if (type==='sse'||type==='http') {
-    const url=$i('mcpUrl').value.trim();
-    if (!url) { toast(t('mcp.add.url_req'),true); return; }
-    let headers={}; try{headers=JSON.parse($i('mcpHeadersArea').value||'{}')}catch{}
-    let env={}; try{env=JSON.parse($i('mcpEnv').value||'{}')}catch{}
-    body={...body,url,headers,env};
-  } else {
-    const command=$i('mcpCmd').value.trim();
-    if (!command) { toast(t('mcp.add.cmd_req'),true); return; }
-    const args=$i('mcpArgs').value.split(',').map(s=>s.trim()).filter(Boolean);
-    let env={}; try{env=JSON.parse($i('mcpEnv').value||'{}')}catch{}
-    body={...body,command,args,env};
+function closeMcpModal() {
+  const overlay = $i('mcpEditModal');
+  overlay.classList.add('hidden');
+  if (overlay._escHandler) {
+    document.removeEventListener('keydown', overlay._escHandler);
+    overlay._escHandler = null;
   }
-  await fetch('/api/mcp/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  config.mcpServers[id]={...body,custom:true};
-  activeMcp.add(id); renderMcp(); hideMcpForm();
-  ['mcpId','mcpLabel','mcpCmd','mcpArgs','mcpEnv','mcpUrl','mcpHeadersArea'].forEach(x=>{const el=$i(x);if(el)el.value='';});
-  $i('mcpType').value='stdio'; updateMcpFormType();
-  toast(t('mcp.add.ok'));
+}
+
+function switchMcpTab(tab) {
+  if (tab === _mcpEditTab) return;
+  if (_mcpEditTab === 'form' && tab === 'json') {
+    const data = _mcpEditCollectForm();
+    if (data) {
+      const { id, ...rest } = data;
+      $i('meJson').value = JSON.stringify(rest, null, 2);
+    }
+  } else if (_mcpEditTab === 'json' && tab === 'form') {
+    const raw = $i('meJson').value.trim();
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        _mcpEditFillForm(parsed);
+        _mcpEditSetError(null);
+      } catch (err) {
+        _mcpEditSetError(t('me.err.json'));
+        return;
+      }
+    }
+  }
+  _applyMcpTab(tab);
+}
+
+function _applyMcpTab(tab) {
+  _mcpEditTab = tab;
+  $i('mcpTabForm').classList.toggle('active', tab === 'form');
+  $i('mcpTabJson').classList.toggle('active', tab === 'json');
+  $i('mcpEditFormPane').style.display = tab === 'form' ? '' : 'none';
+  $i('mcpEditJsonPane').style.display = tab === 'json' ? '' : 'none';
+}
+
+function switchMcpType(type) {
+  const isHttp = type === 'http';
+  $i('meStdioFields').style.display = isHttp ? 'none' : '';
+  $i('meHttpFields').style.display = isHttp ? '' : 'none';
+}
+
+function addMeKvRow(containerId, kind, key = '', val = '') {
+  const container = $i(containerId);
+  const row = document.createElement('div');
+  row.className = 'env-kv-row';
+  const keyPh = kind === 'header' ? 'Authorization' : 'KEY_NAME';
+  const valPh = kind === 'header' ? 'Bearer TOKEN' : 'value';
+  const isSecret = kind === 'env' && /KEY|TOKEN|SECRET|PASS/i.test(key);
+  row.innerHTML = `
+    <input type="text" class="mcp-cfg-input env-kv-key" value="${escH(key)}" placeholder="${keyPh}" autocomplete="off" spellcheck="false" oninput="_meKvKeyChanged(this,'${kind}')">
+    <input type="${isSecret ? 'password' : 'text'}" class="mcp-cfg-input env-kv-val" value="${escH(val)}" placeholder="${valPh}" autocomplete="off" spellcheck="false">
+    <button class="env-kv-del" title="${escH(t('me.kv.del'))}" onclick="this.closest('.env-kv-row').remove()">✕</button>`;
+  container.appendChild(row);
+  row.querySelector('.env-kv-key').focus();
+  return row;
+}
+
+function _meKvKeyChanged(keyInput, kind) {
+  if (kind !== 'env') return;
+  const valInput = keyInput.closest('.env-kv-row').querySelector('.env-kv-val');
+  valInput.type = /KEY|TOKEN|SECRET|PASS/i.test(keyInput.value) ? 'password' : 'text';
+}
+
+function _collectMeKvList(containerId) {
+  const obj = {};
+  $i(containerId).querySelectorAll('.env-kv-row').forEach(row => {
+    const k = row.querySelector('.env-kv-key').value.trim();
+    const v = row.querySelector('.env-kv-val').value;
+    if (k) obj[k] = v;
+  });
+  return obj;
+}
+
+function _populateMeKvList(containerId, obj, kind) {
+  $i(containerId).innerHTML = '';
+  Object.entries(obj || {}).forEach(([k, v]) => addMeKvRow(containerId, kind, k, v));
+}
+
+function _mcpEditReset() {
+  $i('meId').value = '';
+  $i('meLabel').value = '';
+  $i('meDesc').value = '';
+  $i('meCmd').value = '';
+  $i('meArgs').value = '';
+  $i('meUrl').value = '';
+  document.querySelector('input[name="meType"][value="stdio"]').checked = true;
+  switchMcpType('stdio');
+  ['meStdioEnvList', 'meHttpHeadersList', 'meHttpEnvList'].forEach(id => { $i(id).innerHTML = ''; });
+  $i('meJson').value = '';
+  $i('meIdHint').textContent = '';
+  $i('meIdHint').className = 'mcp-field-hint';
+}
+
+function _mcpEditPopulate(serverId) {
+  const m = config.mcpServers[serverId];
+  if (!m) return;
+  $i('meId').value = serverId;
+  $i('meLabel').value = m.label || '';
+  $i('meDesc').value = m.description || '';
+  const type = (m.type === 'sse' || m.type === 'http') ? 'http' : 'stdio';
+  const radio = document.querySelector(`input[name="meType"][value="${type}"]`);
+  if (radio) radio.checked = true;
+  switchMcpType(type);
+  if (type === 'http') {
+    $i('meUrl').value = m.url || '';
+    _populateMeKvList('meHttpHeadersList', m.headers || {}, 'header');
+    _populateMeKvList('meHttpEnvList', m.env || {}, 'env');
+  } else {
+    $i('meCmd').value = m.command || '';
+    $i('meArgs').value = (m.args || []).join('\n');
+    _populateMeKvList('meStdioEnvList', m.env || {}, 'env');
+  }
+  $i('meJson').value = '';
+}
+
+function _mcpEditCollectForm() {
+  const id = $i('meId').value.trim();
+  const type = document.querySelector('input[name="meType"]:checked')?.value || 'stdio';
+  const data = { id, label: $i('meLabel').value.trim() || id, type };
+  const desc = $i('meDesc').value.trim();
+  if (desc) data.description = desc;
+  if (type === 'http') {
+    data.url = $i('meUrl').value.trim();
+    data.headers = _collectMeKvList('meHttpHeadersList');
+    data.env = _collectMeKvList('meHttpEnvList');
+  } else {
+    data.command = $i('meCmd').value.trim();
+    data.args = $i('meArgs').value.split('\n').map(s => s.trim()).filter(Boolean);
+    data.env = _collectMeKvList('meStdioEnvList');
+  }
+  return data;
+}
+
+function _mcpEditFillForm(parsed) {
+  const type = (parsed.type === 'sse' || parsed.type === 'http') ? 'http' : 'stdio';
+  if (parsed.id && !$i('meId').disabled) $i('meId').value = parsed.id || '';
+  $i('meLabel').value = parsed.label || '';
+  $i('meDesc').value = parsed.description || '';
+  const radio = document.querySelector(`input[name="meType"][value="${type}"]`);
+  if (radio) radio.checked = true;
+  switchMcpType(type);
+  if (type === 'http') {
+    $i('meUrl').value = parsed.url || '';
+    _populateMeKvList('meHttpHeadersList', parsed.headers || {}, 'header');
+    _populateMeKvList('meHttpEnvList', parsed.env || {}, 'env');
+  } else {
+    $i('meCmd').value = parsed.command || '';
+    $i('meArgs').value = (parsed.args || []).join('\n');
+    _populateMeKvList('meStdioEnvList', parsed.env || {}, 'env');
+  }
+}
+
+async function saveMcpModal() {
+  let data;
+  if (_mcpEditTab === 'json') {
+    try {
+      const parsed = JSON.parse($i('meJson').value.trim());
+      _mcpEditFillForm(parsed);
+      data = _mcpEditCollectForm();
+    } catch {
+      _mcpEditSetError(t('me.err.json_save'));
+      return;
+    }
+  } else {
+    data = _mcpEditCollectForm();
+  }
+  if (!data.id) { _mcpEditSetError(t('me.err.id_req')); $i('meId').focus(); return; }
+  if (!/^[\w\-]+$/.test(data.id)) { _mcpEditSetError(t('me.err.id_fmt')); $i('meId').focus(); return; }
+  if (_mcpEditMode === 'add' && config.mcpServers[data.id]) { _mcpEditSetError(t('me.err.id_dup')); $i('meId').focus(); return; }
+  if (data.type === 'http' && !data.url) { _mcpEditSetError(t('me.err.url_req')); _applyMcpTab('form'); $i('meUrl').focus(); return; }
+  if (data.type === 'stdio' && !data.command) { _mcpEditSetError(t('me.err.cmd_req')); _applyMcpTab('form'); $i('meCmd').focus(); return; }
+
+  const saveBtn = $i('mcpEditSaveBtn');
+  saveBtn.disabled = true;
+  $i('mcpEditSaveBtnLabel').textContent = _mcpEditMode === 'add' ? t('me.saving.add') : t('me.saving.edit');
+
+  try {
+    const id = data.id;
+    const { id: _id, ...body } = data;
+    if (_mcpEditMode === 'add') {
+      await fetch('/api/mcp/add', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id, ...body }) });
+      config.mcpServers[id] = { ...body, custom: true };
+      activeMcp.add(id);
+    } else {
+      await fetch(`/api/mcp/${_mcpEditId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      config.mcpServers[_mcpEditId] = { ...config.mcpServers[_mcpEditId], ...body };
+    }
+    renderMcp(); closeMcpModal();
+    toast(_mcpEditMode === 'add' ? t('me.toast.added') : t('me.toast.updated'));
+  } catch (err) {
+    _mcpEditSetError(t('me.err.request'));
+  } finally {
+    saveBtn.disabled = false;
+    $i('mcpEditSaveBtnLabel').textContent = _mcpEditMode === 'add' ? t('me.save.add') : t('me.save.edit');
+  }
+}
+
+function _mcpEditSetError(msg) {
+  const el = $i('mcpEditError');
+  if (msg) { el.textContent = msg; el.style.display = 'flex'; }
+  else { el.style.display = 'none'; el.textContent = ''; }
 }
 
 // ─── MCP Settings Modal ─────────────────────────────────────────────────────

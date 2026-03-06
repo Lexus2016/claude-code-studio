@@ -345,6 +345,58 @@ try { db.exec(`ALTER TABLE telegram_devices ADD COLUMN last_session_id TEXT`); }
 try { db.exec(`ALTER TABLE telegram_devices ADD COLUMN last_workdir TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'web'`); } catch(e) {}
 
+// Sanitize a value for better-sqlite3 bind parameters.
+// better-sqlite3 EXPANDS arrays: each element counts as a separate bind value.
+// An empty array [] contributes 0 binds, causing "Too few parameter values".
+// This guard ensures only primitive types reach .run()/.get()/.all().
+function sqlVal(v) {
+  if (v === undefined) return null;
+  if (v === null || typeof v === 'string' || typeof v === 'number' || typeof v === 'bigint') return v;
+  if (typeof v === 'boolean') return v ? 1 : 0;
+  if (Buffer.isBuffer(v)) return v;
+  // Array or object — stringify it (and log a warning for debugging)
+  log.warn('sqlVal: coerced non-primitive to string', { type: typeof v, isArray: Array.isArray(v), preview: JSON.stringify(v)?.substring(0, 100) });
+  return JSON.stringify(v);
+}
+
+// Wrap a prepared statement so .run()/.get()/.all() auto-sanitize all args via sqlVal().
+// This catches the "Too few parameter values" RangeError at the source — no matter
+// which code path triggers it — by ensuring arrays/objects never reach better-sqlite3.
+function wrapStmt(stmt, label) {
+  const origRun = stmt.run.bind(stmt);
+  const origGet = stmt.get.bind(stmt);
+  const origAll = stmt.all.bind(stmt);
+  stmt.run = function(...args) {
+    const safe = args.map(sqlVal);
+    try { return origRun(...safe); }
+    catch (e) {
+      log.error(`stmt.run FAILED [${label}]`, { args: safe.map(a => a === null ? 'NULL' : typeof a === 'string' ? a.substring(0,60) : a), err: e.message, stack: e.stack });
+      throw e;
+    }
+  };
+  stmt.get = function(...args) {
+    const safe = args.map(sqlVal);
+    try { return origGet(...safe); }
+    catch (e) {
+      log.error(`stmt.get FAILED [${label}]`, { args: safe.map(a => a === null ? 'NULL' : typeof a === 'string' ? a.substring(0,60) : a), err: e.message });
+      throw e;
+    }
+  };
+  stmt.all = function(...args) {
+    // named-param objects ({w: ...}) — pass through, don't map
+    if (args.length === 1 && args[0] && typeof args[0] === 'object' && !Array.isArray(args[0]) && !Buffer.isBuffer(args[0])) {
+      return origAll(args[0]);
+    }
+    const safe = args.map(sqlVal);
+    try { return origAll(...safe); }
+    catch (e) {
+      log.error(`stmt.all FAILED [${label}]`, { args: safe.map(a => a === null ? 'NULL' : typeof a === 'string' ? a.substring(0,60) : a), err: e.message });
+      throw e;
+    }
+  };
+  return stmt;
+}
+
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,engine,workdir) VALUES (?,?,?,?,?,?,?,?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
@@ -413,6 +465,9 @@ const stmts = {
     WHERE session_id = ?
   `),
 };
+// Auto-sanitize ALL prepared statements — prevents "Too few parameter values"
+// on every code path (chat, tasks, queue, reconnect, telegram, etc.)
+for (const [name, stmt] of Object.entries(stmts)) wrapStmt(stmt, name);
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -527,10 +582,11 @@ async function startTask(task) {
     const isRetry = lastUserMsg && lastUserMsg.content === prompt;
     if (!isRetry) {
       // New task or different prompt — save user message
-      stmts.addMsg.run(sessionId, 'user', 'text', prompt, null, null, null, null);
+      try { stmts.addMsg.run(sessionId, 'user', 'text', prompt, null, null, null, null); }
+      catch (e) { log.error('startTask addMsg failed', { sessionId, promptLen: prompt.length, err: e.message, stack: e.stack }); throw e; }
     } else {
       // Restart after crash with same prompt — increment retry counter, don't duplicate
-      stmts.incrementRetry.run(sessionId);
+      try { stmts.incrementRetry.run(sessionId); } catch (e) { log.error('startTask incrementRetry failed', { err: e.message }); }
     }
     // Resume existing claude session if any
     const session = stmts.getSession.get(sessionId);
@@ -612,8 +668,8 @@ async function startTask(task) {
 
     // After loop: persist text and determine task status
     try {
-      if (newCid) stmts.updateClaudeId.run(newCid, sessionId);
-      if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null);
+      if (newCid) { try { stmts.updateClaudeId.run(newCid, sessionId); } catch (e) { log.error('taskWorker updateClaudeId failed', { cid: String(newCid).substring(0,50), sessionId, err: e.message, stack: e.stack }); } }
+      if (fullText) { try { stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null); } catch (e) { log.error('taskWorker addMsg(assistant) failed', { sessionId, textLen: fullText.length, err: e.message, stack: e.stack }); } }
       const wasStopped = stoppingTasks.has(task.id);
       stoppingTasks.delete(task.id);
       if (!wasStopped) {
@@ -695,15 +751,16 @@ async function startTask(task) {
     }
     broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id, duration: Date.now() - _taskStartedAt });
   } catch (err) {
-    console.error(`[taskWorker] task ${task.id} exception:`, err);
+    log.error(`[taskWorker] task ${task.id} exception`, { message: err.message, name: err.name, stack: err.stack });
     try {
       // Exception: auto-retry for chain tasks, cancel for non-chain
+      const failureMsg = `${err.name}: ${err.message}`;
       if (task.chain_id && (task.task_retry_count || 0) < 2) {
-        db.prepare(`UPDATE tasks SET status='todo', failure_reason='exception', task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(task.id);
+        db.prepare(`UPDATE tasks SET status='todo', failure_reason=?, task_retry_count=COALESCE(task_retry_count,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(failureMsg, task.id);
         _retryBackoffMs = 5000;
         log.warn(`[taskWorker] task ${task.id}: exception → auto-retry`);
       } else {
-        db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='exception', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(task.id);
+        db.prepare(`UPDATE tasks SET status='cancelled', failure_reason=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`).run(failureMsg, task.id);
       }
     } catch {}
     // Send done so the client doesn't wait forever for an event that will never arrive.
@@ -1273,6 +1330,7 @@ function loadMergedConfig() {
     mcpServers:    { ...(g.mcpServers||{}), ...(l.mcpServers||{}) },
     skills:        { ...(g.skills||{}),     ...(l.skills||{})     },
     slashCommands: [...(l.slashCommands||[])],
+    lang:          l.lang || g.lang || 'en',
   };
   return _mergedConfigCache;
 }
@@ -2198,7 +2256,7 @@ app.post('/api/tasks', (req, res) => {
           depends_on=null, chain_id=null, source_session_id=null,
           scheduled_at=null, recurrence=null, recurrence_end_at=null } = req.body;
   const id = genId();
-  stmts.createTask.run(id, title.substring(0,200), description.substring(0,2000), (notes||'').substring(0,2000), status, sort_order, session_id||null, workdir||null, model, mode, agent_mode, max_turns, attachments||null, depends_on||null, chain_id||null, source_session_id||null, scheduled_at||null, recurrence||null, recurrence_end_at||null);
+  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -2228,10 +2286,10 @@ app.put('/api/tasks/:id', (req, res) => {
   stmts.updateTask.run(
     String(title).substring(0,200), String(description).substring(0,2000),
     String(notes||'').substring(0,2000),
-    status, sort_order, session_id || null, workdir || null,
-    model, mode, agent_mode, max_turns, attachments || null,
-    depends_on || null, chain_id || null, source_session_id || null,
-    scheduled_at || null, recurrence || null, recurrence_end_at || null,
+    sqlVal(status), sqlVal(sort_order), sqlVal(session_id) || null, sqlVal(workdir) || null,
+    sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments) || null,
+    sqlVal(depends_on) || null, sqlVal(chain_id) || null, sqlVal(source_session_id) || null,
+    sqlVal(scheduled_at) || null, sqlVal(recurrence) || null, sqlVal(recurrence_end_at) || null,
     req.params.id
   );
   const updated = stmts.getTask.get(req.params.id);
@@ -2301,8 +2359,8 @@ app.post('/api/tasks/dispatch', (req, res) => {
     (plan_description || 'Task chain').substring(0, 200),
     source?.active_mcp || '[]',
     source?.active_skills || '[]',
-    'auto', 'single', model, 'cli',
-    workdir || null
+    'auto', 'single', sqlVal(model) || 'sonnet', 'cli',
+    sqlVal(workdir) || null
   );
 
   // Chain gets its OWN Claude session — first task starts fresh,
@@ -2327,8 +2385,8 @@ app.post('/api/tasks/dispatch', (req, res) => {
         'todo',
         i,             // sort_order preserves plan ordering
         chainSessionId,
-        workdir || null,
-        model,
+        sqlVal(workdir) || null,
+        sqlVal(model) || 'sonnet',
         'auto', 'single', 30,
         null,          // attachments
         realDeps.length ? JSON.stringify(realDeps) : null,
@@ -2353,7 +2411,7 @@ app.get('/api/sessions', (req,res) => {
 app.post('/api/sessions', (req, res) => {
   const { title = i18nSession(), workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single', engine = null } = req.body || {};
   const id = genId();
-  stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', mode, agentMode, model, engine, workdir || null);
+  stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', sqlVal(mode), sqlVal(agentMode), sqlVal(model), sqlVal(engine), sqlVal(workdir) || null);
   res.json(stmts.getSession.get(id));
 });
 app.get('/api/sessions/interrupted', (req, res) => { res.json(stmts.getInterrupted.all()); });
@@ -2549,16 +2607,20 @@ app.post('/api/mcp/add', (req,res) => {
 });
 app.put('/api/mcp/:id', (req,res) => {
   const c=loadConfig(); const id=req.params.id;
-  const{env,headers,url,args}=req.body;
+  const{env,headers,url,args,label,description,type,command}=req.body;
   if(!c.mcpServers[id]){
     const merged=loadMergedConfig();
     if(!merged.mcpServers[id]) return res.status(404).json({error:'Not found'});
     c.mcpServers[id]={...merged.mcpServers[id]};
   }
-  if(env !== undefined) c.mcpServers[id].env=env; // full replace, not merge — supports deletion
-  if(headers) c.mcpServers[id].headers={...(c.mcpServers[id].headers||{}),...headers};
+  if(label!==undefined) c.mcpServers[id].label=label;
+  if(description!==undefined) c.mcpServers[id].description=description;
+  if(type!==undefined) c.mcpServers[id].type=type;
+  if(command!==undefined) c.mcpServers[id].command=command;
+  if(env !== undefined) c.mcpServers[id].env=env;
+  if(headers!==undefined) c.mcpServers[id].headers=headers;
   if(url!==undefined) c.mcpServers[id].url=url;
-  if(args) c.mcpServers[id].args=args;
+  if(args!==undefined) c.mcpServers[id].args=args;
   saveConfig(c); res.json({ok:true});
 });
 app.delete('/api/mcp/:id', (req,res) => { const c=loadConfig(); if(c.mcpServers[req.params.id]?.custom){delete c.mcpServers[req.params.id]; saveConfig(c)} res.json({ok:true}); });
@@ -3285,7 +3347,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
 
     proxy.send(JSON.stringify({ type: 'done', duration: Date.now() - activeTasks.get(sessionId)?.startedAt }));
   } catch (err) {
-    console.error('[processTelegramChat] Error:', err.message);
+    log.error('[processTelegramChat] Error', { message: err.message, name: err.name, stack: err.stack });
     proxy.send(JSON.stringify({ type: 'error', error: err.message }));
   } finally {
     activeTasks.delete(sessionId);
@@ -3686,7 +3748,7 @@ wss.on('connection', (ws) => {
       let isNewSession = false;
       if (!localSessionId || !existSess) {
         localSessionId = genId();
-        stmts.createSession.run(localSessionId,i18nSession(),'[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||null,msg.workdir||null);
+        stmts.createSession.run(localSessionId,i18nSession(),'[]','[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',sqlVal(msg.engine)||null,sqlVal(msg.workdir)||null);
         isNewSession = true;
       } else {
         localClaudeId = existSess.claude_session_id || undefined;
@@ -3722,19 +3784,30 @@ wss.on('connection', (ws) => {
         const snippet = String(reply_to.content).slice(0, 200);
         replyQuote = `[Replying to: ${reply_to.role || 'user'}: ${snippet}]\n\n`;
       }
-      const replyToId = reply_to?.id ?? null;
+      const replyToId = sqlVal(reply_to?.id ?? null);
       const engineMessage = replyQuote + userMessage;
       const userContent = buildUserContent(engineMessage, attachments);
 
       if (!retry) {
         const attJson = attachments.length ? JSON.stringify(attachments.map(a => ({ type: a.type, name: a.name, base64: a.base64 }))) : null;
-        stmts.addMsg.run(localSessionId,'user','text',userMessage,null,null,replyToId,attJson);
+        try { stmts.addMsg.run(localSessionId,'user','text',userMessage,null,null,replyToId,attJson); }
+        catch (e) { log.error('addMsg(user) failed', { sessionId: localSessionId, replyToId, attJsonLen: attJson?.length, err: e.message, stack: e.stack }); throw e; }
       } else {
-        stmts.incrementRetry.run(localSessionId);
+        try { stmts.incrementRetry.run(localSessionId); }
+        catch (e) { log.error('incrementRetry failed', { sessionId: localSessionId, err: e.message, stack: e.stack }); }
       }
 
       // Load config early — needed for skill classification
       const config = loadMergedConfig();
+
+      // Create AbortController EARLY — before classification — so that pressing
+      // Stop during the 10-15s classification phase actually aborts this processChat.
+      // Previously it was created AFTER classification, causing a race: Stop reset
+      // _tabBusy but couldn't abort, allowing a second processChat to start in parallel.
+      const abortController = new AbortController();
+      myAbortController = abortController;
+      if (effectiveTabId) ws._tabAbort[effectiveTabId] = abortController;
+      else ws._abort = abortController;
 
       // ─── LLM-based task classification ──────────────────────────────
       // When autoSkill=true, classify the user message with haiku (~10-15s via CLI).
@@ -3758,18 +3831,18 @@ wss.on('connection', (ws) => {
         }
       }
 
-      stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(effectiveSkills),mode,agentMode,model,workdir||null,localSessionId);
+      // Bail out early if user pressed Stop during classification
+      if (abortController.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+      try { stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(effectiveSkills),sqlVal(mode),sqlVal(agentMode),sqlVal(model),sqlVal(workdir)||null,localSessionId); }
+      catch (e) { log.error('updateConfig failed', { sessionId: localSessionId, mode, agentMode, model, mIdsLen: mIds.length, skillsLen: effectiveSkills.length, err: e.message, stack: e.stack }); throw e; }
 
       // Auto-title: use LLM-generated title if available, otherwise truncate message
       if (isNewSession || DEFAULT_SESSION_TITLES.has(existSess?.title)) {
         const title = classifiedTitle || (userMessage.substring(0,60)+(userMessage.length>60?'...':''));
-        stmts.updateTitle.run(title, localSessionId);
+        try { stmts.updateTitle.run(title, localSessionId); } catch (e) { log.error('updateTitle failed', { err: e.message }); }
         ws.send(JSON.stringify({ type:'session_title', sessionId:localSessionId, title, tabId: effectiveTabId }));
       }
-      const abortController = new AbortController();
-      myAbortController = abortController;
-      if (effectiveTabId) ws._tabAbort[effectiveTabId] = abortController;
-      else ws._abort = abortController;
 
       // Build system prompt — cached by skill combination, skill files cached in memory
       const systemPrompt = buildSystemPrompt(effectiveSkills, config);
@@ -3818,7 +3891,7 @@ wss.on('connection', (ws) => {
       proxy.send(JSON.stringify({ type:'status', status:'thinking', mode, agentMode, model, tabId: effectiveTabId }));
 
       // Register task in activeTasks so it survives client disconnect/reload
-      stmts.setLastUserMsg.run(userMessage, localSessionId);
+      try { stmts.setLastUserMsg.run(userMessage, localSessionId); } catch (e) { log.error('setLastUserMsg failed', { err: e.message }); }
       chatBuffers.set(localSessionId, ''); // reset buffer for this session
       activeTasks.set(localSessionId, { proxy, abortController, cleanupTimer: null });
 
@@ -3860,7 +3933,7 @@ wss.on('connection', (ws) => {
         const result = await runCliSingle(params);
         newCid = result.cid;
       }
-      if (newCid) { stmts.updateClaudeId.run(newCid, localSessionId); }
+      if (newCid) { try { stmts.updateClaudeId.run(newCid, localSessionId); } catch (e) { log.error('updateClaudeId failed', { cid: String(newCid).substring(0,50), sessionId: localSessionId, err: e.message, stack: e.stack }); } }
 
       proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt }));
       proxy.send(JSON.stringify({ type:'files_changed' }));
@@ -3879,7 +3952,7 @@ wss.on('connection', (ws) => {
       }
     } catch(err) {
       if(err.name==='AbortError') proxy.send(JSON.stringify({ type:'agent_status', status:'Stopped', statusKey:'status.stopped', tabId: effectiveTabId }));
-      else { log.error('chat error', { message: err.message, name: err.name }); proxy.send(JSON.stringify({ type:'error', error:err.message, tabId: effectiveTabId })); }
+      else { log.error('chat error', { message: err.message, name: err.name, stack: err.stack }); proxy.send(JSON.stringify({ type:'error', error:err.message, tabId: effectiveTabId })); }
       proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt }));
       // Notify Telegram about error (if task was NOT started from Telegram)
       if (telegramBot && telegramBot.isRunning() && err.name !== 'AbortError') {
@@ -3983,7 +4056,7 @@ wss.on('connection', (ws) => {
         // handler resets streaming.el which destroys the just-restored _bgTxt bubble on tab switch.
         // session_started is only needed for NEW sessions (to map temp tab ID → real session ID).
       } else {
-        stmts.createSession.run(legacySessionId,i18nSession(),'[]','[]',msg.mode||'auto',msg.agentMode||'single',msg.model||'sonnet',msg.engine||null,null);
+        stmts.createSession.run(legacySessionId,i18nSession(),'[]','[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',sqlVal(msg.engine)||null,null);
         ws.send(JSON.stringify({ type:'session_started', sessionId:legacySessionId }));
       }
       return;
@@ -4331,8 +4404,8 @@ wss.on('connection', (ws) => {
             (finalPlan || 'Task chain').substring(0, 200),
             source?.active_mcp || '[]',
             source?.active_skills || '[]',
-            'auto', 'single', model || 'sonnet', 'cli',
-            workdir || null
+            'auto', 'single', sqlVal(model) || 'sonnet', 'cli',
+            sqlVal(workdir) || null
           );
           // Chain gets its OWN Claude session — first task starts fresh,
           // subsequent tasks --resume from the chain's session (NOT the source chat's).
@@ -4352,8 +4425,8 @@ wss.on('connection', (ws) => {
                 taskId,
                 (a.role || 'Subtask').substring(0, 200),
                 (a.task || '').substring(0, 2000),
-                '', 'todo', i, chainSessionId, workdir || null,
-                model || 'sonnet', 'auto', 'single', 30, null,
+                '', 'todo', i, chainSessionId, sqlVal(workdir) || null,
+                sqlVal(model) || 'sonnet', 'auto', 'single', 30, null,
                 realDeps.length ? JSON.stringify(realDeps) : null,
                 chainId, sessionId || null,
                 null, null, null  // scheduled_at, recurrence, recurrence_end_at

@@ -370,7 +370,7 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | 👥 Agent modes | Single, Multi (in-chat team), Dispatch (tasks → Kanban board) |
 | 🔄 Auto-continue | Hits turn limit mid-task? Resumes automatically |
 | ↗️ Fork conversation | Continue from any message in a new chat |
-| 🔌 MCP servers | Connect GitHub, Slack, databases, and more |
+| 🔌 MCP servers | Connect GitHub, Slack, databases, and more — redesigned modal with Form & JSON editor, full field editing |
 | 🎯 Execute Plan button | In Plan mode, click to auto-switch to Auto mode and run the plan |
 | 🎛 Chat modes | Auto (full access), Plan (read-only analysis), Task (explicit execution) |
 | 🧠 Skills & auto-skills | 28 specialist personas; auto-classified per message with ⚡ Auto |
@@ -390,6 +390,8 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | 🧠 Language-aware AI | Claude reasons in English for precision, responds in your language — full native experience in every conversation |
 | 🛡 Smart session recovery | Thinking block errors auto-heal — Studio resets the session and continues without interruption or data loss |
 | ⚡ True parallel tasks | Independent Kanban tasks run simultaneously in the same project — no artificial workdir locks |
+| 🛡 Database crash protection | All SQLite operations auto-sanitize inputs — no more "Too few parameter values" crashes |
+| ⏹ Instant Stop | Stop button works immediately, even during skill classification — no 10-second delay |
 | 🌍 3 languages | English, Ukrainian, Russian — auto-detected on first visit, switch anytime |
 | 🖥 Cross-platform | Windows, macOS, Linux — no compatibility headaches |
 | 🛡 Security hardened | XSS, path traversal, SQL injection protection built-in |
