@@ -399,6 +399,105 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 
 ---
 
+## BMAD + OpenClaw Integration
+
+Claude Code Studio now ships with the [BMAD Method](https://github.com/bmadcode/bmad-method) — a structured AI-assisted product development workflow — and an OpenClaw bridge for external task automation.
+
+### BMAD Agents
+
+Ten specialist AI personas are available as skills. Select them in the toolbar or let Auto-Skill pick the right one:
+
+| Agent | Persona | Specializes In |
+|-------|---------|---------------|
+| 🧙 BMad Master | Orchestrator | Workflow routing, agent selection, BMAD method guide |
+| 📊 Analyst (Mary) | Business Analyst | Market research, product briefs, requirements elicitation |
+| 🏗️ Architect (Winston) | System Architect | Architecture docs, tech decisions, implementation readiness |
+| 💻 Developer (Amelia) | Senior Engineer | Story execution, TDD, code review (adversarial) |
+| 📋 Product Manager (John) | PM | PRD creation, epics, stories, stakeholder alignment |
+| 🧪 QA Engineer (Quinn) | QA | Test automation, API testing, E2E tests, coverage |
+| 🏃 Scrum Master (Bob) | Agile SM | Sprint planning, story prep, retrospectives |
+| 📚 Tech Writer (Paige) | Documentation | Docs, Mermaid diagrams, standards compliance |
+| 🎨 UX Designer (Sally) | UX/UI | User research, interaction design, UX specs |
+| 🚀 Quick Flow (Barry) | Solo Dev | Rapid spec + implementation, minimum ceremony |
+
+### BMAD Workflow Columns
+
+The Kanban board includes BMAD phase columns for tracking product development lifecycle:
+
+```
+🧠 Brainstorm → 📋 PRD → 🏗️ Architecture → 💻 Implementation → 🧪 QA
+```
+
+- **Phase gate validation**: Moving a card to the next phase warns you if the previous phase still has pending tasks.
+- **BMAD Templates**: When creating a card in a BMAD phase column, click "🧙 BMAD Template" to pre-fill the description with the relevant template (brainstorming session, PRD, tech spec, or readiness report).
+
+### Party Mode
+
+Add a 🎉 Party Mode to any chat session using the **Party** button in the agent toolbar. Before executing, 5 BMAD agents each give a brief perspective on the task from their specialist viewpoint, then synthesize a concrete execution plan and carry it out.
+
+### BMAD Scheduled Tasks
+
+The Scheduler includes pre-built BMAD task templates:
+
+| Template | Recurrence | BMAD Skills Injected |
+|----------|-----------|----------------------|
+| 🧪 Nightly Test Suite | Daily 2am | qa-engineer |
+| 🔒 Weekly Dependency Audit | Weekly | security, devops |
+| 👁️ Weekly Code Review | Weekly | code-review, analyst |
+| 📊 Daily Git Standup | Daily 8am | developer |
+
+Click a template button in the Schedule modal to pre-fill the form. Scheduled tasks automatically inject the relevant BMAD agent skill context via `<!-- bmad-skills: [...] -->` annotations.
+
+### /bmad-help Command
+
+Type `/bmad-help` in any chat to get contextual BMAD guidance:
+- Detects which phase your project is in (by scanning for BMAD artifacts)
+- Suggests the 2-3 most important next actions
+- Provides copy-pasteable prompts for each next step
+
+### OpenClaw Bridge
+
+The OpenClaw bridge (`openclaw-bridge.js`) enables external automation:
+
+**REST API** (Task 16) — create and manage cards externally:
+```bash
+# Create a card
+curl -X POST http://localhost:3000/api/tasks \
+  -H "Cookie: auth=<token>" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Audit dependencies","column":"todo","skill":"security"}'
+
+# List cards
+GET /api/tasks?status=todo
+
+# Update card status
+PATCH /api/tasks/:id
+
+# Get task result
+GET /api/tasks/:id/result
+```
+
+**Event streaming** — task events are forwarded to OpenClaw when `OPENCLAW_API_URL` is set:
+```env
+OPENCLAW_API_URL=https://your-openclaw-instance/api
+OPENCLAW_API_KEY=your-api-key
+```
+
+Event format:
+```json
+{
+  "type": "task_complete",
+  "taskId": "abc123",
+  "title": "Audit dependencies",
+  "result": "Found 3 critical CVEs...",
+  "duration": 45000
+}
+```
+
+**OpenClaw Cron Integration** (Task 19) — cards can be created externally via the REST API for cron-triggered workflows. See the `openclaw-bridge.js` module for the full WebSocket event stream implementation.
+
+---
+
 ## Technical details
 
 For developers who want to understand or modify how it works.

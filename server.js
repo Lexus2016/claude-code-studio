@@ -18,6 +18,8 @@ const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
 const TelegramBot = require('./telegram-bot');
 const TunnelManager = require('./tunnel-manager');
+// Task 17: OpenClaw bridge — external event forwarding and REST API helpers
+const openclawBridge = require('./openclaw-bridge');
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
 {
@@ -724,6 +726,15 @@ async function startTask(task) {
               duration: Date.now() - _taskStartedAt,
             }).catch(() => {});
           }
+          // Task 18: Forward completion event to OpenClaw
+          openclawBridge.emitEvent({
+            type: 'task_complete',
+            taskId: task.id,
+            title: task.title,
+            result: fullText ? fullText.substring(0, 2000) : null,
+            duration: Date.now() - _taskStartedAt,
+            workdir: task.workdir || null,
+          });
         } else if (task.chain_id && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure
           const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
@@ -768,6 +779,15 @@ async function startTask(task) {
               error: reason,
             }).catch(() => {});
           }
+          // Task 18: Forward failure event to OpenClaw
+          openclawBridge.emitEvent({
+            type: 'task_failed',
+            taskId: task.id,
+            title: task.title,
+            error: reason,
+            duration: Date.now() - _taskStartedAt,
+            workdir: task.workdir || null,
+          });
           // Cascade cancel of dependents happens in next processQueue() run
         }
       } else {
@@ -1314,6 +1334,28 @@ const DEFAULT_SLASH_COMMANDS = [
   { id: 'sc8', name: '/optimize', text: 'Analyze performance and optimize. Identify bottlenecks, propose improvements, quantify the expected gains.' },
   { id: 'sc9', name: '/compact',  text: 'Summarize our conversation so far into a concise recap: key decisions made, what was built or changed, current state, and what still needs to be done. Be brief and structured.' },
   { id: 'sc10', name: '/init',    text: 'Analyze this project and create a CLAUDE.md file in the project root. Include: project overview, tech stack, architecture, key conventions, common commands (build, test, lint), and any gotchas a developer should know. Be thorough but concise.' },
+  // Task 13: BMAD contextual guidance command
+  { id: 'sc11', name: '/bmad-help', text: `Analyze the current project state and provide contextual BMAD guidance. Do the following:
+
+1. **Project Phase Detection**: Check for BMAD artifacts in the workspace:
+   - Look for product-brief.md, prd.md, architecture docs → determines current phase
+   - Look for sprint-status.yaml → implementation phase indicator
+   - Look for test files, coverage reports → QA phase indicator
+   - Check recent git commits for phase clues
+
+2. **Phase Assessment**: Based on what you find, identify which BMAD phase the project is in:
+   - 🧠 Brainstorm (no PRD yet)
+   - 📋 PRD (has brief, needs PRD)
+   - 🏗️ Architecture (has PRD, needs architecture doc)
+   - 💻 Implementation (has architecture, coding in progress)
+   - 🧪 QA (implementation done, needs testing)
+   - ✅ Done (all phases complete)
+
+3. **Next Steps**: Suggest the 2-3 most important next actions, including which BMAD agent to use (analyst, architect, developer, qa-engineer, etc.)
+
+4. **Quick Commands**: Provide copy-pasteable prompts for the suggested next steps.
+
+Be concise and actionable. Focus on what's most useful right now.` },
 ];
 
 /** Load LOCAL config only — used by write operations (add/delete MCP, upload/delete skill).
@@ -2412,7 +2454,10 @@ app.get('/schedule', (_,res) => res.sendFile(path.join(__dirname,'public','sched
 // ─── Tasks (Kanban) ───────────────────────────────────────────────────────
 app.get('/api/tasks', (req, res) => {
   const workdir = req.query.workdir || null;
-  const rows = stmts.getTasks.all({ w: workdir || null });
+  const statusFilter = req.query.status || null; // Task 16: ?status=todo filter
+  let rows = stmts.getTasks.all({ w: workdir || null });
+  // Optional status filter for external API clients
+  if (statusFilter) rows = rows.filter(t => t.status === statusFilter);
   const result = rows.map(t => ({
     ...t,
     is_active: t.session_id ? activeTasks.has(t.session_id) : false,
@@ -2485,6 +2530,72 @@ app.delete('/api/tasks/:id', (req, res) => {
   if (task?.worker_pid) killByPid(task.worker_pid);
   stmts.deleteTask.run(tid);
   res.json({ ok: true });
+});
+
+// ─── Task 16: Extended REST API for external card creation ───────────────────
+// PATCH /api/tasks/:id — partial update (only provide fields you want to change)
+app.patch('/api/tasks/:id', express.json(), (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  const allowed = ['title', 'description', 'notes', 'status', 'sort_order', 'model', 'mode', 'agent_mode', 'max_turns', 'scheduled_at', 'recurrence', 'recurrence_end_at'];
+  const updates = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) updates[key] = req.body[key];
+  }
+  // Handle 'column' as alias for 'status' (friendlier API)
+  if (req.body.column !== undefined) updates.status = req.body.column;
+  if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields provided' });
+  const merged = { ...task, ...updates };
+  // Stop task if being moved away from in_progress
+  if (task.status === 'in_progress' && merged.status && merged.status !== 'in_progress') {
+    const ctrl = runningTaskAborts.get(req.params.id);
+    if (ctrl) { stoppingTasks.add(req.params.id); ctrl.abort(); }
+    else if (task.worker_pid) { stoppingTasks.add(req.params.id); killByPid(task.worker_pid); }
+  }
+  stmts.updateTask.run(
+    String(merged.title).substring(0,200), String(merged.description||'').substring(0,2000),
+    String(merged.notes||'').substring(0,2000),
+    sqlVal(merged.status), sqlVal(merged.sort_order), sqlVal(merged.session_id)||null, sqlVal(merged.workdir)||null,
+    sqlVal(merged.model), sqlVal(merged.mode), sqlVal(merged.agent_mode), sqlVal(merged.max_turns), sqlVal(merged.attachments)||null,
+    sqlVal(merged.depends_on)||null, sqlVal(merged.chain_id)||null, sqlVal(merged.source_session_id)||null,
+    sqlVal(merged.scheduled_at)||null, sqlVal(merged.recurrence)||null, sqlVal(merged.recurrence_end_at)||null,
+    req.params.id
+  );
+  if (merged.status === 'todo') setImmediate(processQueue);
+  res.json(stmts.getTask.get(req.params.id));
+});
+
+// GET /api/tasks/:id — get a single task by ID
+app.get('/api/tasks/:id', (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  res.json({ ...task, is_active: task.session_id ? activeTasks.has(task.session_id) : false });
+});
+
+// GET /api/tasks/:id/result — get task result (assistant messages from linked session)
+app.get('/api/tasks/:id/result', (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  if (!task.session_id) return res.json({ task, messages: [], summary: null });
+  const messages = db.prepare(`SELECT role, type, content, tool_name, created_at FROM messages WHERE session_id=? ORDER BY id ASC`).all(task.session_id);
+  const assistantText = messages.filter(m => m.role === 'assistant' && m.type === 'text').map(m => m.content).join('\n\n');
+  res.json({
+    task,
+    messages,
+    summary: assistantText ? assistantText.substring(0, 2000) : null,
+    status: task.status,
+    failure_reason: task.failure_reason || null,
+  });
+});
+
+// POST /api/tasks/:id/run — trigger a task to start immediately (set status to 'todo')
+app.post('/api/tasks/:id/run', (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  if (task.status === 'in_progress') return res.status(409).json({ error: 'Task already running' });
+  db.prepare(`UPDATE tasks SET status='todo', failure_reason=NULL, updated_at=datetime('now') WHERE id=?`).run(req.params.id);
+  setImmediate(processQueue);
+  res.json({ ok: true, task: stmts.getTask.get(req.params.id) });
 });
 
 // ─── Task Dispatch (Chat → Kanban chain) ─────────────────────────────────
@@ -2576,6 +2687,19 @@ app.post('/api/tasks/dispatch', (req, res) => {
   setImmediate(processQueue);
   log.info('Tasks dispatched', { chainId, count: createdTasks.length, workdir });
   res.json({ chain_id: chainId, session_id: chainSessionId, tasks: createdTasks });
+});
+
+// ─── Tasks 17-19: OpenClaw Bridge Endpoints ──────────────────────────────────
+// GET /api/openclaw/status — check if OpenClaw bridge is configured
+app.get('/api/openclaw/status', async (req, res) => {
+  const configured = openclawBridge.isConfigured();
+  if (!configured) return res.json({ configured: false, message: 'Set OPENCLAW_API_URL and OPENCLAW_API_KEY in .env to enable' });
+  const health = await openclawBridge.healthCheck();
+  res.json({ configured, ...health });
+});
+// GET /api/openclaw/cron-templates — Task 19: return cron integration templates
+app.get('/api/openclaw/cron-templates', (req, res) => {
+  res.json(openclawBridge.CRON_TEMPLATES);
 });
 
 // ─── Task 8: BMAD Phase Templates ────────────────────────────────────────────
