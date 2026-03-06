@@ -16,6 +16,7 @@ const SERVER_URL = process.env.ASK_USER_SERVER_URL || 'http://127.0.0.1:3000';
 const SESSION_ID = process.env.ASK_USER_SESSION_ID || '';
 const SECRET = process.env.ASK_USER_SECRET || '';
 const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_STDIN_BUFFER = 10 * 1024 * 1024; // 10 MB
 
 // ─── JSON-RPC helpers ────────────────────────────────────────────────────────
 
@@ -124,6 +125,8 @@ function postToServer(body) {
 
 // ─── Handle JSON-RPC messages ────────────────────────────────────────────────
 
+let _initialized = false;
+
 async function handleMessage(msg) {
   const { id, method, params } = msg;
 
@@ -132,6 +135,7 @@ async function handleMessage(msg) {
 
   switch (method) {
     case 'initialize':
+      _initialized = true;
       sendResponse(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
@@ -140,10 +144,12 @@ async function handleMessage(msg) {
       break;
 
     case 'tools/list':
+      if (!_initialized) { sendError(id, -32002, 'Server not initialized'); return; }
       sendResponse(id, { tools: [ASK_USER_TOOL] });
       break;
 
     case 'tools/call': {
+      if (!_initialized) { sendError(id, -32002, 'Server not initialized'); return; }
       const toolName = params?.name;
       if (toolName !== 'ask_user') {
         sendError(id, -32602, `Unknown tool: ${toolName}`);
@@ -208,6 +214,11 @@ let buffer = '';
 
 process.stdin.on('data', (chunk) => {
   buffer += decoder.write(chunk);
+  if (buffer.length > MAX_STDIN_BUFFER) {
+    process.stderr.write('[mcp] stdin buffer overflow, resetting\n');
+    buffer = '';
+    return;
+  }
   const lines = buffer.split(/\r?\n/);
   buffer = lines.pop() || '';
 

@@ -628,7 +628,9 @@ async function startTask(task) {
           })
           .onTool((name, inp) => {
             try { stmts.addMsg.run(sessionId, 'assistant', 'tool', inp || '', name, null, null, null); } catch {}
-            broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
+            if (name !== 'ask_user' && name !== 'notify_user' && name !== 'set_ui_state') {
+              broadcastToSession(sessionId, { type: 'tool', tool: name, input: (inp || '').substring(0, 600), tabId: sessionId });
+            }
           })
           .onSessionId(sid => { newCid = sid; currentTaskCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
           .onResult(r => { lastTaskResult = r; })
@@ -1618,7 +1620,11 @@ async function runCliSingle(p) {
   const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, workdir, tabId } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
-  const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook','mcp_set_ui_state'] : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write', 'mcp_set_ui_state'];
+  // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
+  const mcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user', 'mcp___ccs_notify__notify_user'];
+  const tools = mode==='planning'
+    ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook', ...mcpTools]
+    : ['Bash','View','GlobTool','GrepTool','ReadNotebook','NotebookEditCell','ListDir','SearchReplace','Write', ...mcpTools];
   const effectiveMaxTurns = maxTurns || 30;
   let fullText = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
@@ -1646,7 +1652,7 @@ async function runCliSingle(p) {
       })
       .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
       .onTool((name, inp) => {
-        if (name === 'ask_user' || name === 'notify_user') {
+        if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state') {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
           return;
         }
@@ -1754,7 +1760,11 @@ async function runSshSingle(p) {
   const { prompt, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
-  const tools = mode==='planning' ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook','mcp_set_ui_state'] : ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', 'mcp_set_ui_state'];
+  // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
+  const mcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user', 'mcp___ccs_notify__notify_user'];
+  const tools = mode==='planning'
+    ? ['View','GlobTool','GrepTool','ListDir','ReadNotebook', ...mcpTools]
+    : ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', ...mcpTools];
   const effectiveMaxTurns = maxTurns || 30;
   let fullText = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
@@ -1778,6 +1788,10 @@ async function runSshSingle(p) {
       })
       .onThinking(t => { ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
       .onTool((name, inp) => {
+        if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state') {
+          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
+          return;
+        }
         ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
         try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,10000),name,null,null,null); } catch {}
       })
@@ -1890,7 +1904,7 @@ async function runMultiAgent(p) {
         // Agent resumes session to maintain context
         cli.send({ prompt:agentPrompt, sessionId: currentSessionId, model, maxTurns:Math.min(maxTurns||30, 50), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
           .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
-          .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,10000),n,agent.id,null,null); } catch {} })
+          .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,10000),n,agent.id,null,null); } catch {} })
           .onSessionId(sid => { currentSessionId = sid; })
           .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
           .onDone(() => _res());
@@ -2180,7 +2194,7 @@ app.get('/api/stats', (req, res) => {
   // Context size estimate: sum of all content lengths in session ÷ 4 chars/token
   let contextTokens = 0;
   if (sessionId) {
-    const { total } = stmts.contextTokens.get(sessionId);
+    const { total } = stmts.contextTokens.get(sessionId) || { total: 0 };
     contextTokens = Math.round(total / 4);
   }
 
@@ -2881,7 +2895,8 @@ app.get('/api/files/download', (req,res) => {
   try {
     const stat = fs.statSync(fp);
     if (stat.isDirectory()) return res.status(400).json({error:'Cannot download a directory'});
-    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(fp)}"`);
+    const _dlFilename = path.basename(fp).replace(/[^\w.\-]/g, '_');
+    res.setHeader('Content-Disposition', `attachment; filename="${_dlFilename}"`);
     res.setHeader('Content-Length', stat.size);
     fs.createReadStream(fp).pipe(res);
   } catch { res.status(404).json({error:'Not found'}); }
@@ -3345,7 +3360,8 @@ async function processTelegramChat({ sessionId, text, userId, chatId, attachment
       await runCliSingle(params);
     }
 
-    proxy.send(JSON.stringify({ type: 'done', duration: Date.now() - activeTasks.get(sessionId)?.startedAt }));
+    const _taskStart = activeTasks.get(sessionId)?.startedAt;
+    proxy.send(JSON.stringify({ type: 'done', duration: _taskStart ? Date.now() - _taskStart : 0 }));
   } catch (err) {
     log.error('[processTelegramChat] Error', { message: err.message, name: err.name, stack: err.stack });
     proxy.send(JSON.stringify({ type: 'error', error: err.message }));
@@ -3814,20 +3830,23 @@ wss.on('connection', (ws) => {
       // Returns both specialist skills AND a short chat title in one call.
       let effectiveSkills = sIds;
       let classifiedTitle = '';
-      log.info('[classify] autoSkill=%s sIds=%j msgLen=%d', autoSkill, sIds, userMessage.length);
+      log.info('[classify] start', { autoSkill, sIds, msgLen: userMessage.length });
       if (autoSkill) {
         try {
           proxy.send(JSON.stringify({ type:'agent_status', status:'⚡ Classifying task...', statusKey:'status.classifying', tabId: effectiveTabId }));
           const classification = await classifyTask(userMessage, sIds, config, workdir || WORKDIR);
-          effectiveSkills = classification.skills;
           classifiedTitle = classification.title;
-          log.info('[classify] skills=%j title=%s', effectiveSkills, classifiedTitle);
+          // Merge classified skills into existing (not replace)
+          const merged = new Set(sIds);
+          for (const s of classification.skills) merged.add(s);
+          effectiveSkills = [...merged];
+          log.info('[classify] done', { newSkills: classification.skills, merged: effectiveSkills, title: classifiedTitle });
           if (effectiveSkills.length > 0) {
             proxy.send(JSON.stringify({ type:'skills_auto', skills: effectiveSkills, tabId: effectiveTabId }));
           }
         } catch (err) {
-          log.error('[classify] Failed: %s', err.message);
-          effectiveSkills = config.skills['auto-mode'] ? ['auto-mode'] : [];
+          log.error('[classify] Failed', { err: err.message });
+          if (!effectiveSkills.length) effectiveSkills = config.skills['auto-mode'] ? ['auto-mode'] : [];
         }
       }
 

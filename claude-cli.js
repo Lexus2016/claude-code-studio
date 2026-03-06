@@ -212,6 +212,8 @@ class ClaudeCLI {
     let globalTimer = null;
     // Track MCP config hash for ref-counted cleanup
     let mcpHash = mcpConfigHash;
+    let _finished = false;
+    let _abortListener = null;
     // Track temp attachment files + parent dir for cleanup
     let attFiles = _tempFiles.slice();
     let attDir = _tempDir;
@@ -219,7 +221,17 @@ class ClaudeCLI {
     proc.stdout.on('data', (chunk) => {
       buffer += stdoutDecoder.write(chunk);
       // Guard against a runaway line (no \n) consuming all heap
-      if (buffer.length > MAX_LINE_BUFFER) { console.warn(`[claude-cli] Buffer overflow (${(buffer.length / 1024 / 1024).toFixed(1)} MB), dropping incomplete line`); buffer = ''; return; }
+      if (buffer.length > MAX_LINE_BUFFER) {
+        // Process any complete lines before discarding the oversized partial line
+        const lastNl = buffer.lastIndexOf('\n');
+        if (lastNl > 0) {
+          const completeLines = buffer.slice(0, lastNl).split(/\r?\n/);
+          for (const cl of completeLines) { if (cl.trim()) { try { this._handle(JSON.parse(cl), h); } catch {} } }
+        }
+        console.warn(`[claude-cli] Buffer overflow (${(buffer.length / 1024 / 1024).toFixed(1)} MB), dropping incomplete line`);
+        buffer = '';
+        return;
+      }
       const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() || '';
       for (const line of lines) {
@@ -253,6 +265,12 @@ class ClaudeCLI {
     });
 
     proc.on('close', (code) => {
+      if (_finished) return; _finished = true;
+      // Remove abort listener to prevent GC leak (listener holds proc reference)
+      if (abortController && _abortListener) {
+        abortController.signal.removeEventListener('abort', _abortListener);
+        _abortListener = null;
+      }
       // Clear both timers — process already exited
       if (globalTimer) { clearTimeout(globalTimer); globalTimer = null; }
       if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
@@ -263,7 +281,7 @@ class ClaudeCLI {
       }
       releaseMcpConfig(mcpHash); mcpHash = null;
       for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
-      if (attDir) { try { fs.rmdirSync(attDir); } catch {} attDir = null; }
+      if (attDir) { try { fs.rmSync(attDir, { recursive: true, force: true }); } catch {} attDir = null; }
       attFiles = [];
       if (code !== 0 && stderrBuf.trim() && h.onError) {
         // Filter out known non-error noise (MCP loading messages) line-by-line,
@@ -281,12 +299,18 @@ class ClaudeCLI {
     });
 
     proc.on('error', (err) => {
+      if (_finished) return; _finished = true;
+      // Remove abort listener to prevent GC leak
+      if (abortController && _abortListener) {
+        abortController.signal.removeEventListener('abort', _abortListener);
+        _abortListener = null;
+      }
       if (globalTimer) { clearTimeout(globalTimer); globalTimer = null; }
       if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
       // Clean up MCP config and temp attachments even when the process fails to start
       releaseMcpConfig(mcpHash); mcpHash = null;
       for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }
-      if (attDir) { try { fs.rmdirSync(attDir); } catch {} attDir = null; }
+      if (attDir) { try { fs.rmSync(attDir, { recursive: true, force: true }); } catch {} attDir = null; }
       attFiles = [];
       // Wrapped in try-catch for the same reason as in 'close': onDone must always fire.
       try { if (h.onError) h.onError(`Failed to start claude: ${err.message}. Binary: ${this.claudeBin}`); } catch {}
@@ -311,8 +335,7 @@ class ClaudeCLI {
     }, MAX_SUBPROCESS_MS);
 
     if (abortController) {
-      // { once: true } ensures the listener is auto-removed after firing
-      abortController.signal.addEventListener('abort', () => {
+      _abortListener = () => {
         killProc(proc);
         // Escalate to SIGKILL after 3 s (Unix only — on Windows killProc already force-kills).
         // Guard: if proc already exited (exitCode/signalCode set), skip to avoid
@@ -325,7 +348,8 @@ class ClaudeCLI {
             try { proc.kill('SIGKILL'); } catch {}
           }, 3000);
         }
-      }, { once: true });
+      };
+      abortController.signal.addEventListener('abort', _abortListener);
     }
 
     return {
@@ -345,6 +369,7 @@ class ClaudeCLI {
     // Reset per-block delta tracking at the start of each assistant turn
     if (data.type === 'message_start') {
       h._deltaBlocks = new Set();
+      h._hasEmittedText = false;
     }
 
     // Inject paragraph separator between text blocks so post-tool text doesn't
@@ -395,7 +420,7 @@ class ClaudeCLI {
       h.onResult(data);
     }
     // Session ID in result messages
-    if (data.session_id && h.onSessionId) h.onSessionId(data.session_id);
+    if (data.session_id && !detectedSid && h.onSessionId) { detectedSid = data.session_id; h.onSessionId(data.session_id); }
   }
 }
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Claude Code Studio</title>
+<title>Claude Code Studio — AI Chat & Agents</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
@@ -850,7 +850,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   background: var(--s1); border: 1px solid var(--border); border-radius: 10px;
   padding: 5px; box-shadow: 0 8px 32px rgba(0,0,0,.55);
 }
-#imgChipPreview img { display: block; max-width: 320px; max-height: 260px; object-fit: contain; border-radius: 7px; }
+#imgChipPreview img { display: block; max-width: min(900px, 80vw); max-height: min(700px, 70vh); object-fit: contain; border-radius: 7px; }
 
 /* ─── @ File picker popup ─── */
 .at-popup {
@@ -1995,6 +1995,14 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       </div>
       <div class="at-popup-list" id="atList"></div>
     </div>
+    <!-- SSH picker popup (# trigger) -->
+    <div class="at-popup hidden" id="sshPopup">
+      <div class="at-popup-hdr">
+        <span>🖥️</span>
+        <input id="sshSearch" data-i18n-ph="ssh.search" placeholder="Search SSH server..." autocomplete="off" oninput="onSshSearch(this.value)">
+      </div>
+      <div class="at-popup-list" id="sshList"></div>
+    </div>
     <!-- Slash commands popup -->
     <div class="at-popup hidden" id="slashPopup">
       <div class="at-popup-hdr"><span>⚡</span><span data-i18n="cmds.popup.hdr" style="flex:1;font-size:12px;color:var(--text)">Команди</span></div>
@@ -2016,7 +2024,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
         </svg>
       </button>
-      <textarea id="input" rows="1" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Вставте скріншот (Ctrl+V) · @ для файлів проекту · 📎 для будь-яких файлів" autofocus aria-label="Message input" aria-multiline="true"></textarea>
+      <textarea id="input" rows="1" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @ — файли · # — SSH · 📎 — будь-який файл" autofocus aria-label="Message input" aria-multiline="true"></textarea>
       <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Завдань у черзі"></span>
       <button class="sb stop-btn hidden" id="stopBtn" onclick="confirmStop()" data-i18n-title="stop.agent" title="Stop agent">
         <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
@@ -2434,7 +2442,7 @@ const streaming = {
     const s = getTS(activeTabId);
     // Clean orphaned spinner before clearing ref (bypasses setter)
     if (s.curEl) { const f = s.curEl.querySelector('.msg-status-footer.state-streaming'); if (f) f.remove(); }
-    s.curEl = null; s.curTxt = ''; s._toolCounts = {}; s._toolLog = [];
+    s.curEl = null; s.curTxt = ''; s._toolCounts = {}; s._toolLog = []; s._hadTool = false;
   },
 };
 let config = { mcpServers: {}, skills: {} };
@@ -2486,7 +2494,7 @@ const TRANSLATIONS = {
     'btn.new':'Чат','tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки',
     'welcome.title':'Нова сесія','welcome.ready':'Готовий до роботи',
     'welcome.desc':'Виберіть MCP та Навички зліва, файли — справа.',
-    'input.ph':'Напишіть завдання... Вставте скріншот (Ctrl+V) · @ для файлів проекту · 📎 для будь-яких файлів',
+    'input.ph':'Напишіть завдання... Ctrl+V — скріншот · @ — файли · # — SSH · 📎 — будь-який файл',
     'files.title':'Робоча директорія','files.refresh':'Оновити','queue.title':'Завдань у черзі',
     'cfg.title':'Налаштування','cfg.saved':'✓ Збережено','cfg.close':'Закрити','cfg.save':'Зберегти',
     'dir.title':'Новий проект','toast.loading':'Завантаження...',
@@ -2539,7 +2547,7 @@ const TRANSLATIONS = {
     'status.connected':'Підключено','status.generating':'Генерація…','status.thinking':'Обдумування...','status.processing':'Обробка...','status.classifying':'⚡ Визначення спеціалістів...','status.reconnecting':'Перепідключення…','status.stopped':'Зупинено','status.error':'Помилка',
     'fpv.download':'Завантажити','fpv.download.title':'Завантажити файл','fpv.share':'Поділитись','fpv.share.title':'Поділитись / Скопіювати посилання','fpv.binary':'Бінарний файл — перегляд недоступний','fpv.img_error':'Помилка завантаження зображення','fpv.load_error':'Помилка завантаження файлу',
     'toast.no_connection':'Немає з\'єднання','toast.sess_not_found':'Сесію не знайдено','toast.cfg_load_err':'Помилка завантаження конфігурації','toast.skill_uploaded':'✓ Скіл завантажено','toast.link_copied':'✓ Посилання скопійовано','toast.select_dir':'Виберіть директорію','toast.link_prompt':'Скопіюйте посилання:',
-    'at.no_project':'Оберіть проект, щоб шукати файли','at.searching':'Пошук...','at.search_err':'Помилка пошуку','at.no_files':'Файлів не знайдено',
+    'at.no_project':'Оберіть проект, щоб шукати файли','at.searching':'Пошук...','at.search_err':'Помилка пошуку','at.no_files':'Файлів не знайдено','ssh.search':'Пошук SSH-сервера...','ssh.no_hosts':'SSH-сервери не налаштовано',
     'dir.this_dir':'. (ця директорія)','dir.no_subdirs':'Немає підпапок','dir.drives':'💻 Всі диски',
     'toast.read_err':'Не вдалося прочитати: ','toast.err_prefix':'Помилка: ','dir.proj_name':'Назва проекту (авто якщо порожньо)',
     'welcome.prompt.1':'Поясни цей код крок за кроком','welcome.prompt.2':'Знайди та виправ помилки','welcome.prompt.3':'Напиши unit-тести','welcome.prompt.4':'Спроектуй архітектуру',
@@ -2670,7 +2678,7 @@ const TRANSLATIONS = {
     'btn.new':'Chat','tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns',
     'welcome.title':'New session','welcome.ready':'Ready to work',
     'welcome.desc':'Choose MCP and Skills on the left, files on the right.',
-    'input.ph':'Write a task... Paste screenshot (Ctrl+V) · @ for project files · 📎 for any files',
+    'input.ph':'Write a task... Ctrl+V — screenshot · @ — files · # — SSH · 📎 — any file',
     'files.title':'Workspace','files.refresh':'Refresh','queue.title':'Tasks waiting in queue',
     'cfg.title':'Configuration','cfg.saved':'✓ Saved','cfg.close':'Close','cfg.save':'Save',
     'dir.title':'New project','toast.loading':'Loading...',
@@ -2723,7 +2731,7 @@ const TRANSLATIONS = {
     'status.connected':'Connected','status.generating':'Generating…','status.thinking':'Thinking...','status.processing':'Processing...','status.classifying':'⚡ Classifying specialists...','status.reconnecting':'Reconnecting…','status.stopped':'Stopped','status.error':'Error',
     'fpv.download':'Download','fpv.download.title':'Download file','fpv.share':'Share','fpv.share.title':'Share / Copy link','fpv.binary':'Binary file — preview not available','fpv.img_error':'Image load error','fpv.load_error':'File load error',
     'toast.no_connection':'No connection','toast.sess_not_found':'Session not found','toast.cfg_load_err':'Config load error','toast.skill_uploaded':'✓ Skill uploaded','toast.link_copied':'✓ Link copied','toast.select_dir':'Select a directory','toast.link_prompt':'Copy link:',
-    'at.no_project':'Select a project to search files','at.searching':'Searching...','at.search_err':'Search error','at.no_files':'No files found',
+    'at.no_project':'Select a project to search files','at.searching':'Searching...','at.search_err':'Search error','at.no_files':'No files found','ssh.search':'Search SSH server...','ssh.no_hosts':'No SSH servers configured',
     'dir.this_dir':'. (this directory)','dir.no_subdirs':'No subdirectories','dir.drives':'💻 All Drives',
     'toast.read_err':'Failed to read: ','toast.err_prefix':'Error: ','dir.proj_name':'Project name (auto if empty)',
     'welcome.prompt.1':'Explain this code step by step','welcome.prompt.2':'Find and fix bugs','welcome.prompt.3':'Write unit tests','welcome.prompt.4':'Design the architecture',
@@ -2854,7 +2862,7 @@ const TRANSLATIONS = {
     'btn.new':'Чат','tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги',
     'welcome.title':'Новая сессия','welcome.ready':'Готов к работе',
     'welcome.desc':'Выберите MCP и Навыки слева, файлы — справа.',
-    'input.ph':'Напишите задание... Вставьте скриншот (Ctrl+V) · @ для файлов проекта · 📎 для любых файлов',
+    'input.ph':'Напишите задание... Ctrl+V — скриншот · @ — файлы · # — SSH · 📎 — любой файл',
     'files.title':'Рабочая директория','files.refresh':'Обновить','queue.title':'Задач в очереди',
     'cfg.title':'Настройки','cfg.saved':'✓ Сохранено','cfg.close':'Закрыть','cfg.save':'Сохранить',
     'dir.title':'Новый проект','toast.loading':'Загрузка...',
@@ -2907,7 +2915,7 @@ const TRANSLATIONS = {
     'status.connected':'Подключено','status.generating':'Генерация…','status.thinking':'Обдумывание...','status.processing':'Обработка...','status.classifying':'⚡ Определение специалистов...','status.reconnecting':'Переподключение…','status.stopped':'Остановлено','status.error':'Ошибка',
     'fpv.download':'Скачать','fpv.download.title':'Скачать файл','fpv.share':'Поделиться','fpv.share.title':'Поделиться / Скопировать ссылку','fpv.binary':'Бинарный файл — предпросмотр недоступен','fpv.img_error':'Ошибка загрузки изображения','fpv.load_error':'Ошибка загрузки файла',
     'toast.no_connection':'Нет соединения','toast.sess_not_found':'Сессия не найдена','toast.cfg_load_err':'Ошибка загрузки конфигурации','toast.skill_uploaded':'✓ Навык загружен','toast.link_copied':'✓ Ссылка скопирована','toast.select_dir':'Выберите директорию','toast.link_prompt':'Скопируйте ссылку:',
-    'at.no_project':'Выберите проект для поиска файлов','at.searching':'Поиск...','at.search_err':'Ошибка поиска','at.no_files':'Файлов не найдено',
+    'at.no_project':'Выберите проект для поиска файлов','at.searching':'Поиск...','at.search_err':'Ошибка поиска','at.no_files':'Файлов не найдено','ssh.search':'Поиск SSH-сервера...','ssh.no_hosts':'SSH-серверы не настроены',
     'dir.this_dir':'. (эта директория)','dir.no_subdirs':'Нет подпапок','dir.drives':'💻 Все диски',
     'toast.read_err':'Не удалось прочитать: ','toast.err_prefix':'Ошибка: ','dir.proj_name':'Название проекта (авто если пусто)',
     'welcome.prompt.1':'Объясни этот код шаг за шагом','welcome.prompt.2':'Найди и исправь ошибки','welcome.prompt.3':'Напиши unit-тесты','welcome.prompt.4':'Спроектируй архитектуру',
@@ -3269,7 +3277,12 @@ function renderMd(text) {
 
   // 3.4 Split inline table headers: move pipe-delimited header from end of text line to its own line
   // Handles LLM output like "some text | Header1 | Header2 |\n|---|---|"
-  text = text.replace(/(\S)[ \t]+(\|(?:[^|\n]+\|){2,})[ \t]*\n([ \t]*\|[\s\-:|]+\|)/gm, '$1\n$2\n$3');
+  // Skip lines already starting with | (valid table rows like "| # | Col1 | Col2 |")
+  text = text.replace(/(\S)[ \t]+(\|(?:[^|\n]+\|){2,})[ \t]*\n([ \t]*\|[\s\-:|]+\|)/gm, (m, $1, $2, $3, off, src) => {
+    const sol = src.lastIndexOf('\n', off - 1) + 1;
+    if (src.substring(sol, off + 1).trimStart().startsWith('|')) return m;
+    return $1 + '\n' + $2 + '\n' + $3;
+  });
 
   // 3.5 Tables — header row + separator row + data rows
   text = text.replace(/((?:^\|.+\|\s*\n?)+)/gm, block => {
@@ -3534,11 +3547,25 @@ function handleWsMsg(d) {
         // Accumulate text for background tabs — restored when user switches back
         // catchUp replaces accumulated text (full replay from server); normal chunks append
         const ts = getTS(tabId);
+        // Ensure paragraph break between text blocks separated by tool calls
+        if (!d.catchUp && ts.curTxt && ts._hadTool) {
+          if (!ts.curTxt.endsWith('\n\n') && !d.text.startsWith('\n')) {
+            ts.curTxt = ts.curTxt.replace(/\n*$/, '\n\n');
+          }
+          ts._hadTool = false;
+        }
         ts.curTxt = d.catchUp ? d.text : (ts.curTxt || '') + d.text;
         break;
       }
       rmStatus();
       if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
+      // Ensure paragraph break between text blocks separated by tool calls
+      if (!d.catchUp && streaming.txt && getTS(tabId)._hadTool) {
+        if (!streaming.txt.endsWith('\n\n') && !d.text.startsWith('\n')) {
+          streaming.txt = streaming.txt.replace(/\n*$/, '\n\n');
+        }
+        getTS(tabId)._hadTool = false;
+      }
       // catchUp = full replay from server after reconnect → replace, not append
       if (d.catchUp) { streaming.txt = d.text; } else { streaming.txt += d.text; }
       streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
@@ -3549,6 +3576,7 @@ function handleWsMsg(d) {
     case 'tool':
       // Track tool usage for activity summary on done — ALWAYS use tabId, not activeTabId
       { const ts = getTS(tabId); if (!ts._toolCounts) ts._toolCounts = {}; const tn = d.tool || 'tool'; ts._toolCounts[tn] = (ts._toolCounts[tn] || 0) + 1; }
+      getTS(tabId)._hadTool = true; // mark that tool call happened between text blocks
       getTS(tabId).agentStatus = ''; // tool arrived — classification status no longer relevant (clear even for background tabs)
       // Live tool activity panel — show what Claude Code is doing
       if (isVisible) {
@@ -3590,21 +3618,26 @@ function handleWsMsg(d) {
     }
 
     case 'ui_state_change': {
-      // Agent requested UI state update (mode, model, agent)
-      if (d.mode) { curMode = d.mode; syncBtn('mode', d.mode); }
-      if (d.model) { curModel = d.model; syncBtn('model', d.model); }
-      if (d.agent) { curAgent = d.agent; syncBtn('agent', d.agent); }
+      // Agent requested UI state update — validate before assigning to prevent invalid state
+      const _validModes = ['auto','planning','task'], _validModels = ['haiku','sonnet','opus'], _validAgents = ['single','multi','dispatch'];
+      if (d.mode && _validModes.includes(d.mode)) { curMode = d.mode; syncBtn('mode', d.mode); }
+      if (d.model && _validModels.includes(d.model)) { curModel = d.model; syncBtn('model', d.model); }
+      if (d.agent && _validAgents.includes(d.agent)) { curAgent = d.agent; syncBtn('agent', d.agent); }
       break;
     }
 
     case 'skills_auto': {
-      // Server classified skills via LLM — update UI
+      // Server classified skills via LLM — merge into existing (not replace)
       if (d.skills?.length) {
-        activeSkills = new Set(d.skills);
+        const newSkills = d.skills.filter(id => !activeSkills.has(id));
+        for (const s of d.skills) activeSkills.add(s);
         renderSkills(); updateSessBarSkills();
-        const displaySkills = d.skills.filter(id => id !== 'auto-mode');
-        if (displaySkills.length > 0) {
-          const names = displaySkills.map(id => (config.skills[id]?.label || id).replace(/^\S+\s/, '')).join(', ');
+        // Ensure session bar is visible (skills_auto may arrive before first 'done')
+        const _bar = $i('sessBar');
+        if (_bar && currentSessionId) _bar.style.display = 'flex';
+        const displayNew = newSkills.filter(id => id !== 'auto-mode');
+        if (displayNew.length > 0) {
+          const names = displayNew.map(id => (config.skills[id]?.label || id).replace(/^\S+\s/, '')).join(', ');
           toast('⚡ ' + names);
         }
       }
@@ -3675,7 +3708,7 @@ function handleWsMsg(d) {
             curMode = 'auto';
             syncBtn('mode', 'auto');
             // Show success toast
-            toast('✅ Auto-switched to auto mode', { duration: 2000 });
+            toast('✅ Auto-switched to auto mode', false, 2000);
           }
         }
         // Clear streaming state
@@ -3701,14 +3734,12 @@ function handleWsMsg(d) {
         }
       }
       // For background tabs: clear saved streaming text (message is now persisted to DB)
-      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._toolCounts = {}; ts._toolLog = []; } }
+      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; } }
       if (found?.tab) { found.tab.generating = false; found.tab.done = true; }
       if (isCurrent) { renderTabs(); if (tabId === activeTabId && !d.taskId) generatingTabId = null; }
       else renderProjects(); // background: remove busy dot from project
       loadHist();
       if (tabId === activeTabId) updateSessBar();
-      // If rate-limit badge shows 'rejected' but message completed — limit must have reset
-      if (_rlInfo && _rlInfo.status === 'rejected') _rlClear();
       break;
 
     case 'files_changed':
@@ -3757,7 +3788,7 @@ function handleWsMsg(d) {
         toast(d.error, true, 5000);
       }
       // For background tabs: clear saved streaming text on error
-      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._toolCounts = {}; ts._toolLog = []; } }
+      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; } }
       if (found?.tab) { found.tab.generating = false; }
       if (isCurrent) { renderTabs(); if (tabId === activeTabId) generatingTabId = null; }
       else renderProjects();
@@ -3887,7 +3918,9 @@ function handleWsMsg(d) {
               chipsDiv.className = 'att-chips';
               chipsDiv.style.cssText = 'padding:4px 0 2px';
               chipsDiv.innerHTML = item.attachments.map(a => a.type && a.type.startsWith('image/')
-                ? `<div class="att-chip chip-img"><img src="data:${a.type};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name||'image')}</span></div>`
+                ? `<div class="att-chip chip-img"><img src="data:${escH(a.type)};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name||'image')}</span></div>`
+                : a.type === 'ssh'
+                ? `<div class="att-chip"><span class="chip-icon">🖥️</span><span class="chip-name">${escH(a.label||'SSH')}</span></div>`
                 : `<div class="att-chip"><span class="chip-icon">📄</span><span class="chip-name">${escH(a.name||'file')}</span></div>`
               ).join('');
               w.insertBefore(chipsDiv, w.querySelector('.msg'));
@@ -4446,7 +4479,7 @@ function _chainProgressRender(chainId, tasks) {
 function _chainProgressUpdate(taskId, status) {
   const card = msgsEl.querySelector('.chain-progress-card');
   if (!card || !_chainData) return;
-  const row = card.querySelector(`[data-task-id="${taskId}"]`);
+  const row = card.querySelector(`[data-task-id="${CSS.escape(taskId)}"]`);
   if (row) {
     row.classList.remove('cpc-done', 'cpc-running', 'cpc-failed', 'cpc-retry');
     const statusEl = row.querySelector('.cpc-status');
@@ -4456,8 +4489,8 @@ function _chainProgressUpdate(taskId, status) {
     else if (status === 'retry') { row.classList.add('cpc-retry'); if (statusEl) statusEl.textContent = t('cpc.retrying'); }
   }
   // Update task state in _chainData
-  const t = _chainData.tasks.find(x => x.id === taskId);
-  if (t) t.status = status;
+  const chainTask = _chainData.tasks.find(x => x.id === taskId);
+  if (chainTask) chainTask.status = status;
   // Update progress bar
   const total = _chainData.tasks.length;
   const done = _chainData.tasks.filter(x => x.status === 'done').length;
@@ -5288,7 +5321,7 @@ function renderTabs() {
     if (tab.generating) dot = '<div class="tab-dot spinning"></div>';
     else if (tab.done) dot = '<div class="tab-dot done"></div>';
     const titleTip = escH(tab.title || t('tab.new'));
-    el.innerHTML = `${dot}<span class="tab-title" data-tip="${titleTip}" ondblclick="event.stopPropagation();startRenameTab(event,'${tab.id}')">${escH(tab.title || t('tab.new'))}</span><button class="tab-close" onclick="event.stopPropagation();closeTab('${tab.id}')">✕</button>`;
+    el.innerHTML = `${dot}<span class="tab-title" data-tip="${titleTip}" ondblclick="event.stopPropagation();startRenameTab(event,'${escH(tab.id)}')">${escH(tab.title || t('tab.new'))}</span><button class="tab-close" onclick="event.stopPropagation();closeTab('${escH(tab.id)}')">✕</button>`;
     bar.appendChild(el);
   }
   const nb = document.createElement('button');
@@ -5613,7 +5646,7 @@ function updateSessBarSkills() {
 }
 
 function syncBtn(group, val) {
-  const groups = { mode: ['auto','planning','task'], agent: ['single','multi'], model: ['haiku','sonnet','opus'] };
+  const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch'], model: ['haiku','sonnet','opus'] };
   if (!groups[group]?.includes(val)) return;
   document.querySelectorAll('.tb-group .tb-btn').forEach(b => {
     if (b.dataset.v === val) {
@@ -5696,6 +5729,8 @@ function _restoreAttachments(saved) {
     // Re-add each saved attachment — the _add* functions create new IDs and push to _attachments
     if (att.type === 'image') {
       _addImageChip(att.base64, att.mimeType, att.name);
+    } else if (att.type === 'ssh') {
+      _addSshChip({ id: att.hostId, label: att.label, host: att.host, port: att.port });
     } else if (att.local) {
       _addLocalFileChip(att.name, att.base64, att.mimeType);
     } else {
@@ -5753,6 +5788,74 @@ function _renderAtList() {
   }).join('');
 }
 
+// ─── # SSH picker ─────────────────────────────────────────────────────────
+let _sshTimer = null, _sshHosts = [], _sshActiveIdx = -1, _sshMode = false;
+
+function _openSshPopup(query) {
+  const popup = $i('sshPopup'), s = $i('sshSearch');
+  popup.classList.remove('hidden');
+  s.value = query;
+  _sshActiveIdx = -1;
+  _sshMode = true;
+  _renderSshList(query);
+}
+
+function _closeSshPopup() {
+  $i('sshPopup').classList.add('hidden');
+  _sshMode = false; _sshHosts = []; _sshActiveIdx = -1;
+}
+
+function onSshSearch(query) {
+  clearTimeout(_sshTimer);
+  _sshTimer = setTimeout(() => _renderSshList(query), 80);
+}
+
+function _renderSshList(query) {
+  const list = $i('sshList');
+  if (!list) return;
+  const q = (query || '').toLowerCase();
+  _sshHosts = (remoteHosts || []).filter(h =>
+    !q || h.label.toLowerCase().includes(q) || h.host.toLowerCase().includes(q)
+  );
+  if (!_sshHosts.length) {
+    list.innerHTML = `<div class="at-empty">${t('ssh.no_hosts')}</div>`;
+    return;
+  }
+  list.innerHTML = _sshHosts.map((h, i) =>
+    `<div class="at-item${i === _sshActiveIdx ? ' active' : ''}" onclick="selectSshHost(${i})">
+      <span class="at-icon" style="font-size:14px">🖥️</span>
+      <div>
+        <div class="at-name">${escH(h.label)}</div>
+        <div class="at-dir">${escH(h.host)}${h.port && h.port != 22 ? ':' + h.port : ''}</div>
+      </div>
+    </div>`
+  ).join('');
+}
+
+function _addSshChip(host) {
+  if (_attachments.find(a => a.type === 'ssh' && a.hostId === host.id)) return;
+  const id = 'att-' + Date.now() + Math.random().toString(36).slice(2, 6);
+  _attachments.push({ id, type: 'ssh', hostId: host.id, label: host.label, host: host.host, port: host.port || 22 });
+  const chip = document.createElement('div');
+  chip.className = 'att-chip'; chip.dataset.attId = id;
+  chip.innerHTML = `<span class="chip-icon">🖥️</span><span class="chip-name" data-tip="${escH(host.host + ':' + (host.port || 22))}">${escH(host.label)}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
+  _getChips().appendChild(chip);
+}
+
+function selectSshHost(idx) {
+  const h = _sshHosts[idx]; if (!h) return;
+  _addSshChip(h);
+  // Remove #query from textarea
+  const val = inEl.value, cur = inEl.selectionStart;
+  const before = val.slice(0, cur), hashIdx = before.lastIndexOf('#');
+  if (hashIdx >= 0) {
+    inEl.value = val.slice(0, hashIdx) + val.slice(cur);
+    inEl.selectionStart = inEl.selectionEnd = hashIdx;
+  }
+  _closeSshPopup();
+  inEl.focus();
+}
+
 function selectAtFile(idx) {
   const f = _atFiles[idx]; if (!f) return;
   _addFileChip(f);
@@ -5771,7 +5874,7 @@ function onAtSearch(query) {
   _atTimer = setTimeout(() => _fetchAtFiles(query), 180);
 }
 
-// Input: watch for @ and / triggers
+// Input: watch for @, # and / triggers
 inEl.addEventListener('input', () => {
   const val = inEl.value, cur = inEl.selectionStart;
   const before = val.slice(0, cur);
@@ -5782,10 +5885,22 @@ inEl.addEventListener('input', () => {
     const afterAt = before.slice(atIdx + 1);
     if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
       if (_slashOpen) _closeSlashPopup();
+      if (_sshMode) _closeSshPopup();
       _openAtPopup(afterAt); return;
     }
   }
   if (!$i('atPopup').classList.contains('hidden')) _closeAtPopup();
+
+  // # SSH picker
+  const hashIdx = before.lastIndexOf('#');
+  if (hashIdx >= 0) {
+    const afterHash = before.slice(hashIdx + 1);
+    if (!afterHash.includes(' ') && !afterHash.includes('\n')) {
+      if (_slashOpen) _closeSlashPopup();
+      _openSshPopup(afterHash); return;
+    }
+  }
+  if (_sshMode) _closeSshPopup();
 
   // / slash commands
   if ((config.slashCommands || []).length) {
@@ -5818,11 +5933,22 @@ inEl.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === 'Tab') && _slashActiveIdx >= 0) { e.preventDefault(); _selectSlashCmd(_slashMatches[_slashActiveIdx]); return; }
 });
 
+// Keyboard navigation inside SSH popup
+inEl.addEventListener('keydown', e => {
+  if (!_sshMode) return;
+  if (e.key === 'Escape') { _closeSshPopup(); e.preventDefault(); return; }
+  if (e.key === 'ArrowDown') { e.preventDefault(); _sshActiveIdx = Math.min(_sshActiveIdx + 1, _sshHosts.length - 1); _renderSshList($i('sshSearch').value); $i('sshList').querySelector('.active')?.scrollIntoView({ block: 'nearest' }); return; }
+  if (e.key === 'ArrowUp') { e.preventDefault(); _sshActiveIdx = Math.max(_sshActiveIdx - 1, -1); _renderSshList($i('sshSearch').value); return; }
+  if ((e.key === 'Enter' || e.key === 'Tab') && _sshActiveIdx >= 0) { e.preventDefault(); selectSshHost(_sshActiveIdx); return; }
+});
+
 // Close popups on click outside
 document.addEventListener('click', e => {
   const popup = $i('atPopup');
   if (popup && !popup.classList.contains('hidden') && !popup.contains(e.target) && e.target !== inEl) _closeAtPopup();
   if (_slashOpen && !$i('slashPopup').contains(e.target) && e.target !== inEl) _closeSlashPopup();
+  const sshPopup = $i('sshPopup');
+  if (sshPopup && !sshPopup.classList.contains('hidden') && !sshPopup.contains(e.target) && e.target !== inEl) _closeSshPopup();
 });
 
 // ─── Clipboard paste (screenshots) ───────────────────────────────────────
@@ -5873,9 +5999,13 @@ async function send() {
   _closeAtPopup();
 
   const msgAttachments = [];
+  const sshContextParts = [];
   for (const att of attSnapshot) {
     if (att.type === 'image') {
       msgAttachments.push({ type: att.mimeType, base64: att.base64, name: att.name });
+    } else if (att.type === 'ssh') {
+      // SSH chip: append metadata as context text, never include credentials
+      sshContextParts.push(`[SSH: ${att.label} | host: ${att.host}:${att.port}]`);
     } else if (att.type === 'file') {
       if (att.local && att.base64) {
         // Local file picked via file dialog — content already read client-side
@@ -5889,6 +6019,7 @@ async function send() {
       }
     }
   }
+  const finalTxt = sshContextParts.length ? (txt ? txt + '\n\n' + sshContextParts.join('\n') : sshContextParts.join('\n')) : txt;
 
   const msgEl = addMsg('user', replyTo ? { replyQuote: { quotedRole: replyTo.role, quotedContent: replyTo.content } } : {});
   // Show file/image chips in message bubble
@@ -5898,6 +6029,8 @@ async function send() {
     chipsDiv.style.cssText = 'padding:4px 0 2px';
     chipsDiv.innerHTML = attSnapshot.map(a => a.type === 'image'
       ? `<div class="att-chip chip-img"><img src="data:${a.mimeType};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name)}</span></div>`
+      : a.type === 'ssh'
+      ? `<div class="att-chip"><span class="chip-icon">🖥️</span><span class="chip-name">${escH(a.label)}</span></div>`
       : `<div class="att-chip"><span class="chip-icon">📄</span><span class="chip-name">${escH(a.relPath || a.name)}</span></div>`
     ).join('');
     msgEl.querySelector('.msg').before(chipsDiv);
@@ -5955,7 +6088,7 @@ async function send() {
     }));
   } else {
     ws.send(JSON.stringify({
-      type: 'chat', text: txt || ' ',
+      type: 'chat', text: finalTxt || ' ',
       tabId: activeTabId,
       sessionId: currentSessionId || undefined,
       attachments: msgAttachments.length ? msgAttachments : undefined,
@@ -6061,6 +6194,7 @@ inEl.addEventListener('input', () => {
 inEl.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) {
     if (!$i('atPopup').classList.contains('hidden')) return; // let @ handler deal with it
+    if (_sshMode) return; // let # SSH handler deal with it
     if (_slashOpen) return; // let slash handler deal with it
     e.preventDefault(); send();
   }
@@ -9051,10 +9185,16 @@ checkVersion();
   const _prevImg = $i('imgChipPreviewImg');
 
   function _posPreview(e) {
-    const pw = _prev.offsetWidth || 330, ph = _prev.offsetHeight || 270;
-    let x = e.clientX + 16, y = e.clientY - ph - 12;
-    if (y < 8) y = e.clientY + 20;
-    if (x + pw > window.innerWidth - 8) x = e.clientX - pw - 16;
+    const pw = _prev.offsetWidth || 910, ph = _prev.offsetHeight || 710;
+    const vw = window.innerWidth, vh = window.innerHeight, pad = 12;
+    // Try right of cursor first, then left
+    let x = e.clientX + 16;
+    if (x + pw > vw - pad) x = e.clientX - pw - 16;
+    if (x < pad) x = pad;
+    // Try above cursor first, then below, then clamp
+    let y = e.clientY - ph - 12;
+    if (y < pad) y = e.clientY + 20;
+    if (y + ph > vh - pad) y = Math.max(pad, vh - ph - pad);
     _prev.style.left = x + 'px';
     _prev.style.top  = y + 'px';
   }

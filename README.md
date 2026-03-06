@@ -234,6 +234,8 @@ If Claude hits the turn limit mid-task, it **auto-continues up to 3 times** — 
 
 Add a remote server, create a project pointing to a directory on it, and Claude works there — as if local. Useful for GPU machines, staging environments, or managing a server fleet without SSH sessions.
 
+**Quick attach with `#`** — type `#` in the chat input and a popup shows your configured SSH servers. Pick one, it attaches as a chip, and Claude knows to run commands on that machine. No context switching, no sidebar clicking — just `#` and go.
+
 ### 🔗 Remote Access — Open Your Studio to the World
 
 Your Studio runs on `localhost:3000`. But what if you need to access it from a coffee shop, your phone's browser, or share a link with a teammate?
@@ -379,7 +381,7 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | 📁 File browser | Browse, preview, and attach files with `@filename` |
 | 🖼 Vision | Paste screenshots — Claude sees and analyzes them |
 | 🗂 Projects | Separate workspaces with their own file directories |
-| 🌐 Remote SSH | Work on remote servers as if they were local |
+| 🌐 Remote SSH | Work on remote servers as if local — type `#` in chat to quickly attach any SSH host |
 | 🔗 Remote Access | One-click public URL via cloudflared or ngrok — access Studio from anywhere |
 | 📱 Mobile UI | Touch-optimized responsive layout for all pages — Chat, Kanban, Schedule |
 | 🔒 File locks | Multiple agents on same codebase — no conflicts |
@@ -392,6 +394,7 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | ⚡ True parallel tasks | Independent Kanban tasks run simultaneously in the same project — no artificial workdir locks |
 | 🛡 Database crash protection | All SQLite operations auto-sanitize inputs — no more "Too few parameter values" crashes |
 | ⏹ Instant Stop | Stop button works immediately, even during skill classification — no 10-second delay |
+| 🛡 Crash-proof storage | Atomic file writes for auth data + MCP protocol guards — no data corruption on unexpected shutdown |
 | 🌍 3 languages | English, Ukrainian, Russian — auto-detected on first visit, switch anytime |
 | 🖥 Cross-platform | Windows, macOS, Linux — no compatibility headaches |
 | 🛡 Security hardened | XSS, path traversal, SQL injection protection built-in |

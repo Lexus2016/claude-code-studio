@@ -18,10 +18,16 @@ function loadAuth() {
   catch { return null; }
 }
 
+function atomicWrite(filePath, content) {
+  const tmp = filePath + '.tmp';
+  fs.writeFileSync(tmp, content);
+  fs.renameSync(tmp, filePath);
+}
+
 function saveAuth(data) {
   const dir = path.dirname(AUTH_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(AUTH_FILE, JSON.stringify(data, null, 2));
+  atomicWrite(AUTH_FILE, JSON.stringify(data, null, 2));
 }
 
 // In-memory sessions cache — single source of truth for the current process.
@@ -41,7 +47,13 @@ function saveSessions(data) {
   _sessionsCache = data; // update cache before disk write so next read is always current
   const dir = path.dirname(SESSIONS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(SESSIONS_FILE, JSON.stringify(_sessionsCache));
+  // Strip internal metadata (_lastFlushed) before persisting — it's process-local state
+  const toWrite = {};
+  for (const [k, v] of Object.entries(_sessionsCache)) {
+    const { _lastFlushed, ...rest } = v;
+    toWrite[k] = rest;
+  }
+  atomicWrite(SESSIONS_FILE, JSON.stringify(toWrite));
 }
 
 function isSetupDone() { return loadAuth() !== null; }
@@ -159,7 +171,8 @@ const PUBLIC_PATHS = [
 ];
 
 function authMiddleware(req, res, next) {
-  if (PUBLIC_PATHS.includes(req.path)) return next();
+  const reqPath = req.path.replace(/\/+$/, '') || '/';
+  if (PUBLIC_PATHS.includes(reqPath)) return next();
   if (!isSetupDone()) {
     if (req.accepts('html')) return res.redirect('/setup');
     return res.status(401).json({ error: 'setup_required' });
