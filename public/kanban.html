@@ -163,6 +163,17 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .dot-in_progress{ background:var(--orange); }
 .dot-done{ background:var(--green); }
 .dot-cancelled{ background:var(--red); }
+/* BMAD phase colours */
+.dot-bmad_brainstorm{ background:#a855f7; }
+.dot-bmad_prd{ background:#7c6aef; }
+.dot-bmad_architecture{ background:#58a6ff; }
+.dot-bmad_implementation{ background:#3fb950; }
+.dot-bmad_qa{ background:#e5a435; }
+/* BMAD phase column accent */
+.col-head.bmad-col{ border-color:rgba(124,106,239,.35); background:linear-gradient(135deg,rgba(124,106,239,.12),rgba(124,106,239,.05)); }
+.col-head.bmad-col .col-title{ color:var(--accent2); }
+/* BMAD board section divider */
+.board-divider{ flex-shrink:0; width:1px; background:var(--border); margin:0 8px; align-self:stretch; opacity:.6; }
 
 /* ─── Card ─── */
 .card{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-md); padding:11px 13px; cursor:grab; user-select:none; transition:box-shadow .15s,border-color .15s,transform .1s; }
@@ -393,6 +404,10 @@ const TR = {
     'proj.label':'Проект:','proj.all':'— Всі проекти —','proj.search':'Пошук проекту...','search.empty':'Не знайдено',
     'col.backlog':'Backlog','col.todo':'До виконання','col.in_progress':'В процесі',
     'col.done':'Виконано','col.cancelled':'Скасовано','col.empty':'Немає задач',
+    'col.bmad_brainstorm':'🧠 Brainstorm','col.bmad_prd':'📋 PRD',
+    'col.bmad_architecture':'🏗️ Architecture','col.bmad_implementation':'💻 Implementation','col.bmad_qa':'🧪 QA',
+    'bmad.gate_warn':'⚠️ BMAD gate: попередня фаза ще не завершена',
+    'bmad.tpl_filled':'✓ Шаблон застосовано','bmad.use_tpl':'🧙 Шаблон BMAD',
     'modal.add':'Нова задача','modal.edit':'Редагувати задачу',
     'modal.name':'Назва *','modal.status':'Статус','modal.session':"Пов'язана сесія",
     'modal.no_session':'— без сесії —','modal.new_session':'➕ Нова сесія',
@@ -423,6 +438,10 @@ const TR = {
     'proj.label':'Project:','proj.all':'— All projects —','proj.search':'Search project...','search.empty':'Not found',
     'col.backlog':'Backlog','col.todo':'To Do','col.in_progress':'In Progress',
     'col.done':'Done','col.cancelled':'Cancelled','col.empty':'No tasks',
+    'col.bmad_brainstorm':'🧠 Brainstorm','col.bmad_prd':'📋 PRD',
+    'col.bmad_architecture':'🏗️ Architecture','col.bmad_implementation':'💻 Implementation','col.bmad_qa':'🧪 QA',
+    'bmad.gate_warn':'⚠️ BMAD gate: previous phase not completed yet',
+    'bmad.tpl_filled':'✓ Template applied','bmad.use_tpl':'🧙 BMAD Template',
     'modal.add':'New task','modal.edit':'Edit task',
     'modal.name':'Title *','modal.status':'Status','modal.session':'Linked session',
     'modal.no_session':'— no session —','modal.new_session':'➕ New Session',
@@ -453,6 +472,10 @@ const TR = {
     'proj.label':'Проект:','proj.all':'— Все проекты —','proj.search':'Поиск проекта...','search.empty':'Не найдено',
     'col.backlog':'Backlog','col.todo':'К выполнению','col.in_progress':'В процессе',
     'col.done':'Выполнено','col.cancelled':'Отменено','col.empty':'Нет задач',
+    'col.bmad_brainstorm':'🧠 Brainstorm','col.bmad_prd':'📋 PRD',
+    'col.bmad_architecture':'🏗️ Architecture','col.bmad_implementation':'💻 Implementation','col.bmad_qa':'🧪 QA',
+    'bmad.gate_warn':'⚠️ BMAD gate: предыдущая фаза ещё не завершена',
+    'bmad.tpl_filled':'✓ Шаблон применён','bmad.use_tpl':'🧙 Шаблон BMAD',
     'modal.add':'Новая задача','modal.edit':'Редактировать задачу',
     'modal.name':'Название *','modal.status':'Статус','modal.session':'Связанная сессия',
     'modal.no_session':'— без сессии —','modal.new_session':'➕ Новая сессия',
@@ -492,7 +515,23 @@ document.querySelector('a.nav-sw-btn[href="/kanban"]').setAttribute('data-tip', 
 document.getElementById('confirmOkBtn').textContent=t('confirm.ok');
 
 // ─── State ────────────────────────────────────────────────────────────────
+// BMAD phase columns (planning workflow) + standard kanban columns
+const BMAD_PHASES=['bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa'];
+// Template mappings for BMAD phases (Task 8)
+const BMAD_PHASE_TEMPLATES={
+  'bmad_brainstorm':'brainstorming-session',
+  'bmad_prd':'prd',
+  'bmad_architecture':'tech-spec',
+  'bmad_qa':'readiness-report',
+};
 const COLS=[
+  // ── BMAD workflow phases ──
+  {id:'bmad_brainstorm',dot:'dot-bmad_brainstorm',bmad:true,bmadOrder:0},
+  {id:'bmad_prd',dot:'dot-bmad_prd',bmad:true,bmadOrder:1},
+  {id:'bmad_architecture',dot:'dot-bmad_architecture',bmad:true,bmadOrder:2},
+  {id:'bmad_implementation',dot:'dot-bmad_implementation',bmad:true,bmadOrder:3},
+  {id:'bmad_qa',dot:'dot-bmad_qa',bmad:true,bmadOrder:4},
+  // ── Standard kanban columns ──
   {id:'backlog',dot:'dot-backlog'},
   {id:'todo',dot:'dot-todo'},
   {id:'in_progress',dot:'dot-in_progress'},
@@ -748,15 +787,22 @@ function updateStats(){
 // ─── Board Render ─────────────────────────────────────────────────────────
 function renderBoard(){
   const board=$i('board');board.innerHTML='';
+  let lastWasBmad=false;
   for(const col of COLS){
+    const isBmad=!!col.bmad;
+    // Add divider between BMAD section and standard section
+    if(lastWasBmad&&!isBmad){
+      const div=document.createElement('div');div.className='board-divider';board.appendChild(div);
+    }
     const colTasks=tasks.filter(tk=>tk.status===col.id).sort((a,b)=>a.sort_order-b.sort_order);
     board.appendChild(makeColumn(col,colTasks));
+    lastWasBmad=isBmad;
   }
   updateStats();
 }
 function makeColumn(col,colTasks){
   const el=document.createElement('div');el.className='col';
-  const hd=document.createElement('div');hd.className='col-head';
+  const hd=document.createElement('div');hd.className='col-head'+(col.bmad?' bmad-col':'');
   hd.innerHTML=`<div class="col-dot ${col.dot}"></div><span class="col-title">${escH(t('col.'+col.id))}</span><span class="col-cnt">${colTasks.length}</span>`;
   el.appendChild(hd);
   const body=document.createElement('div');body.className='col-body';body.dataset.status=col.id;
@@ -843,6 +889,17 @@ function setupDropZone(el){
     }
     try{
       const task=tasks.find(tk=>tk.id===id);
+      // ── Task 7: BMAD phase gate validation ──────────────────────────────
+      const destPhaseIdx=BMAD_PHASES.indexOf(newStatus);
+      if(destPhaseIdx>0){
+        const prevPhaseId=BMAD_PHASES[destPhaseIdx-1];
+        const prevPhasePending=tasks.filter(tk=>tk.id!==id&&tk.status===prevPhaseId&&tk.status!=='done');
+        if(prevPhasePending.length>0){
+          toast(t('bmad.gate_warn')+': '+prevPhasePending.length+' task(s) in '+prevPhaseId.replace('bmad_',''),true);
+          // Non-blocking: warn but allow move
+        }
+      }
+      // For Dispatch mode in BMAD phases: set depends_on based on phase order (Task 7)
       let session_id=task?.session_id||null;
       if(newStatus==='in_progress'&&!session_id){
         const sessR=await apiFetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -927,7 +984,7 @@ function buildForm(tk={}){
       <input id="fTitle" class="inp" placeholder="${t('modal.name')}" value="${escH(tk.title||'')}" maxlength="200">
     </div>
     <div class="grid2">
-      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel">${statusOpts}</select></div>
+      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel" onchange="onFStatusChange()">${statusOpts}</select></div>
       <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel" onchange="onFSessionChange()">${sessOpts}</select></div>
     </div>
     <div id="newSessCfg" class="new-sess-cfg${visClass}">
@@ -959,8 +1016,14 @@ function buildForm(tk={}){
         </div>
       </div>
     </div>
-    <div><label class="lbl">${t('modal.desc')}</label>
+    <div>
+      <label class="lbl">${t('modal.desc')}</label>
       <textarea id="fDesc" class="inp" rows="3" placeholder="…" maxlength="2000">${escH(tk.description||'')}</textarea>
+      <div id="bmadTplBtn" style="margin-top:6px;display:${BMAD_PHASE_TEMPLATES[tk.status||'']?'block':'none'}">
+        <button type="button" class="hb" style="font-size:12px;padding:4px 10px" onclick="fillBmadTemplate()">
+          ${t('bmad.use_tpl')}
+        </button>
+      </div>
     </div>
     <div><label class="lbl">${t('modal.notes')}</label>
       <textarea id="fNotes" class="inp" rows="2" placeholder="…" maxlength="2000">${escH(tk.notes||'')}</textarea>
@@ -1042,6 +1105,27 @@ function onFSessionChange(){
   const hasSess=!!$i('fSession')?.value;
   const cfg=$i('newSessCfg');
   if(cfg)cfg.classList.toggle('visible',!hasSess);
+}
+// Task 8: Show/hide BMAD template button when status changes
+function onFStatusChange(){
+  const status=$i('fStatus')?.value||'';
+  const btn=$i('bmadTplBtn');
+  if(btn)btn.style.display=BMAD_PHASE_TEMPLATES[status]?'block':'none';
+}
+// Task 8: Fetch BMAD template and pre-fill description
+async function fillBmadTemplate(){
+  const status=$i('fStatus')?.value||'';
+  const tplKey=BMAD_PHASE_TEMPLATES[status];
+  if(!tplKey)return;
+  try{
+    const r=await apiFetch(`/api/bmad/templates/${encodeURIComponent(tplKey)}`);
+    const data=await r.json();
+    const desc=$i('fDesc');
+    if(desc&&data.content){
+      desc.value=data.content;
+      toast(t('bmad.tpl_filled'));
+    }
+  }catch(e){toast(t('toast.err')+e.message,true);}
 }
 function getSessCfg(){
   const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',maxTurns:30};

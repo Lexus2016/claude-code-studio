@@ -2415,6 +2415,41 @@ app.post('/api/tasks/dispatch', (req, res) => {
   res.json({ chain_id: chainId, session_id: chainSessionId, tasks: createdTasks });
 });
 
+// ─── Task 8: BMAD Phase Templates ────────────────────────────────────────────
+// Returns the content of a BMAD template by name.
+// Templates stored at /home/ubuntu/.openclaw/workspace/bmad-openclaw/templates/
+const BMAD_TEMPLATES_DIR = path.join(os.homedir(), '.openclaw', 'workspace', 'bmad-openclaw', 'templates');
+const BMAD_TEMPLATE_NAMES = {
+  'brainstorming-session': 'brainstorming-session.md',
+  'prd': 'prd.md',
+  'tech-spec': 'tech-spec.md',
+  'readiness-report': 'readiness-report.md',
+  'story': 'story.md',
+  'epics': 'epics.md',
+  'architecture-decision': 'architecture-decision.md',
+  'ux-design': 'ux-design.md',
+};
+app.get('/api/bmad/templates/:name', (req, res) => {
+  const name = req.params.name;
+  const filename = BMAD_TEMPLATE_NAMES[name];
+  if (!filename) return res.status(404).json({ error: 'Template not found' });
+  try {
+    const filePath = path.join(BMAD_TEMPLATES_DIR, filename);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    res.json({ name, filename, content });
+  } catch (err) {
+    res.status(404).json({ error: `Template file not readable: ${err.message}` });
+  }
+});
+app.get('/api/bmad/templates', (req, res) => {
+  const templates = Object.entries(BMAD_TEMPLATE_NAMES).map(([name, filename]) => {
+    const filePath = path.join(BMAD_TEMPLATES_DIR, filename);
+    const exists = fs.existsSync(filePath);
+    return { name, filename, available: exists };
+  });
+  res.json(templates);
+});
+
 // Sessions
 app.get('/api/sessions', (req,res) => {
   const { workdir } = req.query;
