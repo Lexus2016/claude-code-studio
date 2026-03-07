@@ -72,7 +72,7 @@ class ClaudeSSH {
   send({ prompt, sessionId, model, maxTurns, systemPrompt, allowedTools, abortController }) {
     // Build claude CLI args (mirrors claude-cli.js, no MCP/attachments for remote)
     const args = ['--print'];
-    if (sessionId)         args.push('--resume', sessionId);
+    if (sessionId && typeof sessionId === 'string' && /^[a-f0-9-]+$/i.test(sessionId)) args.push('--resume', sessionId);
     if (model)             args.push('--model', MODEL_MAP[model] || model);
     if (maxTurns)          args.push('--max-turns', String(maxTurns));
     if (systemPrompt)      args.push('--system-prompt', systemPrompt);
@@ -255,7 +255,8 @@ class ClaudeSSH {
 
     if (data.type === 'rate_limit_event' && data.rate_limit_info && h.onRateLimit) h.onRateLimit(data.rate_limit_info);
     if (data.type === 'result'  && h.onResult)  h.onResult(data);
-    if (data.session_id && h.onSessionId) h.onSessionId(data.session_id);
+    // Ensure session_id is a clean string before passing to handler
+    if (data.session_id && h.onSessionId && typeof data.session_id === 'string') h.onSessionId(data.session_id);
   }
 }
 

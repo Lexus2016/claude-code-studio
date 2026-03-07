@@ -124,6 +124,8 @@ class ClaudeCLI {
     // Guard: only pass string UUIDs — reject objects or corrupted JSON values
     if (sessionId && typeof sessionId === 'string' && /^[a-f0-9-]+$/i.test(sessionId)) {
       args.push('--resume', sessionId);
+    } else if (sessionId) {
+      console.warn('[claude-cli] rejected non-UUID sessionId for --resume:', typeof sessionId, String(sessionId).substring(0, 60));
     }
 
     if (model) args.push('--model', MODEL_MAP[model] || model);
