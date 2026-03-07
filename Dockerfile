@@ -10,6 +10,7 @@ RUN npm install -g @anthropic-ai/claude-code
 WORKDIR /app
 
 COPY package.json ./
+COPY scripts/ ./scripts/
 RUN npm install --production
 
 COPY . .
