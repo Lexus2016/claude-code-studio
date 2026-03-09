@@ -203,7 +203,26 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 /* ─── Modal overlay ─── */
 .ov{ position:fixed; inset:0; background:rgba(0,0,0,.65); display:flex; align-items:center; justify-content:center; z-index:200; padding:16px; backdrop-filter:blur(4px); }
 .ov.hidden{ display:none; }
-.modal{ background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); width:100%; max-width:680px; max-height:92vh; display:flex; flex-direction:column; box-shadow:var(--shadow-xl); }
+.modal{ background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); width:100%; max-width:1200px; max-height:92vh; display:flex; flex-direction:column; box-shadow:var(--shadow-xl); }
+.modal.has-chat{ max-width:1200px; }
+.modal-split{ display:flex; flex:1; overflow:hidden; min-height:0; }
+.modal-left{ flex:0 0 420px; display:flex; flex-direction:column; border-right:1px solid var(--border); overflow-y:auto; }
+.modal-left .modal-body{ padding:16px; gap:10px; }
+.modal-right{ flex:1; display:flex; flex-direction:column; min-width:0; }
+.modal-right .chat-panel{ border:none; border-radius:0; flex:1; display:flex; flex-direction:column; height:100%; }
+.modal-right .chat-panel-hd{ padding:10px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.modal-right .chat-panel-body{ flex:1; overflow-y:auto; padding:10px 14px; font-size:12px; }
+.modal-right .chat-msg{ margin-bottom:8px; padding:6px 8px; border-radius:6px; background:var(--s2); }
+.modal-right .chat-role{ font-size:10px; font-weight:700; margin-bottom:2px; }
+.modal-right .chat-role.assistant{ color:var(--accent); }
+.modal-right .chat-role.user{ color:var(--green); }
+.modal-right .chat-role.tool{ color:var(--orange); }
+.modal-right .chat-text{ white-space:pre-wrap; word-break:break-word; color:var(--fg2); line-height:1.4; }
+.modal-right .chat-empty{ padding:40px 20px; text-align:center; color:var(--muted); font-size:13px; }
+.modal-right .live-badge{ display:inline-flex; align-items:center; gap:4px; color:var(--orange); font-size:11px; font-weight:600; }
+.modal-right .live-badge .spinning{ width:10px; height:10px; border-width:1.5px; }
+.modal.no-chat .modal-split{ display:block; }
+.modal.no-chat .modal-left{ flex:1; border-right:none; }
 .modal-hd{ display:flex; align-items:center; gap:10px; padding:15px 20px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .modal-hd-title{ font-size:15px; font-weight:700; flex:1; }
 .modal-close{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:20px; padding:2px 6px; border-radius:var(--r-sm); line-height:1; transition:color .1s,background .1s; }
@@ -296,6 +315,10 @@ textarea.inp{ resize:vertical; min-height:80px; }
   .board { padding: 10px 8px 16px; gap: 8px; }
   .col { width: 240px; }
   .modal { max-width: 95vw; max-height: 92vh; max-height: 92dvh; }
+  .modal-left { flex: 0 0 320px; }
+  .modal-split { flex-direction: column; }
+  .modal-left { border-right: none; border-bottom: 1px solid var(--border); flex: 0 0 auto; max-height: 40vh; }
+  .modal-right { flex: 1; min-height: 200px; }
   .grid2 { grid-template-columns: 1fr; }
   .card-actions { opacity: 1; }
   /* Prevent iOS auto-zoom on focus (requires ≥ 16px) */
@@ -373,13 +396,20 @@ textarea.inp{ resize:vertical; min-height:80px; }
 
 <!-- Task modal -->
 <div class="ov hidden" id="taskOv" onclick="if(event.target===this)closeModal()">
-  <div class="modal">
+  <div class="modal" id="taskModal">
     <div class="modal-hd">
       <span class="modal-hd-title" id="modalTitle"></span>
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
-    <div class="modal-body" id="modalBody"></div>
-    <div class="modal-ft" id="modalFt"></div>
+    <div class="modal-split">
+      <div class="modal-left">
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-ft" id="modalFt"></div>
+      </div>
+      <div class="modal-right" id="modalChat" style="display:none">
+        <div id="chatContainer"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -963,15 +993,29 @@ async function openEditModal(id){
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
     <button class="btn btn-primary btn-sm" onclick="saveTask()">${t('modal.save')}</button>`;
   $i('taskOv').classList.remove('hidden');
+  // Show chat panel in right side for tasks with sessions
+  const chatContainer = $i('chatContainer');
+  const modalChat = $i('modalChat');
+  const modal = $i('taskModal');
   if(tk.session_id){
     try{
       const msgs=await fetchMessages(tk.session_id);
       const chatHtml=buildChatPanel(tk,msgs);
-      const body=$i('modalBody');
-      if(body&&!$i('taskOv').classList.contains('hidden')){
-        const div=document.createElement('div');div.innerHTML=chatHtml;body.appendChild(div.firstElementChild);
-      }
-    }catch{}
+      chatContainer.innerHTML = chatHtml;
+      modalChat.style.display = '';
+      modal.classList.add('has-chat');
+      modal.classList.remove('no-chat');
+    }catch{
+      chatContainer.innerHTML = '';
+      modalChat.style.display = 'none';
+      modal.classList.remove('has-chat');
+      modal.classList.add('no-chat');
+    }
+  } else {
+    chatContainer.innerHTML = '';
+    modalChat.style.display = 'none';
+    modal.classList.remove('has-chat');
+    modal.classList.add('no-chat');
   }
   setTimeout(()=>$i('fTitle')?.focus(),60);
   // Auto-refresh chat panel for active BMAD tasks
@@ -983,16 +1027,17 @@ async function openEditModal(id){
         const msgs=await fetchMessages(tk.session_id);
         const body=$i('chatPanelBody');
         if(body&&msgs.length){
+          const wasAtBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 50;
           body.innerHTML=msgs.map(m=>{
             const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
             const label=role==='user'?t('msg.you'):role==='tool'?`${t('msg.tool')}: ${escH(m.tool_name||'')}`:'Claude';
-            const text=escH((m.content||'').substring(0,300));
+            const text=escH((m.content||'').substring(0,2000));
             return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${text}</div></div>`;
           }).join('');
-          body.scrollTop=body.scrollHeight;
+          if(wasAtBottom) body.scrollTop=body.scrollHeight;
         }
       }catch{}
-    },3000);
+    },2000);
   }
 }
 
@@ -1177,22 +1222,24 @@ function buildChatPanel(tk,msgs){
   const isActive=isTaskActive(tk.status);
   let msgsHtml;
   if(!msgs.length){
-    msgsHtml=`<div class="chat-empty">${t('chat.empty')}</div>`;
+    msgsHtml=`<div class="chat-empty">No messages yet${isActive?' — waiting for output...':''}</div>`;
   }else{
     msgsHtml=msgs.map(m=>{
       const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
       const label=role==='user'?t('msg.you'):role==='tool'?`${t('msg.tool')}: ${escH(m.tool_name||'')}`:'Claude';
-      const text=escH((m.content||'').substring(0,300));
+      const text=escH((m.content||'').substring(0,2000));
       return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${text}</div></div>`;
     }).join('');
   }
   const copyBtn=claudeId?`<span class="mono-tag" title="${t('chat.copy_id')}" onclick="navigator.clipboard.writeText('${escH(claudeId)}').then(()=>toast(t('toast.copied')))">${claudeId.slice(0,12)}…</span>`:'';
   const openBtn=`<a class="open-link" href="${openUrl}" target="_blank">${t('chat.open')}</a>`;
-  const liveBadge=isActive?`<span style="display:inline-flex;align-items:center;gap:4px;color:var(--orange);font-size:11px;font-weight:600"><span class="spinning" style="width:10px;height:10px;border-width:1.5px"></span> Live — auto-refreshing</span>`:'';
+  const liveBadge=isActive?`<span class="live-badge"><span class="spinning" style="width:10px;height:10px;border-width:1.5px"></span> Live</span>`:'';
   return `<div class="chat-panel">
     <div class="chat-panel-hd">
-      <span>${t('chat.title')}: ${sessTitle}</span>
-      <div class="sess-info">${liveBadge}${copyBtn}${openBtn}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+        <span style="font-size:12px;font-weight:600;color:var(--fg)">${liveBadge} ${escH((tk.sess_title||'Session').substring(0,40))}</span>
+        <div style="display:flex;gap:6px;align-items:center">${copyBtn}${openBtn}</div>
+      </div>
     </div>
     <div class="chat-panel-body" id="chatPanelBody">${msgsHtml}</div>
   </div>`;
