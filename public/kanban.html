@@ -518,6 +518,9 @@ document.getElementById('confirmOkBtn').textContent=t('confirm.ok');
 // ─── State ────────────────────────────────────────────────────────────────
 // BMAD phase columns (planning workflow) + standard kanban columns
 const BMAD_PHASES=['bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa'];
+const BMAD_PHASE_SET=new Set(BMAD_PHASES);
+// Helper: is a task actively running? (standard in_progress OR any BMAD phase)
+function isTaskActive(status){ return status==='in_progress'||BMAD_PHASE_SET.has(status); }
 // Template mappings for BMAD phases (Task 8)
 const BMAD_PHASE_TEMPLATES={
   'bmad_brainstorm':'brainstorming-session',
@@ -735,7 +738,7 @@ async function refresh(force=false){
 }
 function startAutoRefresh(){
   clearTimeout(refreshTimer);
-  const hasActive=tasks.some(t=>t.status==='in_progress'||t.status==='todo');
+  const hasActive=tasks.some(t=>isTaskActive(t.status)||t.status==='todo');
   const delay=hasActive?5000:30000;
   refreshTimer=setTimeout(async()=>{await refresh(false);startAutoRefresh();},delay);
 }
@@ -745,7 +748,7 @@ function updateStats(){
   const el=$i('kbStats');
   if(!el)return;
   const counts={backlog:0,todo:0,in_progress:0,done:0,cancelled:0};
-  for(const tk of tasks)counts[tk.status]=(counts[tk.status]||0)+1;
+  for(const tk of tasks){ if(isTaskActive(tk.status)) counts.in_progress++; else counts[tk.status]=(counts[tk.status]||0)+1; }
   const total=tasks.length;
   const completed=counts.done;
   const active=counts.todo+counts.in_progress;
@@ -822,7 +825,7 @@ function makeColumn(col,colTasks){
 function makeCard(tk){
   const el=document.createElement('div');el.className='card';el.dataset.id=tk.id;el.draggable=true;
   let sessBadge='';
-  if(tk.status==='in_progress'){
+  if(isTaskActive(tk.status)){
     sessBadge=`<span class="badge badge-orange"><span class="spinning" style="width:10px;height:10px;border-width:1.5px"></span> ${escH(t('card.running'))}</span>`;
   }else if(tk.session_id){
     sessBadge=`<span class="badge badge-accent">💬 ${escH(tk.sess_title||t('card.sess_fallback'))}</span>`;
@@ -965,6 +968,26 @@ async function openEditModal(id){
     }catch{}
   }
   setTimeout(()=>$i('fTitle')?.focus(),60);
+  // Auto-refresh chat panel for active BMAD tasks
+  if(window._chatRefreshTimer) clearInterval(window._chatRefreshTimer);
+  if(tk.session_id && isTaskActive(tk.status)){
+    window._chatRefreshTimer=setInterval(async()=>{
+      if($i('taskOv')?.classList.contains('hidden')){clearInterval(window._chatRefreshTimer);return;}
+      try{
+        const msgs=await fetchMessages(tk.session_id);
+        const body=$i('chatPanelBody');
+        if(body&&msgs.length){
+          body.innerHTML=msgs.map(m=>{
+            const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
+            const label=role==='user'?t('msg.you'):role==='tool'?`${t('msg.tool')}: ${escH(m.tool_name||'')}`:'Claude';
+            const text=escH((m.content||'').substring(0,300));
+            return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${text}</div></div>`;
+          }).join('');
+          body.scrollTop=body.scrollHeight;
+        }
+      }catch{}
+    },3000);
+  }
 }
 
 function buildForm(tk={}){
@@ -1145,6 +1168,7 @@ function buildChatPanel(tk,msgs){
   const sessTitle=escH(tk.sess_title||tk.session_id);
   const claudeId=tk.claude_session_id||'';
   const openUrl=`/?open_session=${encodeURIComponent(tk.session_id)}`;
+  const isActive=isTaskActive(tk.status);
   let msgsHtml;
   if(!msgs.length){
     msgsHtml=`<div class="chat-empty">${t('chat.empty')}</div>`;
@@ -1158,12 +1182,13 @@ function buildChatPanel(tk,msgs){
   }
   const copyBtn=claudeId?`<span class="mono-tag" title="${t('chat.copy_id')}" onclick="navigator.clipboard.writeText('${escH(claudeId)}').then(()=>toast(t('toast.copied')))">${claudeId.slice(0,12)}…</span>`:'';
   const openBtn=`<a class="open-link" href="${openUrl}" target="_blank">${t('chat.open')}</a>`;
+  const liveBadge=isActive?`<span style="display:inline-flex;align-items:center;gap:4px;color:var(--orange);font-size:11px;font-weight:600"><span class="spinning" style="width:10px;height:10px;border-width:1.5px"></span> Live — auto-refreshing</span>`:'';
   return `<div class="chat-panel">
     <div class="chat-panel-hd">
       <span>${t('chat.title')}: ${sessTitle}</span>
-      <div class="sess-info">${copyBtn}${openBtn}</div>
+      <div class="sess-info">${liveBadge}${copyBtn}${openBtn}</div>
     </div>
-    <div class="chat-panel-body">${msgsHtml}</div>
+    <div class="chat-panel-body" id="chatPanelBody">${msgsHtml}</div>
   </div>`;
 }
 
@@ -1232,7 +1257,7 @@ function confirmDelete(id){
   $i('confirmOv').classList.remove('hidden');
 }
 function closeConfirm(){$i('confirmOv').classList.add('hidden');}
-function closeModal(){$i('taskOv').classList.add('hidden');}
+function closeModal(){if(window._chatRefreshTimer)clearInterval(window._chatRefreshTimer);$i('taskOv').classList.add('hidden');}
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
