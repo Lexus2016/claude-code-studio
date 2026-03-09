@@ -204,8 +204,8 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .ov{ position:fixed; inset:0; background:rgba(0,0,0,.65); display:flex; align-items:center; justify-content:center; z-index:200; padding:16px; backdrop-filter:blur(4px); }
 .ov.hidden{ display:none; }
 .modal{ background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); width:100%; max-width:1200px; max-height:92vh; display:flex; flex-direction:column; box-shadow:var(--shadow-xl); }
-.modal.has-chat{ max-width:1200px; }
-.modal-split{ display:flex; flex:1; overflow:hidden; min-height:0; height:0; }
+.modal.has-chat{ max-width:1200px; height:92vh; }
+.modal-split{ display:flex; flex:1; overflow:hidden; min-height:0; }
 .modal-left{ flex:0 0 420px; display:flex; flex-direction:column; border-right:1px solid var(--border); overflow-y:auto; }
 .modal-left .modal-body{ padding:16px; gap:10px; }
 .modal-right{ flex:1; display:flex; flex-direction:column; min-width:0; height:100%; overflow:hidden; }
@@ -1018,26 +1018,91 @@ async function openEditModal(id){
     modal.classList.add('no-chat');
   }
   setTimeout(()=>$i('fTitle')?.focus(),60);
-  // Auto-refresh chat panel for active BMAD tasks
+  // ── WebSocket streaming for live task output ──
   if(window._chatRefreshTimer) clearInterval(window._chatRefreshTimer);
+  if(window._kanbanWs) { try { window._kanbanWs.close(); } catch{} window._kanbanWs = null; }
+  
   if(tk.session_id && isTaskActive(tk.status)){
-    window._chatRefreshTimer=setInterval(async()=>{
-      if($i('taskOv')?.classList.contains('hidden')){clearInterval(window._chatRefreshTimer);return;}
-      try{
-        const msgs=await fetchMessages(tk.session_id);
-        const body=$i('chatPanelBody');
-        if(body&&msgs.length){
-          const wasAtBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 50;
-          body.innerHTML=msgs.map(m=>{
-            const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
-            const label=role==='user'?t('msg.you'):role==='tool'?`${t('msg.tool')}: ${escH(m.tool_name||'')}`:'Claude';
-            const text=escH((m.content||'').substring(0,2000));
-            return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${text}</div></div>`;
-          }).join('');
-          if(wasAtBottom) body.scrollTop=body.scrollHeight;
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${proto}//${location.host}`);
+    window._kanbanWs = ws;
+    
+    // Track streaming state
+    let streamingEl = null; // current assistant message element being streamed into
+    
+    ws.onopen = () => {
+      // Subscribe to the task's session for live streaming
+      ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: tk.session_id }));
+    };
+    
+    ws.onmessage = (e) => {
+      if($i('taskOv')?.classList.contains('hidden')){ ws.close(); return; }
+      let d;
+      try { d = JSON.parse(e.data); } catch { return; }
+      const body = $i('chatPanelBody');
+      if(!body) return;
+      
+      const wasAtBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
+      
+      if(d.type === 'text') {
+        // Streaming text from Claude — append to current assistant message
+        if(!streamingEl) {
+          streamingEl = document.createElement('div');
+          streamingEl.className = 'chat-msg';
+          streamingEl.innerHTML = '<div class="chat-role assistant">CLAUDE</div><div class="chat-text"></div>';
+          body.appendChild(streamingEl);
         }
-      }catch{}
-    },2000);
+        const textEl = streamingEl.querySelector('.chat-text');
+        textEl.textContent += d.text;
+        if(wasAtBottom) body.scrollTop = body.scrollHeight;
+      }
+      else if(d.type === 'tool') {
+        // Tool usage — show as a tool message
+        streamingEl = null; // next text starts a new assistant block
+        const toolDiv = document.createElement('div');
+        toolDiv.className = 'chat-msg';
+        toolDiv.innerHTML = `<div class="chat-role tool">TOOL: ${escH(d.tool||'')}</div><div class="chat-text">${escH((d.input||'').substring(0,500))}</div>`;
+        body.appendChild(toolDiv);
+        if(wasAtBottom) body.scrollTop = body.scrollHeight;
+      }
+      else if(d.type === 'task_started') {
+        streamingEl = null;
+        const startDiv = document.createElement('div');
+        startDiv.className = 'chat-msg';
+        startDiv.innerHTML = `<div class="chat-role user">TASK</div><div class="chat-text">${escH((d.prompt||d.title||'Task started').substring(0,2000))}</div>`;
+        body.appendChild(startDiv);
+        if(wasAtBottom) body.scrollTop = body.scrollHeight;
+      }
+      else if(d.type === 'result' || d.type === 'task_done') {
+        streamingEl = null;
+        // Refresh the full message list on completion
+        fetchMessages(tk.session_id).then(msgs => {
+          if(!body) return;
+          body.innerHTML = msgs.map(m => {
+            const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
+            const label=role==='user'?'YOU':role==='tool'?`TOOL: ${escH(m.tool_name||'')}`:'CLAUDE';
+            return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${escH(m.content||'')}</div></div>`;
+          }).join('');
+          body.scrollTop = body.scrollHeight;
+        }).catch(()=>{});
+      }
+      else if(d.type === 'catchup') {
+        // Catch-up buffer from already-running task
+        if(d.buffer) {
+          if(!streamingEl) {
+            streamingEl = document.createElement('div');
+            streamingEl.className = 'chat-msg';
+            streamingEl.innerHTML = '<div class="chat-role assistant">CLAUDE</div><div class="chat-text"></div>';
+            body.appendChild(streamingEl);
+          }
+          streamingEl.querySelector('.chat-text').textContent += d.buffer;
+          body.scrollTop = body.scrollHeight;
+        }
+      }
+    };
+    
+    ws.onclose = () => { window._kanbanWs = null; };
+    ws.onerror = () => {};
   }
 }
 
@@ -1227,7 +1292,7 @@ function buildChatPanel(tk,msgs){
     msgsHtml=msgs.map(m=>{
       const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
       const label=role==='user'?t('msg.you'):role==='tool'?`${t('msg.tool')}: ${escH(m.tool_name||'')}`:'Claude';
-      const text=escH((m.content||'').substring(0,2000));
+      const text=escH(m.content||'');
       return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${text}</div></div>`;
     }).join('');
   }
@@ -1310,7 +1375,7 @@ function confirmDelete(id){
   $i('confirmOv').classList.remove('hidden');
 }
 function closeConfirm(){$i('confirmOv').classList.add('hidden');}
-function closeModal(){if(window._chatRefreshTimer)clearInterval(window._chatRefreshTimer);$i('taskOv').classList.add('hidden');}
+function closeModal(){if(window._chatRefreshTimer)clearInterval(window._chatRefreshTimer);if(window._kanbanWs){try{window._kanbanWs.close();}catch{}window._kanbanWs=null;}$i('taskOv').classList.add('hidden');}
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
