@@ -9038,6 +9038,12 @@ loadProjectsList();
 loadRemoteHosts();
 connect();
 checkVersion();
+// Auto-open Add Project modal if ?addProject=1 (from Kanban popup)
+if (new URLSearchParams(location.search).get('addProject') === '1') {
+  setTimeout(() => openAddProject(), 500);
+  // Clean URL
+  history.replaceState(null, '', '/');
+}
 // ─── Image chip hover preview ───
 {
   const _prev = $i('imgChipPreview');
