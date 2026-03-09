@@ -204,7 +204,7 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .ov{ position:fixed; inset:0; background:rgba(0,0,0,.65); display:flex; align-items:center; justify-content:center; z-index:200; padding:16px; backdrop-filter:blur(4px); }
 .ov.hidden{ display:none; }
 .modal{ background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); width:100%; max-width:1200px; max-height:92vh; display:flex; flex-direction:column; box-shadow:var(--shadow-xl); }
-.modal.has-chat{ max-width:1200px; height:92vh; }
+.modal.has-chat{ max-width:1200px; height:92vh; min-height:600px; }
 .modal-split{ display:flex; flex:1; overflow:hidden; min-height:0; }
 .modal-left{ flex:0 0 420px; display:flex; flex-direction:column; border-right:1px solid var(--border); overflow-y:auto; }
 .modal-left .modal-body{ padding:16px; gap:10px; }
@@ -219,6 +219,15 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .modal-right .chat-role.tool{ color:var(--orange); }
 .modal-right .chat-text{ white-space:pre-wrap; word-break:break-word; color:var(--fg2); line-height:1.4; }
 .modal-right .chat-empty{ padding:40px 20px; text-align:center; color:var(--muted); font-size:13px; }
+.modal-right .chat-tools-group{ margin-bottom:6px; border-radius:6px; background:var(--s2); font-size:11px; }
+.modal-right .chat-tools-summary{ padding:6px 10px; cursor:pointer; color:var(--muted); font-weight:500; list-style:none; user-select:none; }
+.modal-right .chat-tools-summary::-webkit-details-marker{ display:none; }
+.modal-right .chat-tools-summary::before{ content:'▸ '; }
+.modal-right details[open] .chat-tools-summary::before{ content:'▾ '; }
+.modal-right .chat-tools-detail{ padding:4px 10px 8px; border-top:1px solid var(--border); max-height:200px; overflow-y:auto; }
+.modal-right .tool-item{ padding:2px 0; color:var(--muted); font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.modal-right .tool-name{ color:var(--orange); font-weight:600; }
+.modal-right .tool-input{ opacity:0.7; }
 .modal-right .live-badge{ display:inline-flex; align-items:center; gap:4px; color:var(--orange); font-size:11px; font-weight:600; }
 .modal-right .live-badge .spinning{ width:10px; height:10px; border-width:1.5px; }
 .modal.no-chat .modal-split{ display:block; }
@@ -752,7 +761,7 @@ async function fetchEtag(){
   return d.ts+'|'+d.n;
 }
 async function fetchMessages(sessId){
-  const d=await(await apiFetch(`/api/sessions/${sessId}/messages?limit=30&offset=0`)).json();
+  const d=await(await apiFetch(`/api/sessions/${sessId}/messages?limit=200&offset=0`)).json();
   return d.messages||[];
 }
 
@@ -1045,6 +1054,9 @@ async function openEditModal(id){
       const wasAtBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
       
       if(d.type === 'text') {
+        // Close any live tool group
+        const liveGroup = body.querySelector('.chat-tools-group-live');
+        if(liveGroup) liveGroup.classList.remove('chat-tools-group-live');
         // Streaming text from Claude — append to current assistant message
         if(!streamingEl) {
           streamingEl = document.createElement('div');
@@ -1057,12 +1069,22 @@ async function openEditModal(id){
         if(wasAtBottom) body.scrollTop = body.scrollHeight;
       }
       else if(d.type === 'tool') {
-        // Tool usage — show as a tool message
+        // Tool usage — add to current tool group or create one
         streamingEl = null; // next text starts a new assistant block
-        const toolDiv = document.createElement('div');
-        toolDiv.className = 'chat-msg';
-        toolDiv.innerHTML = `<div class="chat-role tool">TOOL: ${escH(d.tool||'')}</div><div class="chat-text">${escH((d.input||'').substring(0,500))}</div>`;
-        body.appendChild(toolDiv);
+        let toolGroup = body.querySelector('.chat-tools-group-live');
+        if(!toolGroup) {
+          toolGroup = document.createElement('details');
+          toolGroup.className = 'chat-tools-group chat-tools-group-live';
+          toolGroup.innerHTML = '<summary class="chat-tools-summary">🔧 <span class="tool-count">1</span> tool calls</summary><div class="chat-tools-detail"></div>';
+          body.appendChild(toolGroup);
+        }
+        const count = toolGroup.querySelectorAll('.tool-item').length + 1;
+        toolGroup.querySelector('.tool-count').textContent = count;
+        const detail = toolGroup.querySelector('.chat-tools-detail');
+        const item = document.createElement('div');
+        item.className = 'tool-item';
+        item.innerHTML = `<span class="tool-name">${escH(d.tool||'')}</span> <span class="tool-input">${escH((d.input||'').substring(0,150))}</span>`;
+        detail.appendChild(item);
         if(wasAtBottom) body.scrollTop = body.scrollHeight;
       }
       else if(d.type === 'task_started') {
@@ -1281,7 +1303,6 @@ function getSessCfg(){
 }
 
 function buildChatPanel(tk,msgs){
-  const sessTitle=escH(tk.sess_title||tk.session_id);
   const claudeId=tk.claude_session_id||'';
   const openUrl=`/?open_session=${encodeURIComponent(tk.session_id)}`;
   const isActive=isTaskActive(tk.status);
@@ -1289,9 +1310,33 @@ function buildChatPanel(tk,msgs){
   if(!msgs.length){
     msgsHtml=`<div class="chat-empty">No messages yet${isActive?' — waiting for output...':''}</div>`;
   }else{
-    msgsHtml=msgs.map(m=>{
+    // Group consecutive tool calls into collapsible blocks
+    const groups = [];
+    let toolGroup = [];
+    for(const m of msgs){
       const role=m.role==='user'?'user':m.type==='tool'?'tool':'assistant';
-      const label=role==='user'?t('msg.you'):role==='tool'?`${t('msg.tool')}: ${escH(m.tool_name||'')}`:'Claude';
+      if(role==='tool'){
+        toolGroup.push(m);
+      } else {
+        if(toolGroup.length){
+          groups.push({type:'tools', items:toolGroup});
+          toolGroup=[];
+        }
+        groups.push({type:role, msg:m});
+      }
+    }
+    if(toolGroup.length) groups.push({type:'tools', items:toolGroup});
+    
+    msgsHtml = groups.map((g,i)=>{
+      if(g.type==='tools'){
+        const names = [...new Set(g.items.map(t=>t.tool_name||'tool'))];
+        const summary = `🔧 ${g.items.length} tool calls: ${names.join(', ')}`;
+        const details = g.items.map(t=>`<div class="tool-item"><span class="tool-name">${escH(t.tool_name||'')}</span> <span class="tool-input">${escH((t.content||'').substring(0,150))}</span></div>`).join('');
+        return `<details class="chat-tools-group"><summary class="chat-tools-summary">${escH(summary)}</summary><div class="chat-tools-detail">${details}</div></details>`;
+      }
+      const role=g.type;
+      const m=g.msg;
+      const label=role==='user'?'YOU':'CLAUDE';
       const text=escH(m.content||'');
       return `<div class="chat-msg"><div class="chat-role ${role}">${label}</div><div class="chat-text">${text}</div></div>`;
     }).join('');
