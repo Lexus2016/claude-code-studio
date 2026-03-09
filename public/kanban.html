@@ -124,6 +124,9 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .proj-dd-item .proj-dd-item-path { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 22px; }
 .proj-dd-item.active .proj-dd-item-name { color: var(--accent2); }
 .proj-dd-item.active .proj-dd-item-name::before { content: '●'; color: var(--accent); font-size: 8px; flex-shrink: 0; }
+.proj-dd-divider { height:1px; background:var(--border); margin:4px 8px; }
+.proj-dd-add .proj-dd-item-name { color:var(--accent) !important; }
+.proj-add-form { padding:8px 12px; }
 .proj-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
 
 /* ─── Stats bar ─── */
@@ -716,11 +719,47 @@ function renderProjDropdownList(filter = '') {
         ${!p.isAll ? `<div class="proj-dd-item-path">${escH(shortPath)}</div>` : ''}
       </div>
     `;
-  }).join('');
+  }).join('') + `
+    <div class="proj-dd-divider"></div>
+    <div class="proj-dd-item proj-dd-add" onclick="showAddProjectForm()">
+      <div class="proj-dd-item-name">➕ Add Project</div>
+    </div>
+    <div id="addProjForm" class="proj-add-form" style="display:none">
+      <input id="addProjName" class="inp" placeholder="Project name" style="margin-bottom:6px">
+      <input id="addProjPath" class="inp" placeholder="/path/to/project" style="margin-bottom:6px">
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" onclick="hideAddProjectForm()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="addProjectFromKanban()">Add</button>
+      </div>
+    </div>
+  `;
 }
 
 function filterProjDropdown(value) {
   renderProjDropdownList(value);
+}
+
+function showAddProjectForm() {
+  const form = $i('addProjForm');
+  if(form) { form.style.display = 'block'; $i('addProjName')?.focus(); }
+}
+function hideAddProjectForm() {
+  const form = $i('addProjForm');
+  if(form) form.style.display = 'none';
+}
+async function addProjectFromKanban() {
+  const name = $i('addProjName')?.value.trim();
+  const workdir = $i('addProjPath')?.value.trim();
+  if(!name || !workdir) { toast('Name and path required'); return; }
+  try {
+    const res = await apiFetch('/api/projects', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, workdir}) });
+    if(!res.ok) { const e = await res.json().catch(()=>({})); toast(e.error||'Failed to add project'); return; }
+    toast('Project added');
+    hideAddProjectForm();
+    await loadProjects();
+    // Switch to the new project
+    selectProjFromDropdown(workdir, false);
+  } catch(e) { toast('Error: '+e.message); }
 }
 
 function selectProjFromDropdown(workdir, isAll) {
