@@ -1264,6 +1264,26 @@ function processQueue() {
 // light enough to be negligible — just two SELECT queries on SQLite)
 setInterval(processQueue, 15000);
 
+// ── Orphaned task recovery on startup ──
+// Tasks stuck in active BMAD phases after a server restart have no Claude process.
+// Reset them to 'todo' so processQueue picks them up again.
+(function recoverOrphanedTasks() {
+  const orphaned = db.prepare(`
+    SELECT id, title, status FROM tasks 
+    WHERE status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa','bmad_workflow')
+  `).all();
+  if (orphaned.length) {
+    log.info(`[Recovery] Found ${orphaned.length} orphaned active tasks — resetting to todo`);
+    const reset = db.prepare(`UPDATE tasks SET status='todo' WHERE id=?`);
+    for (const t of orphaned) {
+      reset.run(t.id);
+      log.info(`[Recovery] Reset: ${t.title.substring(0, 60)} (was ${t.status})`);
+    }
+    // Trigger queue processing after a short delay
+    setTimeout(processQueue, 3000);
+  }
+})();
+
 // ── Auto Mode: automatically move backlog → todo for auto-enabled projects ──
 const AUTO_MODE_CONCURRENCY = 5; // max concurrent chains per project
 
