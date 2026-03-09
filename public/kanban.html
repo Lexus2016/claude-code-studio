@@ -1020,6 +1020,13 @@ function openAddModal(defaultStatus='backlog'){
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
     <button class="btn btn-primary btn-sm" onclick="saveTask()">${t('modal.create')}</button>`;
   $i('taskOv').classList.remove('hidden');
+  // Clear right panel for new tasks
+  const modalChat = $i('modalChat');
+  const modal = $i('taskModal');
+  if(modalChat) modalChat.style.display = 'none';
+  if(modal) { modal.classList.remove('has-chat'); modal.classList.add('no-chat'); }
+  $i('chatContainer').innerHTML = '';
+  if(window._kanbanWs) { try { window._kanbanWs.close(); } catch{} window._kanbanWs = null; }
   setTimeout(()=>$i('fTitle')?.focus(),60);
 }
 
