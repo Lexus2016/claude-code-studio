@@ -5190,7 +5190,7 @@ wss.on('connection', (ws) => {
         // Catch up new subscriber with any already-running task (unless suppressed)
         if (!noCatchUp) {
           const runningTask = db.prepare(
-            `SELECT * FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`
+            `SELECT * FROM tasks WHERE session_id=? AND status IN ('in_progress','bmad_brainstorm','bmad_prd','bmad_architecture','bmad_implementation','bmad_qa') LIMIT 1`
           ).get(sessionId);
           if (runningTask && ws.readyState === 1) {
             ws.send(JSON.stringify({ type: 'task_started', taskId: runningTask.id, title: runningTask.title, tabId: sessionId }));
