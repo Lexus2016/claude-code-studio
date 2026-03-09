@@ -3338,6 +3338,56 @@ function parseSprintStatus(filePath) {
   }
 }
 
+// GET /api/bmad/docs?workdir=... — list BMAD output documents
+app.get('/api/bmad/docs', (req, res) => {
+  const workdir = req.query.workdir || WORKDIR;
+  const docs = [];
+  const scanDirs = [
+    { dir: path.join(workdir, '_bmad-output', 'planning-artifacts'), category: 'Planning' },
+    { dir: path.join(workdir, '_bmad-output', 'implementation-artifacts'), category: 'Implementation' },
+    { dir: path.join(workdir, '_bmad-output'), category: 'Output' },
+    { dir: path.join(workdir, 'docs'), category: 'Project Docs' },
+  ];
+  for (const { dir, category } of scanDirs) {
+    try {
+      if (!fs.existsSync(dir)) continue;
+      for (const f of fs.readdirSync(dir)) {
+        const fp = path.join(dir, f);
+        const stat = fs.statSync(fp);
+        if (!stat.isFile()) continue;
+        if (!['.md', '.yaml', '.yml', '.txt'].includes(path.extname(f).toLowerCase())) continue;
+        docs.push({
+          name: f,
+          category,
+          path: fp,
+          relativePath: path.relative(workdir, fp),
+          size: stat.size,
+          modified: stat.mtime.toISOString(),
+        });
+      }
+    } catch {}
+  }
+  res.json({ docs, workdir });
+});
+
+// GET /api/bmad/doc?path=... — read a single BMAD document
+app.get('/api/bmad/doc', (req, res) => {
+  const filePath = req.query.path;
+  if (!filePath) return res.status(400).json({ error: 'path required' });
+  // Security: only allow reading from _bmad-output/ or docs/ within a project
+  const normalized = path.resolve(filePath);
+  if (!normalized.includes('_bmad-output') && !normalized.includes('/docs/') && !normalized.includes('_bmad/')) {
+    return res.status(403).json({ error: 'Access denied — only BMAD output files allowed' });
+  }
+  try {
+    const content = fs.readFileSync(normalized, 'utf-8');
+    const ext = path.extname(normalized).toLowerCase();
+    res.json({ content, name: path.basename(normalized), ext, size: content.length });
+  } catch (e) {
+    res.status(404).json({ error: 'File not found' });
+  }
+});
+
 // GET /api/bmad/sprint-status?workdir=... — parse and return sprint status
 app.get('/api/bmad/sprint-status', (req, res) => {
   const workdir = req.query.workdir || WORKDIR;

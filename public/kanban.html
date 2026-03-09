@@ -127,6 +127,39 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .proj-dd-divider { height:1px; background:var(--border); margin:4px 8px; }
 .proj-dd-add .proj-dd-item-name { color:var(--accent) !important; }
 .proj-add-form { padding:8px 12px; }
+
+/* BMAD Docs Panel */
+.docs-panel { position:fixed; top:0; right:0; width:75vw; max-width:1000px; height:100vh; background:var(--s1); border-left:1px solid var(--border); box-shadow:-4px 0 20px rgba(0,0,0,.3); z-index:2000; display:flex; flex-direction:column; transition:transform .25s ease; }
+.docs-panel.hidden { transform:translateX(100%); pointer-events:none; }
+.docs-panel-hd { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.docs-panel-title { font-size:15px; font-weight:700; color:var(--fg); }
+.docs-panel-body { display:flex; flex:1; overflow:hidden; }
+.docs-sidebar { width:240px; border-right:1px solid var(--border); overflow-y:auto; padding:8px 0; flex-shrink:0; }
+.docs-content { flex:1; overflow-y:auto; padding:20px 24px; font-size:13px; line-height:1.6; color:var(--fg2); }
+.docs-content h1,.docs-content h2,.docs-content h3 { color:var(--fg); margin:1em 0 .5em; }
+.docs-content h1 { font-size:20px; border-bottom:1px solid var(--border); padding-bottom:6px; }
+.docs-content h2 { font-size:16px; }
+.docs-content h3 { font-size:14px; }
+.docs-content pre { background:var(--s2); padding:10px; border-radius:6px; overflow-x:auto; font-size:12px; }
+.docs-content code { background:var(--s2); padding:1px 4px; border-radius:3px; font-size:12px; }
+.docs-content pre code { background:none; padding:0; }
+.docs-content ul,.docs-content ol { padding-left:20px; }
+.docs-content blockquote { border-left:3px solid var(--accent); padding-left:12px; color:var(--muted); margin:8px 0; }
+.docs-content table { border-collapse:collapse; width:100%; margin:8px 0; }
+.docs-content th,.docs-content td { border:1px solid var(--border); padding:6px 10px; text-align:left; font-size:12px; }
+.docs-content th { background:var(--s2); font-weight:600; }
+.docs-content .yaml-content { white-space:pre-wrap; font-family:var(--font-mono); font-size:12px; background:var(--s2); padding:12px; border-radius:6px; }
+.docs-empty { padding:60px 20px; text-align:center; color:var(--muted); font-size:14px; }
+.docs-cat { padding:6px 16px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-top:8px; }
+.docs-cat:first-child { margin-top:0; }
+.docs-file { padding:8px 16px; cursor:pointer; font-size:13px; color:var(--fg2); display:flex; align-items:center; gap:8px; transition:background .15s; }
+.docs-file:hover { background:var(--s2); }
+.docs-file.active { background:var(--accent); color:#fff; border-radius:0; }
+.docs-file-icon { font-size:14px; flex-shrink:0; }
+.docs-file-info { flex:1; min-width:0; }
+.docs-file-name { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.docs-file-meta { font-size:10px; color:var(--muted); margin-top:1px; }
+.docs-file.active .docs-file-meta { color:rgba(255,255,255,.7); }
 .proj-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
 
 /* ─── Stats bar ─── */
@@ -401,6 +434,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
   <span class="refresh-ts" id="refreshTs2"></span>
   <span style="flex:1"></span>
   <button id="sprintSyncBtn" onclick="showSprintSync()" style="background:var(--accent2);color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:none" title="Sync BMAD sprint-status.yaml tasks to Kanban">⚡ Sprint Sync</button>
+  <button id="bmadDocsBtn" onclick="toggleDocsPanel()" style="background:var(--s3);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:none" title="View BMAD output documents">📄 Docs</button>
   <button id="autoModeBtn" onclick="toggleAutoMode()" style="border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;display:none" title="Auto Mode: automatically process all tasks">🤖 Auto Mode</button>
   <span class="status-dot ok" id="kbStatusEl">Connected</span>
 </div>
@@ -1511,7 +1545,140 @@ document.addEventListener('keydown',e=>{
   }catch{}
 })();
 
-// ─── BMAD Sprint Sync ─────────────────────────────────────────────────────
+// ─── BMAD Docs Panel ──────────────────────────────────────────────────────
+let _docsOpen = false;
+let _docsCache = null;
+
+function toggleDocsPanel() {
+  const panel = $i('docsPanel');
+  _docsOpen = !_docsOpen;
+  if (_docsOpen) {
+    panel.classList.remove('hidden');
+    loadDocsList();
+  } else {
+    panel.classList.add('hidden');
+  }
+}
+
+async function loadDocsList() {
+  if (!curWorkdir) return;
+  try {
+    const r = await apiFetch(`/api/bmad/docs?workdir=${encodeURIComponent(curWorkdir)}`);
+    const d = await r.json();
+    _docsCache = d.docs;
+    renderDocsSidebar(d.docs);
+    // Also show/hide the docs button
+    $i('bmadDocsBtn').style.display = d.docs.length ? '' : 'none';
+  } catch { }
+}
+
+function renderDocsSidebar(docs) {
+  const sidebar = $i('docsSidebar');
+  if (!docs.length) {
+    sidebar.innerHTML = '<div class="docs-empty" style="padding:20px;font-size:12px">No BMAD documents yet.<br>Run a workflow to generate them.</div>';
+    return;
+  }
+  // Group by category
+  const groups = {};
+  for (const doc of docs) {
+    if (!groups[doc.category]) groups[doc.category] = [];
+    groups[doc.category].push(doc);
+  }
+  let html = '';
+  for (const [cat, files] of Object.entries(groups)) {
+    html += `<div class="docs-cat">${escH(cat)}</div>`;
+    for (const f of files) {
+      const icon = f.name.endsWith('.yaml') || f.name.endsWith('.yml') ? '📊' : '📝';
+      const size = f.size < 1024 ? f.size + 'B' : Math.round(f.size / 1024) + 'KB';
+      const date = new Date(f.modified).toLocaleDateString();
+      html += `<div class="docs-file" onclick="loadDoc('${escH(f.path)}',this)" title="${escH(f.relativePath)}">
+        <span class="docs-file-icon">${icon}</span>
+        <div class="docs-file-info">
+          <div class="docs-file-name">${escH(f.name)}</div>
+          <div class="docs-file-meta">${size} · ${date}</div>
+        </div>
+      </div>`;
+    }
+  }
+  sidebar.innerHTML = html;
+}
+
+async function loadDoc(filePath, el) {
+  // Highlight active
+  document.querySelectorAll('.docs-file.active').forEach(e => e.classList.remove('active'));
+  if (el) el.classList.add('active');
+  
+  const content = $i('docsContent');
+  content.innerHTML = '<div class="docs-empty">Loading…</div>';
+  try {
+    const r = await apiFetch(`/api/bmad/doc?path=${encodeURIComponent(filePath)}`);
+    const d = await r.json();
+    if (d.error) { content.innerHTML = `<div class="docs-empty">${escH(d.error)}</div>`; return; }
+    
+    if (d.ext === '.yaml' || d.ext === '.yml') {
+      content.innerHTML = `<h1>${escH(d.name)}</h1><div class="yaml-content">${escH(d.content)}</div>`;
+    } else {
+      content.innerHTML = `<div class="md-rendered">${renderMarkdown(d.content)}</div>`;
+    }
+  } catch (e) {
+    content.innerHTML = `<div class="docs-empty">Error loading document</div>`;
+  }
+}
+
+function renderMarkdown(md) {
+  // Lightweight markdown renderer
+  let html = escH(md);
+  // Code blocks (``` ... ```)
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${code}</code></pre>`);
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Bold and italic
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // Blockquotes
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  // Horizontal rules
+  html = html.replace(/^---$/gm, '<hr>');
+  // Unordered lists
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+  // Ordered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  // Tables (simple: | col | col |)
+  html = html.replace(/^(\|.+\|)\n(\|[-: |]+\|)\n((?:\|.+\|\n?)*)/gm, (_, header, sep, body) => {
+    const ths = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+    const rows = body.trim().split('\n').map(row => {
+      const tds = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+      return `<tr>${tds}</tr>`;
+    }).join('');
+    return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+  });
+  // Paragraphs (double newline)
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = '<p>' + html + '</p>';
+  // Single newlines to <br> (within paragraphs)
+  html = html.replace(/([^>])\n([^<])/g, '$1<br>$2');
+  // Clean up empty paragraphs
+  html = html.replace(/<p>\s*<\/p>/g, '');
+  return html;
+}
+
+// Check for docs when project changes
+async function checkBmadDocs() {
+  if (!curWorkdir) { $i('bmadDocsBtn').style.display = 'none'; return; }
+  try {
+    const r = await apiFetch(`/api/bmad/docs?workdir=${encodeURIComponent(curWorkdir)}`);
+    const d = await r.json();
+    $i('bmadDocsBtn').style.display = d.docs.length ? '' : 'none';
+  } catch { $i('bmadDocsBtn').style.display = 'none'; }
+}
 async function checkSprintStatus() {
   if (!curWorkdir) { $i('sprintSyncBtn').style.display='none'; $i('autoModeBtn').style.display='none'; return; }
   try {
@@ -1572,6 +1739,7 @@ const _origRefresh = refresh;
 refresh = async function(force) {
   await _origRefresh(force);
   checkSprintStatus();
+  checkBmadDocs();
 };
 
 function showSprintSync() {
@@ -1655,5 +1823,18 @@ async function doSprintSync() {
   }
 }
 </script>
+<!-- BMAD Docs Panel -->
+<div id="docsPanel" class="docs-panel hidden">
+  <div class="docs-panel-hd">
+    <span class="docs-panel-title">📄 BMAD Documents</span>
+    <button class="modal-close" onclick="toggleDocsPanel()">×</button>
+  </div>
+  <div class="docs-panel-body">
+    <div class="docs-sidebar" id="docsSidebar"></div>
+    <div class="docs-content" id="docsContent">
+      <div class="docs-empty">Select a document to preview</div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
