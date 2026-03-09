@@ -1,20 +1,24 @@
 /**
- * openclaw-notify.js — Send notifications through OpenClaw
- * Uses openclaw CLI system events to deliver notifications to Discord.
+ * openclaw-notify.js — Send notifications through OpenClaw → Discord
+ * Uses `openclaw message send` CLI to deliver notifications.
  */
 'use strict';
 const { execFile } = require('child_process');
 
-const OPENCLAW_BIN = 'openclaw';
-const NOTIFY_ENABLED = process.env.OPENCLAW_NOTIFY !== 'false'; // enabled by default
+const NOTIFY_ENABLED = process.env.OPENCLAW_NOTIFY !== 'false';
+const DISCORD_CHANNEL = process.env.OPENCLAW_NOTIFY_CHANNEL || '1479520243385765888'; // Claude Studio thread
 
 function notify(text) {
   if (!NOTIFY_ENABLED) return;
   try {
-    execFile(OPENCLAW_BIN, ['system', 'event', '--text', text, '--mode', 'now'], 
-      { timeout: 10000 }, 
-      (err) => { if (err) console.error('[openclaw-notify] Failed:', err.message); }
-    );
+    execFile('openclaw', [
+      'message', 'send',
+      '--channel', 'discord',
+      '--target', DISCORD_CHANNEL,
+      '--message', text
+    ], { timeout: 30000 }, (err) => {
+      if (err) console.error('[openclaw-notify] Failed:', err.message);
+    });
   } catch (e) {
     console.error('[openclaw-notify] Error:', e.message);
   }
