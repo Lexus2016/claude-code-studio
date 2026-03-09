@@ -3147,7 +3147,7 @@ const BMAD_STATUS_MAP = {
 
 function findSprintStatusFile(workdir) {
   if (!workdir) return null;
-  // Common locations for sprint-status.yaml
+  // Common locations for sprint-status.yaml relative to the project workdir
   const candidates = [
     path.join(workdir, '_bmad-output', 'implementation-artifacts', 'sprint-status.yaml'),
     path.join(workdir, '_bmad-output', 'sprint-status.yaml'),
@@ -3165,14 +3165,7 @@ function findSprintStatusFile(workdir) {
     candidates.push(path.join(ocWorkspace, v, '_bmad-output', 'sprint-status.yaml'));
     candidates.push(path.join(ocWorkspace, v, 'sprint-status.yaml'));
   }
-  // Also do a shallow scan of ocWorkspace for any project with _bmad-output
-  try {
-    for (const dir of fs.readdirSync(ocWorkspace, { withFileTypes: true })) {
-      if (!dir.isDirectory()) continue;
-      const candidate = path.join(ocWorkspace, dir.name, '_bmad-output', 'implementation-artifacts', 'sprint-status.yaml');
-      if (!candidates.includes(candidate)) candidates.push(candidate);
-    }
-  } catch {}
+  // No shallow scan — only return files that belong to this project
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
   }
