@@ -69,37 +69,54 @@ class ClaudeSSH {
     return cfg;
   }
 
-  send({ prompt, sessionId, model, maxTurns, systemPrompt, allowedTools, abortController }) {
-    // Build claude CLI args (mirrors claude-cli.js, no MCP/attachments for remote)
-    const args = ['--print'];
-    if (sessionId && typeof sessionId === 'string' && /^[a-f0-9-]+$/i.test(sessionId)) args.push('--resume', sessionId);
-    if (model)             args.push('--model', MODEL_MAP[model] || model);
-    if (maxTurns)          args.push('--max-turns', String(maxTurns));
-    // Match local CLI behavior: a resumed Claude session already contains the
-    // original system prompt. Re-sending it changes the session envelope and
-    // can invalidate thinking block signatures on subsequent turns.
-    if (systemPrompt && !sessionId) args.push('--system-prompt', systemPrompt);
-    if (allowedTools?.length) args.push('--allowedTools', ...allowedTools);
-    args.push('--dangerously-skip-permissions');
-    // --verbose is required alongside --output-format stream-json since CLI ≥ 1.0.x
-    args.push('--output-format', 'stream-json', '--verbose');
-    args.push('--include-partial-messages');
-    args.push('-p', prompt);
+  _openSftp(conn) {
+    return new Promise((resolve, reject) => {
+      conn.sftp((err, sftp) => err ? reject(err) : resolve(sftp));
+    });
+  }
 
-    // Wrap in bash -lc so the login shell sources ~/.profile / ~/.bash_profile,
-    // ensuring PATH includes wherever `claude` was installed (nvm, npm global, etc.).
-    // IS_SANDBOX=1 is required when running as root (Claude blocks root by default).
-    // mkdir -p creates the workdir if missing; cd is a no-op if it already exists.
-    const innerCmd = [
-      // Extend PATH to cover common claude install locations (npm global, nvm, local bin)
-      'export PATH="$PATH:/usr/local/bin:/usr/bin:$HOME/.npm-global/bin:$HOME/.local/bin:$(npm root -g 2>/dev/null)/../.bin"',
-      // IS_SANDBOX=1 lets claude run as root without --dangerously-skip-permissions blocking
-      'export IS_SANDBOX=1',
-      `mkdir -p ${shellEscape(this.workdir)}`,
-      `cd ${shellEscape(this.workdir)}`,
-      `claude ${args.map(shellEscape).join(' ')}`,
-    ].join(' && ');
-    const remoteCmd = `bash -lc ${shellEscape(innerCmd)}`;
+  _execText(conn, cmd) {
+    return new Promise((resolve, reject) => {
+      let stdout = '';
+      let stderr = '';
+      conn.exec(cmd, { pty: false }, (err, stream) => {
+        if (err) return reject(err);
+        stream.on('close', (code) => {
+          if (code === 0) resolve(stdout.trim());
+          else reject(new Error(stderr.trim() || `Remote command failed (${code})`));
+        });
+        stream.on('data', (chunk) => { stdout += chunk.toString('utf8'); });
+        stream.stderr.on('data', (chunk) => { stderr += chunk.toString('utf8'); });
+      });
+    });
+  }
+
+  _uploadBuffer(sftp, remotePath, buffer) {
+    return new Promise((resolve, reject) => {
+      const out = sftp.createWriteStream(remotePath, { mode: 0o600 });
+      out.on('close', resolve);
+      out.on('error', reject);
+      out.end(buffer);
+    });
+  }
+
+  send({ prompt, contentBlocks, sessionId, model, maxTurns, systemPrompt, allowedTools, abortController }) {
+    const attachmentSpecs = [];
+    const textParts = [];
+    if (Array.isArray(contentBlocks)) {
+      for (const block of contentBlocks) {
+        if ((block.type === 'image' || block.type === 'file') && block.source?.data) {
+          attachmentSpecs.push({
+            type: block.type,
+            mediaType: block.source.media_type || (block.type === 'image' ? 'image/png' : 'application/octet-stream'),
+            name: String(block.source.name || '').trim(),
+            data: block.source.data,
+          });
+        } else if (block.type === 'text' && block.text && block.text !== prompt) {
+          textParts.push(block.text);
+        }
+      }
+    }
 
     const h = {
       onText: null, onTool: null, onDone: null, onError: null,
@@ -139,62 +156,114 @@ class ClaudeSSH {
     };
 
     conn.on('ready', () => {
-      conn.exec(remoteCmd, { pty: false }, (err, stream) => {
-        if (err) {
-          try { if (h.onError) h.onError(`SSH exec failed: ${err.message}`); } catch {}
-          if (h.onDone) h.onDone(detectedSid);
-          try { conn.end(); } catch {}
-          return;
-        }
-
-        // Close stdin immediately — claude runs non-interactively (mirrors proc.stdin.end() in claude-cli.js)
-        // Without this, the remote process waits for input and hangs indefinitely.
-        try { stream.stdin.end(); } catch {}
-
-        // Handle user abort
-        if (abortController) {
-          abortController.signal.addEventListener('abort', () => {
-            aborted = true;
-            try { stream.close(); } catch {}
-            try { conn.end(); } catch {}
-          }, { once: true });
-        }
-
-        stream.stdout.on('data', (chunk) => {
-          buffer += stdoutDecoder.write(chunk);
-          if (buffer.length > MAX_LINE_BUFFER) { buffer = ''; return; }
-          const lines = buffer.split(/\r?\n/);
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try { this._handle(JSON.parse(line), h); continue; } catch {}
-            // Fallback: extract session ID from plain text
-            const sm = line.match(/session[_\s]*id[:\s]*([a-f0-9-]+)/i);
-            if (sm && !detectedSid) {
-              detectedSid = sm[1];
-              if (h.onSessionId) h.onSessionId(detectedSid);
+      (async () => {
+        let remoteTempDir = null;
+        const remoteFilePaths = [];
+        try {
+          if (attachmentSpecs.length) {
+            remoteTempDir = await this._execText(conn, 'mktemp -d /tmp/claude-att-XXXXXX');
+            const sftp = await this._openSftp(conn);
+            for (let i = 0; i < attachmentSpecs.length; i++) {
+              const spec = attachmentSpecs[i];
+              let ext = '';
+              if (spec.name) ext = path.extname(spec.name).replace(/^\./, '');
+              if (!ext) ext = spec.mediaType.split('/')[1] || (spec.type === 'image' ? 'png' : 'bin');
+              const safeBase = spec.name
+                ? path.basename(spec.name).replace(/[^a-zA-Z0-9._-]/g, '_')
+                : `attachment-${i + 1}.${ext}`;
+              const fileName = path.extname(safeBase) ? safeBase : `${safeBase}.${ext}`;
+              const remotePath = path.posix.join(remoteTempDir, fileName);
+              await this._uploadBuffer(sftp, remotePath, Buffer.from(spec.data, 'base64'));
+              remoteFilePaths.push(remotePath);
             }
           }
-        });
 
-        stream.stderr.on('data', (chunk) => {
-          const str = stderrDecoder.write(chunk);
-          if (stderrBuf.length < 8192) stderrBuf += str.slice(0, 8192 - stderrBuf.length);
-          const sm = str.match(/Session:\s*([a-f0-9-]+)/i)
-            || str.match(/session[_\s]*id[:\s]*([a-f0-9-]+)/i)
-            || str.match(/Resuming session\s+([a-f0-9-]+)/i);
-          if (sm && !detectedSid) {
-            detectedSid = sm[1];
-            if (h.onSessionId) h.onSessionId(detectedSid);
+          const prefixParts = [];
+          if (textParts.length) prefixParts.push(textParts.join('\n\n'));
+          if (remoteFilePaths.length) {
+            prefixParts.push(`[Attached images/files — read these files on the remote host:\n${remoteFilePaths.map(f => `- ${f}`).join('\n')}\n]`);
           }
-        });
+          const finalPrompt = prefixParts.length ? `${prefixParts.join('\n\n')}\n\n${prompt}` : prompt;
 
-        stream.on('close', (code) => finish(code));
-        stream.on('error', (err) => {
-          if (!aborted) try { if (h.onError) h.onError(`SSH stream error: ${err.message}`); } catch {}
-          finish(1);
-        });
-      });
+          const args = ['--print'];
+          if (sessionId && typeof sessionId === 'string' && /^[a-f0-9-]+$/i.test(sessionId)) args.push('--resume', sessionId);
+          if (model) args.push('--model', MODEL_MAP[model] || model);
+          if (maxTurns) args.push('--max-turns', String(maxTurns));
+          if (systemPrompt && !sessionId) args.push('--system-prompt', systemPrompt);
+          if (allowedTools?.length) args.push('--allowedTools', ...allowedTools);
+          args.push('--dangerously-skip-permissions');
+          args.push('--output-format', 'stream-json', '--verbose');
+          args.push('--include-partial-messages');
+          args.push('-p', finalPrompt);
+
+          const innerCmdParts = [
+            'export PATH="$PATH:/usr/local/bin:/usr/bin:$HOME/.npm-global/bin:$HOME/.local/bin:$(npm root -g 2>/dev/null)/../.bin"',
+            'export IS_SANDBOX=1',
+            `mkdir -p ${shellEscape(this.workdir)}`,
+            `cd ${shellEscape(this.workdir)}`,
+          ];
+          if (remoteTempDir) innerCmdParts.push(`trap 'rm -rf ${shellEscape(remoteTempDir)}' EXIT`);
+          innerCmdParts.push(`claude ${args.map(shellEscape).join(' ')}`);
+          const remoteCmd = `bash -lc ${shellEscape(innerCmdParts.join(' && '))}`;
+
+          conn.exec(remoteCmd, { pty: false }, (err, stream) => {
+            if (err) {
+              try { if (h.onError) h.onError(`SSH exec failed: ${err.message}`); } catch {}
+              if (h.onDone) h.onDone(detectedSid);
+              try { conn.end(); } catch {}
+              return;
+            }
+
+            try { stream.stdin.end(); } catch {}
+
+            if (abortController) {
+              abortController.signal.addEventListener('abort', () => {
+                aborted = true;
+                try { stream.close(); } catch {}
+                try { conn.end(); } catch {}
+              }, { once: true });
+            }
+
+            stream.stdout.on('data', (chunk) => {
+              buffer += stdoutDecoder.write(chunk);
+              if (buffer.length > MAX_LINE_BUFFER) { buffer = ''; return; }
+              const lines = buffer.split(/\r?\n/);
+              buffer = lines.pop() || '';
+              for (const line of lines) {
+                if (!line.trim()) continue;
+                try { this._handle(JSON.parse(line), h); continue; } catch {}
+                const sm = line.match(/session[_\s]*id[:\s]*([a-f0-9-]+)/i);
+                if (sm && !detectedSid) {
+                  detectedSid = sm[1];
+                  if (h.onSessionId) h.onSessionId(detectedSid);
+                }
+              }
+            });
+
+            stream.stderr.on('data', (chunk) => {
+              const str = stderrDecoder.write(chunk);
+              if (stderrBuf.length < 8192) stderrBuf += str.slice(0, 8192 - stderrBuf.length);
+              const sm = str.match(/Session:\s*([a-f0-9-]+)/i)
+                || str.match(/session[_\s]*id[:\s]*([a-f0-9-]+)/i)
+                || str.match(/Resuming session\s+([a-f0-9-]+)/i);
+              if (sm && !detectedSid) {
+                detectedSid = sm[1];
+                if (h.onSessionId) h.onSessionId(detectedSid);
+              }
+            });
+
+            stream.on('close', (code) => finish(code));
+            stream.on('error', (err) => {
+              if (!aborted) try { if (h.onError) h.onError(`SSH stream error: ${err.message}`); } catch {}
+              finish(1);
+            });
+          });
+        } catch (err) {
+          try { if (h.onError) h.onError(`SSH attachment setup failed: ${err.message}`); } catch {}
+          if (h.onDone) h.onDone(detectedSid);
+          try { conn.end(); } catch {}
+        }
+      })();
     });
 
     conn.on('error', (err) => {

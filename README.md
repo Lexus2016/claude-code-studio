@@ -236,6 +236,8 @@ Add a remote server, create a project pointing to a directory on it, and Claude 
 
 **Quick attach with `#`** — type `#` in the chat input and a popup shows your configured SSH servers. Pick one (or several — the popup stays open for multi-select), it attaches as a chip, and Claude receives full connection details including stored credentials. No context switching, no sidebar clicking — just `#` and go.
 
+**Attachments work remotely too** — Paste screenshots, upload PDFs, or drag any file into chat. Claude Code Studio automatically uploads them to the remote server via SFTP before processing. Your remote Claude sessions have full vision and file access, just like local ones.
+
 ### 🔗 Remote Access — Open Your Studio to the World
 
 Your Studio runs on `localhost:3000`. But what if you need to access it from a coffee shop, your phone's browser, or share a link with a teammate?

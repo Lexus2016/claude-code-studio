@@ -1292,26 +1292,102 @@ const TG_COLLAPSE_THRESHOLD = 800;
 // Preview length for collapsed responses
 const TG_PREVIEW_LENGTH = 600;
 
+const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif']);
+const TEXT_MIME_PREFIXES = ['text/'];
+const TEXT_MIME_EXACT = new Set([
+  'application/json',
+  'application/ld+json',
+  'application/xml',
+  'application/javascript',
+  'application/x-javascript',
+  'application/typescript',
+  'application/x-typescript',
+  'application/sql',
+  'application/x-sh',
+  'application/x-shellscript',
+  'image/svg+xml',
+]);
+const TEXT_FILE_EXTS = new Set([
+  '.txt', '.md', '.mdx', '.json', '.csv', '.log', '.xml', '.yaml', '.yml', '.toml', '.ini', '.cfg',
+  '.env', '.py', '.js', '.ts', '.jsx', '.tsx', '.html', '.css', '.scss', '.less', '.sh', '.bash',
+  '.zsh', '.sql', '.graphql', '.php', '.rb', '.go', '.rs', '.java', '.kt', '.c', '.h', '.cpp', '.hpp',
+  '.swift', '.cs', '.vue', '.svelte', '.mjs', '.cjs', '.lock', '.pine',
+]);
+
+function isImageAttachment(att) {
+  const type = String(att?.type || '').toLowerCase();
+  if (type.startsWith('image/')) return true;
+  const name = String(att?.name || '').toLowerCase();
+  const ext = path.extname(name);
+  return IMAGE_EXTS.has(ext);
+}
+
+function getImageMimeType(att) {
+  const type = String(att?.type || '').toLowerCase();
+  if (type.startsWith('image/')) return type;
+  switch (path.extname(String(att?.name || '').toLowerCase())) {
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.gif':
+      return 'image/gif';
+    case '.webp':
+      return 'image/webp';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.bmp':
+      return 'image/bmp';
+    case '.ico':
+      return 'image/x-icon';
+    case '.avif':
+      return 'image/avif';
+    default:
+      return 'image/png';
+  }
+}
+
+function isTextAttachment(att) {
+  const type = String(att?.type || '').toLowerCase();
+  if (TEXT_MIME_PREFIXES.some(prefix => type.startsWith(prefix))) return true;
+  if (TEXT_MIME_EXACT.has(type)) return true;
+  const name = String(att?.name || '').toLowerCase();
+  const ext = path.extname(name);
+  return TEXT_FILE_EXTS.has(ext);
+}
+
 // Build Claude content blocks from text + file attachments.
 // Returns plain string when no attachments, or ContentBlock[] when attachments present.
 function buildUserContent(text, attachments = []) {
   if (!attachments || attachments.length === 0) return text;
   const blocks = [];
   for (const att of attachments) {
-    if (att.type && att.type.startsWith('image/')) {
+    if (isImageAttachment(att)) {
       // Vision block — base64 image
-      blocks.push({ type: 'image', source: { type: 'base64', media_type: att.type, data: att.base64 } });
+      blocks.push({ type: 'image', source: { type: 'base64', media_type: getImageMimeType(att), data: att.base64 } });
     } else if (att.type === 'ssh') {
       // SSH host reference — inject full connection info as text context
       let sshText = `[SSH Host: ${att.label || att.host}]\nHost: ${att.host}:${att.port || 22}`;
       if (att.sshKeyPath) sshText += `\nSSH Key: ${att.sshKeyPath}`;
       else if (att.password) sshText += `\nPassword: ${att.password}`;
       blocks.push({ type: 'text', text: sshText });
-    } else {
-      // Text / PDF — decode base64 and embed as readable text block
+    } else if (isTextAttachment(att)) {
+      // Text-like files can be embedded directly into the prompt.
       let content = '(unable to decode)';
       try { content = Buffer.from(att.base64, 'base64').toString('utf-8'); } catch {}
       blocks.push({ type: 'text', text: `[File: ${att.name}]\n${content}` });
+    } else {
+      // Preserve binary attachments as temp files for the CLI instead of
+      // decoding them into prompt text. Raw binary can contain null bytes,
+      // which makes child_process.spawn reject argv entries.
+      blocks.push({
+        type: 'file',
+        source: {
+          type: 'base64',
+          media_type: att.type || 'application/octet-stream',
+          data: att.base64,
+          name: att.name || 'attachment.bin',
+        },
+      });
     }
   }
   if (text) blocks.push({ type: 'text', text });
@@ -1805,7 +1881,7 @@ async function runCliSingle(p) {
 
 // --- SSH Remote Agent ---
 async function runSshSingle(p) {
-  const { prompt, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
+  const { prompt, userContent, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
   // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
@@ -1817,16 +1893,17 @@ async function runSshSingle(p) {
   let fullText = '', newCid = claudeSessionId, chunkCount = 0;
   let currentPrompt = prompt;
   let continueCount = 0;
+  let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
 
   const ssh = new ClaudeSSH({ host: remoteHost, workdir: remoteWorkdir, sshKeyPath, password, port });
 
-  const runOnce = (runPrompt, resumeId) => new Promise((resolve) => {
+  const runOnce = (runPrompt, contentBlocks, resumeId) => new Promise((resolve) => {
     let resultData = null;
     let errorText = '';
     let _done = false;
     const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid, errorText }); } };
 
-    ssh.send({ prompt: runPrompt, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, allowedTools: tools, abortController })
+    ssh.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, allowedTools: tools, abortController })
       .onText(t => {
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
@@ -1859,7 +1936,7 @@ async function runSshSingle(p) {
 
   let lastResult = null;
   while (true) {
-    const { resultData, errorText } = await runOnce(currentPrompt, newCid);
+    const { resultData, errorText } = await runOnce(currentPrompt, currentContentBlocks, newCid);
     lastResult = resultData;
     if (resultData?.subtype === 'success') break;
     if (errorText && /Invalid signature in thinking block/i.test(errorText)) {
@@ -1871,6 +1948,7 @@ async function runSshSingle(p) {
       newCid = null;
       try { stmts.updateClaudeId.run(null, sessionId); } catch {}
       currentPrompt = prompt;
+      currentContentBlocks = Array.isArray(userContent) ? userContent : null;
       continueCount++;
       if (continueCount >= MAX_AUTO_CONTINUES) break;
       continue;
@@ -1898,6 +1976,7 @@ async function runSshSingle(p) {
       try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
     }
     currentPrompt = 'Continue where you left off. Complete the remaining work.';
+    currentContentBlocks = null;
   }
 
   try { if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null); } catch {}
@@ -3880,7 +3959,13 @@ wss.on('connection', (ws) => {
       const userContent = buildUserContent(engineMessage, enrichedAttachments);
 
       if (!retry) {
-        const attJson = attachments.length ? JSON.stringify(attachments.map(a => ({ type: a.type, name: a.name, base64: a.base64 }))) : null;
+        const attJson = attachments.length
+          ? JSON.stringify(attachments.map(a => ({
+              type: isImageAttachment(a) ? getImageMimeType(a) : (a.type || ''),
+              name: a.name,
+              base64: a.base64,
+            })))
+          : null;
         try { stmts.addMsg.run(localSessionId,'user','text',userMessage,null,null,replyToId,attJson); }
         catch (e) { log.error('addMsg(user) failed', { sessionId: localSessionId, replyToId, attJsonLen: attJson?.length, err: e.message, stack: e.stack }); throw e; }
       } else {

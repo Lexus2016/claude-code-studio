@@ -839,10 +839,22 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .att-chip:hover { border-color: var(--accent); }
 .att-chip .chip-icon { font-size: 13px; flex-shrink: 0; }
 .att-chip .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.att-chip .chip-act,
 .att-chip .chip-rm { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 0 0 2px; font-size: 13px; line-height: 1; flex-shrink: 0; transition: color .1s; }
+.att-chip .chip-act {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; margin-left: auto; padding: 0;
+  border-radius: 5px; color: rgba(201, 208, 255, .7);
+  background: rgba(255,255,255,.03); border: 1px solid transparent;
+  opacity: .78; transition: opacity .12s, color .12s, background .12s, border-color .12s;
+}
+.att-chip .chip-act svg { width: 11px; height: 11px; }
+.att-chip:hover .chip-act { opacity: .95; }
+.att-chip .chip-act:hover { color: var(--accent2); background: rgba(124,106,239,.12); border-color: rgba(124,106,239,.28); }
 .att-chip .chip-rm:hover { color: var(--red); }
 .att-chip.chip-img { padding: 3px 8px 3px 3px; gap: 6px; }
 .att-chip.chip-img img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; display: block; cursor: zoom-in; }
+.att-chip.chip-img .chip-name { max-width: 164px; }
 
 /* ─── Image chip hover preview ─── */
 #imgChipPreview {
@@ -1189,8 +1201,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .fpv-btn:hover { color: var(--text); border-color: var(--accent2); }
 
 /* ─── Modal ─── */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; animation: fadeUp .15s; backdrop-filter: blur(14px) saturate(150%); }
-.modal { background: var(--s1); border: 1px solid var(--border); border-radius: var(--r-lg); width: 740px; max-width: 92vw; max-height: 86vh; max-height: 86dvh; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-xl); }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; animation: overlayFade .16s ease; backdrop-filter: blur(14px) saturate(150%); }
+.modal { background: var(--s1); border: 1px solid var(--border); border-radius: var(--r-lg); width: 740px; max-width: 92vw; max-height: 86vh; max-height: 86dvh; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-xl); animation: modalPop .22s var(--ease-out); transform-origin: center top; }
+@keyframes overlayFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalPop {
+  from { opacity: 0; transform: translateY(14px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 .modal-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
 .modal-hdr h2 { font-size: 15px; font-weight: 700; }
 .modal-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 20px; padding: 4px; transition: color .12s; line-height: 1; }
@@ -1204,6 +1221,55 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .modal-body textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.12); }
 .modal-footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .modal-footer button { padding: 7px 18px; border-radius: 7px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; }
+.cmd-modal { width: 560px !important; max-width: calc(100vw - 32px) !important; }
+.cmd-modal .modal-hdr { padding: 18px 20px 14px; }
+.cmd-modal .modal-hdr h2 { display: flex; align-items: center; gap: 10px; font-size: 17px; }
+.cmd-modal .modal-body { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px 20px; background: linear-gradient(180deg, rgba(124,106,239,.04) 0%, rgba(124,106,239,0) 100%); }
+.cmd-field { display: flex; flex-direction: column; gap: 8px; }
+.cmd-field label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.cmd-modal input,
+.cmd-modal textarea {
+  width: 100%;
+  border: 1px solid rgba(124,106,239,.22);
+  background: linear-gradient(180deg, rgba(18,24,38,.96) 0%, rgba(11,16,27,.98) 100%);
+  color: var(--text);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.cmd-modal input {
+  height: 52px;
+  padding: 0 16px;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+}
+.cmd-modal textarea {
+  min-height: 220px;
+  padding: 14px 16px;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  resize: vertical;
+}
+.cmd-modal input::placeholder,
+.cmd-modal textarea::placeholder { color: #6e7c98; }
+.cmd-modal input:focus,
+.cmd-modal textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124,106,239,.16), 0 10px 30px rgba(0,0,0,.22);
+}
+.cmd-name-hint { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.cmd-name-hint code {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(124,106,239,.12);
+  border: 1px solid rgba(124,106,239,.18);
+  color: var(--accent2);
+  font-size: 11px;
+}
 .save-notice { color: var(--green); font-size: 12px; }
 .cfg-path { font-size: 11px; color: var(--muted); padding: 0 2px 10px; font-family: var(--font-mono); letter-spacing: .2px; display: flex; align-items: center; gap: 6px; }
 
@@ -1640,6 +1706,48 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   .tb-btn { min-height: 34px; padding: 5px 10px; }
   .modal { max-height: 92vh; max-height: 92dvh; }
   .modal .modal-body textarea { min-height: 200px; }
+  .cmd-modal input { font-size: 22px; }
+  .cmd-modal textarea { min-height: 180px; font-size: 14px; }
+}
+@media (hover: none), (pointer: coarse) {
+  .mw .cpb,
+  .mw .reply-btn,
+  .mw .fork-btn,
+  .mw .use-btn {
+    opacity: .72;
+  }
+  .mw .cpb,
+  .mw .reply-btn,
+  .mw .fork-btn,
+  .mw .use-btn,
+  .att-chip .chip-act {
+    min-width: 28px;
+    min-height: 28px;
+  }
+  .att-chip .chip-act {
+    opacity: .92;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .modal,
+  .modal-overlay,
+  .mw,
+  .notif-card,
+  .reply-preview,
+  .msg-status-footer,
+  .queue-badge,
+  .stream-cursor {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 </style>
 </head>
@@ -2362,14 +2470,21 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 <!-- Slash Command Modal -->
 <div class="modal-overlay hidden" id="cmdModal" aria-hidden="true" onclick="if(event.target===this)cancelCmdForm()">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cmdModalTitle" tabindex="-1" style="width:560px;max-width:calc(100vw - 32px)">
+  <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="cmdModalTitle" tabindex="-1">
     <div class="modal-hdr">
       <h2 id="cmdModalTitle" data-i18n="cmd.modal.add.title">＋ Додати команду</h2>
       <button class="modal-close" onclick="cancelCmdForm()">✕</button>
     </div>
-    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
-      <input id="cmdName" data-i18n-ph="cmd.name.ph" placeholder="/назва (напр. /check)" autocomplete="off">
-      <textarea id="cmdText" data-i18n-ph="cmd.text.ph" placeholder="Повний текст промпту..." style="min-height:160px;resize:vertical;font-family:inherit;font-size:12px;padding:8px 10px;background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text);outline:none"></textarea>
+    <div class="modal-body">
+      <div class="cmd-field">
+        <label for="cmdName" data-i18n="cmd.modal.name.label">Slash command</label>
+        <input id="cmdName" data-i18n-ph="cmd.name.ph" placeholder="/назва (напр. /check)" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n-html="cmd.modal.name.hint">Use a short trigger like <code>/check</code> or <code>/review</code>.</div>
+      </div>
+      <div class="cmd-field">
+        <label for="cmdText" data-i18n="cmd.modal.text.label">Prompt</label>
+        <textarea id="cmdText" data-i18n-ph="cmd.text.ph" placeholder="Повний текст промпту..."></textarea>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="bg" onclick="cancelCmdForm()" data-i18n="cmd.modal.cancel">Скасувати</button>
@@ -2772,6 +2887,7 @@ const TRANSLATIONS = {
     'cmd.name.ph':'/назва (напр. /check)','cmd.text.ph':'Повний текст промпту...','cmd.add.btn':'Додати','cmd.save.btn':'Зберегти',
     'cmd.add.new':'＋ Додати команду','cmd.insert.title':'Вставити в чат','cmd.edit.title':'Редагувати','cmd.del.title':'Видалити','cmd.del.confirm':'Видалити команду',
     'cmd.modal.add.title':'＋ Додати команду','cmd.modal.edit.title':'✏️ Редагувати команду','cmd.modal.cancel':'Скасувати',
+    'cmd.modal.name.label':'Слеш-команда','cmd.modal.name.hint':'Використайте короткий тригер, наприклад <code>/check</code> або <code>/review</code>.','cmd.modal.text.label':'Промпт',
     'cmd.err.empty':'Введіть назву та текст команди','toast.cmd_added':'✓ Команду додано','toast.cmd_updated':'✓ Команду оновлено',
     'cmds.popup.hdr':'Команди',
     'sec.sshHosts':'SSH Хости',
@@ -2957,6 +3073,7 @@ const TRANSLATIONS = {
     'cmd.name.ph':'/name (e.g. /check)','cmd.text.ph':'Full prompt text...','cmd.add.btn':'Add','cmd.save.btn':'Save',
     'cmd.add.new':'＋ Add command','cmd.insert.title':'Insert into chat','cmd.edit.title':'Edit','cmd.del.title':'Delete','cmd.del.confirm':'Delete command',
     'cmd.modal.add.title':'＋ Add command','cmd.modal.edit.title':'✏️ Edit command','cmd.modal.cancel':'Cancel',
+    'cmd.modal.name.label':'Slash command','cmd.modal.name.hint':'Use a short trigger like <code>/check</code> or <code>/review</code>.','cmd.modal.text.label':'Prompt',
     'cmd.err.empty':'Enter name and prompt text','toast.cmd_added':'✓ Command added','toast.cmd_updated':'✓ Command updated',
     'cmds.popup.hdr':'Commands',
     'sec.sshHosts':'SSH Hosts',
@@ -3142,6 +3259,7 @@ const TRANSLATIONS = {
     'cmd.name.ph':'/название (напр. /check)','cmd.text.ph':'Полный текст промпта...','cmd.add.btn':'Добавить','cmd.save.btn':'Сохранить',
     'cmd.add.new':'＋ Добавить команду','cmd.insert.title':'Вставить в чат','cmd.edit.title':'Редактировать','cmd.del.title':'Удалить','cmd.del.confirm':'Удалить команду',
     'cmd.modal.add.title':'＋ Добавить команду','cmd.modal.edit.title':'✏️ Редактировать команду','cmd.modal.cancel':'Отмена',
+    'cmd.modal.name.label':'Слеш-команда','cmd.modal.name.hint':'Используйте короткий триггер, например <code>/check</code> или <code>/review</code>.','cmd.modal.text.label':'Промпт',
     'cmd.err.empty':'Введите название и текст команды','toast.cmd_added':'✓ Команда добавлена','toast.cmd_updated':'✓ Команда обновлена',
     'cmds.popup.hdr':'Команды',
     'sec.sshHosts':'SSH Хосты',
@@ -3222,6 +3340,7 @@ function setLang(lang) {
   const sel = $i('langSel'); if (sel) sel.value = lang;
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach(el => { const k = el.getAttribute('data-i18n'); if (t[k] !== undefined) el.textContent = t[k]; });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { const k = el.getAttribute('data-i18n-html'); if (t[k] !== undefined) el.innerHTML = t[k]; });
   document.querySelectorAll('[data-i18n-ph]').forEach(el => { const k = el.getAttribute('data-i18n-ph'); if (t[k] !== undefined) el.placeholder = t[k]; });
   document.querySelectorAll('[data-i18n-tip]').forEach(el => { const k = el.getAttribute('data-i18n-tip'); if (t[k] !== undefined) el.setAttribute('data-tip', t[k]); });
   document.querySelectorAll('[data-i18n-title]').forEach(el => { const k = el.getAttribute('data-i18n-title'); if (t[k] !== undefined) el.title = t[k]; });
@@ -4155,6 +4274,7 @@ function handleWsMsg(d) {
       }
       if (activeTabId === d.sessionId) {
         currentSessionId = d.sessionId;
+        updateSessBar({ retryIfMissing: true });
       }
       break;
 
@@ -4213,7 +4333,7 @@ function handleWsMsg(d) {
               chipsDiv.className = 'att-chips';
               chipsDiv.style.cssText = 'padding:4px 0 2px';
               chipsDiv.innerHTML = item.attachments.map(a => isImageAttachmentData(a)
-                ? `<div class="att-chip chip-img"><img src="data:${escH(normalizeImageMimeType(a.type || a.mimeType, a.name))};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name||'image')}</span></div>`
+                ? renderReadonlyImageChip(a)
                 : a.type === 'ssh'
                 ? `<div class="att-chip"><span class="chip-icon">🖥️</span><span class="chip-name">${escH(a.label||'SSH')}</span></div>`
                 : `<div class="att-chip"><span class="chip-icon">📄</span><span class="chip-name">${escH(a.name||'file')}</span></div>`
@@ -5697,28 +5817,62 @@ function openTab(id, title) {
 }
 
 // ─── Session info bar ─────────────────────────────────────────────────────
-async function updateSessBar() {
+let _sessBarRefreshTimer = null;
+
+function clearSessBarRefresh() {
+  if (_sessBarRefreshTimer) {
+    clearTimeout(_sessBarRefreshTimer);
+    _sessBarRefreshTimer = null;
+  }
+}
+
+function scheduleSessBarRefresh(delay = 700) {
+  if (_sessBarRefreshTimer || !currentSessionId) return;
+  const sessionId = currentSessionId;
+  _sessBarRefreshTimer = setTimeout(() => {
+    _sessBarRefreshTimer = null;
+    if (currentSessionId !== sessionId) return;
+    updateSessBar({ retryIfMissing: true });
+  }, delay);
+}
+
+async function updateSessBar(opts = {}) {
+  const { retryIfMissing = false } = opts;
   const bar = $i('sessBar');
   if (!bar) return;
-  if (!currentSessionId) { bar.style.display = 'none'; return; }
+  if (!currentSessionId) { clearSessBarRefresh(); bar.style.display = 'none'; return; }
+  const sessionId = currentSessionId;
   bar.style.display = 'flex';
   try {
-    const r = await fetch(`/api/sessions/${currentSessionId}`);
-    if (!r.ok) { bar.style.display = 'none'; return; }
+    const r = await fetch(`/api/sessions/${sessionId}`);
+    if (!r.ok) { clearSessBarRefresh(); bar.style.display = 'none'; return; }
     const sess = await r.json();
+    if (sessionId !== currentSessionId) return;
     const idEl = $i('sessBarClaudeId');
     const openBtn = $i('sessBarOpenBtn');
+    const hasClaudeId = !!sess.claude_session_id;
     if (idEl) {
-      if (sess.claude_session_id) {
+      if (hasClaudeId) {
         idEl.style.display = '';
         idEl.textContent = sess.claude_session_id.slice(0, 8) + '…';
         idEl.title = t('session.copy_id') + ': ' + sess.claude_session_id;
         idEl.dataset.fullId = sess.claude_session_id;
-      } else { idEl.style.display = 'none'; }
+        clearSessBarRefresh();
+      } else {
+        idEl.style.display = 'none';
+        delete idEl.dataset.fullId;
+      }
     }
-    if (openBtn) { openBtn.style.display = sess.claude_session_id ? '' : 'none'; }
+    if (openBtn) { openBtn.style.display = hasClaudeId ? '' : 'none'; }
     updateSessBarSkills();
-  } catch { bar.style.display = 'none'; }
+    const tab = findTabAcrossProjects(sessionId)?.tab || openTabs.find(t => t.id === sessionId);
+    if (retryIfMissing && !hasClaudeId && tab?.generating && currentSessionId === sessionId) {
+      scheduleSessBarRefresh();
+    }
+  } catch {
+    clearSessBarRefresh();
+    bar.style.display = 'none';
+  }
 }
 function copySessId() {
   const id = $i('sessBarClaudeId')?.dataset?.fullId;
@@ -5947,6 +6101,14 @@ function _syncAttachmentsState(shouldSave = true) {
   if (shouldSave) saveUIState();
 }
 
+function chipCopyButtonHtml() {
+  return `<button class="chip-act" onclick="event.stopPropagation();copyChipImage(this)" data-i18n-title="fpv.copy_img.title" title="${t('fpv.copy_img.title')}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg></button>`;
+}
+
+function renderReadonlyImageChip(att) {
+  return `<div class="att-chip chip-img"><img src="data:${escH(normalizeImageMimeType(att.type || att.mimeType, att.name))};base64,${att.base64}" alt=""><span class="chip-name">${escH(att.name || 'image')}</span>${chipCopyButtonHtml()}</div>`;
+}
+
 function _addFileChip(file, shouldSave = true) {
   if (_attachments.find(a => a.type === 'file' && a.absPath === file.absPath)) return;
   const id = 'att-' + Date.now() + Math.random().toString(36).slice(2, 6);
@@ -5964,7 +6126,7 @@ function _addImageChip(base64, mimeType, name, shouldSave = true) {
   _attachments.push({ id, type: 'image', name: name || 'screenshot.png', base64, mimeType: safeMime });
   const chip = document.createElement('div');
   chip.className = 'att-chip chip-img'; chip.dataset.attId = id;
-  chip.innerHTML = `<img src="data:${safeMime};base64,${base64}" alt=""><span class="chip-name">${escH(name || 'screenshot.png')}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
+  chip.innerHTML = `<img src="data:${safeMime};base64,${base64}" alt=""><span class="chip-name">${escH(name || 'screenshot.png')}</span>${chipCopyButtonHtml()}<button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
   _getChips().appendChild(chip);
   _syncAttachmentsState(shouldSave);
 }
@@ -6338,7 +6500,7 @@ async function send() {
     chipsDiv.className = 'att-chips';
     chipsDiv.style.cssText = 'padding:4px 0 2px';
     chipsDiv.innerHTML = attSnapshot.map(a => a.type === 'image'
-      ? `<div class="att-chip chip-img"><img src="data:${normalizeImageMimeType(a.mimeType, a.name)};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name)}</span></div>`
+      ? renderReadonlyImageChip(a)
       : a.type === 'ssh'
       ? `<div class="att-chip"><span class="chip-icon">🖥️</span><span class="chip-name">${escH(a.label)}</span></div>`
       : `<div class="att-chip"><span class="chip-icon">📄</span><span class="chip-name">${escH(a.relPath || a.name)}</span></div>`
@@ -6706,7 +6868,7 @@ function _renderMsgAt(idx, prepend = false) {
         chipsDiv.style.cssText = 'padding:4px 0 2px';
         chipsDiv.innerHTML = atts.map(a =>
           isImageAttachmentData(a)
-            ? `<div class="att-chip chip-img"><img src="data:${escH(normalizeImageMimeType(a.type || a.mimeType, a.name))};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name || 'image')}</span></div>`
+            ? renderReadonlyImageChip(a)
             : a.type === 'ssh'
             ? `<div class="att-chip"><span class="chip-icon">🖥️</span><span class="chip-name">${escH(a.label || 'SSH')}</span></div>`
             : `<div class="att-chip"><span class="chip-icon">📄</span><span class="chip-name">${escH(a.name || 'file')}</span></div>`
@@ -8263,13 +8425,31 @@ async function fpvCopyImage() {
   if (!_fpvPath || !_fpvIsImg) return;
   const rawUrl = `/api/files/raw?${_filesQS(_fpvPath)}`;
   try {
-    const response = await fetch(rawUrl);
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const blob = await response.blob();
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    await copyImageToClipboard(rawUrl);
     toast(t('toast.img_copied'));
   } catch (e) {
     console.error('Failed to copy image:', e);
+    toast(t('toast.err_prefix') + ' ' + t('fpv.copy_img'));
+  }
+}
+
+async function copyImageToClipboard(src) {
+  if (!src) throw new Error('Missing image source');
+  const response = await fetch(src);
+  if (!response.ok) throw new Error('HTTP ' + response.status);
+  const blob = await response.blob();
+  const blobType = (blob && blob.type) || 'image/png';
+  await navigator.clipboard.write([new ClipboardItem({ [blobType]: blob })]);
+}
+
+async function copyChipImage(btn) {
+  const src = btn?.closest('.att-chip.chip-img')?.querySelector('img')?.src;
+  if (!src) return;
+  try {
+    await copyImageToClipboard(src);
+    toast(t('toast.img_copied'));
+  } catch (e) {
+    console.error('Failed to copy chip image:', e);
     toast(t('toast.err_prefix') + ' ' + t('fpv.copy_img'));
   }
 }
