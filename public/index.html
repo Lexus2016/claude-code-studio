@@ -1359,6 +1359,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   box-shadow: 0 14px 38px rgba(0,0,0,.52), 0 2px 10px rgba(0,0,0,.28);
   opacity: 0; transition: opacity .18s ease; word-break: break-word;
 }
+#globalTip .tip-title { font-size: 15px; font-weight: 800; line-height: 1.35; color: #ffffff; margin-bottom: 8px; }
+#globalTip .tip-desc { font-size: 13px; line-height: 1.6; color: rgba(233,240,255,.9); margin-bottom: 10px; }
+#globalTip .tip-meta { display: flex; flex-direction: column; gap: 8px; }
+#globalTip .tip-row { display: flex; flex-direction: column; gap: 3px; }
+#globalTip .tip-key { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: rgba(158,182,255,.78); }
+#globalTip .tip-val { font-size: 13px; line-height: 1.55; color: #f3f7ff; }
+#globalTip .tip-code { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: #d8e4ff; background: rgba(124,106,239,.1); border: 1px solid rgba(124,106,239,.18); border-radius: 8px; padding: 8px 10px; }
 
 /* ─── Scrollbars ─── */
 * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
@@ -6106,6 +6113,7 @@ function updateSessBarSkills() {
     const autoTip = t('auto.title.on') || 'Skills are auto-selected based on task';
     auto.title = autoTip;
     auto.dataset.tip = autoTip;
+    auto.dataset.tipHtml = buildAutoTooltipHtml();
     el.appendChild(auto);
   }
   // Show active skill chips (filter out 'auto-mode' meta-skill)
@@ -6123,6 +6131,7 @@ function updateSessBarSkills() {
       chip.textContent = label;
       chip.title = tip;
       chip.dataset.tip = tip;
+      chip.dataset.tipHtml = buildSkillChipTooltipHtml(id, s);
       el.appendChild(chip);
     }
   }
@@ -7373,6 +7382,20 @@ function mkToggle(on) {
   return `<div class="sw" aria-hidden="true"><div class="sw-track"></div><div class="sw-thumb"></div></div>`;
 }
 
+function buildRichTooltipHtml(title, description, rows = []) {
+  const safeRows = rows.filter(r => r && r.value);
+  let html = `<div class="tip-title">${escH(title || '')}</div>`;
+  if (description) html += `<div class="tip-desc">${escH(description)}</div>`;
+  if (safeRows.length) {
+    html += '<div class="tip-meta">';
+    for (const row of safeRows) {
+      html += `<div class="tip-row"><div class="tip-key">${escH(row.label || '')}</div><div class="${row.code ? 'tip-val tip-code' : 'tip-val'}">${escH(row.value || '')}</div></div>`;
+    }
+    html += '</div>';
+  }
+  return html;
+}
+
 function mcpSafeText(v) {
   return String(v || '')
     .replace(/([?&](?:token|key|api[_-]?key|authorization)=[^&\s]+)/ig, '$1[hidden]')
@@ -7404,18 +7427,45 @@ function buildMcpDescription(m) {
 }
 
 function buildMcpTooltip(id, m) {
-  const parts = [
-    m.label || id,
-    buildMcpDescription(m),
-  ];
+  const description = buildMcpDescription(m);
   const source = mcpDisplaySource(m);
-  if (m.type === 'http' || m.type === 'sse') {
-    parts.push(`Transport: ${(m.type || 'http').toUpperCase()}`);
-  } else if (m.command) {
-    parts.push('Transport: Command');
-  }
+  const transport = (m.type === 'http' || m.type === 'sse')
+    ? (m.type || 'http').toUpperCase()
+    : (m.command ? 'Command' : '');
+  return buildRichTooltipHtml(m.label || id, description, [
+    transport ? { label: 'Transport', value: transport } : null,
+    source ? { label: 'Source', value: source, code: true } : null,
+  ]);
+}
+
+function buildMcpTextTooltip(id, m) {
+  const description = buildMcpDescription(m);
+  const source = mcpDisplaySource(m);
+  const parts = [m.label || id, description];
+  if (m.type === 'http' || m.type === 'sse') parts.push(`Transport: ${(m.type || 'http').toUpperCase()}`);
+  else if (m.command) parts.push('Transport: Command');
   if (source) parts.push(`Source: ${source}`);
   return parts.filter(Boolean).join('\n\n');
+}
+
+function buildSkillTooltipHtml(id, s) {
+  return buildRichTooltipHtml(s.label || s.shortLabel || id, s.description || s.technicalDescription || '', [
+    s.pluginName ? { label: 'Plugin', value: s.pluginName } : null,
+    s.pluginVersion ? { label: 'Version', value: s.pluginVersion } : null,
+    s.technicalDescription ? { label: 'Type', value: s.technicalDescription } : null,
+    s.file ? { label: 'Path', value: s.file, code: true } : null,
+  ]);
+}
+
+function buildSkillChipTooltipHtml(id, s) {
+  return buildRichTooltipHtml(s.label || s.shortLabel || id, s.description || s.technicalDescription || '', [
+    s.pluginName ? { label: 'Plugin', value: s.pluginName } : null,
+    s.file ? { label: 'Path', value: s.file, code: true } : null,
+  ]);
+}
+
+function buildAutoTooltipHtml() {
+  return buildRichTooltipHtml('⚡ Auto', t('auto.title.on') || 'Skills are auto-selected based on task');
 }
 
 function renderMcp() {
@@ -7427,7 +7477,8 @@ function renderMcp() {
     if (on) c++;
     const missing = getMcpMissingFields(m);
     const mcpDescription = buildMcpDescription(m);
-    const mcpTooltip = buildMcpTooltip(id, m);
+    const mcpTooltip = buildMcpTextTooltip(id, m);
+    const mcpTooltipHtml = buildMcpTooltip(id, m);
     const div = document.createElement('div');
     div.className = `ci ${on ? 'on' : ''}`;
     div.title = on ? t('mcp.toggle.on') : t('mcp.toggle.off');
@@ -7440,8 +7491,8 @@ function renderMcp() {
     div.innerHTML = `
       ${mkToggle(on)}
       <div class="inf">
-        <div class="nm" data-tip="${escH(mcpTooltip)}">${escH(m.label || id)}</div>
-        <div class="ds" data-tip="${escH(mcpTooltip)}">${escH(mcpDescription)}</div>
+        <div class="nm" data-tip="${escH(mcpTooltip)}" data-tip-html="${escH(mcpTooltipHtml)}">${escH(m.label || id)}</div>
+        <div class="ds" data-tip="${escH(mcpTooltip)}" data-tip-html="${escH(mcpTooltipHtml)}">${escH(mcpDescription)}</div>
         <div class="st">${on ? t('mcp.active') : t('mcp.inactive')}</div>
       </div>
       ${missing.length ? `<div class="warn-dot" title="${escH(tipWarn)}"></div>` : ''}
@@ -8056,6 +8107,7 @@ function renderSkills() {
     if (on) c++;
     const primaryLabel = s.shortLabel || s.label || id;
     const nameTip = s.tooltip || s.description || s.label || id;
+    const richTip = buildSkillTooltipHtml(id, s);
     const descText = s.plugin ? (s.description || s.technicalDescription || '') : (s.description || '');
     const descTip = s.plugin
       ? [s.tooltip || s.description || '', s.file ? `Path: ${s.file}` : ''].filter(Boolean).join('\n\n')
@@ -8072,8 +8124,8 @@ function renderSkills() {
     div.innerHTML = `
       ${mkToggle(on)}
       <div class="inf">
-        <div class="nm" data-tip="${escH(nameTip)}">${escH(primaryLabel)}</div>
-        <div class="ds" data-tip="${escH(descTip)}">${escH(descText)}</div>
+        <div class="nm" data-tip="${escH(nameTip)}" data-tip-html="${escH(richTip)}">${escH(primaryLabel)}</div>
+        <div class="ds" data-tip="${escH(descTip)}" data-tip-html="${escH(richTip)}">${escH(descText)}</div>
         <div class="st">${on ? t('skill.active') : t('skill.inactive')}</div>
       </div>
       ${s.custom ? `<button class="rm" onclick="event.stopPropagation();rSkill('${id}')" title="${t('skill.del.title')}">✕</button>` : ''}`;
@@ -9865,9 +9917,11 @@ document.addEventListener('mouseover', e => {
   clearTimeout(_tipTimer);
   if (!el) { _tipEl.style.opacity = '0'; return; }
   const txt = el.getAttribute('data-tip');
-  if (!txt) { _tipEl.style.opacity = '0'; return; }
+  const rich = el.getAttribute('data-tip-html');
+  if (!txt && !rich) { _tipEl.style.opacity = '0'; return; }
   _tipTimer = setTimeout(() => {
-    _tipEl.textContent = txt;
+    if (rich) _tipEl.innerHTML = rich;
+    else _tipEl.textContent = txt;
     const r = el.getBoundingClientRect();
     const tw = _tipEl.offsetWidth || 200;
     const th = _tipEl.offsetHeight || 30;
