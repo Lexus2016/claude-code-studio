@@ -171,13 +171,19 @@ class ClaudeCLI {
       const filePaths = [];
       const textParts = [];
       for (const block of contentBlocks) {
-        if (block.type === 'image' && block.source?.data) {
+        if ((block.type === 'image' || block.type === 'file') && block.source?.data) {
           if (!_tempDir) {
             _tempDir = path.join(os.tmpdir(), `claude-att-${Date.now()}`);
             fs.mkdirSync(_tempDir, { recursive: true });
           }
-          const ext = (block.source.media_type || 'image/png').split('/')[1] || 'png';
-          const fname = `attachment-${_tempFiles.length + 1}.${ext}`;
+          let ext = '';
+          const srcName = String(block.source.name || '').trim();
+          if (srcName) ext = path.extname(srcName).replace(/^\./, '');
+          if (!ext) ext = (block.source.media_type || (block.type === 'image' ? 'image/png' : 'application/octet-stream')).split('/')[1] || (block.type === 'image' ? 'png' : 'bin');
+          const safeBase = srcName
+            ? path.basename(srcName).replace(/[^a-zA-Z0-9._-]/g, '_')
+            : `attachment-${_tempFiles.length + 1}.${ext}`;
+          const fname = path.extname(safeBase) ? safeBase : `${safeBase}.${ext}`;
           const fpath = path.join(_tempDir, fname);
           fs.writeFileSync(fpath, Buffer.from(block.source.data, 'base64'));
           _tempFiles.push(fpath);
@@ -293,7 +299,17 @@ class ClaudeCLI {
       // Flush remaining buffer (including any incomplete multi-byte sequence held by the decoder)
       buffer += stdoutDecoder.end();
       if (buffer.trim()) {
-        try { this._handle(JSON.parse(buffer), h); } catch { try { if (h.onText) h.onText(buffer); } catch {} }
+        try {
+          this._handle(JSON.parse(buffer), h);
+        } catch {
+          const tail = buffer.trim();
+          const looksLikeStructuredTail = /^[{\[]/.test(tail) || /"type"\s*:/.test(tail);
+          if (looksLikeStructuredTail) {
+            console.warn('[claude-cli] Dropping unparseable trailing stream-json chunk');
+          } else {
+            try { if (h.onText) h.onText(buffer); } catch {}
+          }
+        }
       }
       releaseMcpConfig(mcpHash); mcpHash = null;
       for (const f of attFiles) { try { fs.unlinkSync(f); } catch {} }

@@ -1730,14 +1730,6 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <div class="sec-body" id="cmdsBody">
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="cmds.hint">Слеш-команди — шорткати до промптів. Набирайте / в чаті.</div>
         <div id="cmdsList"></div>
-        <div id="cmdForm" style="display:none" class="af">
-          <input id="cmdName" data-i18n-ph="cmd.name.ph" placeholder="/назва (напр. /check)" autocomplete="off">
-          <textarea id="cmdText" data-i18n-ph="cmd.text.ph" placeholder="Повний текст промпту..." style="min-height:60px;resize:vertical;font-family:inherit;font-size:12px;padding:6px 8px;background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text);outline:none"></textarea>
-          <div class="fr">
-            <button class="bp" id="cmdSaveBtn" onclick="saveCommand()">Add</button>
-            <button class="bg" onclick="cancelCmdForm()">✕</button>
-          </div>
-        </div>
         <button class="add-btn" onclick="openCmdForm()" data-i18n="cmd.add.new">＋ Додати команду</button>
       </div>
     </div>
@@ -2056,10 +2048,10 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 </div>
 
 <!-- Config Modal -->
-<div class="modal-overlay hidden" id="cfgModal" onclick="if(event.target===this)closeCfg()">
-  <div class="modal">
+<div class="modal-overlay hidden" id="cfgModal" aria-hidden="true" onclick="if(event.target===this)closeCfg()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cfgTitle" tabindex="-1">
     <div class="modal-hdr">
-      <h2 data-i18n="cfg.title">Налаштування</h2>
+      <h2 id="cfgTitle" data-i18n="cfg.title">Налаштування</h2>
       <button class="modal-close" onclick="closeCfg()">✕</button>
     </div>
     <div class="modal-tabs" id="cfgTabs"></div>
@@ -2078,8 +2070,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 </div>
 
 <!-- MCP Settings Modal -->
-<div class="modal-overlay hidden" id="mcpSettingsModal" onclick="if(event.target===this)closeMcpSettings()">
-  <div class="modal" style="width:580px;max-height:85vh;max-height:85dvh">
+<div class="modal-overlay hidden" id="mcpSettingsModal" aria-hidden="true" onclick="if(event.target===this)closeMcpSettings()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mcpSettingsTitle" tabindex="-1" style="width:580px;max-height:85vh;max-height:85dvh">
     <div class="modal-hdr">
       <h2 id="mcpSettingsTitle" style="font-size:16px;font-weight:700">⚙ MCP</h2>
       <button class="modal-close" onclick="closeMcpSettings()">✕</button>
@@ -2093,10 +2085,10 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 </div>
 
 <!-- MCP Import Modal -->
-<div class="modal-overlay hidden" id="mcpImportModal" onclick="if(event.target===this)closeMcpImport()">
-  <div class="modal" style="width:500px;max-height:82vh;max-height:82dvh">
+<div class="modal-overlay hidden" id="mcpImportModal" aria-hidden="true" onclick="if(event.target===this)closeMcpImport()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mcpImportTitle" tabindex="-1" style="width:500px;max-height:82vh;max-height:82dvh">
     <div class="modal-hdr">
-      <h2 style="font-size:14px;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="mcp.import.modal.title">Імпорт MCP серверів</span></h2>
+      <h2 id="mcpImportTitle" style="font-size:14px;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="mcp.import.modal.title">Імпорт MCP серверів</span></h2>
       <button class="modal-close" onclick="closeMcpImport()">✕</button>
     </div>
     <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto">
@@ -2138,7 +2130,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 </div>
 
 <!-- MCP Add/Edit Modal -->
-<div class="modal-overlay hidden" id="mcpEditModal" onclick="if(event.target===this)closeMcpModal()">
+<div class="modal-overlay hidden" id="mcpEditModal" aria-hidden="true" onclick="if(event.target===this)closeMcpModal()">
   <div class="modal mcp-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="mcpEditTitle">
     <div class="modal-hdr">
       <h2 id="mcpEditTitle" style="font-size:15px;font-weight:700" data-i18n="me.title.add">Add MCP Server</h2>
@@ -2230,8 +2222,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 </div>
 
 <!-- File Preview Modal -->
-<div class="modal-overlay hidden" id="filePreviewModal" onclick="if(event.target===this)closeFpv()">
-  <div class="modal fpv-modal">
+<div class="modal-overlay hidden" id="filePreviewModal" aria-hidden="true" onclick="if(event.target===this)closeFpv()">
+  <div class="modal fpv-modal" role="dialog" aria-modal="true" aria-labelledby="fpvTitle" tabindex="-1">
     <div class="modal-hdr">
       <h2 id="fpvTitle" style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0"></h2>
       <button class="modal-close" onclick="closeFpv()">✕</button>
@@ -2256,10 +2248,10 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 </div>
 
 <!-- Directory Browser Modal -->
-<div class="modal-overlay hidden" id="dirModal" onclick="if(event.target===this)closeDirModal()">
-  <div class="modal dir-modal">
+<div class="modal-overlay hidden" id="dirModal" aria-hidden="true" onclick="if(event.target===this)closeDirModal()">
+  <div class="modal dir-modal" role="dialog" aria-modal="true" aria-labelledby="dirModalTitle" tabindex="-1">
     <div class="modal-hdr">
-      <h2 data-i18n="dir.title">Новий проект</h2>
+      <h2 id="dirModalTitle" data-i18n="dir.title">Новий проект</h2>
       <button class="modal-close" onclick="closeDirModal()">✕</button>
     </div>
 
@@ -2318,8 +2310,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 </div>
 
 <!-- Add SSH Host Modal -->
-<div class="modal-overlay hidden" id="sshHostModal" onclick="if(event.target===this)closeSshHostModal()">
-  <div class="modal ssh-host-modal">
+<div class="modal-overlay hidden" id="sshHostModal" aria-hidden="true" onclick="if(event.target===this)closeSshHostModal()">
+  <div class="modal ssh-host-modal" role="dialog" aria-modal="true" aria-labelledby="sshHostModalTitle" tabindex="-1">
     <div class="modal-hdr">
       <h2 id="sshHostModalTitle" data-i18n="ssh.modal.add.title">🌐 Додати SSH хост</h2>
       <button class="modal-close" onclick="closeSshHostModal()">✕</button>
@@ -2368,8 +2360,26 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   </div>
 </div>
 
+<!-- Slash Command Modal -->
+<div class="modal-overlay hidden" id="cmdModal" aria-hidden="true" onclick="if(event.target===this)cancelCmdForm()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cmdModalTitle" tabindex="-1" style="width:560px;max-width:calc(100vw - 32px)">
+    <div class="modal-hdr">
+      <h2 id="cmdModalTitle" data-i18n="cmd.modal.add.title">＋ Додати команду</h2>
+      <button class="modal-close" onclick="cancelCmdForm()">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+      <input id="cmdName" data-i18n-ph="cmd.name.ph" placeholder="/назва (напр. /check)" autocomplete="off">
+      <textarea id="cmdText" data-i18n-ph="cmd.text.ph" placeholder="Повний текст промпту..." style="min-height:160px;resize:vertical;font-family:inherit;font-size:12px;padding:8px 10px;background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text);outline:none"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="bg" onclick="cancelCmdForm()" data-i18n="cmd.modal.cancel">Скасувати</button>
+      <button class="bp" id="cmdSaveBtn" onclick="saveCommand()" data-i18n="cmd.add.btn">Додати</button>
+    </div>
+  </div>
+</div>
+
 <!-- Confirm Stop Modal -->
-<div class="confirm-overlay hidden" id="confirmStopModal" onclick="if(event.target===this)cancelStop()">
+<div class="confirm-overlay hidden" id="confirmStopModal" aria-hidden="true" onclick="if(event.target===this)cancelStop()">
   <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmStopTitle">
     <div class="cd-icon">⏹</div>
     <h3 id="confirmStopTitle" data-i18n="confirm.stop.h">Stop task?</h3>
@@ -2382,7 +2392,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 </div>
 
 <!-- Rate Limit Rejected Modal -->
-<div class="confirm-overlay hidden" id="rlRejectedModal" onclick="if(event.target===this)closeRlModal()">
+<div class="confirm-overlay hidden" id="rlRejectedModal" aria-hidden="true" onclick="if(event.target===this)closeRlModal()">
   <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="rlModalTitle">
     <div class="cd-icon">🚫</div>
     <div class="rl-modal-type" id="rlModalType">—</div>
@@ -2416,8 +2426,69 @@ let replyTo = null; // { id, role, content }
 let openTabs = [], activeTabId = null;
 const tabState = {}; // per-tab: { curEl, curTxt, currentSessionId, generating, draft, agentStatus, _toolCounts, _toolLog }
 function getTS(id) {
-  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', currentSessionId: null, generating: false, draft: '', agentStatus: '', _toolCounts: {}, _toolLog: [] };
+  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', currentSessionId: null, generating: false, draft: '', attachments: [], replyTo: null, agentStatus: '', _toolCounts: {}, _toolLog: [] };
   return tabState[id];
+}
+
+function cloneAttachmentsForState(list) {
+  return Array.isArray(list) ? list.map(att => ({ ...att })) : [];
+}
+
+function imageMimeFromName(name) {
+  const n = String(name || '').toLowerCase();
+  if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'image/jpeg';
+  if (n.endsWith('.gif')) return 'image/gif';
+  if (n.endsWith('.webp')) return 'image/webp';
+  if (n.endsWith('.svg')) return 'image/svg+xml';
+  if (n.endsWith('.bmp')) return 'image/bmp';
+  if (n.endsWith('.ico')) return 'image/x-icon';
+  if (n.endsWith('.avif')) return 'image/avif';
+  return 'image/png';
+}
+
+function normalizeImageMimeType(mimeType, name) {
+  const type = String(mimeType || '').toLowerCase();
+  return type.startsWith('image/') ? type : imageMimeFromName(name);
+}
+
+function isImageAttachmentData(att) {
+  const type = String(att?.type || att?.mimeType || '').toLowerCase();
+  if (type.startsWith('image/')) return true;
+  const name = String(att?.name || '').toLowerCase();
+  return /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/.test(name);
+}
+
+function saveComposerState(tabId) {
+  if (!tabId) return;
+  const ts = getTS(tabId);
+  ts.draft = inEl.value;
+  ts.attachments = cloneAttachmentsForState(_attachments);
+  ts.replyTo = replyTo ? { ...replyTo } : null;
+}
+
+function restoreComposerState(tabId) {
+  if (!tabId) {
+    inEl.value = '';
+    inEl.style.height = 'auto';
+    _clearAttachments(false);
+    clearReply();
+    return;
+  }
+  const ts = getTS(tabId);
+  inEl.value = ts.draft || '';
+  inEl.style.height = 'auto';
+  inEl.style.height = Math.min(inEl.scrollHeight, 130) + 'px';
+  _restoreAttachments(ts.attachments);
+  const savedReply = ts.replyTo;
+  if (savedReply) {
+    replyTo = savedReply;
+    $i('replyPreviewRole').textContent = savedReply.role === 'user' ? t('you.label') : 'Claude';
+    const rc = savedReply.content || '';
+    $i('replyPreviewText').textContent = rc.slice(0, 120) + (rc.length > 120 ? '…' : '');
+    $i('replyPreview').style.display = 'flex';
+  } else {
+    clearReply();
+  }
 }
 
 // ─── Streaming state proxy (isolated per-tab) ────────────────────────────────
@@ -2478,10 +2549,109 @@ let histOffset = 0;       // offset of the oldest rendered message (non-tool)
 let histTotal  = 0;       // total non-tool message count for current session
 let dirBrowsePath = null; // path currently shown in dir browser
 let _onProjectCreated = null; // callback to invoke after a new project is created
+let _pendingProjectSend = false;
 
 const $i = id => document.getElementById(id);
 const msgsEl = $i('messages');
 const inEl = $i('input');
+const MODAL_FOCUSABLE_SEL = 'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const modalStack = [];
+
+function _findModalEntry(id) {
+  return modalStack.findIndex(entry => entry.id === id);
+}
+
+function _getModalDialog(overlay) {
+  return overlay?.querySelector('[role="dialog"], .modal, .confirm-dialog') || null;
+}
+
+function _syncModalBodyLock() {
+  document.body.style.overflow = modalStack.length ? 'hidden' : '';
+}
+
+function _focusModalTarget(entry) {
+  if (!entry?.dialog) return;
+  let target = null;
+  if (typeof entry.initialFocus === 'string') target = entry.dialog.querySelector(entry.initialFocus);
+  else if (entry.initialFocus instanceof HTMLElement) target = entry.initialFocus;
+  if (!target) {
+    const nodes = [...entry.dialog.querySelectorAll(MODAL_FOCUSABLE_SEL)].filter(el => !el.hasAttribute('inert') && el.offsetParent !== null);
+    target = nodes[0] || entry.dialog;
+  }
+  try { target.focus(); } catch {}
+}
+
+function openModalOverlay(id, opts = {}) {
+  const overlay = $i(id);
+  if (!overlay) return null;
+  const dialog = opts.dialog || _getModalDialog(overlay);
+  if (!dialog) return null;
+  if (!dialog.getAttribute('role')) dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  if (opts.labelId) dialog.setAttribute('aria-labelledby', opts.labelId);
+  if (!dialog.hasAttribute('tabindex')) dialog.tabIndex = -1;
+  overlay.classList.remove('hidden');
+  overlay.setAttribute('aria-hidden', 'false');
+
+  const entry = {
+    id,
+    overlay,
+    dialog,
+    restoreFocusTo: document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    initialFocus: opts.initialFocus || null,
+    onEscape: opts.onEscape || null,
+  };
+  const idx = _findModalEntry(id);
+  if (idx >= 0) modalStack[idx] = entry;
+  else modalStack.push(entry);
+  _syncModalBodyLock();
+  requestAnimationFrame(() => _focusModalTarget(entry));
+  return entry;
+}
+
+function closeModalOverlay(id, opts = {}) {
+  const overlay = $i(id);
+  if (!overlay) return;
+  overlay.classList.add('hidden');
+  overlay.setAttribute('aria-hidden', 'true');
+  const idx = _findModalEntry(id);
+  const [entry] = idx >= 0 ? modalStack.splice(idx, 1) : [null];
+  _syncModalBodyLock();
+  const top = modalStack[modalStack.length - 1];
+  if (top) {
+    requestAnimationFrame(() => _focusModalTarget(top));
+  } else if (opts.restoreFocus !== false && entry?.restoreFocusTo?.isConnected) {
+    requestAnimationFrame(() => { try { entry.restoreFocusTo.focus(); } catch {} });
+  }
+}
+
+document.addEventListener('keydown', e => {
+  const top = modalStack[modalStack.length - 1];
+  if (!top || top.overlay.classList.contains('hidden')) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (typeof top.onEscape === 'function') top.onEscape();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const nodes = [...top.dialog.querySelectorAll(MODAL_FOCUSABLE_SEL)].filter(el => el.offsetParent !== null);
+  if (!nodes.length) {
+    e.preventDefault();
+    top.dialog.focus();
+    return;
+  }
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  const active = document.activeElement;
+  if (e.shiftKey && (active === first || active === top.dialog)) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && active === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}, true);
 
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
@@ -2601,6 +2771,7 @@ const TRANSLATIONS = {
     'sec.cmds':'/ Команди','cmds.hint':'Слеш-команди — шорткати до промптів. Набирайте / в чаті.',
     'cmd.name.ph':'/назва (напр. /check)','cmd.text.ph':'Повний текст промпту...','cmd.add.btn':'Додати','cmd.save.btn':'Зберегти',
     'cmd.add.new':'＋ Додати команду','cmd.insert.title':'Вставити в чат','cmd.edit.title':'Редагувати','cmd.del.title':'Видалити','cmd.del.confirm':'Видалити команду',
+    'cmd.modal.add.title':'＋ Додати команду','cmd.modal.edit.title':'✏️ Редагувати команду','cmd.modal.cancel':'Скасувати',
     'cmd.err.empty':'Введіть назву та текст команди','toast.cmd_added':'✓ Команду додано','toast.cmd_updated':'✓ Команду оновлено',
     'cmds.popup.hdr':'Команди',
     'sec.sshHosts':'SSH Хости',
@@ -2785,6 +2956,7 @@ const TRANSLATIONS = {
     'sec.cmds':'/ Commands','cmds.hint':'Slash commands — shortcuts to prompts. Type / in chat.',
     'cmd.name.ph':'/name (e.g. /check)','cmd.text.ph':'Full prompt text...','cmd.add.btn':'Add','cmd.save.btn':'Save',
     'cmd.add.new':'＋ Add command','cmd.insert.title':'Insert into chat','cmd.edit.title':'Edit','cmd.del.title':'Delete','cmd.del.confirm':'Delete command',
+    'cmd.modal.add.title':'＋ Add command','cmd.modal.edit.title':'✏️ Edit command','cmd.modal.cancel':'Cancel',
     'cmd.err.empty':'Enter name and prompt text','toast.cmd_added':'✓ Command added','toast.cmd_updated':'✓ Command updated',
     'cmds.popup.hdr':'Commands',
     'sec.sshHosts':'SSH Hosts',
@@ -2969,6 +3141,7 @@ const TRANSLATIONS = {
     'sec.cmds':'/ Команды','cmds.hint':'Слеш-команды — шорткаты к промптам. Набирайте / в чате.',
     'cmd.name.ph':'/название (напр. /check)','cmd.text.ph':'Полный текст промпта...','cmd.add.btn':'Добавить','cmd.save.btn':'Сохранить',
     'cmd.add.new':'＋ Добавить команду','cmd.insert.title':'Вставить в чат','cmd.edit.title':'Редактировать','cmd.del.title':'Удалить','cmd.del.confirm':'Удалить команду',
+    'cmd.modal.add.title':'＋ Добавить команду','cmd.modal.edit.title':'✏️ Редактировать команду','cmd.modal.cancel':'Отмена',
     'cmd.err.empty':'Введите название и текст команды','toast.cmd_added':'✓ Команда добавлена','toast.cmd_updated':'✓ Команда обновлена',
     'cmds.popup.hdr':'Команды',
     'sec.sshHosts':'SSH Хосты',
@@ -3171,31 +3344,119 @@ function escH(s) {
     .replace(/"/g, '&quot;');
 }
 
+const LIST_CONTINUATION_TOKEN = '\x06LB\x07';
+
+function _lineIndent(line) {
+  return (line.match(/^(\s*)/) || [''])[1].length;
+}
+
+function normalizeListContinuations(text) {
+  const lines = text.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!/^\s*(?:[-*+]|\d+\.)\s/.test(line)) {
+      out.push(line);
+      continue;
+    }
+    const baseIndent = _lineIndent(line);
+    let merged = line;
+    while (i + 1 < lines.length) {
+      const next = lines[i + 1];
+      if (!next.trim()) break;
+      const nextIndent = _lineIndent(next);
+      const nextIsMarker = /^\s*(?:[-*+]|\d+\.)\s/.test(next);
+      if (nextIsMarker) break;
+      if (nextIndent <= baseIndent) break;
+      merged += `${LIST_CONTINUATION_TOKEN}${next.trim()}`;
+      i++;
+    }
+    out.push(merged);
+  }
+  return out.join('\n');
+}
+
+function isSafeHref(url) {
+  const href = String(url || '').trim().toLowerCase();
+  return href.startsWith('http://')
+    || href.startsWith('https://')
+    || href.startsWith('mailto:')
+    || href.startsWith('tel:')
+    || href.startsWith('/')
+    || href.startsWith('./')
+    || href.startsWith('../')
+    || href.startsWith('#');
+}
+
+function replaceMarkdownLinks(text) {
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    const labelStart = text.indexOf('[', i);
+    if (labelStart === -1) {
+      out += text.slice(i);
+      break;
+    }
+    const labelEnd = text.indexOf('](', labelStart + 1);
+    if (labelEnd === -1) {
+      out += text.slice(i);
+      break;
+    }
+    out += text.slice(i, labelStart);
+    const label = text.slice(labelStart + 1, labelEnd);
+    let depth = 1;
+    let urlEnd = labelEnd + 2;
+    let url = '';
+    while (urlEnd < text.length) {
+      const ch = text[urlEnd];
+      if (ch === '(') {
+        depth++;
+        url += ch;
+      } else if (ch === ')') {
+        depth--;
+        if (depth === 0) break;
+        url += ch;
+      } else {
+        url += ch;
+      }
+      urlEnd++;
+    }
+    if (depth !== 0) {
+      out += text.slice(labelStart);
+      break;
+    }
+    const href = url.trim();
+    out += isSafeHref(href)
+      ? `<a href="${href}" target="_blank" rel="noopener">${label}</a>`
+      : label;
+    i = urlEnd + 1;
+  }
+  return out;
+}
+
 // Parse a captured block of list lines (bullet or ordered, any indentation level)
 function parseListBlock(blockText) {
   const lines = blockText.trimEnd().split('\n')
     .filter(l => /^\s*(?:[-*+]|\d+\.)\s/.test(l));
   if (!lines.length) return blockText;
 
-  function getIndent(line) {
-    return (line.match(/^(\s*)/) || [''])[1].length;
-  }
-
   function buildList(arr) {
     if (!arr.length) return '';
-    const baseInd = getIndent(arr[0]);
+    const baseInd = _lineIndent(arr[0]);
     const isOl = /^\s*\d+\./.test(arr[0]);
     const tag = isOl ? 'ol' : 'ul';
     const items = [];
     let i = 0;
     while (i < arr.length) {
-      const ind = getIndent(arr[i]);
+      const ind = _lineIndent(arr[i]);
       if (ind < baseInd) break;
       if (ind > baseInd) { i++; continue; }
-      const text = arr[i].replace(/^\s*(?:[-*+]|\d+\.)\s+/, '');
+      const text = arr[i]
+        .replace(/^\s*(?:[-*+]|\d+\.)\s+/, '')
+        .replaceAll(LIST_CONTINUATION_TOKEN, '<br>');
       i++;
       const nested = [];
-      while (i < arr.length && getIndent(arr[i]) > ind) nested.push(arr[i++]);
+      while (i < arr.length && _lineIndent(arr[i]) > ind) nested.push(arr[i++]);
       items.push('<li>' + text + (nested.length ? buildList(nested) : '') + '</li>');
     }
     return items.length ? `<${tag}>${items.join('')}</${tag}>` : '';
@@ -3237,6 +3498,7 @@ function renderMd(text) {
 
   // 0.5. Reformat inline numbered items into proper markdown list
   text = reformatInlineNumberedItems(text);
+  text = normalizeListContinuations(text);
 
   // 1. Extract and protect code blocks
   const blocks = [];
@@ -3331,10 +3593,7 @@ function renderMd(text) {
   // Restore inline code (was extracted in step 2.5)
   text = text.replace(/\x04ICODE(\d+)\x05/g, (_, i) => `<code>${inlineCodes[+i]}</code>`);
   // Links
-  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
-    if (/^javascript:/i.test(url.trim())) return label;
-    return `<a href="${url}" target="_blank" rel="noopener">${label}</a>`;
-  });
+  text = replaceMarkdownLinks(text);
 
   // 5. Paragraphs — wrap lines that aren't block elements
   const blockTags = /^<(?:h[1-6]|ul|ol|li|hr|blockquote|pre|div)|^\x02BLOCK\d+\x03/;
@@ -3953,8 +4212,8 @@ function handleWsMsg(d) {
               const chipsDiv = document.createElement('div');
               chipsDiv.className = 'att-chips';
               chipsDiv.style.cssText = 'padding:4px 0 2px';
-              chipsDiv.innerHTML = item.attachments.map(a => a.type && a.type.startsWith('image/')
-                ? `<div class="att-chip chip-img"><img src="data:${escH(a.type)};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name||'image')}</span></div>`
+              chipsDiv.innerHTML = item.attachments.map(a => isImageAttachmentData(a)
+                ? `<div class="att-chip chip-img"><img src="data:${escH(normalizeImageMimeType(a.type || a.mimeType, a.name))};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name||'image')}</span></div>`
                 : a.type === 'ssh'
                 ? `<div class="att-chip"><span class="chip-icon">🖥️</span><span class="chip-name">${escH(a.label||'SSH')}</span></div>`
                 : `<div class="att-chip"><span class="chip-icon">📄</span><span class="chip-name">${escH(a.name||'file')}</span></div>`
@@ -4212,7 +4471,11 @@ function _rlShowModal(info) {
   $i('rlModalType').textContent = typeLabel;
   $i('rlModalTitle').textContent = t('rl.modal.title');
   $i('rlModalDesc').textContent = t('rl.modal.desc').replace('{type}', typeLabel);
-  modal.classList.remove('hidden');
+  openModalOverlay('rlRejectedModal', {
+    initialFocus: '#rlRejectedModal .cd-btn-ok',
+    labelId: 'rlModalTitle',
+    onEscape: closeRlModal,
+  });
 
   // Live countdown inside modal (every 1s for precision)
   const updateTimer = () => {
@@ -4236,7 +4499,7 @@ function _rlShowModal(info) {
 }
 
 function closeRlModal() {
-  $i('rlRejectedModal').classList.add('hidden');
+  closeModalOverlay('rlRejectedModal');
   _rlModalShown = false;
   if (_rlModalTimer) { clearInterval(_rlModalTimer); _rlModalTimer = null; }
 }
@@ -4329,12 +4592,14 @@ function updateQueueBadge(n) {
 }
 
 function confirmStop() {
-  const modal = $i('confirmStopModal');
-  modal.classList.remove('hidden');
-  setTimeout(() => $i('confirmStopBtn').focus(), 50);
+  openModalOverlay('confirmStopModal', {
+    initialFocus: '#confirmStopBtn',
+    labelId: 'confirmStopTitle',
+    onEscape: cancelStop,
+  });
 }
 function cancelStop() {
-  $i('confirmStopModal').classList.add('hidden');
+  closeModalOverlay('confirmStopModal');
 }
 function doStop() {
   cancelStop();
@@ -5477,11 +5742,9 @@ function switchTab(id) {
   // Save state for current tab before switching
   if (activeTabId) {
     const oldTS = getTS(activeTabId);
-    oldTS.draft = inEl.value;
+    saveComposerState(activeTabId);
     oldTS.curTxt = streaming.txt; // Save via proxy (reads from old activeTabId)
     if (streaming.toolLog.length) oldTS._toolLog = streaming.toolLog.slice();
-    oldTS.attachments = [..._attachments];
-    oldTS.replyTo = replyTo;
   }
   // Clear only the DOM reference for the old tab — curTxt/_toolLog/_toolCounts are kept
   // so loadSess can restore them when the user switches back while Claude is still running.
@@ -5501,21 +5764,7 @@ function switchTab(id) {
     currentSessionId = null; // Clear stale ID immediately — updateSessBar() below will hide the bar
     loadSess(id);            // async — will set currentSessionId and refresh sessBar when done
   }
-  // Restore textarea draft for new tab
-  const draft = getTS(id).draft || '';
-  inEl.value = draft;
-  inEl.style.height = 'auto';
-  inEl.style.height = Math.min(inEl.scrollHeight, 130) + 'px';
-  // Restore attachments and reply-to for new tab
-  _restoreAttachments(getTS(id).attachments);
-  const savedReply = getTS(id).replyTo;
-  if (savedReply) {
-    replyTo = savedReply;
-    $i('replyPreviewRole').textContent = savedReply.role === 'user' ? t('you.label') : 'Claude';
-    const rc = savedReply.content || '';
-    $i('replyPreviewText').textContent = rc.slice(0, 120) + (rc.length > 120 ? '…' : '');
-    $i('replyPreview').style.display = 'flex';
-  } else { clearReply(); }
+  restoreComposerState(id);
   // Update stop button state and isGen for new tab
   const newTab = openTabs.find(t => t.id === id);
   if (newTab?.generating) {
@@ -5554,11 +5803,7 @@ function newTab() {
   const tempId = 'new-' + Date.now();
   if (!curProjectId) { _onProjectCreated = () => newTab(); openAddProject(); return; }
   // Save current tab's state before switching
-  if (activeTabId) {
-    getTS(activeTabId).draft = inEl.value;
-    getTS(activeTabId).attachments = [..._attachments];
-    getTS(activeTabId).replyTo = replyTo;
-  }
+  if (activeTabId) saveComposerState(activeTabId);
   openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true });
   activeTabId = tempId;
   currentSessionId = null;
@@ -5697,7 +5942,12 @@ let _attachments = []; // [{id, type:'file'|'image', name, relPath, absPath, pro
 
 function _getChips() { return $i('attChips'); }
 
-function _addFileChip(file) {
+function _syncAttachmentsState(shouldSave = true) {
+  if (activeTabId) getTS(activeTabId).attachments = cloneAttachmentsForState(_attachments);
+  if (shouldSave) saveUIState();
+}
+
+function _addFileChip(file, shouldSave = true) {
   if (_attachments.find(a => a.type === 'file' && a.absPath === file.absPath)) return;
   const id = 'att-' + Date.now() + Math.random().toString(36).slice(2, 6);
   _attachments.push({ id, type: 'file', name: file.name, relPath: file.relPath, absPath: file.absPath, projectDir: curWorkdir });
@@ -5705,24 +5955,28 @@ function _addFileChip(file) {
   chip.className = 'att-chip'; chip.dataset.attId = id;
   chip.innerHTML = `<span class="chip-icon">📄</span><span class="chip-name" data-tip="${escH(file.relPath)}">${escH(file.name)}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
   _getChips().appendChild(chip);
+  _syncAttachmentsState(shouldSave);
 }
 
-function _addImageChip(base64, mimeType, name) {
+function _addImageChip(base64, mimeType, name, shouldSave = true) {
+  const safeMime = normalizeImageMimeType(mimeType, name || 'screenshot.png');
   const id = 'att-' + Date.now() + Math.random().toString(36).slice(2, 6);
-  _attachments.push({ id, type: 'image', name: name || 'screenshot.png', base64, mimeType });
+  _attachments.push({ id, type: 'image', name: name || 'screenshot.png', base64, mimeType: safeMime });
   const chip = document.createElement('div');
   chip.className = 'att-chip chip-img'; chip.dataset.attId = id;
-  chip.innerHTML = `<img src="data:${mimeType};base64,${base64}" alt=""><span class="chip-name">${escH(name || 'screenshot.png')}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
+  chip.innerHTML = `<img src="data:${safeMime};base64,${base64}" alt=""><span class="chip-name">${escH(name || 'screenshot.png')}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
   _getChips().appendChild(chip);
+  _syncAttachmentsState(shouldSave);
 }
 
-function _addLocalFileChip(name, base64, mimeType) {
+function _addLocalFileChip(name, base64, mimeType, shouldSave = true) {
   const id = 'att-' + Date.now() + Math.random().toString(36).slice(2, 6);
   _attachments.push({ id, type: 'file', name, base64, mimeType: mimeType || 'application/octet-stream', local: true });
   const chip = document.createElement('div');
   chip.className = 'att-chip'; chip.dataset.attId = id;
   chip.innerHTML = `<span class="chip-icon">📎</span><span class="chip-name" title="${escH(name)}">${escH(name)}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
   _getChips().appendChild(chip);
+  _syncAttachmentsState(shouldSave);
 }
 
 function onFilePicker(input) {
@@ -5750,30 +6004,33 @@ function rmChip(id) {
   _attachments = _attachments.filter(a => a.id !== id);
   const el = document.querySelector(`[data-att-id="${id}"]`);
   if (el) el.remove();
+  _syncAttachmentsState();
 }
 
-function _clearAttachments() {
+function _clearAttachments(shouldSave = true) {
   _attachments = [];
   _getChips().innerHTML = '';
+  _syncAttachmentsState(shouldSave);
 }
 
 // Restore saved attachments — rebuild chips from saved array
 function _restoreAttachments(saved) {
-  _clearAttachments();
+  _clearAttachments(false);
   if (!saved?.length) return;
   for (const att of saved) {
     // Re-add each saved attachment — the _add* functions create new IDs and push to _attachments
     if (att.type === 'image') {
-      _addImageChip(att.base64, att.mimeType, att.name);
+      _addImageChip(att.base64, att.mimeType, att.name, false);
     } else if (att.type === 'ssh') {
-      _addSshChip({ id: att.hostId, label: att.label, host: att.host, port: att.port });
+      _addSshChip({ id: att.hostId, label: att.label, host: att.host, port: att.port }, false);
     } else if (att.local) {
-      _addLocalFileChip(att.name, att.base64, att.mimeType);
+      _addLocalFileChip(att.name, att.base64, att.mimeType, false);
     } else {
       // Project file — pass the original object (has name, relPath, absPath)
-      _addFileChip({ name: att.name, relPath: att.relPath, absPath: att.absPath });
+      _addFileChip({ name: att.name, relPath: att.relPath, absPath: att.absPath }, false);
     }
   }
+  _syncAttachmentsState(false);
 }
 
 // ─── @ File picker ────────────────────────────────────────────────────────
@@ -5868,7 +6125,7 @@ function _renderSshList(query) {
   ).join('');
 }
 
-function _addSshChip(host) {
+function _addSshChip(host, shouldSave = true) {
   if (_attachments.find(a => a.type === 'ssh' && a.hostId === host.id)) return;
   const id = 'att-' + Date.now() + Math.random().toString(36).slice(2, 6);
   _attachments.push({ id, type: 'ssh', hostId: host.id, label: host.label, host: host.host, port: host.port || 22 });
@@ -5876,6 +6133,7 @@ function _addSshChip(host) {
   chip.className = 'att-chip'; chip.dataset.attId = id;
   chip.innerHTML = `<span class="chip-icon">🖥️</span><span class="chip-name" data-tip="${escH(host.host + ':' + (host.port || 22))}">${escH(host.label)}</span><button class="chip-rm" onclick="rmChip('${id}')" title="${t('chip.remove')}">✕</button>`;
   _getChips().appendChild(chip);
+  _syncAttachmentsState(shouldSave);
 }
 
 function selectSshHost(idx) {
@@ -6027,18 +6285,21 @@ async function send() {
   const txt = inEl.value.trim();
   if (!txt && !_attachments.length) return;
 
+  // Require a project before sending the first message in a new session.
+  // Keep the composer intact so text, reply target, and attachments survive
+  // the project creation flow without any rehydration hacks.
+  if (!curProjectId && !currentSessionId) {
+    _pendingProjectSend = true;
+    _onProjectCreated = () => { _pendingProjectSend = false; send(); };
+    openAddProject();
+    return;
+  }
+
   // Clear input IMMEDIATELY before any async work to prevent double-send.
   // If user presses Enter during an async file fetch, the second send()
   // will see empty input and return early.
   inEl.value = '';
   inEl.style.height = 'auto';
-
-  // Require a project before sending the first message in a new session
-  if (!curProjectId && !currentSessionId) {
-    _onProjectCreated = () => { inEl.value = txt; send(); };
-    openAddProject();
-    return;
-  }
 
   // Collect attachment payloads (fetch file contents for @ mentions)
   const attSnapshot = [..._attachments];
@@ -6049,7 +6310,7 @@ async function send() {
   const sshContextParts = [];
   for (const att of attSnapshot) {
     if (att.type === 'image') {
-      msgAttachments.push({ type: att.mimeType, base64: att.base64, name: att.name });
+      msgAttachments.push({ type: normalizeImageMimeType(att.mimeType, att.name), base64: att.base64, name: att.name });
     } else if (att.type === 'ssh') {
       // SSH chip: append metadata as context text (display only, no credentials)
       sshContextParts.push(`[SSH: ${att.label} | host: ${att.host}:${att.port}]`);
@@ -6077,7 +6338,7 @@ async function send() {
     chipsDiv.className = 'att-chips';
     chipsDiv.style.cssText = 'padding:4px 0 2px';
     chipsDiv.innerHTML = attSnapshot.map(a => a.type === 'image'
-      ? `<div class="att-chip chip-img"><img src="data:${a.mimeType};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name)}</span></div>`
+      ? `<div class="att-chip chip-img"><img src="data:${normalizeImageMimeType(a.mimeType, a.name)};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name)}</span></div>`
       : a.type === 'ssh'
       ? `<div class="att-chip"><span class="chip-icon">🖥️</span><span class="chip-name">${escH(a.label)}</span></div>`
       : `<div class="att-chip"><span class="chip-icon">📄</span><span class="chip-name">${escH(a.relPath || a.name)}</span></div>`
@@ -6444,8 +6705,8 @@ function _renderMsgAt(idx, prepend = false) {
         chipsDiv.className = 'att-chips';
         chipsDiv.style.cssText = 'padding:4px 0 2px';
         chipsDiv.innerHTML = atts.map(a =>
-          a.type && a.type.startsWith('image/')
-            ? `<div class="att-chip chip-img"><img src="data:${escH(a.type)};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name || 'image')}</span></div>`
+          isImageAttachmentData(a)
+            ? `<div class="att-chip chip-img"><img src="data:${escH(normalizeImageMimeType(a.type || a.mimeType, a.name))};base64,${a.base64}" alt=""><span class="chip-name">${escH(a.name || 'image')}</span></div>`
             : a.type === 'ssh'
             ? `<div class="att-chip"><span class="chip-icon">🖥️</span><span class="chip-name">${escH(a.label || 'SSH')}</span></div>`
             : `<div class="att-chip"><span class="chip-icon">📄</span><span class="chip-name">${escH(a.name || 'file')}</span></div>`
@@ -7000,21 +7261,15 @@ function openMcpModal(mode, serverId = null) {
     idInput.title = '';
     _mcpEditReset();
   }
-  overlay.classList.remove('hidden');
-  requestAnimationFrame(() => {
-    (mode === 'add' ? idInput : $i('meLabel')).focus();
+  openModalOverlay('mcpEditModal', {
+    initialFocus: mode === 'add' ? '#meId' : '#meLabel',
+    labelId: 'mcpEditTitle',
+    onEscape: closeMcpModal,
   });
-  overlay._escHandler = (e) => { if (e.key === 'Escape') closeMcpModal(); };
-  document.addEventListener('keydown', overlay._escHandler);
 }
 
 function closeMcpModal() {
-  const overlay = $i('mcpEditModal');
-  overlay.classList.add('hidden');
-  if (overlay._escHandler) {
-    document.removeEventListener('keydown', overlay._escHandler);
-    overlay._escHandler = null;
-  }
+  closeModalOverlay('mcpEditModal');
 }
 
 function switchMcpTab(tab) {
@@ -7332,10 +7587,14 @@ function showMcpSettings(id, enableAfter=false) {
   }
 
   body.appendChild(envSection);
-  $i('mcpSettingsModal').classList.remove('hidden');
+  openModalOverlay('mcpSettingsModal', {
+    initialFocus: '#mcpSettingsBody input, #mcpSettingsBody button, #mcpSettingsBody textarea, #mcpSettingsBody select',
+    labelId: 'mcpSettingsTitle',
+    onEscape: closeMcpSettings,
+  });
 }
 function closeMcpSettings() {
-  $i('mcpSettingsModal').classList.add('hidden');
+  closeModalOverlay('mcpSettingsModal');
   _mcpCfgId=null; _mcpCfgEnable=false;
 }
 async function saveMcpSettings() {
@@ -7397,10 +7656,14 @@ function openMcpImport() {
   $i('mcpImportError').style.display = 'none';
   $i('mcpImportBtn').disabled = true;
   $i('mcpImportReplace').checked = false;
-  $i('mcpImportModal').classList.remove('hidden');
+  openModalOverlay('mcpImportModal', {
+    initialFocus: '#mcpImportJson',
+    labelId: 'mcpImportTitle',
+    onEscape: closeMcpImport,
+  });
 }
 function closeMcpImport() {
-  $i('mcpImportModal').classList.add('hidden');
+  closeModalOverlay('mcpImportModal');
   _mcpImportData = null;
 }
 function mcpImportPreviewClear() {
@@ -7659,24 +7922,34 @@ function renderCommands() {
 
 function openCmdForm(id) {
   _editingCmdId = id || null;
-  const form = $i('cmdForm'), btn = $i('cmdSaveBtn');
+  const btn = $i('cmdSaveBtn');
+  const title = $i('cmdModalTitle');
   if (id) {
     const cmd = (config.slashCommands || []).find(c => c.id === id);
     if (!cmd) return;
     $i('cmdName').value = cmd.name;
     $i('cmdText').value = cmd.text;
     btn.textContent = t('cmd.save.btn');
+    btn.setAttribute('data-i18n', 'cmd.save.btn');
+    title.textContent = t('cmd.modal.edit.title');
+    title.setAttribute('data-i18n', 'cmd.modal.edit.title');
   } else {
     $i('cmdName').value = '';
     $i('cmdText').value = '';
     btn.textContent = t('cmd.add.btn');
+    btn.setAttribute('data-i18n', 'cmd.add.btn');
+    title.textContent = t('cmd.modal.add.title');
+    title.setAttribute('data-i18n', 'cmd.modal.add.title');
   }
-  form.style.display = 'flex';
-  $i('cmdName').focus();
+  openModalOverlay('cmdModal', {
+    initialFocus: '#cmdName',
+    labelId: 'cmdModalTitle',
+    onEscape: cancelCmdForm,
+  });
 }
 
 function cancelCmdForm() {
-  $i('cmdForm').style.display = 'none';
+  closeModalOverlay('cmdModal');
   _editingCmdId = null;
 }
 
@@ -7723,6 +7996,14 @@ async function rCommand(id) {
   if (_editingCmdId === id) cancelCmdForm();
   renderCommands();
 }
+
+document.addEventListener('keydown', e => {
+  if ($i('cmdModal')?.classList.contains('hidden')) return;
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    saveCommand();
+  }
+});
 
 // Slash autocomplete helpers
 function _openSlashPopup(query) {
@@ -7802,7 +8083,11 @@ async function openCfgEditor() {
   $i('cfgEditor').value = cfgFiles[activeCfgTab] || '';
   $i('saveNotice').className = 'save-notice hidden';
   updateCfgPathInfo(activeCfgTab);
-  $i('cfgModal').classList.remove('hidden');
+  openModalOverlay('cfgModal', {
+    initialFocus: '#cfgEditor',
+    labelId: 'cfgTitle',
+    onEscape: closeCfg,
+  });
 }
 
 function updateCfgPathInfo(id) {
@@ -7848,8 +8133,7 @@ async function saveCfg() {
   } catch (e) { toast(e.message, true); }
 }
 
-function closeCfg() { $i('cfgModal').classList.add('hidden'); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeFpv(); closeCfg(); closeDirModal(); cancelStop(); closeSshHostModal(); } });
+function closeCfg() { closeModalOverlay('cfgModal'); }
 
 // ─── File Browser ─────────────────────────────────────────────────────────
 function _filesQS(relPath) {
@@ -7895,7 +8179,7 @@ async function loadFiles(dir = '') {
 let _fpvPath = '', _fpvName = '', _fpvIsImg = false;
 
 function closeFpv() {
-  $i('filePreviewModal').classList.add('hidden');
+  closeModalOverlay('filePreviewModal');
   $i('fpvBody').innerHTML = '';
   _fpvPath = ''; _fpvName = ''; _fpvIsImg = false;
   $i('fpvCopyImgBtn').style.display = 'none';
@@ -7909,7 +8193,11 @@ async function openFilePreview(relPath, name) {
   $i('fpvExt').textContent = ext || 'file';
   const body = $i('fpvBody');
   body.innerHTML = `<div class="fpv-text" style="color:var(--muted)">${t('toast.loading')}</div>`;
-  $i('filePreviewModal').classList.remove('hidden');
+  openModalOverlay('filePreviewModal', {
+    initialFocus: '#filePreviewModal .fpv-btn, #filePreviewModal .modal-close',
+    labelId: 'fpvTitle',
+    onEscape: closeFpv,
+  });
 
   const rawUrl = `/api/files/raw?${_filesQS(relPath)}`;
   const imgExts = ['.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp','.ico','.tiff'];
@@ -8199,11 +8487,7 @@ function switchProject(id) {
   // Persist current project's live tab state to memory before switching away
   if (curProjectId) {
     // Save current tab's input draft, attachments & reply-to so they aren't lost
-    if (activeTabId) {
-      getTS(activeTabId).draft = inEl.value;
-      getTS(activeTabId).attachments = [..._attachments];
-      getTS(activeTabId).replyTo = replyTo;
-    }
+    if (activeTabId) saveComposerState(activeTabId);
     projectTabs[curProjectId] = openTabs;
     projectActiveTab[curProjectId] = activeTabId;
   }
@@ -8256,23 +8540,11 @@ function switchProject(id) {
 
   // Restore input draft, attachments & reply-to for the target tab (or clear if no tab)
   if (activeTabId) {
-    const draft = getTS(activeTabId).draft || '';
-    inEl.value = draft;
-    inEl.style.height = 'auto';
-    inEl.style.height = Math.min(inEl.scrollHeight, 130) + 'px';
-    _restoreAttachments(getTS(activeTabId).attachments);
-    const savedReply = getTS(activeTabId).replyTo;
-    if (savedReply) {
-      replyTo = savedReply;
-      $i('replyPreviewRole').textContent = savedReply.role === 'user' ? t('you.label') : 'Claude';
-      const rc = savedReply.content || '';
-      $i('replyPreviewText').textContent = rc.slice(0, 120) + (rc.length > 120 ? '…' : '');
-      $i('replyPreview').style.display = 'flex';
-    } else { clearReply(); }
+    restoreComposerState(activeTabId);
   } else {
     inEl.value = '';
     inEl.style.height = 'auto';
-    _clearAttachments();
+    _clearAttachments(false);
     clearReply();
   }
 
@@ -8353,7 +8625,11 @@ async function renameProject(id, btnEl) {
 
 // ─── Directory browser ───────────────────────────────────────────────────
 function openAddProject() {
-  $i('dirModal').classList.remove('hidden');
+  openModalOverlay('dirModal', {
+    initialFocus: '#projNameInput',
+    labelId: 'dirModalTitle',
+    onEscape: () => closeDirModal(),
+  });
   $i('gitInitChk').checked = false;
   $i('projNameInput').value = '';
   dirBrowsePath = null;
@@ -8454,7 +8730,7 @@ async function selectDir() {
     if (!d.ok) { toast((d.error || t('ssh.err')), true); return; }
     await loadProjectsList();
     if (d.id) switchProject(d.id);
-    closeDirModal();
+    closeDirModal(true);
     if (_onProjectCreated) { const cb = _onProjectCreated; _onProjectCreated = null; cb(); }
     return;
   }
@@ -8475,12 +8751,16 @@ async function selectDir() {
 
   await loadProjectsList();
   if (d.id) switchProject(d.id);
-  closeDirModal();
+  closeDirModal(true);
   if (_onProjectCreated) { const cb = _onProjectCreated; _onProjectCreated = null; cb(); }
 }
 
-function closeDirModal() {
-  $i('dirModal').classList.add('hidden');
+function closeDirModal(preservePending = false) {
+  closeModalOverlay('dirModal');
+  if (!preservePending) {
+    _pendingProjectSend = false;
+    _onProjectCreated = null;
+  }
 }
 
 // ─── Remote SSH Project Type Toggle ──────────────────────────────────────
@@ -8592,12 +8872,15 @@ function openAddHostModal() {
   $i('sshHostTestResult').textContent = '';
   $i('sshHostTestResult').className = 'rh-test-result';
   setAuthType('key');
-  $i('sshHostModal').classList.remove('hidden');
-  setTimeout(() => $i('sshHostLabel')?.focus(), 80);
+  openModalOverlay('sshHostModal', {
+    initialFocus: '#sshHostLabel',
+    labelId: 'sshHostModalTitle',
+    onEscape: closeSshHostModal,
+  });
 }
 
 function closeSshHostModal() {
-  $i('sshHostModal').classList.add('hidden');
+  closeModalOverlay('sshHostModal');
 }
 
 function setAuthType(type) {
@@ -8626,8 +8909,11 @@ async function editRemoteHost(id) {
   setAuthType(hasPwd ? 'pwd' : 'key');
   $i('sshHostKey').value = hasPwd ? '' : (h.sshKeyPath || '');
   $i('sshHostPassword').value = hasPwd ? '' : '';  // never pre-fill password for security
-  $i('sshHostModal').classList.remove('hidden');
-  setTimeout(() => $i('sshHostLabel')?.focus(), 80);
+  openModalOverlay('sshHostModal', {
+    initialFocus: '#sshHostLabel',
+    labelId: 'sshHostModalTitle',
+    onEscape: closeSshHostModal,
+  });
 }
 
 async function testNewSshHost() {
@@ -9103,21 +9389,41 @@ const LS_KEY = 'cc_ui_state';
 function saveUIState() {
   try {
     const c = id => $i(id)?.classList.contains('collapsed');
+    if (activeTabId) saveComposerState(activeTabId);
+    const shouldSaveTab = (tab) => {
+      if (!tab?.isNew) return true;
+      const ts = getTS(tab.id);
+      return !!(ts.draft || ts.attachments?.length || ts.replyTo);
+    };
+    const saveTab = (tab) => {
+      const ts = getTS(tab.id);
+      return {
+        id: tab.id,
+        title: tab.title,
+        isNew: !!tab.isNew,
+        draft: ts.draft || '',
+        attachments: cloneAttachmentsForState(ts.attachments),
+        replyTo: ts.replyTo ? { ...ts.replyTo } : null,
+      };
+    };
     // Collect all project tab states (current + background)
     const allProjTabs = {};
     for (const [pid, tabs] of Object.entries(projectTabs)) {
+      const savedTabs = tabs.filter(shouldSaveTab);
       allProjTabs[pid] = {
-        tabs: tabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
-        activeTabId: pid === curProjectId ? activeTabId : (projectActiveTab[pid] || tabs[0]?.id || null),
+        tabs: savedTabs.map(saveTab),
+        activeTabId: savedTabs.some(t => t.id === (pid === curProjectId ? activeTabId : projectActiveTab[pid])) ? (pid === curProjectId ? activeTabId : projectActiveTab[pid]) : (savedTabs[0]?.id || null),
       };
     }
     // Ensure current project is always included
     if (curProjectId) {
+      const savedTabs = openTabs.filter(shouldSaveTab);
       allProjTabs[curProjectId] = {
-        tabs: openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
-        activeTabId: openTabs.find(t => t.id === activeTabId && !t.isNew) ? activeTabId : null,
+        tabs: savedTabs.map(saveTab),
+        activeTabId: savedTabs.some(t => t.id === activeTabId) ? activeTabId : null,
       };
     }
+    const savedOpenTabs = openTabs.filter(shouldSaveTab);
     localStorage.setItem(LS_KEY, JSON.stringify({
       activeMcp: [...activeMcp],
       activeSkills: [...activeSkills],
@@ -9125,8 +9431,8 @@ function saveUIState() {
       curWorkdir, curProjectId,
       panels: { left: c('leftPanel'), right: c('rightPanel') },
       sections: { hist: c('histBody'), mcp: c('mcpBody'), skills: c('skillsBody'), cmds: c('cmdsBody'), proj: c('projBody'), sshHosts: c('sshHostsBody'), tunnel: c('tunnelBody'), tg: c('tgBody') },
-      openTabs: openTabs.filter(t => !t.isNew).map(t => ({ id: t.id, title: t.title })),
-      activeTabId: openTabs.find(t => t.id === activeTabId && !t.isNew) ? activeTabId : null,
+      openTabs: savedOpenTabs.map(saveTab),
+      activeTabId: savedOpenTabs.some(t => t.id === activeTabId) ? activeTabId : null,
       allProjTabs,
       headerCollapsed: c('hdrZone') || false,
       fontSize: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15.5,
@@ -9137,6 +9443,13 @@ function restoreUIState() {
   try {
     const s = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
     if (!s) return;
+    const restoreTabState = (savedTab) => {
+      if (!savedTab?.id) return;
+      const ts = getTS(savedTab.id);
+      ts.draft = savedTab.draft || '';
+      ts.attachments = cloneAttachmentsForState(savedTab.attachments);
+      ts.replyTo = savedTab.replyTo || null;
+    };
     if (s.activeMcp) activeMcp = new Set(s.activeMcp);
     if (s.activeSkills) activeSkills = new Set(s.activeSkills);
     if (s.autoSkillsMode !== undefined) { autoSkillsMode = !!s.autoSkillsMode; }
@@ -9166,7 +9479,8 @@ function restoreUIState() {
     }
     // Restore current project's tabs
     if (s.openTabs?.length) {
-      openTabs = s.openTabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false }));
+      openTabs = s.openTabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false, isNew: !!t.isNew }));
+      s.openTabs.forEach(restoreTabState);
       activeTabId = s.activeTabId || null;
     }
     // Pre-populate background project tab arrays from saved state
@@ -9174,7 +9488,8 @@ function restoreUIState() {
       for (const [pid, saved] of Object.entries(s.allProjTabs)) {
         if (pid === curProjectId) continue; // current project already restored above
         if (saved?.tabs?.length) {
-          projectTabs[pid] = saved.tabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false }));
+          projectTabs[pid] = saved.tabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false, isNew: !!t.isNew }));
+          saved.tabs.forEach(restoreTabState);
           projectActiveTab[pid] = saved.activeTabId || projectTabs[pid][0]?.id || null;
         }
       }
@@ -9193,6 +9508,7 @@ function restoreUIState() {
     if (s.fontSize) {
       document.documentElement.style.setProperty('--msg-font', s.fontSize + 'px');
     }
+    restoreComposerState(activeTabId);
   } catch {}
 }
 

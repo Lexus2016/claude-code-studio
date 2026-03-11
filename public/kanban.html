@@ -357,8 +357,8 @@ textarea.inp{ resize:vertical; min-height:80px; }
 <div class="board" id="board"></div>
 
 <!-- Task modal -->
-<div class="ov hidden" id="taskOv" onclick="if(event.target===this)closeModal()">
-  <div class="modal">
+<div class="ov hidden" id="taskOv" aria-hidden="true" onclick="if(event.target===this)closeModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
     <div class="modal-hd">
       <span class="modal-hd-title" id="modalTitle"></span>
       <button class="modal-close" onclick="closeModal()">×</button>
@@ -369,8 +369,8 @@ textarea.inp{ resize:vertical; min-height:80px; }
 </div>
 
 <!-- Confirm modal -->
-<div class="ov hidden" id="confirmOv">
-  <div class="modal" style="max-width:400px">
+<div class="ov hidden" id="confirmOv" aria-hidden="true" onclick="if(event.target===this)closeConfirm()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" tabindex="-1" style="max-width:400px">
     <div class="modal-hd">
       <span class="modal-hd-title" id="confirmTitle"></span>
       <button class="modal-close" onclick="closeConfirm()">×</button>
@@ -513,6 +513,58 @@ try{
 // ─── Utils ────────────────────────────────────────────────────────────────
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function $i(id){return document.getElementById(id);}
+const MODAL_FOCUSABLE_SEL='button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const modalStack=[];
+function openOverlay(id, opts={}){
+  const ov=$i(id); if(!ov) return;
+  const dialog=ov.querySelector('[role="dialog"], .modal'); if(!dialog) return;
+  ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false');
+  const entry={id,ov,dialog,restore:document.activeElement instanceof HTMLElement?document.activeElement:null,initialFocus:opts.initialFocus||null,onEscape:opts.onEscape||null};
+  const idx=modalStack.findIndex(x=>x.id===id);
+  if(idx>=0) modalStack[idx]=entry; else modalStack.push(entry);
+  document.body.style.overflow='hidden';
+  requestAnimationFrame(()=>{
+    let target=null;
+    if(typeof entry.initialFocus==='string') target=dialog.querySelector(entry.initialFocus);
+    if(!target){
+      const nodes=[...dialog.querySelectorAll(MODAL_FOCUSABLE_SEL)].filter(el=>el.offsetParent!==null);
+      target=nodes[0]||dialog;
+    }
+    try{target.focus();}catch{}
+  });
+}
+function closeOverlay(id){
+  const ov=$i(id); if(!ov) return;
+  ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true');
+  const idx=modalStack.findIndex(x=>x.id===id);
+  const entry=idx>=0?modalStack.splice(idx,1)[0]:null;
+  document.body.style.overflow=modalStack.length?'hidden':'';
+  const top=modalStack[modalStack.length-1];
+  if(top){
+    requestAnimationFrame(()=>{ try{ (top.dialog.querySelector(MODAL_FOCUSABLE_SEL)||top.dialog).focus(); }catch{} });
+  }else if(entry?.restore?.isConnected){
+    requestAnimationFrame(()=>{ try{entry.restore.focus();}catch{} });
+  }
+}
+document.addEventListener('keydown',e=>{
+  const top=modalStack[modalStack.length-1];
+  if(top){
+    if(e.key==='Escape'){
+      e.preventDefault(); e.stopImmediatePropagation();
+      if(typeof top.onEscape==='function') top.onEscape();
+      return;
+    }
+    if(e.key==='Tab'){
+      const nodes=[...top.dialog.querySelectorAll(MODAL_FOCUSABLE_SEL)].filter(el=>el.offsetParent!==null);
+      if(!nodes.length){ e.preventDefault(); top.dialog.focus(); return; }
+      const first=nodes[0], last=nodes[nodes.length-1], active=document.activeElement;
+      if(e.shiftKey && (active===first || active===top.dialog)){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey && active===last){ e.preventDefault(); first.focus(); }
+      return;
+    }
+  }
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!$i('taskOv').classList.contains('hidden')) saveTask();
+}, true);
 function relTime(iso){
   if(!iso)return'';
   const s=Math.round((Date.now()-new Date(iso.endsWith('Z')?iso:iso+'Z'))/1000);
@@ -878,8 +930,7 @@ function openAddModal(defaultStatus='backlog'){
   $i('modalFt').innerHTML=`
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
     <button class="btn btn-primary btn-sm" onclick="saveTask()">${t('modal.create')}</button>`;
-  $i('taskOv').classList.remove('hidden');
-  setTimeout(()=>$i('fTitle')?.focus(),60);
+  openOverlay('taskOv',{initialFocus:'#fTitle',onEscape:closeModal});
 }
 
 // ─── Modal: Edit ───────────────────────────────────────────────────────────
@@ -896,7 +947,7 @@ async function openEditModal(id){
     <div style="flex:1"></div>
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
     <button class="btn btn-primary btn-sm" onclick="saveTask()">${t('modal.save')}</button>`;
-  $i('taskOv').classList.remove('hidden');
+  openOverlay('taskOv',{initialFocus:'#fTitle',onEscape:closeModal});
   if(tk.session_id){
     try{
       const msgs=await fetchMessages(tk.session_id);
@@ -1146,18 +1197,10 @@ function confirmDelete(id){
       await refresh(true);
     }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
   };
-  $i('confirmOv').classList.remove('hidden');
+  openOverlay('confirmOv',{initialFocus:'#cancelBtn',onEscape:closeConfirm});
 }
-function closeConfirm(){$i('confirmOv').classList.add('hidden');}
-function closeModal(){$i('taskOv').classList.add('hidden');}
-
-document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){
-    if(!$i('taskOv').classList.contains('hidden')){closeModal();return;}
-    if(!$i('confirmOv').classList.contains('hidden')){closeConfirm();return;}
-  }
-  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!$i('taskOv').classList.contains('hidden'))saveTask();
-});
+function closeConfirm(){closeOverlay('confirmOv');}
+function closeModal(){closeOverlay('taskOv');}
 
 (async()=>{
   // Update project search placeholder with translation

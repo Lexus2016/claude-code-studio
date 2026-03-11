@@ -380,8 +380,8 @@ button{font-family:inherit;cursor:pointer}
 </div>
 
 <!-- Task modal -->
-<div class="ov hidden" id="taskOv" onclick="if(event.target===this)closeModal()">
-  <div class="modal">
+<div class="ov hidden" id="taskOv" aria-hidden="true" onclick="if(event.target===this)closeModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
     <div class="modal-hd">
       <div class="modal-hd-icon">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -561,6 +561,34 @@ const RECUR_NEXT = { hourly: 3600, daily: 86400, weekly: 604800, monthly: 259200
 // ─── Helpers ──────────────────────────────────────────────────────────────
 function $i(id) { return document.getElementById(id); }
 function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+const MODAL_FOCUSABLE_SEL='button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+let modalRestoreFocus = null;
+
+function openOverlay(id, opts={}) {
+  const ov = $i(id); if (!ov) return;
+  const dialog = ov.querySelector('[role="dialog"], .modal'); if (!dialog) return;
+  modalRestoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  ov.classList.remove('hidden');
+  ov.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  requestAnimationFrame(() => {
+    const target = (typeof opts.initialFocus === 'string' ? dialog.querySelector(opts.initialFocus) : null)
+      || dialog.querySelector(MODAL_FOCUSABLE_SEL)
+      || dialog;
+    try { target.focus(); } catch {}
+  });
+}
+
+function closeOverlay(id) {
+  const ov = $i(id); if (!ov) return;
+  ov.classList.add('hidden');
+  ov.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+  if (modalRestoreFocus?.isConnected) {
+    requestAnimationFrame(() => { try { modalRestoreFocus.focus(); } catch {} });
+  }
+  modalRestoreFocus = null;
+}
 
 function toast(msg, type='') {
   const el = document.createElement('div');
@@ -1056,8 +1084,7 @@ function openAddModal() {
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
       ${t('btn.create')}
     </button>`;
-  $i('taskOv').classList.remove('hidden');
-  setTimeout(() => $i('fTitle')?.focus(), 50);
+  openOverlay('taskOv', { initialFocus: '#fTitle' });
 }
 
 async function openEditModal(id) {
@@ -1076,7 +1103,7 @@ async function openEditModal(id) {
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
       ${t('btn.save')}
     </button>`;
-  $i('taskOv').classList.remove('hidden');
+  openOverlay('taskOv', { initialFocus: '#fTitle' });
 }
 
 async function saveTask() {
@@ -1145,14 +1172,24 @@ async function deleteTask(id) {
 }
 
 function closeModal() {
-  $i('taskOv').classList.add('hidden');
+  closeOverlay('taskOv');
   editingId = null;
 }
 
 // Keyboard: Escape to close modal
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeModal();
-});
+  if (!$i('taskOv').classList.contains('hidden')) {
+    if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
+    if (e.key === 'Tab') {
+      const dialog = $i('taskOv').querySelector('[role="dialog"], .modal');
+      const nodes = [...dialog.querySelectorAll(MODAL_FOCUSABLE_SEL)].filter(el => el.offsetParent !== null);
+      if (!nodes.length) { e.preventDefault(); dialog.focus(); return; }
+      const first = nodes[0], last = nodes[nodes.length - 1], active = document.activeElement;
+      if (e.shiftKey && (active === first || active === dialog)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+    }
+  }
+}, true);
 
 // ─── Auto-refresh ─────────────────────────────────────────────────────────
 function startAutoRefresh() {
