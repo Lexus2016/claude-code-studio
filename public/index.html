@@ -7373,6 +7373,51 @@ function mkToggle(on) {
   return `<div class="sw" aria-hidden="true"><div class="sw-track"></div><div class="sw-thumb"></div></div>`;
 }
 
+function mcpSafeText(v) {
+  return String(v || '')
+    .replace(/([?&](?:token|key|api[_-]?key|authorization)=[^&\s]+)/ig, '$1[hidden]')
+    .replace(/(Bearer\s+)[A-Za-z0-9._-]+/ig, '$1[hidden]');
+}
+
+function mcpDisplaySource(m) {
+  if (m.type === 'http' || m.type === 'sse') {
+    try {
+      const u = new URL(m.url);
+      return `${u.protocol}//${u.host}${u.pathname}`;
+    } catch {
+      return mcpSafeText(m.url || '');
+    }
+  }
+  const cmd = m.command || '';
+  const args = Array.isArray(m.args) ? m.args : [];
+  if (!cmd) return '';
+  const interestingArg = args.find(a => typeof a === 'string' && !a.startsWith('-')) || '';
+  return [cmd, interestingArg].filter(Boolean).join(' ');
+}
+
+function buildMcpDescription(m) {
+  if (m.description && m.description.trim()) return m.description.trim();
+  if (m.type === 'http') return 'HTTP MCP server';
+  if (m.type === 'sse') return 'SSE MCP server';
+  if (m.command) return 'Command-based MCP server';
+  return 'MCP server';
+}
+
+function buildMcpTooltip(id, m) {
+  const parts = [
+    m.label || id,
+    buildMcpDescription(m),
+  ];
+  const source = mcpDisplaySource(m);
+  if (m.type === 'http' || m.type === 'sse') {
+    parts.push(`Transport: ${(m.type || 'http').toUpperCase()}`);
+  } else if (m.command) {
+    parts.push('Transport: Command');
+  }
+  if (source) parts.push(`Source: ${source}`);
+  return parts.filter(Boolean).join('\n\n');
+}
+
 function renderMcp() {
   const el = $i('mcpList'); el.innerHTML = '';
   const tipWarn = t('mcp.cfg.warn'), tipCfg = t('mcp.cfg.tip');
@@ -7381,6 +7426,8 @@ function renderMcp() {
     const on = activeMcp.has(id);
     if (on) c++;
     const missing = getMcpMissingFields(m);
+    const mcpDescription = buildMcpDescription(m);
+    const mcpTooltip = buildMcpTooltip(id, m);
     const div = document.createElement('div');
     div.className = `ci ${on ? 'on' : ''}`;
     div.title = on ? t('mcp.toggle.on') : t('mcp.toggle.off');
@@ -7393,8 +7440,8 @@ function renderMcp() {
     div.innerHTML = `
       ${mkToggle(on)}
       <div class="inf">
-        <div class="nm" data-tip="${escH(m.label || id)}">${escH(m.label || id)}</div>
-        <div class="ds" data-tip="${escH(m.description || '')}">${escH(m.description || '')}</div>
+        <div class="nm" data-tip="${escH(mcpTooltip)}">${escH(m.label || id)}</div>
+        <div class="ds" data-tip="${escH(mcpTooltip)}">${escH(mcpDescription)}</div>
         <div class="st">${on ? t('mcp.active') : t('mcp.inactive')}</div>
       </div>
       ${missing.length ? `<div class="warn-dot" title="${escH(tipWarn)}"></div>` : ''}
