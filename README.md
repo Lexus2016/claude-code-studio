@@ -208,6 +208,8 @@ Skills are `.md` files that give Claude a specialist persona. When a skill is ac
 
 Think of it as **hiring the right specialist for each job**. Instead of a generalist answering everything, Claude adopts the mindset, experience, and vocabulary of the relevant domain expert. A frontend question gets answered by someone who has debugged hydration mismatches at 3am, not by a generalist who read the React docs once.
 
+**Plugin skills (🧩)** — Claude Code Studio automatically discovers skills from your installed Claude Code plugins. Skills from marketplace and cached plugins appear in the sidebar grouped by plugin name. No configuration needed — install a plugin in Claude Code, and its skills show up in Studio immediately.
+
 You can also pick skills manually in the sidebar — this turns off Auto mode. Add your own `.md` files to the `skills/` directory for custom specializations.
 
 ### ⚙️ Model & Turns
@@ -254,14 +256,23 @@ Why does this matter? Because your AI doesn't need to be chained to your desk. S
 
 ### 📱 Mobile-Ready — Use It from Your Phone's Browser
 
-Not just Telegram. Open your Studio's public URL (via Remote Access) in any mobile browser — and the full UI works.
+Not just Telegram. Open your Studio's public URL (via Remote Access) in any mobile browser — and you get an experience that feels like a native app.
+
+**Native-feel mobile UI** — a full redesign for small screens. A mobile header with live status indicator (pulsing orange while Claude works, green when idle, red on error). A settings bottom sheet slides up from the edge — switch modes, models, and agent types with one tap. Session tabs live in a full-screen overlay with individual close buttons and a tab counter badge.
 
 - **Touch-optimized** — 44px tap targets, scroll-snap Kanban columns, swipeable panels
-- **iOS-safe** — no auto-zoom on focus, proper viewport handling for notched devices, no rubber-banding
-- **Responsive layout** — sidebars auto-collapse on mobile, restore on desktop. Toolbar scrolls horizontally with fade hints
+- **iOS-safe** — no auto-zoom on focus, safe area insets for notched devices, no rubber-banding
+- **Responsive layout** — sidebars auto-collapse on mobile, restore on desktop
 - **All pages** — Chat, Kanban, Schedule, Auth — every screen adapts to narrow viewports
+- **Accessibility** — all modals use ARIA-compliant focus traps with Escape-to-close and focus restoration
 
-You're on a train, your tunnel is running, you open the URL on your phone. Full Kanban board with snap-scrolling columns. Full chat with streaming. Full schedule view. Not a "mobile version" — the real thing, optimized for touch.
+You're on a train, your tunnel is running, you open the URL on your phone. Full Kanban board with snap-scrolling columns. Full chat with streaming. Settings a swipe away. Not a "mobile version" — the real interface, redesigned for touch.
+
+### 🔄 Self-Healing Sessions
+
+If a Claude session is lost — server restart, network issue, expired session — Studio automatically rebuilds the full conversation context from its SQLite history and replays it into a fresh session. Claude continues coherently from where it left off. No manual intervention, no lost context. Works for both local and SSH sessions.
+
+When Claude exhausts its auto-continues, a **Restart Session** button appears right in the chat. One click clears the broken session and lets you keep going.
 
 ### 💾 Everything is saved
 
@@ -378,6 +389,7 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | 🎯 Execute Plan button | In Plan mode, click to auto-switch to Auto mode and run the plan |
 | 🎛 Chat modes | Auto (full access), Plan (read-only analysis), Task (explicit execution) |
 | 🧠 Skills & auto-skills | 28 specialist personas; auto-classified per message with ⚡ Auto |
+| 🧩 Plugin skills | Auto-discovers skills from installed Claude Code plugins — zero configuration |
 | ⚙️ Model & turns | Haiku / Sonnet / Opus; adjustable turn budget (1–200) with auto-continue |
 | 🔀 Auto mode switch | Claude can switch modes mid-task (e.g., planning → execution) |
 | 📁 File browser | Browse, preview, and attach files with `@filename` — multi-select: popup stays open for picking several files |
@@ -385,7 +397,7 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | 🗂 Projects | Separate workspaces with their own file directories |
 | 🌐 Remote SSH | Work on remote servers as if local — type `#` in chat to quickly attach any SSH host |
 | 🔗 Remote Access | One-click public URL via cloudflared or ngrok — access Studio from anywhere |
-| 📱 Mobile UI | Touch-optimized responsive layout for all pages — Chat, Kanban, Schedule |
+| 📱 Mobile UI | Native-feel mobile interface — bottom sheet settings, status indicator, tabs overlay, swipe gestures |
 | 🔒 File locks | Multiple agents on same codebase — no conflicts |
 | 🔄 Cross-tab Kanban sync | Edit or move a task in one tab — every other open tab updates instantly |
 | 🔄 Tab drag-and-drop | Reorder chat tabs by dragging — organize your workspace your way |
@@ -393,7 +405,7 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | 📊 Rate limit alerts | Warnings at 80/90/95%, live countdown to reset |
 | 🔒 Auth | Password login, 30-day tokens, data stays on your machine |
 | 🧠 Language-aware AI | Claude reasons in English for precision, responds in your language — full native experience in every conversation |
-| 🛡 Smart session recovery | Thinking block errors auto-heal — Studio resets the session and continues without interruption or data loss |
+| 🛡 Self-healing sessions | Full session replay from SQLite history when session is lost — auto-rebuilds context, continues seamlessly |
 | ⚡ True parallel tasks | Independent Kanban tasks run simultaneously in the same project — no artificial workdir locks |
 | 🛡 Database crash protection | All SQLite operations auto-sanitize inputs — no more "Too few parameter values" crashes |
 | ⏹ Instant Stop | Stop button works immediately, even during skill classification — no 10-second delay |
