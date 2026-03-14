@@ -4805,9 +4805,11 @@ wss.on('connection', (ws) => {
               }
               // Keep non-text events from proxy buffer (tool activity, done, error, status).
               // Text is already replayed via chatBuf above — discard text/thinking to avoid duplication.
-              activeTask.proxy._buffer = activeTask.proxy._buffer.filter(raw => {
-                try { const d = JSON.parse(raw); return d.type !== 'text' && d.type !== 'thinking'; } catch { return false; }
-              });
+              if (Array.isArray(activeTask.proxy._buffer)) {
+                activeTask.proxy._buffer = activeTask.proxy._buffer.filter(raw => {
+                  try { const d = JSON.parse(raw); return d.type !== 'text' && d.type !== 'thinking'; } catch { return false; }
+                });
+              }
               activeTask.proxy.attach(ws);
               ws._tabAbort[sessionId] = activeTask.abortController;
               if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'task_resumed', sessionId, tabId: sessionId }));
@@ -5016,9 +5018,11 @@ wss.on('connection', (ws) => {
           }
           // Keep non-text events (tool, done, error, status) — discard text/thinking
           // to avoid duplication with chatBuf replay above
-          task.proxy._buffer = task.proxy._buffer.filter(raw => {
-            try { const d = JSON.parse(raw); return d.type !== 'text' && d.type !== 'thinking'; } catch { return false; }
-          });
+          if (Array.isArray(task.proxy._buffer)) {
+            task.proxy._buffer = task.proxy._buffer.filter(raw => {
+              try { const d = JSON.parse(raw); return d.type !== 'text' && d.type !== 'thinking'; } catch { return false; }
+            });
+          }
           task.proxy.attach(ws);
           if (tabId) ws._tabAbort[tabId] = task.abortController;
           ws.send(JSON.stringify({ type: 'task_resumed', sessionId, tabId }));
