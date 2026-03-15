@@ -265,6 +265,7 @@ const BOT_I18N = {
     'forum_instructions': '🏗 <b>Налаштування Forum Mode</b>\n\n1. Створіть нову приватну групу в Telegram\n2. Назвіть її, наприклад, «Claude Studio»\n3. Увімкніть <b>Topics</b> в налаштуваннях групи\n4. Додайте мене як адміна з правом «Manage Topics»\n5. Напишіть у групі: /connect',
     'forum_already': '✅ Forum вже підключено.',
     'forum_connected': '✅ <b>Forum підключено!</b>\n\nСтворюю структуру...',
+    'forum_syncing': '🔄 <b>Синхронізація Forum</b>\n\nСтворюю відсутні топіки...',
     'forum_created_topics': '✅ Структуру створено:\n\n📋 <b>Tasks</b> — управління задачами\n🔔 <b>Activity</b> — сповіщення\n\nТеми проєктів з\'являться автоматично.',
     'forum_not_supergroup': '❌ Ця команда працює тільки в супергрупі з увімкненими Topics.',
     'forum_not_admin': '❌ Додайте бота як адміна з правом «Manage Topics».',
@@ -490,6 +491,7 @@ const BOT_I18N = {
     'forum_instructions': '🏗 <b>Forum Mode Setup</b>\n\n1. Create a new private group in Telegram\n2. Name it, e.g. "Claude Studio"\n3. Enable <b>Topics</b> in group settings\n4. Add me as admin with "Manage Topics" permission\n5. Write /connect in the group',
     'forum_already': '✅ Forum is already connected.',
     'forum_connected': '✅ <b>Forum connected!</b>\n\nCreating structure...',
+    'forum_syncing': '🔄 <b>Syncing Forum</b>\n\nCreating missing topics...',
     'forum_created_topics': '✅ Structure created:\n\n📋 <b>Tasks</b> — task management\n🔔 <b>Activity</b> — notifications\n\nProject topics will appear automatically.',
     'forum_not_supergroup': '❌ This command only works in a supergroup with Topics enabled.',
     'forum_not_admin': '❌ Add the bot as admin with "Manage Topics" permission.',
@@ -715,6 +717,7 @@ const BOT_I18N = {
     'forum_instructions': '🏗 <b>Настройка Forum Mode</b>\n\n1. Создайте новую приватную группу в Telegram\n2. Назовите её, например, «Claude Studio»\n3. Включите <b>Темы</b> в настройках группы\n4. Добавьте меня как админа с правом «Управление темами»\n5. Напишите в группе: /connect',
     'forum_already': '✅ Forum уже подключён.',
     'forum_connected': '✅ <b>Forum подключён!</b>\n\nСоздаю структуру...',
+    'forum_syncing': '🔄 <b>Синхронизация Forum</b>\n\nСоздаю недостающие топики...',
     'forum_created_topics': '✅ Структура создана:\n\n📋 <b>Tasks</b> — управление задачами\n🔔 <b>Activity</b> — уведомления\n\nТемы проектов появятся автоматически.',
     'forum_not_supergroup': '❌ Эта команда работает только в супергруппе с включёнными Темами.',
     'forum_not_admin': '❌ Добавьте бота как админа с правом «Управление темами».',
@@ -3273,17 +3276,15 @@ class TelegramBot extends EventEmitter {
       return this._sendMessage(chatId, this._t('forum_not_admin'));
     }
 
-    // Check if already connected
+    // Save forum_chat_id (or keep existing)
     const device = this._stmts.getDevice.get(userId);
-    if (device?.forum_chat_id === chatId) {
-      return this._sendMessage(chatId, this._t('forum_already'));
+    const alreadyConnected = device?.forum_chat_id === chatId;
+    if (!alreadyConnected) {
+      this._stmts.setForumChatId.run(chatId, userId);
     }
 
-    // Save forum_chat_id, then create structure; rollback on failure
-    this._stmts.setForumChatId.run(chatId, userId);
-
-    // Send "connected, creating..." BEFORE the actual creation
-    await this._sendMessage(chatId, this._t('forum_connected'));
+    // Send status message BEFORE the actual creation
+    await this._sendMessage(chatId, this._t(alreadyConnected ? 'forum_syncing' : 'forum_connected'));
 
     // Clear _currentThreadId so structure messages go to correct threads (not the /connect thread)
     const savedThreadId = this._currentThreadId;
@@ -3292,8 +3293,10 @@ class TelegramBot extends EventEmitter {
     try {
       await this._createForumStructure(chatId);
     } catch (err) {
-      this._stmts.setForumChatId.run(null, userId);
-      this.log.error(`[telegram] Forum connect failed, rolled back: ${err.message}`);
+      if (!alreadyConnected) {
+        this._stmts.setForumChatId.run(null, userId);
+      }
+      this.log.error(`[telegram] Forum connect failed: ${err.message}`);
       await this._sendMessage(chatId, this._t('forum_not_admin'));
     } finally {
       this._currentThreadId = savedThreadId;
