@@ -3282,13 +3282,21 @@ class TelegramBot extends EventEmitter {
     // Save forum_chat_id, then create structure; rollback on failure
     this._stmts.setForumChatId.run(chatId, userId);
 
+    // Send "connected, creating..." BEFORE the actual creation
+    await this._sendMessage(chatId, this._t('forum_connected'));
+
+    // Clear _currentThreadId so structure messages go to correct threads (not the /connect thread)
+    const savedThreadId = this._currentThreadId;
+    this._currentThreadId = null;
+
     try {
       await this._createForumStructure(chatId);
-      await this._sendMessage(chatId, this._t('forum_connected'));
     } catch (err) {
       this._stmts.setForumChatId.run(null, userId);
       this.log.error(`[telegram] Forum connect failed, rolled back: ${err.message}`);
       await this._sendMessage(chatId, this._t('forum_not_admin'));
+    } finally {
+      this._currentThreadId = savedThreadId;
     }
   }
 
@@ -3304,10 +3312,12 @@ class TelegramBot extends EventEmitter {
       const hasActivityTopic = existing.some(t => t.type === 'activity');
 
       if (!hasTasksTopic) {
+        this.log.info(`[telegram] Creating Tasks topic in forum ${chatId}`);
         const tasksTopic = await this._callApi('createForumTopic', {
           chat_id: chatId,
           name: '📋 Tasks',
         });
+        this.log.info(`[telegram] Tasks topic created: thread_id=${tasksTopic.message_thread_id}`);
         this._stmts.addForumTopic.run(tasksTopic.message_thread_id, chatId, 'tasks', null);
         this._forumTopics.set(`${chatId}:${tasksTopic.message_thread_id}`, { type: 'tasks', workdir: null, chatId });
 
@@ -3321,10 +3331,12 @@ class TelegramBot extends EventEmitter {
       }
 
       if (!hasActivityTopic) {
+        this.log.info(`[telegram] Creating Activity topic in forum ${chatId}`);
         const activityTopic = await this._callApi('createForumTopic', {
           chat_id: chatId,
           name: '🔔 Activity',
         });
+        this.log.info(`[telegram] Activity topic created: thread_id=${activityTopic.message_thread_id}`);
         this._stmts.addForumTopic.run(activityTopic.message_thread_id, chatId, 'activity', null);
         this._forumTopics.set(`${chatId}:${activityTopic.message_thread_id}`, { type: 'activity', workdir: null, chatId });
 
@@ -3337,7 +3349,8 @@ class TelegramBot extends EventEmitter {
         }
       }
 
-      // Notify in General topic
+      // Notify in General topic (explicit no thread_id — goes to General)
+      this.log.info(`[telegram] Forum structure created, sending confirmation`);
       await this._sendMessage(chatId, this._t('forum_created_topics'));
 
       // Create topics for existing projects
