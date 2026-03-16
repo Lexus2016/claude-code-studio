@@ -312,6 +312,10 @@ button{font-family:inherit;cursor:pointer}
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Schedule
       </a>
+      <a class="nav-sw-btn" href="/dashboard" data-tip="Dashboard">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+        Dashboard
+      </a>
     </nav>
     <div class="hdr-meta">
       <div class="proj-dd-wrap" id="projDdWrap">
@@ -447,6 +451,8 @@ const TR = {
     'form.exec': 'Параметри виконання',
     'form.exec.mode': 'Режим', 'form.exec.agent': 'Агент',
     'form.exec.model': 'Модель', 'form.exec.turns': 'Кроки',
+    'group.badge': 'група', 'group.progress': '{done}/{total}',
+    'group.run_now': 'Запустити групу',
     'locale': 'uk',
   },
   en: {
@@ -495,6 +501,8 @@ const TR = {
     'form.exec': 'Execution options',
     'form.exec.mode': 'Mode', 'form.exec.agent': 'Agent',
     'form.exec.model': 'Model', 'form.exec.turns': 'Steps',
+    'group.badge': 'group', 'group.progress': '{done}/{total}',
+    'group.run_now': 'Run group',
     'locale': 'en-GB',
   },
   ru: {
@@ -543,6 +551,8 @@ const TR = {
     'form.exec': 'Параметры выполнения',
     'form.exec.mode': 'Режим', 'form.exec.agent': 'Агент',
     'form.exec.model': 'Модель', 'form.exec.turns': 'Шаги',
+    'group.badge': 'группа', 'group.progress': '{done}/{total}',
+    'group.run_now': 'Запустить группу',
     'locale': 'ru-RU',
   },
 };
@@ -554,7 +564,7 @@ function taskCount(n) {
 function recurLabel(r) { return t('recur.' + r) || r; }
 
 // ─── State ────────────────────────────────────────────────────────────────
-let tasks = [], sessions = [], curWorkdir = null, editingId = null;
+let tasks = [], sessions = [], chains = [], curWorkdir = null, editingId = null;
 let projects = [];
 const RECUR_NEXT = { hourly: 3600, daily: 86400, weekly: 604800, monthly: 2592000 };
 
@@ -743,10 +753,16 @@ async function fetchSessions() {
   return r.json();
 }
 
+async function fetchChains() {
+  const url = curWorkdir ? `/api/task-chains?workdir=${encodeURIComponent(curWorkdir)}` : '/api/task-chains';
+  const r = await apiFetch(url);
+  return r.json();
+}
+
 async function refresh() {
   const el = $i('schStatusEl');
   try {
-    [tasks, sessions] = await Promise.all([fetchTasks(), fetchSessions()]);
+    [tasks, sessions, chains] = await Promise.all([fetchTasks(), fetchSessions(), fetchChains().catch(() => [])]);
     render();
     const now = new Date().toLocaleTimeString(t('locale'), { hour: '2-digit', minute: '2-digit' });
     $i('refreshTs').textContent = now;
@@ -797,7 +813,16 @@ function bucketTasks(allTasks) {
 function render() {
   $i('skeleton')?.remove();
 
-  const { overdue, today, tomorrow, thisWeek, later, recurOnly } = bucketTasks(tasks);
+  // Build virtual items from scheduled chains so they appear in the timeline
+  // Filter out tasks that belong to a known chain (they're shown inside the chain card)
+  const chainIds = new Set(chains.map(c => c.id));
+  const standaloneTasks = tasks.filter(tk => !tk.chain_id || !chainIds.has(tk.chain_id));
+  const chainItems = chains
+    .filter(c => (c.scheduled_at != null || c.recurrence != null) && c.derived_status !== 'done' && c.derived_status !== 'cancelled')
+    .map(c => ({ ...c, _isChain: true, status: c.derived_status }));
+  const allItems = [...standaloneTasks, ...chainItems];
+
+  const { overdue, today, tomorrow, thisWeek, later, recurOnly } = bucketTasks(allItems);
 
   // Update stats with animation
   animateCount('cntOverdue', overdue.length);
@@ -842,7 +867,7 @@ function renderSection(s) {
   const hdCls = isOverdue ? ' overdue-hd' : '';
   const dayLine = dayOfWeek ? `<div style="font-size:12px;font-weight:500;color:var(--muted);margin-top:2px">${escH(dayOfWeek)}</div>` : '';
 
-  const cards = tasks.map(t => renderCard(t, relCls)).join('');
+  const cards = tasks.map(item => item._isChain ? renderScheduleChainCard(item, relCls) : renderCard(item, relCls)).join('');
 
   return `<div class="section">
     <div class="section-hd${hdCls}">
@@ -930,6 +955,93 @@ function renderCard(tk, cls) {
       <div class="agcard-actions">${runBtn}${editBtn}</div>
     </div>
   </div>`;
+}
+
+function renderScheduleChainCard(chain, cls) {
+  const isToday = cls === 'today';
+  const isOverdue = cls === 'overdue';
+  const showHM = isToday || isOverdue;
+  const isRunning = chain.derived_status === 'in_progress';
+  const isRunnable = (isOverdue || isToday) && !isRunning;
+  const s = chain.tasks_summary || { total: 0, done: 0, in_progress: 0, failed: 0 };
+  const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
+
+  let timeHM = '', timeDate = '';
+  if (chain.scheduled_at) {
+    if (showHM) { timeHM = fmtTime(chain.scheduled_at); }
+    else {
+      const d = new Date(chain.scheduled_at * 1000);
+      timeHM = d.toLocaleDateString(t('locale'), { weekday: 'short', day: 'numeric' });
+      timeDate = d.toLocaleDateString(t('locale'), { month: 'short' });
+    }
+  } else { timeHM = '∞'; }
+
+  let recurBadge = '';
+  if (chain.recurrence) {
+    const nextRun = nextRunLabel(chain);
+    recurBadge = `<span class="badge badge-accent">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+      ${escH(recurLabel(chain.recurrence))}${nextRun ? ` · ${nextRun}` : ''}
+    </span>`;
+  }
+
+  const groupBadge = `<span class="badge badge-accent" style="gap:4px">
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    ${escH(t('group.badge'))} · ${s.done}/${s.total}
+  </span>`;
+
+  const statusBadge = isRunning
+    ? `<span class="badge badge-orange"><span class="spinning"></span> ${t('card.running')}</span>`
+    : `<span class="badge badge-muted"><span class="dot dot-${chain.derived_status}"></span> ${statusLabel(chain.derived_status)}</span>`;
+
+  const modelBadge = chain.model ? `<span class="badge badge-muted">${escH(chain.model)}</span>` : '';
+
+  const runBtn = isRunnable
+    ? `<button class="btn-run" onclick="runChainNow('${chain.id}')" title="${escH(t('group.run_now'))}">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        ${t('card.run_now')}
+      </button>` : '';
+
+  const progressBar = s.total > 0 ? `<div style="width:100%;height:3px;background:var(--s3);border-radius:2px;margin-top:6px;overflow:hidden">
+    <div style="width:${pct}%;height:100%;background:${isRunning ? 'var(--orange)' : 'var(--green)'};border-radius:2px;transition:width .3s"></div>
+  </div>` : '';
+
+  const runningCls = isRunning ? ' running' : '';
+
+  // Sub-task mini list (collapsed, max 5 shown)
+  const taskList = (chain.tasks || []).slice(0, 5).map(tk => {
+    const icon = tk.status === 'done' ? '✓' : tk.status === 'in_progress' ? '●' : tk.status === 'cancelled' ? '✕' : '○';
+    const color = tk.status === 'done' ? 'var(--green)' : tk.status === 'in_progress' ? 'var(--orange)' : tk.status === 'cancelled' ? 'var(--red)' : 'var(--muted)';
+    const strike = tk.status === 'done' ? 'text-decoration:line-through;color:var(--muted)' : '';
+    return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;padding:1px 0"><span style="color:${color};font-size:10px;width:12px;text-align:center">${icon}</span><span style="${strike}">${escH(tk.title)}</span></div>`;
+  }).join('');
+  const moreCount = (chain.tasks || []).length - 5;
+  const moreLabel = moreCount > 0 ? `<div style="font-size:11px;color:var(--muted);padding:2px 0 0 18px">+${moreCount} more</div>` : '';
+
+  return `<div class="tl-item">
+    <div class="tl-dot tl-dot-${cls}"></div>
+    <div class="tl-time">
+      <div class="tl-time-hm ${cls}">${escH(timeHM)}</div>
+      ${timeDate ? `<div class="tl-time-date">${escH(timeDate)}</div>` : ''}
+    </div>
+    <div class="agcard agcard-${cls}${runningCls}" id="agcard-chain-${chain.id}" style="border-left:3px solid var(--accent)">
+      <div class="agcard-body">
+        <div class="agcard-title">${escH(chain.title)}</div>
+        <div class="agcard-badges">${groupBadge}${statusBadge}${recurBadge}${modelBadge}</div>
+        ${progressBar}
+        <div style="margin-top:6px">${taskList}${moreLabel}</div>
+      </div>
+      <div class="agcard-actions">${runBtn}</div>
+    </div>
+  </div>`;
+}
+
+async function runChainNow(chainId) {
+  try {
+    await apiFetch(`/api/task-chains/${chainId}/activate`, { method: 'POST' });
+    toast(t('toast.queued'));
+    await refresh();
+  } catch(e) { toast(t('toast.err') + e.message, 'err'); }
 }
 
 function statusLabel(s) {

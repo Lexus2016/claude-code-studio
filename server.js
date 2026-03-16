@@ -375,6 +375,29 @@ try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_chain    ON tasks(chain_id)`)
 try { db.exec(`ALTER TABLE telegram_devices ADD COLUMN last_session_id TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE telegram_devices ADD COLUMN last_workdir TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'web'`); } catch(e) {}
+// Task chains (groups): lightweight metadata for manually-created sequential task groups
+db.exec(`
+  CREATE TABLE IF NOT EXISTS task_chains (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT 'Task Group',
+    workdir TEXT,
+    model TEXT DEFAULT 'sonnet',
+    mode TEXT DEFAULT 'auto',
+    agent_mode TEXT DEFAULT 'single',
+    max_turns INTEGER DEFAULT 30,
+    session_id TEXT,
+    scheduled_at INTEGER,
+    recurrence TEXT,
+    recurrence_end_at INTEGER,
+    source_session_id TEXT,
+    sort_order REAL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_chain_session ON task_chains(session_id);
+  CREATE INDEX IF NOT EXISTS idx_chain_workdir ON task_chains(workdir);
+`);
 
 // Sanitize a value for better-sqlite3 bind parameters.
 // better-sqlite3 EXPANDS arrays: each element counts as a separate bind value.
@@ -509,12 +532,62 @@ const stmts = {
   // getSession endpoint helpers — pre-compiled to avoid re-prepare on every load
   hasRunningTask: db.prepare(`SELECT id FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`),
   getChainTasks:  db.prepare(`SELECT id, title, status, depends_on, chain_id FROM tasks WHERE source_session_id=? ORDER BY sort_order ASC`),
+  // Task chains (groups)
+  getChains: db.prepare(`SELECT * FROM task_chains WHERE (@w IS NULL OR workdir = @w) ORDER BY sort_order ASC, created_at ASC`),
+  getChain: db.prepare(`SELECT * FROM task_chains WHERE id=?`),
+  createChain: db.prepare(`INSERT INTO task_chains (id,title,workdir,model,mode,agent_mode,max_turns,session_id,scheduled_at,recurrence,recurrence_end_at,source_session_id,sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+  updateChain: db.prepare(`UPDATE task_chains SET title=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
+  deleteChain: db.prepare(`DELETE FROM task_chains WHERE id=?`),
+  deleteChainTasks: db.prepare(`DELETE FROM tasks WHERE chain_id=?`),
+  getChainTasksList: db.prepare(`SELECT * FROM tasks WHERE chain_id=? ORDER BY sort_order ASC, created_at ASC`),
+  getChainsEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM task_chains`),
+  // Dashboard analytics — pre-compiled for performance (11 queries per request)
+  dashSummary: db.prepare(`SELECT (SELECT COUNT(*) FROM sessions) AS total_sessions, (SELECT COUNT(*) FROM messages) AS total_messages, (SELECT COUNT(*) FROM messages WHERE type='tool') AS total_tool_calls, (SELECT COUNT(*) FROM messages WHERE role='assistant' AND type='text') AS assistant_messages, (SELECT COALESCE(SUM(LENGTH(content)),0) FROM messages) AS total_chars`),
+  dashTools: db.prepare(`SELECT tool_name AS name, COUNT(*) AS count FROM messages WHERE type='tool' AND tool_name IS NOT NULL GROUP BY tool_name ORDER BY count DESC LIMIT 15`),
+  dashModels: db.prepare(`SELECT model, COUNT(*) AS count FROM sessions WHERE model IS NOT NULL GROUP BY model`),
+  dashAgentModes: db.prepare(`SELECT agent_mode, COUNT(*) AS count FROM sessions WHERE agent_mode IS NOT NULL GROUP BY agent_mode`),
+  dashModes: db.prepare(`SELECT mode, COUNT(*) AS count FROM sessions WHERE mode IS NOT NULL GROUP BY mode`),
+  dashDailyActivity: db.prepare(`SELECT date(created_at) AS date, COUNT(*) AS count FROM messages WHERE created_at >= date('now', '-90 days') GROUP BY date(created_at) ORDER BY date ASC`),
+  dashHourlyDist: db.prepare(`SELECT CAST(strftime('%H', created_at) AS INTEGER) AS hour, COUNT(*) AS count FROM messages GROUP BY hour ORDER BY hour`),
+  dashTopSessions: db.prepare(`SELECT s.id, s.title, s.model, s.agent_mode, s.created_at, s.workdir, COUNT(m.id) AS msg_count, SUM(CASE WHEN m.type='tool' THEN 1 ELSE 0 END) AS tool_count FROM sessions s JOIN messages m ON m.session_id = s.id GROUP BY s.id ORDER BY msg_count DESC LIMIT 10`),
+  dashSessionStats: db.prepare(`SELECT ROUND(AVG(cnt),1) AS avg_messages_per_session, MAX(cnt) AS max_messages_in_session FROM (SELECT COUNT(*) AS cnt FROM messages GROUP BY session_id)`),
+  dashMultiAgentStats: db.prepare(`SELECT COUNT(DISTINCT agent_id) AS unique_agents, COUNT(*) AS agent_messages FROM messages WHERE agent_id IS NOT NULL`),
+  dashWeeklyTrend: db.prepare(`SELECT strftime('%Y-W%W', created_at) AS week, COUNT(*) AS count, SUM(CASE WHEN type='tool' THEN 1 ELSE 0 END) AS tool_count FROM messages WHERE created_at >= date('now', '-84 days') GROUP BY week ORDER BY week ASC`),
 };
 // Auto-sanitize ALL prepared statements — prevents "Too few parameter values"
 // on every code path (chat, tasks, queue, reconnect, telegram, etc.)
 for (const [name, stmt] of Object.entries(stmts)) wrapStmt(stmt, name);
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+// Derive chain status from its child tasks (no stored status — eliminates sync bugs)
+function deriveChainStatusFromTasks(tasks) {
+  if (!tasks.length) return 'backlog';
+  if (tasks.every(t => t.status === 'done')) return 'done';
+  if (tasks.some(t => t.status === 'in_progress')) return 'in_progress';
+  if (tasks.some(t => t.status === 'cancelled') &&
+      !tasks.some(t => t.status === 'in_progress' || t.status === 'todo')) return 'cancelled';
+  if (tasks.some(t => t.status === 'todo')) return 'todo';
+  return 'backlog';
+}
+function deriveChainStatus(chainId) {
+  return deriveChainStatusFromTasks(stmts.getChainTasksList.all(chainId));
+}
+
+// Build chain summary for API responses (single query per chain)
+function chainWithSummary(chain) {
+  const tasks = stmts.getChainTasksList.all(chain.id);
+  const total = tasks.length;
+  const done = tasks.filter(t => t.status === 'done').length;
+  const in_progress = tasks.filter(t => t.status === 'in_progress').length;
+  const failed = tasks.filter(t => t.status === 'cancelled').length;
+  return {
+    ...chain,
+    derived_status: deriveChainStatusFromTasks(tasks),
+    tasks_summary: { total, done, in_progress, failed },
+    tasks,
+  };
+}
 
 // ─── Active task registry ─────────────────────────────────────────────────
 // Keeps running Claude subprocesses alive when the browser tab closes/reloads.
@@ -732,6 +805,25 @@ async function startTask(task) {
           log.info(`[taskWorker] task ${task.id}: done`);
           // 🔄 Auto-schedule next occurrence for recurring tasks
           scheduleNextRun(task);
+          // 🔗 Chain completion: check if all tasks in a manual chain are done
+          if (task.chain_id) {
+            try {
+              const chain = stmts.getChain.get(task.chain_id);
+              if (chain) {
+                const allChainTasks = stmts.getChainTasksList.all(task.chain_id);
+                const allDone = allChainTasks.every(ct => ct.status === 'done');
+                if (allDone) {
+                  db.prepare(`UPDATE task_chains SET updated_at=datetime('now') WHERE id=?`).run(task.chain_id);
+                  log.info(`[taskWorker] chain ${task.chain_id} completed: all ${allChainTasks.length} tasks done`);
+                  if (chain.recurrence && chain.scheduled_at) {
+                    scheduleNextChainRun(chain, allChainTasks);
+                  }
+                } else {
+                  db.prepare(`UPDATE task_chains SET updated_at=datetime('now') WHERE id=?`).run(task.chain_id);
+                }
+              }
+            } catch (e) { log.error('Chain completion check failed', { chainId: task.chain_id, error: e.message }); }
+          }
           // Notify Telegram about completed task
           if (telegramBot && telegramBot.isRunning()) {
             telegramBot.notifyTaskComplete({
@@ -857,6 +949,52 @@ function scheduleNextRun(task) {
   log.info(`[schedule] Next run queued: "${task.title}" → ${new Date(next * 1000).toISOString()}`);
 }
 
+// Clone entire chain + tasks for recurring chain execution
+function scheduleNextChainRun(chain, oldTasks) {
+  if (!chain.recurrence || !chain.scheduled_at) return;
+  const now = Math.floor(Date.now() / 1000);
+  let next = calcNextRun(chain.scheduled_at, chain.recurrence);
+  let guard = 0;
+  while (next <= now && guard < 10000) { next = calcNextRun(next, chain.recurrence); guard++; }
+  if (guard >= 10000) { log.warn(`[schedule] Chain recurrence too many iterations: "${chain.title}"`); return; }
+  if (chain.recurrence_end_at && next > chain.recurrence_end_at) {
+    log.info(`[schedule] Chain recurrence ended: "${chain.title}"`); return;
+  }
+  const newChainId = genId();
+  const newSessionId = genId();
+  db.transaction(() => {
+    // Create new session for next run
+    stmts.createSession.run(newSessionId, chain.title, '[]', '[]',
+      chain.mode || 'auto', chain.agent_mode || 'single', chain.model || 'sonnet', 'cli',
+      chain.workdir || null);
+    // Clone chain
+    stmts.createChain.run(newChainId, chain.title, chain.workdir || null,
+      chain.model || 'sonnet', chain.mode || 'auto', chain.agent_mode || 'single',
+      chain.max_turns || 30, newSessionId, next, chain.recurrence,
+      chain.recurrence_end_at || null, chain.source_session_id || null, chain.sort_order || 0);
+    // Clone tasks with new IDs, re-map depends_on
+    const idMap = {};
+    for (const t of oldTasks) idMap[t.id] = genId();
+    for (let i = 0; i < oldTasks.length; i++) {
+      const t = oldTasks[i];
+      const newId = idMap[t.id];
+      let newDeps = null;
+      if (t.depends_on) {
+        try {
+          const deps = JSON.parse(t.depends_on).map(d => idMap[d]).filter(Boolean);
+          if (deps.length) newDeps = JSON.stringify(deps);
+        } catch {}
+      }
+      stmts.createTask.run(newId, t.title, t.description || '', t.notes || '', 'todo',
+        i * 1000, newSessionId, chain.workdir || null, chain.model || 'sonnet',
+        chain.mode || 'auto', chain.agent_mode || 'single', chain.max_turns || 30,
+        null, newDeps, newChainId, chain.source_session_id || null,
+        next, null, null);
+    }
+  })();
+  log.info(`[schedule] Chain next run queued: "${chain.title}" → ${new Date(next * 1000).toISOString()}, ${oldTasks.length} tasks cloned`);
+}
+
 function processQueue() {
   const todo = stmts.getTodoTasks.all();
   if (!todo.length) return;
@@ -900,7 +1038,7 @@ function processQueue() {
           }
           const allDone = deps.every(depId => {
             const dep = stmts.getTask.get(depId);
-            return dep && dep.status === 'done';
+            return !dep || dep.status === 'done'; // deleted dep = satisfied
           });
           if (!allDone) continue; // deps not ready yet
         }
@@ -2778,6 +2916,46 @@ app.get('/setup', (_,res) => { if(auth.isSetupDone()) return res.redirect('/'); 
 app.get('/login', (_,res) => { if(!auth.isSetupDone()) return res.redirect('/setup'); res.sendFile(path.join(__dirname,'public','auth.html')); });
 app.get('/kanban', (_,res) => res.sendFile(path.join(__dirname,'public','kanban.html')));
 app.get('/schedule', (_,res) => res.sendFile(path.join(__dirname,'public','schedule.html')));
+app.get('/dashboard', (_,res) => res.sendFile(path.join(__dirname,'public','dashboard.html')));
+
+// ─── Dashboard Analytics ────────────────────────────────────────────────────
+app.get('/api/dashboard', (req, res) => {
+  try {
+    const summary = stmts.dashSummary.get();
+    // Estimated time saved: tool calls ~30s manual work each, assistant messages ~2min research each
+    summary.estimated_hours_saved = Math.round(((summary.total_tool_calls * 0.5) + (summary.assistant_messages * 2)) / 60 * 10) / 10;
+
+    const tools = stmts.dashTools.all();
+    const models = stmts.dashModels.all();
+    const agentModes = stmts.dashAgentModes.all();
+    const modes = stmts.dashModes.all();
+    const dailyActivity = stmts.dashDailyActivity.all();
+    const hourlyDist = stmts.dashHourlyDist.all();
+    const topSessions = stmts.dashTopSessions.all();
+    const sessionStats = stmts.dashSessionStats.get();
+    const multiAgentStats = stmts.dashMultiAgentStats.get();
+    const weeklyTrend = stmts.dashWeeklyTrend.all();
+
+    // Automation Index (0-100): weighted score of tool usage, multi-agent adoption, and activity
+    // 60% = tool-to-message ratio (higher = more automated), 25% = multi-agent usage, 15% = session count (capped at 30)
+    const toolRatio = summary.total_messages > 0 ? summary.total_tool_calls / summary.total_messages : 0;
+    const multiRatio = agentModes.reduce((acc, m) => m.agent_mode === 'multi' ? acc + m.count : acc, 0) /
+      Math.max(1, agentModes.reduce((acc, m) => acc + m.count, 0));
+    const efficiencyScore = Math.min(100, Math.round(
+      (toolRatio * 60) + (multiRatio * 25) + (Math.min(summary.total_sessions, 30) / 30 * 15)
+    ));
+
+    res.json({
+      summary, tools, models, agentModes, modes,
+      dailyActivity, hourlyDist, topSessions,
+      sessionStats, multiAgentStats, weeklyTrend,
+      efficiencyScore
+    });
+  } catch (e) {
+    log.error('Dashboard analytics error', { err: e.message });
+    res.status(500).json({ error: 'Failed to load analytics' });
+  }
+});
 
 // ─── Tasks (Kanban) ───────────────────────────────────────────────────────
 app.get('/api/tasks', (req, res) => {
@@ -2853,8 +3031,175 @@ app.delete('/api/tasks/:id', (req, res) => {
   // Kill worker process directly if PID is known
   const task = stmts.getTask.get(tid);
   if (task?.worker_pid) killByPid(task.worker_pid);
+  // Re-link depends_on for chain tasks so the next task doesn't get stuck
+  if (task?.chain_id) {
+    const siblings = stmts.getChainTasksList.all(task.chain_id);
+    const idx = siblings.findIndex(t => t.id === tid);
+    if (idx >= 0 && idx < siblings.length - 1) {
+      const nextTask = siblings[idx + 1];
+      const prevId = idx > 0 ? siblings[idx - 1].id : null;
+      db.prepare(`UPDATE tasks SET depends_on=?, updated_at=datetime('now') WHERE id=?`)
+        .run(prevId ? JSON.stringify([prevId]) : null, nextTask.id);
+    }
+  }
   stmts.deleteTask.run(tid);
   res.json({ ok: true });
+});
+
+// ─── Task Chains (Groups) ────────────────────────────────────────────────
+app.get('/api/task-chains', (req, res) => {
+  const workdir = req.query.workdir || null;
+  const rows = stmts.getChains.all({ w: workdir || null });
+  res.json(rows.map(chainWithSummary));
+});
+app.get('/api/task-chains/etag', (req, res) => {
+  // Combine chains etag with tasks etag for accurate change detection
+  const ce = stmts.getChainsEtag.get();
+  const te = stmts.getTasksEtag.get();
+  res.json({ ts: [ce.ts, te.ts].join('|'), n: ce.n });
+});
+app.get('/api/task-chains/:id', (req, res) => {
+  const chain = stmts.getChain.get(req.params.id);
+  if (!chain) return res.status(404).json({ error: 'Not found' });
+  res.json(chainWithSummary(chain));
+});
+app.post('/api/task-chains', (req, res) => {
+  const { title = 'Task Group', workdir = null, model = 'sonnet', mode = 'auto',
+          agent_mode = 'single', max_turns = 30, scheduled_at = null,
+          recurrence = null, recurrence_end_at = null } = req.body;
+  const id = genId();
+  // Create shared session for the chain
+  const sessionId = genId();
+  stmts.createSession.run(sessionId, String(title).substring(0, 200), '[]', '[]',
+    sqlVal(mode), sqlVal(agent_mode), sqlVal(model), 'cli', sqlVal(workdir) || null);
+  stmts.createChain.run(id, String(title).substring(0, 200), sqlVal(workdir) || null,
+    sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns),
+    sessionId, sqlVal(scheduled_at) || null, sqlVal(recurrence) || null,
+    sqlVal(recurrence_end_at) || null, null, 0);
+  res.json(chainWithSummary(stmts.getChain.get(id)));
+});
+app.put('/api/task-chains/:id', (req, res) => {
+  const chain = stmts.getChain.get(req.params.id);
+  if (!chain) return res.status(404).json({ error: 'Not found' });
+  const { title = chain.title, workdir = chain.workdir, model = chain.model,
+          mode = chain.mode, agent_mode = chain.agent_mode, max_turns = chain.max_turns,
+          session_id = chain.session_id, scheduled_at = chain.scheduled_at,
+          recurrence = chain.recurrence, recurrence_end_at = chain.recurrence_end_at,
+          sort_order = chain.sort_order } = req.body;
+  stmts.updateChain.run(String(title).substring(0, 200), sqlVal(workdir) || null,
+    sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns),
+    sqlVal(session_id) || null, sqlVal(scheduled_at) || null, sqlVal(recurrence) || null,
+    sqlVal(recurrence_end_at) || null, sqlVal(sort_order), req.params.id);
+  // If scheduled_at changed, propagate to child tasks
+  if (scheduled_at !== chain.scheduled_at) {
+    const tasks = stmts.getChainTasksList.all(req.params.id);
+    for (const t of tasks) {
+      db.prepare(`UPDATE tasks SET scheduled_at=?, updated_at=datetime('now') WHERE id=?`)
+        .run(sqlVal(scheduled_at) || null, t.id);
+    }
+  }
+  res.json(chainWithSummary(stmts.getChain.get(req.params.id)));
+});
+app.delete('/api/task-chains/:id', (req, res) => {
+  const chain = stmts.getChain.get(req.params.id);
+  if (!chain) return res.status(404).json({ error: 'Not found' });
+  // Abort any running tasks in this chain
+  const tasks = stmts.getChainTasksList.all(req.params.id);
+  for (const t of tasks) {
+    if (t.status === 'in_progress') {
+      const ctrl = runningTaskAborts.get(t.id);
+      if (ctrl) { stoppingTasks.add(t.id); ctrl.abort(); }
+      else if (t.worker_pid) { stoppingTasks.add(t.id); killByPid(t.worker_pid); }
+    }
+  }
+  stmts.deleteChainTasks.run(req.params.id);
+  stmts.deleteChain.run(req.params.id);
+  res.json({ ok: true });
+});
+// Add task to chain — auto-sets depends_on to previous task
+app.post('/api/task-chains/:id/tasks', (req, res) => {
+  const chain = stmts.getChain.get(req.params.id);
+  if (!chain) return res.status(404).json({ error: 'Chain not found' });
+  const { title = 'Subtask', description = '', notes = '' } = req.body;
+  const existing = stmts.getChainTasksList.all(req.params.id);
+  const lastTask = existing[existing.length - 1];
+  const sortOrder = existing.length ? (lastTask?.sort_order || 0) + 1000 : 0;
+  const dependsOn = lastTask ? JSON.stringify([lastTask.id]) : null;
+  // Inherit chain's derived status for new tasks
+  const chainStatus = deriveChainStatus(req.params.id);
+  const taskStatus = (chainStatus === 'in_progress' || chainStatus === 'todo') ? 'todo' : 'backlog';
+  const taskId = genId();
+  stmts.createTask.run(taskId, String(title).substring(0, 200), String(description).substring(0, 2000),
+    String(notes || '').substring(0, 2000), taskStatus, sortOrder,
+    chain.session_id || null, chain.workdir || null, chain.model || 'sonnet',
+    chain.mode || 'auto', chain.agent_mode || 'single', chain.max_turns || 30,
+    null, dependsOn, req.params.id, chain.source_session_id || null,
+    chain.scheduled_at || null, null, null);
+  if (taskStatus === 'todo') setImmediate(processQueue);
+  res.json(stmts.getTask.get(taskId));
+});
+// Reorder tasks within a chain — rebuilds depends_on chain
+app.put('/api/task-chains/:id/tasks/reorder', (req, res) => {
+  const chain = stmts.getChain.get(req.params.id);
+  if (!chain) return res.status(404).json({ error: 'Chain not found' });
+  const { task_ids } = req.body;
+  if (!Array.isArray(task_ids)) return res.status(400).json({ error: 'task_ids must be an array' });
+  db.transaction(() => {
+    for (let i = 0; i < task_ids.length; i++) {
+      const tid = task_ids[i];
+      const prevId = i > 0 ? task_ids[i - 1] : null;
+      const dependsOn = prevId ? JSON.stringify([prevId]) : null;
+      db.prepare(`UPDATE tasks SET sort_order=?, depends_on=?, updated_at=datetime('now') WHERE id=? AND chain_id=?`)
+        .run(i * 1000, dependsOn, tid, req.params.id);
+    }
+  })();
+  db.prepare(`UPDATE task_chains SET updated_at=datetime('now') WHERE id=?`).run(req.params.id);
+  res.json(chainWithSummary(stmts.getChain.get(req.params.id)));
+});
+// Activate chain — set all tasks to todo, first one has no depends_on
+app.post('/api/task-chains/:id/activate', (req, res) => {
+  const chain = stmts.getChain.get(req.params.id);
+  if (!chain) return res.status(404).json({ error: 'Chain not found' });
+  const tasks = stmts.getChainTasksList.all(req.params.id);
+  if (!tasks.length) return res.status(400).json({ error: 'Chain has no tasks' });
+  db.transaction(() => {
+    for (let i = 0; i < tasks.length; i++) {
+      const t = tasks[i];
+      // Skip already completed/in-progress tasks
+      if (t.status === 'done' || t.status === 'in_progress') continue;
+      const prevId = i > 0 ? tasks[i - 1].id : null;
+      const dependsOn = prevId ? JSON.stringify([prevId]) : null;
+      db.prepare(`UPDATE tasks SET status='todo', depends_on=?, sort_order=?, scheduled_at=?, updated_at=datetime('now') WHERE id=?`)
+        .run(dependsOn, i * 1000, chain.scheduled_at || null, t.id);
+    }
+    db.prepare(`UPDATE task_chains SET updated_at=datetime('now') WHERE id=?`).run(req.params.id);
+  })();
+  setImmediate(processQueue);
+  res.json(chainWithSummary(stmts.getChain.get(req.params.id)));
+});
+// Remove a single task from chain — re-links depends_on
+app.delete('/api/task-chains/:chainId/tasks/:taskId', (req, res) => {
+  const { chainId, taskId } = req.params;
+  const chain = stmts.getChain.get(chainId);
+  if (!chain) return res.status(404).json({ error: 'Chain not found' });
+  const tasks = stmts.getChainTasksList.all(chainId);
+  const idx = tasks.findIndex(t => t.id === taskId);
+  if (idx < 0) return res.status(404).json({ error: 'Task not in chain' });
+  // Abort if running
+  const task = stmts.getTask.get(taskId);
+  const ctrl = runningTaskAborts.get(taskId);
+  if (ctrl) { stoppingTasks.add(taskId); ctrl.abort(); }
+  else if (task?.worker_pid) { stoppingTasks.add(taskId); killByPid(task.worker_pid); }
+  // Re-link: next task's depends_on points to previous task
+  if (idx < tasks.length - 1) {
+    const nextTask = tasks[idx + 1];
+    const prevId = idx > 0 ? tasks[idx - 1].id : null;
+    const newDeps = prevId ? JSON.stringify([prevId]) : null;
+    db.prepare(`UPDATE tasks SET depends_on=?, updated_at=datetime('now') WHERE id=?`).run(newDeps, nextTask.id);
+  }
+  stmts.deleteTask.run(taskId);
+  db.prepare(`UPDATE task_chains SET updated_at=datetime('now') WHERE id=?`).run(chainId);
+  res.json(chainWithSummary(stmts.getChain.get(chainId)));
 });
 
 // ─── Task Dispatch (Chat → Kanban chain) ─────────────────────────────────
@@ -2907,6 +3252,11 @@ app.post('/api/tasks/dispatch', (req, res) => {
     'auto', 'single', sqlVal(model) || 'sonnet', 'cli',
     sqlVal(workdir) || null
   );
+
+  // Register chain in task_chains table (gives it a title, session, and metadata)
+  stmts.createChain.run(chainId, (plan_description || 'Task chain').substring(0, 200),
+    sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', 30,
+    chainSessionId, null, null, null, source_session_id || null, 0);
 
   // Chain gets its OWN Claude session — first task starts fresh,
   // subsequent tasks --resume from the chain's session (NOT the source chat's).
@@ -4996,6 +5346,10 @@ wss.on('connection', (ws) => {
             'auto', 'single', sqlVal(model) || 'sonnet', 'cli',
             sqlVal(workdir) || null
           );
+          // Register chain in task_chains table
+          stmts.createChain.run(chainId, (finalPlan || 'Task chain').substring(0, 200),
+            sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', 30,
+            chainSessionId, null, null, null, sessionId || null, 0);
           // Chain gets its OWN Claude session — first task starts fresh,
           // subsequent tasks --resume from the chain's session (NOT the source chat's).
           // Sharing claude_session_id with source chat causes context mixing chaos.

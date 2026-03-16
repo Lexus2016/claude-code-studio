@@ -295,6 +295,58 @@ textarea.inp{ resize:vertical; min-height:80px; }
   .hdr-meta { display: none; }
   .kb-progress { display: none; }
 }
+
+/* ─── Chain (group) card ─── */
+.chain-card{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-md); cursor:grab; user-select:none; transition:box-shadow .15s,border-color .15s; overflow:hidden; }
+.chain-card:hover{ border-color:var(--muted); box-shadow:var(--shadow-md); }
+.chain-card.dragging{ opacity:.4; cursor:grabbing; }
+.chain-card.status-in_progress{ border-left:3px solid var(--orange); }
+.chain-card.status-done{ border-left:3px solid var(--green); }
+.chain-card.status-cancelled{ border-left:3px solid var(--red); }
+.chain-header{ display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; }
+.chain-header:hover{ background:rgba(255,255,255,.03); }
+.chain-toggle{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:10px; transition:transform .2s; padding:0; line-height:1; }
+.chain-toggle.open{ transform:rotate(90deg); }
+.chain-title{ font-size:13px; font-weight:700; flex:1; line-height:1.3; word-break:break-word; }
+.chain-progress{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.chain-progress-bar{ width:40px; height:4px; background:var(--s3); border-radius:2px; overflow:hidden; }
+.chain-progress-fill{ height:100%; border-radius:2px; transition:width .3s; }
+.chain-progress-fill.green{ background:var(--green); }
+.chain-progress-fill.orange{ background:var(--orange); }
+.chain-progress-text{ font-size:11px; font-weight:600; color:var(--muted); white-space:nowrap; }
+.chain-tasks{ border-top:1px solid var(--border); display:none; }
+.chain-tasks.open{ display:block; }
+.chain-task-item{ display:flex; align-items:center; gap:8px; padding:7px 12px 7px 20px; font-size:12px; border-bottom:1px solid rgba(42,51,71,.5); transition:background .1s; }
+.chain-task-item:last-child{ border-bottom:none; }
+.chain-task-item:hover{ background:rgba(255,255,255,.02); }
+.chain-task-icon{ width:14px; height:14px; border-radius:50%; border:2px solid var(--border); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:8px; }
+.chain-task-icon.done{ background:var(--green); border-color:var(--green); color:white; }
+.chain-task-icon.in_progress{ border-color:var(--orange); animation:pulse-ring 1.5s ease-out infinite; }
+.chain-task-icon.cancelled{ background:var(--red); border-color:var(--red); color:white; }
+@keyframes pulse-ring{ 0%{ box-shadow:0 0 0 0 rgba(229,164,53,.4); } 70%{ box-shadow:0 0 0 4px rgba(229,164,53,0); } 100%{ box-shadow:0 0 0 0 rgba(229,164,53,0); } }
+.chain-task-title{ flex:1; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.chain-task-title.done-text{ color:var(--muted); text-decoration:line-through; }
+.chain-task-del{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:11px; padding:2px 4px; border-radius:3px; opacity:0; transition:opacity .1s,color .1s; }
+.chain-task-item:hover .chain-task-del{ opacity:1; }
+.chain-task-del:hover{ color:var(--red); }
+.chain-footer{ display:flex; align-items:center; gap:5px; padding:7px 12px; border-top:1px solid var(--border); flex-wrap:wrap; }
+.chain-actions{ display:none; gap:3px; margin-left:auto; }
+.chain-card:hover .chain-actions{ display:flex; }
+.chain-card:hover .chain-time{ display:none; }
+.chain-time{ font-size:11px; color:var(--muted); margin-left:auto; }
+.chain-add-task{ background:none; border:1px dashed var(--border); color:var(--muted); cursor:pointer; padding:6px 12px; font-size:11px; text-align:center; font-family:inherit; transition:.12s; width:100%; }
+.chain-add-task:hover{ background:var(--s3); color:var(--text); border-color:var(--muted); }
+/* Chain modal: task list */
+.chain-modal-tasks{ display:flex; flex-direction:column; gap:6px; }
+.chain-modal-task{ display:flex; align-items:flex-start; gap:8px; background:var(--s3); border:1px solid var(--border); border-radius:var(--r-sm); padding:10px 12px; }
+.chain-modal-task .task-num{ font-size:12px; font-weight:700; color:var(--muted); min-width:20px; padding-top:2px; }
+.chain-modal-task .task-fields{ flex:1; display:flex; flex-direction:column; gap:6px; }
+.chain-modal-task .task-fields input,
+.chain-modal-task .task-fields textarea{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-sm); padding:6px 10px; color:var(--text); font-size:13px; font-family:inherit; width:100%; }
+.chain-modal-task .task-fields input:focus,
+.chain-modal-task .task-fields textarea:focus{ border-color:var(--accent); outline:none; }
+.chain-modal-task .task-remove{ background:none; border:none; color:var(--muted); cursor:pointer; padding:2px 6px; font-size:14px; border-radius:3px; }
+.chain-modal-task .task-remove:hover{ color:var(--red); background:rgba(248,81,73,.1); }
 </style>
 </head>
 <body>
@@ -316,6 +368,10 @@ textarea.inp{ resize:vertical; min-height:80px; }
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Schedule
       </a>
+      <a class="nav-sw-btn" href="/dashboard" data-tip="Dashboard">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+        Dashboard
+      </a>
     </nav>
     <div class="hdr-meta">
       <div class="proj-dd-wrap" id="projDdWrap">
@@ -336,6 +392,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
   <div class="hdr-btns">
     <span class="refresh-ts" id="refreshTs" style="margin-right:4px"></span>
     <button class="hb" onclick="refresh(true)" id="refreshBtn" title="Оновити">&#8635;</button>
+    <button class="hb" onclick="openAddChainModal()" id="addGroupBtn">&#xFF0B; <span id="addGroupBtnLabel">Група</span></button>
     <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel">Задача</span></button>
     <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
@@ -417,6 +474,11 @@ const TR = {
     'nav.chat':'Чат','nav.kanban':'Kanban дошка','nav.aria':'Навігація між розділами',
     'stat.total':'всього',
     'card.sched_tip':'Чекає запуску:','modal.sched_wait':'Чекає запуску:','locale':'uk-UA',
+    'hdr.group':'Група','group.add':'Нова група','group.edit':'Редагувати групу',
+    'group.title':'Назва групи *','group.tasks':'Завдання','group.add_task':'+ Додати завдання',
+    'group.empty':'Додайте завдання до групи','group.activate':'Запустити',
+    'group.delete':'Видалити групу?','group.delete_body':'Буде видалено групу та всі її завдання.',
+    'group.created':'✓ Групу створено','group.saved':'✓ Групу збережено','group.task_added':'✓ Завдання додано',
   },
   en: {
     'hdr.title':'Kanban','hdr.add':'Task',
@@ -447,6 +509,11 @@ const TR = {
     'nav.chat':'Chat','nav.kanban':'Kanban board','nav.aria':'Navigation',
     'stat.total':'total',
     'card.sched_tip':'Waiting for launch:','modal.sched_wait':'Waiting for launch:','locale':'en-US',
+    'hdr.group':'Group','group.add':'New group','group.edit':'Edit group',
+    'group.title':'Group title *','group.tasks':'Tasks','group.add_task':'+ Add task',
+    'group.empty':'Add tasks to the group','group.activate':'Run',
+    'group.delete':'Delete group?','group.delete_body':'The group and all its tasks will be deleted.',
+    'group.created':'✓ Group created','group.saved':'✓ Group saved','group.task_added':'✓ Task added',
   },
   ru: {
     'hdr.title':'Kanban','hdr.add':'Задача',
@@ -477,6 +544,11 @@ const TR = {
     'nav.chat':'Чат','nav.kanban':'Kanban доска','nav.aria':'Навигация',
     'stat.total':'всего',
     'card.sched_tip':'Ожидает запуска:','modal.sched_wait':'Ожидает запуска:','locale':'ru-RU',
+    'hdr.group':'Группа','group.add':'Новая группа','group.edit':'Редактировать группу',
+    'group.title':'Название группы *','group.tasks':'Задания','group.add_task':'+ Добавить задание',
+    'group.empty':'Добавьте задания в группу','group.activate':'Запустить',
+    'group.delete':'Удалить группу?','group.delete_body':'Группа и все её задания будут удалены.',
+    'group.created':'✓ Группа создана','group.saved':'✓ Группа сохранена','group.task_added':'✓ Задание добавлено',
   },
 };
 const lang = localStorage.getItem('lang') || 'uk';
@@ -484,6 +556,7 @@ function t(k){ return (TR[lang]||TR.uk)[k] || k; }
 
 document.title = t('hdr.title') + ' — Claude Code Studio';
 document.getElementById('addBtnLabel').textContent=t('hdr.add');
+document.getElementById('addGroupBtnLabel').textContent=t('hdr.group');
 document.getElementById('kbStatusEl').textContent=t('hdr.connected');
 document.getElementById('cancelBtn').textContent=t('confirm.cancel');
 document.querySelector('.nav-sw').setAttribute('aria-label', t('nav.aria'));
@@ -500,6 +573,10 @@ const COLS=[
   {id:'cancelled',dot:'dot-cancelled'},
 ];
 let tasks=[],sessions=[],projects=[];
+let chains=[];
+let lastChainEtag='';
+let chainExpandState={};
+try { chainExpandState = JSON.parse(localStorage.getItem('kanban_chain_expand') || '{}'); } catch {}
 let curWorkdir=null,lastEtag='',refreshTimer=null,modalMode=null,editingId=null,dragSrcId=null;
 let pendingAttachments=[]; // [{name, type, base64}]
 
@@ -563,7 +640,11 @@ document.addEventListener('keydown',e=>{
       return;
     }
   }
-  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!$i('taskOv').classList.contains('hidden')) saveTask();
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!$i('taskOv').classList.contains('hidden')){
+    if(modalMode==='add_chain'||modalMode==='edit_chain')saveChain();
+    else if(modalMode==='add_chain_task')saveChainTask();
+    else saveTask();
+  }
 }, true);
 function relTime(iso){
   if(!iso)return'';
@@ -612,6 +693,8 @@ async function loadProjects(){
 function onProjChange(doRefresh=true){
   const addBtn=$i('addBtn');
   if(addBtn){addBtn.disabled=!curWorkdir;addBtn.title=curWorkdir?'':t('toast.no_project');}
+  const addGroupBtn=$i('addGroupBtn');
+  if(addGroupBtn){addGroupBtn.disabled=!curWorkdir;addGroupBtn.title=curWorkdir?'':t('toast.no_project');}
   updateProjDropdownBtn();
   if(doRefresh)refresh(true);
 }
@@ -738,6 +821,16 @@ async function refresh(force=false){
     if(!force&&etag===lastEtag)return;
     const[newTasks,newSessions]=await Promise.all([fetchTasks(),fetchSessions()]);
     tasks=newTasks;sessions=newSessions;lastEtag=etag;
+    // Fetch chains
+    try{
+      const ce=await apiFetch('/api/task-chains/etag').then(r=>r.json());
+      const cEtag=ce.ts+'|'+ce.n;
+      if(force||cEtag!==lastChainEtag){
+        lastChainEtag=cEtag;
+        const url=curWorkdir?`/api/task-chains?workdir=${encodeURIComponent(curWorkdir)}`:'/api/task-chains';
+        chains=await apiFetch(url).then(r=>r.json());
+      }
+    }catch(e){console.warn('chains fetch:',e);chains=[];}
     renderBoard();
     const ts=new Date().toLocaleTimeString(lang==='uk'?'uk-UA':lang==='ru'?'ru-RU':'en-GB',{hour:'2-digit',minute:'2-digit'});
     $i('refreshTs').textContent=ts;
@@ -747,7 +840,8 @@ async function refresh(force=false){
 }
 function startAutoRefresh(){
   clearTimeout(refreshTimer);
-  const hasActive=tasks.some(t=>t.status==='in_progress'||t.status==='todo');
+  const hasActive=tasks.some(t=>t.status==='in_progress'||t.status==='todo')
+    ||chains.some(c=>c.derived_status==='in_progress'||c.derived_status==='todo');
   const delay=hasActive?5000:30000;
   refreshTimer=setTimeout(async()=>{await refresh(false);startAutoRefresh();},delay);
 }
@@ -800,22 +894,27 @@ function updateStats(){
 // ─── Board Render ─────────────────────────────────────────────────────────
 function renderBoard(){
   const board=$i('board');board.innerHTML='';
+  const chainIds=new Set(chains.map(c=>c.id));
+  const standaloneTasks=tasks.filter(tk=>!tk.chain_id||!chainIds.has(tk.chain_id));
   for(const col of COLS){
-    const colTasks=tasks.filter(tk=>tk.status===col.id).sort((a,b)=>a.sort_order-b.sort_order);
-    board.appendChild(makeColumn(col,colTasks));
+    const colStandalone=standaloneTasks.filter(tk=>tk.status===col.id).sort((a,b)=>a.sort_order-b.sort_order);
+    const colChains=chains.filter(c=>c.derived_status===col.id).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+    board.appendChild(makeColumn(col,colStandalone,colChains));
   }
   updateStats();
 }
-function makeColumn(col,colTasks){
+function makeColumn(col,colTasks,colChains=[]){
   const el=document.createElement('div');el.className='col';
+  const totalCount=colTasks.length+colChains.length;
   const hd=document.createElement('div');hd.className='col-head';
-  hd.innerHTML=`<div class="col-dot ${col.dot}"></div><span class="col-title">${escH(t('col.'+col.id))}</span><span class="col-cnt">${colTasks.length}</span>`;
+  hd.innerHTML=`<div class="col-dot ${col.dot}"></div><span class="col-title">${escH(t('col.'+col.id))}</span><span class="col-cnt">${totalCount}</span>`;
   el.appendChild(hd);
   const body=document.createElement('div');body.className='col-body';body.dataset.status=col.id;
   setupDropZone(body);
-  if(colTasks.length===0){
+  if(totalCount===0){
     const empty=document.createElement('div');empty.className='col-empty';empty.textContent=t('col.empty');body.appendChild(empty);
   }else{
+    for(const chain of colChains)body.appendChild(makeChainCard(chain));
     for(const tk of colTasks)body.appendChild(makeCard(tk));
   }
   el.appendChild(body);
@@ -858,6 +957,70 @@ function makeCard(tk){
   });
   return el;
 }
+function makeChainCard(chain){
+  const el=document.createElement('div');
+  el.className=`chain-card status-${chain.derived_status}`;
+  el.dataset.chainId=chain.id;
+  el.draggable=true;
+  const s=chain.tasks_summary;
+  const pct=s.total?Math.round((s.done/s.total)*100):0;
+  const isExpanded=chainExpandState[chain.id]||false;
+  const progressColor=s.in_progress>0?'orange':'green';
+  const runningBadge=chain.derived_status==='in_progress'
+    ?`<span class="badge badge-orange"><span class="spinning" style="width:10px;height:10px;border-width:1.5px"></span> ${escH(t('card.running'))}</span>`:'';
+  const modelBadge=chain.model?`<span class="badge badge-muted">${escH(chain.model)}</span>`:'';
+  let tasksHtml='';
+  if(chain.tasks&&chain.tasks.length){
+    tasksHtml=chain.tasks.map(tk=>{
+      const iconCls=tk.status==='done'?'done':tk.status==='in_progress'?'in_progress':tk.status==='cancelled'?'cancelled':'';
+      const iconContent=tk.status==='done'?'✓':tk.status==='cancelled'?'✕':'';
+      const titleCls=tk.status==='done'?' done-text':'';
+      return `<div class="chain-task-item" data-task-id="${tk.id}">
+        <div class="chain-task-icon ${iconCls}">${iconContent}</div>
+        <span class="chain-task-title${titleCls}">${escH(tk.title)}</span>
+        <button class="chain-task-del" onclick="event.stopPropagation();deleteChainTask('${chain.id}','${tk.id}')" title="${t('modal.delete')}">✕</button>
+      </div>`;
+    }).join('');
+  }else{
+    tasksHtml=`<div style="padding:12px;text-align:center;color:var(--muted);font-size:12px">${escH(t('group.empty'))}</div>`;
+  }
+  el.innerHTML=`
+    <div class="chain-header" onclick="toggleChain('${chain.id}')">
+      <span class="chain-toggle${isExpanded?' open':''}">▶</span>
+      <span class="chain-title">${escH(chain.title)}</span>
+      <div class="chain-progress">
+        <div class="chain-progress-bar">
+          <div class="chain-progress-fill ${progressColor}" style="width:${pct}%"></div>
+        </div>
+        <span class="chain-progress-text">${s.done}/${s.total}</span>
+      </div>
+    </div>
+    <div class="chain-tasks${isExpanded?' open':''}">
+      ${tasksHtml}
+      <button class="chain-add-task" onclick="event.stopPropagation();openAddChainTaskModal('${chain.id}')">${escH(t('group.add_task'))}</button>
+    </div>
+    <div class="chain-footer">
+      ${runningBadge}${modelBadge}
+      <span class="chain-time">${relTime(chain.updated_at)}</span>
+      <span class="chain-actions">
+        ${chain.derived_status==='backlog'||chain.derived_status==='todo'?`<button class="cbtn" title="${escH(t('group.activate'))}" onclick="event.stopPropagation();activateChain('${chain.id}')">▶</button>`:''}
+        <button class="cbtn" title="${escH(t('group.edit'))}" onclick="event.stopPropagation();openEditChainModal('${chain.id}')">✎</button>
+        <button class="cbtn" title="${escH(t('modal.delete'))}" onclick="event.stopPropagation();confirmDeleteChain('${chain.id}')">✕</button>
+      </span>
+    </div>`;
+  el.addEventListener('dragstart',e=>{
+    dragSrcId='chain:'+chain.id;
+    el.classList.add('dragging');
+    e.dataTransfer.effectAllowed='move';
+    e.dataTransfer.setData('text/plain','chain:'+chain.id);
+  });
+  el.addEventListener('dragend',()=>{
+    el.classList.remove('dragging');
+    document.querySelectorAll('.col-body.dz').forEach(z=>z.classList.remove('dz'));
+    document.querySelectorAll('.card-ph').forEach(p=>p.remove());
+  });
+  return el;
+}
 
 // ─── Drag & Drop ──────────────────────────────────────────────────────────
 function setupDropZone(el){
@@ -878,6 +1041,23 @@ function setupDropZone(el){
     document.querySelectorAll('.card-ph').forEach(p=>p.remove());
     const id=e.dataTransfer.getData('text/plain')||dragSrcId;
     if(!id)return;
+    // Handle chain card drops
+    if(id.startsWith('chain:')){
+      const chainId=id.substring(6);
+      const newStatus=el.dataset.status;
+      try{
+        if(newStatus==='todo'||newStatus==='in_progress'){
+          await apiFetch(`/api/task-chains/${chainId}/activate`,{method:'POST'});
+        }
+        await apiFetch(`/api/task-chains/${chainId}`,{
+          method:'PUT',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({sort_order:0})
+        });
+        try{const bc=new BroadcastChannel('tasks');bc.postMessage({type:'chain_changed',id:chainId});bc.close();}catch{}
+        await refresh(true);
+      }catch(err){if(err.message!=='401')toast(t('toast.err')+err.message,true);}
+      return;
+    }
     const newStatus=el.dataset.status;
     const cards=[...el.querySelectorAll('.card[data-id]')];
     const afterEl=getDragAfter(el,e.clientY);
@@ -912,13 +1092,254 @@ function setupDropZone(el){
   });
 }
 function getDragAfter(container,y){
-  const els=[...container.querySelectorAll('.card:not(.dragging):not(.card-ph)')];
+  const els=[...container.querySelectorAll('.card:not(.dragging):not(.card-ph), .chain-card:not(.dragging)')];
   return els.reduce((cl,el)=>{
     const box=el.getBoundingClientRect();
     const offset=y-box.top-box.height/2;
     if(offset<0&&offset>cl.offset)return{offset,el};
     return cl;
   },{offset:-Infinity,el:null}).el;
+}
+
+// ─── Chain helpers ─────────────────────────────────────────────────────────
+function toggleChain(chainId){
+  chainExpandState[chainId]=!chainExpandState[chainId];
+  try{localStorage.setItem('kanban_chain_expand',JSON.stringify(chainExpandState));}catch{}
+  renderBoard();
+}
+async function activateChain(chainId){
+  try{
+    await apiFetch(`/api/task-chains/${chainId}/activate`,{method:'POST'});
+    toast(t('group.activate')+' ✓');
+    await refresh(true);
+  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
+}
+async function deleteChainTask(chainId,taskId){
+  try{
+    await apiFetch(`/api/task-chains/${chainId}/tasks/${taskId}`,{method:'DELETE'});
+    await refresh(true);
+  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
+}
+function confirmDeleteChain(chainId){
+  const chain=chains.find(c=>c.id===chainId);
+  $i('confirmTitle').textContent=t('group.delete');
+  $i('confirmBody').innerHTML=`<p style="font-size:14px;color:var(--text)">«${escH(chain?.title||chainId)}»</p><p style="font-size:12px;color:var(--muted);margin-top:6px">${t('group.delete_body')}</p>`;
+  $i('confirmOkBtn').onclick=async()=>{
+    try{
+      await apiFetch(`/api/task-chains/${chainId}`,{method:'DELETE'});
+      chains=chains.filter(c=>c.id!==chainId);
+      renderBoard();
+      toast(t('toast.deleted'));closeConfirm();
+      try{const bc=new BroadcastChannel('tasks');bc.postMessage({type:'chain_deleted',id:chainId});bc.close();}catch{}
+      await refresh(true);
+    }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
+  };
+  openOverlay('confirmOv',{initialFocus:'#cancelBtn',onEscape:closeConfirm});
+}
+
+// ─── Chain modals ─────────────────────────────────────────────────────────
+function openAddChainModal(){
+  if(!curWorkdir){toast(t('toast.no_project'),true);return;}
+  modalMode='add_chain';editingId=null;
+  $i('modalTitle').textContent=t('group.add');
+  $i('modalBody').innerHTML=buildChainForm({});
+  $i('modalFt').innerHTML=`
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
+    <button class="btn btn-primary btn-sm" onclick="saveChain()">${t('modal.create')}</button>`;
+  openOverlay('taskOv',{initialFocus:'#fChainTitle',onEscape:closeModal});
+}
+function openEditChainModal(chainId){
+  const chain=chains.find(c=>c.id===chainId);
+  if(!chain)return;
+  modalMode='edit_chain';editingId=chainId;
+  $i('modalTitle').textContent=t('group.edit');
+  $i('modalBody').innerHTML=buildChainForm(chain);
+  $i('modalFt').innerHTML=`
+    <button class="btn btn-danger btn-sm" onclick="confirmDeleteChain('${chainId}');closeModal()">${t('modal.delete')}</button>
+    <div style="flex:1"></div>
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
+    <button class="btn btn-primary btn-sm" onclick="saveChain()">${t('modal.save')}</button>`;
+  openOverlay('taskOv',{initialFocus:'#fChainTitle',onEscape:closeModal});
+}
+function openAddChainTaskModal(chainId){
+  modalMode='add_chain_task';editingId=chainId;
+  $i('modalTitle').textContent=t('group.add_task');
+  $i('modalBody').innerHTML=`
+    <div><label class="lbl">${t('modal.name')}</label>
+      <input id="fChainTaskTitle" class="inp" placeholder="${t('modal.name')}" maxlength="200">
+    </div>
+    <div><label class="lbl">${t('modal.desc')}</label>
+      <textarea id="fChainTaskDesc" class="inp" rows="3" placeholder="…" maxlength="2000"></textarea>
+    </div>`;
+  $i('modalFt').innerHTML=`
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
+    <button class="btn btn-primary btn-sm" onclick="saveChainTask()">${t('modal.create')}</button>`;
+  openOverlay('taskOv',{initialFocus:'#fChainTaskTitle',onEscape:closeModal});
+}
+function buildChainForm(chain){
+  const m=chain.mode||kbSettings.mode||'auto';
+  const ag=chain.agent_mode||kbSettings.agent_mode||'single';
+  const mdl=chain.model||kbSettings.model||'sonnet';
+  const existingTasks=chain.tasks||[];
+  let tasksHtml='';
+  if(modalMode==='add_chain'){
+    tasksHtml=`
+      <div><label class="lbl">${t('group.tasks')}</label>
+        <div class="chain-modal-tasks" id="chainTasksContainer">
+          <div class="chain-modal-task" data-idx="0">
+            <span class="task-num">1.</span>
+            <div class="task-fields">
+              <input class="chain-task-input" placeholder="${escH(t('modal.name'))}" maxlength="200">
+              <textarea class="chain-task-desc-input" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="2000"></textarea>
+            </div>
+            <button class="task-remove" onclick="removeChainFormTask(this)">✕</button>
+          </div>
+        </div>
+        <button class="col-add" style="margin-top:4px" onclick="addChainFormTask()">${escH(t('group.add_task'))}</button>
+      </div>`;
+  }else if(existingTasks.length){
+    tasksHtml=`
+      <div><label class="lbl">${t('group.tasks')} (${existingTasks.length})</label>
+        <div class="chain-modal-tasks">
+          ${existingTasks.map((tk,i)=>`
+            <div class="chain-modal-task">
+              <span class="task-num">${i+1}.</span>
+              <div class="task-fields">
+                <span style="font-size:13px;color:var(--text)">${escH(tk.title)}</span>
+                ${tk.description?`<span style="font-size:12px;color:var(--muted)">${escH(tk.description.substring(0,100))}</span>`:''}
+              </div>
+              <span class="badge badge-muted" style="font-size:10px">${tk.status}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  }
+  return `
+    <div><label class="lbl">${t('group.title')}</label>
+      <input id="fChainTitle" class="inp" placeholder="${escH(t('group.title'))}" value="${escH(chain.title||'')}" maxlength="200">
+    </div>
+    <div id="chainSessCfg" class="new-sess-cfg visible">
+      <div class="new-sess-hdr">${t('modal.new_sess_cfg')}</div>
+      <div class="sc-row">
+        <div class="sc-seg" data-group="mode">
+          <span class="sc-lbl">${t('tb.mode')}</span>
+          <button type="button" class="sc-btn${m==='auto'?' on':''}" data-v="auto" onclick="scOpt(this)">Auto</button>
+          <button type="button" class="sc-btn${m==='planning'?' on':''}" data-v="planning" onclick="scOpt(this)">Plan</button>
+          <button type="button" class="sc-btn${m==='task'?' on':''}" data-v="task" onclick="scOpt(this)">Task</button>
+        </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg" data-group="agent">
+          <span class="sc-lbl">${t('tb.agent')}</span>
+          <button type="button" class="sc-btn${ag==='single'?' on':''}" data-v="single" onclick="scOpt(this)">Single</button>
+          <button type="button" class="sc-btn${ag==='multi'?' on':''}" data-v="multi" onclick="scOpt(this)">Multi</button>
+        </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg" data-group="model">
+          <span class="sc-lbl">${t('tb.model')}</span>
+          <button type="button" class="sc-btn${mdl==='haiku'?' on':''}" data-v="haiku" onclick="scOpt(this)">Haiku</button>
+          <button type="button" class="sc-btn${mdl==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
+          <button type="button" class="sc-btn${mdl==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
+        </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg">
+          <span class="sc-lbl">${t('tb.turns')}</span>
+          <input type="number" class="sc-turns" id="fChainMaxTurns" value="${chain.max_turns||kbSettings.max_turns||30}" min="1" max="100">
+        </div>
+      </div>
+    </div>
+    ${tasksHtml}`;
+}
+function addChainFormTask(){
+  const container=$i('chainTasksContainer');
+  if(!container)return;
+  const count=container.children.length;
+  const div=document.createElement('div');
+  div.className='chain-modal-task';
+  div.dataset.idx=count;
+  div.innerHTML=`
+    <span class="task-num">${count+1}.</span>
+    <div class="task-fields">
+      <input class="chain-task-input" placeholder="${escH(t('modal.name'))}" maxlength="200">
+      <textarea class="chain-task-desc-input" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="2000"></textarea>
+    </div>
+    <button class="task-remove" onclick="removeChainFormTask(this)">✕</button>`;
+  container.appendChild(div);
+  div.querySelector('input')?.focus();
+}
+function removeChainFormTask(btn){
+  const container=$i('chainTasksContainer');
+  if(!container||container.children.length<=1)return;
+  btn.closest('.chain-modal-task').remove();
+  [...container.children].forEach((el,i)=>{
+    const num=el.querySelector('.task-num');
+    if(num)num.textContent=(i+1)+'.';
+  });
+}
+async function saveChain(){
+  const title=($i('fChainTitle')?.value||'').trim();
+  if(!title){toast(t('group.title'),true);$i('fChainTitle')?.focus();return;}
+  const cfg={};
+  const cfgEl=$i('chainSessCfg');
+  if(cfgEl){
+    cfgEl.querySelectorAll('.sc-seg[data-group]').forEach(grp=>{
+      const on=grp.querySelector('.sc-btn.on');
+      if(on)cfg[grp.dataset.group]=on.dataset.v;
+    });
+  }
+  const maxTurns=parseInt($i('fChainMaxTurns')?.value||30);
+  try{
+    if(modalMode==='add_chain'){
+      const chainRes=await apiFetch('/api/task-chains',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          title,workdir:curWorkdir||null,
+          model:cfg.model||'sonnet',mode:cfg.mode||'auto',
+          agent_mode:cfg.agent||'single',max_turns:maxTurns,
+        })
+      });
+      const chain=await chainRes.json();
+      const container=$i('chainTasksContainer');
+      if(container){
+        const taskEls=[...container.querySelectorAll('.chain-modal-task')];
+        for(const taskEl of taskEls){
+          const taskTitle=(taskEl.querySelector('.chain-task-input')?.value||'').trim();
+          const taskDesc=(taskEl.querySelector('.chain-task-desc-input')?.value||'').trim();
+          if(taskTitle){
+            await apiFetch(`/api/task-chains/${chain.id}/tasks`,{
+              method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({title:taskTitle,description:taskDesc})
+            });
+          }
+        }
+      }
+      toast(t('group.created'));
+    }else{
+      await apiFetch(`/api/task-chains/${editingId}`,{
+        method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          title,model:cfg.model||'sonnet',mode:cfg.mode||'auto',
+          agent_mode:cfg.agent||'single',max_turns:maxTurns,
+        })
+      });
+      toast(t('group.saved'));
+    }
+    closeModal();
+    await refresh(true);
+  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
+}
+async function saveChainTask(){
+  const title=($i('fChainTaskTitle')?.value||'').trim();
+  if(!title){toast(t('modal.name'),true);$i('fChainTaskTitle')?.focus();return;}
+  const desc=($i('fChainTaskDesc')?.value||'').trim();
+  try{
+    await apiFetch(`/api/task-chains/${editingId}/tasks`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({title,description:desc})
+    });
+    toast(t('group.task_added'));
+    closeModal();
+    await refresh(true);
+  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
 }
 
 // ─── Modal: Add ────────────────────────────────────────────────────────────
@@ -1217,7 +1638,7 @@ function closeModal(){closeOverlay('taskOv');}
   // Listen for task CRUD from other tabs (schedule, etc.)
   try{
     const tc=new BroadcastChannel('tasks');
-    tc.onmessage=e=>{if(e.data?.type==='task_deleted'||e.data?.type==='task_changed')refresh(true);};
+    tc.onmessage=e=>{if(e.data?.type==='task_deleted'||e.data?.type==='task_changed'||e.data?.type==='chain_deleted'||e.data?.type==='chain_changed')refresh(true);};
   }catch{}
 })();
 </script>

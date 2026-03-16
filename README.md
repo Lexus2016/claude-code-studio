@@ -147,6 +147,8 @@ Pair your phone, your tablet, your laptop — all at once. Control the same Clau
 
 Your Telegram supergroup becomes a structured project workspace. Each project gets its own topic thread. Tasks live in a dedicated Tasks topic. Activity notifications flow into an Activity topic. It's not just a remote control — it's an organized command center for all your projects.
 
+![Telegram Forum Mode](public/screenshots/tg_forum.jpg)
+
 **How to set up:**
 1. Create a Telegram supergroup with Topics enabled
 2. Type `/connect` in the group — Studio pairs instantly
@@ -291,6 +293,25 @@ If a Claude session is lost — server restart, network issue, expired session �
 
 When Claude exhausts its auto-continues, a **Restart Session** button appears right in the chat. One click clears the broken session and lets you keep going.
 
+### 📊 Dashboard — Your Productivity at a Glance
+
+How productive is your AI workflow? The Dashboard page gives you a visual answer — no guessing, just data.
+
+![Dashboard](public/screenshots/dashboard.jpg)
+
+**What you see:**
+- **Hero cards** — total sessions, tool calls, messages, and estimated time saved (based on average manual execution time per operation)
+- **Activity heatmap** — GitHub-style contribution grid showing your last 90 days of activity
+- **Tool usage breakdown** — which Claude tools do the heavy lifting (Read, Bash, Edit, Grep...) — the iceberg of hidden automation
+- **Automation Index** — a 0–100 score combining tool usage ratio, multi-agent adoption, and activity consistency
+- **Model distribution** — donut chart showing Haiku / Sonnet / Opus usage split
+- **Peak hours** — when you're most active, hour by hour
+- **Top sessions** — your most intensive conversations, ranked by message count, with project badges and one-click navigation back to the chat
+
+Every number links back to the real data. Click a top session and you land directly in that conversation, in the right project context.
+
+The Dashboard is a marketing tool for your own productivity — the kind of screen you screenshot and share.
+
 ### 💾 Everything is saved
 
 Sessions, chats, task history — all stored locally in SQLite. Come back tomorrow, continue exactly where you left off.
@@ -421,6 +442,7 @@ After setup, Claude Code CLI will use your OpenRouter API key and the model you 
 | 🔄 Tab drag-and-drop | Reorder chat tabs by dragging — organize your workspace your way |
 | 💾 History | Everything saved to SQLite, resume anytime |
 | 📊 Rate limit alerts | Warnings at 80/90/95%, live countdown to reset |
+| 📊 Dashboard | Visual analytics — activity heatmap, tool usage, model distribution, automation score, top sessions with one-click navigation |
 | 🔒 Auth | Password login, 30-day tokens, data stays on your machine |
 | 🧠 Language-aware AI | Claude reasons in English for precision, responds in your language — full native experience in every conversation |
 | 🛡 Self-healing sessions | Full session replay from SQLite history when session is lost — auto-rebuilds context, continues seamlessly |
