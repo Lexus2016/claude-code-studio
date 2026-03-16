@@ -152,11 +152,11 @@ Your Telegram supergroup becomes a structured project workspace. Each project ge
 2. Type `/connect` in the group — Studio pairs instantly
 3. Studio auto-creates the structure: a **Tasks** topic for task management, an **Activity** topic for notifications, and a separate topic for each of your projects
 
-**Project topics** — each project directory gets its own thread. Send a message in a project topic and Claude works in that project's context. Use `/new` to start a fresh session, `/history` to see past sessions, `/session N` to switch between them, `/files` to browse the directory, `/diff` for recent changes, `/log` for git history, `/stop` to halt a running task. It's like having the full Studio experience inside each Telegram thread.
+**Project topics** — each project directory gets its own thread. Send a message in a project topic and Claude works in that project's context. Use `/new` to start a fresh session, `/history` to see past sessions with clickable switch buttons, `/session N` to switch, `/files` to browse, `/cat` to read files, `/diff` for changes, `/log` for git history, `/last` and `/full` for recent messages, `/stop` to halt. Every done/error message has contextual buttons — [📜 History] [🆕 New] — so you navigate without typing commands. Type `/help` in any topic for a full command reference.
 
-**Tasks topic** — your Kanban board, inside Telegram. Type a task title and it's created instantly. Use `/list` to see all tasks, `/done ID` to mark one complete, `/start ID` to queue it for execution. Manage your entire backlog without ever opening the browser.
+**Tasks topic** — your Kanban board, inside Telegram. Type a task title and it's created instantly. Full lifecycle management: `/list` to see all tasks, `/start ID` to begin, `/done ID` to complete, `/todo ID`, `/block ID`, `/backlog ID` to change status, `/delete ID` to remove. Manage your entire backlog without ever opening the browser.
 
-**Activity topic** — every notification (task completed, task failed, session events) gets posted here automatically. One place to see everything that happened while you were away.
+**Activity topic** — every notification (task completed, task failed, session events) gets posted here with interactive buttons: [💬 Open chat] jumps to the session in its project topic, [📁 Project] navigates directly to the project thread. Not just a log — a navigation hub.
 
 **Inline creation** — in your private chat with the bot, use the **New Chat** and **New Task** buttons to create items directly. No commands to memorize — just tap and type.
 
