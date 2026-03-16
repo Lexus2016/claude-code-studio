@@ -274,7 +274,7 @@ const BOT_I18N = {
     'forum_topic_project': '📁 <b>{name}</b>\n📂 {path}\n\nПросто пишіть повідомлення — вони йдуть до Claude.\n\n/new — нова сесія\n/history — попередні сесії\n/files — файли проєкту\n/diff — git diff\n/log — git log',
     'forum_topic_tasks': '📋 <b>Задачі</b>\n\nКоманди:\n/new <i>назва</i> — створити задачу\n/list — показати всі\n/done <i>#id</i> — завершити задачу\n/start <i>#id</i> — почати задачу',
     'forum_topic_activity': '🔔 <b>Сповіщення</b>\n\nТут з\'являтимуться оновлення про завершення задач та помилки.',
-    'forum_help_project': '📖 <b>Команди проєкту</b>\n\n<b>Сесії:</b>\n/new — нова сесія\n/history — список сесій\n/session <code>&lt;n&gt;</code> — перемкнути сесію\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень\n/full — повна остання відповідь\n/files <code>[path]</code> — файли проєкту\n/cat <code>&lt;file&gt;</code> — вміст файлу\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Дії:</b>\n/stop — зупинити задачу\n/status — стан системи',
+    'forum_help_project': '📖 <b>Команди проєкту</b>\n\n<b>Сесії:</b>\n/new — нова сесія\n/history — список сесій\n/session <code>&lt;n&gt;</code> — перемкнути сесію\n/info — поточна сесія та стан\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень\n/full — повна остання відповідь\n/files <code>[path]</code> — файли проєкту\n/cat <code>&lt;file&gt;</code> — вміст файлу\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Дії:</b>\n/stop — зупинити задачу\n/status — стан системи',
     'forum_help_tasks': '📖 <b>Команди задач</b>\n\n/new <code>&lt;назва&gt;</code> — створити задачу\n/list — показати всі\n/start <code>#id</code> — почати\n/done <code>#id</code> — завершити\n/todo <code>#id</code> — в «todo»\n/block <code>#id</code> — заблокувати\n/backlog <code>#id</code> — в backlog\n/delete <code>#id</code> — видалити\n\n💡 Просто напишіть текст — він стане задачею.',
     'forum_help_general': '📖 <b>Команди Forum</b>\n\n/status — стан системи\n/help — ця довідка\n\n💡 Перейдіть у топік проєкту, щоб писати Claude.',
     'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}\n\n[/start #{id}] [/done #{id}]',
@@ -287,6 +287,7 @@ const BOT_I18N = {
     'forum_switch_session': '💬 Перемкнуто на сесію: <b>{title}</b>',
     'forum_unknown_topic': '❓ Ця тема не прив\'язана до проєкту.\n\nВикористовуйте теми, створені ботом.',
     'forum_unknown_cmd': '❓ Невідома команда: {cmd}\n\nВведіть /help для списку команд.',
+    'forum_activity_readonly': '🔔 Цей топік лише для сповіщень.\n\nВикористовуйте кнопки вище або перейдіть у топік проєкту.',
     'btn_forum_setup': '🏗 Forum Mode',
     'btn_forum_disconnect': '🔌 Відключити Forum',
   },
@@ -504,7 +505,7 @@ const BOT_I18N = {
     'forum_topic_project': '📁 <b>{name}</b>\n📂 {path}\n\nJust write messages — they go to Claude.\n\n/new — new session\n/history — previous sessions\n/files — project files\n/diff — git diff\n/log — git log',
     'forum_topic_tasks': '📋 <b>Tasks</b>\n\nCommands:\n/new <i>title</i> — create task\n/list — show all\n/done <i>#id</i> — complete task\n/start <i>#id</i> — start task',
     'forum_topic_activity': '🔔 <b>Notifications</b>\n\nTask completions and errors will appear here.',
-    'forum_help_project': '📖 <b>Project Commands</b>\n\n<b>Sessions:</b>\n/new — new session\n/history — session list\n/session <code>&lt;n&gt;</code> — switch session\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages\n/full — full last response\n/files <code>[path]</code> — project files\n/cat <code>&lt;file&gt;</code> — file contents\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Actions:</b>\n/stop — stop current task\n/status — system status',
+    'forum_help_project': '📖 <b>Project Commands</b>\n\n<b>Sessions:</b>\n/new — new session\n/history — session list\n/session <code>&lt;n&gt;</code> — switch session\n/info — current session &amp; state\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages\n/full — full last response\n/files <code>[path]</code> — project files\n/cat <code>&lt;file&gt;</code> — file contents\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Actions:</b>\n/stop — stop current task\n/status — system status',
     'forum_help_tasks': '📖 <b>Task Commands</b>\n\n/new <code>&lt;title&gt;</code> — create task\n/list — show all\n/start <code>#id</code> — start\n/done <code>#id</code> — complete\n/todo <code>#id</code> — set to «todo»\n/block <code>#id</code> — mark blocked\n/backlog <code>#id</code> — set to backlog\n/delete <code>#id</code> — delete\n\n💡 Just type text — it becomes a task.',
     'forum_help_general': '📖 <b>Forum Commands</b>\n\n/status — system status\n/help — this help\n\n💡 Go to a project topic to chat with Claude.',
     'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}\n\n[/start #{id}] [/done #{id}]',
@@ -517,6 +518,7 @@ const BOT_I18N = {
     'forum_switch_session': '💬 Switched to session: <b>{title}</b>',
     'forum_unknown_topic': '❓ This topic is not linked to a project.\n\nUse topics created by the bot.',
     'forum_unknown_cmd': '❓ Unknown command: {cmd}\n\nType /help for available commands.',
+    'forum_activity_readonly': '🔔 This topic is for notifications only.\n\nUse the buttons above or go to a project topic.',
     'btn_forum_setup': '🏗 Forum Mode',
     'btn_forum_disconnect': '🔌 Disconnect Forum',
   },
@@ -734,7 +736,7 @@ const BOT_I18N = {
     'forum_topic_project': '📁 <b>{name}</b>\n📂 {path}\n\nПросто пишите сообщения — они идут к Claude.\n\n/new — новая сессия\n/history — предыдущие сессии\n/files — файлы проекта\n/diff — git diff\n/log — git log',
     'forum_topic_tasks': '📋 <b>Задачи</b>\n\nКоманды:\n/new <i>название</i> — создать задачу\n/list — показать все\n/done <i>#id</i> — завершить задачу\n/start <i>#id</i> — начать задачу',
     'forum_topic_activity': '🔔 <b>Уведомления</b>\n\nЗдесь будут появляться обновления о завершении задач и ошибках.',
-    'forum_help_project': '📖 <b>Команды проекта</b>\n\n<b>Сессии:</b>\n/new — новая сессия\n/history — список сессий\n/session <code>&lt;n&gt;</code> — переключить сессию\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений\n/full — полный последний ответ\n/files <code>[path]</code> — файлы проекта\n/cat <code>&lt;file&gt;</code> — содержимое файла\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Действия:</b>\n/stop — остановить задачу\n/status — состояние системы',
+    'forum_help_project': '📖 <b>Команды проекта</b>\n\n<b>Сессии:</b>\n/new — новая сессия\n/history — список сессий\n/session <code>&lt;n&gt;</code> — переключить сессию\n/info — текущая сессия и состояние\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений\n/full — полный последний ответ\n/files <code>[path]</code> — файлы проекта\n/cat <code>&lt;file&gt;</code> — содержимое файла\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Действия:</b>\n/stop — остановить задачу\n/status — состояние системы',
     'forum_help_tasks': '📖 <b>Команды задач</b>\n\n/new <code>&lt;название&gt;</code> — создать задачу\n/list — показать все\n/start <code>#id</code> — начать\n/done <code>#id</code> — завершить\n/todo <code>#id</code> — в «todo»\n/block <code>#id</code> — заблокировать\n/backlog <code>#id</code> — в backlog\n/delete <code>#id</code> — удалить\n\n💡 Просто напишите текст — он станет задачей.',
     'forum_help_general': '📖 <b>Команды Forum</b>\n\n/status — состояние системы\n/help — эта справка\n\n💡 Перейдите в топик проекта, чтобы писать Claude.',
     'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}\n\n[/start #{id}] [/done #{id}]',
@@ -747,6 +749,7 @@ const BOT_I18N = {
     'forum_switch_session': '💬 Переключено на сессию: <b>{title}</b>',
     'forum_unknown_topic': '❓ Эта тема не привязана к проекту.\n\nИспользуйте темы, созданные ботом.',
     'forum_unknown_cmd': '❓ Неизвестная команда: {cmd}\n\nВведите /help для списка команд.',
+    'forum_activity_readonly': '🔔 Этот топик только для уведомлений.\n\nИспользуйте кнопки выше или перейдите в топик проекта.',
     'btn_forum_setup': '🏗 Forum Mode',
     'btn_forum_disconnect': '🔌 Отключить Forum',
   },
@@ -3483,7 +3486,9 @@ class TelegramBot extends EventEmitter {
       case 'tasks':
         return this._handleForumTaskMessage(msg);
       case 'activity':
-        // Read-only topic, ignore user messages
+        if ((msg.text || '').trim()) {
+          await this._sendMessage(chatId, this._t('forum_activity_readonly'));
+        }
         return;
       default:
         return;
@@ -3516,8 +3521,17 @@ class TelegramBot extends EventEmitter {
     const text = (msg.text || '').trim();
     const ctx = this._getContext(userId);
 
-    // Set project context
+    // Set project context + validate session belongs to this project
     ctx.projectWorkdir = workdir;
+    if (ctx.sessionId) {
+      const sess = this.db.prepare('SELECT workdir FROM sessions WHERE id = ?').get(ctx.sessionId);
+      if (!sess || sess.workdir !== workdir) {
+        // Session from different project — restore last session for this project, or clear
+        const lastForProject = this._stmts.getSessionsByWorkdir.all(workdir);
+        ctx.sessionId = lastForProject.length ? lastForProject[0].id : null;
+        this._saveDeviceContext(userId);
+      }
+    }
 
     // Handle project-specific commands
     if (text.startsWith('/')) {
@@ -3553,6 +3567,8 @@ class TelegramBot extends EventEmitter {
           return this._cmdStatus(chatId);
         case '/help':
           return this._sendMessage(chatId, this._t('forum_help_project'));
+        case '/info':
+          return this._forumShowInfo(chatId, userId, workdir);
         default:
           // Unknown command — treat as message to Claude
           break;
@@ -3566,9 +3582,26 @@ class TelegramBot extends EventEmitter {
       return this._sendMessage(chatId, this._t('forum_no_text'));
     }
 
-    // Ensure session exists for this project
+    // Ensure session exists for this project — show orientation on first interaction
     if (!ctx.sessionId) {
-      await this._forumNewSession(chatId, userId, workdir, true);
+      const existing = this._stmts.getSessionsByWorkdir.all(workdir);
+      if (existing.length > 0) {
+        // Restore last session + show orientation
+        ctx.sessionId = existing[0].id;
+        this._saveDeviceContext(userId);
+        const title = (existing[0].title || 'Untitled').substring(0, 40);
+        const buttons = [
+          { text: '📜 History', callback_data: 'fm:history' },
+          { text: '🆕 New', callback_data: 'fm:new' },
+        ];
+        await this._sendMessage(chatId,
+          `📌 ${this._escHtml(title)} (${existing[0].msg_count || 0} msg)\n` +
+          (existing.length > 1 ? `📜 +${existing.length - 1} sessions\n` : ''),
+          { reply_markup: JSON.stringify({ inline_keyboard: [buttons] }) }
+        );
+      } else {
+        await this._forumNewSession(chatId, userId, workdir, true);
+      }
     }
 
     // Collect attachments
@@ -3612,6 +3645,40 @@ class TelegramBot extends EventEmitter {
         reply_markup: JSON.stringify({ inline_keyboard: [buttons] }),
       });
     }
+  }
+
+  /**
+   * Show current session info and project state.
+   */
+  async _forumShowInfo(chatId, userId, workdir) {
+    const ctx = this._getContext(userId);
+    const projectName = workdir.split('/').filter(Boolean).pop() || workdir;
+    const rows = this._stmts.getSessionsByWorkdir.all(workdir);
+
+    let text = `📁 <b>${this._escHtml(projectName)}</b>\n📂 <code>${this._escHtml(workdir)}</code>\n`;
+
+    if (ctx.sessionId) {
+      const sess = this.db.prepare('SELECT title, updated_at FROM sessions WHERE id = ?').get(ctx.sessionId);
+      if (sess) {
+        const title = (sess.title || 'Untitled').substring(0, 45);
+        const ago = this._timeAgo(sess.updated_at);
+        const msgCount = this.db.prepare('SELECT COUNT(*) as c FROM messages WHERE session_id = ?').get(ctx.sessionId)?.c || 0;
+        text += `\n💬 <b>${this._escHtml(title)}</b>\n📊 ${msgCount} msg · ${ago}`;
+      }
+    } else {
+      text += '\n💬 <i>No active session</i>';
+    }
+
+    text += `\n📜 ${rows.length} total sessions`;
+
+    const buttons = [
+      { text: '📄 Last 5', callback_data: 'fm:last' },
+      { text: '📜 History', callback_data: 'fm:history' },
+      { text: '🆕 New', callback_data: 'fm:new' },
+    ];
+    await this._sendMessage(chatId, text, {
+      reply_markup: JSON.stringify({ inline_keyboard: [buttons] }),
+    });
   }
 
   /**
@@ -3878,12 +3945,29 @@ class TelegramBot extends EventEmitter {
         const newStatus = statusMap[cmd];
         this._stmts.updateTaskStatus.run(newStatus, task.id);
 
-        return this._sendMessage(chatId, this._t('forum_task_updated', {
+        const msgText = this._t('forum_task_updated', {
           icon: iconMap[newStatus],
           id: this._escHtml(task.id.slice(-4)),
           title: this._escHtml((task.title || '').substring(0, 50)),
           status: newStatus,
-        }));
+        });
+
+        // Add "Go to project" button for actionable statuses if task has workdir
+        const options = {};
+        if (task.workdir && (newStatus === 'in_progress' || newStatus === 'todo')) {
+          const device = this._stmts.getDevice.get(userId);
+          if (device?.forum_chat_id) {
+            const topics = this._stmts.getForumTopics.all(device.forum_chat_id);
+            const projectTopic = topics.find(t => t.type === 'project' && t.workdir === task.workdir);
+            if (projectTopic) {
+              options.reply_markup = JSON.stringify({ inline_keyboard: [[
+                { text: '📁 Go to project', callback_data: `fa:project:${projectTopic.thread_id}` },
+              ]] });
+            }
+          }
+        }
+
+        return this._sendMessage(chatId, msgText, options);
       }
 
       case '/delete': {
