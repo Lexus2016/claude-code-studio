@@ -3857,9 +3857,18 @@ class TelegramBot extends EventEmitter {
 
         text += `\n\n💡 <i>Session activated — write in the project topic to continue.</i>`;
 
+        const buttons = [
+          [
+            { text: '📄 Full', callback_data: 'fm:last' },
+            { text: '📜 History', callback_data: 'fm:history' },
+            { text: '🆕 New', callback_data: 'fm:new' },
+          ],
+        ];
+
         await this._sendMessage(chatId, text, {
           message_thread_id: projectTopic.thread_id,
           parse_mode: 'HTML',
+          reply_markup: JSON.stringify({ inline_keyboard: buttons }),
         });
         return;
       }
