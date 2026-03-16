@@ -59,7 +59,15 @@ config.json
 # Test scripts & artifacts
 test-*.sh
 public/test-*.html
-tool-activity-check.png
+
+# Root-level images — NEVER commit (may contain sensitive screenshots)
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.bmp
+/*.webp
+/*.tiff
 
 # Task tracking (local dev planning)
 tasks/
