@@ -1169,10 +1169,13 @@ class TelegramProxy {
     const text = `⏳ <b>Processing...</b>${toolLine}\n\n${preview}`;
 
     // Inline stop button on progress messages so the user always has controls at the bottom
-    const progressMarkup = JSON.stringify({ inline_keyboard: [[
-      { text: '🛑 Stop', callback_data: 'cm:stop' },
-      { text: '🏠 Menu', callback_data: 'm:menu' },
-    ]] });
+    const progressButtons = this._threadId
+      ? [{ text: '🛑 Stop', callback_data: 'cm:stop' }]
+      : [
+          { text: '🛑 Stop', callback_data: 'cm:stop' },
+          { text: '🏠 Menu', callback_data: 'm:menu' },
+        ];
+    const progressMarkup = JSON.stringify({ inline_keyboard: [progressButtons] });
 
     try {
       if (this._progressMsgId) {
@@ -1255,11 +1258,17 @@ class TelegramProxy {
     // Send completion notification with buttons
     const duration = data.duration ? ` (${Math.round(data.duration / 1000)}s)` : '';
     const toolsSummary = this._toolsUsed.length ? `\n🔧 Tools: ${this._bot._escHtml([...new Set(this._toolsUsed)].join(', '))}` : '';
-    const doneButtons = [
-      { text: '💬 Continue', callback_data: 'cm:compose' },
-      ...(isLarge ? [{ text: '📄 Full', callback_data: 'cm:full' }] : []),
-      { text: '🏠 Menu', callback_data: 'm:menu' }
-    ];
+    const doneButtons = this._threadId
+      ? [
+          ...(isLarge ? [{ text: '📄 Full', callback_data: 'cm:full' }] : []),
+          { text: '📜 History', callback_data: 'fm:history' },
+          { text: '🆕 New', callback_data: 'fm:new' },
+        ]
+      : [
+          { text: '💬 Continue', callback_data: 'cm:compose' },
+          ...(isLarge ? [{ text: '📄 Full', callback_data: 'cm:full' }] : []),
+          { text: '🏠 Menu', callback_data: 'm:menu' },
+        ];
     await this._tgSend(
       `✅ <b>Done</b>${duration}${toolsSummary}`,
       {
@@ -1287,16 +1296,17 @@ class TelegramProxy {
       } catch (e) { /* ignore */ }
     }
 
+    const errorButtons = this._threadId
+      ? [{ text: '🔄 Retry', callback_data: 'fm:retry' }]
+      : [
+          { text: '🔄 Retry', callback_data: 'cm:compose' },
+          { text: '🏠 Menu', callback_data: 'm:menu' },
+        ];
     await this._tgSend(
       `❌ <b>Error:</b> ${this._bot._escHtml(data.error || 'Unknown error')}`,
       {
         parse_mode: 'HTML',
-        reply_markup: JSON.stringify({
-          inline_keyboard: [[
-            { text: '🔄 Retry', callback_data: 'cm:compose' },
-            { text: '🏠 Menu', callback_data: 'm:menu' }
-          ]]
-        })
+        reply_markup: JSON.stringify({ inline_keyboard: [errorButtons] })
       }
     );
   }
