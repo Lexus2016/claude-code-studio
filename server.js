@@ -993,6 +993,7 @@ class TelegramProxy {
     this._lastEditAt = 0;
     this._toolsUsed = [];
     this._finished = false;
+    this._sessionTitle = null; // cached session title for forum indicator
     // Typing indicator — sends "typing..." action every 4s
     this._typingInterval = setInterval(() => {
       const params = { chat_id: this._chatId, action: 'typing' };
@@ -1166,7 +1167,22 @@ class TelegramProxy {
     const toolLine = this._toolsUsed.length
       ? `\n🔧 ${this._bot._escHtml(this._toolsUsed.slice(-3).join(', '))}`
       : '';
-    const text = `⏳ <b>Processing...</b>${toolLine}\n\n${preview}`;
+
+    // Session indicator for forum — cache title on first use
+    let sessionTag = '';
+    if (this._threadId && this._sessionId) {
+      if (this._sessionTitle === null) {
+        try {
+          const sess = db.prepare('SELECT title FROM sessions WHERE id = ?').get(this._sessionId);
+          this._sessionTitle = sess?.title || '';
+        } catch { this._sessionTitle = ''; }
+      }
+      if (this._sessionTitle) {
+        sessionTag = ` · <i>${this._bot._escHtml(this._sessionTitle.substring(0, 30))}</i>`;
+      }
+    }
+
+    const text = `⏳ <b>Processing...</b>${sessionTag}${toolLine}\n\n${preview}`;
 
     // Inline stop button on progress messages so the user always has controls at the bottom
     const progressButtons = this._threadId
@@ -1258,6 +1274,18 @@ class TelegramProxy {
     // Send completion notification with buttons
     const duration = data.duration ? ` (${Math.round(data.duration / 1000)}s)` : '';
     const toolsSummary = this._toolsUsed.length ? `\n🔧 Tools: ${this._bot._escHtml([...new Set(this._toolsUsed)].join(', '))}` : '';
+
+    // Session indicator for forum context
+    let sessionLine = '';
+    if (this._threadId && this._sessionId) {
+      try {
+        const sess = db.prepare('SELECT title FROM sessions WHERE id = ?').get(this._sessionId);
+        if (sess?.title) {
+          sessionLine = `\n💬 ${this._bot._escHtml(sess.title.substring(0, 40))}`;
+        }
+      } catch {}
+    }
+
     const doneButtons = this._threadId
       ? [
           ...(isLarge ? [{ text: '📄 Full', callback_data: 'cm:full' }] : []),
@@ -1270,7 +1298,7 @@ class TelegramProxy {
           { text: '🏠 Menu', callback_data: 'm:menu' },
         ];
     await this._tgSend(
-      `✅ <b>Done</b>${duration}${toolsSummary}`,
+      `✅ <b>Done</b>${duration}${sessionLine}${toolsSummary}`,
       {
         parse_mode: 'HTML',
         reply_markup: JSON.stringify({ inline_keyboard: [doneButtons] })

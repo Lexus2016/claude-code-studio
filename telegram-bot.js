@@ -3605,7 +3605,12 @@ class TelegramBot extends EventEmitter {
     this._saveDeviceContext(userId);
 
     if (!silent) {
-      await this._sendMessage(chatId, this._t('forum_session_started'));
+      const buttons = [
+        { text: '📜 History', callback_data: 'fm:history' },
+      ];
+      await this._sendMessage(chatId, this._t('forum_session_started'), {
+        reply_markup: JSON.stringify({ inline_keyboard: [buttons] }),
+      });
     }
   }
 
@@ -3669,6 +3674,12 @@ class TelegramBot extends EventEmitter {
         return this._forumShowHistory(chatId, userId, topicInfo.workdir);
       case 'new':
         return this._forumNewSession(chatId, userId, topicInfo.workdir);
+      case 'last': {
+        // Show last 5 messages of current session
+        const ctx = this._getContext(userId);
+        if (!ctx.sessionId) return this._sendMessage(chatId, this._t('forum_history_empty'));
+        return this._cmdLast(chatId, userId, ['5']);
+      }
       case 'retry': {
         // Resend the last user message
         const ctx = this._getContext(userId);
@@ -3771,7 +3782,18 @@ class TelegramBot extends EventEmitter {
     this._saveDeviceContext(userId);
 
     const title = (rows[idx].title || 'Untitled').substring(0, 50);
-    await this._sendMessage(chatId, this._t('forum_switch_session', { title: this._escHtml(title) }));
+    const msgCount = rows[idx].msg_count || 0;
+    const text = this._t('forum_switch_session', { title: this._escHtml(title) })
+      + `\n📊 ${msgCount} msg`;
+
+    const buttons = [
+      { text: '📄 Last 5', callback_data: 'fm:last' },
+      { text: '📜 History', callback_data: 'fm:history' },
+      { text: '🆕 New', callback_data: 'fm:new' },
+    ];
+    await this._sendMessage(chatId, text, {
+      reply_markup: JSON.stringify({ inline_keyboard: [buttons] }),
+    });
   }
 
   /**
