@@ -8,7 +8,7 @@ const url = require('url');
 const { execSync, spawn: spawnProc } = require('child_process');
 const crypto = require('crypto');
 const multer = require('multer');
-const Database = require('better-sqlite3');
+const openDatabase = require('./db-adapter');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -296,13 +296,7 @@ function sanitizeSessionId(val) {
 // ============================================
 // DATABASE
 // ============================================
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-// Performance pragmas — safe with WAL mode
-db.pragma('synchronous = NORMAL');   // WAL durability guarantees make FULL unnecessary
-db.pragma('cache_size = -32000');    // 32 MB page cache
-db.pragma('temp_store = MEMORY');    // Temp tables in RAM
-db.pragma('foreign_keys = ON');      // Enforce FK constraints (was silently off)
+const db = openDatabase(DB_PATH);
 db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
