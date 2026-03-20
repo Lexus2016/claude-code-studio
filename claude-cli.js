@@ -206,11 +206,15 @@ class ClaudeCLI {
     args.push('-p', finalPrompt);
 
     // Unset CLAUDECODE to allow nested invocation from dev environment.
-    // Unset ANTHROPIC_API_KEY so the CLI subprocess uses Max subscription
-    // instead of prompting for API key configuration (which hangs on closed stdin).
     const env = { ...process.env };
     delete env.CLAUDECODE;
-    delete env.ANTHROPIC_API_KEY;
+    // When ANTHROPIC_BASE_URL is set the user is routing through a proxy (e.g. LiteLLM)
+    // and needs ANTHROPIC_API_KEY for auth.  Only strip the key when talking directly to
+    // Anthropic so the CLI subprocess falls back to Max subscription (otherwise the CLI
+    // prompts for API-key configuration on closed stdin and hangs).
+    if (!env.ANTHROPIC_BASE_URL) {
+      delete env.ANTHROPIC_API_KEY;
+    }
 
     // On Windows .cmd/.bat files require cmd.exe (shell:true) to execute.
     // On Unix, binaries execute directly (shell:false is safer).
