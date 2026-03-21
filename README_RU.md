@@ -255,7 +255,7 @@ npx github:Lexus2016/claude-code-studio    # запуск как обычно
 | **Дашборд** | Тепловая карта активности, использование инструментов, распределение моделей, Индекс автоматизации, пиковые часы |
 | **Надёжность** | Самовосстанавливающиеся сессии, защита от сбоев, атомарные записи, мгновенная остановка |
 | **Безопасность** | bcrypt-аутентификация, AES-256-GCM для SSH, Helmet.js, защита от path traversal, предотвращение XSS/SQLi |
-| **Платформа** | Windows/macOS/Linux, Docker (поддержка registry mirror), 3 языка (EN/UA/RU), поддержка OpenRouter |
+| **Платформа** | Windows/macOS/Linux, Docker (non-root, registry mirror), LLM proxy/gateway, 3 языка (EN/UA/RU), поддержка OpenRouter |
 
 ---
 
@@ -285,6 +285,7 @@ MAX_TASK_WORKERS=5
 CLAUDE_TIMEOUT_MS=1800000
 TRUST_PROXY=false
 LOG_LEVEL=info
+ANTHROPIC_BASE_URL=       # LLM proxy/gateway (LiteLLM, Bifrost, OpenRouter)
 ```
 
 **Безопасность:** bcrypt (12 раундов), 32-байтные токены (TTL 30 дней), AES-256-GCM для SSH-паролей, заголовки Helmet.js, защита от path traversal, XSS-фильтрация, параметризованные SQL-запросы, ограничения буфера 2MB.
