@@ -102,6 +102,14 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .sec-title .badge { background: var(--accent); color: white; font-size: 10px; padding: 1px 7px; border-radius: 10px; font-weight: 700; min-width: 20px; text-align: center; }
 .sec-body { padding: 4px 8px 10px; }
 .sec-body.collapsed { display: none; }
+/* ─── Section quick-filter ─── */
+.sec-filter-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 2px 5px; border-radius: 4px; transition: color .15s, background .15s; line-height: 1; flex-shrink: 0; }
+.sec-filter-btn:hover, .sec-filter-btn.on { color: var(--accent); background: rgba(124,106,239,.15); }
+.sec-filter-row { display: none; align-items: center; gap: 5px; margin: 0 0 6px; }
+.sec-filter-row input { flex: 1; min-width: 0; background: var(--s3); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 12px; color: var(--text); outline: none; font-family: inherit; transition: border-color .15s, box-shadow .15s; }
+.sec-filter-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(124,106,239,.13); }
+.sec-filter-row .sfx { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 16px; padding: 1px 4px; border-radius: 3px; transition: color .15s; flex-shrink: 0; line-height: 1; }
+.sec-filter-row .sfx:hover { color: var(--red); }
 
 /* ─── Version badge in header ─── */
 #versionBadge { font-size: 11px; color: var(--muted); cursor: default; letter-spacing: .3px; }
@@ -2018,9 +2026,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('proj')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('proj')}">
         <span data-i18n="sec.projects">Проекти</span>
-        <span class="badge" id="projCount">0</span>
+        <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
+          <button class="sec-filter-btn" id="projFilterBtn" onclick="event.stopPropagation();toggleSecFilter('proj')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <span class="badge" id="projCount">0</span>
+        </div>
       </div>
       <div class="sec-body" id="projBody">
+        <div class="sec-filter-row" id="projFilterRow"><input type="text" id="projFilterInp" placeholder="Фільтр..." aria-label="Фільтр проектів" oninput="applySecFilter('proj',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('proj');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('proj')">×</button></div>
         <div id="projList"></div>
         <button class="add-btn" onclick="openAddProject()" data-i18n="proj.add">＋ Додати проект</button>
       </div>
@@ -2041,12 +2053,14 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('hist')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('hist')}">
         <span data-i18n="sec.chats">Чати</span>
-        <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+        <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
+          <button class="sec-filter-btn" id="histFilterBtn" onclick="event.stopPropagation();toggleSecFilter('hist')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button class="hist-select-btn" id="histSelBtn" onclick="event.stopPropagation();toggleHistSelect()" data-i18n-title="hist.sel.title" title="Вибрати кілька">☑</button>
           <span class="badge" id="histCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="histBody">
+        <div class="sec-filter-row" id="histFilterRow"><input type="text" id="histFilterInp" placeholder="Фільтр..." aria-label="Фільтр чатів" oninput="applySecFilter('hist',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('hist');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('hist')">×</button></div>
         <div class="hist-list" id="histList"></div>
         <div class="hist-bulk-bar" id="histBulkBar">
           <span class="bulk-info" id="histBulkInfo">0 вибрано</span>
@@ -2059,9 +2073,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('mcp')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('mcp')}">
         <span data-i18n="sec.mcp">MCP</span>
-        <span class="badge" id="mcpCount">0</span>
+        <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
+          <button class="sec-filter-btn" id="mcpFilterBtn" onclick="event.stopPropagation();toggleSecFilter('mcp')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <span class="badge" id="mcpCount">0</span>
+        </div>
       </div>
       <div class="sec-body" id="mcpBody">
+        <div class="sec-filter-row" id="mcpFilterRow"><input type="text" id="mcpFilterInp" placeholder="Фільтр..." aria-label="Фільтр MCP-серверів" oninput="applySecFilter('mcp',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('mcp');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('mcp')">×</button></div>
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="mcp.hint">Увімкніть інструменти, які Claude може використовувати в цьому чаті.</div>
         <div id="mcpList"></div>
         <button class="add-btn" onclick="openMcpModal('add')" data-i18n="mcp.add">＋ Додати MCP-сервер</button>
@@ -2075,12 +2093,14 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('skills')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('skills')}">
         <span data-i18n="sec.skills">Навички</span>
-        <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+        <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
+          <button class="sec-filter-btn" id="skillsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('skills')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button id="autoSkillsBtn" class="auto-skills-btn" onclick="event.stopPropagation();toggleAutoSkills()">⚡ Auto</button>
           <span class="badge" id="skillsCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="skillsBody">
+        <div class="sec-filter-row" id="skillsFilterRow"><input type="text" id="skillsFilterInp" placeholder="Фільтр..." aria-label="Фільтр навичок" oninput="applySecFilter('skills',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('skills');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('skills')">×</button></div>
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="skills.hint">Навички — файли інструкцій, що додаються до системного промпту.</div>
         <div id="autoSkillsHint" class="auto-notif" style="display:none" data-i18n="skills.auto_hint">⚡ Навички обираються автоматично по тексту задачі</div>
         <div id="skillsList"></div>
@@ -2092,9 +2112,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('cmds')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('cmds')}">
         <span data-i18n="sec.cmds">/ Команди</span>
-        <span class="badge" id="cmdsCount">0</span>
+        <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
+          <button class="sec-filter-btn" id="cmdsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('cmds')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <span class="badge" id="cmdsCount">0</span>
+        </div>
       </div>
       <div class="sec-body" id="cmdsBody">
+        <div class="sec-filter-row" id="cmdsFilterRow"><input type="text" id="cmdsFilterInp" placeholder="Фільтр..." aria-label="Фільтр команд" oninput="applySecFilter('cmds',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('cmds');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('cmds')">×</button></div>
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="cmds.hint">Слеш-команди — шорткати до промптів. Набирайте / в чаті.</div>
         <div id="cmdsList"></div>
         <button class="add-btn" onclick="openCmdForm()" data-i18n="cmd.add.new">＋ Додати команду</button>
@@ -6467,6 +6491,83 @@ function toggleSec(id) {
   saveUIState();
 }
 
+// ─── Section quick-filter ──────────────────────────────────────────────────
+const _SEC_FILTER_CFG = {
+  proj:   { listId: 'projList',   itemSel: '.ci' },
+  hist:   { listId: 'histList',   itemSel: '.hist-item' },
+  mcp:    { listId: 'mcpList',    itemSel: '.ci' },
+  skills: { listId: 'skillsList', itemSel: '.ci' },
+  cmds:   { listId: 'cmdsList',   itemSel: '.ci' }
+};
+
+function toggleSecFilter(id) {
+  const row = $i(id + 'FilterRow');
+  const btn = $i(id + 'FilterBtn');
+  if (!row) return;
+  const visible = row.style.display === 'flex';
+  if (visible) {
+    clearSecFilter(id);
+  } else {
+    row.style.display = 'flex';
+    if (btn) btn.classList.add('on');
+    const inp = $i(id + 'FilterInp');
+    if (inp) { inp.value = ''; inp.focus(); }
+  }
+}
+
+function clearSecFilter(id) {
+  const row = $i(id + 'FilterRow');
+  const btn = $i(id + 'FilterBtn');
+  const inp = $i(id + 'FilterInp');
+  if (!row) return;
+  row.style.display = 'none';
+  if (btn) btn.classList.remove('on');
+  if (inp) { inp.value = ''; applySecFilter(id, ''); }
+}
+
+function applySecFilter(id, query) {
+  const q = query.trim().toLowerCase();
+  const cfg = _SEC_FILTER_CFG[id];
+  if (!cfg) return;
+  const list = $i(cfg.listId);
+  if (!list) return;
+  list.querySelectorAll(cfg.itemSel).forEach(item => {
+    const text = (item.textContent || '').toLowerCase();
+    item.style.display = (!q || text.includes(q)) ? '' : 'none';
+  });
+  // For skills: hide category/subcategory headers when all their items are hidden
+  if (id === 'skills') {
+    // Pass 1: subcat headers — only look at items until next .sk-subcat or .sk-cat
+    list.querySelectorAll('.sk-subcat').forEach(hdr => {
+      if (!q) { hdr.style.display = ''; return; }
+      let el = hdr.nextElementSibling;
+      let hasVisible = false;
+      while (el && !el.classList.contains('sk-cat') && !el.classList.contains('sk-subcat')) {
+        if (el.style.display !== 'none') hasVisible = true;
+        el = el.nextElementSibling;
+      }
+      hdr.style.display = hasVisible ? '' : 'none';
+    });
+    // Pass 2: cat headers — check any still-visible sibling (ci or subcat) until next .sk-cat
+    list.querySelectorAll('.sk-cat').forEach(hdr => {
+      if (!q) { hdr.style.display = ''; return; }
+      let el = hdr.nextElementSibling;
+      let hasVisible = false;
+      while (el && !el.classList.contains('sk-cat')) {
+        if (el.style.display !== 'none') hasVisible = true;
+        el = el.nextElementSibling;
+      }
+      hdr.style.display = hasVisible ? '' : 'none';
+    });
+  }
+}
+
+// Re-apply active filter after a section list is re-rendered
+function _reapplySecFilter(id) {
+  const inp = $i(id + 'FilterInp');
+  if (inp && inp.value) applySecFilter(id, inp.value);
+}
+
 function toggleHeader() {
   const zone = $i('hdrZone');
   if (!zone) return;
@@ -7259,6 +7360,7 @@ async function loadHist() {
       el.appendChild(d);
     }
     updateHistSpinners();
+    _reapplySecFilter('hist');
   } catch (e) { console.error('loadHist:', e); }
 }
 
@@ -7928,6 +8030,7 @@ function renderMcp() {
     el.appendChild(div);
   }
   $i('mcpCount').textContent = c;
+  _reapplySecFilter('mcp');
 }
 
 // Returns unconfigured credential fields (placeholder values)
@@ -8612,6 +8715,7 @@ function renderSkills() {
     }
   }
   $i('skillsCount').textContent = c;
+  _reapplySecFilter('skills');
 }
 
 function tSkill(id) {
@@ -8682,6 +8786,7 @@ function renderCommands() {
     });
     el.appendChild(div);
   }
+  _reapplySecFilter('cmds');
 }
 
 function openCmdForm(id) {
@@ -9207,6 +9312,7 @@ function renderProjects() {
     _initProjDrag(div, el);
     el.appendChild(div);
   }
+  _reapplySecFilter('proj');
 }
 
 // ─── Project dropdown in header ────────────────────────────────────────────
