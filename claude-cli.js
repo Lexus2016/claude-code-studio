@@ -46,7 +46,15 @@ function findClaudeBin() {
     for (const c of winCandidates) {
       if (fs.existsSync(c)) return c;
     }
-    return 'claude.cmd'; // fallback: PATH lookup for npm global install on Windows
+    try {
+      const resolved = execSync('where.exe claude', { stdio: ['ignore', 'pipe', 'ignore'] })
+        .toString()
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .find(Boolean);
+      if (resolved) return resolved;
+    } catch {}
+    return 'claude'; // fallback via PATH / запасний варіант через PATH
   }
 
   return 'claude'; // fallback to PATH (Unix)
