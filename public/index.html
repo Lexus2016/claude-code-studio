@@ -41,26 +41,9 @@ body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Seg
 }
 .thinking-badge:hover { border-color: var(--accent); color: var(--accent2); background: var(--abg); }
 .thinking-badge svg { width: 11px; height: 11px; flex-shrink: 0; }
-.mw.assistant.thinking-msg { background: transparent; padding: 2px 12px 2px 44px; }
+.mw.assistant.thinking-msg { background: transparent; padding: 2px 12px 2px 34px; }
 .mw.assistant.thinking-msg .msg { background: transparent; box-shadow: none; padding: 0; }
 
-/* ─── Tool result block ─── */
-.tool-result-block {
-  border: 1px solid var(--border); border-radius: var(--r-sm);
-  background: var(--tool-bg); font-size: 11px; overflow: hidden; margin: 2px 0;
-}
-.tr-header {
-  display: flex; align-items: center; gap: 6px; padding: 5px 10px;
-  cursor: pointer; user-select: none; color: var(--muted);
-  transition: background .1s; font-family: var(--font-mono);
-}
-.tr-header:hover { background: var(--s2); }
-.tr-header .tr-arrow { font-size: 10px; transition: transform .2s; flex-shrink: 0; }
-.tr-header.open .tr-arrow { transform: rotate(90deg); }
-.tr-content { margin: 0; padding: 8px 10px; border-top: 1px solid var(--border); overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 320px; overflow-y: auto; font-family: var(--font-mono); font-size: 11px; color: var(--text); display: none; }
-.tr-content.open { display: block; }
-.mw.user.tool-result-msg { background: transparent; padding: 2px 12px; }
-.mw.user.tool-result-msg .msg { background: transparent; box-shadow: none; padding: 0; border: none; }
 
 /* ─── Thinking modal ─── */
 .thinking-modal-body {
@@ -7553,28 +7536,6 @@ function _renderMsgAt(idx, prepend = false) {
     return w;
   }
 
-  // ── Tool result: render as collapsible block ──
-  if (m.type === 'tool_result') {
-    const w = document.createElement('div');
-    w.className = 'mw user tool-result-msg';
-    if (m.id) w.dataset.msgId = String(m.id);
-    const raw = m.content || '';
-    const lines = raw.split('\n');
-    const lineCount = lines.length;
-    const preview = lines.slice(0, 2).join('\n');
-    const block = document.createElement('div');
-    block.className = 'tool-result-block';
-    const toolLabel = m.tool_name ? escH(m.tool_name) + ' result' : 'tool result';
-    block.innerHTML = `<div class="tr-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')"><span class="tr-arrow">▶</span><span style="font-size:11px;color:var(--muted)">${toolLabel}</span><span style="margin-left:4px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(preview.substring(0,80))}${lineCount > 2 ? '…' : ''}</span><span style="font-size:10px;color:var(--muted);flex-shrink:0;margin-left:6px">${lineCount} line${lineCount !== 1 ? 's' : ''}</span></div><pre class="tr-content">${escH(raw)}</pre>`;
-    const div = document.createElement('div');
-    div.className = 'msg';
-    div.appendChild(block);
-    w.appendChild(div);
-    if (prepend) { const f = msgsEl.querySelector('.mw, .agent-team-card'); if (f) msgsEl.insertBefore(w, f); else msgsEl.prepend(w); }
-    else msgsEl.appendChild(w);
-    return w;
-  }
-
   const w = document.createElement('div');
   w.className = `mw ${m.role}`;
   if (m.id) w.dataset.msgId = String(m.id);
@@ -7810,7 +7771,7 @@ async function loadSess(id) {
             // Single mode: scan backward for consecutive tool rows before this text message
             const tc = {};
             for (let j = i - 1; j >= 0; j--) {
-              if (raw[j].type === 'thinking' || raw[j].type === 'tool_result') continue;
+              if (raw[j].type === 'thinking') continue;
               if (raw[j].type !== 'tool' || raw[j].agent_id) break;
               const tn = raw[j].tool_name || 'tool';
               tc[tn] = (tc[tn] || 0) + 1;

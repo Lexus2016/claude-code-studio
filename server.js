@@ -3964,8 +3964,6 @@ function parseJsonlToMessages(jsonlPath) {
     const lines = fs.readFileSync(jsonlPath, 'utf8').trim().split('\n').filter(Boolean);
     const msgs = [];
     let idCounter = 1;
-    // Maps tool_use_id → tool name so tool_result messages show the real tool name
-    const toolUseIdToName = {};
     for (const line of lines) {
       let d; try { d = JSON.parse(line); } catch { continue; }
       const ts = d.timestamp || null;
@@ -3976,23 +3974,20 @@ function parseJsonlToMessages(jsonlPath) {
             msgs.push({ id: idCounter++, role: 'user', type: 'text', content: mc, tool_name: null, agent_id: null, created_at: ts });
           continue;
         }
+        // Only show text blocks; tool_result entries are system responses to tool calls
+        // (not user-written messages) — showing them clutters history with "Read result" etc.
         const textBlocks = mc.filter(b => b.type === 'text' && b.text?.trim());
         if (textBlocks.length > 0)
           msgs.push({ id: idCounter++, role: 'user', type: 'text', content: textBlocks.map(b => b.text).join('\n'), tool_name: null, agent_id: null, created_at: ts });
-        for (const b of mc.filter(b => b.type === 'tool_result')) {
-          const raw = typeof b.content === 'string' ? b.content : (Array.isArray(b.content) ? b.content.map(c => c.text || '').join('\n') : '');
-          msgs.push({ id: idCounter++, role: 'user', type: 'tool_result', content: raw.substring(0, 20000), tool_name: toolUseIdToName[b.tool_use_id] || null, agent_id: null, created_at: ts });
-        }
       } else if (d.type === 'assistant') {
         const mc = d.message?.content;
         if (!Array.isArray(mc)) continue;
         for (const b of mc) {
           if (b.type === 'thinking' && b.thinking)
             msgs.push({ id: idCounter++, role: 'assistant', type: 'thinking', content: b.thinking, tool_name: null, agent_id: null, created_at: ts });
-          else if (b.type === 'tool_use' && b.name) {
-            if (b.id) toolUseIdToName[b.id] = b.name; // register for tool_result lookup
+          else if (b.type === 'tool_use' && b.name)
             msgs.push({ id: idCounter++, role: 'assistant', type: 'tool', content: (typeof b.input === 'string' ? b.input : JSON.stringify(b.input || {})).substring(0, 2000), tool_name: b.name, agent_id: null, created_at: ts });
-          } else if (b.type === 'text' && b.text)
+          else if (b.type === 'text' && b.text)
             msgs.push({ id: idCounter++, role: 'assistant', type: 'text', content: b.text, tool_name: null, agent_id: null, created_at: ts });
         }
       }
