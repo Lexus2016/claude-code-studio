@@ -3959,42 +3959,6 @@ function cwdToCliProjectName(cwd) {
   return cwd.replace(/[/_]/g, '-');
 }
 
-function parseJsonlToMessages(jsonlPath) {
-  try {
-    const lines = fs.readFileSync(jsonlPath, 'utf8').trim().split('\n').filter(Boolean);
-    const msgs = [];
-    let idCounter = 1;
-    for (const line of lines) {
-      let d; try { d = JSON.parse(line); } catch { continue; }
-      const ts = d.timestamp || null;
-      if (d.type === 'user') {
-        const mc = d.message?.content;
-        if (!Array.isArray(mc)) {
-          if (typeof mc === 'string' && mc.trim())
-            msgs.push({ id: idCounter++, role: 'user', type: 'text', content: mc, tool_name: null, agent_id: null, created_at: ts });
-          continue;
-        }
-        // Only show text blocks; tool_result entries are system responses to tool calls
-        // (not user-written messages) — showing them clutters history with "Read result" etc.
-        const textBlocks = mc.filter(b => b.type === 'text' && b.text?.trim());
-        if (textBlocks.length > 0)
-          msgs.push({ id: idCounter++, role: 'user', type: 'text', content: textBlocks.map(b => b.text).join('\n'), tool_name: null, agent_id: null, created_at: ts });
-      } else if (d.type === 'assistant') {
-        const mc = d.message?.content;
-        if (!Array.isArray(mc)) continue;
-        for (const b of mc) {
-          if (b.type === 'thinking' && b.thinking)
-            msgs.push({ id: idCounter++, role: 'assistant', type: 'thinking', content: b.thinking, tool_name: null, agent_id: null, created_at: ts });
-          else if (b.type === 'tool_use' && b.name)
-            msgs.push({ id: idCounter++, role: 'assistant', type: 'tool', content: (typeof b.input === 'string' ? b.input : JSON.stringify(b.input || {})).substring(0, 2000), tool_name: b.name, agent_id: null, created_at: ts });
-          else if (b.type === 'text' && b.text)
-            msgs.push({ id: idCounter++, role: 'assistant', type: 'text', content: b.text, tool_name: null, agent_id: null, created_at: ts });
-        }
-      }
-    }
-    return msgs;
-  } catch { return []; }
-}
 
 app.get('/api/sessions/cli-list', (req, res) => {
   const workdir = String(req.query.workdir || WORKDIR || '');
@@ -4134,25 +4098,7 @@ app.get('/api/sessions/:id', (req,res) => {
   const s = stmts.getSession.get(req.params.id);
   if (!s) return res.status(404).json({ error: 'Not found' });
 
-  // Try JSONL-first serving if session has CLI session ID and workdir
-  let messages = null;
-  if (s.claude_session_id && s.workdir) {
-    const homeDir = os.homedir();
-    const safeBase = path.resolve(path.join(homeDir, '.claude', 'projects'));
-    const projectDir = path.resolve(path.join(safeBase, cwdToCliProjectName(s.workdir)));
-    const jsonlPath = path.join(projectDir, s.claude_session_id + '.jsonl');
-    if (fs.existsSync(jsonlPath)) {
-      const parsed = parseJsonlToMessages(jsonlPath);
-      if (parsed.length > 0) messages = parsed;
-    }
-  }
-
-  // Fallback to SQLite
-  if (!messages) {
-    messages = stmts.getMsgsLite.all(req.params.id);
-  }
-
-  s.messages = messages;
+  s.messages = stmts.getMsgsLite.all(req.params.id);
   s.hasRunningTask = !!stmts.hasRunningTask.get(req.params.id);
   s.isChatRunning = activeTasks.has(req.params.id);
   const chainTasks = stmts.getChainTasks.all(req.params.id);
