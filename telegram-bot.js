@@ -149,6 +149,7 @@ class TelegramBot extends EventEmitter {
       getDirectContext: this._getContext.bind(this),
       saveDeviceContext: this._saveDeviceContext.bind(this),
       botId: () => this._botId,
+      botUsername: () => this._botInfo?.username || 'your_bot',
       cmdStatus: this._cmdStatus.bind(this),
       cmdFiles: this._cmdFiles.bind(this),
       cmdCat: this._cmdCat.bind(this),
@@ -1680,7 +1681,7 @@ class TelegramBot extends EventEmitter {
       if (data.startsWith('ch:'))     return this._screenChatSelect(chatId, userId, data, opts);
       if (data.startsWith('cm:'))     return this._routeChatMenu(chatId, userId, data, opts);
       if (data.startsWith('d:'))      return this._routeDialog(chatId, userId, data, opts);
-      if (data.startsWith('fs:') || data.startsWith('fm:') || data.startsWith('fa:')) {
+      if (data.startsWith('ft:') || data.startsWith('fo:') || data.startsWith('fs:') || data.startsWith('fm:') || data.startsWith('fa:')) {
         return this._forum.handleCallback(chatId, userId, data, threadId, msgId);
       }
       if (data.startsWith('f:'))      return this._screenFiles(chatId, userId, data, opts);
@@ -2723,18 +2724,8 @@ class TelegramBot extends EventEmitter {
       }
 
     } else if (data === 's:forum') {
-      // Show forum setup instructions
-      if (editMsgId) {
-        await this._editScreen(chatId, editMsgId,
-          this._t('forum_instructions'),
-          [[{ text: this._t('btn_back'), callback_data: 's:menu' }]]
-        );
-      } else {
-        await this._showScreen(chatId, userId,
-          this._t('forum_instructions'),
-          [[{ text: this._t('btn_back'), callback_data: 's:menu' }]]
-        );
-      }
+      // Guided forum onboarding flow (FORUM-05)
+      return this._forum.startOnboarding(chatId, userId, editMsgId);
 
     } else if (data === 's:forum:off') {
       await this._forum.cmdForumDisconnect(chatId, userId);

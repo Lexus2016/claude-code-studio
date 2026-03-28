@@ -154,7 +154,9 @@ class TelegramBotForum {
    * Called from TelegramBot._handleCallback.
    */
   async handleCallback(chatId, userId, data, threadId, msgId) {
-    // Route by prefix — check ft: before f: to avoid prefix collision (Pitfall 3)
+    // Route by prefix — check ft: and fo: before f: to avoid prefix collision (Pitfall 3)
+    if (data.startsWith('ft:')) return this.handleTaskCallback(chatId, userId, data, threadId);
+    if (data.startsWith('fo:')) return this.handleOnboardingCallback(chatId, userId, data, msgId);
     if (data.startsWith('fs:')) return this.handleSessionCallback(chatId, userId, data, threadId);
     if (data.startsWith('fm:')) return this.handleActionCallback(chatId, userId, data, threadId);
     if (data.startsWith('fa:')) return this.handleActivityCallback(chatId, userId, data, threadId);
@@ -983,6 +985,146 @@ class TelegramBotForum {
    * Handle messages in the Tasks topic.
    * threadId passed explicitly (FORUM-03).
    */
+  // ─── Guided Onboarding (FORUM-05) ─────────────────────────────────────
+
+  /**
+   * Start the guided forum onboarding flow (Step 0: intro screen).
+   * Called from telegram-bot.js _routeSettings when user taps "Forum Mode".
+   */
+  async startOnboarding(chatId, userId, editMsgId) {
+    const text = this._api.t('forum_setup_title') + '\n\n' + this._api.t('forum_setup_intro');
+    const kb = [
+      [{ text: this._api.t('forum_setup_btn_next'), callback_data: 'fo:step:1' }],
+      [{ text: this._api.t('forum_setup_btn_cancel'), callback_data: 's:menu' }],
+    ];
+    if (editMsgId) {
+      await this._api.editScreen(chatId, editMsgId, text, kb);
+    } else {
+      await this._api.showScreen(chatId, userId, text, kb);
+    }
+  }
+
+  /**
+   * Handle onboarding step callbacks (fo:step:1, fo:step:2, fo:step:3).
+   * Each step is a stateless screen edit — no persistent state to clean up.
+   */
+  async handleOnboardingCallback(chatId, userId, data, msgId) {
+    const step = data.split(':')[2];
+
+    if (step === '1') {
+      const text = this._api.t('forum_setup_step1_title') + '\n\n' + this._api.t('forum_setup_step1_text');
+      const kb = [
+        [{ text: this._api.t('forum_setup_btn_done'), callback_data: 'fo:step:2' }],
+        [{ text: this._api.t('forum_setup_btn_cancel'), callback_data: 's:menu' }],
+      ];
+      return this._api.editScreen(chatId, msgId, text, kb);
+    }
+
+    if (step === '2') {
+      const botUsername = this._api.botUsername();
+      const text = this._api.t('forum_setup_step2_title') + '\n\n' +
+        this._api.t('forum_setup_step2_text', { bot_username: botUsername });
+      const kb = [
+        [{ text: this._api.t('forum_setup_btn_done'), callback_data: 'fo:step:3' }],
+        [{ text: this._api.t('forum_setup_btn_cancel'), callback_data: 's:menu' }],
+      ];
+      return this._api.editScreen(chatId, msgId, text, kb);
+    }
+
+    if (step === '3') {
+      const text = this._api.t('forum_setup_step3_title') + '\n\n' + this._api.t('forum_setup_step3_text');
+      const kb = [
+        [{ text: this._api.t('forum_setup_btn_cancel'), callback_data: 's:menu' }],
+      ];
+      return this._api.editScreen(chatId, msgId, text, kb);
+    }
+  }
+
+  // ─── Task Inline Buttons (FORUM-10) ──────────────────────────────────
+
+  /**
+   * Build inline keyboard buttons for a task based on its current status.
+   * Returns an array of button objects for the next logical status transitions.
+   */
+  _buildTaskButtons(task) {
+    const shortId = task.id.slice(-6);
+    const statusActions = {
+      backlog: [
+        { text: this._api.t('ft_btn_todo'), callback_data: `ft:todo:${shortId}` },
+        { text: this._api.t('ft_btn_start'), callback_data: `ft:start:${shortId}` },
+      ],
+      todo: [
+        { text: this._api.t('ft_btn_start'), callback_data: `ft:start:${shortId}` },
+        { text: this._api.t('ft_btn_done'), callback_data: `ft:done:${shortId}` },
+      ],
+      in_progress: [
+        { text: this._api.t('ft_btn_done'), callback_data: `ft:done:${shortId}` },
+        { text: this._api.t('ft_btn_block'), callback_data: `ft:block:${shortId}` },
+      ],
+      blocked: [
+        { text: this._api.t('ft_btn_start'), callback_data: `ft:start:${shortId}` },
+      ],
+      done: [
+        { text: this._api.t('ft_btn_reopen'), callback_data: `ft:todo:${shortId}` },
+      ],
+    };
+    return statusActions[task.status] || statusActions.backlog;
+  }
+
+  /**
+   * Handle task inline button callbacks (ft:start:, ft:done:, ft:todo:, ft:block:, ft:info:).
+   */
+  async handleTaskCallback(chatId, userId, data, threadId) {
+    const parts = data.split(':');
+    const action = parts[1]; // start, done, todo, block, info
+    const shortId = parts[2];
+
+    const task = this._api.stmts.findTaskByIdLike.get(`%${shortId}`);
+    if (!task) {
+      return this._api.sendMessage(chatId, this._api.t('forum_task_not_found'), {
+        message_thread_id: threadId,
+      });
+    }
+
+    if (action === 'info') {
+      // Show task detail with all action buttons
+      const icons = { backlog: '📋', todo: '📝', in_progress: '🔄', done: '✅', blocked: '🚫' };
+      const text = `${icons[task.status] || '•'} <b>#${this._api.escHtml(task.id.slice(-4))}</b> ${this._api.escHtml((task.title || '').substring(0, 100))}\n📌 ${task.status}`;
+      const buttons = this._buildTaskButtons(task);
+      return this._api.sendMessage(chatId, text, {
+        message_thread_id: threadId,
+        parse_mode: 'HTML',
+        reply_markup: JSON.stringify({ inline_keyboard: [buttons] }),
+      });
+    }
+
+    // Status change
+    const statusMap = { start: 'in_progress', done: 'done', todo: 'todo', block: 'blocked', backlog: 'backlog' };
+    const newStatus = statusMap[action];
+    if (!newStatus) return;
+
+    this._api.stmts.updateTaskStatus.run(newStatus, task.id);
+
+    const icons = { done: '✅', in_progress: '🔄', todo: '📝', blocked: '🚫', backlog: '📋' };
+    const text = this._api.t('forum_task_updated', {
+      icon: icons[newStatus],
+      id: this._api.escHtml(task.id.slice(-4)),
+      title: this._api.escHtml((task.title || '').substring(0, 50)),
+      status: newStatus,
+    });
+
+    // Show updated task with new action buttons
+    const updatedTask = { ...task, status: newStatus };
+    const buttons = this._buildTaskButtons(updatedTask);
+    await this._api.sendMessage(chatId, text, {
+      message_thread_id: threadId,
+      parse_mode: 'HTML',
+      reply_markup: JSON.stringify({ inline_keyboard: [buttons] }),
+    });
+  }
+
+  // ─── Tasks Topic Message Handler ─────────────────────────────────────
+
   async _handleForumTaskMessage(msg, threadId) {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
@@ -998,11 +1140,16 @@ class TelegramBotForum {
       this._api.stmts.insertTask.run(id, title, workdir);
 
       const workdirLine = workdir ? `\n📁 ${this._api.escHtml(workdir.split('/').filter(Boolean).pop())}` : '';
+      const newTask = { id, title, status: 'backlog' };
+      const buttons = this._buildTaskButtons(newTask);
       return this._api.sendMessage(chatId, this._api.t('forum_task_created', {
         id: this._api.escHtml(id),
         title: this._api.escHtml(title),
         workdir_line: workdirLine,
-      }));
+      }), {
+        message_thread_id: threadId,
+        reply_markup: JSON.stringify({ inline_keyboard: [buttons] }),
+      });
     }
 
     const [rawCmd, ...argParts] = text.split(/\s+/);
@@ -1019,11 +1166,16 @@ class TelegramBotForum {
         this._api.stmts.insertTask.run(id, title, workdir);
 
         const workdirLine = workdir ? `\n📁 ${this._api.escHtml(workdir.split('/').filter(Boolean).pop())}` : '';
+        const newTask = { id, title, status: 'backlog' };
+        const buttons = this._buildTaskButtons(newTask);
         return this._api.sendMessage(chatId, this._api.t('forum_task_created', {
           id: this._api.escHtml(id),
           title: this._api.escHtml(title),
           workdir_line: workdirLine,
-        }));
+        }), {
+          message_thread_id: threadId,
+          reply_markup: JSON.stringify({ inline_keyboard: [buttons] }),
+        });
       }
 
       case '/list': {
@@ -1043,7 +1195,22 @@ class TelegramBotForum {
           listText += `${icons[status] || '•'} <b>${this._api.escHtml(status)}</b> (${items.length})\n`;
           listText += items.map(t => `  · <code>${t.id.slice(-4)}</code> ${this._api.escHtml((t.title || '').substring(0, 45))}`).join('\n') + '\n\n';
         }
-        return this._api.sendMessage(chatId, listText);
+
+        // Build inline keyboard with per-task buttons
+        const keyboard = [];
+        for (const task of rows) {
+          if (task.status === 'done') continue; // Skip completed tasks in quick-action list
+          const shortId = task.id.slice(-6);
+          const titleBtn = { text: `${icons[task.status] || '•'} ${(task.title || '').substring(0, 30)}`, callback_data: `ft:info:${shortId}` };
+          const nextBtn = this._buildTaskButtons(task)[0]; // first action = most common next status
+          keyboard.push([titleBtn, nextBtn]);
+        }
+
+        const options = { message_thread_id: threadId };
+        if (keyboard.length > 0) {
+          options.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
+        }
+        return this._api.sendMessage(chatId, listText, options);
       }
 
       case '/done':

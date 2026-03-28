@@ -251,7 +251,7 @@ const BOT_I18N = {
     'forum_help_project': '📖 <b>Команди проєкту</b>\n\n<b>Сесії:</b>\n/new — нова сесія\n/history — список сесій\n/session <code>&lt;n&gt;</code> — перемкнути сесію\n/info — поточна сесія та стан\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень\n/full — повна остання відповідь\n/files <code>[path]</code> — файли проєкту\n/cat <code>&lt;file&gt;</code> — вміст файлу\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Дії:</b>\n/stop — зупинити задачу\n/status — стан системи',
     'forum_help_tasks': '📖 <b>Команди задач</b>\n\n/new <code>&lt;назва&gt;</code> — створити задачу\n/list — показати всі\n/start <code>#id</code> — почати\n/done <code>#id</code> — завершити\n/todo <code>#id</code> — в «todo»\n/block <code>#id</code> — заблокувати\n/backlog <code>#id</code> — в backlog\n/delete <code>#id</code> — видалити\n\n💡 Просто напишіть текст — він стане задачею.',
     'forum_help_general': '📖 <b>Команди Forum</b>\n\n/status — стан системи\n/help — ця довідка\n\n💡 Перейдіть у топік проєкту, щоб писати Claude.',
-    'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}\n\n[/start #{id}] [/done #{id}]',
+    'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}',
     'forum_task_updated': '{icon} <b>#{id}</b> {title} → {status}',
     'forum_task_not_found': '❌ Задачу не знайдено.',
     'forum_no_text': '💡 Надішліть текстове повідомлення для спілкування з Claude.',
@@ -291,6 +291,26 @@ const BOT_I18N = {
     'fm_session_activated_hint': '💡 <i>Сесію активовано — пишіть у топіку проєкту для продовження.</i>',
     'fm_session_activated_short': '✅ Сесію активовано в топіку проєкту.',
     'fm_write_in_topic': '📁 <i>Напишіть повідомлення в топіку проєкту, щоб почати роботу з Claude.</i>',
+
+    // Forum onboarding steps
+    'forum_setup_title': '🏗 <b>Forum Mode</b>',
+    'forum_setup_intro': 'Forum Mode створює супергрупу з окремими топіками для кожного проєкту.\n\nКожен проєкт — окрема тема. Задачі та активність — окремі топіки.',
+    'forum_setup_step1_title': '📱 <b>Крок 1 з 3: Створіть групу</b>',
+    'forum_setup_step1_text': '1. Відкрийте Telegram → Нова група\n2. Назвіть її (наприклад, «Claude Studio»)\n3. В налаштуваннях групи увімкніть <b>Topics</b>',
+    'forum_setup_step2_title': '🤖 <b>Крок 2 з 3: Додайте бота</b>',
+    'forum_setup_step2_text': '1. Відкрийте групу → Додати учасників\n2. Знайдіть @{bot_username}\n3. Зробіть адміном з правом «Manage Topics»',
+    'forum_setup_step3_title': '🔗 <b>Крок 3 з 3: Підключіть</b>',
+    'forum_setup_step3_text': 'Напишіть <code>/connect</code> у групі.\n\nБот автоматично створить топіки Tasks та Activity.',
+    'forum_setup_btn_next': 'Далі ➡️',
+    'forum_setup_btn_done': 'Готово, далі ➡️',
+    'forum_setup_btn_cancel': '❌ Скасувати',
+
+    // Task inline button labels
+    'ft_btn_start': '▶ Start',
+    'ft_btn_done': '✅ Done',
+    'ft_btn_block': '🚫 Block',
+    'ft_btn_todo': '📝 Todo',
+    'ft_btn_reopen': '🔄 Reopen',
 
     // Media attachment
     'attach_pending': '📎 <b>{name}</b> додано ({size}KB)\nНадішліть текстове повідомлення або додайте ще файлів.',
@@ -529,7 +549,7 @@ const BOT_I18N = {
     'forum_help_project': '📖 <b>Project Commands</b>\n\n<b>Sessions:</b>\n/new — new session\n/history — session list\n/session <code>&lt;n&gt;</code> — switch session\n/info — current session &amp; state\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages\n/full — full last response\n/files <code>[path]</code> — project files\n/cat <code>&lt;file&gt;</code> — file contents\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Actions:</b>\n/stop — stop current task\n/status — system status',
     'forum_help_tasks': '📖 <b>Task Commands</b>\n\n/new <code>&lt;title&gt;</code> — create task\n/list — show all\n/start <code>#id</code> — start\n/done <code>#id</code> — complete\n/todo <code>#id</code> — set to «todo»\n/block <code>#id</code> — mark blocked\n/backlog <code>#id</code> — set to backlog\n/delete <code>#id</code> — delete\n\n💡 Just type text — it becomes a task.',
     'forum_help_general': '📖 <b>Forum Commands</b>\n\n/status — system status\n/help — this help\n\n💡 Go to a project topic to chat with Claude.',
-    'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}\n\n[/start #{id}] [/done #{id}]',
+    'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}',
     'forum_task_updated': '{icon} <b>#{id}</b> {title} → {status}',
     'forum_task_not_found': '❌ Task not found.',
     'forum_no_text': '💡 Send a text message to talk to Claude.',
@@ -569,6 +589,26 @@ const BOT_I18N = {
     'fm_session_activated_hint': '💡 <i>Session activated — write in the project topic to continue.</i>',
     'fm_session_activated_short': '✅ Session activated in project topic.',
     'fm_write_in_topic': '📁 <i>Write a message in the project topic to start working with Claude.</i>',
+
+    // Forum onboarding steps
+    'forum_setup_title': '🏗 <b>Forum Mode</b>',
+    'forum_setup_intro': 'Forum Mode creates a supergroup with per-project topic threads.\n\nEach project gets its own topic. Tasks and Activity are separate topics.',
+    'forum_setup_step1_title': '📱 <b>Step 1 of 3: Create the Group</b>',
+    'forum_setup_step1_text': '1. Open Telegram → New Group\n2. Name it (e.g. "Claude Studio")\n3. In group Settings → Enable <b>Topics</b>',
+    'forum_setup_step2_title': '🤖 <b>Step 2 of 3: Add the Bot</b>',
+    'forum_setup_step2_text': '1. Open the group → Add Members\n2. Search for @{bot_username}\n3. Promote to Admin with "Manage Topics" permission',
+    'forum_setup_step3_title': '🔗 <b>Step 3 of 3: Connect</b>',
+    'forum_setup_step3_text': 'Send <code>/connect</code> in the group.\n\nThe bot will create Tasks and Activity topics automatically.',
+    'forum_setup_btn_next': 'Next ➡️',
+    'forum_setup_btn_done': 'Done, next ➡️',
+    'forum_setup_btn_cancel': '❌ Cancel',
+
+    // Task inline button labels
+    'ft_btn_start': '▶ Start',
+    'ft_btn_done': '✅ Done',
+    'ft_btn_block': '🚫 Block',
+    'ft_btn_todo': '📝 Todo',
+    'ft_btn_reopen': '🔄 Reopen',
 
     // Media attachment
     'attach_pending': '📎 <b>{name}</b> attached ({size}KB)\nSend a text message to include it, or send more files.',
@@ -807,7 +847,7 @@ const BOT_I18N = {
     'forum_help_project': '📖 <b>Команды проекта</b>\n\n<b>Сессии:</b>\n/new — новая сессия\n/history — список сессий\n/session <code>&lt;n&gt;</code> — переключить сессию\n/info — текущая сессия и состояние\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений\n/full — полный последний ответ\n/files <code>[path]</code> — файлы проекта\n/cat <code>&lt;file&gt;</code> — содержимое файла\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Действия:</b>\n/stop — остановить задачу\n/status — состояние системы',
     'forum_help_tasks': '📖 <b>Команды задач</b>\n\n/new <code>&lt;название&gt;</code> — создать задачу\n/list — показать все\n/start <code>#id</code> — начать\n/done <code>#id</code> — завершить\n/todo <code>#id</code> — в «todo»\n/block <code>#id</code> — заблокировать\n/backlog <code>#id</code> — в backlog\n/delete <code>#id</code> — удалить\n\n💡 Просто напишите текст — он станет задачей.',
     'forum_help_general': '📖 <b>Команды Forum</b>\n\n/status — состояние системы\n/help — эта справка\n\n💡 Перейдите в топик проекта, чтобы писать Claude.',
-    'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}\n\n[/start #{id}] [/done #{id}]',
+    'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}',
     'forum_task_updated': '{icon} <b>#{id}</b> {title} → {status}',
     'forum_task_not_found': '❌ Задача не найдена.',
     'forum_no_text': '💡 Отправьте текстовое сообщение для общения с Claude.',
@@ -847,6 +887,26 @@ const BOT_I18N = {
     'fm_session_activated_hint': '💡 <i>Сессия активирована — пишите в топике проекта для продолжения.</i>',
     'fm_session_activated_short': '✅ Сессия активирована в топике проекта.',
     'fm_write_in_topic': '📁 <i>Напишите сообщение в топике проекта, чтобы начать работу с Claude.</i>',
+
+    // Forum onboarding steps
+    'forum_setup_title': '🏗 <b>Forum Mode</b>',
+    'forum_setup_intro': 'Forum Mode создаёт супергруппу с отдельными топиками для каждого проекта.\n\nКаждый проект — отдельная тема. Задачи и активность — отдельные топики.',
+    'forum_setup_step1_title': '📱 <b>Шаг 1 из 3: Создайте группу</b>',
+    'forum_setup_step1_text': '1. Откройте Telegram → Новая группа\n2. Назовите её (например, «Claude Studio»)\n3. В настройках группы включите <b>Темы</b>',
+    'forum_setup_step2_title': '🤖 <b>Шаг 2 из 3: Добавьте бота</b>',
+    'forum_setup_step2_text': '1. Откройте группу → Добавить участников\n2. Найдите @{bot_username}\n3. Сделайте админом с правом «Управление темами»',
+    'forum_setup_step3_title': '🔗 <b>Шаг 3 из 3: Подключите</b>',
+    'forum_setup_step3_text': 'Напишите <code>/connect</code> в группе.\n\nБот автоматически создаст топики Tasks и Activity.',
+    'forum_setup_btn_next': 'Далее ➡️',
+    'forum_setup_btn_done': 'Готово, далее ➡️',
+    'forum_setup_btn_cancel': '❌ Отмена',
+
+    // Task inline button labels
+    'ft_btn_start': '▶ Start',
+    'ft_btn_done': '✅ Done',
+    'ft_btn_block': '🚫 Block',
+    'ft_btn_todo': '📝 Todo',
+    'ft_btn_reopen': '🔄 Reopen',
 
     // Media attachment
     'attach_pending': '📎 <b>{name}</b> добавлено ({size}KB)\nОтправьте текстовое сообщение или добавьте ещё файлов.',
