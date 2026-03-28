@@ -44,7 +44,7 @@ Plans:
 - [x] 02-02-PLAN.md — sendMessageDraft streaming migration in TelegramProxy (server.js)
 - [x] 02-03-PLAN.md — Auto-generated Back buttons + context header on every screen
 - [x] 02-04-PLAN.md — Dynamic persistent keyboard + setMyCommands with 4 commands
-- [ ] 02-05-PLAN.md — 2-tap flow validation, slash command pruning, human verification checkpoint
+- [x] 02-05-PLAN.md — 2-tap flow validation, slash command pruning, human verification checkpoint
 **Success Criteria** (what must be TRUE):
   1. From any screen (or fresh /start), a user can send a message to Claude with at most 2 taps — no slash commands typed
   2. Every inline keyboard screen shows a Back button; tapping it always goes exactly one level up (never a dead end, never a full reset)

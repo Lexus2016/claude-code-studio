@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-04-PLAN.md (persistent reply keyboard + setMyCommands)
-last_updated: "2026-03-28T20:08:22.441Z"
+stopped_at: Completed 02-05-PLAN.md (2-tap flow finalization + legacy commands)
+last_updated: "2026-03-28T20:12:55.264Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
   percent: 57
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 2
-Plan: 3 of 5 complete
+Plan: 5 of 5 complete
 Status: Ready to execute
 Last activity: 2026-03-28
 
@@ -58,6 +58,7 @@ Progress: [######░░░░] 57%
 | Phase 02-ux-redesign P01 | 9min | 2 tasks | 1 files |
 | Phase 02-ux-redesign P03 | 6min | 2 tasks | 2 files |
 | Phase 02-ux-redesign P04 | 4min | 2 tasks | 2 files |
+| Phase 02-ux-redesign P05 | 2min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,8 @@ Recent decisions affecting current work:
 - [Phase 02-ux-redesign]: Context header replaces per-screen inline project/chat display for consistency
 - [Phase 02-ux-redesign]: Keyboard context update via separate sendMessage (editMessageText cannot set ReplyKeyboardMarkup)
 - [Phase 02-ux-redesign]: setMyCommands called once at startup with only /start /help /cancel /status
+- [Phase 02-ux-redesign]: LIMIT 2 query pattern for single-item auto-selection in _handleWriteButton
+- [Phase 02-ux-redesign]: Legacy commands kept functional but removed from / menu -- backward compat for power users
 
 ### Pending Todos
 
@@ -95,6 +98,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T20:08:22.438Z
-Stopped at: Completed 02-04-PLAN.md (persistent reply keyboard + setMyCommands)
+Last session: 2026-03-28T20:12:55.261Z
+Stopped at: Completed 02-05-PLAN.md (2-tap flow finalization + legacy commands)
 Resume file: None
