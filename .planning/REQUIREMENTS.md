@@ -44,12 +44,12 @@
 - [ ] **FORUM-02**: Forum mode and Direct mode never share `ctx.state` — forum state is scoped to `(chatId, threadId, userId)`, direct mode state is scoped to `userId`
 - [ ] **FORUM-03**: `threadId` is always passed explicitly as a parameter to every forum API call (no class-level `this._currentThreadId`)
 - [ ] **FORUM-04**: Existing Forum Mode supergroups continue working after extraction with zero reconfiguration
-- [ ] **FORUM-05**: Forum Mode setup has a guided onboarding flow with inline buttons (step-by-step, not just a text wall of instructions)
+- [x] **FORUM-05**: Forum Mode setup has a guided onboarding flow with inline buttons (step-by-step, not just a text wall of instructions)
 - [x] **FORUM-06**: Every Claude response in a project topic includes an inline keyboard with quick actions: Continue session, New session, Files, Diff, Last 5 messages
 - [x] **FORUM-07**: `/help` in a Forum Mode project topic shows only Forum-specific commands — Direct Mode navigation commands (e.g. `/projects`, `/chats`) are not shown
 - [x] **FORUM-08**: Activity topic has actionable inline buttons on every notification: Go to Project topic, View Full Response — not just read-only text
 - [x] **FORUM-09**: Error messages in any Forum topic include recovery action buttons (Retry, Go to project, Help) — no dead ends
-- [ ] **FORUM-10**: Tasks topic replaces manual `/start #id` / `/done #id` commands with inline buttons per task — user never needs to type a task ID
+- [x] **FORUM-10**: Tasks topic replaces manual `/start #id` / `/done #id` commands with inline buttons per task — user never needs to type a task ID
 - [x] **FORUM-11**: Project topic always shows the active session name in its pinned message or topic header; switching sessions is one tap via inline keyboard
 
 ### Server Encapsulation (ENC)
@@ -111,12 +111,12 @@
 | FORUM-02 | Phase 3 | Pending |
 | FORUM-03 | Phase 3 | Pending |
 | FORUM-04 | Phase 3 | Pending |
-| FORUM-05 | Phase 3 | Pending |
+| FORUM-05 | Phase 3 | Complete |
 | FORUM-06 | Phase 3 | Complete |
 | FORUM-07 | Phase 3 | Complete |
 | FORUM-08 | Phase 3 | Complete |
 | FORUM-09 | Phase 3 | Complete |
-| FORUM-10 | Phase 3 | Pending |
+| FORUM-10 | Phase 3 | Complete |
 | FORUM-11 | Phase 3 | Complete |
 | ENC-01 | Phase 4 | Pending |
 | ENC-02 | Phase 4 | Pending |

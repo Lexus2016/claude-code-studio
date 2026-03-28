@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-02-PLAN.md (forum UX enhancements)
-last_updated: "2026-03-28T20:58:01.420Z"
+stopped_at: Completed 03-03-PLAN.md (forum onboarding + task buttons)
+last_updated: "2026-03-28T21:05:22.893Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
   percent: 73
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 3
-Plan: 2 of 3 complete
+Plan: 3 of 3 complete
 Status: Ready to execute
 Last activity: 2026-03-28
 
@@ -60,6 +60,7 @@ Progress: [########░░] 73%
 | Phase 02-ux-redesign P04 | 4min | 2 tasks | 2 files |
 | Phase 02-ux-redesign P05 | 2min | 2 tasks | 1 files |
 | Phase 03 P02 | 3min | 2 tasks | 3 files |
+| Phase 03 P03 | 3min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,8 @@ Recent decisions affecting current work:
 - [Phase 02-ux-redesign]: Legacy commands kept functional but removed from / menu -- backward compat for power users
 - [Phase 03]: Only forum-mode button labels in server.js TelegramProxy are i18n-ified; Direct Mode buttons left as-is
 - [Phase 03]: Error recovery layout changed from 1 row (3 buttons) to 2 rows (2+2) to accommodate Help button
+- [Phase 03]: Onboarding is stateless — each step edits the same message, no persistent state to clean up
+- [Phase 03]: ft: and fo: prefixes routed before f: in both routing layers to avoid collision
 
 ### Pending Todos
 
@@ -101,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T20:58:01.417Z
-Stopped at: Completed 03-02-PLAN.md (forum UX enhancements)
+Last session: 2026-03-28T21:05:22.890Z
+Stopped at: Completed 03-03-PLAN.md (forum onboarding + task buttons)
 Resume file: None

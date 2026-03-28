@@ -62,7 +62,7 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md — Extract 21 forum methods to TelegramBotForum class (composition facade, state scoping, threadId explicit)
 - [x] 03-02-PLAN.md — Forum UX enhancements (inline keyboards, activity buttons, error recovery, /help scoping, session display, i18n)
-- [ ] 03-03-PLAN.md — Guided onboarding flow + task inline buttons (ft: callback prefix)
+- [x] 03-03-PLAN.md — Guided onboarding flow + task inline buttons (ft: callback prefix)
 **Success Criteria** (what must be TRUE):
   1. `telegram-bot-forum.js` exists containing `TelegramBotForum` class; `telegram-bot.js` no longer contains inline forum logic (~860 lines removed)
   2. A message sent in a Forum Mode topic does not affect `ctx.state` for the same user's Direct Mode conversation (and vice versa)
