@@ -1376,6 +1376,8 @@ class TelegramProxy {
     this._toolsUsed = [];
     this._finished = false;
     this._sessionTitle = null; // cached session title for forum indicator
+    this._draftId = (Date.now() % 2147483646) + 1; // non-zero int for sendMessageDraft
+    this._usesDraftStreaming = true; // flips to false on first sendMessageDraft failure
     // Typing indicator — sends "typing..." action every 4s
     this._typingInterval = setInterval(() => {
       const params = { chat_id: this._chatId, action: 'typing' };
@@ -1532,20 +1534,42 @@ class TelegramProxy {
     if (this._finished) return;
     if (this._updateTimer) return;
     const elapsed = Date.now() - this._lastEditAt;
-    const delay = Math.max(3000 - elapsed, 500);
+    const baseDelay = this._usesDraftStreaming ? 500 : 3000;
+    const delay = Math.max(baseDelay - elapsed, 200);
     this._updateTimer = setTimeout(() => this._sendProgress(), delay);
   }
 
   async _sendProgress() {
     this._updateTimer = null;
     if (this._finished) return;
-
     this._lastEditAt = Date.now();
 
     let preview = this._buffer;
     if (preview.length > 3500) {
       preview = '...\n' + preview.slice(-3500);
     }
+
+    // ── Draft streaming path (sendMessageDraft — no rate limit) ──────────
+    if (this._usesDraftStreaming) {
+      try {
+        const text = (preview || ' ').slice(0, 4096); // plain text only, no parse_mode
+        const params = {
+          chat_id: this._chatId,
+          draft_id: this._draftId,
+          text: text,
+        };
+        if (this._threadId) params.message_thread_id = this._threadId;
+        await this._bot._callApi('sendMessageDraft', params);
+        return;
+      } catch (err) {
+        // First failure: fall back permanently to editMessageText for this proxy instance
+        this._usesDraftStreaming = false;
+        this._bot.log.warn(`[TelegramProxy] sendMessageDraft failed, falling back to editMessageText: ${err.message}`);
+        // Fall through to legacy path below
+      }
+    }
+
+    // ── Legacy editMessageText path (fallback) ──────────────────────────
     preview = this._bot._escHtml(preview);
 
     const toolLine = this._toolsUsed.length
