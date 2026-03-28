@@ -2530,7 +2530,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     </div>
     <span class="dlg-panel-time" id="dlgPanelTime"></span>
     <div class="dlg-panel-actions">
-      <button class="dlg-btn" onclick="checkDelegation()" data-i18n="dlg.check">Перевірити</button>
+      <button class="dlg-btn" onclick="checkDelegationBtn()" data-i18n="dlg.check">Перевірити</button>
       <button class="dlg-btn" onclick="toggleDelegateDialog()" data-i18n="dlg.dialog">Діалог</button>
       <button class="dlg-btn" onclick="sendDelegateMsg()" data-i18n="dlg.message">Повідомлення</button>
       <button class="dlg-btn danger" onclick="stopDelegation()" data-i18n="dlg.stop">Стоп</button>
@@ -3565,6 +3565,7 @@ const TRANSLATIONS = {
     'dlg.toast.select_agent':'Оберіть агента','dlg.toast.describe_task':'Опишіть завдання',
     'dlg.toast.delegated':'Делеговано до {agent}','dlg.toast.fail':'Помилка делегування: {err}',
     'dlg.toast.send_fail':'Не вдалося надіслати','dlg.toast.send_err':'Помилка надсилання: {err}','dlg.toast.stopped':'Делегування зупинено',
+    'dlg.toast.updated':'Діалог оновлено','dlg.toast.no_changes':'Без змін',
   },
   en: {
     'sec.proactive':'Status',
@@ -3775,6 +3776,7 @@ const TRANSLATIONS = {
     'dlg.toast.select_agent':'Select an agent','dlg.toast.describe_task':'Describe the task',
     'dlg.toast.delegated':'Delegated to {agent}','dlg.toast.fail':'Failed to delegate: {err}',
     'dlg.toast.send_fail':'Failed to send message','dlg.toast.send_err':'Failed to send: {err}','dlg.toast.stopped':'Delegation stopped',
+    'dlg.toast.updated':'Dialog updated','dlg.toast.no_changes':'No changes',
   },
   ru: {
     'sec.proactive':'Статус',
@@ -3985,6 +3987,7 @@ const TRANSLATIONS = {
     'dlg.toast.select_agent':'Выберите агента','dlg.toast.describe_task':'Опишите задачу',
     'dlg.toast.delegated':'Делегировано: {agent}','dlg.toast.fail':'Ошибка делегирования: {err}',
     'dlg.toast.send_fail':'Не удалось отправить','dlg.toast.send_err':'Ошибка отправки: {err}','dlg.toast.stopped':'Делегирование остановлено',
+    'dlg.toast.updated':'Диалог обновлён','dlg.toast.no_changes':'Без изменений',
   }
 };
 function t(key) {
@@ -11400,23 +11403,31 @@ async function sendDelegateMsgSubmit() {
   }
 }
 
-async function checkDelegation(showDialog = true) {
+async function checkDelegation() {
   if (!_activeDelegation) return;
   try {
     const r = await fetch(`/api/delegate/${_activeDelegation.id}/check`, { method: 'POST' });
     if (!r.ok) return;
     const d = await r.json();
     if (d.dialog !== undefined) {
+      const changed = d.dialog !== _activeDelegation.dialog;
       _activeDelegation.dialog = d.dialog;
       _activeDelegation.lastUpdate = d.lastUpdate;
-      if (showDialog) {
-        const container = $i('dlgDialogContainer');
-        if (container) container.style.display = '';
-      }
       _renderDelegateDialog();
       _renderDelegatePanel();
+      return changed;
     }
   } catch {}
+  return false;
+}
+
+async function checkDelegationBtn() {
+  const changed = await checkDelegation();
+  if (changed) {
+    toast(t('dlg.toast.updated'), false, 2000);
+  } else {
+    toast(t('dlg.toast.no_changes'), false, 2000);
+  }
 }
 
 async function stopDelegation() {
