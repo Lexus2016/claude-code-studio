@@ -200,6 +200,8 @@ class TelegramBotForum {
 
     try {
       await this._createForumStructure(chatId);
+      // Set forum-scoped commands (FORUM-07) — show only relevant commands in supergroup
+      await this._setForumCommands(chatId);
     } catch (err) {
       if (!alreadyConnected) {
         this._api.stmts.setForumChatId.run(null, userId);
@@ -297,18 +299,24 @@ class TelegramBotForum {
       const session = this._api.db.prepare('SELECT workdir FROM sessions WHERE id = ?').get(sessionId);
       if (session?.workdir) {
         const projectTopic = topics.find(t => t.type === 'project' && t.workdir === session.workdir);
-        const buttons = [];
+        const urlRow = [];
 
         // Use URL buttons for cross-topic navigation
         if (projectTopic) {
           const topicUrl = this._topicLink(forumChatId, projectTopic.thread_id);
-          buttons.push({ text: this._api.t('fm_btn_open_chat'), url: topicUrl });
+          urlRow.push({ text: this._api.t('fm_btn_open_chat'), url: topicUrl });
         } else {
           // Fallback: callback button to auto-create project topic + show preview
-          buttons.push({ text: this._api.t('fm_btn_open_chat'), callback_data: `fa:open:${sessionId}` });
+          urlRow.push({ text: this._api.t('fm_btn_open_chat'), callback_data: `fa:open:${sessionId}` });
         }
 
-        options.reply_markup = JSON.stringify({ inline_keyboard: [buttons] });
+        // Action buttons row — Continue session or start New session
+        const actionRow = [
+          { text: this._api.t('fm_btn_continue'), callback_data: `fa:continue:${sessionId}` },
+          { text: this._api.t('fm_btn_new'), callback_data: `fa:new:${session.workdir}` },
+        ];
+
+        options.reply_markup = JSON.stringify({ inline_keyboard: [urlRow, actionRow] });
       }
     }
 
@@ -339,6 +347,28 @@ class TelegramBotForum {
       parse_mode: 'HTML',
       reply_markup: JSON.stringify({ inline_keyboard: rows }),
     });
+  }
+
+  // ─── Forum-Scoped Commands (FORUM-07) ──────────────────────────────────
+
+  /**
+   * Set forum-scoped bot commands via setMyCommands.
+   * Shows only forum-relevant commands when in the supergroup.
+   */
+  async _setForumCommands(chatId) {
+    try {
+      await this._api.callApi('setMyCommands', {
+        commands: JSON.stringify([
+          { command: 'help', description: this._api.t('fm_cmd_help_desc') },
+          { command: 'status', description: this._api.t('fm_cmd_status_desc') },
+          { command: 'new', description: this._api.t('fm_cmd_new_desc') },
+          { command: 'stop', description: this._api.t('fm_cmd_stop_desc') },
+        ]),
+        scope: JSON.stringify({ type: 'chat', chat_id: chatId }),
+      });
+    } catch (err) {
+      this._api.log.warn(`[forum] Failed to set forum commands: ${err.message}`);
+    }
   }
 
   // ─── Internal Methods ──────────────────────────────────────────────────
@@ -743,6 +773,16 @@ class TelegramBotForum {
         });
         return;
       }
+      case 'help': {
+        // Show context-appropriate help — determine topic type
+        const helpTopicInfo = this.getTopicInfo(chatId, threadId);
+        const helpKey = helpTopicInfo?.type === 'tasks' ? 'forum_help_tasks'
+          : helpTopicInfo?.type === 'project' ? 'forum_help_project'
+          : 'forum_help_general';
+        return this._api.sendMessage(chatId, this._api.t(helpKey), {
+          message_thread_id: threadId,
+        });
+      }
     }
   }
 
@@ -824,6 +864,67 @@ class TelegramBotForum {
         return;
       }
 
+      case 'continue': {
+        // Continue session from Activity topic — switch session and prompt in project topic
+        const contSession = this._api.db.prepare('SELECT id, title, workdir FROM sessions WHERE id = ?').get(param);
+        if (!contSession) return this._api.sendMessage(chatId, this._api.t('forum_task_not_found'));
+
+        const ctx = this._api.getDirectContext(userId);
+        ctx.projectWorkdir = contSession.workdir;
+        ctx.sessionId = contSession.id;
+        this._api.saveDeviceContext(userId);
+
+        // Find project topic for navigation
+        const contTopics = this._api.stmts.getForumTopics.all(chatId);
+        const contProjectTopic = contTopics.find(t => t.type === 'project' && t.workdir === contSession.workdir);
+        if (contProjectTopic) {
+          // Send compose prompt in the project topic
+          await this._api.sendMessage(chatId, this._api.t('compose_prompt'), {
+            message_thread_id: contProjectTopic.thread_id,
+            reply_markup: JSON.stringify({ inline_keyboard: [
+              [{ text: this._api.t('btn_cancel'), callback_data: 'fm:info' }],
+            ]}),
+          });
+          // Link back from activity topic
+          const topicUrl = this._topicLink(chatId, contProjectTopic.thread_id);
+          await this._api.sendMessage(chatId, this._api.t('fm_session_activated_short'), {
+            message_thread_id: threadId,
+            reply_markup: JSON.stringify({ inline_keyboard: [
+              [{ text: this._api.t('fm_btn_go_project'), url: topicUrl }],
+            ]}),
+          });
+        }
+        return;
+      }
+
+      case 'new': {
+        // Create new session from Activity topic — param is workdir
+        const newWorkdir = param;
+        if (!newWorkdir) return;
+
+        const newTopics = this._api.stmts.getForumTopics.all(chatId);
+        let newProjectTopic = newTopics.find(t => t.type === 'project' && t.workdir === newWorkdir);
+
+        // Auto-create project topic if it doesn't exist yet
+        if (!newProjectTopic) {
+          const newThreadId = await this.createProjectTopic(chatId, newWorkdir);
+          if (!newThreadId) return this._api.sendMessage(chatId, '❌ Failed to create project topic.');
+          newProjectTopic = { thread_id: newThreadId, type: 'project', workdir: newWorkdir };
+        }
+
+        await this._forumNewSession(chatId, userId, newWorkdir);
+
+        // Link to project topic from activity
+        const topicUrl = this._topicLink(chatId, newProjectTopic.thread_id);
+        await this._api.sendMessage(chatId, this._api.t('fm_session_activated_short'), {
+          message_thread_id: threadId,
+          reply_markup: JSON.stringify({ inline_keyboard: [
+            [{ text: this._api.t('fm_btn_go_project'), url: topicUrl }],
+          ]}),
+        });
+        return;
+      }
+
       case 'project': {
         // Navigate to project topic — send URL link for direct navigation
         const targetThreadId = parseInt(param);
@@ -858,16 +959,23 @@ class TelegramBotForum {
 
     const title = (rows[idx].title || this._api.t('chat_untitled')).substring(0, 50);
     const msgCount = rows[idx].msg_count || 0;
-    const text = this._api.t('forum_switch_session', { title: this._api.escHtml(title) })
-      + `\n📊 ${msgCount} msg`;
+    const text = this._api.t('fm_session_switched', {
+      title: this._api.escHtml(title),
+      count: msgCount,
+    });
 
     const buttons = [
-      { text: this._api.t('fm_btn_last5'), callback_data: 'fm:last' },
-      { text: this._api.t('fm_btn_history'), callback_data: 'fm:history' },
-      { text: this._api.t('fm_btn_new'), callback_data: 'fm:new' },
+      [
+        { text: this._api.t('fm_btn_last5'), callback_data: 'fm:last' },
+        { text: this._api.t('fm_btn_continue'), callback_data: 'fm:compose' },
+      ],
+      [
+        { text: this._api.t('fm_btn_history'), callback_data: 'fm:history' },
+        { text: this._api.t('fm_btn_new'), callback_data: 'fm:new' },
+      ],
     ];
     await this._api.sendMessage(chatId, text, {
-      reply_markup: JSON.stringify({ inline_keyboard: [buttons] }),
+      reply_markup: JSON.stringify({ inline_keyboard: buttons }),
     });
   }
 
