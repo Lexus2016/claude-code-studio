@@ -46,6 +46,40 @@ const FSM_STATES = {
   AWAITING_ASK_RESPONSE: 'AWAITING_ASK_RESPONSE',
 };
 
+// ─── Screen Registry ────────────────────────────────────────────────────────
+// Defines the navigation hierarchy: each screen has a handler method and a parent.
+// parent can be a string (static) or a function (dynamic, e.g. depends on context).
+const SCREENS = {
+  MAIN:        { parent: null,                                             handler: '_screenMainMenu' },
+  PROJECTS:    { parent: 'MAIN',                                           handler: '_screenProjects' },
+  PROJECT:     { parent: 'PROJECTS',                                       handler: '_screenProjectSelect' },
+  CHATS:       { parent: (ctx) => ctx.projectWorkdir ? 'PROJECT' : 'MAIN', handler: '_screenChats' },
+  DIALOG:      { parent: 'CHATS',                                          handler: '_screenDialog' },
+  DIALOG_FULL: { parent: 'DIALOG',                                         handler: '_screenDialogFull' },
+  FILES:       { parent: (ctx) => ctx.projectWorkdir ? 'PROJECT' : 'MAIN', handler: '_screenFiles' },
+  TASKS:       { parent: (ctx) => ctx.projectWorkdir ? 'PROJECT' : 'MAIN', handler: '_screenTasks' },
+  STATUS:      { parent: 'MAIN',                                           handler: '_screenStatus' },
+  TUNNEL:      { parent: 'MAIN',                                           handler: '_cmdTunnel' },
+  SETTINGS:    { parent: 'MAIN',                                           handler: '_screenSettings' },
+};
+
+// Maps callback_data prefixes to SCREENS keys for routing lookup.
+// Preserves backward compatibility — old buttons in chat history still route correctly.
+const CALLBACK_TO_SCREEN = {
+  'm:menu':     'MAIN',
+  'p:list':     'PROJECTS',
+  'p:sel:':     'PROJECT',
+  'c:list:':    'CHATS',
+  'd:overview': 'DIALOG',
+  'd:all:':     'DIALOG_FULL',
+  'f:':         'FILES',
+  't:list':     'TASKS',
+  't:all':      'TASKS',
+  'm:status':   'STATUS',
+  'tn:menu':    'TUNNEL',
+  's:menu':     'SETTINGS',
+};
+
 // ─── Bot Internationalization ───────────────────────────────────────────────
 const BOT_I18N = require('./telegram-bot-i18n');
 
@@ -365,6 +399,29 @@ class TelegramBot extends EventEmitter {
     try {
       await this._callApi('answerCallbackQuery', { callback_query_id: callbackQueryId, text });
     } catch {}
+  }
+
+  /**
+   * Build a Back button row for the given screen key.
+   * Uses the SCREENS registry parent chain to determine the back destination.
+   * @param {string} screenKey - Key from SCREENS registry (e.g. 'PROJECTS', 'DIALOG')
+   * @param {object} ctx - User context (for dynamic parent resolution)
+   * @returns {Array|null} Inline keyboard row with back button, or null for MAIN
+   */
+  _buildBackButton(screenKey, ctx) {
+    const screen = SCREENS[screenKey];
+    if (!screen) return null;
+    let parentKey;
+    if (typeof screen.parent === 'function') {
+      parentKey = screen.parent(ctx);
+    } else {
+      parentKey = screen.parent;
+    }
+    if (!parentKey) return null; // MAIN has no back button
+    // Find the callback_data that routes to parentKey
+    const parentCb = Object.entries(CALLBACK_TO_SCREEN)
+      .find(([, v]) => v === parentKey)?.[0] || 'm:menu';
+    return [{ text: this._t('btn_back'), callback_data: parentCb }];
   }
 
   // ─── Pairing ───────────────────────────────────────────────────────────────
@@ -2590,6 +2647,107 @@ class TelegramBot extends EventEmitter {
     }
   }
 
+  // ─── Ask User Notification (cross-context alert) ──────────────────────
+
+  /**
+   * Notify all paired devices about a pending ask_user question.
+   * Called from TelegramProxy._handleAskUser() after the question is sent
+   * to the originating chat. Ensures the user sees the question even if
+   * they are in a different Forum topic or on a different device.
+   *
+   * @param {Object} opts
+   * @param {number} opts.userId - Telegram user ID
+   * @param {string} opts.sessionId - Chat session ID
+   * @param {number|string} opts.sourceChatId - Chat where the ask was already sent
+   * @param {number|null} opts.sourceThreadId - Thread where the ask was already sent (Forum)
+   * @param {string} opts.questionText - The question text from Claude
+   * @param {Array} opts.questions - Full questions array (for options)
+   */
+  async notifyAskUser({ userId, sessionId, sourceChatId, sourceThreadId, questionText, questions }) {
+    if (!this.running) return;
+
+    const devices = this._stmts.getAllDevices.all().filter(d => d.notifications_enabled);
+    if (!devices.length) return;
+
+    // Session info for context
+    const session = this.db.prepare('SELECT title, workdir FROM sessions WHERE id = ?').get(sessionId);
+    const sessionTitle = session?.title || 'Claude';
+
+    // Build notification text
+    const q = (Array.isArray(questions) && questions.length) ? questions[0] : {};
+    const truncatedQuestion = questionText.length > 500 ? questionText.slice(0, 500) + '…' : questionText;
+
+    const text = [
+      `❓ <b>${this._t('ask_notify_title')}</b>`,
+      this._t('ask_notify_session', { title: this._escHtml(sessionTitle) }),
+      '',
+      this._escHtml(truncatedQuestion),
+      '',
+      q.options?.length ? `<i>${this._t('ask_choose_hint')}</i>` : `<i>${this._t('ask_text_hint')}</i>`,
+    ].join('\n');
+
+    // Build answer buttons (same callback_data as the original ask)
+    const skipLabel = this._t('ask_skip_btn');
+    const rows = [];
+    if (q.options?.length) {
+      for (let i = 0; i < q.options.length; i++) {
+        const opt = q.options[i];
+        const label = (typeof opt === 'string' ? opt : (opt.label || opt.value || `Option ${i + 1}`)).substring(0, 64);
+        rows.push([{ text: label, callback_data: `ask:${i}` }]);
+      }
+    }
+    rows.push([{ text: skipLabel, callback_data: 'ask:skip' }]);
+
+    for (const device of devices) {
+      // Rate limit: reuse the same lastNotifiedAt guard as notifyTaskComplete
+      const ctx = this._getContext(device.telegram_user_id);
+      const now = Date.now();
+      if (now - (ctx.lastNotifiedAt || 0) < 5000) continue;
+      ctx.lastNotifiedAt = now;
+
+      try {
+        if (device.forum_chat_id) {
+          // Forum Mode — send to Activity topic with project link
+          await this._notifyForumAskUser(device.forum_chat_id, text, session, rows);
+        } else {
+          // Private chat — skip if the ask was already sent to this exact chat
+          if (String(device.telegram_chat_id) === String(sourceChatId) && !sourceThreadId) continue;
+          await this._sendMessage(device.telegram_chat_id, text, {
+            parse_mode: 'HTML',
+            reply_markup: JSON.stringify({ inline_keyboard: rows }),
+          });
+        }
+      } catch (err) {
+        this.log.warn(`[telegram] Ask notification failed for ${device.display_name}: ${err.message}`);
+      }
+    }
+  }
+
+  /**
+   * Send ask_user notification to Forum Activity topic with project link.
+   */
+  async _notifyForumAskUser(forumChatId, text, session, answerRows) {
+    const topics = this._stmts.getForumTopics.all(forumChatId);
+    const activityTopic = topics.find(t => t.type === 'activity');
+    if (!activityTopic) return;
+
+    // Clone rows and add "Go to chat" URL button if project topic exists
+    const rows = answerRows.map(r => [...r]);
+    if (session?.workdir) {
+      const projectTopic = topics.find(t => t.type === 'project' && t.workdir === session.workdir);
+      if (projectTopic) {
+        const topicUrl = this._topicLink(forumChatId, projectTopic.thread_id);
+        rows.push([{ text: this._t('ask_notify_go_to_chat'), url: topicUrl }]);
+      }
+    }
+
+    await this._sendMessage(forumChatId, text, {
+      message_thread_id: activityTopic.thread_id,
+      parse_mode: 'HTML',
+      reply_markup: JSON.stringify({ inline_keyboard: rows }),
+    });
+  }
+
   // ─── Stop / New Commands ────────────────────────────────────────────────
 
   async _cmdStop(chatId, userId) {
@@ -3960,3 +4118,5 @@ class TelegramBot extends EventEmitter {
 
 module.exports = TelegramBot;
 module.exports.FSM_STATES = FSM_STATES;
+module.exports.SCREENS = SCREENS;
+module.exports.CALLBACK_TO_SCREEN = CALLBACK_TO_SCREEN;
