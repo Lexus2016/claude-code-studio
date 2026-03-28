@@ -861,9 +861,13 @@ class TelegramBot extends EventEmitter {
     switch (cmd) {
       case '/help':    return this._cmdHelp(chatId, userId);
       case '/start':   return this._screenMainMenu(chatId, userId); // already authorized
+      // Legacy command — removed from / menu (KB-03), handler kept for backward compat
       case '/projects':return this._cmdProjects(chatId, userId);
+      // Legacy command — removed from / menu (KB-03), handler kept for backward compat
       case '/project': return this._cmdProject(chatId, userId, args);
+      // Legacy command — removed from / menu (KB-03), handler kept for backward compat
       case '/chats':   return this._cmdChats(chatId, userId);
+      // Legacy command — removed from / menu (KB-03), handler kept for backward compat
       case '/chat':    return this._cmdChat(chatId, userId, args);
       case '/last':    return this._cmdLast(chatId, userId, args);
       case '/full':    return this._cmdFull(chatId, userId);
@@ -1653,16 +1657,19 @@ class TelegramBot extends EventEmitter {
   }
 
   /**
-   * Smart ✉ Write button handler (persistent keyboard).
-   * If session active → compose mode directly (1 tap!).
-   * If no session but project set → open chats for that project.
-   * If nothing → open projects list.
+   * Smart Write button handler (persistent keyboard).
+   * Routes for 2-tap optimization:
+   *   - Session active → compose mode directly (0 more taps)
+   *   - Project set, 1 chat → auto-select chat, compose (0 more taps)
+   *   - Project set, N chats → show chats list (1 more tap)
+   *   - No project, 1 project → auto-select, then show chats (1 more tap)
+   *   - No project, N projects → show projects list (2 more taps)
    */
   async _handleWriteButton(chatId, userId) {
     const ctx = this._getContext(userId);
 
     if (ctx.sessionId) {
-      // Has active session — go directly to compose
+      // Has active session — go directly to compose (0 more taps)
       ctx.state = FSM_STATES.COMPOSING;
       let composeText = this._t('compose_mode');
       const sess = this.db.prepare('SELECT title, workdir FROM sessions WHERE id = ?').get(ctx.sessionId);
@@ -1677,11 +1684,51 @@ class TelegramBot extends EventEmitter {
     }
 
     if (ctx.projectWorkdir) {
-      // Has project but no session — show chats for this project
+      // Has project but no session — auto-select if exactly 1 chat
+      try {
+        const rows = this.db.prepare(
+          'SELECT id, title FROM sessions WHERE workdir = ? ORDER BY updated_at DESC LIMIT 2'
+        ).all(ctx.projectWorkdir);
+
+        if (rows.length === 1) {
+          // Auto-select the single chat → compose directly
+          ctx.sessionId = rows[0].id;
+          ctx.state = FSM_STATES.COMPOSING;
+          this._saveDeviceContext(userId);
+          const title = (rows[0].title || this._t('chat_untitled')).substring(0, 40);
+          const projName = ctx.projectWorkdir.split('/').filter(Boolean).pop() || '';
+          const composeText = this._t('compose_mode') + `\n\n📁 ${this._escHtml(projName)} → 💬 ${this._escHtml(title)}`;
+          await this._showScreen(chatId, userId, composeText,
+            [[{ text: this._t('btn_cancel'), callback_data: 'd:overview' }]]);
+          // Update persistent keyboard with new session info
+          await this._sendReplyKeyboard(chatId, ctx, `✓ ${this._escHtml(title)}`);
+          return;
+        }
+      } catch (_) { /* fall through to chats list */ }
+
+      // Multiple chats or error — show chats list (1 more tap to select)
       return this._screenChats(chatId, userId, 'c:list:0');
     }
 
-    // Nothing selected — show projects
+    // Nothing selected — auto-select if exactly 1 project
+    try {
+      const rows = this.db.prepare(
+        "SELECT workdir FROM sessions WHERE workdir IS NOT NULL AND workdir != '' GROUP BY workdir ORDER BY MAX(updated_at) DESC LIMIT 2"
+      ).all();
+
+      if (rows.length === 1) {
+        // Auto-select the single project, then show its chats
+        ctx.projectWorkdir = rows[0].workdir;
+        ctx.projectList = [rows[0].workdir];
+        this._saveDeviceContext(userId);
+        // Update persistent keyboard with project context
+        const projName = rows[0].workdir.split('/').filter(Boolean).pop() || '';
+        await this._sendReplyKeyboard(chatId, ctx, `📁 ${this._escHtml(projName)}`);
+        return this._screenChats(chatId, userId, 'c:list:0');
+      }
+    } catch (_) { /* fall through to projects list */ }
+
+    // Multiple projects or none — show projects list
     return this._screenProjects(chatId, userId, 'p:list:0');
   }
 
