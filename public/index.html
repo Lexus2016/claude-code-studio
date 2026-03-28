@@ -2519,7 +2519,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <span id="sessBarClaudeId" style="display:none;font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="" onclick="copySessId()"></span>
     <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openInClaude()">⚡ Claude Code</a>
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
-    <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" title="Delegate to external agent">⇗ Delegate</button>
+    <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
   </div>
 
   <div class="dlg-panel" id="delegatePanel">
@@ -2530,17 +2530,17 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     </div>
     <span class="dlg-panel-time" id="dlgPanelTime"></span>
     <div class="dlg-panel-actions">
-      <button class="dlg-btn" onclick="checkDelegation()">Check</button>
-      <button class="dlg-btn" onclick="toggleDelegateDialog()">Dialog</button>
-      <button class="dlg-btn" onclick="sendDelegateMsg()">Message</button>
-      <button class="dlg-btn danger" onclick="stopDelegation()">Stop</button>
+      <button class="dlg-btn" onclick="checkDelegation()" data-i18n="dlg.check">Перевірити</button>
+      <button class="dlg-btn" onclick="toggleDelegateDialog()" data-i18n="dlg.dialog">Діалог</button>
+      <button class="dlg-btn" onclick="sendDelegateMsg()" data-i18n="dlg.message">Повідомлення</button>
+      <button class="dlg-btn danger" onclick="stopDelegation()" data-i18n="dlg.stop">Стоп</button>
     </div>
   </div>
   <div id="dlgDialogContainer" style="display:none;padding:0 14px 8px;background:var(--s1);border-bottom:1px solid var(--border);">
     <div class="dlg-dialog-view" id="dlgDialogView"></div>
     <div class="dlg-msg-input" id="dlgMsgInput">
-      <input id="dlgMsgText" placeholder="Send message to agent..." onkeydown="if(event.key==='Enter')sendDelegateMsgSubmit()">
-      <button onclick="sendDelegateMsgSubmit()">Send</button>
+      <input id="dlgMsgText" data-i18n-ph="dlg.msg.ph" placeholder="Надіслати повідомлення агенту..." onkeydown="if(event.key==='Enter')sendDelegateMsgSubmit()">
+      <button onclick="sendDelegateMsgSubmit()" data-i18n="dlg.send">Надіслати</button>
     </div>
   </div>
 
@@ -3067,39 +3067,39 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 <div class="modal-overlay hidden" id="delegateModal" aria-hidden="true" onclick="if(event.target===this)closeDelegateModal()">
   <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="dlgModalTitle">
     <div class="modal-hdr">
-      <h2 id="dlgModalTitle">Delegate to Agent</h2>
+      <h2 id="dlgModalTitle" data-i18n="dlg.title">Делегувати агенту</h2>
       <button class="modal-close" onclick="closeDelegateModal()">&times;</button>
     </div>
     <div class="modal-body" style="gap:16px;display:flex;flex-direction:column;">
       <div class="cmd-field">
-        <label>Agent</label>
+        <label data-i18n="dlg.agent">Агент</label>
         <select id="dlgAgent" class="dlg-select">
-          <option value="">Select agent...</option>
+          <option value="" data-i18n="dlg.agent.select">Оберіть агента...</option>
         </select>
       </div>
       <div class="cmd-field">
-        <label>Mode</label>
+        <label data-i18n="dlg.mode">Режим</label>
         <div class="dlg-mode-cards">
           <label class="dlg-mode-card selected" onclick="this.parentElement.querySelectorAll('.dlg-mode-card').forEach(c=>c.classList.remove('selected'));this.classList.add('selected')">
             <input type="radio" name="dlgMode" value="handoff" checked style="display:none">
-            <span class="dlg-mode-title">Handoff</span>
-            <span class="dlg-mode-desc">Full transfer. Opens terminal, you continue working there.</span>
+            <span class="dlg-mode-title" data-i18n="dlg.mode.handoff">Передача</span>
+            <span class="dlg-mode-desc" data-i18n="dlg.mode.handoff.desc">Повна передача. Відкриє термінал, ви продовжите роботу там.</span>
           </label>
           <label class="dlg-mode-card" onclick="this.parentElement.querySelectorAll('.dlg-mode-card').forEach(c=>c.classList.remove('selected'));this.classList.add('selected')">
             <input type="radio" name="dlgMode" value="sync" style="display:none">
-            <span class="dlg-mode-title">Sync</span>
-            <span class="dlg-mode-desc">Parallel work. Both agents active, communicate via dialog file.</span>
+            <span class="dlg-mode-title" data-i18n="dlg.mode.sync">Синхронізація</span>
+            <span class="dlg-mode-desc" data-i18n="dlg.mode.sync.desc">Паралельна робота. Обидва агенти активні, спілкуються через файл діалогу.</span>
           </label>
         </div>
       </div>
       <div class="cmd-field">
-        <label>Task</label>
-        <textarea id="dlgTask" rows="3" class="dlg-textarea" placeholder="What should the agent do..."></textarea>
+        <label data-i18n="dlg.task">Завдання</label>
+        <textarea id="dlgTask" rows="3" class="dlg-textarea" data-i18n-ph="dlg.task.ph" placeholder="Що має зробити агент..."></textarea>
       </div>
     </div>
     <div class="modal-footer">
-      <button onclick="closeDelegateModal()" style="background:var(--s2);color:var(--muted);">Cancel</button>
-      <button onclick="submitDelegation()" style="background:var(--accent);color:#fff;">Delegate</button>
+      <button onclick="closeDelegateModal()" style="background:var(--s2);color:var(--muted);" data-i18n="dlg.cancel">Скасувати</button>
+      <button onclick="submitDelegation()" style="background:var(--accent);color:#fff;" data-i18n="dlg.submit">Делегувати</button>
     </div>
   </div>
 </div>
@@ -3554,6 +3554,17 @@ const TRANSLATIONS = {
     'cli.import.doing':'Імпортую…','cli.import.doing_n':'Імпортую {n} сесій…',
     'cli.import.result':'Імпортовано: {n}','cli.import.skipped':' пропущено: {n}','cli.import.errors':' помилок: {n}',
     'thinking.title':'Ланцюжок думок','thinking.copy':'Копіювати','thinking.copied':'✓ Скопійовано','thinking.copy_err':'Не вдалося скопіювати',
+    'dlg.title':'Делегувати агенту','dlg.agent':'Агент','dlg.agent.select':'Оберіть агента...','dlg.mode':'Режим',
+    'dlg.mode.handoff':'Передача','dlg.mode.handoff.desc':'Повна передача. Відкриє термінал, ви продовжите роботу там.',
+    'dlg.mode.sync':'Синхронізація','dlg.mode.sync.desc':'Паралельна робота. Обидва агенти активні, спілкуються через файл діалогу.',
+    'dlg.task':'Завдання','dlg.task.ph':'Що має зробити агент...','dlg.cancel':'Скасувати','dlg.submit':'Делегувати',
+    'dlg.btn':'Делегувати','dlg.btn.title':'Делегувати зовнішньому агенту',
+    'dlg.check':'Перевірити','dlg.dialog':'Діалог','dlg.message':'Повідомлення','dlg.stop':'Стоп',
+    'dlg.msg.ph':'Надіслати повідомлення агенту...','dlg.send':'Надіслати',
+    'dlg.no_agents':'Немає налаштованих агентів (додайте в Налаштуваннях)',
+    'dlg.toast.select_agent':'Оберіть агента','dlg.toast.describe_task':'Опишіть завдання',
+    'dlg.toast.delegated':'Делеговано до {agent}','dlg.toast.fail':'Помилка делегування: {err}',
+    'dlg.toast.send_fail':'Не вдалося надіслати','dlg.toast.send_err':'Помилка надсилання: {err}','dlg.toast.stopped':'Делегування зупинено',
   },
   en: {
     'sec.proactive':'Status',
@@ -3753,6 +3764,17 @@ const TRANSLATIONS = {
     'cli.import.doing':'Importing…','cli.import.doing_n':'Importing {n} sessions…',
     'cli.import.result':'Imported: {n}','cli.import.skipped':' skipped: {n}','cli.import.errors':' errors: {n}',
     'thinking.title':'Chain of thought','thinking.copy':'Copy','thinking.copied':'✓ Copied','thinking.copy_err':'Failed to copy',
+    'dlg.title':'Delegate to Agent','dlg.agent':'Agent','dlg.agent.select':'Select agent...','dlg.mode':'Mode',
+    'dlg.mode.handoff':'Handoff','dlg.mode.handoff.desc':'Full transfer. Opens terminal, you continue working there.',
+    'dlg.mode.sync':'Sync','dlg.mode.sync.desc':'Parallel work. Both agents active, communicate via dialog file.',
+    'dlg.task':'Task','dlg.task.ph':'What should the agent do...','dlg.cancel':'Cancel','dlg.submit':'Delegate',
+    'dlg.btn':'Delegate','dlg.btn.title':'Delegate to external agent',
+    'dlg.check':'Check','dlg.dialog':'Dialog','dlg.message':'Message','dlg.stop':'Stop',
+    'dlg.msg.ph':'Send message to agent...','dlg.send':'Send',
+    'dlg.no_agents':'No agents configured (add via Settings)',
+    'dlg.toast.select_agent':'Select an agent','dlg.toast.describe_task':'Describe the task',
+    'dlg.toast.delegated':'Delegated to {agent}','dlg.toast.fail':'Failed to delegate: {err}',
+    'dlg.toast.send_fail':'Failed to send message','dlg.toast.send_err':'Failed to send: {err}','dlg.toast.stopped':'Delegation stopped',
   },
   ru: {
     'sec.proactive':'Статус',
@@ -3952,6 +3974,17 @@ const TRANSLATIONS = {
     'cli.import.doing':'Импортирую…','cli.import.doing_n':'Импортирую {n} сессий…',
     'cli.import.result':'Импортировано: {n}','cli.import.skipped':' пропущено: {n}','cli.import.errors':' ошибок: {n}',
     'thinking.title':'Цепочка рассуждений','thinking.copy':'Копировать','thinking.copied':'✓ Скопировано','thinking.copy_err':'Не удалось скопировать',
+    'dlg.title':'Делегировать агенту','dlg.agent':'Агент','dlg.agent.select':'Выберите агента...','dlg.mode':'Режим',
+    'dlg.mode.handoff':'Передача','dlg.mode.handoff.desc':'Полная передача. Откроет терминал, вы продолжите работу там.',
+    'dlg.mode.sync':'Синхронизация','dlg.mode.sync.desc':'Параллельная работа. Оба агента активны, общаются через файл диалога.',
+    'dlg.task':'Задача','dlg.task.ph':'Что должен сделать агент...','dlg.cancel':'Отмена','dlg.submit':'Делегировать',
+    'dlg.btn':'Делегировать','dlg.btn.title':'Делегировать внешнему агенту',
+    'dlg.check':'Проверить','dlg.dialog':'Диалог','dlg.message':'Сообщение','dlg.stop':'Стоп',
+    'dlg.msg.ph':'Отправить сообщение агенту...','dlg.send':'Отправить',
+    'dlg.no_agents':'Нет настроенных агентов (добавьте в Настройках)',
+    'dlg.toast.select_agent':'Выберите агента','dlg.toast.describe_task':'Опишите задачу',
+    'dlg.toast.delegated':'Делегировано: {agent}','dlg.toast.fail':'Ошибка делегирования: {err}',
+    'dlg.toast.send_fail':'Не удалось отправить','dlg.toast.send_err':'Ошибка отправки: {err}','dlg.toast.stopped':'Делегирование остановлено',
   }
 };
 function t(key) {
@@ -11205,7 +11238,7 @@ function openDelegateModal() {
   _loadExternalAgents().then(() => {
     const sel = $i('dlgAgent');
     if (!sel) return;
-    sel.innerHTML = '<option value="">-- Select agent --</option>';
+    sel.innerHTML = ''; const defOpt = document.createElement('option'); defOpt.value = ''; defOpt.textContent = t('dlg.agent.select'); sel.appendChild(defOpt);
     for (const [id, cfg] of Object.entries(_externalAgents)) {
       const opt = document.createElement('option');
       opt.value = id;
@@ -11215,12 +11248,12 @@ function openDelegateModal() {
     if (Object.keys(_externalAgents).length === 0) {
       const opt = document.createElement('option');
       opt.value = '';
-      opt.textContent = 'No agents configured (add via Settings)';
+      opt.textContent = t('dlg.no_agents');
       opt.disabled = true;
       sel.appendChild(opt);
     }
     $i('dlgTask').value = '';
-    openModalOverlay('delegateModal');
+    openModalOverlay('delegateModal', { onEscape: closeDelegateModal });
   });
 }
 
@@ -11233,8 +11266,8 @@ async function submitDelegation() {
   const task = $i('dlgTask')?.value?.trim();
   const mode = document.querySelector('input[name="dlgMode"]:checked')?.value || 'handoff';
 
-  if (!agentId) { toast('Select an agent', true); return; }
-  if (!task) { toast('Describe the task', true); return; }
+  if (!agentId) { toast(t('dlg.toast.select_agent'), true); return; }
+  if (!task) { toast(t('dlg.toast.describe_task'), true); return; }
 
   try {
     const r = await fetch('/api/delegate', {
@@ -11243,7 +11276,7 @@ async function submitDelegation() {
       body: JSON.stringify({ agentId, mode, task, sessionId: currentSessionId }),
     });
     const d = await r.json();
-    if (!r.ok) { toast(d.error || 'Delegation failed', true); return; }
+    if (!r.ok) { toast(d.error || t('dlg.toast.fail').replace('{err}', ''), true); return; }
 
     _activeDelegation = {
       id: d.delegationId,
@@ -11263,9 +11296,9 @@ async function submitDelegation() {
       _startDelegatePolling();
     }
 
-    toast(`Delegated to ${d.agent}`, false, 3000);
+    toast(t('dlg.toast.delegated').replace('{agent}', d.agent), false, 3000);
   } catch (err) {
-    toast('Failed to delegate: ' + err.message, true);
+    toast(t('dlg.toast.fail').replace('{err}', err.message), true);
   }
 }
 
@@ -11354,7 +11387,7 @@ async function sendDelegateMsgSubmit() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
     });
-    if (!r.ok) { toast('Failed to send message', true); return; }
+    if (!r.ok) { toast(t('dlg.toast.send_fail'), true); return; }
     input.value = '';
     // Optimistic update: append to local dialog immediately
     const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
@@ -11363,7 +11396,7 @@ async function sendDelegateMsgSubmit() {
     // Then fetch the full dialog from server
     checkDelegation();
   } catch (err) {
-    toast('Failed to send: ' + err.message, true);
+    toast(t('dlg.toast.send_err').replace('{err}', err.message), true);
   }
 }
 
@@ -11392,7 +11425,7 @@ async function stopDelegation() {
   _renderDelegatePanel();
   const container = $i('dlgDialogContainer');
   if (container) container.style.display = 'none';
-  toast('Delegation stopped');
+  toast(t('dlg.toast.stopped'));
 }
 
 function _startDelegatePolling(intervalMs = 15000) {
