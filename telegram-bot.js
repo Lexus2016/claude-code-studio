@@ -231,6 +231,9 @@ class TelegramBot extends EventEmitter {
       // Delete any stale webhook — Telegram ignores getUpdates if webhook is set
       await this._callApi('deleteWebhook', { drop_pending_updates: false });
 
+      // Set bot command menu (only /start, /help, /cancel, /status)
+      await this._setCommands();
+
       this.log.info(`[telegram] Bot started: @${me.username} (${me.first_name})`);
     } catch (err) {
       this.log.error(`[telegram] Invalid bot token: ${err.message}`);
@@ -457,6 +460,86 @@ class TelegramBot extends EventEmitter {
     }
     if (parts.length === 0) return this._t('header_none') + '\n\n';
     return parts.join(this._t('header_separator')) + '\n\n';
+  }
+
+  // ─── Persistent Reply Keyboard ────────────────────────────────────────────
+
+  /**
+   * Build a dynamic context-aware persistent reply keyboard.
+   * Row 1: Write button (+ chat name if session active), Menu button.
+   * Row 2: Project button (if project active), Status button.
+   * @param {object} ctx - User context
+   * @returns {object} ReplyKeyboardMarkup object
+   */
+  _buildReplyKeyboard(ctx) {
+    const row1 = [];
+
+    // Write button always first — includes chat name when session active
+    if (ctx.sessionId) {
+      let chatName;
+      try {
+        const sess = this.db.prepare('SELECT title FROM sessions WHERE id=?').get(ctx.sessionId);
+        chatName = (sess?.title || this._t('chat_untitled')).substring(0, 18);
+      } catch {
+        chatName = this._t('chat_untitled');
+      }
+      row1.push({ text: `${this._t('kb_write')} · ${chatName}` });
+    } else {
+      row1.push({ text: this._t('kb_write') });
+    }
+    row1.push({ text: this._t('kb_menu') });
+
+    const rows = [row1];
+
+    // Second row: project context + status
+    if (ctx.projectWorkdir) {
+      const pName = ctx.projectWorkdir.split('/').filter(Boolean).pop() || '...';
+      rows.push([
+        { text: `${this._t('kb_project_prefix')} ${pName}`.substring(0, 28) },
+        { text: this._t('kb_status') },
+      ]);
+    } else {
+      rows.push([{ text: this._t('kb_status') }]);
+    }
+
+    return {
+      keyboard: rows,
+      resize_keyboard: true,
+      is_persistent: true,
+    };
+  }
+
+  /**
+   * Send a message with the dynamic persistent reply keyboard attached.
+   * Use when context changes (project/chat selection) to refresh the bottom bar.
+   * @param {number} chatId
+   * @param {object} ctx - User context
+   * @param {string} message - Text to send alongside keyboard update
+   */
+  async _sendReplyKeyboard(chatId, ctx, message) {
+    return this._sendMessage(chatId, message, {
+      reply_markup: JSON.stringify(this._buildReplyKeyboard(ctx)),
+    });
+  }
+
+  /**
+   * Set the bot's command menu via setMyCommands.
+   * Called once at startup. Only includes /start, /help, /cancel, /status.
+   * Navigation commands (/project, /chat, etc.) are intentionally excluded.
+   */
+  async _setCommands() {
+    try {
+      await this._callApi('setMyCommands', {
+        commands: [
+          { command: 'start', description: this._t('cmd_start_desc') },
+          { command: 'help', description: this._t('cmd_help_desc') },
+          { command: 'cancel', description: this._t('cmd_cancel_desc') },
+          { command: 'status', description: this._t('cmd_status_desc') },
+        ],
+      });
+    } catch (err) {
+      this.log.warn(`[telegram] Failed to set commands: ${err.message}`);
+    }
   }
 
   // ─── Pairing ───────────────────────────────────────────────────────────────

@@ -21,6 +21,13 @@ const BOT_I18N = {
     'kb_menu': '🏠 Меню',
     'kb_write': '✉ Написати',
     'kb_status': '📊 Статус',
+    'kb_project_prefix': '📁',
+
+    // Command descriptions (setMyCommands)
+    'cmd_start_desc': 'Головне меню',
+    'cmd_help_desc': 'Довідка',
+    'cmd_cancel_desc': 'Скасувати поточну дію',
+    'cmd_status_desc': 'Статус системи',
 
     // Main menu
     'main_title': '🤖 <b>Claude Code Studio</b>',
@@ -302,6 +309,12 @@ const BOT_I18N = {
     'kb_menu': '🏠 Menu',
     'kb_write': '✉ Write',
     'kb_status': '📊 Status',
+    'kb_project_prefix': '📁',
+
+    'cmd_start_desc': 'Main menu',
+    'cmd_help_desc': 'Help',
+    'cmd_cancel_desc': 'Cancel current action',
+    'cmd_status_desc': 'System status',
 
     'main_title': '🤖 <b>Claude Code Studio</b>',
     'main_project': '📁 Project: <code>{name}</code>',
@@ -565,6 +578,12 @@ const BOT_I18N = {
     'kb_menu': '🏠 Меню',
     'kb_write': '✉ Написать',
     'kb_status': '📊 Статус',
+    'kb_project_prefix': '📁',
+
+    'cmd_start_desc': 'Главное меню',
+    'cmd_help_desc': 'Помощь',
+    'cmd_cancel_desc': 'Отменить текущее действие',
+    'cmd_status_desc': 'Статус системы',
 
     'main_title': '🤖 <b>Claude Code Studio</b>',
     'main_project': '📁 Проект: <code>{name}</code>',
