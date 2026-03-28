@@ -1616,7 +1616,7 @@ class TelegramProxy {
 
     // Inline stop button on progress messages so the user always has controls at the bottom
     const progressButtons = this._threadId
-      ? [{ text: '🛑 Stop', callback_data: 'cm:stop' }]
+      ? [{ text: this._bot._t('fm_btn_stop'), callback_data: 'cm:stop' }]
       : [
           { text: '🛑 Stop', callback_data: 'cm:stop' },
           { text: '🏠 Menu', callback_data: 'm:menu' },
@@ -1722,15 +1722,15 @@ class TelegramProxy {
       ? [
           // Row 1: primary actions — continue working, view full response
           [
-            { text: '💬 Continue', callback_data: 'fm:compose' },
-            ...(isLarge ? [{ text: '📄 Full', callback_data: 'cm:full' }] : []),
-            { text: '📋 Diff', callback_data: 'fm:diff' },
+            { text: this._bot._t('fm_btn_continue'), callback_data: 'fm:compose' },
+            ...(isLarge ? [{ text: this._bot._t('fm_btn_full'), callback_data: 'cm:full' }] : []),
+            { text: this._bot._t('fm_btn_diff'), callback_data: 'fm:diff' },
           ],
           // Row 2: navigation — files, history, new session
           [
-            { text: '📁 Files', callback_data: 'fm:files' },
-            { text: '📜 History', callback_data: 'fm:history' },
-            { text: '🆕 New', callback_data: 'fm:new' },
+            { text: this._bot._t('fm_btn_files'), callback_data: 'fm:files' },
+            { text: this._bot._t('fm_btn_history'), callback_data: 'fm:history' },
+            { text: this._bot._t('fm_btn_new'), callback_data: 'fm:new' },
           ],
         ]
       : [
@@ -1769,19 +1769,26 @@ class TelegramProxy {
 
     const errorButtons = this._threadId
       ? [
-          { text: '🔄 Retry', callback_data: 'fm:retry' },
-          { text: '💬 Continue', callback_data: 'fm:compose' },
-          { text: '📜 History', callback_data: 'fm:history' },
+          [
+            { text: this._bot._t('fm_btn_retry'), callback_data: 'fm:retry' },
+            { text: this._bot._t('fm_btn_continue'), callback_data: 'fm:compose' },
+          ],
+          [
+            { text: this._bot._t('fm_btn_history'), callback_data: 'fm:history' },
+            { text: this._bot._t('fm_btn_help'), callback_data: 'fm:help' },
+          ],
         ]
       : [
-          { text: '🔄 Retry', callback_data: 'cm:compose' },
-          { text: '🏠 Menu', callback_data: 'm:menu' },
+          [
+            { text: '🔄 Retry', callback_data: 'cm:compose' },
+            { text: '🏠 Menu', callback_data: 'm:menu' },
+          ],
         ];
     await this._tgSend(
       `❌ <b>Error:</b> ${this._bot._escHtml(data.error || 'Unknown error')}`,
       {
         parse_mode: 'HTML',
-        reply_markup: JSON.stringify({ inline_keyboard: [errorButtons] })
+        reply_markup: JSON.stringify({ inline_keyboard: errorButtons })
       }
     );
   }
