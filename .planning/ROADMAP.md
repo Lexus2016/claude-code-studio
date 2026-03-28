@@ -38,6 +38,13 @@ Plans:
 **Goal**: Users can reach Claude in 2 taps from any state, navigate without dead ends, and see their active context at all times
 **Depends on**: Phase 1
 **Requirements**: NAV-01, NAV-02, NAV-03, NAV-04, NAV-05, NAV-06, KB-01, KB-02, KB-03, ARCH-02, ARCH-03, ARCH-04, STREAM-01
+**Plans:** 5 plans
+Plans:
+- [ ] 02-01-PLAN.md — SCREENS registry, callback router refactor, screenMsgId removal (editMsgId from callback anchor)
+- [ ] 02-02-PLAN.md — sendMessageDraft streaming migration in TelegramProxy (server.js)
+- [ ] 02-03-PLAN.md — Auto-generated Back buttons + context header on every screen
+- [ ] 02-04-PLAN.md — Dynamic persistent keyboard + setMyCommands with 4 commands
+- [ ] 02-05-PLAN.md — 2-tap flow validation, slash command pruning, human verification checkpoint
 **Success Criteria** (what must be TRUE):
   1. From any screen (or fresh /start), a user can send a message to Claude with at most 2 taps — no slash commands typed
   2. Every inline keyboard screen shows a Back button; tapping it always goes exactly one level up (never a dead end, never a full reset)
@@ -45,7 +52,6 @@ Plans:
   4. Tapping any navigation button edits the existing screen message in place; no new messages appear in chat for navigation actions
   5. The persistent bottom keyboard always shows the active project/chat name, and the Write button is always present and routes correctly
   6. Claude response streaming uses `sendMessageDraft` — no rate-limit freezes or message flickering during long responses
-**Plans**: TBD
 **UI hint**: yes
 
 ### Phase 3: Forum Mode UX + Extraction
@@ -81,7 +87,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/2 | Planning complete | - |
-| 2. UX Redesign | 0/TBD | Not started | - |
+| 1. Foundation | 2/2 | Complete | 2026-03-28 |
+| 2. UX Redesign | 0/5 | Planning complete | - |
 | 3. Forum Mode UX + Extraction | 0/TBD | Not started | - |
 | 4. Server Encapsulation | 0/TBD | Not started | - |
