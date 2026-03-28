@@ -12,7 +12,7 @@
 
 - [ ] **NAV-01**: User can send a message to Claude in ≤2 taps from any state (zero slash commands required)
 - [ ] **NAV-02**: Every inline keyboard screen has a functional Back button that takes the user one level up the navigation hierarchy
-- [ ] **NAV-03**: All navigation actions edit the existing screen message in place (no new messages sent for navigation taps)
+- [x] **NAV-03**: All navigation actions edit the existing screen message in place (no new messages sent for navigation taps)
 - [ ] **NAV-04**: Every screen message shows a context header: current active project and chat names (or "none selected")
 - [ ] **NAV-05**: Slash commands `/project <n>` and `/chat <n>` are removed from the command menu; inline button selection is the only navigation method
 - [ ] **NAV-06**: User can return to Main Menu from any screen with a single tap
@@ -34,9 +34,9 @@
 ### Screen Architecture (ARCH)
 
 - [x] **ARCH-01**: i18n translation data is extracted to a separate file `telegram-bot-i18n.js` (removes ~825 lines from main bot file)
-- [ ] **ARCH-02**: Screens are defined via a registry object (`SCREENS`) where each entry has `handler` and `parent` — back button is generated automatically from `parent` pointer
-- [ ] **ARCH-03**: `ctx.screenMsgId` and `ctx.screenChatId` are removed; screen handlers receive `editMsgId` from the callback message anchor (`cbq.message.message_id`) instead
-- [ ] **ARCH-04**: All legacy callback_data prefixes (`m:`, `p:`, `c:`, `ch:`, `cm:`, `d:`, `f:`, `t:`, `s:`, `tn:`, `ask:`) remain functional as fallback handlers during migration — old buttons in chat history never break
+- [x] **ARCH-02**: Screens are defined via a registry object (`SCREENS`) where each entry has `handler` and `parent` — back button is generated automatically from `parent` pointer
+- [x] **ARCH-03**: `ctx.screenMsgId` and `ctx.screenChatId` are removed; screen handlers receive `editMsgId` from the callback message anchor (`cbq.message.message_id`) instead
+- [x] **ARCH-04**: All legacy callback_data prefixes (`m:`, `p:`, `c:`, `ch:`, `cm:`, `d:`, `f:`, `t:`, `s:`, `tn:`, `ask:`) remain functional as fallback handlers during migration — old buttons in chat history never break
 
 ### Forum Mode (FORUM)
 
@@ -96,16 +96,16 @@
 | FSM-05 | Phase 1 | Complete |
 | NAV-01 | Phase 2 | Pending |
 | NAV-02 | Phase 2 | Pending |
-| NAV-03 | Phase 2 | Pending |
+| NAV-03 | Phase 2 | Complete |
 | NAV-04 | Phase 2 | Pending |
 | NAV-05 | Phase 2 | Pending |
 | NAV-06 | Phase 2 | Pending |
 | KB-01 | Phase 2 | Pending |
 | KB-02 | Phase 2 | Pending |
 | KB-03 | Phase 2 | Pending |
-| ARCH-02 | Phase 2 | Pending |
-| ARCH-03 | Phase 2 | Pending |
-| ARCH-04 | Phase 2 | Pending |
+| ARCH-02 | Phase 2 | Complete |
+| ARCH-03 | Phase 2 | Complete |
+| ARCH-04 | Phase 2 | Complete |
 | STREAM-01 | Phase 2 | Complete |
 | FORUM-01 | Phase 3 | Pending |
 | FORUM-02 | Phase 3 | Pending |

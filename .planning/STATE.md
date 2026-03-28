@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 02-02-PLAN.md (sendMessageDraft streaming)
-last_updated: "2026-03-28T19:27:55.474Z"
+status: executing
+stopped_at: Completed 02-01-PLAN.md (SCREENS registry + editMsgId refactor)
+last_updated: "2026-03-28T19:38:34Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 7
-  completed_plans: 3
-  percent: 0
+  completed_plans: 4
+  percent: 57
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** A user should be able to send a message to Claude in 2 taps or fewer — from any state, without knowing any slash commands
-**Current focus:** Phase 01 — foundation
+**Current focus:** Phase 02 — UX redesign
 
 ## Current Position
 
 Phase: 2
-Plan: Not started
-Status: Phase complete — ready for verification
+Plan: 1 of 5 complete
+Status: Executing phase 02-ux-redesign
 Last activity: 2026-03-28
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [######░░░░] 57%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-01 P01 | 2min | 2 tasks | 2 files |
 | Phase 01 P02 | 5min | 2 tasks | 2 files |
 | Phase 02-ux-redesign P02 | 3min | 2 tasks | 1 files |
+| Phase 02-ux-redesign P01 | 9min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,9 @@ Recent decisions affecting current work:
 - [Phase 02-ux-redesign]: sendMessageDraft uses plain text only during streaming (no parse_mode) to avoid malformed HTML failures
 - [Phase 02-ux-redesign]: Draft streaming fallback is permanent per proxy instance — first failure flips flag, no retry
 - [Phase 02-ux-redesign]: Thinking message suppressed in draft mode — draft provides its own streaming indicator
+- [Phase 02-ux-redesign P01]: SCREENS registry uses function parents for dynamic back resolution (CHATS/FILES/TASKS depend on ctx.projectWorkdir)
+- [Phase 02-ux-redesign P01]: editMsgId passed from cbq.message.message_id to screen handlers, replacing ctx.screenMsgId global slot
+- [Phase 02-ux-redesign P01]: Forum callbacks (fs:, fm:, fa:) excluded from opts propagation per Phase 3 boundary
 
 ### Pending Todos
 
@@ -85,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T19:27:55.471Z
-Stopped at: Completed 02-02-PLAN.md (sendMessageDraft streaming)
+Last session: 2026-03-28T19:38:34Z
+Stopped at: Completed 02-01-PLAN.md (SCREENS registry + editMsgId refactor)
 Resume file: None

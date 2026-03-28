@@ -40,7 +40,7 @@ Plans:
 **Requirements**: NAV-01, NAV-02, NAV-03, NAV-04, NAV-05, NAV-06, KB-01, KB-02, KB-03, ARCH-02, ARCH-03, ARCH-04, STREAM-01
 **Plans:** 1/5 plans executed
 Plans:
-- [ ] 02-01-PLAN.md — SCREENS registry, callback router refactor, screenMsgId removal (editMsgId from callback anchor)
+- [x] 02-01-PLAN.md — SCREENS registry, callback router refactor, screenMsgId removal (editMsgId from callback anchor)
 - [x] 02-02-PLAN.md — sendMessageDraft streaming migration in TelegramProxy (server.js)
 - [ ] 02-03-PLAN.md — Auto-generated Back buttons + context header on every screen
 - [ ] 02-04-PLAN.md — Dynamic persistent keyboard + setMyCommands with 4 commands
