@@ -387,11 +387,6 @@ class TelegramBot extends EventEmitter {
     const params = {};
     if (keyboard) params.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
     const sent = await this._sendMessage(chatId, text, params);
-    if (sent && userId !== null) {
-      const ctx = this._getContext(userId);
-      ctx.screenMsgId = sent.message_id;
-      ctx.screenChatId = chatId;
-    }
     return sent;
   }
 
@@ -1078,7 +1073,7 @@ class TelegramBot extends EventEmitter {
 
   // ─── Tunnel Commands ──────────────────────────────────────────────────────
 
-  async _cmdTunnel(chatId, userId) {
+  async _cmdTunnel(chatId, userId, { editMsgId } = {}) {
     const keyboard = [
       [
         { text: this._t('tn_btn_start'), callback_data: 'tn:start' },
@@ -1107,9 +1102,8 @@ class TelegramBot extends EventEmitter {
       text = this._t('tn_screen_inactive');
     }
 
-    const ctx = this._getContext(userId);
-    if (ctx.screenMsgId && ctx.screenChatId === chatId) {
-      await this._editScreen(chatId, ctx.screenMsgId, text, keyboard);
+    if (editMsgId) {
+      await this._editScreen(chatId, editMsgId, text, keyboard);
     } else {
       await this._showScreen(chatId, userId, text, keyboard);
     }
@@ -1447,10 +1441,8 @@ class TelegramBot extends EventEmitter {
     }
     this._stmts.updateLastActive.run(userId);
 
-    // Update screen reference
     const ctx = this._getContext(userId);
-    ctx.screenMsgId = msgId;
-    ctx.screenChatId = chatId;
+    const opts = { editMsgId: msgId };
 
     try {
       // Reset task input state on any non-task navigation
@@ -1480,28 +1472,28 @@ class TelegramBot extends EventEmitter {
         }
       }
 
-      // Route by prefix
-      if (data === 'm:menu')       return this._screenMainMenu(chatId, userId);
-      if (data === 'm:status')     return this._screenStatus(chatId, userId);
+      // Route by prefix — pass opts (editMsgId) to all screen handlers
+      if (data === 'm:menu')       return this._screenMainMenu(chatId, userId, opts);
+      if (data === 'm:status')     return this._screenStatus(chatId, userId, opts);
       if (data === 'm:noop')       return;
-      if (data === 'p:list' || data.startsWith('p:list:')) return this._screenProjects(chatId, userId, data);
-      if (data.startsWith('p:sel:'))  return this._screenProjectSelect(chatId, userId, data);
-      if (data.startsWith('pm:'))     return this._routeProjectMenu(chatId, userId, data);
-      if (data === 'c:new')            return this._handleNewChat(chatId, userId);
-      if (data.startsWith('c:list:')) return this._screenChats(chatId, userId, data);
-      if (data.startsWith('ch:'))     return this._screenChatSelect(chatId, userId, data);
-      if (data.startsWith('cm:'))     return this._routeChatMenu(chatId, userId, data);
-      if (data.startsWith('d:'))      return this._routeDialog(chatId, userId, data);
+      if (data === 'p:list' || data.startsWith('p:list:')) return this._screenProjects(chatId, userId, data, opts);
+      if (data.startsWith('p:sel:'))  return this._screenProjectSelect(chatId, userId, data, opts);
+      if (data.startsWith('pm:'))     return this._routeProjectMenu(chatId, userId, data, opts);
+      if (data === 'c:new')            return this._handleNewChat(chatId, userId, opts);
+      if (data.startsWith('c:list:')) return this._screenChats(chatId, userId, data, opts);
+      if (data.startsWith('ch:'))     return this._screenChatSelect(chatId, userId, data, opts);
+      if (data.startsWith('cm:'))     return this._routeChatMenu(chatId, userId, data, opts);
+      if (data.startsWith('d:'))      return this._routeDialog(chatId, userId, data, opts);
       if (data.startsWith('fs:'))     return this._handleForumSessionCallback(chatId, userId, data);
       if (data.startsWith('fm:'))     return this._handleForumActionCallback(chatId, userId, data);
       if (data.startsWith('fa:'))     return this._handleForumActivityCallback(chatId, userId, data);
-      if (data.startsWith('f:'))      return this._screenFiles(chatId, userId, data);
-      if (data === 't:list' || data === 't:all') return this._screenTasks(chatId, userId, data);
-      if (data === 't:new')         return this._handleNewTask(chatId, userId);
-      if (data === 't:skip')        return this._handleSkipTaskDesc(chatId, userId);
-      if (data === 's:menu')       return this._screenSettings(chatId, userId);
-      if (data.startsWith('s:'))   return this._routeSettings(chatId, userId, data);
-      if (data.startsWith('tn:'))  return this._routeTunnel(chatId, userId, data);
+      if (data.startsWith('f:'))      return this._screenFiles(chatId, userId, data, opts);
+      if (data === 't:list' || data === 't:all') return this._screenTasks(chatId, userId, data, opts);
+      if (data === 't:new')         return this._handleNewTask(chatId, userId, opts);
+      if (data === 't:skip')        return this._handleSkipTaskDesc(chatId, userId, opts);
+      if (data === 's:menu')       return this._screenSettings(chatId, userId, opts);
+      if (data.startsWith('s:'))   return this._routeSettings(chatId, userId, data, opts);
+      if (data.startsWith('tn:'))  return this._routeTunnel(chatId, userId, data, opts);
     } catch (err) {
       this.log.error(`[telegram] Callback error: ${err.message}`);
       await this._editScreen(chatId, msgId, this._t('error_prefix', { msg: this._escHtml(err.message) }), [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
@@ -1512,7 +1504,7 @@ class TelegramBot extends EventEmitter {
 
   // ─── Screens ─────────────────────────────────────────────────────────────
 
-  async _screenMainMenu(chatId, userId) {
+  async _screenMainMenu(chatId, userId, { editMsgId } = {}) {
     const ctx = this._getContext(userId);
     const lines = [this._t('main_title') + '\n'];
 
@@ -1539,8 +1531,8 @@ class TelegramBot extends EventEmitter {
       }
     }
 
-    if (ctx.screenMsgId && ctx.screenChatId === chatId) {
-      await this._editScreen(chatId, ctx.screenMsgId, lines.join('\n'), keyboard);
+    if (editMsgId) {
+      await this._editScreen(chatId, editMsgId, lines.join('\n'), keyboard);
     } else {
       await this._showScreen(chatId, userId, lines.join('\n'), keyboard);
     }
@@ -1579,7 +1571,7 @@ class TelegramBot extends EventEmitter {
     return this._screenProjects(chatId, userId, 'p:list:0');
   }
 
-  async _screenProjects(chatId, userId, data) {
+  async _screenProjects(chatId, userId, data, { editMsgId } = {}) {
     const page = parseInt(data.split(':')[2] || '0', 10) || 0;
     const perPage = 5;
     const ctx = this._getContext(userId);
@@ -1594,7 +1586,11 @@ class TelegramBot extends EventEmitter {
       ctx.projectList = rows.map(r => r.workdir);
 
       if (rows.length === 0) {
-        return this._editScreen(chatId, ctx.screenMsgId, this._t('projects_empty'),
+        if (editMsgId) {
+          return this._editScreen(chatId, editMsgId, this._t('projects_empty'),
+            [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
+        }
+        return this._showScreen(chatId, userId, this._t('projects_empty'),
           [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
       }
 
@@ -1619,19 +1615,32 @@ class TelegramBot extends EventEmitter {
 
       keyboard.push([{ text: this._t('btn_main_menu'), callback_data: 'm:menu' }]);
 
-      await this._editScreen(chatId, ctx.screenMsgId, this._t('projects_title', { count: rows.length }), keyboard);
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId, this._t('projects_title', { count: rows.length }), keyboard);
+      } else {
+        await this._showScreen(chatId, userId, this._t('projects_title', { count: rows.length }), keyboard);
+      }
     } catch (err) {
-      await this._editScreen(chatId, ctx.screenMsgId, `❌ ${this._escHtml(err.message)}`,
-        [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId, `❌ ${this._escHtml(err.message)}`,
+          [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
+      } else {
+        await this._showScreen(chatId, userId, `❌ ${this._escHtml(err.message)}`,
+          [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
+      }
     }
   }
 
-  async _screenProjectSelect(chatId, userId, data) {
+  async _screenProjectSelect(chatId, userId, data, { editMsgId } = {}) {
     const idx = parseInt(data.split(':')[2], 10);
     const ctx = this._getContext(userId);
 
     if (!ctx.projectList || idx < 0 || idx >= ctx.projectList.length) {
-      return this._editScreen(chatId, ctx.screenMsgId, this._t('project_not_found'),
+      if (editMsgId) {
+        return this._editScreen(chatId, editMsgId, this._t('project_not_found'),
+          [[{ text: this._t('btn_back_projects'), callback_data: 'p:list' }]]);
+      }
+      return this._showScreen(chatId, userId, this._t('project_not_found'),
         [[{ text: this._t('btn_back_projects'), callback_data: 'p:list' }]]);
     }
 
@@ -1648,10 +1657,15 @@ class TelegramBot extends EventEmitter {
       [{ text: this._t('btn_back_projects'), callback_data: 'p:list' }, { text: this._t('btn_back_menu'), callback_data: 'm:menu' }],
     ];
 
-    await this._editScreen(chatId, ctx.screenMsgId, `📁 <b>${this._escHtml(name)}</b>${this._t('project_choose')}`, keyboard);
+    const text = `📁 <b>${this._escHtml(name)}</b>${this._t('project_choose')}`;
+    if (editMsgId) {
+      await this._editScreen(chatId, editMsgId, text, keyboard);
+    } else {
+      await this._showScreen(chatId, userId, text, keyboard);
+    }
   }
 
-  async _routeProjectMenu(chatId, userId, data) {
+  async _routeProjectMenu(chatId, userId, data, opts = {}) {
     const action = data.split(':')[1];
     const ctx = this._getContext(userId);
 
@@ -1661,11 +1675,11 @@ class TelegramBot extends EventEmitter {
     } else if (action === 'diff') {
       await this._cmdDiff(chatId, userId);
     } else if (action === 'back') {
-      return this._screenProjects(chatId, userId, 'p:list:0');
+      return this._screenProjects(chatId, userId, 'p:list:0', opts);
     }
   }
 
-  async _screenChats(chatId, userId, data) {
+  async _screenChats(chatId, userId, data, { editMsgId } = {}) {
     const page = parseInt(data.split(':')[2] || '0', 10) || 0;
     const perPage = 5;
     const ctx = this._getContext(userId);
@@ -1691,11 +1705,14 @@ class TelegramBot extends EventEmitter {
 
       if (rows.length === 0) {
         const backBtn = workdir ? 'pm:back' : 'm:menu';
-        return this._editScreen(chatId, ctx.screenMsgId, this._t('chats_empty'),
-          [
-            [{ text: this._t('btn_new_chat'), callback_data: 'c:new' }],
-            [{ text: this._t('btn_back'), callback_data: backBtn }],
-          ]);
+        const emptyKb = [
+          [{ text: this._t('btn_new_chat'), callback_data: 'c:new' }],
+          [{ text: this._t('btn_back'), callback_data: backBtn }],
+        ];
+        if (editMsgId) {
+          return this._editScreen(chatId, editMsgId, this._t('chats_empty'), emptyKb);
+        }
+        return this._showScreen(chatId, userId, this._t('chats_empty'), emptyKb);
       }
 
       const totalPages = Math.ceil(rows.length / perPage);
@@ -1724,36 +1741,53 @@ class TelegramBot extends EventEmitter {
       const backBtn = workdir ? 'pm:back' : 'm:menu';
       keyboard.push([{ text: this._t('btn_back'), callback_data: backBtn }]);
 
-      await this._editScreen(chatId, ctx.screenMsgId, `${header} (${rows.length})`, keyboard);
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId, `${header} (${rows.length})`, keyboard);
+      } else {
+        await this._showScreen(chatId, userId, `${header} (${rows.length})`, keyboard);
+      }
     } catch (err) {
-      await this._editScreen(chatId, ctx.screenMsgId, `❌ ${this._escHtml(err.message)}`,
-        [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId, `❌ ${this._escHtml(err.message)}`,
+          [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
+      } else {
+        await this._showScreen(chatId, userId, `❌ ${this._escHtml(err.message)}`,
+          [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
+      }
     }
   }
 
-  async _screenChatSelect(chatId, userId, data) {
+  async _screenChatSelect(chatId, userId, data, { editMsgId } = {}) {
     const idx = parseInt(data.split(':')[1], 10);
     const ctx = this._getContext(userId);
 
     if (!ctx.chatList || idx < 0 || idx >= ctx.chatList.length) {
-      return this._editScreen(chatId, ctx.screenMsgId, this._t('chat_not_found'),
+      if (editMsgId) {
+        return this._editScreen(chatId, editMsgId, this._t('chat_not_found'),
+          [[{ text: this._t('btn_back_chats'), callback_data: 'c:list:0' }]]);
+      }
+      return this._showScreen(chatId, userId, this._t('chat_not_found'),
         [[{ text: this._t('btn_back_chats'), callback_data: 'c:list:0' }]]);
     }
 
     ctx.sessionId = ctx.chatList[idx];
     ctx.dialogPage = 0;
     this._saveDeviceContext(userId);
-    return this._screenDialog(chatId, userId);
+    return this._screenDialog(chatId, userId, { editMsgId });
   }
 
-  async _screenDialog(chatId, userId, { mode = 'overview' } = {}) {
+  async _screenDialog(chatId, userId, { mode = 'overview', editMsgId } = {}) {
     const ctx = this._getContext(userId);
     const sid = ctx.sessionId;
-    if (!sid) return this._screenChats(chatId, userId, 'c:list:0');
+    if (!sid) return this._screenChats(chatId, userId, 'c:list:0', { editMsgId });
 
     const session = this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(sid);
     if (!session) {
-      return this._editScreen(chatId, ctx.screenMsgId, this._t('session_not_found'),
+      if (editMsgId) {
+        return this._editScreen(chatId, editMsgId, this._t('session_not_found'),
+          [[{ text: this._t('btn_back_chats'), callback_data: 'c:list:0' }]]);
+      }
+      return this._showScreen(chatId, userId, this._t('session_not_found'),
         [[{ text: this._t('btn_back_chats'), callback_data: 'c:list:0' }]]);
     }
 
@@ -1768,7 +1802,7 @@ class TelegramBot extends EventEmitter {
     const projectLine = projectName ? `📁 ${this._escHtml(projectName)} → ` : '';
 
     if (mode === 'all') {
-      return this._screenDialogFull(chatId, userId, allMsgs, { title, projectLine });
+      return this._screenDialogFull(chatId, userId, allMsgs, { title, projectLine, editMsgId });
     }
 
     // ── Overview mode: single-message digest ──
@@ -1835,14 +1869,14 @@ class TelegramBot extends EventEmitter {
       [{ text: '🔄', callback_data: 'd:overview' }, { text: this._t('btn_back_chats'), callback_data: 'c:list:0' }, { text: this._t('btn_back_menu'), callback_data: 'm:menu' }],
     ];
 
-    if (ctx.screenMsgId && ctx.screenChatId === chatId) {
-      await this._editScreen(chatId, ctx.screenMsgId, text, keyboard);
+    if (editMsgId) {
+      await this._editScreen(chatId, editMsgId, text, keyboard);
     } else {
       await this._showScreen(chatId, userId, text, keyboard);
     }
   }
 
-  async _screenDialogFull(chatId, userId, allMsgs, { title, projectLine }) {
+  async _screenDialogFull(chatId, userId, allMsgs, { title, projectLine, editMsgId } = {}) {
     const ctx = this._getContext(userId);
 
     const PAGE_SIZE = 5;
@@ -1884,8 +1918,8 @@ class TelegramBot extends EventEmitter {
       [{ text: this._t('btn_back_overview'), callback_data: 'd:overview' }, { text: this._t('btn_back_chats'), callback_data: 'c:list:0' }, { text: this._t('btn_back_menu'), callback_data: 'm:menu' }],
     ];
 
-    if (ctx.screenMsgId && ctx.screenChatId === chatId) {
-      await this._editScreen(chatId, ctx.screenMsgId, text, keyboard);
+    if (editMsgId) {
+      await this._editScreen(chatId, editMsgId, text, keyboard);
     } else {
       await this._showScreen(chatId, userId, text, keyboard);
     }
@@ -1978,33 +2012,34 @@ class TelegramBot extends EventEmitter {
     }
   }
 
-  async _routeDialog(chatId, userId, data) {
+  async _routeDialog(chatId, userId, data, opts = {}) {
     const ctx = this._getContext(userId);
+    const { editMsgId } = opts;
 
     // Overview mode (default entry / back from full view)
     if (data === 'd:overview') {
       ctx.dialogPage = 0;
-      return this._screenDialog(chatId, userId, { mode: 'overview' });
+      return this._screenDialog(chatId, userId, { mode: 'overview', editMsgId });
     }
 
     // Full paginated view
     if (data.startsWith('d:all:')) {
       const page = parseInt(data.split(':')[2]) || 0;
       ctx.dialogPage = page;
-      return this._screenDialog(chatId, userId, { mode: 'all' });
+      return this._screenDialog(chatId, userId, { mode: 'all', editMsgId });
     }
 
     // Legacy pagination (kept for compatibility)
     if (data.startsWith('d:page:')) {
       const page = parseInt(data.split(':')[2]) || 0;
       ctx.dialogPage = page;
-      return this._screenDialog(chatId, userId, { mode: 'all' });
+      return this._screenDialog(chatId, userId, { mode: 'all', editMsgId });
     }
 
     // Show full message
     if (data.startsWith('d:full:')) {
-      const msgId = parseInt(data.split(':')[2]);
-      return this._showFullMessage(chatId, msgId);
+      const fullMsgId = parseInt(data.split(':')[2]);
+      return this._showFullMessage(chatId, fullMsgId);
     }
 
     // Clear pending attachments
@@ -2019,7 +2054,7 @@ class TelegramBot extends EventEmitter {
       ctx.sessionId = sid;
       ctx.dialogPage = 0;
       this._saveDeviceContext(userId);
-      return this._screenDialog(chatId, userId, { mode: 'overview' });
+      return this._screenDialog(chatId, userId, { mode: 'overview', editMsgId });
     }
 
     // Compose in session
@@ -2030,15 +2065,21 @@ class TelegramBot extends EventEmitter {
       const title = sess?.title || this._t('chat_untitled');
       ctx.state = FSM_STATES.COMPOSING;
       this._saveDeviceContext(userId);
+      if (editMsgId) {
+        return this._editScreen(chatId, editMsgId,
+          `✉ ${this._t('compose_prompt')}\n\n💬 ${this._escHtml(title)}`,
+          [[{ text: this._t('btn_cancel'), callback_data: 'd:overview' }]]);
+      }
       return this._showScreen(chatId, userId,
         `✉ ${this._t('compose_prompt')}\n\n💬 ${this._escHtml(title)}`,
         [[{ text: this._t('btn_cancel'), callback_data: 'd:overview' }]]);
     }
   }
 
-  async _routeChatMenu(chatId, userId, data) {
+  async _routeChatMenu(chatId, userId, data, opts = {}) {
     const action = data.split(':')[1];
     const ctx = this._getContext(userId);
+    const { editMsgId } = opts;
 
     if (action === 'more') {
       if (!ctx.sessionId) return;
@@ -2068,7 +2109,11 @@ class TelegramBot extends EventEmitter {
         [{ text: this._t('btn_back_chats'), callback_data: 'c:list:0' }],
       ];
 
-      await this._editScreen(chatId, ctx.screenMsgId, text, keyboard);
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId, text, keyboard);
+      } else {
+        await this._showScreen(chatId, userId, text, keyboard);
+      }
 
     } else if (action === 'full') {
       // Send as new message, keep screen
@@ -2086,10 +2131,17 @@ class TelegramBot extends EventEmitter {
           composeText += `\n\n${projName ? `📁 ${this._escHtml(projName)} → ` : ''}💬 ${this._escHtml(sessTitle)}`;
         }
       }
-      await this._editScreen(chatId, ctx.screenMsgId,
-        composeText,
-        [[{ text: this._t('btn_cancel'), callback_data: 'cm:cancel' }]]
-      );
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId,
+          composeText,
+          [[{ text: this._t('btn_cancel'), callback_data: 'cm:cancel' }]]
+        );
+      } else {
+        await this._showScreen(chatId, userId,
+          composeText,
+          [[{ text: this._t('btn_cancel'), callback_data: 'cm:cancel' }]]
+        );
+      }
 
     } else if (action === 'cancel') {
       ctx.state = FSM_STATES.IDLE;
@@ -2097,19 +2149,19 @@ class TelegramBot extends EventEmitter {
       ctx.pendingAttachments = [];
       // Re-show dialog overview
       if (ctx.sessionId) {
-        return this._screenDialog(chatId, userId, { mode: 'overview' });
+        return this._screenDialog(chatId, userId, { mode: 'overview', editMsgId });
       }
-      return this._screenMainMenu(chatId, userId);
+      return this._screenMainMenu(chatId, userId, { editMsgId });
 
     } else if (action === 'stop') {
       return this._cmdStop(chatId, userId);
 
     } else if (action === 'back') {
-      return this._screenChats(chatId, userId, 'c:list:0');
+      return this._screenChats(chatId, userId, 'c:list:0', opts);
     }
   }
 
-  async _screenFiles(chatId, userId, data) {
+  async _screenFiles(chatId, userId, data, { editMsgId } = {}) {
     const ctx = this._getContext(userId);
     const fs = require('fs');
     const pathMod = require('path');
@@ -2127,7 +2179,11 @@ class TelegramBot extends EventEmitter {
 
     const targetDir = pathMod.resolve(baseDir, subPath);
     if (!targetDir.startsWith(baseDir)) {
-      return this._editScreen(chatId, ctx.screenMsgId, this._t('files_denied'),
+      if (editMsgId) {
+        return this._editScreen(chatId, editMsgId, this._t('files_denied'),
+          [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
+      }
+      return this._showScreen(chatId, userId, this._t('files_denied'),
         [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
     }
 
@@ -2196,14 +2252,22 @@ class TelegramBot extends EventEmitter {
         ? `📂 <b>${this._escHtml(relDisplay)}</b>`
         : `📂 <b>${this._escHtml(relDisplay)}</b>\n\n${this._t('files_empty_label')}`;
 
-      await this._editScreen(chatId, ctx.screenMsgId, text, keyboard);
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId, text, keyboard);
+      } else {
+        await this._showScreen(chatId, userId, text, keyboard);
+      }
     } catch (err) {
-      await this._editScreen(chatId, ctx.screenMsgId, `❌ ${this._escHtml(err.message)}`,
-        [[{ text: this._t('btn_back'), callback_data: ctx.projectWorkdir ? 'pm:back' : 'm:menu' }]]);
+      const errKb = [[{ text: this._t('btn_back'), callback_data: ctx.projectWorkdir ? 'pm:back' : 'm:menu' }]];
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId, `❌ ${this._escHtml(err.message)}`, errKb);
+      } else {
+        await this._showScreen(chatId, userId, `❌ ${this._escHtml(err.message)}`, errKb);
+      }
     }
   }
 
-  async _screenTasks(chatId, userId, data) {
+  async _screenTasks(chatId, userId, data, { editMsgId } = {}) {
     const ctx = this._getContext(userId);
     const showAll = data === 't:all';
     const workdir = showAll ? null : ctx.projectWorkdir;
@@ -2224,11 +2288,14 @@ class TelegramBot extends EventEmitter {
 
       if (rows.length === 0) {
         const back = ctx.projectWorkdir && !showAll ? 'pm:back' : 'm:menu';
-        return this._editScreen(chatId, ctx.screenMsgId, this._t('tasks_empty'),
-          [
-            [{ text: this._t('btn_new_task'), callback_data: 't:new' }],
-            [{ text: this._t('btn_back'), callback_data: back }],
-          ]);
+        const emptyKb = [
+          [{ text: this._t('btn_new_task'), callback_data: 't:new' }],
+          [{ text: this._t('btn_back'), callback_data: back }],
+        ];
+        if (editMsgId) {
+          return this._editScreen(chatId, editMsgId, this._t('tasks_empty'), emptyKb);
+        }
+        return this._showScreen(chatId, userId, this._t('tasks_empty'), emptyKb);
       }
 
       const icons = { backlog: '📋', todo: '📝', in_progress: '🔄', done: '✅', blocked: '🚫' };
@@ -2252,14 +2319,22 @@ class TelegramBot extends EventEmitter {
       const back = ctx.projectWorkdir && !showAll ? 'pm:back' : 'm:menu';
       keyboard.push([{ text: this._t('btn_back'), callback_data: back }]);
 
-      await this._editScreen(chatId, ctx.screenMsgId, text, keyboard);
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId, text, keyboard);
+      } else {
+        await this._showScreen(chatId, userId, text, keyboard);
+      }
     } catch (err) {
-      await this._editScreen(chatId, ctx.screenMsgId, `❌ ${this._escHtml(err.message)}`,
-        [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
+      const errKb = [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]];
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId, `❌ ${this._escHtml(err.message)}`, errKb);
+      } else {
+        await this._showScreen(chatId, userId, `❌ ${this._escHtml(err.message)}`, errKb);
+      }
     }
   }
 
-  async _screenStatus(chatId, userId) {
+  async _screenStatus(chatId, userId, { editMsgId } = {}) {
     const ctx = this._getContext(userId);
 
     try {
@@ -2307,14 +2382,22 @@ class TelegramBot extends EventEmitter {
         [{ text: this._t('btn_refresh'), callback_data: 'm:status' }, { text: this._t('btn_back_menu'), callback_data: 'm:menu' }],
       ];
 
-      await this._editScreen(chatId, ctx.screenMsgId, text, keyboard);
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId, text, keyboard);
+      } else {
+        await this._showScreen(chatId, userId, text, keyboard);
+      }
     } catch (err) {
-      await this._editScreen(chatId, ctx.screenMsgId, `❌ ${this._escHtml(err.message)}`,
-        [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
+      const errKb = [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]];
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId, `❌ ${this._escHtml(err.message)}`, errKb);
+      } else {
+        await this._showScreen(chatId, userId, `❌ ${this._escHtml(err.message)}`, errKb);
+      }
     }
   }
 
-  async _screenSettings(chatId, userId) {
+  async _screenSettings(chatId, userId, { editMsgId } = {}) {
     const ctx = this._getContext(userId);
     const device = this._stmts.getDevice.get(userId);
     if (!device) return;
@@ -2339,36 +2422,58 @@ class TelegramBot extends EventEmitter {
       [{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }],
     ];
 
-    await this._editScreen(chatId, ctx.screenMsgId, text, keyboard);
+    if (editMsgId) {
+      await this._editScreen(chatId, editMsgId, text, keyboard);
+    } else {
+      await this._showScreen(chatId, userId, text, keyboard);
+    }
   }
 
-  async _routeSettings(chatId, userId, data) {
+  async _routeSettings(chatId, userId, data, opts = {}) {
     const ctx = this._getContext(userId);
+    const { editMsgId } = opts;
 
     if (data === 's:notify:on' || data === 's:notify:off') {
       const val = data === 's:notify:on' ? 1 : 0;
       this._stmts.updateNotifications.run(val, userId);
-      return this._screenSettings(chatId, userId); // Re-render settings
+      return this._screenSettings(chatId, userId, opts); // Re-render settings
 
     } else if (data === 's:unlink') {
-      await this._editScreen(chatId, ctx.screenMsgId,
-        this._t('settings_unlink_confirm'),
-        [
-          [{ text: this._t('btn_confirm_unlink'), callback_data: 's:unlink:yes' }],
-          [{ text: this._t('btn_cancel'), callback_data: 's:menu' }],
-        ]
-      );
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId,
+          this._t('settings_unlink_confirm'),
+          [
+            [{ text: this._t('btn_confirm_unlink'), callback_data: 's:unlink:yes' }],
+            [{ text: this._t('btn_cancel'), callback_data: 's:menu' }],
+          ]
+        );
+      } else {
+        await this._showScreen(chatId, userId,
+          this._t('settings_unlink_confirm'),
+          [
+            [{ text: this._t('btn_confirm_unlink'), callback_data: 's:unlink:yes' }],
+            [{ text: this._t('btn_cancel'), callback_data: 's:menu' }],
+          ]
+        );
+      }
 
     } else if (data === 's:forum') {
       // Show forum setup instructions
-      await this._editScreen(chatId, ctx.screenMsgId,
-        this._t('forum_instructions'),
-        [[{ text: this._t('btn_back'), callback_data: 's:menu' }]]
-      );
+      if (editMsgId) {
+        await this._editScreen(chatId, editMsgId,
+          this._t('forum_instructions'),
+          [[{ text: this._t('btn_back'), callback_data: 's:menu' }]]
+        );
+      } else {
+        await this._showScreen(chatId, userId,
+          this._t('forum_instructions'),
+          [[{ text: this._t('btn_back'), callback_data: 's:menu' }]]
+        );
+      }
 
     } else if (data === 's:forum:off') {
       await this._cmdForumDisconnect(chatId, userId);
-      return this._screenSettings(chatId, userId);
+      return this._screenSettings(chatId, userId, opts);
 
     } else if (data === 's:unlink:yes') {
       this._stmts.removeByUserId.run(userId);
@@ -2382,9 +2487,9 @@ class TelegramBot extends EventEmitter {
     }
   }
 
-  async _routeTunnel(chatId, userId, data) {
+  async _routeTunnel(chatId, userId, data, opts = {}) {
     if (data === 'tn:menu') {
-      return this._cmdTunnel(chatId, userId);
+      return this._cmdTunnel(chatId, userId, opts);
     } else if (data === 'tn:start') {
       this.emit('tunnel_start', { chatId });
     } else if (data === 'tn:stop') {
@@ -3628,7 +3733,7 @@ class TelegramBot extends EventEmitter {
 
   // ─── Inline New Chat / New Task ──────────────────────────────────────────
 
-  async _handleNewChat(chatId, userId) {
+  async _handleNewChat(chatId, userId, { editMsgId } = {}) {
     const ctx = this._getContext(userId);
     const workdir = ctx.projectWorkdir || process.env.WORKDIR || './workspace';
 
@@ -3643,30 +3748,36 @@ class TelegramBot extends EventEmitter {
     ctx.dialogPage = 0;
     this._saveDeviceContext(userId);
 
-    await this._editScreen(chatId, ctx.screenMsgId,
-      this._t('new_session_created', { id: this._escHtml(id) }),
-      [[{ text: this._t('btn_cancel'), callback_data: 'd:overview' }]]
-    );
+    const newChatText = this._t('new_session_created', { id: this._escHtml(id) });
+    const newChatKb = [[{ text: this._t('btn_cancel'), callback_data: 'd:overview' }]];
+    if (editMsgId) {
+      await this._editScreen(chatId, editMsgId, newChatText, newChatKb);
+    } else {
+      await this._showScreen(chatId, userId, newChatText, newChatKb);
+    }
   }
 
-  async _handleNewTask(chatId, userId) {
+  async _handleNewTask(chatId, userId, { editMsgId } = {}) {
     const ctx = this._getContext(userId);
     ctx.state = FSM_STATES.AWAITING_TASK_TITLE;
     ctx.stateData = { workdir: ctx.projectWorkdir || null };
 
-    await this._editScreen(chatId, ctx.screenMsgId,
-      this._t('new_task_prompt'),
-      [[{ text: this._t('btn_cancel'), callback_data: ctx.projectWorkdir ? 't:list' : 'm:menu' }]]
-    );
+    const taskText = this._t('new_task_prompt');
+    const taskKb = [[{ text: this._t('btn_cancel'), callback_data: ctx.projectWorkdir ? 't:list' : 'm:menu' }]];
+    if (editMsgId) {
+      await this._editScreen(chatId, editMsgId, taskText, taskKb);
+    } else {
+      await this._showScreen(chatId, userId, taskText, taskKb);
+    }
   }
 
-  async _handleSkipTaskDesc(chatId, userId) {
+  async _handleSkipTaskDesc(chatId, userId, { editMsgId } = {}) {
     const ctx = this._getContext(userId);
     ctx.state = FSM_STATES.IDLE;
     ctx.stateData = null;
 
     // Go back to tasks list
-    return this._screenTasks(chatId, userId, ctx.projectWorkdir ? 't:list' : 't:all');
+    return this._screenTasks(chatId, userId, ctx.projectWorkdir ? 't:list' : 't:all', { editMsgId });
   }
 
   async _cmdInfo(chatId, userId) {
@@ -3819,8 +3930,6 @@ class TelegramBot extends EventEmitter {
         projectWorkdir: null,
         projectList: null,
         chatList: null,
-        screenMsgId: null,      // THE message being edited in place
-        screenChatId: null,     // chat where screen lives
         chatPage: 0,            // pagination for chat list
         filePath: null,         // current dir in file browser
         filePathCache: new Map(), // int key → absolute path
