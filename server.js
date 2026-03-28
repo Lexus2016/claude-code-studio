@@ -4550,8 +4550,8 @@ let telegramBot = null;
 function _clearTelegramAskState(sessionId) {
   if (!telegramBot) return;
   const task = activeTasks.get(sessionId);
-  if (task?.proxy?._userId) {
-    const ctx = telegramBot._getContext(task.proxy._userId);
+  if (task?.userId) {
+    const ctx = telegramBot.getContext(task.userId);
     if (ctx.state === 'AWAITING_ASK_RESPONSE') {
       ctx.state = 'IDLE';
       ctx.stateData = null;
@@ -4566,18 +4566,18 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
 
   // Check if session is busy
   if (activeTasks.has(sessionId)) {
-    await telegramBot._sendMessage(chatId, '⏳ This session is busy. Wait for completion or use /stop.');
+    await telegramBot.sendMessage(chatId, '⏳ This session is busy. Wait for completion or use /stop.');
     return;
   }
 
   // Load session from DB
   const session = stmts.getSession.get(sessionId);
   if (!session) {
-    await telegramBot._sendMessage(chatId, '❌ Session not found.');
+    await telegramBot.sendMessage(chatId, '❌ Session not found.');
     return;
   }
 
-  const proxy = new TelegramProxy(telegramBot, chatId, sessionId, userId, threadId);
+  const proxy = telegramBot.createResponseHandler({ userId, chatId, sessionId, threadId, broadcastToSession });
   const abortController = new AbortController();
 
   activeTasks.set(sessionId, {
@@ -4666,18 +4666,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     stmts.setLastUserMsg.run(text, sessionId);
 
     // Send "thinking" indicator only in legacy mode (draft streaming provides its own visual)
-    if (!proxy._usesDraftStreaming) {
-      const thinkingMsg = await telegramBot._sendMessage(chatId, '🤔 <b>Thinking...</b>', {
-        parse_mode: 'HTML',
-        reply_markup: JSON.stringify({ inline_keyboard: [[
-          { text: '🛑 Stop', callback_data: 'cm:stop' },
-          { text: '🏠 Menu', callback_data: 'm:menu' },
-        ]] }),
-      });
-      if (thinkingMsg?.message_id) {
-        proxy._progressMsgId = thinkingMsg.message_id;
-      }
-    }
+    await proxy.startThinking();
 
     const params = {
       prompt: text,
@@ -4728,7 +4717,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     }
     // Clean up pending ask_user state on Telegram bot context
     if (userId && telegramBot) {
-      const ctx = telegramBot._getContext(userId);
+      const ctx = telegramBot.getContext(userId);
       if (ctx.state === 'AWAITING_ASK_RESPONSE') {
         ctx.state = 'IDLE';
         ctx.stateData = null;
@@ -4799,30 +4788,30 @@ function _attachTelegramListeners(bot) {
       if (!tunnelManager) initTunnelManager();
       if (tunnelManager.isRunning()) {
         const s = tunnelManager.getStatus();
-        await bot._sendMessage(chatId, `🟢 Already running:\n${bot._escHtml(s.publicUrl)}`);
+        await bot.sendMessage(chatId, `🟢 Already running:\n${bot.escHtml(s.publicUrl)}`);
         return;
       }
       const c = loadConfig();
       const provider = c.tunnel?.provider || 'cloudflared';
       const config = { ngrokAuthtoken: c.tunnel?.ngrokAuthtoken };
-      await bot._sendMessage(chatId, `⏳ Starting ${bot._escHtml(provider)}...`);
+      await bot.sendMessage(chatId, `⏳ Starting ${bot.escHtml(provider)}...`);
       const { publicUrl } = await tunnelManager.start(provider, config);
-      await bot._sendMessage(chatId, `🟢 Remote Access active!\n\n🔗 ${bot._escHtml(publicUrl)}`);
+      await bot.sendMessage(chatId, `🟢 Remote Access active!\n\n🔗 ${bot.escHtml(publicUrl)}`);
     } catch (err) {
-      await bot._sendMessage(chatId, `❌ Error: ${bot._escHtml(err.message)}`);
+      await bot.sendMessage(chatId, `❌ Error: ${bot.escHtml(err.message)}`);
     }
   });
 
   bot.on('tunnel_stop', async ({ chatId }) => {
     try {
       if (!tunnelManager?.isRunning()) {
-        await bot._sendMessage(chatId, bot._t('tn_not_running'));
+        await bot.sendMessage(chatId, bot.t('tn_not_running'));
         return;
       }
       tunnelManager.stop();
-      await bot._sendMessage(chatId, bot._t('tn_notify_stopped'));
+      await bot.sendMessage(chatId, bot.t('tn_notify_stopped'));
     } catch (err) {
-      try { await bot._sendMessage(chatId, `❌ ${bot._escHtml(err.message)}`); } catch {}
+      try { await bot.sendMessage(chatId, `❌ ${bot.escHtml(err.message)}`); } catch {}
     }
   });
 
@@ -4830,12 +4819,12 @@ function _attachTelegramListeners(bot) {
     try {
       const s = tunnelManager?.getStatus();
       if (s?.running) {
-        await bot._sendMessage(chatId, `🟢 Remote Access active\n\n🔗 ${bot._escHtml(s.publicUrl)}\n⏱ Since: ${bot._escHtml(String(s.startedAt))}`);
+        await bot.sendMessage(chatId, `🟢 Remote Access active\n\n🔗 ${bot.escHtml(s.publicUrl)}\n⏱ Since: ${bot.escHtml(String(s.startedAt))}`);
       } else {
-        await bot._sendMessage(chatId, bot._t('tn_not_running'));
+        await bot.sendMessage(chatId, bot.t('tn_not_running'));
       }
     } catch (err) {
-      try { await bot._sendMessage(chatId, `❌ ${bot._escHtml(err.message)}`); } catch {}
+      try { await bot.sendMessage(chatId, `❌ ${bot.escHtml(err.message)}`); } catch {}
     }
   });
 
@@ -4844,9 +4833,9 @@ function _attachTelegramListeners(bot) {
     const task = activeTasks.get(sessionId);
     if (task && task.abortController) {
       task.abortController.abort();
-      await bot._sendMessage(chatId, '🛑 Task stopped.');
+      await bot.sendMessage(chatId, '🛑 Task stopped.');
     } else {
-      await bot._sendMessage(chatId, 'No active task in this session.');
+      await bot.sendMessage(chatId, 'No active task in this session.');
     }
   });
 }
