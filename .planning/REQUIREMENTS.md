@@ -54,8 +54,8 @@
 
 ### Server Encapsulation (ENC)
 
-- [ ] **ENC-01**: `TelegramBot` exposes a `createResponseHandler({ userId, chatId, threadId })` public factory method that server.js uses for all bot interactions
-- [ ] **ENC-02**: `server.js` no longer calls any `bot._*` private methods directly (removes coupling to internal implementation)
+- [x] **ENC-01**: `TelegramBot` exposes a `createResponseHandler({ userId, chatId, threadId })` public factory method that server.js uses for all bot interactions
+- [x] **ENC-02**: `server.js` no longer calls any `bot._*` private methods directly (removes coupling to internal implementation)
 
 ### Streaming (STREAM)
 
@@ -118,5 +118,5 @@
 | FORUM-09 | Phase 3 | Complete |
 | FORUM-10 | Phase 3 | Complete |
 | FORUM-11 | Phase 3 | Complete |
-| ENC-01 | Phase 4 | Pending |
-| ENC-02 | Phase 4 | Pending |
+| ENC-01 | Phase 4 | Complete |
+| ENC-02 | Phase 4 | Complete |

@@ -81,7 +81,7 @@ Plans:
 **Requirements**: ENC-01, ENC-02
 **Plans:** 1 plan
 Plans:
-- [ ] 04-01-PLAN.md — Move TelegramProxy into telegram-bot.js, expose createResponseHandler factory, replace all bot._* calls with public wrappers
+- [x] 04-01-PLAN.md — Move TelegramProxy into telegram-bot.js, expose createResponseHandler factory, replace all bot._* calls with public wrappers
 **Success Criteria** (what must be TRUE):
   1. `TelegramBot` exposes `createResponseHandler({ userId, chatId, threadId })` and `server.js` uses it as the sole interface for all bot interactions
   2. A grep for `bot._` in `server.js` returns zero matches — no private method calls remain

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-03-PLAN.md (forum onboarding + task buttons)
-last_updated: "2026-03-28T21:10:58.561Z"
+stopped_at: Completed 04-01-PLAN.md (server encapsulation)
+last_updated: "2026-03-28T21:31:34.848Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
-  percent: 73
+  completed_phases: 4
+  total_plans: 11
+  completed_plans: 11
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** A user should be able to send a message to Claude in 2 taps or fewer — from any state, without knowing any slash commands
-**Current focus:** Phase 03 — Forum Mode UX + Extraction
+**Current focus:** Phase 04 — Server Encapsulation (complete)
 
 ## Current Position
 
 Phase: 4
-Plan: Not started
-Status: Ready to execute
+Plan: 1 of 1 (complete)
+Status: Phase complete
 Last activity: 2026-03-28
 
-Progress: [########░░] 73%
+Progress: [##########] 100%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [########░░] 73%
 | Phase 02-ux-redesign P05 | 2min | 2 tasks | 1 files |
 | Phase 03 P02 | 3min | 2 tasks | 3 files |
 | Phase 03 P03 | 3min | 1 tasks | 3 files |
+| Phase 04-server-encapsulation P01 | 7min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,10 @@ Recent decisions affecting current work:
 - [Phase 03]: Error recovery layout changed from 1 row (3 buttons) to 2 rows (2+2) to accommodate Help button
 - [Phase 03]: Onboarding is stateless — each step edits the same message, no persistent state to clean up
 - [Phase 03]: ft: and fo: prefixes routed before f: in both routing layers to avoid collision
+- [Phase 04]: TelegramProxy moved inside telegram-bot.js -- proxy is bot-internal streaming infrastructure, not a server concern
+- [Phase 04]: broadcastToSession injected as callback to maintain dependency inversion
+- [Phase 04]: startThinking() encapsulates thinking message logic inside proxy
+- [Phase 04]: task.userId used instead of task.proxy._userId in _clearTelegramAskState
 
 ### Pending Todos
 
@@ -104,6 +109,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T21:05:22.890Z
-Stopped at: Completed 03-03-PLAN.md (forum onboarding + task buttons)
+Last session: 2026-03-28T21:31:00Z
+Stopped at: Completed 04-01-PLAN.md (server encapsulation)
 Resume file: None
