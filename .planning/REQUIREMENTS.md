@@ -33,7 +33,7 @@
 
 ### Screen Architecture (ARCH)
 
-- [ ] **ARCH-01**: i18n translation data is extracted to a separate file `telegram-bot-i18n.js` (removes ~825 lines from main bot file)
+- [x] **ARCH-01**: i18n translation data is extracted to a separate file `telegram-bot-i18n.js` (removes ~825 lines from main bot file)
 - [ ] **ARCH-02**: Screens are defined via a registry object (`SCREENS`) where each entry has `handler` and `parent` — back button is generated automatically from `parent` pointer
 - [ ] **ARCH-03**: `ctx.screenMsgId` and `ctx.screenChatId` are removed; screen handlers receive `editMsgId` from the callback message anchor (`cbq.message.message_id`) instead
 - [ ] **ARCH-04**: All legacy callback_data prefixes (`m:`, `p:`, `c:`, `ch:`, `cm:`, `d:`, `f:`, `t:`, `s:`, `tn:`, `ask:`) remain functional as fallback handlers during migration — old buttons in chat history never break
@@ -88,7 +88,7 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| ARCH-01 | Phase 1 | Pending |
+| ARCH-01 | Phase 1 | Complete |
 | FSM-01 | Phase 1 | Pending |
 | FSM-02 | Phase 1 | Pending |
 | FSM-03 | Phase 1 | Pending |

@@ -25,7 +25,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Requirements**: ARCH-01, FSM-01, FSM-02, FSM-03, FSM-04, FSM-05
 **Plans:** 2 plans
 Plans:
-- [ ] 01-01-PLAN.md — Extract BOT_I18N to telegram-bot-i18n.js (i18n separation)
+- [x] 01-01-PLAN.md — Extract BOT_I18N to telegram-bot-i18n.js (i18n separation)
 - [ ] 01-02-PLAN.md — Replace ad-hoc state flags with explicit FSM (ctx.state + ctx.stateData)
 **Success Criteria** (what must be TRUE):
   1. `telegram-bot-i18n.js` exists as a standalone file; `telegram-bot.js` imports from it and is ~825 lines shorter
