@@ -40,10 +40,10 @@
 
 ### Forum Mode (FORUM)
 
-- [ ] **FORUM-01**: Forum mode logic is extracted to a separate class `TelegramBotForum` in `telegram-bot-forum.js` (~860 lines)
-- [ ] **FORUM-02**: Forum mode and Direct mode never share `ctx.state` — forum state is scoped to `(chatId, threadId, userId)`, direct mode state is scoped to `userId`
-- [ ] **FORUM-03**: `threadId` is always passed explicitly as a parameter to every forum API call (no class-level `this._currentThreadId`)
-- [ ] **FORUM-04**: Existing Forum Mode supergroups continue working after extraction with zero reconfiguration
+- [x] **FORUM-01**: Forum mode logic is extracted to a separate class `TelegramBotForum` in `telegram-bot-forum.js` (~860 lines)
+- [x] **FORUM-02**: Forum mode and Direct mode never share `ctx.state` — forum state is scoped to `(chatId, threadId, userId)`, direct mode state is scoped to `userId`
+- [x] **FORUM-03**: `threadId` is always passed explicitly as a parameter to every forum API call (no class-level `this._currentThreadId`)
+- [x] **FORUM-04**: Existing Forum Mode supergroups continue working after extraction with zero reconfiguration
 - [x] **FORUM-05**: Forum Mode setup has a guided onboarding flow with inline buttons (step-by-step, not just a text wall of instructions)
 - [x] **FORUM-06**: Every Claude response in a project topic includes an inline keyboard with quick actions: Continue session, New session, Files, Diff, Last 5 messages
 - [x] **FORUM-07**: `/help` in a Forum Mode project topic shows only Forum-specific commands — Direct Mode navigation commands (e.g. `/projects`, `/chats`) are not shown
@@ -107,10 +107,10 @@
 | ARCH-03 | Phase 2 | Complete |
 | ARCH-04 | Phase 2 | Complete |
 | STREAM-01 | Phase 2 | Complete |
-| FORUM-01 | Phase 3 | Pending |
-| FORUM-02 | Phase 3 | Pending |
-| FORUM-03 | Phase 3 | Pending |
-| FORUM-04 | Phase 3 | Pending |
+| FORUM-01 | Phase 3 | Complete |
+| FORUM-02 | Phase 3 | Complete |
+| FORUM-03 | Phase 3 | Complete |
+| FORUM-04 | Phase 3 | Complete |
 | FORUM-05 | Phase 3 | Complete |
 | FORUM-06 | Phase 3 | Complete |
 | FORUM-07 | Phase 3 | Complete |

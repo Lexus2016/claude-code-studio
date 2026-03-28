@@ -58,7 +58,7 @@ Plans:
 **Goal**: Forum Mode becomes a first-class UX — every topic has native inline keyboards, guided onboarding, and action buttons — all within a clean `TelegramBotForum` module with isolated state
 **Depends on**: Phase 2
 **Requirements**: FORUM-01, FORUM-02, FORUM-03, FORUM-04, FORUM-05, FORUM-06, FORUM-07, FORUM-08, FORUM-09, FORUM-10, FORUM-11
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans executed
 Plans:
 - [x] 03-01-PLAN.md — Extract 21 forum methods to TelegramBotForum class (composition facade, state scoping, threadId explicit)
 - [x] 03-02-PLAN.md — Forum UX enhancements (inline keyboards, activity buttons, error recovery, /help scoping, session display, i18n)
@@ -95,5 +95,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Foundation | 2/2 | Complete | 2026-03-28 |
 | 2. UX Redesign | 5/5 | Complete | 2026-03-28 |
-| 3. Forum Mode UX + Extraction | 2/3 | In Progress|  |
-| 4. Server Encapsulation | 0/1 | Not started | - |
+| 3. Forum Mode UX + Extraction | 3/3 | Complete | 2026-03-28 |
+| 4. Server Encapsulation | 1/1 | Complete | 2026-03-28 |

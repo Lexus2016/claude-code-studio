@@ -26,21 +26,36 @@ A user should be able to send a message to Claude in **2 taps or fewer** — fro
 
 ### Active
 
-- [ ] New user reaches first Claude message in ≤2 taps (zero slash commands required)
-- [ ] Persistent bottom keyboard always reflects current context (project/chat active or not)
-- [ ] Single clear navigation hierarchy: Main → Project → Chat → Compose
-- [ ] Back navigation always works predictably (one level up, no dead ends)
-- [ ] State always visible: user knows what project/chat is active at a glance
-- [ ] Forum Mode and Direct Mode are clearly separated (no command confusion)
-- [ ] Common actions accessible from anywhere: new chat, status, back to main
-- [ ] No redundant slash commands (remove /project <n>, /chat <n> in favor of inline buttons)
-- [ ] Forum Mode extracted to a separate module (TelegramBotForum class)
+All milestone requirements are complete. See Validated sections below.
 
 ### Validated in Phase 1: Foundation
 
-- ✓ Pending input states (task creation) cannot accidentally intercept unrelated messages — FSM-01..03
+- ✓ Pending input states cannot accidentally intercept unrelated messages — FSM-01..03
 - ✓ i18n extracted to a separate file for maintainability — ARCH-01
 - ✓ Explicit state machine replaces ad-hoc boolean flags — FSM-01..05
+
+### Validated in Phase 2: UX Redesign
+
+- ✓ New user reaches first Claude message in ≤2 taps — NAV-01
+- ✓ Persistent bottom keyboard reflects current context — KB-01..03
+- ✓ Back navigation always works predictably — NAV-02
+- ✓ State always visible (context header on every screen) — NAV-04
+- ✓ No redundant slash commands — NAV-05
+- ✓ Edit-in-place navigation — NAV-03, ARCH-02..04
+- ✓ sendMessageDraft streaming — STREAM-01
+
+### Validated in Phase 3: Forum Mode
+
+- ✓ Forum Mode extracted to TelegramBotForum class — FORUM-01
+- ✓ Forum/Direct mode state isolation — FORUM-02
+- ✓ Explicit threadId everywhere — FORUM-03
+- ✓ Backward compat for existing supergroups — FORUM-04
+- ✓ Guided onboarding, inline keyboards, action buttons — FORUM-05..11
+
+### Validated in Phase 4: Server Encapsulation
+
+- ✓ createResponseHandler() public API — ENC-01
+- ✓ Zero bot._* private calls in server.js — ENC-02
 
 ### Out of Scope
 
@@ -86,9 +101,10 @@ A user should be able to send a message to Claude in **2 taps or fewer** — fro
 - No build tools, no TypeScript
 
 ### Key Files
-- `telegram-bot.js` — bot logic (~3960 lines after Phase 1), TelegramBot extends EventEmitter, FSM state machine
-- `telegram-bot-i18n.js` — i18n data (790 lines), BOT_I18N with uk/en/ru locales
-- `server.js` — main server, instantiates TelegramBot, routes events
+- `telegram-bot.js` — bot logic + TelegramProxy (~4063 lines), SCREENS registry, FSM, public API
+- `telegram-bot-i18n.js` — i18n data (923 lines), BOT_I18N with uk/en/ru locales
+- `telegram-bot-forum.js` — forum mode (1277 lines), TelegramBotForum class, scoped state
+- `server.js` — main server (~6404 lines), uses only public bot API
 - `data/chats.db` — SQLite: sessions, messages, telegram_devices tables
 
 ## Constraints
@@ -104,10 +120,11 @@ A user should be able to send a message to Claude in **2 taps or fewer** — fro
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Keep native fetch (no grammy/telegraf) | No new deps, already working | Confirmed |
-| Split into 3 files: telegram-bot.js + telegram-bot-i18n.js + telegram-bot-forum.js | Reduces god-object, 18% of file is i18n, forum is 860 lines | Phase 1: i18n done |
+| Split into 4 files: bot + i18n + forum + proxy | Eliminates god-object | Phase 1-4: done |
 | Formalize state machine with explicit states | Prevents pendingInput/pendingAsk conflicts | Phase 1: done |
-| Replace slash-command navigation with inline-only | /project <n>, /chat <n> redundant; inline buttons are superior UX | — Pending |
-| Smart persistent keyboard reflects context | Shows current project/chat name, adapts buttons | — Pending |
+| Replace slash-command navigation with inline-only | /project <n>, /chat <n> redundant | Phase 2: done |
+| Smart persistent keyboard reflects context | Shows current project/chat name, adapts buttons | Phase 2: done |
+| Public API for server.js integration | Eliminates bot._* private calls | Phase 4: done |
 
 ## Evolution
 
@@ -127,4 +144,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after Phase 1 completion*
+*Last updated: 2026-03-28 after milestone completion (all 4 phases)*
