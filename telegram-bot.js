@@ -747,10 +747,21 @@ class TelegramBot extends EventEmitter {
       const ctx = this._getContext(userId);
       if (ctx.state === FSM_STATES.AWAITING_ASK_RESPONSE) {
         const requestId = ctx.stateData?.askRequestId;
+        const origAskMsgId = ctx.stateData?.askMsgId;
+        const origAskChatId = ctx.stateData?.askChatId;
         ctx.state = FSM_STATES.IDLE;
         ctx.stateData = null;
         this.emit('ask_user_response', { requestId, answer: text });
         await this._sendMessage(chatId, this._t('ask_answered'));
+        // Clean up original ask message (remove stale buttons)
+        if (origAskMsgId && origAskChatId) {
+          this._callApi('editMessageText', {
+            chat_id: origAskChatId,
+            message_id: origAskMsgId,
+            text: this._t('ask_answered'),
+            parse_mode: 'HTML',
+          }).catch(() => {});
+        }
         return;
       }
 
@@ -1450,6 +1461,10 @@ class TelegramBot extends EventEmitter {
       return;
     }
 
+    // Save original ask message location before clearing stateData
+    const origAskMsgId = ctx.stateData?.askMsgId;
+    const origAskChatId = ctx.stateData?.askChatId;
+
     const suffix = data.slice(4); // after "ask:"
 
     if (suffix === 'skip') {
@@ -1466,6 +1481,8 @@ class TelegramBot extends EventEmitter {
           parse_mode: 'HTML',
         });
       } catch {}
+      // Clean up original ask message if answered from a different context
+      this._cleanupOtherAskMsg(chatId, msgId, origAskChatId, origAskMsgId, this._t('ask_skipped'));
       return;
     }
 
@@ -1485,15 +1502,35 @@ class TelegramBot extends EventEmitter {
     ctx.stateData = null;
     this.emit('ask_user_response', { requestId, answer });
 
+    const resolvedText = this._t('ask_selected', { option: this._escHtml(answer) });
+
     // Edit the question message to show what was selected
     try {
       await this._callApi('editMessageText', {
         chat_id: chatId,
         message_id: msgId,
-        text: this._t('ask_selected', { option: this._escHtml(answer) }),
+        text: resolvedText,
         parse_mode: 'HTML',
       });
     } catch {}
+    // Clean up original ask message if answered from a different context
+    this._cleanupOtherAskMsg(chatId, msgId, origAskChatId, origAskMsgId, resolvedText);
+  }
+
+  /**
+   * Edit the original ask message when answered from a different context (notification).
+   * Silently fails — cleanup is best-effort, never blocks the answer flow.
+   */
+  _cleanupOtherAskMsg(answeredChatId, answeredMsgId, origChatId, origMsgId, text) {
+    if (!origMsgId || !origChatId) return;
+    // Same message — already edited above
+    if (String(answeredChatId) === String(origChatId) && answeredMsgId === origMsgId) return;
+    this._callApi('editMessageText', {
+      chat_id: origChatId,
+      message_id: origMsgId,
+      text,
+      parse_mode: 'HTML',
+    }).catch(() => {}); // Best-effort, fire-and-forget
   }
 
   // ─── Notifications (called from server.js) ────────────────────────────────

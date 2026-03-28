@@ -1494,11 +1494,21 @@ class TelegramProxy {
       this._progressMsgId = null;
     }
 
+    let askMsg;
     try {
-      await this._tgSend( text, { parse_mode: 'HTML', reply_markup: replyMarkup });
+      askMsg = await this._tgSend( text, { parse_mode: 'HTML', reply_markup: replyMarkup });
     } catch {
       // Fallback without HTML
-      await this._tgSend( text.replace(/<[^>]+>/g, ''), { reply_markup: replyMarkup }).catch(() => {});
+      askMsg = await this._tgSend( text.replace(/<[^>]+>/g, ''), { reply_markup: replyMarkup }).catch(() => null);
+    }
+
+    // Store original ask message location for cross-context cleanup
+    if (askMsg?.message_id && this._userId) {
+      const ctx = this._bot._getContext(this._userId);
+      if (ctx.stateData) {
+        ctx.stateData.askMsgId = askMsg.message_id;
+        ctx.stateData.askChatId = this._chatId;
+      }
     }
 
     // Notify other devices/contexts about the pending question
