@@ -33,10 +33,14 @@ A user should be able to send a message to Claude in **2 taps or fewer** — fro
 - [ ] State always visible: user knows what project/chat is active at a glance
 - [ ] Forum Mode and Direct Mode are clearly separated (no command confusion)
 - [ ] Common actions accessible from anywhere: new chat, status, back to main
-- [ ] Pending input states (task creation) cannot accidentally intercept unrelated messages
 - [ ] No redundant slash commands (remove /project <n>, /chat <n> in favor of inline buttons)
-- [ ] i18n extracted to a separate file for maintainability
 - [ ] Forum Mode extracted to a separate module (TelegramBotForum class)
+
+### Validated in Phase 1: Foundation
+
+- ✓ Pending input states (task creation) cannot accidentally intercept unrelated messages — FSM-01..03
+- ✓ i18n extracted to a separate file for maintainability — ARCH-01
+- ✓ Explicit state machine replaces ad-hoc boolean flags — FSM-01..05
 
 ### Out of Scope
 
@@ -82,7 +86,8 @@ A user should be able to send a message to Claude in **2 taps or fewer** — fro
 - No build tools, no TypeScript
 
 ### Key Files
-- `telegram-bot.js` — entire bot (4693 lines), single class TelegramBot extends EventEmitter
+- `telegram-bot.js` — bot logic (~3960 lines after Phase 1), TelegramBot extends EventEmitter, FSM state machine
+- `telegram-bot-i18n.js` — i18n data (790 lines), BOT_I18N with uk/en/ru locales
 - `server.js` — main server, instantiates TelegramBot, routes events
 - `data/chats.db` — SQLite: sessions, messages, telegram_devices tables
 
@@ -98,9 +103,9 @@ A user should be able to send a message to Claude in **2 taps or fewer** — fro
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Keep native fetch (no grammy/telegraf) | No new deps, already working | — Pending |
-| Split into 3 files: telegram-bot.js + telegram-bot-i18n.js + telegram-bot-forum.js | Reduces god-object, 18% of file is i18n, forum is 860 lines | — Pending |
-| Formalize state machine with explicit states | Prevents pendingInput/pendingAsk conflicts | — Pending |
+| Keep native fetch (no grammy/telegraf) | No new deps, already working | Confirmed |
+| Split into 3 files: telegram-bot.js + telegram-bot-i18n.js + telegram-bot-forum.js | Reduces god-object, 18% of file is i18n, forum is 860 lines | Phase 1: i18n done |
+| Formalize state machine with explicit states | Prevents pendingInput/pendingAsk conflicts | Phase 1: done |
 | Replace slash-command navigation with inline-only | /project <n>, /chat <n> redundant; inline buttons are superior UX | — Pending |
 | Smart persistent keyboard reflects context | Shows current project/chat name, adapts buttons | — Pending |
 
@@ -122,4 +127,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after initialization*
+*Last updated: 2026-03-28 after Phase 1 completion*
