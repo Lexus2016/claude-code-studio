@@ -1549,7 +1549,7 @@ function buildSessionReplayContent(sessionId) {
   let userTurn = 0;
   let assistantTurn = 0;
   for (const msg of rawMsgs) {
-    if (msg.type === 'tool') continue;
+    if (msg.type === 'tool' || msg.type === 'thinking') continue;
 
     const attachments = parseMessageAttachments(msg.attachments);
     const replyQuote = buildReplyQuoteFromHistory(msgMap, msg.reply_to_id);
