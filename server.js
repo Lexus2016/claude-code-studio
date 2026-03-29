@@ -1580,6 +1580,12 @@ function buildSessionReplayContent(sessionId) {
 // ============================================
 
 /** Default slash commands — seeded into config.json on first run / fresh install. */
+const DEFAULT_EXTERNAL_AGENTS = {
+  codex:    { label: 'OpenAI Codex',  template: 'codex {prompt}' },
+  gemini:   { label: 'Gemini CLI',    template: 'gemini -i {prompt}' },
+  opencode: { label: 'opencode',      template: 'opencode' },
+};
+
 const DEFAULT_SLASH_COMMANDS = [
   { id: 'sc1', name: '/check',    text: 'Check this step by step: syntax, logic, edge cases, and potential bugs. Be thorough.' },
   { id: 'sc2', name: '/review',   text: 'Do a thorough code review: readability, performance, security, and adherence to best practices. Point out issues with severity levels (critical / warning / suggestion).' },
@@ -1594,8 +1600,8 @@ const DEFAULT_SLASH_COMMANDS = [
 ];
 
 /** Load LOCAL config only — used by write operations (add/delete MCP, upload/delete skill).
- *  Seeds default slash commands into config.json on fresh install and after updates:
- *  only adds defaults whose name is not yet present — never overwrites user commands. */
+ *  Seeds default slash commands AND external agents into config.json on fresh install
+ *  and after updates: only adds defaults not yet present — never overwrites user entries. */
 function loadConfig() {
   let c;
   try { c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')); } catch { c = {}; }
@@ -1605,10 +1611,21 @@ function loadConfig() {
   if (!c.externalAgents)  c.externalAgents  = {};
   // Merge-in any default commands the user doesn't have yet (match by name).
   // This handles fresh installs AND version upgrades that add new defaults.
+  let dirty = false;
   const existingNames = new Set(c.slashCommands.map(cmd => cmd.name));
   const toAdd = DEFAULT_SLASH_COMMANDS.filter(def => !existingNames.has(def.name));
   if (toAdd.length > 0) {
     c.slashCommands.push(...toAdd);
+    dirty = true;
+  }
+  // Merge-in default external agents (same pattern — seed on fresh install / upgrade)
+  for (const [id, def] of Object.entries(DEFAULT_EXTERNAL_AGENTS)) {
+    if (!c.externalAgents[id]) {
+      c.externalAgents[id] = { ...def };
+      dirty = true;
+    }
+  }
+  if (dirty) {
     try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); } catch {}
   }
   return c;
@@ -5220,7 +5237,11 @@ function readDialog(delegationDir) {
 }
 
 function shellEscape(s) {
-  // Single-quote wrapping: replace ' with '\'' (end quote, escaped quote, start quote)
+  if (os.platform() === 'win32') {
+    // Windows cmd.exe: wrap in double quotes, escape inner double quotes
+    return '"' + String(s).replace(/"/g, '""') + '"';
+  }
+  // Unix: single-quote wrapping, replace ' with '\'' (end quote, escaped quote, start quote)
   return "'" + String(s).replace(/'/g, "'\\''") + "'";
 }
 
@@ -5241,15 +5262,26 @@ function openTerminal(shellCommand) {
     const script = `tell application "Terminal"\n  activate\n  do script "${tmpScript}"\nend tell`;
     try {
       spawnProc('osascript', ['-e', script], { detached: true, stdio: 'ignore' }).unref();
-      // Clean up temp script after a delay (terminal has started by then)
       setTimeout(() => { try { fs.unlinkSync(tmpScript); } catch {} }, 10000);
       return { ok: true };
     } catch (err) {
       try { fs.unlinkSync(tmpScript); } catch {}
       return { ok: false, error: err.message };
     }
+  } else if (platform === 'win32') {
+    // Windows — write a .bat script and open it in a new cmd window
+    const tmpBat = path.join(os.tmpdir(), `ccs-delegate-${Date.now()}.bat`);
+    fs.writeFileSync(tmpBat, `@echo off\n${shellCommand}\npause\n`);
+    try {
+      spawnProc('cmd.exe', ['/c', 'start', 'Delegate', 'cmd.exe', '/k', tmpBat], { detached: true, stdio: 'ignore' }).unref();
+      setTimeout(() => { try { fs.unlinkSync(tmpBat); } catch {} }, 10000);
+      return { ok: true };
+    } catch (err) {
+      try { fs.unlinkSync(tmpBat); } catch {}
+      return { ok: false, error: err.message };
+    }
   } else {
-    // Linux fallback — try common terminal emulators
+    // Linux — try common terminal emulators
     const terminals = ['gnome-terminal', 'xterm', 'konsole'];
     for (const term of terminals) {
       try {
