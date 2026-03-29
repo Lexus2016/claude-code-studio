@@ -7800,6 +7800,45 @@ function _renderMsgAt(idx, prepend = false) {
     return w;
   }
 
+  // Render delegate messages with agent card styling
+  if (m.type === 'delegate') {
+    const agentId = (m.tool_name || '').replace('delegate:', '');
+    const icon = _agentIcons[agentId] || '⇗';
+    const label = _externalAgents[agentId]?.label || agentId || 'Agent';
+    const ts = m.created_at ? m.created_at.slice(11, 19) : '';
+    const w = document.createElement('div');
+    w.className = 'mw delegate';
+    w.dataset.agentIcon = icon;
+    if (m.id) w.dataset.msgId = String(m.id);
+    const headerEl = document.createElement('div');
+    headerEl.className = 'dlg-msg-header';
+    const agentEl = document.createElement('span');
+    agentEl.className = 'dlg-msg-agent';
+    agentEl.textContent = label;
+    const timeEl = document.createElement('span');
+    timeEl.className = 'dlg-msg-time';
+    timeEl.textContent = ts;
+    headerEl.appendChild(agentEl);
+    headerEl.appendChild(timeEl);
+    const bodyEl = document.createElement('div');
+    bodyEl.className = 'dlg-msg-body';
+    bodyEl.innerHTML = renderMd(m.content || '');
+    const msgEl = document.createElement('div');
+    msgEl.className = 'msg';
+    msgEl.appendChild(headerEl);
+    msgEl.appendChild(bodyEl);
+    w.appendChild(msgEl);
+    const cpBtn = document.createElement('button');
+    cpBtn.className = 'cpb';
+    cpBtn.title = t('copy.msg');
+    cpBtn.onclick = function() { cpMsg(this); };
+    cpBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+    w.appendChild(cpBtn);
+    if (prepend) { const f = msgsEl.querySelector('.mw, .agent-team-card'); if (f) msgsEl.insertBefore(w, f); else msgsEl.prepend(w); }
+    else msgsEl.appendChild(w);
+    return w;
+  }
+
   const w = document.createElement('div');
   w.className = `mw ${m.role}`;
   if (m.id) w.dataset.msgId = String(m.id);
@@ -11312,7 +11351,7 @@ function _parseDlgEntries(dialog) {
   return entries;
 }
 
-function _addDelegateMsg(icon, label, firstTs, lastTs, text) {
+function _addDelegateMsg(icon, label, firstTs, lastTs, text, save = true) {
   const w = document.createElement('div');
   w.className = 'mw delegate';
   w.dataset.agentIcon = icon;
@@ -11344,6 +11383,14 @@ function _addDelegateMsg(icon, label, firstTs, lastTs, text) {
   cpBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
   w.appendChild(cpBtn);
   msgsEl.appendChild(w);
+  // Persist to session history so it survives page reload
+  if (save && _activeDelegation?.id) {
+    fetch(`/api/delegate/${_activeDelegation.id}/save-msg`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: text, agentLabel: label }),
+    }).catch(() => {});
+  }
 }
 
 function _showNewDlgEntries() {
@@ -11682,6 +11729,7 @@ fetch('/api/lang').then(r => r.json()).then(d => {
 }).catch(() => {});
 restoreUIState();
 _rlRestore(); // Restore rate limit badge from localStorage if still active
+_loadExternalAgents(); // Load agent labels for delegate message rendering
 _restoreDelegationState(); // Restore active delegation panel if server has one
 {
   const btn = $i('autoSkillsBtn');

@@ -5391,6 +5391,22 @@ app.post('/api/delegate/:id/check', (req, res) => {
   res.json({ dialog, lastUpdate: delegation.lastUpdate });
 });
 
+// Save delegate agent message to session history (so it survives page reload)
+app.post('/api/delegate/:id/save-msg', express.json(), (req, res) => {
+  const delegation = activeDelegations.get(req.params.id);
+  if (!delegation) return res.status(404).json({ error: 'Delegation not found' });
+  if (!delegation.sessionId) return res.status(400).json({ error: 'No session linked' });
+  const { content, agentLabel } = req.body;
+  if (!content) return res.status(400).json({ error: 'content required' });
+  const toolName = `delegate:${delegation.agentId}`;
+  try {
+    stmts.addMsg.run(delegation.sessionId, 'assistant', 'delegate', content, toolName, null, null, null);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.delete('/api/delegate/:id', (req, res) => {
   const delegation = activeDelegations.get(req.params.id);
   if (!delegation) return res.status(404).json({ error: 'Delegation not found' });
