@@ -3596,6 +3596,7 @@ const TRANSLATIONS = {
     'agent.modal.label.label':'Назва','agent.label.ph':'OpenAI Codex',
     'agent.modal.template.label':'Шаблон команди','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — підставиться текст задачі',
     'agent.add.btn':'Додати','agent.save.btn':'Зберегти',
+    'agent.test.title':'Перевірити наявність','agent.test.fail':'Команду не знайдено в системі',
     'agent.err.empty':'Заповніть всі поля','agent.err.id':'ID: тільки латинські букви, цифри, - та _',
     'toast.agent_added':'✓ Агента додано','toast.agent_updated':'✓ Агента оновлено',
     'sec.sshHosts':'SSH Хости',
@@ -3818,6 +3819,7 @@ const TRANSLATIONS = {
     'agent.modal.label.label':'Label','agent.label.ph':'OpenAI Codex',
     'agent.modal.template.label':'Command template','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — replaced with task text',
     'agent.add.btn':'Add','agent.save.btn':'Save',
+    'agent.test.title':'Test availability','agent.test.fail':'Command not found on system',
     'agent.err.empty':'Fill in all fields','agent.err.id':'ID: letters, digits, - and _ only',
     'toast.agent_added':'✓ Agent added','toast.agent_updated':'✓ Agent updated',
     'sec.sshHosts':'SSH Hosts',
@@ -4040,6 +4042,7 @@ const TRANSLATIONS = {
     'agent.modal.label.label':'Название','agent.label.ph':'OpenAI Codex',
     'agent.modal.template.label':'Шаблон команды','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — подставится текст задачи',
     'agent.add.btn':'Добавить','agent.save.btn':'Сохранить',
+    'agent.test.title':'Проверить наличие','agent.test.fail':'Команда не найдена в системе',
     'agent.err.empty':'Заполните все поля','agent.err.id':'ID: только латинские буквы, цифры, - и _',
     'toast.agent_added':'✓ Агент добавлен','toast.agent_updated':'✓ Агент обновлён',
     'sec.sshHosts':'SSH Хосты',
@@ -9440,9 +9443,11 @@ function renderAgents() {
         <div class="nm">${icon} ${escH(cfg.label || id)}</div>
         <div class="ds" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:monospace;font-size:11px">${escH(cfg.template || '')}</div>
       </div>
+      <button class="cfg agent-test-btn" data-agent-id="${escH(id)}" title="${t('agent.test.title')}" style="font-size:12px">▶</button>
       <button class="cfg" data-agent-id="${escH(id)}" title="${t('agent.edit.title')}">✏️</button>
       <button class="rm" data-agent-id="${escH(id)}" title="${t('agent.del.title')}">✕</button>`;
-    div.querySelector('.cfg').addEventListener('click', e => { e.stopPropagation(); openAgentForm(id); });
+    div.querySelector('.agent-test-btn').addEventListener('click', e => { e.stopPropagation(); testAgent(id, e.currentTarget); });
+    div.querySelector('.cfg:not(.agent-test-btn)').addEventListener('click', e => { e.stopPropagation(); openAgentForm(id); });
     div.querySelector('.rm').addEventListener('click', e => { e.stopPropagation(); deleteAgent(id); });
     el.appendChild(div);
   }
@@ -9516,6 +9521,32 @@ async function deleteAgent(id) {
   } catch (e) { toast(e.message, true); return; }
   delete _externalAgents[id];
   renderAgents();
+}
+
+async function testAgent(id, btnEl) {
+  const origText = btnEl.textContent;
+  btnEl.textContent = '...';
+  btnEl.disabled = true;
+  try {
+    const r = await fetch(`/api/external-agents/${id}/test`, { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      btnEl.textContent = '✓';
+      btnEl.style.color = '#10b981';
+      toast(`${_externalAgents[id]?.label || id}: ${d.path}`);
+    } else {
+      btnEl.textContent = '✗';
+      btnEl.style.color = '#ef4444';
+      toast(d.error || t('agent.test.fail'), true);
+    }
+  } catch (e) {
+    btnEl.textContent = '✗';
+    btnEl.style.color = '#ef4444';
+    toast(e.message, true);
+  } finally {
+    btnEl.disabled = false;
+    setTimeout(() => { btnEl.textContent = origText; btnEl.style.color = ''; }, 3000);
+  }
 }
 
 document.addEventListener('keydown', e => {

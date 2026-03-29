@@ -5355,6 +5355,8 @@ app.post('/api/external-agents/:id/test', (req, res) => {
   // Extract base command from template (first word before space)
   const baseCmd = (agentConfig.template || '').split(/\s+/)[0];
   if (!baseCmd) return res.json({ ok: false, error: 'Empty template' });
+  // Validate command name to prevent injection (only allow safe chars)
+  if (!/^[a-zA-Z0-9._-]+$/.test(baseCmd)) return res.json({ ok: false, error: 'Invalid command name' });
   const whichCmd = os.platform() === 'win32' ? 'where' : 'which';
   try {
     const result = execSync(`${whichCmd} ${baseCmd}`, { stdio: 'pipe', timeout: 5000 }).toString().trim();
