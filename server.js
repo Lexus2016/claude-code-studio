@@ -1583,7 +1583,7 @@ function buildSessionReplayContent(sessionId) {
 const DEFAULT_EXTERNAL_AGENTS = {
   codex:    { label: 'OpenAI Codex',  template: 'codex {prompt}' },
   gemini:   { label: 'Gemini CLI',    template: 'gemini -i {prompt}' },
-  opencode: { label: 'opencode',      template: 'opencode' },
+  opencode: { label: 'opencode',      template: 'opencode run {prompt}' },
 };
 
 const DEFAULT_SLASH_COMMANDS = [

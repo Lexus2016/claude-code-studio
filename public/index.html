@@ -3123,11 +3123,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <button class="modal-close" onclick="cancelAgentForm()">✕</button>
     </div>
     <div class="modal-body">
-      <div class="cmd-field">
-        <label for="agentId" data-i18n="agent.modal.id.label">ID</label>
-        <input id="agentId" data-i18n-ph="agent.id.ph" placeholder="codex, gemini, aider..." autocomplete="off">
-        <div class="cmd-name-hint" data-i18n="agent.modal.id.hint">Латинські букви, цифри, - та _</div>
-      </div>
+      <input type="hidden" id="agentId">
       <div class="cmd-field">
         <label for="agentLabel" data-i18n="agent.modal.label.label">Label</label>
         <input id="agentLabel" data-i18n-ph="agent.label.ph" placeholder="OpenAI Codex" autocomplete="off">
@@ -9453,16 +9449,28 @@ function renderAgents() {
   }
 }
 
+function _agentSlugify(label) {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'agent';
+}
+
+function _agentUniqueId(label) {
+  const base = _agentSlugify(label);
+  if (!_externalAgents[base]) return base;
+  for (let i = 2; i < 100; i++) {
+    const candidate = `${base}-${i}`;
+    if (!_externalAgents[candidate]) return candidate;
+  }
+  return `${base}-${Date.now()}`;
+}
+
 function openAgentForm(id) {
   _editingAgentId = id || null;
   const btn = $i('agentSaveBtn');
   const title = $i('agentModalTitle');
-  const idInput = $i('agentId');
   if (id) {
     const cfg = _externalAgents[id];
     if (!cfg) return;
-    idInput.value = id;
-    idInput.disabled = true;
+    $i('agentId').value = id;
     $i('agentLabel').value = cfg.label || '';
     $i('agentTemplate').value = cfg.template || '';
     btn.textContent = t('agent.save.btn');
@@ -9470,8 +9478,7 @@ function openAgentForm(id) {
     title.textContent = t('agent.modal.edit.title');
     title.setAttribute('data-i18n', 'agent.modal.edit.title');
   } else {
-    idInput.value = '';
-    idInput.disabled = false;
+    $i('agentId').value = '';
     $i('agentLabel').value = '';
     $i('agentTemplate').value = '';
     btn.textContent = t('agent.add.btn');
@@ -9480,7 +9487,7 @@ function openAgentForm(id) {
     title.setAttribute('data-i18n', 'agent.modal.add.title');
   }
   openModalOverlay('agentModal', {
-    initialFocus: id ? '#agentLabel' : '#agentId',
+    initialFocus: '#agentLabel',
     labelId: 'agentModalTitle',
     onEscape: cancelAgentForm,
   });
@@ -9488,16 +9495,15 @@ function openAgentForm(id) {
 
 function cancelAgentForm() {
   closeModalOverlay('agentModal');
-  $i('agentId').disabled = false;
   _editingAgentId = null;
 }
 
 async function saveAgent() {
-  const id = $i('agentId').value.trim();
   const label = $i('agentLabel').value.trim();
   const template = $i('agentTemplate').value.trim();
-  if (!id || !label || !template) { toast(t('agent.err.empty'), true); return; }
-  if (!/^[a-zA-Z0-9_-]+$/.test(id)) { toast(t('agent.err.id'), true); return; }
+  if (!label || !template) { toast(t('agent.err.empty'), true); return; }
+  // Use existing ID when editing, generate unique slug when creating
+  const id = _editingAgentId || _agentUniqueId(label);
   try {
     const r = await fetch('/api/external-agents', {
       method: 'POST', headers: {'Content-Type':'application/json'},
