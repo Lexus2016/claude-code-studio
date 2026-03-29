@@ -3710,6 +3710,49 @@ app.post('/api/sessions/reorder', (req, res) => {
   tx();
   res.json({ ok: true });
 });
+// ─── Export session as JSON ───────────────────────────────────────────────
+app.get('/api/sessions/:id/export', (req, res) => {
+  const sess = stmts.getSession.get(req.params.id);
+  if (!sess) return res.status(404).json({ error: 'Not found' });
+  const messages = stmts.getMsgs.all(req.params.id);
+  res.setHeader('Content-Disposition', `attachment; filename="session-${req.params.id}.json"`);
+  res.setHeader('Content-Type', 'application/json');
+  res.json({ version: 1, exported_at: new Date().toISOString(), session: sess, messages });
+});
+
+// ─── Import session from JSON export ──────────────────────────────────────
+app.post('/api/sessions/import', (req, res) => {
+  const { session, messages } = req.body || {};
+  if (!session || typeof session !== 'object' || !Array.isArray(messages)) {
+    return res.status(400).json({ error: 'Invalid import body: session object and messages array required' });
+  }
+  const newId = genId();
+  const tx = db.transaction(() => {
+    stmts.createSession.run(
+      newId,
+      String(session.title || 'Imported session').substring(0, 200),
+      session.active_mcp || '[]',
+      session.active_skills || '[]',
+      session.mode || 'auto',
+      session.agent_mode || 'single',
+      session.model || 'sonnet',
+      session.workdir || null
+    );
+    db.prepare('UPDATE sessions SET claude_session_id=NULL WHERE id=?').run(newId);
+    const limit = Math.min(messages.length, 2000);
+    for (let i = 0; i < limit; i++) {
+      const m = messages[i];
+      stmts.addMsg.run(newId, m.role, m.type, m.content || '', m.tool_name || null, m.agent_id || null, null, null);
+    }
+  });
+  try {
+    tx();
+    res.status(201).json({ ok: true, session: stmts.getSession.get(newId) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/sessions/:id', (req,res) => {
   const s = stmts.getSession.get(req.params.id);
   if (!s) return res.status(404).json({ error: 'Not found' });

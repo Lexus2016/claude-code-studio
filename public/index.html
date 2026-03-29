@@ -1006,6 +1006,10 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .sess-compact-btn.loading::after { content:attr(data-loading); animation:compactPulse 1.2s ease-in-out infinite; }
 @keyframes compactPulse { 0%,100% { opacity:.5; } 50% { opacity:1; } }
 
+/* ─── Export / Import buttons ─── */
+.sess-export-btn { font-size:11px; color:var(--text-dim); background:transparent; border:1px solid var(--border); padding:1px 7px; border-radius:4px; cursor:pointer; flex-shrink:0; transition:all .15s; display:inline-flex; align-items:center; gap:3px; }
+.sess-export-btn:hover { color:var(--green); border-color:rgba(63,185,80,.4); background:rgba(63,185,80,.08); }
+
 /* ─── Retry indicators ─── */
 .retry-badge { font-size:11px; color:var(--text-dim); opacity:.65; margin-top:3px; letter-spacing:.01em; }
 .msg-retry-indicator { margin:2px 12px 6px; font-size:11px; color:var(--text-dim); opacity:.6; }
@@ -2576,6 +2580,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openInClaude()">⚡ Claude Code</a>
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
     <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
+    <button id="sessBarExportBtn" class="sess-export-btn" style="display:none;" onclick="exportSession()" title="Export session as JSON">↓ Export</button>
+    <input type="file" id="sessImportInput" accept=".json" style="display:none" onchange="importSessionFile(this)">
+    <button class="sess-export-btn" onclick="$i('sessImportInput').click()" title="Import session from JSON">↑ Import</button>
   </div>
 
   <div class="dlg-panel" id="delegatePanel">
@@ -6663,6 +6670,8 @@ async function updateSessBar(opts = {}) {
     if (delegateBtn) {
       delegateBtn.style.display = currentSessionId ? '' : 'none';
     }
+    const exportBtn = $i('sessBarExportBtn');
+    if (exportBtn) exportBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
     if (retryIfMissing && !hasClaudeId && tab?.generating && currentSessionId === sessionId) {
       scheduleSessBarRefresh();
     }
@@ -6724,6 +6733,43 @@ async function compactSession() {
   }
 }
 
+async function exportSession() {
+  if (!currentSessionId) return;
+  try {
+    const r = await fetch(`/api/sessions/${currentSessionId}/export`);
+    if (!r.ok) { toast('Export failed: ' + r.status, true); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `session-${currentSessionId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast('Export error: ' + e.message, true); }
+}
+
+async function importSessionFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data.session || !Array.isArray(data.messages)) {
+      toast('Invalid export file', true); return;
+    }
+    const r = await fetch('/api/sessions/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: data.session, messages: data.messages })
+    });
+    if (!r.ok) { toast('Import failed: ' + r.status, true); return; }
+    const { session } = await r.json();
+    toast('Session imported');
+    await loadHist();
+    openTab(session.id, session.title);
+  } catch (e) { toast('Import error: ' + e.message, true); }
+}
 
 function switchTab(id) {
   if (activeTabId === id) return;
