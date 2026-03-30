@@ -319,7 +319,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .hist-item .del { opacity: 0; background: none; border: none; color: var(--red); cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 3px; }
 .hist-item:hover .del { opacity: .5; }
 .hist-item .del:hover { opacity: 1; }
-.hist-item .fork-sess { opacity: 0; background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 3px; }
+.hist-item .fork-sess { opacity: 0; background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 3px; flex-shrink: 0; }
 .hist-item:hover .fork-sess { opacity: .5; }
 .hist-item .fork-sess:hover { opacity: 1; }
 /* ─── History bulk selection ─── */
@@ -7959,7 +7959,7 @@ async function loadHist() {
       d.setAttribute('tabindex', '0');
       if (!histSelectMode) d.setAttribute('draggable', 'true');
       const dt = new Date(s.updated_at).toLocaleDateString(localStorage.getItem('lang') || 'uk', { day: 'numeric', month: 'short' });
-      d.innerHTML = `<span class="drag-handle" onclick="event.stopPropagation()" title="${t('hist.drag')}">⠿</span><input type="checkbox" class="hist-chk" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();toggleSessCheck('${s.id}',this)"><span class="ht" data-tip="${escH(s.title)}">${escH(s.title)}</span><span class="hd">${dt}</span>${s.claude_session_id ? `<button class="fork-sess" onclick="event.stopPropagation();forkSess('${s.id}')" title="${t('sess.fork')}">↗</button>` : ''}<button class="del" onclick="event.stopPropagation();delSess('${s.id}')" title="✕">✕</button>`;
+      d.innerHTML = `<span class="drag-handle" onclick="event.stopPropagation()" title="${t('hist.drag')}">⠿</span><input type="checkbox" class="hist-chk" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();toggleSessCheck('${s.id}',this)"><span class="ht" data-tip="${escH(s.title)}">${escH(s.title)}</span><span class="hd">${dt}</span>${s.claude_session_id ? `<button class="fork-sess" onclick="event.stopPropagation();forkSess('${s.id}')" data-tip="${t('sess.fork')}">↗</button>` : ''}<button class="del" onclick="event.stopPropagation();delSess('${s.id}')" title="✕">✕</button>`;
       if (histSelectMode) {
         d.onclick = (e) => { const chk = d.querySelector('.hist-chk'); chk.checked = !chk.checked; toggleSessCheck(s.id, chk); };
       } else {
