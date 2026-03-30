@@ -125,8 +125,15 @@ class ClaudeCLI {
     this.claudeBin = options.claudeBin || CLAUDE_BIN;
   }
 
-  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController }) {
+  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, bare, forkSession, addDirs }) {
     const args = ['--print'];
+
+    // --bare: skip CLAUDE.md/settings/MCP auto-discovery for faster startup
+    // Use for service calls (classifier, title gen) where everything is explicit
+    if (bare) args.push('--bare');
+
+    // --fork-session: branch from an existing session (requires --resume)
+    if (forkSession && sessionId) args.push('--fork-session');
 
     // Session resumption: --resume <sessionId> (not --session-id + --resume separately)
     // Guard: only pass string UUIDs — reject objects or corrupted JSON values
@@ -161,6 +168,11 @@ class ClaudeCLI {
       mcpConfigPath = mcp.path;
       mcpConfigHash = mcp.hash;
       args.push('--mcp-config', mcpConfigPath);
+    }
+
+    // --add-dir: give Claude access to additional directories
+    if (addDirs?.length) {
+      for (const d of addDirs) args.push('--add-dir', d);
     }
 
     // CRITICAL: bypass permission prompts in non-interactive mode

@@ -370,6 +370,7 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN parent_task_id TEXT`); } catch {}   
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_host TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN sort_order REAL`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN fork_from_cid TEXT`); } catch {}
 // Performance indexes — safe to re-run (IF NOT EXISTS)
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
@@ -2061,6 +2062,7 @@ async function classifyTask(userMessage, currentSkills, config, workdir) {
       prompt,
       model: 'haiku',
       maxTurns: 1,
+      bare: true,          // skip CLAUDE.md/settings scan — service call, everything explicit
       tools: '',           // disable all built-in tools (--tools "")
       mcpServers: {},
       systemPrompt: 'You are a task classifier. Analyze the user task and:\n1. Select 1-4 most relevant specialist IDs from the list\n2. Generate a short chat title (3-7 words, in the SAME language as user\'s message)\n\nRules:\n- Match the INTENT and DOMAIN of the task to specialists. The user may write in any language — match meaning, not exact words.\n- When the task clearly relates to a domain (design, UI, UX, security, backend, frontend, etc.) — always select ALL matching specialists from the list, including plugin specialists (IDs starting with "plugin:").\n- For coding tasks — select the most relevant engineering specialist(s).\n- Prefer selecting a relevant specialist over skipping. When in doubt, include it.\n- Plugin skills (IDs like "plugin:name:skill") are equally valid — select them when their description matches the task.\n- Skip only: generic meta/system/setup/cancel skills, and pure general-knowledge questions with no coding/design/engineering aspect.\n- Use the keywords field [in brackets] (if present) to improve matching — they describe typical tasks for each specialist.\n- Return the EXACT skill IDs as shown in the list. Copy them precisely, including any "plugin:" prefix.\n\nReturn ONLY a JSON object: {"skills":["id1","id2"],"title":"Short title here"}\nNo explanation, no markdown.',
@@ -2181,7 +2183,7 @@ function isResettableClaudeSessionError(errorText = '') {
 
 // --- CLI Single Agent ---
 async function runCliSingle(p) {
-  const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, workdir, tabId } = p;
+  const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, workdir, tabId } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
   // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
@@ -2197,6 +2199,7 @@ async function runCliSingle(p) {
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
 
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
+  let pendingFork = !!forkSession; // only fork on first CLI call
 
   // Run a single CLI invocation and return { resultData, sid, errorText }
   const runOnce = (runPrompt, contentBlocks, resumeId) => new Promise((resolve) => {
@@ -2204,8 +2207,9 @@ async function runCliSingle(p) {
     let errorText = '';
     let _done = false;
     const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid, errorText }); } };
+    const useFork = pendingFork; pendingFork = false;
 
-    cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController })
+    cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork })
       .onText(t => {
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
@@ -3749,6 +3753,19 @@ app.post('/api/sessions', (req, res) => {
   const { title = i18nSession(), workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single' } = req.body || {};
   const id = genId();
   stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', sqlVal(mode), sqlVal(agentMode), sqlVal(model), sqlVal(workdir) || null);
+  res.json(stmts.getSession.get(id));
+});
+// Fork session — create a branch from an existing conversation
+app.post('/api/sessions/:id/fork', (req, res) => {
+  const source = stmts.getSession.get(req.params.id);
+  if (!source) return res.status(404).json({ error: 'session not found' });
+  if (!source.claude_session_id) return res.status(400).json({ error: 'session has no Claude session to fork from' });
+  const id = genId();
+  const title = `Fork: ${(source.title || '').substring(0, 80)}`;
+  stmts.createSession.run(id, title, source.active_mcp || '[]', source.active_skills || '[]',
+    source.mode || 'auto', source.agent_mode || 'single', source.model || 'sonnet', source.workdir || null);
+  // Set claude_session_id to source's so --resume picks it up, and fork_from_cid to trigger --fork-session
+  db.prepare(`UPDATE sessions SET claude_session_id=?, fork_from_cid=? WHERE id=?`).run(source.claude_session_id, source.claude_session_id, id);
   res.json(stmts.getSession.get(id));
 });
 app.get('/api/sessions/interrupted', (req, res) => { res.json(stmts.getInterrupted.all()); });
@@ -6094,6 +6111,9 @@ wss.on('connection', (ws) => {
       chatBuffers.set(localSessionId, ''); // reset buffer for this session
       activeTasks.set(localSessionId, { proxy, abortController, cleanupTimer: null, source: 'web', startedAt: Date.now() });
 
+      // Detect fork: if fork_from_cid is set, this is the first message in a forked session
+      const _forkCid = existSess?.fork_from_cid || null;
+
       const params = {
         prompt: enginePrompt,
         userContent,
@@ -6105,6 +6125,7 @@ wss.on('connection', (ws) => {
         sessionId: localSessionId,
         abortController,
         claudeSessionId: localClaudeId,
+        forkSession: !!_forkCid,
         mode,
         workdir: workdir || WORKDIR,
         tabId: effectiveTabId,
@@ -6136,6 +6157,8 @@ wss.on('connection', (ws) => {
         resultMeta = result.resultMeta;
       }
       if (newCid) { try { stmts.updateClaudeId.run(newCid, localSessionId); } catch (e) { log.error('updateClaudeId failed', { cid: String(newCid).substring(0,50), sessionId: localSessionId, err: e.message, stack: e.stack }); } }
+      // Clear fork flag after first successful CLI call — session now has its own claude_session_id
+      if (_forkCid) { try { db.prepare(`UPDATE sessions SET fork_from_cid=NULL WHERE id=?`).run(localSessionId); } catch {} }
 
       proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt, ...(resultMeta ? { resultMeta } : {}) }));
       proxy.send(JSON.stringify({ type:'files_changed' }));
