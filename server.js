@@ -129,11 +129,13 @@ const BUNDLED_SKILL_META = {
   'technical-writer':  { label:'✒️ Technical Writer',           category:'product'     },
   'investment-banking':{ label:'💼 Investment Banking Analyst', category:'finance'     },
   'researcher':        { label:'🔬 Deep Researcher',            category:'research'    },
+  'interview':         { label:'🎤 Interview First',            category:'workflow'    },
+  'plan-execute':      { label:'📐 Plan & Execute',             category:'workflow'    },
 };
 
 // ─── Server-side i18n for user-facing defaults ──────────────────────────────
 const SERVER_I18N = {
-  uk: { newSession: 'Нова сесія', newTask: 'Нова задача' },
+  uk: { newSession: 'Нова сесія', newTask: 'Нове завдання' },
   en: { newSession: 'New session', newTask: 'New task' },
   ru: { newSession: 'Новая сессия', newTask: 'Новая задача' },
 };
@@ -1128,7 +1130,9 @@ async function startTask(task) {
     } catch (e) {
       console.error(`[taskWorker] task ${task.id} onDone DB error:`, e);
     }
-    broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id, duration: Date.now() - _taskStartedAt });
+    const _taskModelInfo = lastTaskResult?.modelUsage ? Object.values(lastTaskResult.modelUsage)[0] : null;
+    const _taskMeta = lastTaskResult ? { cost: lastTaskResult.total_cost_usd, usage: lastTaskResult.usage, numTurns: lastTaskResult.num_turns, durationMs: lastTaskResult.duration_ms, contextWindow: _taskModelInfo?.contextWindow || 0 } : null;
+    broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id, duration: Date.now() - _taskStartedAt, ...(_taskMeta ? { resultMeta: _taskMeta } : {}) });
   } catch (err) {
     log.error(`[taskWorker] task ${task.id} exception`, { message: err.message, name: err.name, stack: err.stack });
     try {
@@ -2233,9 +2237,11 @@ async function runCliSingle(p) {
 
   // Main loop: run agent, auto-continue until it finishes successfully or budget exhausted
   let lastResult = null;
+  let totalCostUsd = 0;
   while (true) {
     const { resultData, errorText } = await runOnce(currentPrompt, currentContentBlocks, newCid);
     lastResult = resultData;
+    totalCostUsd += resultData?.total_cost_usd || 0;
 
     // ✅ Success — agent finished naturally
     if (resultData?.subtype === 'success') break;
@@ -2330,7 +2336,15 @@ async function runCliSingle(p) {
   }
   try { if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null); } catch (e) { log.error('[THINKING-SAVE-ERR] CLI text save failed', { sessionId, error: e.message }); }
   try { stmts.setPartialText.run(null, sessionId); } catch {}
-  return { cid: newCid, completed: lastResult?.subtype === 'success' };
+  const _modelInfo = lastResult?.modelUsage ? Object.values(lastResult.modelUsage)[0] : null;
+  const resultMeta = lastResult ? {
+    cost: totalCostUsd || lastResult.total_cost_usd,
+    usage: lastResult.usage,
+    numTurns: lastResult.num_turns,
+    durationMs: lastResult.duration_ms,
+    contextWindow: _modelInfo?.contextWindow || 0,
+  } : null;
+  return { cid: newCid, completed: lastResult?.subtype === 'success', resultMeta };
 }
 
 // --- SSH Remote Agent ---
@@ -2389,9 +2403,11 @@ async function runSshSingle(p) {
   });
 
   let lastResult = null;
+  let totalCostUsd = 0;
   while (true) {
     const { resultData, errorText } = await runOnce(currentPrompt, currentContentBlocks, newCid);
     lastResult = resultData;
+    totalCostUsd += resultData?.total_cost_usd || 0;
     if (resultData?.subtype === 'success') break;
     if (errorText && isResettableClaudeSessionError(errorText)) {
       const isThinkingSig = /Invalid signature in thinking block/i.test(errorText);
@@ -2444,7 +2460,15 @@ async function runSshSingle(p) {
   try { if (fullThinking) stmts.addMsg.run(sessionId, 'assistant', 'thinking', fullThinking, null, null, null, null); } catch (e) { log.error('[THINKING-SAVE-ERR] SSH thinking save failed', { sessionId, error: e.message }); }
   try { if (fullText) stmts.addMsg.run(sessionId, 'assistant', 'text', fullText, null, null, null, null); } catch (e) { log.error('[THINKING-SAVE-ERR] SSH text save failed', { sessionId, error: e.message }); }
   try { stmts.setPartialText.run(null, sessionId); } catch {}
-  return { cid: newCid, completed: lastResult?.subtype === 'success' };
+  const _modelInfo = lastResult?.modelUsage ? Object.values(lastResult.modelUsage)[0] : null;
+  const resultMeta = lastResult ? {
+    cost: totalCostUsd || lastResult.total_cost_usd,
+    usage: lastResult.usage,
+    numTurns: lastResult.num_turns,
+    durationMs: lastResult.duration_ms,
+    contextWindow: _modelInfo?.contextWindow || 0,
+  } : null;
+  return { cid: newCid, completed: lastResult?.subtype === 'success', resultMeta };
 }
 
 // --- Multi-Agent (CLI only) ---
@@ -6022,6 +6046,7 @@ wss.on('connection', (ws) => {
       };
 
       let newCid;
+      let resultMeta = null;
       // Check if the active project is a remote SSH project
       const _activeProj = loadProjects().find(p => p.workdir === (workdir || WORKDIR) && p.isRemote);
       if (_activeProj) {
@@ -6035,6 +6060,7 @@ wss.on('connection', (ws) => {
           port:         _activeProj.port || 22,
         });
         newCid = sshResult.cid;
+        resultMeta = sshResult.resultMeta;
         // Track remote host on session for UI indicators
         try { db.prepare(`UPDATE sessions SET remote_host=? WHERE id=?`).run(_activeProj.remoteHost, localSessionId); } catch {}
       } else if (agentMode==='multi') {
@@ -6042,10 +6068,11 @@ wss.on('connection', (ws) => {
       } else {
         const result = await runCliSingle(params);
         newCid = result.cid;
+        resultMeta = result.resultMeta;
       }
       if (newCid) { try { stmts.updateClaudeId.run(newCid, localSessionId); } catch (e) { log.error('updateClaudeId failed', { cid: String(newCid).substring(0,50), sessionId: localSessionId, err: e.message, stack: e.stack }); } }
 
-      proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt }));
+      proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt, ...(resultMeta ? { resultMeta } : {}) }));
       proxy.send(JSON.stringify({ type:'files_changed' }));
       // Notify Telegram (if task was NOT started from Telegram — those get notified via TelegramProxy)
       if (telegramBot && telegramBot.isRunning()) {

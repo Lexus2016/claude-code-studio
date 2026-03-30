@@ -1017,6 +1017,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .msg-retry-indicator { margin:2px 12px 6px; font-size:11px; color:var(--text-dim); opacity:.6; }
 .msg-interrupted { margin:4px 12px 6px; font-size:11px; color:var(--yellow,#e5c07b); opacity:.8; }
 .msg-done-badge { margin:6px 14px 2px; padding:5px 10px; font-size:11px; color:var(--green,#98c379); opacity:.75; border-top:1px solid rgba(139,148,158,.06); }
+.msg-stats { margin:2px 14px 4px; padding:3px 10px; font-size:10px; color:var(--muted,#8b949e); opacity:.7; font-family:var(--mono,'Fira Code',monospace); letter-spacing:.3px; }
 .execute-plan-btn { margin:8px 14px 6px; padding:8px 16px; font-size:13px; font-weight:500; color:#fff; background:var(--accent); border:none; border-radius:var(--r-sm); cursor:pointer; transition:all .15s; }
 .execute-plan-btn:hover { background:var(--accent-hover,#3b82f6); transform:translateY(-1px); }
 .execute-plan-btn:active { transform:translateY(0); }
@@ -2236,7 +2237,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <div class="sec-body" id="skillsBody">
         <div class="sec-filter-row" id="skillsFilterRow"><input type="text" id="skillsFilterInp" placeholder="Фільтр..." aria-label="Фільтр навичок" oninput="applySecFilter('skills',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('skills');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('skills')">×</button></div>
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="skills.hint">Навички — файли інструкцій, що додаються до системного промпту.</div>
-        <div id="autoSkillsHint" class="auto-notif" style="display:none" data-i18n="skills.auto_hint">⚡ Навички обираються автоматично по тексту задачі</div>
+        <div id="autoSkillsHint" class="auto-notif" style="display:none" data-i18n="skills.auto_hint">⚡ Навички обираються автоматично по тексту завдання</div>
         <div class="sec-list"><div id="skillsList"></div></div>
         <input type="file" id="skillUpload" accept=".md,.txt" style="display:none" onchange="uploadSkill(this)">
       </div>
@@ -2267,7 +2268,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         </div>
       </div>
       <div class="sec-body" id="agentsBody">
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="agents.hint">Зовнішні агенти для делегування задач.</div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="agents.hint">Зовнішні агенти для делегування завдань.</div>
         <div class="sec-list"><div id="agentsList"></div></div>
       </div>
     </div>
@@ -2501,7 +2502,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
           Kanban
         </a>
-        <a class="nav-sw-btn" href="/schedule" data-tip="Розклад задач" data-i18n-tip="nav.schedule.tip">
+        <a class="nav-sw-btn" href="/schedule" data-tip="Розклад завдань" data-i18n-tip="nav.schedule.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           Schedule
         </a>
@@ -3527,7 +3528,7 @@ const TRANSLATIONS = {
     'mcp.add.id_req':'ID обов\'язковий','mcp.add.url_req':'URL обов\'язковий',
     'mcp.add.cmd_req':'Команда обов\'язкова','mcp.add.ok':'✓ MCP сервер додано',
         'skill.active':'● У системному промпті','skill.inactive':'○ Не активний','skill.del.title':'Видалити skill','skill.name_prompt':'Назва скілу:',
-    'skills.auto_hint':'⚡ Навички обираються автоматично по тексту задачі',
+    'skills.auto_hint':'⚡ Навички обираються автоматично по тексту завдання',
     'auto.title.on':'⚡ Auto-Skills: увімкнено — клік для вимкнення',
     'auto.title.off':'⚡ Auto-Skills: вимкнено — клік для увімкнення',
     'status.connected':'Підключено','status.generating':'Генерація…','status.thinking':'Обдумування...','status.processing':'Обробка...','status.classifying':'⚡ Визначення спеціалістів...','status.reconnecting':'Перепідключення…','status.stopped':'Зупинено','status.error':'Помилка',
@@ -3558,7 +3559,7 @@ const TRANSLATIONS = {
     'files.empty':'Порожньо','files.view':'Переглянути',
     'proj.empty':'Немає проектів. Додайте директорію для роботи з Claude Code.',
     'proj.search':'Пошук проекту...','search.empty':'Не знайдено',
-    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban дошка','nav.schedule.tip':'Розклад задач','nav.aria':'Навігація між розділами','tip.lang':'Мова інтерфейсу',
+    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban дошка','nav.schedule.tip':'Розклад завдань','nav.aria':'Навігація між розділами','tip.lang':'Мова інтерфейсу',
     'mcp.import.btn':'Імпорт','mcp.import.title':'Імпортувати MCP з JSON файлу (Claude Desktop формат)',
     'mcp.export.btn':'Експорт','mcp.export.title':'Експортувати всі MCP у JSON файл','mcp.replace.title':'Замінить існуючий',
     'mcp.type.stdio':'stdio (команда)','mcp.type.sse':'SSE (URL потік)',
@@ -3589,12 +3590,12 @@ const TRANSLATIONS = {
     'cmd.modal.name.label':'Слеш-команда','cmd.modal.name.hint':'Використайте короткий тригер, наприклад <code>/check</code> або <code>/review</code>.','cmd.modal.text.label':'Промпт',
     'cmd.err.empty':'Введіть назву та текст команди','toast.cmd_added':'✓ Команду додано','toast.cmd_updated':'✓ Команду оновлено',
     'cmds.popup.hdr':'Команди',
-    'sec.agents':'Агенти','agents.hint':'Зовнішні агенти для делегування задач.',
+    'sec.agents':'Агенти','agents.hint':'Зовнішні агенти для делегування завдань.',
     'agent.add.new':'Додати агента','agent.edit.title':'Редагувати','agent.del.title':'Видалити','agent.del.confirm':'Видалити агента',
     'agent.modal.add.title':'＋ Додати агента','agent.modal.edit.title':'✏️ Редагувати агента','agent.modal.cancel':'Скасувати',
     'agent.modal.id.label':'ID','agent.id.ph':'codex, gemini, aider...','agent.modal.id.hint':'Латинські букви, цифри, - та _',
     'agent.modal.label.label':'Назва','agent.label.ph':'OpenAI Codex',
-    'agent.modal.template.label':'Шаблон команди','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — підставиться текст задачі',
+    'agent.modal.template.label':'Шаблон команди','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — підставиться текст завдання',
     'agent.add.btn':'Додати','agent.save.btn':'Зберегти',
     'agent.test.title':'Перевірити наявність','agent.test.fail':'Команду не знайдено в системі',
     'agent.err.empty':'Заповніть всі поля','agent.err.id':'ID: тільки латинські букви, цифри, - та _',
@@ -4899,6 +4900,32 @@ function handleWsMsg(d) {
           badge.textContent = total > 0 ? `✅ ${t('msf.done')} — ${total} ${t('ta.calls')}` : `✅ ${t('msf.done')}`;
           const footer = streaming.el.querySelector('.msg-status-footer');
           if (footer) streaming.el.insertBefore(badge, footer); else streaming.el.appendChild(badge);
+        }
+        // ─── Result stats (cost / tokens / duration) ────────────────────────────
+        if (d.resultMeta && streaming.el) {
+          const rm = d.resultMeta;
+          const parts = [];
+          if (rm.cost != null) parts.push(`$${rm.cost < 0.01 ? rm.cost.toFixed(4) : rm.cost.toFixed(3)}`);
+          if (rm.usage) {
+            const inT = rm.usage.input_tokens; const outT = rm.usage.output_tokens;
+            const fmt = n => n >= 1000 ? (n/1000).toFixed(1) + 'K' : String(n);
+            if (inT || outT) parts.push(`${fmt(inT||0)} in / ${fmt(outT||0)} out`);
+          }
+          if (rm.numTurns) parts.push(`${rm.numTurns} turn${rm.numTurns > 1 ? 's' : ''}`);
+          if (rm.contextWindow && rm.usage) {
+            const ctxUsed = (rm.usage.input_tokens || 0) + (rm.usage.cache_creation_input_tokens || 0) + (rm.usage.cache_read_input_tokens || 0);
+            const ctxPct = Math.round(ctxUsed / rm.contextWindow * 100);
+            if (ctxPct > 0) parts.push(`${ctxPct}% ctx`);
+          }
+          const dur = rm.durationMs || d.duration;
+          if (dur) parts.push(`${(dur/1000).toFixed(1)}s`);
+          if (parts.length) {
+            const statsEl = document.createElement('div');
+            statsEl.className = 'msg-stats';
+            statsEl.textContent = parts.join(' · ');
+            const footer = streaming.el.querySelector('.msg-status-footer');
+            if (footer) streaming.el.insertBefore(statsEl, footer); else streaming.el.appendChild(statsEl);
+          }
         }
         markDone(streaming.el);
 
@@ -9181,6 +9208,7 @@ const SKILL_CATS = {
   product:     { en: '📋 Product', uk: '📋 Продукт', ru: '📋 Продукт' },
   finance:     { en: '💼 Finance', uk: '💼 Фінанси', ru: '💼 Финансы' },
   research:    { en: '🔬 Research', uk: '🔬 Дослідження', ru: '🔬 Исследования' },
+  workflow:    { en: '📐 Workflow', uk: '📐 Робочий процес', ru: '📐 Рабочий процесс' },
   system:      { en: '⚙️ System', uk: '⚙️ Система', ru: '⚙️ Система' },
   plugin:      { en: '🧩 Plugin Skills', uk: '🧩 Skills плагінів', ru: '🧩 Skills плагинов' },
 };

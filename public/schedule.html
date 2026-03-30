@@ -308,7 +308,7 @@ button{font-family:inherit;cursor:pointer}
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
         Kanban
       </a>
-      <a class="nav-sw-btn active" href="/schedule" data-tip="Розклад задач">
+      <a class="nav-sw-btn active" href="/schedule" data-tip="Розклад завдань">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Schedule
       </a>
@@ -390,7 +390,7 @@ button{font-family:inherit;cursor:pointer}
       <div class="modal-hd-icon">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       </div>
-      <span class="modal-hd-title" id="modalTitle">Нова задача з розкладом</span>
+      <span class="modal-hd-title" id="modalTitle">Нове завдання з розкладом</span>
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
     <div class="modal-body" id="modalBody"></div>
@@ -425,29 +425,29 @@ const TR = {
     'status.in_progress': 'Виконується', 'status.done': 'Готово', 'status.cancelled': 'Скасовано',
     'card.running': 'Виконується', 'card.run_now': 'Run now',
     'card.run_now.title': 'Запустити зараз', 'card.edit.title': 'Редагувати',
-    'empty.title': 'Жодних запланованих задач',
-    'empty.sub': 'Заплануйте першу задачу — Claude запустить її автоматично у вказаний час.',
-    'empty.cta': 'Запланувати задачу',
-    'modal.add': 'Нова задача з розкладом', 'modal.edit': 'Редагувати задачу',
+    'empty.title': 'Жодних запланованих завдань',
+    'empty.sub': 'Заплануйте перше завдання — Claude запустить його автоматично у вказаний час.',
+    'empty.cta': 'Запланувати завдання',
+    'modal.add': 'Нове завдання з розкладом', 'modal.edit': 'Редагувати завдання',
     'form.title': 'Назва *', 'form.title.ph': 'Що має зробити Claude?',
-    'form.date': 'Дата та час запуску', 'form.date.hint': 'Залиште порожнім для задачі без дати',
+    'form.date': 'Дата та час запуску', 'form.date.hint': 'Залиште порожнім для завдання без дати',
     'form.recur': 'Повторення', 'form.recur.hint': 'Claude буде запускатись автоматично',
     'form.recur.once': '— одноразово —',
     'form.recur.end': 'Кінець повторень',
     'form.recur.end.hint': "Необов'язково — якщо не вказано, повторюється безкінечно",
-    'form.desc': 'Опис', 'form.desc.ph': 'Детальний опис задачі для Claude…',
+    'form.desc': 'Опис', 'form.desc.ph': 'Детальний опис завдання для Claude…',
     'form.session': "Пов'язана сесія", 'form.session.hint': 'Claude відновить цю сесію',
     'form.no_session': '— без сесії —',
     'form.model': 'Модель',
     'form.model.sonnet': 'Sonnet (за замовч.)', 'form.model.haiku': 'Haiku (швидший)', 'form.model.opus': 'Opus (найпотужніший)',
     'btn.cancel': 'Скасувати', 'btn.create': 'Створити', 'btn.save': 'Зберегти', 'btn.delete': 'Видалити',
-    'toast.queued': 'Задачу передано у чергу', 'toast.scheduled': 'Задачу заплановано',
-    'toast.saved': 'Збережено', 'toast.deleted': 'Задачу видалено',
-    'toast.err.title': 'Введіть назву задачі',
+    'toast.queued': 'Завдання передано у чергу', 'toast.scheduled': 'Завдання заплановано',
+    'toast.saved': 'Збережено', 'toast.deleted': 'Завдання видалено',
+    'toast.err.title': 'Введіть назву завдання',
     'toast.no_project': 'Спочатку оберіть проєкт',
     'toast.err.load': 'Помилка завантаження: ', 'toast.err': 'Помилка: ',
-    'confirm.delete': 'Видалити задачу? Цю дію не можна скасувати.',
-    'tasks.count': '{n} задач', 'tasks.count.1': '{n} задача', 'tasks.count.few': '{n} задачи',
+    'confirm.delete': 'Видалити завдання? Цю дію не можна скасувати.',
+    'tasks.count': '{n} завдань', 'tasks.count.1': '{n} завдання', 'tasks.count.few': '{n} завдання',
     'form.exec': 'Параметри виконання',
     'form.exec.mode': 'Режим', 'form.exec.agent': 'Агент',
     'form.exec.model': 'Модель', 'form.exec.turns': 'Кроки',
