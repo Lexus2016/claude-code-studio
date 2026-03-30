@@ -2178,6 +2178,17 @@ function decryptPassword(stored) {
 const MAX_AUTO_CONTINUES = 3;
 const MAX_RATE_LIMIT_WAITS = 3;
 const MAX_RATE_LIMIT_WAIT_MS = 30 * 60 * 1000; // 30 min — skip auto-wait if reset is further out
+const MIN_RATE_LIMIT_WAIT_MS = 10 * 1000; // 10s floor to avoid rapid-fire retries
+
+// Sleep that resolves on timeout or when signal fires (whichever first)
+function _sleepAbortable(ms, signal) {
+  return new Promise(resolve => {
+    if (signal?.aborted) { resolve(); return; }
+    const onAbort = () => { clearTimeout(timer); resolve(); };
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
 
 function isResettableClaudeSessionError(errorText = '') {
   return /Invalid signature in thinking block|invalid session|session .* not found|could not find .*session|no conversation found|resume .*failed|failed to resume|conversation .* not found/i.test(errorText || '');
@@ -2284,7 +2295,7 @@ async function runCliSingle(p) {
       if (isRateLimitRejected) {
         const resetsAt = rateLimitInfo?.resetsAt;
         const rateLimitType = rateLimitInfo?.rateLimitType || 'unknown';
-        const waitMs = resetsAt ? Math.max(0, (resetsAt * 1000) - Date.now() + 5000) : 60000; // +5s buffer, fallback 60s
+        const waitMs = Math.max(MIN_RATE_LIMIT_WAIT_MS, resetsAt ? (resetsAt * 1000) - Date.now() + 5000 : 60000 * (rateLimitWaitCount + 1)); // +5s buffer, fallback 60s
 
         // Don't auto-wait if retries exhausted, too far away, or 7-day limit
         if (rateLimitWaitCount >= MAX_RATE_LIMIT_WAITS || waitMs > MAX_RATE_LIMIT_WAIT_MS || rateLimitType === 'seven_day') {
@@ -2305,14 +2316,6 @@ async function runCliSingle(p) {
         { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
         try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
         try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'waiting', secondsLeft: waitSec, resetsAt, rateLimitType, attempt: rateLimitWaitCount, maxAttempts: MAX_RATE_LIMIT_WAITS, ...(tabId ? { tabId } : {}) })); } catch {}
-
-        // Sleep with abort support — resolves on timeout or when user stops
-        const _sleepAbortable = (ms, signal) => new Promise(resolve => {
-          if (signal?.aborted) { resolve(); return; }
-          const onAbort = () => { clearTimeout(timer); resolve(); };
-          const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
-          signal?.addEventListener('abort', onAbort, { once: true });
-        });
 
         // Wait loop with periodic countdown updates (every 30s)
         const waitEnd = Date.now() + waitMs;
@@ -2522,7 +2525,7 @@ async function runSshSingle(p) {
       if (isRateLimitRejected) {
         const resetsAt = rateLimitInfo?.resetsAt;
         const rateLimitType = rateLimitInfo?.rateLimitType || 'unknown';
-        const waitMs = resetsAt ? Math.max(0, (resetsAt * 1000) - Date.now() + 5000) : 60000;
+        const waitMs = Math.max(MIN_RATE_LIMIT_WAIT_MS, resetsAt ? (resetsAt * 1000) - Date.now() + 5000 : 60000 * (rateLimitWaitCount + 1));
         if (rateLimitWaitCount >= MAX_RATE_LIMIT_WAITS || waitMs > MAX_RATE_LIMIT_WAIT_MS || rateLimitType === 'seven_day') {
           const reason = rateLimitWaitCount >= MAX_RATE_LIMIT_WAITS ? 'retries exhausted' : rateLimitType === 'seven_day' ? '7-day limit' : 'reset too far';
           const notice = `\n\n⚠️ **Rate limit** — ${reason}. Please retry manually later.\n\n`;
@@ -2539,12 +2542,6 @@ async function runSshSingle(p) {
         { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
         try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
         try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'waiting', secondsLeft: waitSec, resetsAt, rateLimitType, attempt: rateLimitWaitCount, maxAttempts: MAX_RATE_LIMIT_WAITS, ...(tabId ? { tabId } : {}) })); } catch {}
-        const _sleepAbortable = (ms, signal) => new Promise(resolve => {
-          if (signal?.aborted) { resolve(); return; }
-          const onAbort = () => { clearTimeout(timer); resolve(); };
-          const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
-          signal?.addEventListener('abort', onAbort, { once: true });
-        });
         const waitEnd = Date.now() + waitMs;
         while (Date.now() < waitEnd) {
           if (abortController?.signal?.aborted) break;

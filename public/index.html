@@ -7085,6 +7085,8 @@ function newTab() {
   curMode = 'auto';
   syncBtn('agent', 'single');
   syncBtn('mode', 'auto');
+  // New tab is never generating — reset interrupt bar and stop button
+  isGen = false; generatingTabId = null; setSendStop(false);
   msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();
   renderMcp(); renderSkills();
   userScrolled = false; renderTabs(); saveUIState(); updateSessBar();
