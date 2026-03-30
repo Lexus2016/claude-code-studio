@@ -4032,6 +4032,7 @@ const TRANSLATIONS = {
     'rl.toast.80':'⚠️ {type} лимит: использовано 80%','rl.toast.90':'🔶 {type} лимит: осталось 10%!','rl.toast.95':'🚫 {type} лимит почти исчерпан!',
     'rl.modal.title':'Лимит исчерпан','rl.modal.desc':'Ваш {type} лимит Claude Max исчерпан. Новые запросы заблокированы до сброса.','rl.modal.reset':'Сброс через:','rl.modal.ok':'Понятно',
     'rl.notify.title':'Claude Max — лимит','rl.notify.body':'{type} лимит: использовано {pct}%',
+    'rl.wait.status':'Лимит — ожидание сброса','rl.wait.resuming':'Лимит сброшен — продолжение…',
     'queue.badge':'{n} в очереди',
     'ver.current':'Текущая версия','ver.update':'Доступно обновление {tag}!\nЗапустите: npx github:Lexus2016/claude-code-studio','ver.latest':' — последняя ✓','ver.checking':'Проверка версии...',
     'status.connecting':'Подключение...',
@@ -5165,6 +5166,20 @@ function handleWsMsg(d) {
 
     case 'rate_limit':
       updateRateLimit(d.info);
+      break;
+
+    case 'rate_limit_wait':
+      if (d.status === 'waiting' || d.status === 'countdown') {
+        // Close auto-opened modal — server handles retry automatically
+        if (_rlModalShown) closeRlModal();
+        const sec = d.secondsLeft || 0;
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        const timeStr = m > 0 ? `${m}${t('rl.time.m')} ${String(s).padStart(2,'0')}${t('rl.time.s')}` : `${s}${t('rl.time.s')}`;
+        setStatus(`${t('rl.wait.status')} ${timeStr}`, 'warn');
+      } else if (d.status === 'resuming') {
+        setStatus(t('rl.wait.resuming'), 'ok');
+      }
       break;
 
     case 'ask_user':
