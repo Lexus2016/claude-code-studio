@@ -125,12 +125,12 @@ class ClaudeCLI {
     this.claudeBin = options.claudeBin || CLAUDE_BIN;
   }
 
-  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, bare, forkSession, addDirs }) {
+  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs }) {
     const args = ['--print'];
 
-    // --bare: skip CLAUDE.md/settings/MCP auto-discovery for faster startup
-    // Use for service calls (classifier, title gen) where everything is explicit
-    if (bare) args.push('--bare');
+    // --setting-sources: control which setting sources to load (user, project, local)
+    // Use settingSources='' to skip all, or 'user' to skip project CLAUDE.md for service calls
+    if (settingSources != null) args.push('--setting-sources', settingSources);
 
     // --fork-session: branch from an existing session (requires --resume)
     if (forkSession && sessionId) args.push('--fork-session');

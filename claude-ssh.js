@@ -100,7 +100,7 @@ class ClaudeSSH {
     });
   }
 
-  send({ prompt, contentBlocks, sessionId, model, maxTurns, systemPrompt, allowedTools, abortController }) {
+  send({ prompt, contentBlocks, sessionId, model, maxTurns, systemPrompt, allowedTools, abortController, forkSession }) {
     const attachmentSpecs = [];
     const textParts = [];
     if (Array.isArray(contentBlocks)) {
@@ -186,6 +186,7 @@ class ClaudeSSH {
           const finalPrompt = prefixParts.length ? `${prefixParts.join('\n\n')}\n\n${prompt}` : prompt;
 
           const args = ['--print'];
+          if (forkSession && sessionId) args.push('--fork-session');
           if (sessionId && typeof sessionId === 'string' && /^[a-f0-9-]+$/i.test(sessionId)) args.push('--resume', sessionId);
           if (model) args.push('--model', MODEL_MAP[model] || model);
           if (maxTurns) args.push('--max-turns', String(maxTurns));

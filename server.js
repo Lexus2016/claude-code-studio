@@ -2062,7 +2062,7 @@ async function classifyTask(userMessage, currentSkills, config, workdir) {
       prompt,
       model: 'haiku',
       maxTurns: 1,
-      bare: true,          // skip CLAUDE.md/settings scan — service call, everything explicit
+      settingSources: 'user', // skip project CLAUDE.md — service call, everything explicit
       tools: '',           // disable all built-in tools (--tools "")
       mcpServers: {},
       systemPrompt: 'You are a task classifier. Analyze the user task and:\n1. Select 1-4 most relevant specialist IDs from the list\n2. Generate a short chat title (3-7 words, in the SAME language as user\'s message)\n\nRules:\n- Match the INTENT and DOMAIN of the task to specialists. The user may write in any language — match meaning, not exact words.\n- When the task clearly relates to a domain (design, UI, UX, security, backend, frontend, etc.) — always select ALL matching specialists from the list, including plugin specialists (IDs starting with "plugin:").\n- For coding tasks — select the most relevant engineering specialist(s).\n- Prefer selecting a relevant specialist over skipping. When in doubt, include it.\n- Plugin skills (IDs like "plugin:name:skill") are equally valid — select them when their description matches the task.\n- Skip only: generic meta/system/setup/cancel skills, and pure general-knowledge questions with no coding/design/engineering aspect.\n- Use the keywords field [in brackets] (if present) to improve matching — they describe typical tasks for each specialist.\n- Return the EXACT skill IDs as shown in the list. Copy them precisely, including any "plugin:" prefix.\n\nReturn ONLY a JSON object: {"skills":["id1","id2"],"title":"Short title here"}\nNo explanation, no markdown.',
@@ -2361,7 +2361,7 @@ async function runCliSingle(p) {
 
 // --- SSH Remote Agent ---
 async function runSshSingle(p) {
-  const { prompt, userContent, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
+  const { prompt, userContent, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
   // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
@@ -2376,14 +2376,16 @@ async function runSshSingle(p) {
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
 
   const ssh = new ClaudeSSH({ host: remoteHost, workdir: remoteWorkdir, sshKeyPath, password, port });
+  let pendingFork = !!forkSession; // only fork on first SSH call
 
   const runOnce = (runPrompt, contentBlocks, resumeId) => new Promise((resolve) => {
     let resultData = null;
     let errorText = '';
     let _done = false;
     const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid, errorText }); } };
+    const useFork = pendingFork; pendingFork = false;
 
-    ssh.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, allowedTools: tools, abortController })
+    ssh.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, allowedTools: tools, abortController, forkSession: useFork })
       .onText(t => {
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
