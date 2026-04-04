@@ -5728,9 +5728,11 @@ function _rlClear() {
 function setSendStop(generating) {
   const stopBtn = $i('stopBtn');
   const pill = $i('interruptPill');
+  const curProj = curProjectId ? projects.find(p => p.id === curProjectId) : null;
+  const isRemoteSession = curProj?.isRemote || false;
   if (generating) {
     stopBtn.classList.remove('hidden');
-    if (pill) {
+    if (pill && !isRemoteSession) {
       pill.classList.add('visible');
       renderInterruptPill();
     }
@@ -7763,7 +7765,8 @@ async function send() {
   const activeTab = openTabs.find(t => t.id === activeTabId);
   const tabIsGenerating = activeTab?.generating || false;
 
-  if (tabIsGenerating && interruptSendMode === 'interrupt') {
+  const _curProj = curProjectId ? projects.find(p => p.id === curProjectId) : null;
+  if (tabIsGenerating && interruptSendMode === 'interrupt' && !_curProj?.isRemote) {
     // ─── Mid-task interrupt: send clarification to running Claude process ───
     const badge = document.createElement('div');
     badge.className = 'msg-interrupt';
