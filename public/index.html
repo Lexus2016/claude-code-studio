@@ -5728,13 +5728,12 @@ function _rlClear() {
 function setSendStop(generating) {
   const stopBtn = $i('stopBtn');
   const pill = $i('interruptPill');
-  const curProj = curProjectId ? projects.find(p => p.id === curProjectId) : null;
-  const isRemoteSession = curProj?.isRemote || false;
+  const isRemote = curProjectId && projects.find(p => p.id === curProjectId)?.isRemote;
   if (generating) {
     stopBtn.classList.remove('hidden');
-    if (pill && !isRemoteSession) {
-      pill.classList.add('visible');
-      renderInterruptPill();
+    if (pill) {
+      if (isRemote) { pill.classList.remove('visible'); }
+      else { pill.classList.add('visible'); renderInterruptPill(); }
     }
   } else {
     stopBtn.classList.add('hidden');
