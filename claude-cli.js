@@ -76,8 +76,8 @@ const MODEL_MAP = {
   // 'opus':   'claude-opus-4-6',
   // 'sonnet': 'claude-sonnet-4-6',
   // 'haiku':  'claude-haiku-4-5',
-  'opus':   'opus[1m]',
-  'sonnet': 'sonnet[1m]',
+  'opus':   'opus',
+  'sonnet': 'sonnet',
   'haiku':  'haiku',
 };
 

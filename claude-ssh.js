@@ -8,7 +8,7 @@ const fs  = require('fs');
 const MAX_LINE_BUFFER    = 10 * 1024 * 1024; // 10 MB
 const MAX_SUBPROCESS_MS  = parseInt(process.env.CLAUDE_TIMEOUT_MS || '1800000', 10);
 
-const MODEL_MAP = { opus: 'opus[1m]', sonnet: 'sonnet[1m]', haiku: 'haiku' };
+const MODEL_MAP = { opus: 'opus', sonnet: 'sonnet', haiku: 'haiku' };
 
 // Shell-escape a string using POSIX single-quotes
 function shellEscape(str) {
