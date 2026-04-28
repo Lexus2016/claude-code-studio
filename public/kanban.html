@@ -468,7 +468,7 @@ const TR = {
     'toast.sess_created':'✓ Сесію створено автоматично','toast.err':'Помилка: ',
     'toast.no_project':'Спочатку оберіть проект',
     'modal.new_sess_cfg':'Налаштування нової сесії',
-    'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки','tb.engine':'Двигун',
+    'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки','tb.engine':'Двигун','tb.effort':'Зусилля',
     'card.running':'Виконується','msg.you':'Ви','msg.tool':'Tool','refresh.now':'щойно',
     'card.retry':'↩ повтор',
     'time.min':'хв','time.hr':'г','time.day':'д',
@@ -504,7 +504,7 @@ const TR = {
     'toast.sess_created':'✓ Session created automatically','toast.err':'Error: ',
     'toast.no_project':'Select a project first',
     'modal.new_sess_cfg':'New session settings',
-    'tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns','tb.engine':'Engine',
+    'tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns','tb.engine':'Engine','tb.effort':'Effort',
     'card.running':'Running','msg.you':'You','msg.tool':'Tool','refresh.now':'just now',
     'card.retry':'↩ retry',
     'time.min':'m','time.hr':'h','time.day':'d',
@@ -540,7 +540,7 @@ const TR = {
     'toast.no_project':'Сначала выберите проект',
     'modal.new_sess_cfg':'Настройки новой сессии',
     'modal.attach':'Вложения','modal.attach_hint':'Нажмите, перетащите или вставьте (Ctrl+V)','modal.attach_max':'Максимум 10 файлов на задачу',
-    'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги','tb.engine':'Движок',
+    'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги','tb.engine':'Движок','tb.effort':'Усилие',
     'card.running':'Выполняется','msg.you':'Вы','msg.tool':'Tool','refresh.now':'только что',
     'card.retry':'↩ повтор',
     'time.min':'м','time.hr':'ч','time.day':'д',
@@ -1264,6 +1264,18 @@ function buildChainForm(chain){
           <span class="sc-lbl">${t('tb.turns')}</span>
           <input type="number" class="sc-turns" id="fChainMaxTurns" value="${chain.max_turns||kbSettings.max_turns||30}" min="1" max="100">
         </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg">
+          <span class="sc-lbl">${t('tb.effort')}</span>
+          <select class="sc-turns" id="fChainEffort" style="width:auto">
+            <option value=""${!chain.effort?' selected':''}>Auto</option>
+            <option value="low"${chain.effort==='low'?' selected':''}>Low</option>
+            <option value="medium"${chain.effort==='medium'?' selected':''}>Medium</option>
+            <option value="high"${chain.effort==='high'?' selected':''}>High</option>
+            <option value="xhigh"${chain.effort==='xhigh'?' selected':''}>XHigh</option>
+            <option value="max"${chain.effort==='max'?' selected':''}>Max</option>
+          </select>
+        </div>
       </div>
     </div>
     ${tasksHtml}`;
@@ -1309,6 +1321,7 @@ async function saveChain(){
     });
   }
   const maxTurns=parseInt($i('fChainMaxTurns')?.value||30);
+  const chainEffort=($i('fChainEffort')?.value||'').trim()||null;
   try{
     if(modalMode==='add_chain'){
       const chainRes=await apiFetch('/api/task-chains',{
@@ -1317,6 +1330,7 @@ async function saveChain(){
           title,workdir:curWorkdir||null,
           model:cfg.model||'sonnet',mode:cfg.mode||'auto',
           agent_mode:cfg.agent||'single',max_turns:maxTurns,
+          effort:chainEffort,
         })
       });
       const chain=await chainRes.json();
@@ -1341,6 +1355,7 @@ async function saveChain(){
         body:JSON.stringify({
           title,model:cfg.model||'sonnet',mode:cfg.mode||'auto',
           agent_mode:cfg.agent||'single',max_turns:maxTurns,
+          effort:chainEffort,
         })
       });
       // Save edited tasks & create new ones
@@ -1522,6 +1537,18 @@ function buildForm(tk={}){
           <span class="sc-lbl">${t('tb.turns')}</span>
           <input type="number" class="sc-turns" id="fMaxTurns" value="${tk.max_turns||kbSettings.max_turns||30}" min="1" max="100" oninput="kbSettings.max_turns=+this.value||30;try{localStorage.setItem('kanban_sess_cfg',JSON.stringify(kbSettings));}catch{}">
         </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg">
+          <span class="sc-lbl">${t('tb.effort')}</span>
+          <select class="sc-turns" id="fEffort" style="width:auto">
+            <option value=""${!tk.effort?' selected':''}>Auto</option>
+            <option value="low"${tk.effort==='low'?' selected':''}>Low</option>
+            <option value="medium"${tk.effort==='medium'?' selected':''}>Medium</option>
+            <option value="high"${tk.effort==='high'?' selected':''}>High</option>
+            <option value="xhigh"${tk.effort==='xhigh'?' selected':''}>XHigh</option>
+            <option value="max"${tk.effort==='max'?' selected':''}>Max</option>
+          </select>
+        </div>
       </div>
     </div>
     <div><label class="lbl">${t('modal.desc')}</label>
@@ -1609,7 +1636,7 @@ function onFSessionChange(){
   if(cfg)cfg.classList.toggle('visible',!hasSess);
 }
 function getSessCfg(){
-  const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',maxTurns:30};
+  const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',maxTurns:30,effort:''};
   const cfg=$i('newSessCfg');
   if(!cfg)return defaults;
   const result={};
@@ -1618,6 +1645,7 @@ function getSessCfg(){
     if(on)result[grp.dataset.group]=on.dataset.v;
   });
   result.maxTurns=parseInt($i('fMaxTurns')?.value||30);
+  result.effort=($i('fEffort')?.value||'').trim();
   return{...defaults,...result};
 }
 
@@ -1665,6 +1693,7 @@ async function saveTask(){
     mode:cfg.mode,
     agent_mode:cfg.agent,
     max_turns:cfg.maxTurns,
+    effort:cfg.effort||null,
     attachments:pendingAttachments.length?JSON.stringify(pendingAttachments):null,
   };
   try{

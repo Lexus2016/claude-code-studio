@@ -450,7 +450,7 @@ const TR = {
     'tasks.count': '{n} завдань', 'tasks.count.1': '{n} завдання', 'tasks.count.few': '{n} завдання',
     'form.exec': 'Параметри виконання',
     'form.exec.mode': 'Режим', 'form.exec.agent': 'Агент',
-    'form.exec.model': 'Модель', 'form.exec.turns': 'Кроки',
+    'form.exec.model': 'Модель', 'form.exec.turns': 'Кроки', 'form.exec.effort': 'Зусилля',
     'group.badge': 'група', 'group.progress': '{done}/{total}',
     'group.run_now': 'Запустити групу',
     'locale': 'uk',
@@ -500,7 +500,7 @@ const TR = {
     'tasks.count': '{n} tasks', 'tasks.count.1': '{n} task', 'tasks.count.few': '{n} tasks',
     'form.exec': 'Execution options',
     'form.exec.mode': 'Mode', 'form.exec.agent': 'Agent',
-    'form.exec.model': 'Model', 'form.exec.turns': 'Steps',
+    'form.exec.model': 'Model', 'form.exec.turns': 'Steps', 'form.exec.effort': 'Effort',
     'group.badge': 'group', 'group.progress': '{done}/{total}',
     'group.run_now': 'Run group',
     'locale': 'en-GB',
@@ -550,7 +550,7 @@ const TR = {
     'tasks.count': '{n} задач', 'tasks.count.1': '{n} задача', 'tasks.count.few': '{n} задачи',
     'form.exec': 'Параметры выполнения',
     'form.exec.mode': 'Режим', 'form.exec.agent': 'Агент',
-    'form.exec.model': 'Модель', 'form.exec.turns': 'Шаги',
+    'form.exec.model': 'Модель', 'form.exec.turns': 'Шаги', 'form.exec.effort': 'Усилие',
     'group.badge': 'группа', 'group.progress': '{done}/{total}',
     'group.run_now': 'Запустить группу',
     'locale': 'ru-RU',
@@ -1164,6 +1164,18 @@ function buildForm(tk={}) {
           <span class="sc-lbl">${t('form.exec.turns')}</span>
           <input type="number" class="sc-turns" id="fMaxTurns" value="${tk.max_turns||30}" min="1" max="100">
         </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg">
+          <span class="sc-lbl">${t('form.exec.effort')}</span>
+          <select class="sc-turns" id="fEffort" style="width:auto">
+            <option value=""${!tk.effort?' selected':''}>Auto</option>
+            <option value="low"${tk.effort==='low'?' selected':''}>Low</option>
+            <option value="medium"${tk.effort==='medium'?' selected':''}>Medium</option>
+            <option value="high"${tk.effort==='high'?' selected':''}>High</option>
+            <option value="xhigh"${tk.effort==='xhigh'?' selected':''}>XHigh</option>
+            <option value="max"${tk.effort==='max'?' selected':''}>Max</option>
+          </select>
+        </div>
       </div>
     </div>`;
 }
@@ -1241,6 +1253,7 @@ async function saveTask() {
     mode: getScVal('mode', 'auto'),
     agent_mode: getScVal('agent_mode', 'single'),
     max_turns: parseInt($i('fMaxTurns')?.value) || 30,
+    effort: ($i('fEffort')?.value || '').trim() || null,
     scheduled_at,
     recurrence,
     recurrence_end_at,

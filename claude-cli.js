@@ -125,12 +125,20 @@ class ClaudeCLI {
     this.claudeBin = options.claudeBin || CLAUDE_BIN;
   }
 
-  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs, extraEnv, extraSettings }) {
+  send({ prompt, contentBlocks, sessionId, model, maxTurns, mcpServers, systemPrompt, allowedTools, tools, abortController, settingSources, forkSession, addDirs, extraEnv, extraSettings, name, effort, jsonSchema }) {
     const args = ['--print'];
 
     // --setting-sources: control which setting sources to load (user, project, local)
     // Use settingSources='' to skip all, or 'user' to skip project CLAUDE.md for service calls
     if (settingSources != null) args.push('--setting-sources', settingSources);
+
+    // --name: display name visible in /resume picker, prompt box, and terminal title.
+    // Pass the human-readable session title so power users mixing the Studio UI
+    // with `claude --resume` in a terminal see meaningful labels instead of UUIDs.
+    if (typeof name === 'string') {
+      const cleanName = name.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 100);
+      if (cleanName) args.push('--name', cleanName);
+    }
 
     // --fork-session: branch from an existing session (requires --resume)
     if (forkSession && sessionId) args.push('--fork-session');
@@ -145,6 +153,24 @@ class ClaudeCLI {
 
     if (model) args.push('--model', MODEL_MAP[model] || model);
     if (maxTurns) args.push('--max-turns', String(maxTurns));
+
+    // --effort: thinking-effort dial for the current session.
+    // Allowed: low | medium | high | xhigh | max. Reject unknown values silently
+    // so callers can pass user-supplied input without crashing the subprocess.
+    if (typeof effort === 'string') {
+      const e = effort.trim().toLowerCase();
+      if (['low', 'medium', 'high', 'xhigh', 'max'].includes(e)) {
+        args.push('--effort', e);
+      }
+    }
+
+    // --json-schema: structured-output validation. Pass either a JSON string
+    // or an object (will be JSON.stringify'd). Used by orchestrator to guarantee
+    // the plan response parses without regex extraction.
+    if (jsonSchema) {
+      const schemaStr = typeof jsonSchema === 'string' ? jsonSchema : JSON.stringify(jsonSchema);
+      args.push('--json-schema', schemaStr);
+    }
     // Don't pass --system-prompt when resuming a session — the system prompt is
     // already baked into the session history. Changing it invalidates cryptographic
     // signatures on thinking blocks, causing API 400 "Invalid signature in thinking block".

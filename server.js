@@ -367,6 +367,7 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN recurrence_end_at INTEGER`); } catch
 try { db.exec(`ALTER TABLE tasks ADD COLUMN task_output TEXT`); } catch {}        // Structured result from report_result
 try { db.exec(`ALTER TABLE tasks ADD COLUMN context TEXT`); } catch {}            // Curated context passed by parent task
 try { db.exec(`ALTER TABLE tasks ADD COLUMN parent_task_id TEXT`); } catch {}     // Task that created this task via MCP
+try { db.exec(`ALTER TABLE tasks ADD COLUMN effort TEXT`); } catch {}             // claude --effort dial: low|medium|high|xhigh|max (NULL = CLI default)
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_host TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN sort_order REAL`); } catch {}
@@ -425,6 +426,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_chain_session ON task_chains(session_id);
   CREATE INDEX IF NOT EXISTS idx_chain_workdir ON task_chains(workdir);
 `);
+try { db.exec(`ALTER TABLE task_chains ADD COLUMN effort TEXT`); } catch {}      // claude --effort dial; chain-level default for new tasks
 
 // Sanitize a value for better-sqlite3 bind parameters.
 // better-sqlite3 EXPANDS arrays: each element counts as a separate bind value.
@@ -518,8 +520,8 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
-  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,updated_at=datetime('now') WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at,effort) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,effort=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
@@ -563,8 +565,8 @@ const stmts = {
   // Task chains (groups)
   getChains: db.prepare(`SELECT * FROM task_chains WHERE (@w IS NULL OR workdir = @w) ORDER BY sort_order ASC, created_at ASC`),
   getChain: db.prepare(`SELECT * FROM task_chains WHERE id=?`),
-  createChain: db.prepare(`INSERT INTO task_chains (id,title,workdir,model,mode,agent_mode,max_turns,session_id,scheduled_at,recurrence,recurrence_end_at,source_session_id,sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`),
-  updateChain: db.prepare(`UPDATE task_chains SET title=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
+  createChain: db.prepare(`INSERT INTO task_chains (id,title,workdir,model,mode,agent_mode,max_turns,session_id,scheduled_at,recurrence,recurrence_end_at,source_session_id,sort_order,effort) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+  updateChain: db.prepare(`UPDATE task_chains SET title=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,sort_order=?,effort=?,updated_at=datetime('now') WHERE id=?`),
   deleteChain: db.prepare(`DELETE FROM task_chains WHERE id=?`),
   deleteChainTasks: db.prepare(`DELETE FROM tasks WHERE chain_id=?`),
   getChainTasksList: db.prepare(`SELECT * FROM tasks WHERE chain_id=? ORDER BY sort_order ASC, created_at ASC`),
@@ -1045,7 +1047,7 @@ async function startTask(task) {
     while (true) {
       lastTaskResult = null;
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
-      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort });
+      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort, name: task.title, effort: task.effort || null });
       // Save subprocess PID so startup recovery can kill orphans on restart
       if (stream.process?.pid) {
         db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
@@ -2307,7 +2309,7 @@ function isResettableClaudeSessionError(errorText = '') {
 
 // --- CLI Single Agent ---
 async function runCliSingle(p) {
-  const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, workdir, tabId } = p;
+  const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, workdir, tabId, name, effort } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
   // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
@@ -2345,7 +2347,7 @@ async function runCliSingle(p) {
       CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
     };
 
-    cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings })
+    cli.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, mcpServers, allowedTools: tools, abortController, forkSession: useFork, extraEnv: interruptEnv, extraSettings: interruptHookSettings, name, effort })
       .onText(t => {
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
@@ -2559,7 +2561,7 @@ async function runCliSingle(p) {
 
 // --- SSH Remote Agent ---
 async function runSshSingle(p) {
-  const { prompt, userContent, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId } = p;
+  const { prompt, userContent, systemPrompt, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, remoteHost, remoteWorkdir, sshKeyPath, password, port, tabId, name, effort } = p;
   const mp = mode==='planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n' : mode==='task' ? 'MODE: EXECUTION.\n\n' : '';
   const sp = (mp + (systemPrompt||'')).trim() || undefined;
   // MCP tools must use the mcp__<serverName>__<toolName> format in allowedTools
@@ -2585,7 +2587,7 @@ async function runSshSingle(p) {
     const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid, errorText, rateLimitInfo }); } };
     const useFork = pendingFork; pendingFork = false;
 
-    ssh.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, allowedTools: tools, abortController, forkSession: useFork })
+    ssh.send({ prompt: runPrompt, contentBlocks, sessionId: resumeId, model, maxTurns: effectiveMaxTurns, systemPrompt: sp, allowedTools: tools, abortController, forkSession: useFork, name, effort })
       .onText(t => {
         fullText += t;
         { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
@@ -2738,7 +2740,7 @@ async function runSshSingle(p) {
 
 // --- Multi-Agent (CLI only) ---
 async function runMultiAgent(p) {
-  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId } = p;
+  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort } = p;
   ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'🧠 Planning...', statusKey:'agent.planning', ...(tabId ? { tabId } : {}) }));
 
   const effectiveWorkdir = workdir || WORKDIR;
@@ -2748,11 +2750,45 @@ async function runMultiAgent(p) {
   const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${prompt}`;
   let currentSessionId = claudeSessionId || null;
 
+  // Schema-validated structured output guarantees the plan parses without
+  // regex extraction. Mirrors the shape of planPrompt above.
+  const planSchema = {
+    type: 'object',
+    properties: {
+      plan: { type: 'string' },
+      agents: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            role: { type: 'string' },
+            task: { type: 'string' },
+            depends_on: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['id', 'role', 'task'],
+        },
+      },
+    },
+    required: ['plan', 'agents'],
+  };
+
   await new Promise(res => {
     let _settled = false;
     const _res = () => { if (!_settled) { _settled = true; res(); } };
-    cli.send({ prompt:planPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], abortController })
+    // Plan call must be deterministic: with --json-schema, model emits the
+    // result via a synthetic "StructuredOutput" tool. We strip everything else
+    // so it can't burn the single turn on an unrelated tool/skill call:
+    //   tools=''         → disables all built-in tools (Read, Bash, …)
+    //   settingSources='' → skips user/project/local CLAUDE.md and skills
+    // StructuredOutput is injected by --json-schema and remains available.
+    cli.send({ prompt:planPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], tools:'', settingSources:'', abortController, effort, jsonSchema: planSchema })
       .onText(t => { planText+=t; })
+      // With --json-schema the model emits the result via the synthetic
+      // "StructuredOutput" tool_use rather than plain text. Capture its input
+      // as planText so the JSON.parse below works in either streaming path.
+      .onTool((name, input) => { if (name === 'StructuredOutput' && input) planText = typeof input === 'string' ? input : JSON.stringify(input); })
       .onSessionId(sid => { currentSessionId = sid; })
       .onError(() => _res())
       .onDone(() => _res());
@@ -2799,7 +2835,7 @@ async function runMultiAgent(p) {
         let _settled = false;
         const _res = () => { if (!_settled) { _settled = true; res(); } };
         // Agent resumes session to maintain context
-        cli.send({ prompt:agentPrompt, sessionId: currentSessionId, model, maxTurns:Math.min(maxTurns||30, 50), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController })
+        cli.send({ prompt:agentPrompt, sessionId: currentSessionId, model, maxTurns:Math.min(maxTurns||30, 50), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController, effort })
           .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
           .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,500),n,agent.id,null,null); } catch {} })
           .onSessionId(sid => { currentSessionId = sid; })
@@ -2827,7 +2863,7 @@ Provide a clear summary of what was accomplished. Be concise.`;
   await new Promise(res => {
     let _settled = false;
     const _res = () => { if (!_settled) { _settled = true; res(); } };
-    cli.send({ prompt:summaryPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], abortController })
+    cli.send({ prompt:summaryPrompt, sessionId: currentSessionId, model, maxTurns:1, allowedTools:[], abortController, effort })
       .onText(t => { summaryText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:'summarizer', ...(tabId ? { tabId } : {}) })); } catch {} })
       .onSessionId(sid => { currentSessionId = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
       .onError(() => _res())
@@ -3080,7 +3116,8 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           callerTask?.source_session_id || null,
           toUnixTs(scheduled_at),
           null, // recurrence
-          null  // recurrence_end_at
+          null, // recurrence_end_at
+          callerTask?.effort || null  // effort: inherit from caller task by default
         );
 
         // Set new columns that aren't in createTask prepared statement
@@ -3109,7 +3146,8 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
       // ── create_chain ───────────────────────────────────────────────────
       case 'create_chain': {
         const { title = 'Task Chain', tasks: taskDefs, model: chainModel,
-                scheduled_at: chainScheduledAt, recurrence, recurrence_end_at } = req.body;
+                scheduled_at: chainScheduledAt, recurrence, recurrence_end_at,
+                effort: chainEffort } = req.body;
         if (!Array.isArray(taskDefs) || !taskDefs.length) {
           return res.status(400).json({ error: 'Missing or empty tasks array' });
         }
@@ -3141,10 +3179,12 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
 
         stmts.createSession.run(chainSessionId, String(title).substring(0, 200), '[]', '[]',
           'auto', 'single', effectiveModel, workdir);
+        const effectiveEffort = chainEffort || callerTask?.effort || null;
         stmts.createChain.run(chainId, String(title).substring(0, 200), workdir,
           effectiveModel, 'auto', 'single', 30,
           chainSessionId, toUnixTs(chainScheduledAt), recurrence || null,
-          toUnixTs(recurrence_end_at), callerTask?.source_session_id || null, 0);
+          toUnixTs(recurrence_end_at), callerTask?.source_session_id || null, 0,
+          effectiveEffort);
 
         // Create tasks with auto-linked depends_on
         const taskIds = [];
@@ -3184,7 +3224,8 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
             chainId,
             callerTask?.source_session_id || null,
             toUnixTs(chainScheduledAt),
-            null, null
+            null, null,
+            td.effort || effectiveEffort  // effort: per-task override, else chain default
           );
 
           stmts.setTaskContext.run(contextJson, callerTaskId || null, taskId);
@@ -3685,9 +3726,9 @@ app.post('/api/tasks', (req, res) => {
   const { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
           model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
           depends_on=null, chain_id=null, source_session_id=null,
-          scheduled_at=null, recurrence=null, recurrence_end_at=null } = req.body;
+          scheduled_at=null, recurrence=null, recurrence_end_at=null, effort=null } = req.body;
   const id = genId();
-  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null);
+  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -3701,7 +3742,8 @@ app.put('/api/tasks/:id', (req, res) => {
           model=task.model||'sonnet', mode=task.mode||'auto', agent_mode=task.agent_mode||'single',
           max_turns=task.max_turns||30, attachments=task.attachments,
           depends_on=task.depends_on, chain_id=task.chain_id, source_session_id=task.source_session_id,
-          scheduled_at=task.scheduled_at, recurrence=task.recurrence, recurrence_end_at=task.recurrence_end_at } = req.body;
+          scheduled_at=task.scheduled_at, recurrence=task.recurrence, recurrence_end_at=task.recurrence_end_at,
+          effort=task.effort } = req.body;
   // Stop running process when task is moved away from in_progress
   if (task.status === 'in_progress' && status !== 'in_progress') {
     const ctrl = runningTaskAborts.get(req.params.id);
@@ -3721,6 +3763,7 @@ app.put('/api/tasks/:id', (req, res) => {
     sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments) || null,
     sqlVal(depends_on) || null, sqlVal(chain_id) || null, sqlVal(source_session_id) || null,
     sqlVal(scheduled_at) || null, sqlVal(recurrence) || null, sqlVal(recurrence_end_at) || null,
+    sqlVal(effort) || null,
     req.params.id
   );
   const updated = stmts.getTask.get(req.params.id);
@@ -3774,7 +3817,7 @@ app.get('/api/task-chains/:id', (req, res) => {
 app.post('/api/task-chains', (req, res) => {
   const { title = 'Task Group', workdir = null, model = 'sonnet', mode = 'auto',
           agent_mode = 'single', max_turns = 30, scheduled_at = null,
-          recurrence = null, recurrence_end_at = null } = req.body;
+          recurrence = null, recurrence_end_at = null, effort = null } = req.body;
   const id = genId();
   // Create shared session for the chain
   const sessionId = genId();
@@ -3783,7 +3826,7 @@ app.post('/api/task-chains', (req, res) => {
   stmts.createChain.run(id, String(title).substring(0, 200), sqlVal(workdir) || null,
     sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns),
     sessionId, sqlVal(scheduled_at) || null, sqlVal(recurrence) || null,
-    sqlVal(recurrence_end_at) || null, null, 0);
+    sqlVal(recurrence_end_at) || null, null, 0, sqlVal(effort) || null);
   res.json(chainWithSummary(stmts.getChain.get(id)));
 });
 app.put('/api/task-chains/:id', (req, res) => {
@@ -3793,11 +3836,11 @@ app.put('/api/task-chains/:id', (req, res) => {
           mode = chain.mode, agent_mode = chain.agent_mode, max_turns = chain.max_turns,
           session_id = chain.session_id, scheduled_at = chain.scheduled_at,
           recurrence = chain.recurrence, recurrence_end_at = chain.recurrence_end_at,
-          sort_order = chain.sort_order } = req.body;
+          sort_order = chain.sort_order, effort = chain.effort } = req.body;
   stmts.updateChain.run(String(title).substring(0, 200), sqlVal(workdir) || null,
     sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns),
     sqlVal(session_id) || null, sqlVal(scheduled_at) || null, sqlVal(recurrence) || null,
-    sqlVal(recurrence_end_at) || null, sqlVal(sort_order), req.params.id);
+    sqlVal(recurrence_end_at) || null, sqlVal(sort_order), sqlVal(effort) || null, req.params.id);
   // If scheduled_at changed, propagate to child tasks
   if (scheduled_at !== chain.scheduled_at) {
     const tasks = stmts.getChainTasksList.all(req.params.id);
@@ -3842,7 +3885,7 @@ app.post('/api/task-chains/:id/tasks', (req, res) => {
     chain.session_id || null, chain.workdir || null, chain.model || 'sonnet',
     chain.mode || 'auto', chain.agent_mode || 'single', chain.max_turns || 30,
     null, dependsOn, req.params.id, chain.source_session_id || null,
-    chain.scheduled_at || null, null, null);
+    chain.scheduled_at || null, null, null, chain.effort || null);
   if (taskStatus === 'todo') setImmediate(processQueue);
   res.json(stmts.getTask.get(taskId));
 });
@@ -3919,6 +3962,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
     model = 'sonnet',
     source_session_id,
     claude_session_id,
+    effort = null,
   } = req.body;
 
   if (!planTasks?.length) return res.status(400).json({ error: 'No tasks provided' });
@@ -3964,7 +4008,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
   // Register chain in task_chains table (gives it a title, session, and metadata)
   stmts.createChain.run(chainId, (plan_description || 'Task chain').substring(0, 200),
     sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', 30,
-    chainSessionId, null, null, null, source_session_id || null, 0);
+    chainSessionId, null, null, null, source_session_id || null, 0, sqlVal(effort) || null);
 
   // Chain gets its OWN Claude session — first task starts fresh,
   // subsequent tasks --resume from the chain's session (NOT the source chat's).
@@ -3995,7 +4039,8 @@ app.post('/api/tasks/dispatch', (req, res) => {
         realDeps.length ? JSON.stringify(realDeps) : null,
         chainId,
         source_session_id || null,
-        null, null, null  // scheduled_at, recurrence, recurrence_end_at
+        null, null, null, // scheduled_at, recurrence, recurrence_end_at
+        sqlVal(t.effort || effort) || null  // per-task override else dispatch-level effort
       );
       createdTasks.push(stmts.getTask.get(taskId));
     }
@@ -6233,7 +6278,7 @@ wss.on('connection', (ws) => {
         }
       }
 
-      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false, autoSkill=false } = msg;
+      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=null } = msg;
 
       let replyQuote = '';
       if (reply_to && reply_to.content) {
@@ -6404,6 +6449,7 @@ wss.on('connection', (ws) => {
       // Detect fork: if fork_from_cid is set, this is the first message in a forked session
       const _forkCid = existSess?.fork_from_cid || null;
 
+      const _sessName = (existSess?.title && !DEFAULT_SESSION_TITLES.has(existSess.title)) ? existSess.title : null;
       const params = {
         prompt: enginePrompt,
         userContent,
@@ -6419,6 +6465,8 @@ wss.on('connection', (ws) => {
         mode,
         workdir: workdir || WORKDIR,
         tabId: effectiveTabId,
+        name: _sessName,
+        effort,
       };
 
       let newCid;
@@ -6969,7 +7017,7 @@ wss.on('connection', (ws) => {
     if (msg.type === 'dispatch_plan') {
       (async () => {
         try {
-          const { text, plan, agents, sessionId, workdir, model, tabId } = msg;
+          const { text, plan, agents, sessionId, workdir, model, tabId, effort = null } = msg;
           let finalPlan, finalAgents;
 
           // Save user's dispatch text to DB (so it survives page refresh)
@@ -6989,13 +7037,41 @@ wss.on('connection', (ws) => {
             const cli = new ClaudeCLI({ cwd: effectiveWorkdir });
             const planPrompt = `You are a lead architect. Break this into 2-5 subtasks. Respond ONLY in JSON:\n{"plan":"...","agents":[{"id":"agent-1","role":"...","task":"...","depends_on":[]}]}\n\nTASK: ${text}`;
 
+            // Mirror runMultiAgent's plan schema so the Kanban dispatcher gets the
+            // same structured-output guarantee — no regex extraction, no fallback.
+            const planSchema = {
+              type: 'object',
+              properties: {
+                plan: { type: 'string' },
+                agents: {
+                  type: 'array',
+                  minItems: 1,
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      role: { type: 'string' },
+                      task: { type: 'string' },
+                      depends_on: { type: 'array', items: { type: 'string' } },
+                    },
+                    required: ['id', 'role', 'task'],
+                  },
+                },
+              },
+              required: ['plan', 'agents'],
+            };
+
             const session = sessionId ? stmts.getSession.get(sessionId) : null;
             let planText = '';
 
             await new Promise(resolve => {
               let done = false;
-              cli.send({ prompt: planPrompt, sessionId: sanitizeSessionId(session?.claude_session_id), model: model || 'sonnet', maxTurns: 1, allowedTools: [] })
+              // Same hardening as runMultiAgent's plan call: tools='' disables built-in tools,
+              // settingSources='' skips CLAUDE.md + skills, --json-schema makes the model emit
+              // via the synthetic StructuredOutput tool — captured in .onTool below.
+              cli.send({ prompt: planPrompt, sessionId: sanitizeSessionId(session?.claude_session_id), model: model || 'sonnet', maxTurns: 1, allowedTools: [], tools: '', settingSources: '', jsonSchema: planSchema })
                 .onText(t => { planText += t; })
+                .onTool((name, input) => { if (name === 'StructuredOutput' && input) planText = typeof input === 'string' ? input : JSON.stringify(input); })
                 .onError(() => { if (!done) { done = true; resolve(); } })
                 .onDone(() => { if (!done) { done = true; resolve(); } });
             });
@@ -7058,7 +7134,7 @@ wss.on('connection', (ws) => {
           // Register chain in task_chains table
           stmts.createChain.run(chainId, (finalPlan || 'Task chain').substring(0, 200),
             sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', 30,
-            chainSessionId, null, null, null, sessionId || null, 0);
+            chainSessionId, null, null, null, sessionId || null, 0, sqlVal(effort) || null);
           // Chain gets its OWN Claude session — first task starts fresh,
           // subsequent tasks --resume from the chain's session (NOT the source chat's).
           // Sharing claude_session_id with source chat causes context mixing chaos.
@@ -7081,7 +7157,8 @@ wss.on('connection', (ws) => {
                 sqlVal(model) || 'sonnet', 'auto', 'single', 30, null,
                 realDeps.length ? JSON.stringify(realDeps) : null,
                 chainId, sessionId || null,
-                null, null, null  // scheduled_at, recurrence, recurrence_end_at
+                null, null, null,  // scheduled_at, recurrence, recurrence_end_at
+                sqlVal(a.effort || effort) || null
               );
               created.push(stmts.getTask.get(taskId));
             }

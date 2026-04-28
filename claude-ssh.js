@@ -100,7 +100,7 @@ class ClaudeSSH {
     });
   }
 
-  send({ prompt, contentBlocks, sessionId, model, maxTurns, systemPrompt, allowedTools, abortController, forkSession }) {
+  send({ prompt, contentBlocks, sessionId, model, maxTurns, systemPrompt, allowedTools, abortController, forkSession, name, effort }) {
     const attachmentSpecs = [];
     const textParts = [];
     if (Array.isArray(contentBlocks)) {
@@ -188,8 +188,18 @@ class ClaudeSSH {
           const args = ['--print'];
           if (forkSession && sessionId) args.push('--fork-session');
           if (sessionId && typeof sessionId === 'string' && /^[a-f0-9-]+$/i.test(sessionId)) args.push('--resume', sessionId);
+          if (typeof name === 'string') {
+            const cleanName = name.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 100);
+            if (cleanName) args.push('--name', cleanName);
+          }
           if (model) args.push('--model', MODEL_MAP[model] || model);
           if (maxTurns) args.push('--max-turns', String(maxTurns));
+          if (typeof effort === 'string') {
+            const e = effort.trim().toLowerCase();
+            if (['low', 'medium', 'high', 'xhigh', 'max'].includes(e)) {
+              args.push('--effort', e);
+            }
+          }
           if (systemPrompt && !sessionId) args.push('--system-prompt', systemPrompt);
           if (allowedTools?.length) args.push('--allowedTools', ...allowedTools);
           args.push('--dangerously-skip-permissions');

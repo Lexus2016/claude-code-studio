@@ -2601,6 +2601,18 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
+      <span class="label">Effort</span>
+      <select class="tb-input" id="effortSel" onchange="setEffort(this.value)" style="width:78px" title="Thinking effort dial (claude --effort): Auto = CLI default, higher levels = deeper reasoning">
+        <option value="">Auto</option>
+        <option value="low">Low</option>
+        <option value="medium">Med</option>
+        <option value="high">High</option>
+        <option value="xhigh">X-High</option>
+        <option value="max">Max</option>
+      </select>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-group">
       <span class="label" data-i18n="tb.turns">Кроки</span>
       <input type="number" class="tb-input" id="maxTurns" value="50" min="1" max="200">
     </div>
@@ -3358,6 +3370,14 @@ let activeMcp = new Set(), activeSkills = new Set();
 let autoSkillsMode = true; // ON by default; user can disable
 let cfgFiles = {}, activeCfgTab = null;
 let curMode = 'auto', curAgent = 'single', curModel = 'sonnet';
+// --effort dial: '' (Auto, no flag) | 'low' | 'medium' | 'high' | 'xhigh' | 'max'.
+// Persisted globally in localStorage so the user's preferred reasoning depth survives reloads.
+let curEffort = (function(){ try { return localStorage.getItem('effort') || ''; } catch { return ''; } })();
+function setEffort(v) {
+  const valid = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
+  curEffort = valid.includes(v) ? v : '';
+  try { localStorage.setItem('effort', curEffort); } catch {}
+}
 let curWorkdir = null; // current working directory for the session
 let projects = [], curProjectId = null; // projects list + active project
 
@@ -7832,6 +7852,7 @@ async function send() {
       mcpServers: [...activeMcp],
       mode: curMode, agentMode: curAgent,
       model: curModel,
+      effort: curEffort || undefined,
       maxTurns: parseInt($i('maxTurns').value) || 30,
       workdir: curWorkdir || undefined,
     }));
@@ -11811,6 +11832,17 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initMobUI);
 } else {
   setTimeout(initMobUI, 0);
+}
+
+// Restore --effort dropdown selection from the value loaded on script init
+function _restoreEffortUI() {
+  const el = document.getElementById('effortSel');
+  if (el) el.value = curEffort || '';
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _restoreEffortUI);
+} else {
+  setTimeout(_restoreEffortUI, 0);
 }
 
 // ─── Responsive: collapse sidebars when crossing mobile breakpoint ────────

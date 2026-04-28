@@ -208,8 +208,8 @@ Forum Mode is now powered by a **dedicated standalone module** (`telegram-bot-fo
 | Survives restart | No | No | Yes (SQLite) |
 | Best for | Focused work | Complex tasks to watch | Background batch work |
 
-**Multi** — orchestrator decomposes into 2–5 subtasks with real-time streaming. Send plan to Kanban with 📋 button.
-**Dispatch** — subtasks go to Kanban as persistent cards with dependency graphs, auto-retry, and cascade cancellation.
+**Multi** — orchestrator decomposes into 2–5 subtasks with real-time streaming. The planning step uses `--json-schema` structured output — the plan JSON is guaranteed to parse without regex extraction, even with complex prompts. Send plan to Kanban with 📋 button.
+**Dispatch** — subtasks go to Kanban as persistent cards with dependency graphs, auto-retry, and cascade cancellation. Effort level set in chat flows to all dispatched tasks automatically.
 
 ### ⇗ Cross-Agent Delegation
 
@@ -262,6 +262,8 @@ Add your own, edit them, delete them. As many as you want.
 Sonnet and Opus run with a **1 million token context window** — entire large codebases, long conversation histories, and massive file sets fit in a single session without hitting limits.
 
 Turn budget: 1–200 (default 50). Auto-continues up to 3x — so 50 turns effectively means up to 200 steps.
+
+**Thinking effort dial** — a new `Effort` dropdown in the chat toolbar (and task/chain forms) lets you tune how hard Claude thinks before responding: `Auto` (CLI default), `Low`, `Med`, `High`, `X-High`, or `Max`. Your selection persists across reloads via localStorage. The effort level flows automatically to every subtask and chain — set it once, runs everywhere.
 
 ### 🌐 Remote Access & SSH
 
@@ -318,13 +320,13 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 
 | Category | Features |
 |----------|----------|
-| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait |
-| **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs |
-| **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted |
+| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker |
+| **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, effort dial per task/chain |
+| **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, effort dial per task, watchdog auto-recovery |
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
 | **Telegram** | Bot control, push notifications, ask_user forwarding (+ file answers), session bridge, Forum Mode, inline stop, deep-link navigation, rich action buttons (localized EN/UA/RU), Write button, file attachments, interrupt queue while busy |
 | **Delegation** | Cross-agent handoff/sync (Codex, Gemini, opencode), CONTEXT.md + DIALOG.md protocol, fs.watch + polling, persistent across restarts, Windows support, sidebar agents manager, auto-seeded defaults, test button |
-| **Agents** | Single, Multi (2–5 in-chat), Dispatch (Kanban), auto-retry, cascade cancellation |
+| **Agents** | Single, Multi (2–5 in-chat, schema-validated planning), Dispatch (Kanban), auto-retry, cascade cancellation, effort propagation |
 | **Modes** | Auto, Plan (read-only + Execute Plan), Task, auto mode switching |
 | **Skills** | 28 built-in, auto-classification, plugin discovery, custom `.md` files |
 | **Commands** | 8 built-in slash commands, custom commands |
