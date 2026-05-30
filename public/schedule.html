@@ -74,6 +74,8 @@ button{font-family:inherit;cursor:pointer}
 .proj-dd-item-name{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:8px}
 .proj-dd-item.active .proj-dd-item-name{color:var(--accent2)}
 .proj-dd-item.active .proj-dd-item-name::before{content:'●';color:var(--accent);font-size:8px;flex-shrink:0}
+.proj-dd-section-label{padding:8px 16px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.proj-dd-divider{height:1px;background:var(--border);margin:6px 0}
 
 /* ─── Stats bar ─── */
 .stats-bar{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--s1);border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0}
@@ -410,7 +412,7 @@ const TR = {
     'nav.chat': 'Chat', 'nav.kanban': 'Kanban', 'nav.schedule': 'Schedule',
     'nav.aria': 'Навігація між розділами',
     'hdr.add': 'Задача', 'hdr.refresh': 'Оновити', 'hdr.connected': 'Підключено', 'hdr.disconnected': 'Відключено',
-    'proj.all': 'Всі проекти', 'proj.search': 'Пошук…', 'proj.noname': 'Без проекту',
+    'proj.all': 'Всі проекти', 'proj.recent': 'Нещодавні', 'proj.search': 'Пошук…', 'proj.noname': 'Без проекту',
     'stat.overdue': 'прострочено', 'stat.today': 'сьогодні',
     'stat.upcoming': 'заплановано', 'stat.recurring': 'повторюваних',
     'recur.hourly': 'Щогодини', 'recur.daily': 'Щодня',
@@ -460,7 +462,7 @@ const TR = {
     'nav.chat': 'Chat', 'nav.kanban': 'Kanban', 'nav.schedule': 'Schedule',
     'nav.aria': 'Navigation',
     'hdr.add': 'Task', 'hdr.refresh': 'Refresh', 'hdr.connected': 'Connected', 'hdr.disconnected': 'Disconnected',
-    'proj.all': 'All projects', 'proj.search': 'Search…', 'proj.noname': 'No name',
+    'proj.all': 'All projects', 'proj.recent': 'Recent', 'proj.search': 'Search…', 'proj.noname': 'No name',
     'stat.overdue': 'overdue', 'stat.today': 'today',
     'stat.upcoming': 'upcoming', 'stat.recurring': 'recurring',
     'recur.hourly': 'Hourly', 'recur.daily': 'Daily',
@@ -510,7 +512,7 @@ const TR = {
     'nav.chat': 'Чат', 'nav.kanban': 'Kanban', 'nav.schedule': 'Расписание',
     'nav.aria': 'Навигация',
     'hdr.add': 'Задача', 'hdr.refresh': 'Обновить', 'hdr.connected': 'Подключено', 'hdr.disconnected': 'Отключено',
-    'proj.all': 'Все проекты', 'proj.search': 'Поиск…', 'proj.noname': 'Без проекта',
+    'proj.all': 'Все проекты', 'proj.recent': 'Недавние', 'proj.search': 'Поиск…', 'proj.noname': 'Без проекта',
     'stat.overdue': 'просрочено', 'stat.today': 'сегодня',
     'stat.upcoming': 'запланировано', 'stat.recurring': 'повторяющихся',
     'recur.hourly': 'Каждый час', 'recur.daily': 'Ежедневно',
@@ -566,6 +568,7 @@ function recurLabel(r) { return t('recur.' + r) || r; }
 // ─── State ────────────────────────────────────────────────────────────────
 let tasks = [], sessions = [], chains = [], curWorkdir = null, editingId = null;
 let projects = [];
+let config = {};
 const RECUR_NEXT = { hourly: 3600, daily: 86400, weekly: 604800, monthly: 2592000 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -689,6 +692,7 @@ async function loadProjects() {
   try {
     const r = await apiFetch('/api/projects');
     projects = await r.json();
+    try { const rc = await apiFetch('/api/config'); config = await rc.json(); } catch {}
     // Sync with the same localStorage key that Chat and Kanban use
     const state = JSON.parse(localStorage.getItem('cc_ui_state') || '{}');
     if (state.curWorkdir) {
@@ -702,26 +706,78 @@ async function loadProjects() {
 
 function filterProj(q) { renderProjList(q); }
 
-function renderProjList(q) {
-  const lc = q.toLowerCase();
-  const list = $i('projDdList');
-  list.innerHTML = `<div class="proj-dd-item${!curWorkdir?' active':''}" onclick="selectProj(null, true)">
-    <div class="proj-dd-item-name">${t('proj.all')}</div></div>`;
-  for (const p of projects) {
-    const wd = p.workdir || p.id || '';
-    const name = p.name || wd.split('/').pop() || wd || t('proj.noname');
-    if (q && !name.toLowerCase().includes(lc) && !wd.toLowerCase().includes(lc)) continue;
-    const isActive = curWorkdir === wd || curWorkdir === p.id;
-    const safeWd = wd.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    list.innerHTML += `<div class="proj-dd-item${isActive?' active':''}" onclick="selectProj('${safeWd}', false)">
+// Recently-opened tracking (per-browser, shared with Chat and Kanban; keyed by project id).
+const PROJ_RECENTS_KEY = 'cc_proj_recents';
+function _loadProjRecents() {
+  try { return JSON.parse(localStorage.getItem(PROJ_RECENTS_KEY)) || {}; } catch { return {}; }
+}
+function recordProjectOpen(id) {
+  if (!id) return;
+  try {
+    const map = _loadProjRecents();
+    map[id] = Date.now();
+    localStorage.setItem(PROJ_RECENTS_KEY, JSON.stringify(map));
+  } catch {}
+}
+function getRecentProjectIds(limit) {
+  const map = _loadProjRecents();
+  const known = new Set(projects.map(p => p.id));
+  return Object.keys(map)
+    .filter(id => known.has(id))
+    .sort((a, b) => map[b] - map[a])
+    .slice(0, limit);
+}
+
+function _projItemHTML(p) {
+  const wd = p.workdir || p.id || '';
+  const name = p.name || wd.split('/').pop() || wd || t('proj.noname');
+  const isActive = curWorkdir === wd || curWorkdir === p.id;
+  const safeWd = wd.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  return `<div class="proj-dd-item${isActive?' active':''}" onclick="selectProj('${safeWd}', false)">
       <div class="proj-dd-item-name">${escH(name)}</div>
       ${wd ? `<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(wd)}</div>` : ''}
     </div>`;
+}
+
+function renderProjList(q) {
+  const lc = q.toLowerCase();
+  const list = $i('projDdList');
+  const allItem = `<div class="proj-dd-item${!curWorkdir?' active':''}" onclick="selectProj(null, true)">
+    <div class="proj-dd-item-name">${t('proj.all')}</div></div>`;
+
+  // Searching: flat filtered list, with the "All projects" clear-item on top (unchanged behavior).
+  if (q) {
+    let html = allItem;
+    for (const p of projects) {
+      const wd = p.workdir || p.id || '';
+      const name = p.name || wd.split('/').pop() || wd || t('proj.noname');
+      if (!name.toLowerCase().includes(lc) && !wd.toLowerCase().includes(lc)) continue;
+      html += _projItemHTML(p);
+    }
+    list.innerHTML = html;
+    return;
   }
+
+  // Not searching: "All projects", then a Recent section (top N), then the full list.
+  let html = allItem;
+  const n = Math.max(0, config.recentProjectsCount ?? 5);
+  const recentIds = n > 0 ? getRecentProjectIds(n) : [];
+  if (recentIds.length) {
+    const byId = Object.fromEntries(projects.map(p => [p.id, p]));
+    html += `<div class="proj-dd-section-label">${t('proj.recent')}</div>`;
+    html += recentIds.map(id => _projItemHTML(byId[id])).join('');
+    html += `<div class="proj-dd-divider"></div>`;
+  }
+  for (const p of projects) html += _projItemHTML(p);
+  list.innerHTML = html;
 }
 
 function selectProj(wd, isAll) {
   curWorkdir = isAll ? null : (wd || null);
+  if (!isAll) {
+    const p = projects.find(x => x.workdir === wd || x.id === wd);
+    if (p) recordProjectOpen(p.id);
+  }
   // Write to the same key used by Chat and Kanban
   const state = JSON.parse(localStorage.getItem('cc_ui_state') || '{}');
   state.curWorkdir = curWorkdir;
