@@ -125,6 +125,8 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .proj-dd-item.active .proj-dd-item-name { color: var(--accent2); }
 .proj-dd-item.active .proj-dd-item-name::before { content: '●'; color: var(--accent); font-size: 8px; flex-shrink: 0; }
 .proj-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
+.proj-dd-section-label { padding: 8px 16px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.proj-dd-divider { height: 1px; background: var(--border); margin: 6px 0; }
 
 /* ─── Stats bar ─── */
 .proj-bar{ display:flex; align-items:center; gap:16px; padding:8px 16px; background:var(--s1); border-bottom:1px solid var(--border); flex-shrink:0; }
@@ -450,7 +452,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 const TR = {
   uk: {
     'hdr.title':'Kanban','hdr.add':'Завдання',
-    'proj.label':'Проект:','proj.all':'— Всі проекти —','proj.search':'Пошук проекту...','search.empty':'Не знайдено',
+    'proj.label':'Проект:','proj.all':'— Всі проекти —','proj.recent':'Нещодавні','proj.search':'Пошук проекту...','search.empty':'Не знайдено',
     'col.backlog':'Backlog','col.todo':'До виконання','col.in_progress':'В процесі',
     'col.done':'Виконано','col.cancelled':'Скасовано','col.empty':'Немає завдань',
     'modal.add':'Нове завдання','modal.edit':'Редагувати завдання',
@@ -486,7 +488,7 @@ const TR = {
   },
   en: {
     'hdr.title':'Kanban','hdr.add':'Task',
-    'proj.label':'Project:','proj.all':'— All projects —','proj.search':'Search project...','search.empty':'Not found',
+    'proj.label':'Project:','proj.all':'— All projects —','proj.recent':'Recent','proj.search':'Search project...','search.empty':'Not found',
     'col.backlog':'Backlog','col.todo':'To Do','col.in_progress':'In Progress',
     'col.done':'Done','col.cancelled':'Cancelled','col.empty':'No tasks',
     'modal.add':'New task','modal.edit':'Edit task',
@@ -522,7 +524,7 @@ const TR = {
   },
   ru: {
     'hdr.title':'Kanban','hdr.add':'Задача',
-    'proj.label':'Проект:','proj.all':'— Все проекты —','proj.search':'Поиск проекта...','search.empty':'Не найдено',
+    'proj.label':'Проект:','proj.all':'— Все проекты —','proj.recent':'Недавние','proj.search':'Поиск проекта...','search.empty':'Не найдено',
     'col.backlog':'Backlog','col.todo':'К выполнению','col.in_progress':'В процессе',
     'col.done':'Выполнено','col.cancelled':'Отменено','col.empty':'Нет задач',
     'modal.add':'Новая задача','modal.edit':'Редактировать задачу',
@@ -578,7 +580,7 @@ const COLS=[
   {id:'done',dot:'dot-done'},
   {id:'cancelled',dot:'dot-cancelled'},
 ];
-let tasks=[],sessions=[],projects=[];
+let tasks=[],sessions=[],projects=[],config={};
 let chains=[];
 let lastChainEtag='';
 let chainExpandState={};
@@ -684,6 +686,7 @@ async function apiFetch(url,opts={}){
 // ─── Projects ─────────────────────────────────────────────────────────────
 async function loadProjects(){
   try{const r=await apiFetch('/api/projects');projects=await r.json();}catch{projects=[];}
+  try{const rc=await apiFetch('/api/config');config=await rc.json();}catch{}
   renderProjDropdownList('');
   try{
     const s=JSON.parse(localStorage.getItem('cc_ui_state')||'null');
@@ -743,34 +746,66 @@ function updateProjDropdownBtn() {
   renderProjDropdownList();
 }
 
-function renderProjDropdownList(filter = '') {
-  const list = $i('projDdList');
-  if (!list) return;
+// Recently-opened tracking (per-browser, shared with the chat page; keyed by project id).
+const PROJ_RECENTS_KEY = 'cc_proj_recents';
+function _loadProjRecents() {
+  try { return JSON.parse(localStorage.getItem(PROJ_RECENTS_KEY)) || {}; } catch { return {}; }
+}
+function recordProjectOpen(id) {
+  if (!id) return;
+  try {
+    const map = _loadProjRecents();
+    map[id] = Date.now();
+    localStorage.setItem(PROJ_RECENTS_KEY, JSON.stringify(map));
+  } catch {}
+}
+function getRecentProjectIds(limit) {
+  const map = _loadProjRecents();
+  const known = new Set(projects.map(p => p.id));
+  return Object.keys(map)
+    .filter(id => known.has(id))
+    .sort((a, b) => map[b] - map[a])
+    .slice(0, limit);
+}
 
-  const allItems = [
-    { id: '', name: t('proj.all'), workdir: '', isAll: true },
-    ...projects
-  ];
-
-  const filtered = filter
-    ? allItems.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()) || p.workdir.toLowerCase().includes(filter.toLowerCase()))
-    : allItems;
-
-  if (!filtered.length) {
-    list.innerHTML = `<div class="proj-dd-empty">${t('col.empty')}</div>`;
-    return;
-  }
-
-  list.innerHTML = filtered.map(p => {
-    const active = p.isAll ? !curWorkdir : (p.workdir === curWorkdir || p.id === curWorkdir);
-    const shortPath = p.workdir && p.workdir.length > 45 ? '…' + p.workdir.slice(-43) : p.workdir;
-    return `
-      <div class="proj-dd-item${active ? ' active' : ''}" onclick="selectProjFromDropdown('${escH(p.workdir || p.id)}', ${p.isAll})">
+function _projDdItemHTML(p) {
+  const active = p.isAll ? !curWorkdir : (p.workdir === curWorkdir || p.id === curWorkdir);
+  const shortPath = p.workdir && p.workdir.length > 45 ? '…' + p.workdir.slice(-43) : p.workdir;
+  return `
+      <div class="proj-dd-item${active ? ' active' : ''}" onclick="selectProjFromDropdown('${escH(p.workdir || p.id)}', ${!!p.isAll})">
         <div class="proj-dd-item-name">${active && !p.isAll ? '● ' : ''}${escH(p.name)}</div>
         ${!p.isAll ? `<div class="proj-dd-item-path">${escH(shortPath)}</div>` : ''}
       </div>
     `;
-  }).join('');
+}
+
+function renderProjDropdownList(filter = '') {
+  const list = $i('projDdList');
+  if (!list) return;
+
+  const allItem = { id: '', name: t('proj.all'), workdir: '', isAll: true };
+
+  if (filter) {
+    const f = filter.toLowerCase();
+    const filtered = [allItem, ...projects].filter(p => p.name.toLowerCase().includes(f) || p.workdir.toLowerCase().includes(f));
+    list.innerHTML = filtered.length
+      ? filtered.map(_projDdItemHTML).join('')
+      : `<div class="proj-dd-empty">${t('col.empty')}</div>`;
+    return;
+  }
+
+  // Not searching: "All projects" clear-item, then a Recent section, then the full list.
+  let html = _projDdItemHTML(allItem);
+  const n = Math.max(0, config.recentProjectsCount ?? 5);
+  const recentIds = n > 0 ? getRecentProjectIds(n) : [];
+  if (recentIds.length) {
+    const byId = Object.fromEntries(projects.map(p => [p.id, p]));
+    html += `<div class="proj-dd-section-label">${t('proj.recent')}</div>`;
+    html += recentIds.map(id => _projDdItemHTML(byId[id])).join('');
+    html += `<div class="proj-dd-divider"></div>`;
+  }
+  html += projects.map(_projDdItemHTML).join('');
+  list.innerHTML = html;
 }
 
 function filterProjDropdown(value) {
@@ -780,6 +815,10 @@ function filterProjDropdown(value) {
 function selectProjFromDropdown(workdir, isAll) {
   closeProjDropdown();
   curWorkdir = isAll ? null : workdir;
+  if (!isAll) {
+    const p = projects.find(x => x.workdir === workdir || x.id === workdir);
+    if (p) recordProjectOpen(p.id);
+  }
   try {
     const s = JSON.parse(localStorage.getItem('cc_ui_state') || '{}');
     s.curWorkdir = curWorkdir;
