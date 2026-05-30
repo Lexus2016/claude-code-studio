@@ -211,6 +211,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .proj-dd-item.active .proj-dd-item-name { color: var(--accent2); }
 .proj-dd-item.active .proj-dd-item-name::before { content: '●'; color: var(--accent); font-size: 8px; flex-shrink: 0; }
 .proj-dd-empty { padding: 20px 16px; text-align: center; color: var(--muted); font-size: 13px; }
+.proj-dd-section-label { padding: 8px 16px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.proj-dd-divider { height: 1px; background: var(--border); margin: 6px 0; }
 
 /* ─── Rate limit badge ─── */
 #rlBadge { display:none; position:relative; align-items:center; gap:5px; padding:3px 9px; border-radius:6px; font-size:12px; font-weight:600; cursor:default; user-select:none; background:rgba(245,158,11,.15); border:1px solid rgba(245,158,11,.45); color:#f59e0b; transition:background .2s,border-color .2s; }
@@ -3610,6 +3612,7 @@ const TRANSLATIONS = {
     'files.empty':'Порожньо','files.view':'Переглянути',
     'proj.empty':'Немає проектів. Додайте директорію для роботи з Claude Code.',
     'proj.search':'Пошук проекту...','search.empty':'Не знайдено',
+    'proj.recent':'Нещодавні','proj.all':'Усі проекти',
     'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban дошка','nav.schedule.tip':'Розклад завдань','nav.aria':'Навігація між розділами','tip.lang':'Мова інтерфейсу',
     'mcp.import.btn':'Імпорт','mcp.import.title':'Імпортувати MCP з JSON файлу (Claude Desktop формат)',
     'mcp.export.btn':'Експорт','mcp.export.title':'Експортувати всі MCP у JSON файл','mcp.replace.title':'Замінить існуючий',
@@ -3838,6 +3841,7 @@ const TRANSLATIONS = {
     'files.empty':'Empty','files.view':'Preview',
     'proj.empty':'No projects. Add a directory to work with Claude Code.',
     'proj.search':'Search project...','search.empty':'Not found',
+    'proj.recent':'Recent','proj.all':'All projects',
     'nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.schedule.tip':'Schedule','nav.aria':'Navigation','tip.lang':'Interface language',
     'mcp.import.btn':'Import','mcp.import.title':'Import MCP from JSON file (Claude Desktop format)',
     'mcp.export.btn':'Export','mcp.export.title':'Export all MCP to JSON file','mcp.replace.title':'Will replace existing',
@@ -4066,6 +4070,7 @@ const TRANSLATIONS = {
     'files.empty':'Пусто','files.view':'Просмотр',
     'proj.empty':'Нет проектов. Добавьте директорию для работы с Claude Code.',
     'proj.search':'Поиск проекта...','search.empty':'Не найдено',
+    'proj.recent':'Недавние','proj.all':'Все проекты',
     'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban доска','nav.schedule.tip':'Расписание','nav.aria':'Навигация','tip.lang':'Язык интерфейса',
     'mcp.import.btn':'Импорт','mcp.import.title':'Импортировать MCP из JSON файла (формат Claude Desktop)',
     'mcp.export.btn':'Экспорт','mcp.export.title':'Экспортировать все MCP в JSON файл','mcp.replace.title':'Заменит существующий',
@@ -10154,6 +10159,27 @@ function fmtSize(b) {
 }
 
 // ─── Projects ──────────────────────────────────────────────────────────────
+// Recently-opened tracking (per-browser). Map of { [projectId]: epochMs }.
+const PROJ_RECENTS_KEY = 'cc_proj_recents';
+function _loadProjRecents() {
+  try { return JSON.parse(localStorage.getItem(PROJ_RECENTS_KEY)) || {}; } catch { return {}; }
+}
+function recordProjectOpen(id) {
+  try {
+    const map = _loadProjRecents();
+    map[id] = Date.now();
+    localStorage.setItem(PROJ_RECENTS_KEY, JSON.stringify(map));
+  } catch {}
+}
+function getRecentProjectIds(limit) {
+  const map = _loadProjRecents();
+  const known = new Set(projects.map(p => p.id));
+  return Object.keys(map)
+    .filter(id => known.has(id))
+    .sort((a, b) => map[b] - map[a])
+    .slice(0, limit);
+}
+
 async function loadProjectsList() {
   try {
     const r = await fetch('/api/projects');
@@ -10285,6 +10311,18 @@ function closeProjDropdown() {
   $i('projDdMenu')?.classList.remove('open');
 }
 
+function _projDdItemHTML(p) {
+  const active = p.id === curProjectId;
+  const shortPath = p.workdir.length > 45 ? '…' + p.workdir.slice(-43) : p.workdir;
+  const rhLabel = p.isRemote ? `<span style="font-size:10px;color:var(--accent2);margin-left:4px">🌐 ${escH(p.remoteHost||'SSH')}</span>` : '';
+  return `
+      <div class="proj-dd-item${active ? ' active' : ''}" onclick="selectProjFromDropdown('${p.id}')">
+        <div class="proj-dd-item-name">${active ? '● ' : ''}${escH(p.name)}${rhLabel}</div>
+        <div class="proj-dd-item-path">${escH(shortPath)}</div>
+      </div>
+    `;
+}
+
 function renderProjDropdownList(filter = '') {
   const list = $i('projDdList');
   if (!list) return;
@@ -10298,17 +10336,24 @@ function renderProjDropdownList(filter = '') {
     return;
   }
 
-  list.innerHTML = filtered.map(p => {
-    const active = p.id === curProjectId;
-    const shortPath = p.workdir.length > 45 ? '…' + p.workdir.slice(-43) : p.workdir;
-    const rhLabel = p.isRemote ? `<span style="font-size:10px;color:var(--accent2);margin-left:4px">🌐 ${escH(p.remoteHost||'SSH')}</span>` : '';
-    return `
-      <div class="proj-dd-item${active ? ' active' : ''}" onclick="selectProjFromDropdown('${p.id}')">
-        <div class="proj-dd-item-name">${active ? '● ' : ''}${escH(p.name)}${rhLabel}</div>
-        <div class="proj-dd-item-path">${escH(shortPath)}</div>
-      </div>
-    `;
-  }).join('');
+  // When not searching, surface a "Recent" section on top, then the full list.
+  if (!filter) {
+    const n = Math.max(0, config.recentProjectsCount ?? 5);
+    const recentIds = n > 0 ? getRecentProjectIds(n) : [];
+    if (recentIds.length) {
+      const byId = Object.fromEntries(projects.map(p => [p.id, p]));
+      const recentHTML = recentIds.map(id => _projDdItemHTML(byId[id])).join('');
+      list.innerHTML =
+        `<div class="proj-dd-section-label">${t('proj.recent')}</div>` +
+        recentHTML +
+        `<div class="proj-dd-divider"></div>` +
+        `<div class="proj-dd-section-label">${t('proj.all')}</div>` +
+        projects.map(_projDdItemHTML).join('');
+      return;
+    }
+  }
+
+  list.innerHTML = filtered.map(_projDdItemHTML).join('');
 }
 
 function filterProjDropdown(value) {
@@ -10369,6 +10414,7 @@ function switchProject(id) {
 
   curProjectId = id;
   curWorkdir = p.workdir;
+  recordProjectOpen(id);
 
   // Restore from in-memory state (if project was visited before), else from localStorage
   if (projectTabs[id]) {

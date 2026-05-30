@@ -1973,6 +1973,7 @@ function loadMergedConfig() {
     skills:        { ...(g.skills||{}),     ...(l.skills||{})     },
     slashCommands: [...(l.slashCommands||[])],
     lang:          l.lang || g.lang || 'en',
+    recentProjectsCount: l.recentProjectsCount ?? g.recentProjectsCount ?? 5,
   });
   return _mergedConfigCache;
 }
