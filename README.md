@@ -383,3 +383,13 @@ npm start     # production
 ## License
 
 MIT
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=Lexus2016%2Fclaude-code-studio&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Lexus2016/claude-code-studio&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Lexus2016/claude-code-studio&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Lexus2016/claude-code-studio&type=date&legend=top-left" />
+ </picture>
+</a>
