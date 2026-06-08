@@ -291,6 +291,14 @@ class TunnelManager extends EventEmitter {
     this._state.pid = null;
     this._state.startedAt = null;
     this._state.error = reason || null;
+    if (this._proc) {
+      try {
+        this._proc.stdout?.removeAllListeners('data');
+        this._proc.stderr?.removeAllListeners('data');
+        this._proc.removeAllListeners('error');
+        this._proc.removeAllListeners('exit');
+      } catch {}
+    }
     this._proc = null;
   }
 }

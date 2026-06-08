@@ -342,7 +342,9 @@ class TelegramBot extends EventEmitter {
       // Network errors — retry after delay
       if (!err.message?.includes('Invalid bot token')) {
         this.log.warn(`[telegram] Poll error (retrying in 5s): ${err.message}`);
-        this._pollTimer = setTimeout(() => this._poll(), 5000);
+        if (this.running) {
+          this._pollTimer = setTimeout(() => this._poll(), 5000);
+        }
         return;
       }
       this.log.error(`[telegram] Fatal poll error: ${err.message}`);

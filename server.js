@@ -4554,6 +4554,9 @@ app.post('/api/sessions/:id/open-terminal', (req, res) => {
   const safeSid = _cleanSid.replace(/[^a-zA-Z0-9-]/g, '');
   if (!safeSid) return res.status(400).json({ error: 'Invalid session ID' });
   const workdir = session.workdir || WORKDIR;
+  if (/[&|;<>%^\r\n`]/.test(workdir) || workdir.includes('$(')) {
+    return res.status(400).json({ error: 'Invalid directory path: contains unsafe characters' });
+  }
   const platform = process.platform;
   let fullCmd, ok = false;
   try {

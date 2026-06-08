@@ -12,7 +12,7 @@
  */
 
 function parseVersion(v) {
-  return v.split('.').map(Number);
+  return v.split('-')[0].split('.').map(Number);
 }
 
 function nodeSatisfies(minStr) {
