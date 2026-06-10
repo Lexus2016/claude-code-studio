@@ -920,6 +920,12 @@ const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '5
 const taskRunning = new Set();        // task IDs currently executing
 const runningTaskAborts = new Map();  // taskId → AbortController
 const stoppingTasks = new Set();      // task IDs being manually stopped (onDone must not overwrite status)
+// task IDs started via the independent-worker path. Authoritative count for the
+// MAX_TASK_WORKERS cap — DB session_id can't be used, because startTask() assigns
+// a session to every independent task on launch, so they'd vanish from a
+// `session_id IS NULL` count on the very next processQueue tick (the old bug let
+// the cap reset each tick → unbounded parallel `claude` subprocesses).
+const independentRunning = new Set();
 
 async function startTask(task) {
   if (taskRunning.has(task.id)) return;
@@ -1059,7 +1065,7 @@ async function startTask(task) {
         stream
           .onText(t => {
             fullText += t;
-            taskBuffers.set(task.id, (taskBuffers.get(task.id) || '') + t);
+            { const _tb = (taskBuffers.get(task.id) || '') + t; taskBuffers.set(task.id, _tb.length > MAX_CHAT_BUFFER ? _tb.slice(-MAX_CHAT_BUFFER) : _tb); }
             broadcastToSession(sessionId, { type: 'text', text: t, tabId: sessionId });
           })
           .onTool((name, inp) => {
@@ -1099,7 +1105,7 @@ async function startTask(task) {
       console.log(`[taskWorker] task ${task.id}: auto-continuing (${taskContinueCount}/${MAX_AUTO_CONTINUES}), reason: ${lastTaskResult?.subtype || 'unknown'}`);
       const notice = `\n⏳ Auto-continuing (${taskContinueCount}/${MAX_AUTO_CONTINUES})...\n`;
       fullText += notice;
-      taskBuffers.set(task.id, (taskBuffers.get(task.id) || '') + notice);
+      { const _tb = (taskBuffers.get(task.id) || '') + notice; taskBuffers.set(task.id, _tb.length > MAX_CHAT_BUFFER ? _tb.slice(-MAX_CHAT_BUFFER) : _tb); }
       broadcastToSession(sessionId, { type: 'text', text: notice, tabId: sessionId });
       currentTaskPrompt = 'Continue where you left off. Complete the remaining work. When finished, run the MANDATORY POST-TASK VERIFICATION from your original instructions.';
     }
@@ -1236,6 +1242,7 @@ async function startTask(task) {
   } finally {
     taskBuffers.delete(task.id);
     taskRunning.delete(task.id);
+    independentRunning.delete(task.id);
     runningTaskAborts.delete(task.id);
     setTimeout(processQueue, _retryBackoffMs || 500);
   }
@@ -1311,8 +1318,8 @@ function processQueue() {
   const occupiedSids = new Set(inProg.filter(t => t.session_id).map(t => t.session_id));
   // Workdir-level lock: prevents parallel chain tasks from writing to the same directory concurrently
   const occupiedWorkdirs = new Set(inProg.filter(t => t.workdir).map(t => t.workdir));
-  // Count independent running tasks (null session_id)
-  let indepRunning = inProg.filter(t => !t.session_id).length;
+  // Count independent running tasks via the in-memory registry (see independentRunning decl)
+  let indepRunning = independentRunning.size;
   const startedSids = new Set();
   const startedWorkdirs = new Set();
   for (const task of todo) {
@@ -1367,8 +1374,9 @@ function processQueue() {
       // Independent: up to MAX_TASK_WORKERS concurrent
       if (indepRunning < MAX_TASK_WORKERS) {
         indepRunning++;
+        independentRunning.add(task.id);
         if (task.workdir) startedWorkdirs.add(task.workdir);
-        startTask(task).catch(e => console.error('[taskWorker]', e));
+        startTask(task).catch(e => { independentRunning.delete(task.id); console.error('[taskWorker]', e); });
       }
     }
   }
@@ -4370,9 +4378,23 @@ app.post('/api/sessions/import', (req, res) => {
     );
     const importMsg = db.prepare('INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,created_at) VALUES (?,?,?,?,?,?,?,?,COALESCE(?,CURRENT_TIMESTAMP))');
     const limit = Math.min(messages.length, 2000);
+    // reply_to_id holds row ids from the SOURCE database. Inserting them verbatim
+    // either violates the self-FK (foreign_keys=ON → whole import fails) or points
+    // at unrelated messages. Pass 1 inserts with reply_to_id=NULL while recording
+    // old→new id; pass 2 rewrites reply_to_id through that map (unknown refs stay NULL).
+    const idMap = new Map();
     for (let i = 0; i < limit; i++) {
       const m = messages[i];
-      importMsg.run(newId, m.role, m.type, m.content || '', m.tool_name || null, m.agent_id || null, m.reply_to_id || null, m.attachments || null, m.created_at || null);
+      const info = importMsg.run(newId, m.role, m.type, m.content || '', m.tool_name || null, m.agent_id || null, null, m.attachments || null, m.created_at || null);
+      if (m.id != null) idMap.set(String(m.id), Number(info.lastInsertRowid));
+    }
+    const updReply = db.prepare('UPDATE messages SET reply_to_id=? WHERE id=?');
+    for (let i = 0; i < limit; i++) {
+      const m = messages[i];
+      if (m.reply_to_id == null || m.id == null) continue;
+      const newSelf = idMap.get(String(m.id));
+      const newTarget = idMap.get(String(m.reply_to_id));
+      if (newSelf != null && newTarget != null) updReply.run(newTarget, newSelf);
     }
   });
   try {
@@ -4833,7 +4855,19 @@ app.put('/api/config-files', (req,res) => {
   const{filename,content}=req.body;
   const allowed={'config.json':CONFIG_PATH,'CLAUDE.md':path.join(WORKDIR,'CLAUDE.md'),'.claude/settings.json':path.join(os.homedir(),'.claude','settings.json'),'.env':path.join(APP_DIR,'.env')};
   const target=allowed[filename]; if(!target) return res.status(400).json({error:'Unknown'});
-  try{const dir=path.dirname(target); if(!fs.existsSync(dir)) fs.mkdirSync(dir,{recursive:true}); fs.writeFileSync(target,content,'utf-8'); res.json({ok:true})}
+  try{
+    const dir=path.dirname(target); if(!fs.existsSync(dir)) fs.mkdirSync(dir,{recursive:true});
+    if(filename==='config.json'){
+      // Validate + atomic write, then invalidate the merged-config / skill / prompt
+      // caches — otherwise edits made through the UI don't reach chats until a
+      // GET /api/config happens to force a fresh read.
+      let parsed; try{ parsed=JSON.parse(content); }catch{ return res.status(400).json({error:'Invalid JSON'}); }
+      saveConfig(parsed);
+    } else {
+      const tmp=target+'.tmp'; fs.writeFileSync(tmp,content,'utf-8'); fs.renameSync(tmp,target);
+    }
+    res.json({ok:true});
+  }
   catch(e){res.status(500).json({error:e.message})}
 });
 
@@ -4897,7 +4931,11 @@ app.get('/api/files', (req,res) => {
     } else {
       const ext=path.extname(fp).toLowerCase();
       const te=['.js','.ts','.py','.html','.css','.json','.md','.txt','.yaml','.yml','.sh','.env','.toml','.sql','.jsx','.tsx','.pine','.cfg','.log','.mjs','.go','.rs','.rb','.php'];
-      const content=(te.includes(ext)||stat.size<512*1024)?fs.readFileSync(fp,'utf-8'):'[Binary]';
+      // Hard size cap regardless of extension: a multi-GB .log/.json would otherwise be
+      // read fully into memory and ERR_STRING_TOO_LONG surfaces as a misleading 404.
+      const MAX_PREVIEW = 2 * 1024 * 1024; // 2 MB
+      const content = stat.size > MAX_PREVIEW ? '[File too large to preview (>2 MB)]'
+        : (te.includes(ext)||stat.size<512*1024) ? fs.readFileSync(fp,'utf-8') : '[Binary]';
       res.json({type:'file',name:path.basename(fp),content,ext,workdir:workdirReal});
     }
   }catch{res.status(404).json({error:'Not found'})}
