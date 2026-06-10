@@ -377,6 +377,9 @@ try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); 
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_msg_created   ON messages(created_at)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_chain    ON tasks(chain_id)`); } catch {}
+// messages.reply_to_id is a self-referencing FK; without this index every
+// cascaded message delete triggers a full-table FK scan (O(N²) session cleanup)
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_msg_reply_to  ON messages(reply_to_id)`); } catch {}
 // Stats archive: preserve dashboard data when sessions are deleted
 db.exec(`
   CREATE TABLE IF NOT EXISTS stats_archived (
