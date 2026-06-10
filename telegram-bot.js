@@ -1124,8 +1124,10 @@ class TelegramBot extends EventEmitter {
     const baseDir = ctx.projectWorkdir || process.env.WORKDIR || pathMod.join(process.cwd(), 'workspace');
     const filePath = pathMod.resolve(baseDir, args.join(' '));
 
-    // Security: path traversal check
-    if (!filePath.startsWith(baseDir)) {
+    // Security: path traversal check. Must compare with a trailing separator —
+    // a bare startsWith lets a sibling dir with a shared prefix slip through
+    // (baseDir /srv/workspace would accept /srv/workspace-private/…).
+    if (filePath !== baseDir && !filePath.startsWith(baseDir + pathMod.sep)) {
       await this._sendMessage(chatId, this._t('files_denied'), navButtons);
       return;
     }
@@ -2458,7 +2460,7 @@ class TelegramBot extends EventEmitter {
     }
 
     const targetDir = pathMod.resolve(baseDir, subPath);
-    if (!targetDir.startsWith(baseDir)) {
+    if (targetDir !== baseDir && !targetDir.startsWith(baseDir + pathMod.sep)) {
       const deniedBack = this._buildBackButton('FILES', ctx) || [{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }];
       if (editMsgId) {
         return this._editScreen(chatId, editMsgId, this._t('files_denied'),
@@ -2880,8 +2882,10 @@ class TelegramBot extends EventEmitter {
           chatId,
           threadId: msg.message_thread_id || null,
           attachments: [attachment],
-          callback: (err) => {
-            if (err) this._sendMessage(chatId, this._t('error_prefix', { msg: this._escHtml(err.message || 'error') }));
+          callback: (result) => {
+            // server.js always resolves with { ok: true } on success and { error } on failure;
+            // treating any truthy arg as an error made every successful upload show "❌".
+            if (result?.error) this._sendMessage(chatId, this._t('error_prefix', { msg: this._escHtml(String(result.error)) }));
           }
         });
       } else if (ctx.state === FSM_STATES.COMPOSING && ctx.sessionId) {
