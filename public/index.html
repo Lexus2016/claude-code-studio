@@ -4335,7 +4335,17 @@ function escH(s) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Escape a value for safe interpolation into a single-quoted JS string that
+// itself sits inside a double-quoted HTML attribute (inline onclick handlers).
+// JS-escape backslash + apostrophe first, then HTML-escape so the attribute
+// can't be broken out of. Without this, a filename/path containing an
+// apostrophe breaks the handler (or injects JS).
+function escArg(s) {
+  return escH(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
 }
 
 const LIST_CONTINUATION_TOKEN = '\x06LB\x07';
@@ -9992,7 +10002,7 @@ async function loadFiles(dir = '') {
     for (const it of items) {
       const el = document.createElement('div');
       el.className = 'fii';
-      const fileBtns = it.type === 'file' ? `<button class="fpe" onclick="event.stopPropagation();openFilePreview('${escH(it.path)}','${escH(it.name)}')" title="${t('files.view')}">👁</button><button class="fdl" onclick="event.stopPropagation();downloadFile('${escH(it.path)}')" title="${t('fpv.download')}">⬇</button>` : '';
+      const fileBtns = it.type === 'file' ? `<button class="fpe" onclick="event.stopPropagation();openFilePreview('${escArg(it.path)}','${escArg(it.name)}')" title="${t('files.view')}">👁</button><button class="fdl" onclick="event.stopPropagation();downloadFile('${escArg(it.path)}')" title="${t('fpv.download')}">⬇</button>` : '';
       el.innerHTML = `<span class="fi">${it.type === 'dir' ? '<span style="color:var(--accent2);font-size:13px">▸</span>' : fileIcon(it.name)}</span><span class="fn">${escH(it.name)}</span><span class="fs">${it.size ? fmtSize(it.size) : ''}</span>${fileBtns}`;
       el.onclick = it.type === 'dir' ? () => loadFiles(it.path) : () => openFilePreview(it.path, it.name);
       treeEl.appendChild(el);

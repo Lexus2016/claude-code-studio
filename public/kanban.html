@@ -596,7 +596,9 @@ try{
 }catch{}
 
 // ─── Utils ────────────────────────────────────────────────────────────────
-function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+// Escape for a single-quoted JS string inside a double-quoted HTML attribute (inline onclick).
+function escArg(s){return escH(String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"));}
 function $i(id){return document.getElementById(id);}
 const MODAL_FOCUSABLE_SEL='button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const modalStack=[];
@@ -772,7 +774,7 @@ function _projDdItemHTML(p) {
   const active = p.isAll ? !curWorkdir : (p.workdir === curWorkdir || p.id === curWorkdir);
   const shortPath = p.workdir && p.workdir.length > 45 ? '…' + p.workdir.slice(-43) : p.workdir;
   return `
-      <div class="proj-dd-item${active ? ' active' : ''}" onclick="selectProjFromDropdown('${escH(p.workdir || p.id)}', ${!!p.isAll})">
+      <div class="proj-dd-item${active ? ' active' : ''}" onclick="selectProjFromDropdown('${escArg(p.workdir || p.id)}', ${!!p.isAll})">
         <div class="proj-dd-item-name">${active && !p.isAll ? '● ' : ''}${escH(p.name)}</div>
         ${!p.isAll ? `<div class="proj-dd-item-path">${escH(shortPath)}</div>` : ''}
       </div>

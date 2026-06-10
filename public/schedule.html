@@ -573,7 +573,7 @@ const RECUR_NEXT = { hourly: 3600, daily: 86400, weekly: 604800, monthly: 259200
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 function $i(id) { return document.getElementById(id); }
-function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 const MODAL_FOCUSABLE_SEL='button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let modalRestoreFocus = null;
 
@@ -732,7 +732,7 @@ function _projItemHTML(p) {
   const wd = p.workdir || p.id || '';
   const name = p.name || wd.split('/').pop() || wd || t('proj.noname');
   const isActive = curWorkdir === wd || curWorkdir === p.id;
-  const safeWd = wd.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const safeWd = escH(wd.replace(/\\/g,'\\\\').replace(/'/g,"\\'"));
   return `<div class="proj-dd-item${isActive?' active':''}" onclick="selectProj('${safeWd}', false)">
       <div class="proj-dd-item-name">${escH(name)}</div>
       ${wd ? `<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(wd)}</div>` : ''}
