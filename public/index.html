@@ -11901,6 +11901,16 @@ const _mobPlaceholders = { uk: 'Напишіть завдання...', en: 'Writ
 let _desktopPlaceholder = '';
 function initMobUI() {
   if (!_isMob()) return;
+  // Collapse both side panels off-screen on mobile. On a fresh load already at
+  // mobile width the resize "crossed into mobile" branch never fires (_prevMobile
+  // starts true), so without this the left/right panels overlap the chat.
+  ['leftPanel', 'rightPanel'].forEach(id => {
+    const el = $i(id);
+    if (el && !el.classList.contains('collapsed')) {
+      el.classList.add('collapsed');
+      document.querySelectorAll(`[onclick="toggle('${id}')"]`).forEach(btn => btn.classList.remove('active'));
+    }
+  });
   updateMobTitle();
   updateMobSubtitle();
   // Shorten input placeholder on mobile
