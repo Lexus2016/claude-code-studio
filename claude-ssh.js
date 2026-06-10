@@ -129,11 +129,16 @@ class ClaudeSSH {
     let buffer = '', stderrBuf = '', detectedSid = sessionId || null;
     let globalTimer = null;
     let aborted = false;
+    let finished = false;
 
     const conn = new Client();
 
-    // Called exactly once when the connection/stream is done
+    // Called exactly once when the connection/stream is done. stream 'close' and
+    // 'error' can both fire — without this guard the stdout tail is flushed twice
+    // and the stderr error block is re-sent to the client.
     const finish = (code) => {
+      if (finished) return;
+      finished = true;
       if (globalTimer) { clearTimeout(globalTimer); globalTimer = null; }
 
       // Flush remaining stdout

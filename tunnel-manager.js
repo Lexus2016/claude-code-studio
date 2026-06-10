@@ -71,25 +71,32 @@ class TunnelManager extends EventEmitter {
       // from a previous process after rapid stop/start cycles.
       const proc = this._proc;
 
-      // Listen for URL on stdout/stderr
-      const onData = (stream) => (chunk) => {
-        if (this._proc !== proc) return; // stale handler from previous process
-        const text = chunk.toString();
-        this.log.debug(`[tunnel:${stream}] ${text.trim()}`);
+      // Listen for URL on stdout/stderr. Each stream keeps an accumulating buffer
+      // (capped) so a URL split across two 'data' chunks is still matched —
+      // otherwise neither half matches and start() rejects on the 30s timeout
+      // even though the tunnel is up.
+      const onData = (stream) => {
+        let buf = '';
+        return (chunk) => {
+          if (this._proc !== proc) return; // stale handler from previous process
+          const text = chunk.toString();
+          this.log.debug(`[tunnel:${stream}] ${text.trim()}`);
+          buf = (buf + text).slice(-65536); // bound growth; URLs are far shorter
 
-        const url = this._parseUrl(provider, text);
-        if (url && !settled) {
-          settled = true;
-          clearTimeout(timeout);
-          this._state.running = true;
-          this._state.publicUrl = url;
-          this._state.startedAt = new Date().toISOString();
-          this._state.error = null;
-          this.log.info(`[tunnel] Public URL: ${url}`);
-          this.emit('url', url);
-          this._startHealthCheck();
-          resolve({ publicUrl: url });
-        }
+          const url = this._parseUrl(provider, buf);
+          if (url && !settled) {
+            settled = true;
+            clearTimeout(timeout);
+            this._state.running = true;
+            this._state.publicUrl = url;
+            this._state.startedAt = new Date().toISOString();
+            this._state.error = null;
+            this.log.info(`[tunnel] Public URL: ${url}`);
+            this.emit('url', url);
+            this._startHealthCheck();
+            resolve({ publicUrl: url });
+          }
+        };
       };
 
       proc.stdout?.on('data', onData('stdout'));
