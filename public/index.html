@@ -3613,7 +3613,7 @@ const TRANSLATIONS = {
     'proj.empty':'Немає проектів. Додайте директорію для роботи з Claude Code.',
     'proj.search':'Пошук проекту...','search.empty':'Не знайдено',
     'proj.recent':'Нещодавні','proj.all':'Усі проекти',
-    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban дошка','nav.schedule.tip':'Розклад завдань','nav.aria':'Навігація між розділами','tip.lang':'Мова інтерфейсу',
+    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban дошка','nav.schedule.tip':'Розклад завдань','nav.dashboard.tip':'Панель статистики','nav.aria':'Навігація між розділами','tip.lang':'Мова інтерфейсу',
     'mcp.import.btn':'Імпорт','mcp.import.title':'Імпортувати MCP з JSON файлу (Claude Desktop формат)',
     'mcp.export.btn':'Експорт','mcp.export.title':'Експортувати всі MCP у JSON файл','mcp.replace.title':'Замінить існуючий',
     'mcp.type.stdio':'stdio (команда)','mcp.type.sse':'SSE (URL потік)',
@@ -3842,7 +3842,7 @@ const TRANSLATIONS = {
     'proj.empty':'No projects. Add a directory to work with Claude Code.',
     'proj.search':'Search project...','search.empty':'Not found',
     'proj.recent':'Recent','proj.all':'All projects',
-    'nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.schedule.tip':'Schedule','nav.aria':'Navigation','tip.lang':'Interface language',
+    'nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.schedule.tip':'Schedule','nav.dashboard.tip':'Statistics dashboard','nav.aria':'Navigation','tip.lang':'Interface language',
     'mcp.import.btn':'Import','mcp.import.title':'Import MCP from JSON file (Claude Desktop format)',
     'mcp.export.btn':'Export','mcp.export.title':'Export all MCP to JSON file','mcp.replace.title':'Will replace existing',
     'mcp.type.stdio':'stdio (command)','mcp.type.sse':'SSE (URL stream)',
@@ -4071,7 +4071,7 @@ const TRANSLATIONS = {
     'proj.empty':'Нет проектов. Добавьте директорию для работы с Claude Code.',
     'proj.search':'Поиск проекта...','search.empty':'Не найдено',
     'proj.recent':'Недавние','proj.all':'Все проекты',
-    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban доска','nav.schedule.tip':'Расписание','nav.aria':'Навигация','tip.lang':'Язык интерфейса',
+    'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban доска','nav.schedule.tip':'Расписание','nav.dashboard.tip':'Панель статистики','nav.aria':'Навигация','tip.lang':'Язык интерфейса',
     'mcp.import.btn':'Импорт','mcp.import.title':'Импортировать MCP из JSON файла (формат Claude Desktop)',
     'mcp.export.btn':'Экспорт','mcp.export.title':'Экспортировать все MCP в JSON файл','mcp.replace.title':'Заменит существующий',
     'mcp.type.stdio':'stdio (команда)','mcp.type.sse':'SSE (URL поток)',
@@ -4348,6 +4348,32 @@ function escArg(s) {
   return escH(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
 }
 
+// Send a JSON payload over the chat WebSocket only if it's open. Returns true on
+// send. Guards handlers (ask cards, etc.) that would otherwise throw a TypeError
+// if the socket dropped while the control was still on screen.
+function wsSendSafe(payload) {
+  if (!ws || ws.readyState !== 1) return false;
+  try { ws.send(JSON.stringify(payload)); return true; } catch { return false; }
+}
+
+// Clipboard copy that also works over plain http (tunnel/remote use), where
+// navigator.clipboard is undefined and a bare writeText() throws synchronously.
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve, reject) => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-9999px'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error('copy failed'));
+    } catch (e) { reject(e); }
+  });
+}
+
 const LIST_CONTINUATION_TOKEN = '\x06LB\x07';
 
 function _lineIndent(line) {
@@ -4447,8 +4473,12 @@ function parseListBlock(blockText) {
   function buildList(arr) {
     if (!arr.length) return '';
     const baseInd = _lineIndent(arr[0]);
-    const isOl = /^\s*\d+\./.test(arr[0]);
+    const olMatch = arr[0].match(/^\s*(\d+)\./);
+    const isOl = !!olMatch;
     const tag = isOl ? 'ol' : 'ul';
+    // Preserve the starting number so a list like "3. …\n4. …" isn't renumbered to 1.
+    const startN = isOl ? parseInt(olMatch[1], 10) : 1;
+    const openTag = isOl && startN !== 1 ? `<ol start="${startN}">` : `<${tag}>`;
     const items = [];
     let i = 0;
     while (i < arr.length) {
@@ -4463,7 +4493,7 @@ function parseListBlock(blockText) {
       while (i < arr.length && _lineIndent(arr[i]) > ind) nested.push(arr[i++]);
       items.push('<li>' + text + (nested.length ? buildList(nested) : '') + '</li>');
     }
-    return items.length ? `<${tag}>${items.join('')}</${tag}>` : '';
+    return items.length ? `${openTag}${items.join('')}</${tag}>` : '';
   }
 
   return buildList(lines);
@@ -4647,12 +4677,12 @@ function renderStreaming(text) {
 function copyCode(id, btn) {
   const code = $i(id);
   if (!code) return;
-  navigator.clipboard.writeText(code.textContent).then(() => {
+  copyText(code.textContent).then(() => {
     const orig = btn.textContent;
     btn.textContent = '✓ ' + t('copy.code');
     btn.classList.add('ok');
     setTimeout(() => { btn.textContent = orig; btn.classList.remove('ok'); }, 1500);
-  });
+  }).catch(() => toast('⚠ ' + t('copy.code')));
 }
 
 // ─── WebSocket ────────────────────────────────────────────────────────────
@@ -6523,7 +6553,7 @@ function askUserSubmit(requestId) {
     return;
   }
 
-  ws.send(JSON.stringify({ type: 'ask_user_response', requestId, answer }));
+  if (!wsSendSafe({ type: 'ask_user_response', requestId, answer })) { toast('⚠ ' + (t('toast.no_connection') || 'No connection')); return; }
 
   // Build compact display text
   let displayText = '';
@@ -6540,7 +6570,7 @@ function askUserCancel(requestId) {
   const card = document.querySelector(`.ask-user-card[data-rid="${requestId}"]`);
   if (!card || card.classList.contains('ask-answered')) return;
 
-  ws.send(JSON.stringify({ type: 'ask_user_cancel', requestId }));
+  wsSendSafe({ type: 'ask_user_cancel', requestId });
   _collapseAskCard(card, '', true);
 }
 
@@ -6675,7 +6705,7 @@ function submitAskTool(requestId) {
   }
 
   // Send response to server
-  ws.send(JSON.stringify({ type: 'ask_tool_response', requestId, answer }));
+  if (!wsSendSafe({ type: 'ask_tool_response', requestId, answer })) { toast('⚠ ' + (t('toast.no_connection') || 'No connection')); return; }
 
   // Collapse into compact pill, then send as user message
   _collapseAskCard(card, answer, false);
@@ -6688,7 +6718,7 @@ function skipAskTool(requestId) {
   const card = document.querySelector(`.ask-tool-card[data-rid="${requestId}"]`);
   if (!card || card.classList.contains('ask-answered')) return;
 
-  ws.send(JSON.stringify({ type: 'ask_tool_response', requestId, answer: '[Skipped]' }));
+  wsSendSafe({ type: 'ask_tool_response', requestId, answer: '[Skipped]' });
   _collapseAskCard(card, '', true);
 }
 
@@ -6717,12 +6747,12 @@ msgsEl.addEventListener('scroll', () => {
 });
 
 function cpMsg(b) {
-  const t = b.parentElement.querySelector('.msg').textContent;
-  navigator.clipboard.writeText(t).then(() => {
+  const txt = b.parentElement.querySelector('.msg').textContent;
+  copyText(txt).then(() => {
     b.innerHTML = '✓';
     b.classList.add('ok');
     setTimeout(() => { b.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>'; b.classList.remove('ok'); }, 1500);
-  });
+  }).catch(() => toast('⚠'));
 }
 
 function setReply(btn) {
@@ -6985,7 +7015,7 @@ async function updateSessBar(opts = {}) {
 function copySessId() {
   const id = $i('sessBarClaudeId')?.dataset?.fullId;
   if (!id) return;
-  navigator.clipboard.writeText(id).then(() => toast('✓ ' + t('session.copy_id')));
+  copyText(id).then(() => toast('✓ ' + t('session.copy_id'))).catch(() => toast('⚠ ' + t('session.copy_id')));
 }
 async function openInClaude() {
   if (!currentSessionId) return;
@@ -6993,7 +7023,7 @@ async function openInClaude() {
     const r = await fetch(`/api/sessions/${currentSessionId}/open-terminal`, { method: 'POST' });
     const d = await r.json();
     if (!d.ok && d.command) {
-      navigator.clipboard.writeText(d.command).then(() => toast(t('toast.cmd_copied')));
+      copyText(d.command).then(() => toast(t('toast.cmd_copied'))).catch(() => {});
     }
   } catch {}
 }
@@ -7814,6 +7844,7 @@ async function send() {
       tabId: activeTabId,
       attachments: msgAttachments.length ? msgAttachments : undefined,
     }));
+    clearReply(); // else the reply target stays armed and silently quotes into the next message
     return;
   }
 
@@ -11875,7 +11906,7 @@ function initMobUI() {
   const inp = $i('input');
   if (inp) {
     if (!_desktopPlaceholder) _desktopPlaceholder = inp.placeholder;
-    const lang = (typeof curLang !== 'undefined' && curLang) || 'en';
+    const lang = localStorage.getItem('lang') || 'en';
     inp.placeholder = _mobPlaceholders[lang] || _mobPlaceholders.en;
   }
 }
