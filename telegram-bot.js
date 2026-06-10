@@ -1121,7 +1121,9 @@ class TelegramBot extends EventEmitter {
       return;
     }
 
-    const baseDir = ctx.projectWorkdir || process.env.WORKDIR || pathMod.join(process.cwd(), 'workspace');
+    // resolve() normalizes baseDir (trailing slash / relative WORKDIR) so the
+    // separator-suffixed comparison below can't false-negative on valid paths.
+    const baseDir = pathMod.resolve(ctx.projectWorkdir || process.env.WORKDIR || pathMod.join(process.cwd(), 'workspace'));
     const filePath = pathMod.resolve(baseDir, args.join(' '));
 
     // Security: path traversal check. Must compare with a trailing separator —
@@ -2448,7 +2450,9 @@ class TelegramBot extends EventEmitter {
     const fs = require('fs');
     const pathMod = require('path');
 
-    const baseDir = ctx.projectWorkdir || process.env.WORKDIR || pathMod.join(process.cwd(), 'workspace');
+    // resolve() normalizes baseDir (trailing slash / relative WORKDIR) so the
+    // separator-suffixed traversal check below can't false-negative on valid paths.
+    const baseDir = pathMod.resolve(ctx.projectWorkdir || process.env.WORKDIR || pathMod.join(process.cwd(), 'workspace'));
 
     let subPath;
     if (data.startsWith('f:c:')) {
