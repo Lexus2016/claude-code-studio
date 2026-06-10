@@ -2173,6 +2173,28 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 600px;
 }
+/* ─── Session notes panel ─── */
+.notes-panel { padding: 8px 14px 10px; background: var(--s1); border-bottom: 1px solid var(--border); display: none; gap: 8px; align-items: flex-start; }
+.notes-panel.open { display: flex; }
+.notes-panel textarea { flex: 1; min-height: 64px; max-height: 200px; background: var(--s2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 13px; resize: vertical; line-height: 1.45; font-family: inherit; }
+.notes-panel textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(124,106,239,.15); }
+.notes-panel textarea::placeholder { color: var(--text-dim); }
+.notes-save-btn { padding: 5px 12px; font-size: 12px; background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; flex-shrink: 0; white-space: nowrap; }
+.notes-save-btn:hover { opacity: .85; }
+.notes-saved { font-size: 11px; color: var(--ok,#10b981); opacity: 0; transition: opacity .4s; align-self: center; flex-shrink: 0; }
+.notes-saved.show { opacity: 1; }
+/* ─── Chat message search bar ─── */
+.chat-search-bar { display: none; padding: 6px 14px; background: var(--s1); border-bottom: 1px solid var(--border); align-items: center; gap: 8px; }
+.chat-search-bar.visible { display: flex; }
+.chat-search-bar input { flex: 1; background: var(--s2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 13px; font-family: inherit; }
+.chat-search-bar input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(124,106,239,.15); }
+.chat-search-bar input::placeholder { color: var(--text-dim); }
+.search-count { font-size: 11px; color: var(--text-dim); white-space: nowrap; min-width: 40px; text-align: right; }
+.search-nav-btn { background: none; border: 1px solid var(--border); color: var(--text-dim); border-radius: 4px; cursor: pointer; font-size: 13px; padding: 2px 7px; line-height: 1.4; }
+.search-nav-btn:hover { color: var(--text); border-color: var(--accent); }
+.search-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 4px; }
+.search-close:hover { color: var(--text); }
+.msg-highlight { background: rgba(124,106,239,.25) !important; outline: 2px solid rgba(124,106,239,.5); border-radius: 3px; }
 </style>
 </head>
 <body>
@@ -2635,7 +2657,14 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
     <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
     <button id="sessBarExportBtn" class="sess-export-btn" style="display:none;" onclick="exportSession()" title="Export session as JSON">↓ Export</button>
+    <button id="sessBarNotesBtn" class="sess-export-btn" style="display:none;" onclick="toggleNotesPanel()" title="Session notes (private)">📝 Notes</button>
     <input type="file" id="sessImportInput" accept=".json" style="display:none" onchange="importSessionFile(this)">
+  </div>
+
+  <div class="notes-panel" id="notesPanel">
+    <textarea id="notesTextarea" placeholder="Private session notes — not sent to Claude..." rows="3" oninput="scheduleNotesSave()"></textarea>
+    <button class="notes-save-btn" onclick="saveNotes()">Save</button>
+    <span class="notes-saved" id="notesSavedLabel">✓ Saved</span>
   </div>
 
   <div class="dlg-panel" id="delegatePanel">
@@ -2661,6 +2690,14 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <input id="dlgMsgText" data-i18n-ph="dlg.msg.ph" placeholder="Надіслати повідомлення агенту..." onkeydown="if(event.key==='Enter')sendDelegateMsgSubmit()">
       <button onclick="sendDelegateMsgSubmit()" data-i18n="dlg.send">Надіслати</button>
     </div>
+  </div>
+
+  <div class="chat-search-bar" id="chatSearchBar">
+    <input type="text" id="chatSearchInput" placeholder="Search messages... (Esc to close)" oninput="filterMessages(this.value)" onkeydown="if(event.key==='Escape')closeChatSearch();else if(event.key==='Enter')searchNavStep(event.shiftKey?-1:1)">
+    <span class="search-count" id="searchCount"></span>
+    <button class="search-nav-btn" onclick="searchNavStep(-1)" title="Previous match">▲</button>
+    <button class="search-nav-btn" onclick="searchNavStep(1)" title="Next match">▼</button>
+    <button class="search-close" onclick="closeChatSearch()" title="Close search (Esc)">✕</button>
   </div>
 
   <div class="msgs" id="messages" role="log" aria-live="polite" aria-label="Chat messages">
@@ -7005,6 +7042,9 @@ async function updateSessBar(opts = {}) {
     }
     const exportBtn = $i('sessBarExportBtn');
     if (exportBtn) exportBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
+    const notesBtn = $i('sessBarNotesBtn');
+    if (notesBtn) notesBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
+    loadNotesForSession(sess.notes);
     if (retryIfMissing && !hasClaudeId && tab?.generating && currentSessionId === sessionId) {
       scheduleSessBarRefresh();
     }
@@ -12487,6 +12527,105 @@ checkVersion();
     else setTimeout(tryOpen, 800);
   }
 }
+
+// ─── Session Notes ────────────────────────────────────────────────────────
+let _notesSaveTimer = null;
+function toggleNotesPanel() {
+  const panel = $i('notesPanel');
+  if (!panel) return;
+  const open = panel.classList.toggle('open');
+  if (open) setTimeout(() => $i('notesTextarea')?.focus(), 50);
+}
+function scheduleNotesSave() {
+  clearTimeout(_notesSaveTimer);
+  _notesSaveTimer = setTimeout(saveNotes, 1200);
+}
+async function saveNotes() {
+  clearTimeout(_notesSaveTimer);
+  if (!currentSessionId) return;
+  const notes = $i('notesTextarea')?.value ?? '';
+  try {
+    await fetch(`/api/sessions/${currentSessionId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes })
+    });
+    const lbl = $i('notesSavedLabel');
+    if (lbl) { lbl.classList.add('show'); setTimeout(() => lbl.classList.remove('show'), 1500); }
+  } catch {}
+}
+function loadNotesForSession(notes) {
+  const ta = $i('notesTextarea');
+  if (ta) ta.value = notes || '';
+  // Reset panel state on session switch — keep closed
+  const panel = $i('notesPanel');
+  if (panel) panel.classList.remove('open');
+}
+
+// ─── Chat Message Search ──────────────────────────────────────────────────
+let _searchMatches = [], _searchIdx = -1;
+function openChatSearch() {
+  const bar = $i('chatSearchBar');
+  if (!bar) return;
+  bar.classList.add('visible');
+  const inp = $i('chatSearchInput');
+  if (inp) { inp.select(); inp.focus(); }
+}
+function closeChatSearch() {
+  const bar = $i('chatSearchBar');
+  if (bar) bar.classList.remove('visible');
+  document.querySelectorAll('#messages .mw').forEach(m => { m.style.display = ''; m.classList.remove('msg-highlight'); });
+  _searchMatches = []; _searchIdx = -1;
+  if ($i('searchCount')) $i('searchCount').textContent = '';
+}
+function filterMessages(query) {
+  _searchMatches = []; _searchIdx = -1;
+  const msgs = document.querySelectorAll('#messages .mw');
+  if (!query.trim()) {
+    msgs.forEach(m => { m.style.display = ''; m.classList.remove('msg-highlight'); });
+    if ($i('searchCount')) $i('searchCount').textContent = '';
+    return;
+  }
+  const q = query.toLowerCase();
+  msgs.forEach(m => {
+    const text = m.textContent || '';
+    const match = text.toLowerCase().includes(q);
+    m.style.display = match ? '' : 'none';
+    m.classList.remove('msg-highlight');
+    if (match) _searchMatches.push(m);
+  });
+  if ($i('searchCount')) $i('searchCount').textContent = _searchMatches.length ? `1/${_searchMatches.length}` : '0';
+  if (_searchMatches.length) { _searchIdx = 0; _highlightSearchMatch(); }
+}
+function searchNavStep(dir) {
+  if (!_searchMatches.length) return;
+  _searchIdx = (_searchIdx + dir + _searchMatches.length) % _searchMatches.length;
+  _highlightSearchMatch();
+  if ($i('searchCount')) $i('searchCount').textContent = `${_searchIdx + 1}/${_searchMatches.length}`;
+}
+function _highlightSearchMatch() {
+  _searchMatches.forEach((m, i) => m.classList.toggle('msg-highlight', i === _searchIdx));
+  _searchMatches[_searchIdx]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+// Global keyboard shortcuts
+document.addEventListener('keydown', e => {
+  // Ctrl/Cmd+F — open message search (only when a session is active and focus is not in an input)
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (!currentSessionId) return;
+    e.preventDefault();
+    openChatSearch();
+  }
+  // Escape — close search or notes
+  if (e.key === 'Escape') {
+    const bar = $i('chatSearchBar');
+    if (bar?.classList.contains('visible')) { closeChatSearch(); return; }
+    const np = $i('notesPanel');
+    if (np?.classList.contains('open')) { np.classList.remove('open'); }
+  }
+});
 </script>
 </body>
 </html>

@@ -372,6 +372,7 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_host TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN sort_order REAL`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN fork_from_cid TEXT`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN notes TEXT DEFAULT ''`); } catch {}
 // Performance indexes — safe to re-run (IF NOT EXISTS)
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
@@ -4425,8 +4426,9 @@ app.get('/api/sessions/:id', (req,res) => {
   res.json(s);
 });
 app.put('/api/sessions/:id', (req, res) => {
-  const { title, active_mcp, active_skills } = req.body;
+  const { title, active_mcp, active_skills, notes } = req.body;
   if (title) stmts.updateTitle.run(title, req.params.id);
+  if (notes !== undefined) db.prepare(`UPDATE sessions SET notes=?,updated_at=datetime('now') WHERE id=?`).run(notes, req.params.id);
   if (active_mcp !== undefined || active_skills !== undefined) {
     db.prepare(`UPDATE sessions SET active_mcp=COALESCE(?,active_mcp),active_skills=COALESCE(?,active_skills),updated_at=datetime('now') WHERE id=?`)
       .run(

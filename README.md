@@ -10,6 +10,8 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
+> **v5.52.0** — Session Notes, in-chat search (Ctrl+F / ⌘F), and a significant wave of reliability & security hardening.
+
 ---
 
 ## Why Claude Code Studio?
@@ -124,6 +126,10 @@ Hit **Translate** inside the thinking modal to render the chain of thought in yo
 **Interrupt attachments** — attach files, screenshots, or SSH configs to any mid-task clarification. Claude receives images as visual content (full multimodal MCP blocks), files as readable paths, and SSH configs with credentials pre-filled. No need to stop the task to share context — everything arrives in the same checkpoint delivery. Works from both the web UI and Telegram.
 
 **Rate limit auto-wait** — when Claude's API responds with a rate limit or overload (429), Studio automatically waits for the reset window and retries — no manual refresh, no lost session. A live countdown appears in the chat: *"Rate limited — retrying in 4m 30s"*. Up to 3 automatic retries, max 30-minute wait, correctly handles stale reset timestamps with a safe minimum floor.
+
+**Session notes** — every session has a private scratchpad. Click **📝 Notes** in the session bar to open a resizable textarea that auto-saves as you type. Notes are stored in SQLite alongside the session — your context clues, observations, and reminders persist across restarts and never get sent to Claude.
+
+**In-chat message search** — press **Ctrl+F** (or **⌘F** on Mac) to open a search bar above the messages. Type to instantly filter — only matching messages stay visible. Navigate between hits with ▲▼ or **Enter / Shift+Enter**. Press **Esc** to close. Instantly find that command you ran three hundred messages ago.
 
 **Session fork** — hit the ↗ button next to any chat to create a full copy that shares the same Claude CLI session history. Branch your conversation at any point — explore alternative approaches without losing the original thread. Works on SSH hosts too.
 
@@ -320,7 +326,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 
 | Category | Features |
 |----------|----------|
-| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker |
+| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F) |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, effort dial per task/chain |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, effort dial per task, watchdog auto-recovery |
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
@@ -333,7 +339,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | **Remote** | SSH servers, SFTP upload, `#` quick-attach, cloudflared/ngrok tunnels |
 | **Mobile** | Native-feel UI, bottom sheet, scroll-snap Kanban, iOS-safe, touch-optimized |
 | **Dashboard** | Activity heatmap, tool usage, model distribution, Automation Index, peak hours |
-| **Reliability** | Self-healing sessions, crash protection, atomic writes, instant stop, rate limit auto-wait, concurrency safety (session lock + busy_timeout), orphaned session lock auto-cleanup |
+| **Reliability** | security-hardened Telegram uploads, self-healing sessions, crash protection, atomic writes, instant stop, rate limit auto-wait, concurrency safety (session lock + busy_timeout), orphaned session lock auto-cleanup |
 | **Security** | bcrypt auth, AES-256-GCM SSH, Helmet.js, path traversal protection, XSS/SQLi prevention |
 | **Platform** | Windows/macOS/Linux, Docker (non-root, registry mirror), LLM proxy/gateway, 3 languages (EN/UA/RU), OpenRouter support |
 
