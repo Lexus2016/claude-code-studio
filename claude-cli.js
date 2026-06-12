@@ -79,6 +79,7 @@ const MODEL_MAP = {
   'opus':   'opus',
   'sonnet': 'sonnet',
   'haiku':  'haiku',
+  'fable':  'fable',
 };
 
 // ─── MCP config file cache ──────────────────────────────────────────────────

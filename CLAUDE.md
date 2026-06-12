@@ -80,6 +80,7 @@ Environment (`.env`, see `.env.example`):
 - `haiku` → `claude-haiku-4-5-20251001`
 - `sonnet` → `claude-sonnet-4-5-20250929` (default)
 - `opus` → `claude-opus-4-6`
+- `fable` → alias `fable`, display "Fable" (CLI resolves the alias internally)
 
 ## MCP & Skills
 
@@ -139,8 +140,9 @@ These are non-obvious bugs that caused real failures:
 claude-opus-4-6
 claude-sonnet-4-6
 claude-haiku-4-5
+fable
 ```
-Use these in `claude-cli.js`. Do not use dated suffixes in CLI flags.
+Use these in `claude-cli.js`. Do not use dated suffixes in CLI flags. Short aliases (`opus`, `sonnet`, `haiku`, `fable`) are resolved by the CLI internally — pass them through as-is.
 
 ### Markdown Rendering in SPA
 - During streaming: `renderStreaming()` handles unclosed code fences
