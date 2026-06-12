@@ -227,6 +227,8 @@ function cleanOldSessions() {
     const toDelete = db.prepare(`SELECT id FROM sessions WHERE updated_at < datetime('now', '-' || ? || ' days')`).all(SESSION_TTL_DAYS);
     if (toDelete.length > 0) {
       archiveSessionStats(toDelete.map(r => r.id));
+      // Best-effort: kill interactive tmux sessions tied to expiring studio sessions
+      for (const r of toDelete) { try { killInteractiveTmux(r.id); } catch {} }
     }
     const result = db.prepare(`DELETE FROM sessions WHERE updated_at < datetime('now', '-' || ? || ' days')`).run(SESSION_TTL_DAYS);
     if (result.changes > 0) {

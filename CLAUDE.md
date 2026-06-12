@@ -105,7 +105,7 @@ This is intentional — do not introduce build tools.
 
 ### Engines
 - `api` (default) — headless `claude -p` via `runCliSingle` in server.js
-- `subscription` — persistent interactive tmux session via `claude-interactive.js`, billed on the Claude Max subscription. Limitations: no MCP servers, no maxTurns, no attachments; systemPrompt is fixed at tmux spawn time (mid-session skill/mode changes apply only after respawn). Choice persisted per session in `sessions.run_engine` (the `engine` column belongs to telegram-bot.js — do not reuse it).
+- `subscription` — persistent interactive tmux session (one per chat) via `claude-interactive.js`, billed on the Claude Max subscription (UI button "Subscription"). MCP servers passed via `--mcp-config` at spawn; systemPrompt via `--append-system-prompt` at spawn; config changes (skills/mode/MCP/model) auto-respawn the tmux session with `--resume` — verified to keep writing to the same transcript jsonl. Image attachments saved to temp files, paths appended to the prompt. maxTurns is not applicable. Choice persisted per session in `sessions.run_engine` (the `engine` column belongs to telegram-bot.js — do not reuse it).
 
 ### WebSocket Protocol — Do Not Break
 The entire UI depends on this exact message contract:
