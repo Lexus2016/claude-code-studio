@@ -2500,6 +2500,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         </div>
       </div>
       <div class="mob-sheet-section">
+        <div class="mob-sheet-label">Engine</div>
+        <div class="mob-sheet-chips">
+          <button class="mob-chip on" data-mob="engine" data-v="api" onclick="setMobOpt(this,'engine')">API</button>
+          <button class="mob-chip" data-mob="engine" data-v="subscription" onclick="setMobOpt(this,'engine')">Max</button>
+        </div>
+      </div>
+      <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.turns">Max turns</div>
         <div class="mob-sheet-turns">
           <input type="number" id="mobMaxTurns" value="50" min="1" max="200">
@@ -2625,6 +2632,12 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <button class="tb-btn on" data-v="sonnet" onclick="setOpt(this,'model')">Sonnet</button>
       <button class="tb-btn" data-v="opus" onclick="setOpt(this,'model')">Opus</button>
       <button class="tb-btn" data-v="fable" onclick="setOpt(this,'model')">Fable</button>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-group">
+      <span class="label">Engine</span>
+      <button class="tb-btn on" data-v="api" onclick="setOpt(this,'engine')">API</button>
+      <button class="tb-btn" data-v="subscription" onclick="setOpt(this,'engine')">Max</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -3411,7 +3424,7 @@ let config = { mcpServers: {}, skills: {} };
 let activeMcp = new Set(), activeSkills = new Set();
 let autoSkillsMode = true; // ON by default; user can disable
 let cfgFiles = {}, activeCfgTab = null;
-let curMode = 'auto', curAgent = 'single', curModel = 'sonnet';
+let curMode = 'auto', curAgent = 'single', curModel = 'sonnet', curEngine = 'api';
 // --effort dial: '' (Auto, no flag) | 'low' | 'medium' | 'high' | 'xhigh' | 'max'.
 // Persisted globally in localStorage so the user's preferred reasoning depth survives reloads.
 let curEffort = (function(){ try { return localStorage.getItem('effort') || ''; } catch { return ''; } })();
@@ -4961,10 +4974,11 @@ function handleWsMsg(d) {
 
     case 'ui_state_change': {
       // Agent requested UI state update — validate before assigning to prevent invalid state
-      const _validModes = ['auto','planning','task'], _validModels = ['haiku','sonnet','opus','fable'], _validAgents = ['single','multi','dispatch'];
+      const _validModes = ['auto','planning','task'], _validModels = ['haiku','sonnet','opus','fable'], _validAgents = ['single','multi','dispatch'], _validEngines = ['api','subscription'];
       if (d.mode && _validModes.includes(d.mode)) { curMode = d.mode; syncBtn('mode', d.mode); }
       if (d.model && _validModels.includes(d.model)) { curModel = d.model; syncBtn('model', d.model); }
       if (d.agent && _validAgents.includes(d.agent)) { curAgent = d.agent; syncBtn('agent', d.agent); }
+      if (d.engine && _validEngines.includes(d.engine)) { curEngine = d.engine; syncBtn('engine', d.engine); }
       break;
     }
 
@@ -7382,6 +7396,7 @@ function setOpt(btn, group) {
   if (group === 'mode') curMode = v;
   else if (group === 'agent') curAgent = v;
   else if (group === 'model') curModel = v;
+  else if (group === 'engine') curEngine = v;
   updInd();
   // Sync mobile UI
   if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
@@ -7427,7 +7442,7 @@ function updateSessBarSkills() {
 }
 
 function syncBtn(group, val) {
-  const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch'], model: ['haiku','sonnet','opus','fable'] };
+  const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch'], model: ['haiku','sonnet','opus','fable'], engine: ['api','subscription'] };
   if (!groups[group]?.includes(val)) return;
   // Sync desktop toolbar
   document.querySelectorAll('.tb-group .tb-btn').forEach(b => {
@@ -7941,6 +7956,7 @@ async function send() {
       mcpServers: [...activeMcp],
       mode: curMode, agentMode: curAgent,
       model: curModel,
+      engine: curEngine,
       effort: curEffort || undefined,
       maxTurns: parseInt($i('maxTurns').value) || 30,
       workdir: curWorkdir || undefined,
@@ -8473,6 +8489,8 @@ async function loadSess(id) {
     if (d.mode) { curMode = d.mode; syncBtn('mode', d.mode); }
     if (d.agent_mode) { curAgent = d.agent_mode; syncBtn('agent', d.agent_mode); }
     if (d.model) { curModel = d.model; syncBtn('model', d.model); }
+    curEngine = d.run_engine === 'subscription' ? 'subscription' : 'api';
+    syncBtn('engine', curEngine);
     updInd();
 
     curWorkdir = d.workdir || null;
@@ -11793,6 +11811,7 @@ function setMobOpt(btn, group) {
   if (group === 'mode') curMode = v;
   else if (group === 'agent') curAgent = v;
   else if (group === 'model') curModel = v;
+  else if (group === 'engine') curEngine = v;
   syncBtn(group, v);
   updateMobSubtitle();
   saveUIState();

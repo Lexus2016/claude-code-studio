@@ -14,6 +14,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
+const { runInteractiveSingle, killInteractiveTmux } = require('./claude-interactive');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
 const TelegramBot = require('./telegram-bot');
@@ -352,6 +353,8 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN worker_pid INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN attachments TEXT`); } catch {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN attachments TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN engine TEXT`); } catch {}
+// run_engine: api/subscription choice for the web UI — DISTINCT from `engine` (owned by telegram-bot.js, value 'cli')
+try { db.exec(`ALTER TABLE sessions ADD COLUMN run_engine TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN partial_text TEXT`); } catch {}
 // Task Dispatch: chain dependencies + auto-recovery columns
 try { db.exec(`ALTER TABLE tasks ADD COLUMN depends_on TEXT`); } catch {}
@@ -4542,6 +4545,8 @@ app.delete('/api/sessions/:id', (req,res) => {
   chatBuffers.delete(sid);
   // Archive dashboard stats before deletion (ON DELETE CASCADE removes messages)
   archiveSessionStats([sid]);
+  // Best-effort: kill the interactive tmux session tied to this studio session
+  try { killInteractiveTmux(sid); } catch {}
   // Unlink recurring tasks from session (preserve the schedule), delete the rest
   db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(sid);
   stmts.deleteTasksBySession.run(sid);
@@ -4564,6 +4569,8 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
   }
   // Archive dashboard stats before deletion (ON DELETE CASCADE removes messages)
   archiveSessionStats(ids);
+  // Best-effort: kill interactive tmux sessions tied to these studio sessions
+  for (const id of ids) { try { killInteractiveTmux(id); } catch {} }
   const del = db.transaction(() => {
     for (const id of ids) {
       // Unlink recurring tasks from session (preserve the schedule), delete the rest
@@ -6325,7 +6332,7 @@ wss.on('connection', (ws) => {
         }
       }
 
-      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=null } = msg;
+      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=null, engine='api' } = msg;
 
       let replyQuote = '';
       if (reply_to && reply_to.content) {
@@ -6402,6 +6409,8 @@ wss.on('connection', (ws) => {
 
       try { stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(effectiveSkills),sqlVal(mode),sqlVal(agentMode),sqlVal(model),sqlVal(workdir)||null,localSessionId); }
       catch (e) { log.error('updateConfig failed', { sessionId: localSessionId, mode, agentMode, model, mIdsLen: mIds.length, skillsLen: effectiveSkills.length, err: e.message, stack: e.stack }); throw e; }
+      // Persist engine choice (coerce anything other than 'subscription' to 'api')
+      try { db.prepare(`UPDATE sessions SET run_engine=? WHERE id=?`).run(engine === 'subscription' ? 'subscription' : 'api', localSessionId); } catch {}
 
       // Auto-title: use LLM-generated title if available, otherwise smart-truncate message
       if (isNewSession || DEFAULT_SESSION_TITLES.has(existSess?.title)) {
@@ -6536,6 +6545,20 @@ wss.on('connection', (ws) => {
         try { db.prepare(`UPDATE sessions SET remote_host=? WHERE id=?`).run(_activeProj.remoteHost, localSessionId); } catch {}
       } else if (agentMode==='multi') {
         newCid = await runMultiAgent(params);
+      } else if (engine === 'subscription') {
+        // Interactive tmux engine (Claude Max subscription billing) — module collects
+        // output without touching SQLite; persistence mirrors runCliSingle's save phase.
+        const r = await runInteractiveSingle(params);
+        for (const ev of r.toolEvents) {
+          try { stmts.addMsg.run(localSessionId,'assistant','tool',(ev.input||'').substring(0,500),ev.name,null,null,null); } catch {}
+        }
+        if (r.fullThinking) { try { stmts.addMsg.run(localSessionId,'assistant','thinking',r.fullThinking,null,null,null,null); } catch {} }
+        if (r.fullText) {
+          try { stmts.addMsg.run(localSessionId,'assistant','text',r.fullText,null,null,null,null); } catch {}
+          { const _cb = (chatBuffers.get(localSessionId) || '') + r.fullText; chatBuffers.set(localSessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        }
+        newCid = r.cid;
+        resultMeta = r.resultMeta;
       } else {
         const result = await runCliSingle(params);
         newCid = result.cid;

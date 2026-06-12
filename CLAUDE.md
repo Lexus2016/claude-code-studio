@@ -103,6 +103,10 @@ This is intentional — do not introduce build tools.
 - **No TypeScript** — vanilla JS throughout
 - **No CSS frameworks** — vanilla CSS only
 
+### Engines
+- `api` (default) — headless `claude -p` via `runCliSingle` in server.js
+- `subscription` — persistent interactive tmux session via `claude-interactive.js`, billed on the Claude Max subscription. Limitations: no MCP servers, no maxTurns, no attachments; systemPrompt is fixed at tmux spawn time (mid-session skill/mode changes apply only after respawn). Choice persisted per session in `sessions.run_engine` (the `engine` column belongs to telegram-bot.js — do not reuse it).
+
 ### WebSocket Protocol — Do Not Break
 The entire UI depends on this exact message contract:
 - Client → Server: `{ type: 'chat', text, mode, model, mcpServers, skills }`
