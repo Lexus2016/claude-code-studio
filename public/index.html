@@ -2636,8 +2636,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <div class="tb-sep"></div>
     <div class="tb-group">
       <span class="label">Engine</span>
-      <button class="tb-btn on" data-v="api" onclick="setOpt(this,'engine')">API</button>
-      <button class="tb-btn" data-v="subscription" onclick="setOpt(this,'engine')">Subscription</button>
+      <button class="tb-btn on" data-v="api" onclick="setOpt(this,'engine')" title="API engine — headless claude -p, billed per token (Claude Pro / API key)">API</button>
+      <button class="tb-btn" data-v="subscription" onclick="setOpt(this,'engine')" title="Subscription engine — persistent tmux session, billed on Claude Max subscription (no API credits). Requires: tmux + Claude Max.">Subscription</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -2666,6 +2666,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   <div class="sess-bar" id="sessBar" style="display:none">
     <span id="sessBarSkills" style="display:flex;gap:4px;align-items:center;overflow:hidden;flex-shrink:1;"></span>
     <span style="flex:1"></span>
+    <span id="sessBarMaxBadge" style="display:none;font-size:11px;font-weight:600;color:#a78bfa;background:rgba(124,106,239,.15);border:1px solid rgba(124,106,239,.35);padding:1px 7px;border-radius:4px;flex-shrink:0;" title="Running on Claude Max subscription (tmux engine — no API credits consumed)">⚡ Max</span>
     <span id="sessBarRetry" style="display:none;font-size:11px;color:var(--warn,#f59e0b);opacity:.85;flex-shrink:0;"></span>
     <span id="sessBarClaudeId" style="display:none;font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="" onclick="copySessId()"></span>
     <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openInClaude()">⚡ Claude Code</a>
@@ -7060,6 +7061,8 @@ async function updateSessBar(opts = {}) {
     if (exportBtn) exportBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
     const notesBtn = $i('sessBarNotesBtn');
     if (notesBtn) notesBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
+    const maxBadge = $i('sessBarMaxBadge');
+    if (maxBadge) maxBadge.style.display = (sess.run_engine === 'subscription') ? '' : 'none';
     loadNotesForSession(sess.notes);
     if (retryIfMissing && !hasClaudeId && tab?.generating && currentSessionId === sessionId) {
       scheduleSessBarRefresh();

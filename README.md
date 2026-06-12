@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.52.0** — Session Notes, in-chat search (Ctrl+F / ⌘F), and a significant wave of reliability & security hardening.
+> **v5.53.0** — Subscription engine with ⚡ Max badge, Fable model, and engine tooltips for crystal-clear billing context.
 
 ---
 
@@ -264,12 +264,22 @@ Add your own, edit them, delete them. As many as you want.
 | **Haiku** | Standard | Fast — simple questions, quick checks |
 | **Sonnet** | **1M tokens** | Balanced (default) — most everyday tasks |
 | **Opus** | **1M tokens** | Most capable — complex architecture, hard bugs |
+| **Fable** | **1M tokens** | Most creative & reasoning-intensive — complex planning, deep analysis |
 
 Sonnet and Opus run with a **1 million token context window** — entire large codebases, long conversation histories, and massive file sets fit in a single session without hitting limits.
 
 Turn budget: 1–200 (default 50). Auto-continues up to 3x — so 50 turns effectively means up to 200 steps.
 
 **Thinking effort dial** — a new `Effort` dropdown in the chat toolbar (and task/chain forms) lets you tune how hard Claude thinks before responding: `Auto` (CLI default), `Low`, `Med`, `High`, `X-High`, or `Max`. Your selection persists across reloads via localStorage. The effort level flows automatically to every subtask and chain — set it once, runs everywhere.
+
+**Execution engines** — two billing modes, selectable from the chat toolbar:
+
+| Engine | How it runs | Billing |
+|--------|-------------|---------|
+| **API** | Headless `claude -p` subprocess | Per-token (Claude Pro / API key) |
+| **Subscription** | Persistent tmux session (Claude Max) | Claude Max subscription — zero API credits consumed |
+
+The active engine is always visible at a glance: a **⚡ Max** badge appears in the session bar whenever your session runs on the Subscription engine — so you never confuse which billing mode is in effect. Hover any engine button in the toolbar for a full explanation before you switch.
 
 ### 🌐 Remote Access & SSH
 
@@ -326,7 +336,8 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 
 | Category | Features |
 |----------|----------|
-| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F) |
+| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge (Subscription engine indicator) |
+| **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, Fable / Opus / Sonnet / Haiku model selector |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, effort dial per task/chain |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, effort dial per task, watchdog auto-recovery |
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
