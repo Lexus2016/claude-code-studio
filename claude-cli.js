@@ -522,3 +522,4 @@ class ClaudeCLI {
 }
 
 module.exports = ClaudeCLI;
+module.exports.findClaudeBin = findClaudeBin;
