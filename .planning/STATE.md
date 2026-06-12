@@ -113,11 +113,12 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 260329-fr1 | implement chat export/import feature: export session+messages as JSON, import creates new session with same messages as context | 2026-03-29 | 45ffdb1 | [260329-fr1-implement-chat-export-import-feature-exp](.planning/quick/260329-fr1-implement-chat-export-import-feature-exp/) |
 | 260404-qlq | hide interrupt pill for SSH project sessions | 2026-04-04 | 4e78d0d | [260404-qlq-hide-interrupt-pill-for-ssh-project-sess](.planning/quick/260404-qlq-hide-interrupt-pill-for-ssh-project-sess/) |
+| 260612-efs | add fable model to picker + subscription (Max) engine via interactive tmux sessions | 2026-06-12 | 0bd851b | [260612-efs-add-fable-model-to-model-picker-interact](.planning/quick/260612-efs-add-fable-model-to-model-picker-interact/) |
 
 ## Session Continuity
 
-Last activity: 2026-04-04 - Completed quick task 260404-qlq: hide interrupt pill for SSH project sessions
+Last activity: 2026-06-12 - Completed quick task 260612-efs: fable model + subscription (Max) tmux engine
 
-Last session: 2026-04-04T13:52:00Z
-Stopped at: Completed quick task 260404-qlq
+Last session: 2026-06-12T08:40:00Z
+Stopped at: Completed quick task 260612-efs
 Resume file: None
