@@ -5466,6 +5466,21 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
         password:      decryptPassword(_activeProj.password) || '',
         port:          _activeProj.port || 22,
       });
+    } else if ((session.run_engine || 'api') === 'subscription') {
+      // Respect the chat's billing engine choice from Telegram too — interactive
+      // module collects output without touching SQLite, so persist it here
+      // (mirrors the WS chat handler's subscription branch).
+      const r = await runInteractiveSingle(params);
+      for (const ev of r.toolEvents) {
+        try { stmts.addMsg.run(sessionId,'assistant','tool',(ev.input||'').substring(0,500),ev.name,null,null,null); } catch {}
+      }
+      if (r.fullThinking) { try { stmts.addMsg.run(sessionId,'assistant','thinking',r.fullThinking,null,null,null,null); } catch {} }
+      if (r.fullText) {
+        try { stmts.addMsg.run(sessionId,'assistant','text',r.fullText,null,null,null,null); } catch {}
+        const _cb = (chatBuffers.get(sessionId) || '') + r.fullText;
+        chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb);
+      }
+      if (r.cid) { try { stmts.updateClaudeId.run(r.cid, sessionId); } catch {} }
     } else {
       await runCliSingle(params);
     }
@@ -6545,11 +6560,14 @@ wss.on('connection', (ws) => {
         resultMeta = sshResult.resultMeta;
         // Track remote host on session for UI indicators
         try { db.prepare(`UPDATE sessions SET remote_host=? WHERE id=?`).run(_activeProj.remoteHost, localSessionId); } catch {}
-      } else if (agentMode==='multi') {
-        newCid = await runMultiAgent(params);
       } else if (engine === 'subscription') {
         // Interactive tmux engine (Claude Max subscription billing) — module collects
         // output without touching SQLite; persistence mirrors runCliSingle's save phase.
+        // Checked BEFORE multi-agent: multi runs through API-billed headless calls and
+        // would silently override the user's explicit billing choice.
+        if (agentMode === 'multi') {
+          try { proxy.send(JSON.stringify({ type: 'text', text: 'ℹ️ Multi-agent mode uses the API engine — running in single-agent interactive mode instead.\n\n', tabId: effectiveTabId })); } catch {}
+        }
         const r = await runInteractiveSingle(params);
         for (const ev of r.toolEvents) {
           try { stmts.addMsg.run(localSessionId,'assistant','tool',(ev.input||'').substring(0,500),ev.name,null,null,null); } catch {}
@@ -6561,6 +6579,8 @@ wss.on('connection', (ws) => {
         }
         newCid = r.cid;
         resultMeta = r.resultMeta;
+      } else if (agentMode==='multi') {
+        newCid = await runMultiAgent(params);
       } else {
         const result = await runCliSingle(params);
         newCid = result.cid;

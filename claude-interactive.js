@@ -104,7 +104,8 @@ function mcpConfigPath(mcpServers) {
     const json = JSON.stringify({ mcpServers });
     const hash = crypto.createHash('sha256').update(json).digest('hex').slice(0, 16);
     const p = path.join(os.tmpdir(), `ccs-mcp-${hash}.json`);
-    if (!fs.existsSync(p)) fs.writeFileSync(p, json);
+    // 0600: the config embeds internal MCP secrets (ASK_USER_SECRET etc.)
+    if (!fs.existsSync(p)) fs.writeFileSync(p, json, { mode: 0o600 });
     return p;
   } catch {
     return null;
