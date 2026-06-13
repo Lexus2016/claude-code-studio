@@ -1744,9 +1744,9 @@ function buildSessionReplayContent(sessionId) {
 
 /** Default slash commands — seeded into config.json on first run / fresh install. */
 const DEFAULT_EXTERNAL_AGENTS = {
-  codex:    { label: 'OpenAI Codex',  template: 'codex {prompt}' },
-  gemini:   { label: 'Gemini CLI',    template: 'gemini -i {prompt}' },
-  opencode: { label: 'opencode',      template: 'opencode run {prompt}' },
+  codex:    { label: 'OpenAI Codex',    template: 'codex {prompt}' },
+  agy:      { label: 'Antigravity CLI', template: 'agy -i {prompt}' },
+  opencode: { label: 'opencode',        template: 'opencode run {prompt}' },
 };
 
 const DEFAULT_SLASH_COMMANDS = [
@@ -6020,7 +6020,7 @@ function shellEscape(s) {
 function buildTerminalCommand(agentConfig, workdir, prompt) {
   const template = agentConfig.template || '';
   const cmd = template.replace('{prompt}', shellEscape(prompt));
-  // Gemini has no --cwd, so always cd first
+  // Not every agent CLI accepts a --cwd flag, so always cd into the workdir first
   return `cd ${shellEscape(workdir)} && ${cmd}`;
 }
 

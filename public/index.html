@@ -3703,7 +3703,7 @@ const TRANSLATIONS = {
     'sec.agents':'Агенти','agents.hint':'Зовнішні агенти для делегування завдань.',
     'agent.add.new':'Додати агента','agent.edit.title':'Редагувати','agent.del.title':'Видалити','agent.del.confirm':'Видалити агента',
     'agent.modal.add.title':'＋ Додати агента','agent.modal.edit.title':'✏️ Редагувати агента','agent.modal.cancel':'Скасувати',
-    'agent.modal.id.label':'ID','agent.id.ph':'codex, gemini, aider...','agent.modal.id.hint':'Латинські букви, цифри, - та _',
+    'agent.modal.id.label':'ID','agent.id.ph':'codex, agy, aider...','agent.modal.id.hint':'Латинські букви, цифри, - та _',
     'agent.modal.label.label':'Назва','agent.label.ph':'OpenAI Codex',
     'agent.modal.template.label':'Шаблон команди','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — підставиться текст завдання',
     'agent.add.btn':'Додати','agent.save.btn':'Зберегти',
@@ -3932,7 +3932,7 @@ const TRANSLATIONS = {
     'sec.agents':'Agents','agents.hint':'External agents for task delegation.',
     'agent.add.new':'Add agent','agent.edit.title':'Edit','agent.del.title':'Delete','agent.del.confirm':'Delete agent',
     'agent.modal.add.title':'＋ Add agent','agent.modal.edit.title':'✏️ Edit agent','agent.modal.cancel':'Cancel',
-    'agent.modal.id.label':'ID','agent.id.ph':'codex, gemini, aider...','agent.modal.id.hint':'Letters, digits, - and _ only',
+    'agent.modal.id.label':'ID','agent.id.ph':'codex, agy, aider...','agent.modal.id.hint':'Letters, digits, - and _ only',
     'agent.modal.label.label':'Label','agent.label.ph':'OpenAI Codex',
     'agent.modal.template.label':'Command template','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — replaced with task text',
     'agent.add.btn':'Add','agent.save.btn':'Save',
@@ -4161,7 +4161,7 @@ const TRANSLATIONS = {
     'sec.agents':'Агенты','agents.hint':'Внешние агенты для делегирования задач.',
     'agent.add.new':'Добавить агента','agent.edit.title':'Редактировать','agent.del.title':'Удалить','agent.del.confirm':'Удалить агента',
     'agent.modal.add.title':'＋ Добавить агента','agent.modal.edit.title':'✏️ Редактировать агента','agent.modal.cancel':'Отмена',
-    'agent.modal.id.label':'ID','agent.id.ph':'codex, gemini, aider...','agent.modal.id.hint':'Латинские буквы, цифры, - и _',
+    'agent.modal.id.label':'ID','agent.id.ph':'codex, agy, aider...','agent.modal.id.hint':'Латинские буквы, цифры, - и _',
     'agent.modal.label.label':'Название','agent.label.ph':'OpenAI Codex',
     'agent.modal.template.label':'Шаблон команды','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — подставится текст задачи',
     'agent.add.btn':'Добавить','agent.save.btn':'Сохранить',
@@ -12244,7 +12244,7 @@ async function _loadExternalAgents() {
   } catch { _externalAgents = {}; }
 }
 
-const _agentIcons = { codex: '🧠', gemini: '♊', opencode: '⚡', claude: '🟣', aider: '🔧', cursor: '▶' };
+const _agentIcons = { codex: '🧠', agy: '🛸', gemini: '♊', opencode: '⚡', claude: '🟣', aider: '🔧', cursor: '▶' };
 
 function openDelegateModal() {
   _loadExternalAgents().then(() => {
