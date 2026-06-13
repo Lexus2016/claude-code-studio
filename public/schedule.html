@@ -442,7 +442,7 @@ const TR = {
     'form.session': "Пов'язана сесія", 'form.session.hint': 'Claude відновить цю сесію',
     'form.no_session': '— без сесії —',
     'form.model': 'Модель',
-    'form.model.sonnet': 'Sonnet (за замовч.)', 'form.model.haiku': 'Haiku (швидший)', 'form.model.opus': 'Opus (найпотужніший)',
+    'form.model.sonnet': 'Sonnet (за замовч.)', 'form.model.haiku': 'Haiku (швидший)', 'form.model.opus': 'Opus (найпотужніший)', 'form.model.fable': 'Fable',
     'btn.cancel': 'Скасувати', 'btn.create': 'Створити', 'btn.save': 'Зберегти', 'btn.delete': 'Видалити',
     'toast.queued': 'Завдання передано у чергу', 'toast.scheduled': 'Завдання заплановано',
     'toast.saved': 'Збережено', 'toast.deleted': 'Завдання видалено',
@@ -453,7 +453,7 @@ const TR = {
     'tasks.count': '{n} завдань', 'tasks.count.1': '{n} завдання', 'tasks.count.few': '{n} завдання',
     'form.exec': 'Параметри виконання',
     'form.exec.mode': 'Режим', 'form.exec.agent': 'Агент',
-    'form.exec.model': 'Модель', 'form.exec.turns': 'Кроки', 'form.exec.effort': 'Зусилля',
+    'form.exec.model': 'Модель', 'form.exec.turns': 'Кроки', 'form.exec.effort': 'Зусилля', 'form.exec.engine': 'Рушій',
     'group.badge': 'група', 'group.progress': '{done}/{total}',
     'group.run_now': 'Запустити групу',
     'locale': 'uk',
@@ -492,7 +492,7 @@ const TR = {
     'form.session': 'Linked session', 'form.session.hint': 'Claude will resume this session',
     'form.no_session': '— no session —',
     'form.model': 'Model',
-    'form.model.sonnet': 'Sonnet (default)', 'form.model.haiku': 'Haiku (faster)', 'form.model.opus': 'Opus (most powerful)',
+    'form.model.sonnet': 'Sonnet (default)', 'form.model.haiku': 'Haiku (faster)', 'form.model.opus': 'Opus (most powerful)', 'form.model.fable': 'Fable',
     'btn.cancel': 'Cancel', 'btn.create': 'Create', 'btn.save': 'Save', 'btn.delete': 'Delete',
     'toast.queued': 'Task queued', 'toast.scheduled': 'Task scheduled',
     'toast.saved': 'Saved', 'toast.deleted': 'Task deleted',
@@ -503,7 +503,7 @@ const TR = {
     'tasks.count': '{n} tasks', 'tasks.count.1': '{n} task', 'tasks.count.few': '{n} tasks',
     'form.exec': 'Execution options',
     'form.exec.mode': 'Mode', 'form.exec.agent': 'Agent',
-    'form.exec.model': 'Model', 'form.exec.turns': 'Steps', 'form.exec.effort': 'Effort',
+    'form.exec.model': 'Model', 'form.exec.turns': 'Steps', 'form.exec.effort': 'Effort', 'form.exec.engine': 'Engine',
     'group.badge': 'group', 'group.progress': '{done}/{total}',
     'group.run_now': 'Run group',
     'locale': 'en-GB',
@@ -542,7 +542,7 @@ const TR = {
     'form.session': 'Связанная сессия', 'form.session.hint': 'Claude возобновит эту сессию',
     'form.no_session': '— без сессии —',
     'form.model': 'Модель',
-    'form.model.sonnet': 'Sonnet (по умолч.)', 'form.model.haiku': 'Haiku (быстрее)', 'form.model.opus': 'Opus (самый мощный)',
+    'form.model.sonnet': 'Sonnet (по умолч.)', 'form.model.haiku': 'Haiku (быстрее)', 'form.model.opus': 'Opus (самый мощный)', 'form.model.fable': 'Fable',
     'btn.cancel': 'Отмена', 'btn.create': 'Создать', 'btn.save': 'Сохранить', 'btn.delete': 'Удалить',
     'toast.queued': 'Задача добавлена в очередь', 'toast.scheduled': 'Задача запланирована',
     'toast.saved': 'Сохранено', 'toast.deleted': 'Задача удалена',
@@ -553,7 +553,7 @@ const TR = {
     'tasks.count': '{n} задач', 'tasks.count.1': '{n} задача', 'tasks.count.few': '{n} задачи',
     'form.exec': 'Параметры выполнения',
     'form.exec.mode': 'Режим', 'form.exec.agent': 'Агент',
-    'form.exec.model': 'Модель', 'form.exec.turns': 'Шаги', 'form.exec.effort': 'Усилие',
+    'form.exec.model': 'Модель', 'form.exec.turns': 'Шаги', 'form.exec.effort': 'Усилие', 'form.exec.engine': 'Движок',
     'group.badge': 'группа', 'group.progress': '{done}/{total}',
     'group.run_now': 'Запустить группу',
     'locale': 'ru-RU',
@@ -570,6 +570,8 @@ function recurLabel(r) { return t('recur.' + r) || r; }
 let tasks = [], sessions = [], chains = [], curWorkdir = null, editingId = null;
 let projects = [];
 let config = {};
+// Subscription engine capability + global default — populated from /api/version on load.
+let _schedTmuxAvailable = true, _schedDefaultEngine = 'api';
 const RECUR_NEXT = { hourly: 3600, daily: 86400, weekly: 604800, monthly: 2592000 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -694,6 +696,11 @@ async function loadProjects() {
     const r = await apiFetch('/api/projects');
     projects = await r.json();
     try { const rc = await apiFetch('/api/config'); config = await rc.json(); } catch {}
+    try {
+      const ver = await fetch('/api/version').then(r => r.json());
+      _schedTmuxAvailable = ver.tmuxAvailable !== false;
+      _schedDefaultEngine = ver.defaultEngine === 'subscription' ? 'subscription' : 'api';
+    } catch {}
     // Sync with the same localStorage key that Chat and Kanban use
     const state = JSON.parse(localStorage.getItem('cc_ui_state') || '{}');
     if (state.curWorkdir) {
@@ -1215,7 +1222,10 @@ function buildForm(tk={}) {
           <button type="button" class="sc-btn${tk.model==='haiku'?' on':''}" data-v="haiku" onclick="scOpt(this)">Haiku</button>
           <button type="button" class="sc-btn${(tk.model||'sonnet')==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
           <button type="button" class="sc-btn${tk.model==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
+          <button type="button" class="sc-btn${tk.model==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)">Fable</button>
         </div>
+        <div class="sc-sep"></div>
+        ${engineSegHtml(tk.run_engine)}
         <div class="sc-sep"></div>
         <div class="sc-seg">
           <span class="sc-lbl">${t('form.exec.turns')}</span>
@@ -1247,6 +1257,18 @@ function scOpt(btn) {
   if (!grp) return;
   grp.querySelectorAll('.sc-btn').forEach(b => b.classList.remove('on'));
   btn.classList.add('on');
+}
+
+// Engine (api/subscription) segment. Subscription disabled without server tmux.
+function engineSegHtml(val) {
+  const eng = val || (_schedDefaultEngine === 'subscription' && _schedTmuxAvailable ? 'subscription' : 'api');
+  const subDisabled = !_schedTmuxAvailable;
+  const subAttrs = subDisabled ? ` disabled style="opacity:0.4;cursor:not-allowed" title="Потрібен tmux на сервері"` : '';
+  return `<div class="sc-seg" data-group="run_engine">
+    <span class="sc-lbl">${t('form.exec.engine')}</span>
+    <button type="button" class="sc-btn${eng==='api'?' on':''}" data-v="api" onclick="scOpt(this)">API</button>
+    <button type="button" class="sc-btn${eng==='subscription'&&!subDisabled?' on':''}" data-v="subscription" onclick="scOpt(this)"${subAttrs}>Subscription</button>
+  </div>`;
 }
 
 function getScVal(group, fallback) {
@@ -1309,6 +1331,7 @@ async function saveTask() {
     model: getScVal('model', 'sonnet'),
     mode: getScVal('mode', 'auto'),
     agent_mode: getScVal('agent_mode', 'single'),
+    run_engine: getScVal('run_engine', _schedDefaultEngine === 'subscription' && _schedTmuxAvailable ? 'subscription' : 'api'),
     max_turns: parseInt($i('fMaxTurns')?.value) || 30,
     effort: ($i('fEffort')?.value || '').trim() || null,
     scheduled_at,
