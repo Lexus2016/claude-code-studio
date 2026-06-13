@@ -1548,7 +1548,9 @@ async function openEditModal(id){
 // Engine (api/subscription) segment — distinct from the vestigial 'engine'
 // (cli) notion. Uses data-group="run_engine". Subscription disabled w/o tmux.
 function engineSegHtml(val){
-  const eng=val||kbSettings.run_engine||'api';
+  // Clamp to API when tmux is unavailable (mirrors Chat's resolveEngineForView)
+  const raw=val||kbSettings.run_engine||'api';
+  const eng=(raw==='subscription'&&_kbTmuxAvailable)?'subscription':'api';
   const subDisabled=!_kbTmuxAvailable;
   const subAttrs=subDisabled?` disabled style="opacity:0.4;cursor:not-allowed" title="Потрібен tmux на сервері"`:'';
   return `<div class="sc-seg" data-group="run_engine">

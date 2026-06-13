@@ -6120,6 +6120,9 @@ function _chainProgressUpdate(taskId, status) {
 function rmW() { const w = msgsEl.querySelector('.welcome'); if (w) w.remove(); }
 function showW() {
   streaming.el = null;
+  // Welcome/blank screen = no active chat → engine selector reflects the global default
+  _curSessionRunEngine = null;
+  if (typeof resolveEngineForView === 'function') resolveEngineForView();
   msgsEl.innerHTML = `<div class="welcome"><div class="wi">CCS</div><h2>Claude Code Studio</h2><p>${t('welcome.desc')}</p><div class="welcome-prompts"><div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; ${t('welcome.prompt.1')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F41B; ${t('welcome.prompt.2')}</div><div class="wp-card" onclick="setPrompt(this)">&#x2728; ${t('welcome.prompt.3')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; ${t('welcome.prompt.4')}</div></div><button class="welcome-import-btn" onclick="$i('sessImportInput').click()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('welcome.import')}</button></div>`;
 }
 
@@ -7267,9 +7270,7 @@ function newTab() {
   curMode = 'auto';
   syncBtn('agent', 'single');
   syncBtn('mode', 'auto');
-  // New chat has no explicit engine → start from the global default
-  _curSessionRunEngine = null;
-  resolveEngineForView();
+  // New chat starts from the global default — handled centrally by showW() below
   // New tab is never generating — reset interrupt bar and stop button
   isGen = false; generatingTabId = null; setSendStop(false);
   msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();

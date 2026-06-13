@@ -1261,7 +1261,9 @@ function scOpt(btn) {
 
 // Engine (api/subscription) segment. Subscription disabled without server tmux.
 function engineSegHtml(val) {
-  const eng = val || (_schedDefaultEngine === 'subscription' && _schedTmuxAvailable ? 'subscription' : 'api');
+  // Clamp to API when tmux is unavailable (mirrors Chat's resolveEngineForView)
+  const raw = val || _schedDefaultEngine;
+  const eng = (raw === 'subscription' && _schedTmuxAvailable) ? 'subscription' : 'api';
   const subDisabled = !_schedTmuxAvailable;
   const subAttrs = subDisabled ? ` disabled style="opacity:0.4;cursor:not-allowed" title="Потрібен tmux на сервері"` : '';
   return `<div class="sc-seg" data-group="run_engine">
