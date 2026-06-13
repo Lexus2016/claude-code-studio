@@ -2513,7 +2513,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         <div class="mob-sheet-chips">
           <button class="mob-chip on" data-mob="engine" data-v="api" onclick="setMobOpt(this,'engine')">API</button>
           <button class="mob-chip" data-mob="engine" data-v="subscription" onclick="setMobOpt(this,'engine')">Subscription</button>
-          <button class="mob-chip" onclick="setDefaultEngine()" title="Зробити поточний рушій типовим для нових чатів">★ Set as default</button>
+          <button class="mob-chip" data-default-star onclick="setDefaultEngine()" title="Зробити поточний рушій типовим для нових чатів">★ Set as default</button>
         </div>
       </div>
       <div class="mob-sheet-section">
@@ -2648,7 +2648,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <span class="label">Engine</span>
       <button class="tb-btn on" data-v="api" onclick="setOpt(this,'engine')" title="API engine — headless claude -p, billed per token (Claude Pro / API key)">API</button>
       <button class="tb-btn" data-v="subscription" onclick="setOpt(this,'engine')" title="Subscription engine — persistent tmux session, billed on Claude Max subscription (no API credits). Requires: tmux + Claude Max.">Subscription</button>
-      <button class="tb-btn" onclick="setDefaultEngine()" title="Зробити поточний рушій типовим для нових чатів" style="padding:0 8px">★</button>
+      <button class="tb-btn" data-default-star onclick="setDefaultEngine()" title="Зробити поточний рушій типовим для нових чатів" style="padding:0 8px">★</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -3439,6 +3439,9 @@ let activeMcp = new Set(), activeSkills = new Set();
 let autoSkillsMode = true; // ON by default; user can disable
 let cfgFiles = {}, activeCfgTab = null;
 let curMode = 'auto', curAgent = 'single', curModel = 'sonnet', curEngine = 'api';
+// Global default engine for NEW chats (server-backed via /api/default-engine).
+// _curSessionRunEngine = the open chat's explicit run_engine (null = inherit default).
+let _globalDefaultEngine = 'api', _curSessionRunEngine = null;
 // --effort dial: '' (Auto, no flag) | 'low' | 'medium' | 'high' | 'xhigh' | 'max'.
 // Persisted globally in localStorage so the user's preferred reasoning depth survives reloads.
 let curEffort = (function(){ try { return localStorage.getItem('effort') || ''; } catch { return ''; } })();
@@ -4992,7 +4995,7 @@ function handleWsMsg(d) {
       if (d.mode && _validModes.includes(d.mode)) { curMode = d.mode; syncBtn('mode', d.mode); }
       if (d.model && _validModels.includes(d.model)) { curModel = d.model; syncBtn('model', d.model); }
       if (d.agent && _validAgents.includes(d.agent)) { curAgent = d.agent; syncBtn('agent', d.agent); }
-      if (d.engine && _validEngines.includes(d.engine)) { curEngine = d.engine; syncBtn('engine', d.engine); }
+      if (d.engine && _validEngines.includes(d.engine)) { curEngine = d.engine; syncBtn('engine', d.engine); syncDefaultStar(); }
       break;
     }
 
@@ -7264,6 +7267,9 @@ function newTab() {
   curMode = 'auto';
   syncBtn('agent', 'single');
   syncBtn('mode', 'auto');
+  // New chat has no explicit engine → start from the global default
+  _curSessionRunEngine = null;
+  resolveEngineForView();
   // New tab is never generating — reset interrupt bar and stop button
   isGen = false; generatingTabId = null; setSendStop(false);
   msgsEl.innerHTML = ''; showW(); renderProjects(); loadHist();
@@ -7420,10 +7426,35 @@ function setOpt(btn, group) {
   if (group === 'mode') curMode = v;
   else if (group === 'agent') curAgent = v;
   else if (group === 'model') curModel = v;
-  else if (group === 'engine') curEngine = v;
+  else if (group === 'engine') { curEngine = v; syncDefaultStar(); }
   updInd();
   // Sync mobile UI
   if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
+}
+
+// Highlight the ★ button when the current engine selection IS the global default.
+// (setOpt / syncBtn clear .on across the whole tb-group, including the star, so
+// this must run AFTER them.)
+function syncDefaultStar() {
+  const isDefault = curEngine === _globalDefaultEngine;
+  const cur = curEngine === 'subscription' ? 'Subscription' : 'API';
+  document.querySelectorAll('[data-default-star]').forEach(b => {
+    b.classList.toggle('on', isDefault);
+    b.title = isDefault
+      ? `${cur} — типовий рушій для нових чатів`
+      : `Зробити поточний рушій (${cur}) типовим для нових чатів`;
+  });
+}
+
+// Resolve which engine the current view shows: an explicit per-chat run_engine
+// wins; otherwise the chat inherits the global default. Race-proof — called from
+// both checkVersion (default loaded) and loadSess (session loaded); whichever
+// runs last produces the correct result.
+function resolveEngineForView() {
+  const want = _curSessionRunEngine || _globalDefaultEngine;
+  curEngine = (want === 'subscription' && _tmuxAvailable) ? 'subscription' : 'api';
+  syncBtn('engine', curEngine);
+  syncDefaultStar();
 }
 
 // Persist the current engine choice as the global default for NEW chats/tasks.
@@ -7433,7 +7464,9 @@ function setDefaultEngine() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ engine: curEngine }),
   }).then(r => r.json()).then(d => {
-    toast('★ ' + (d.defaultEngine === 'subscription' ? 'Subscription' : 'API') + ' — типовий рушій для нових чатів');
+    _globalDefaultEngine = d.defaultEngine === 'subscription' ? 'subscription' : 'api';
+    syncDefaultStar();
+    toast('★ ' + (_globalDefaultEngine === 'subscription' ? 'Subscription' : 'API') + ' — типовий рушій для нових чатів');
   }).catch(() => toast('⚠ Не вдалося зберегти типовий рушій', true));
 }
 
@@ -8126,6 +8159,7 @@ function applyTmuxCapability(available) {
     curEngine = 'api';
     syncBtn('engine', 'api');
   }
+  if (typeof syncDefaultStar === 'function') syncDefaultStar();
 }
 
 // ─── Version check ────────────────────────────────────────────────────────
@@ -8133,13 +8167,10 @@ async function checkVersion() {
   try {
     const local = await fetch('/api/version').then(r => r.json());
     applyTmuxCapability(local.tmuxAvailable !== false);
-    // Seed the engine selector from the global default — ONLY for the fresh
-    // new-chat blank state. An open session's persisted run_engine (restored at
-    // session-load) always wins; never override it here.
-    if (!currentSessionId && local.defaultEngine) {
-      curEngine = (local.defaultEngine === 'subscription' && _tmuxAvailable) ? 'subscription' : 'api';
-      syncBtn('engine', curEngine);
-    }
+    // Store the global default and resolve the current view's engine. An open
+    // chat's explicit run_engine wins; a chat without one inherits this default.
+    _globalDefaultEngine = local.defaultEngine === 'subscription' ? 'subscription' : 'api';
+    resolveEngineForView();
     const el = $i('versionBadge');
     if (!el) return;
     const cur = local.version || '?';
@@ -8558,8 +8589,10 @@ async function loadSess(id) {
     if (d.mode) { curMode = d.mode; syncBtn('mode', d.mode); }
     if (d.agent_mode) { curAgent = d.agent_mode; syncBtn('agent', d.agent_mode); }
     if (d.model) { curModel = d.model; syncBtn('model', d.model); }
-    curEngine = (d.run_engine === 'subscription' && _tmuxAvailable) ? 'subscription' : 'api';
-    syncBtn('engine', curEngine);
+    // Explicit per-chat run_engine wins; a chat without one (null — old chats or
+    // never-sent) inherits the global default instead of being forced to API.
+    _curSessionRunEngine = (d.run_engine === 'subscription' || d.run_engine === 'api') ? d.run_engine : null;
+    resolveEngineForView();
     updInd();
 
     curWorkdir = d.workdir || null;
@@ -11882,6 +11915,7 @@ function setMobOpt(btn, group) {
   else if (group === 'model') curModel = v;
   else if (group === 'engine') curEngine = v;
   syncBtn(group, v);
+  if (group === 'engine') syncDefaultStar();
   updateMobSubtitle();
   saveUIState();
 }
