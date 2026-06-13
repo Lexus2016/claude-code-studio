@@ -373,6 +373,7 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN task_output TEXT`); } catch {}      
 try { db.exec(`ALTER TABLE tasks ADD COLUMN context TEXT`); } catch {}            // Curated context passed by parent task
 try { db.exec(`ALTER TABLE tasks ADD COLUMN parent_task_id TEXT`); } catch {}     // Task that created this task via MCP
 try { db.exec(`ALTER TABLE tasks ADD COLUMN effort TEXT`); } catch {}             // claude --effort dial: low|medium|high|xhigh|max (NULL = CLI default)
+try { db.exec(`ALTER TABLE tasks ADD COLUMN run_engine TEXT`); } catch {}         // api/subscription billing choice — mirrors sessions.run_engine
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_host TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN sort_order REAL`); } catch {}
@@ -529,8 +530,8 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at,effort) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
-  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,effort=?,updated_at=datetime('now') WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at,effort,run_engine) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,effort=?,run_engine=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
@@ -1059,9 +1060,38 @@ async function startTask(task) {
       },
     };
 
+    // Engine selection: subscription tasks run via the persistent interactive
+    // tmux Claude session (billed on Claude Max), one-shot, no auto-continue.
+    const _taskEngine = (task.run_engine === 'subscription') ? 'subscription' : 'api';
+
     while (true) {
       lastTaskResult = null;
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
+
+      if (_taskEngine === 'subscription') {
+        // One-shot: interactive Claude runs to end_turn naturally. The proxy only
+        // broadcasts live frames to the session; persistence is mirrored from the
+        // returned value below (same shape the chat path uses).
+        const _proxy = { send: (str) => { try { broadcastToSession(sessionId, JSON.parse(str)); } catch {} } };
+        const r = await runInteractiveSingle({
+          prompt: currentTaskPrompt, systemPrompt: '', model: session?.model || task.model || 'sonnet',
+          mode: task.mode || 'auto', ws: _proxy, sessionId, abortController: taskAbort,
+          claudeSessionId: currentTaskCid, workdir: task.workdir || WORKDIR, mcpServers: taskMcpServers,
+        });
+        for (const ev of (r.toolEvents || [])) {
+          try { stmts.addMsg.run(sessionId, 'assistant', 'tool', (ev.input || '').substring(0, 500), ev.name, null, null, null); } catch {}
+        }
+        if (r.fullText) {
+          fullText += r.fullText;
+          const _tb = (taskBuffers.get(task.id) || '') + r.fullText;
+          taskBuffers.set(task.id, _tb.length > MAX_CHAT_BUFFER ? _tb.slice(-MAX_CHAT_BUFFER) : _tb);
+        }
+        if (r.cid) { newCid = r.cid; currentTaskCid = r.cid; try { stmts.updateClaudeId.run(r.cid, sessionId); } catch {} }
+        if (!r.completed) hasError = true;
+        lastTaskResult = r.completed ? { subtype: 'success' } : { subtype: 'error' };
+        break; // one-shot: interactive runs to end_turn, no auto-continue
+      }
+
       const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort, name: task.title, effort: task.effort || null });
       // Save subprocess PID so startup recovery can kill orphans on restart
       if (stream.process?.pid) {
@@ -3135,7 +3165,8 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           toUnixTs(scheduled_at),
           null, // recurrence
           null, // recurrence_end_at
-          callerTask?.effort || null  // effort: inherit from caller task by default
+          callerTask?.effort || null,  // effort: inherit from caller task by default
+          callerTask?.run_engine || null  // run_engine: inherit from caller task by default
         );
 
         // Set new columns that aren't in createTask prepared statement
@@ -3243,7 +3274,8 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
             callerTask?.source_session_id || null,
             toUnixTs(chainScheduledAt),
             null, null,
-            td.effort || effectiveEffort  // effort: per-task override, else chain default
+            td.effort || effectiveEffort,  // effort: per-task override, else chain default
+            td.run_engine || callerTask?.run_engine || null  // run_engine: per-task override, else inherit from caller
           );
 
           stmts.setTaskContext.run(contextJson, callerTaskId || null, taskId);
@@ -3451,6 +3483,16 @@ app.put('/api/lang', express.json(), (req, res) => {
   res.json({ ok: true });
 });
 
+// Global default engine for NEW chats/tasks ('api' | 'subscription'). Per-item
+// run_engine override still persists; this only seeds fresh selectors.
+app.put('/api/default-engine', express.json(), (req, res) => {
+  const e = req.body.engine === 'subscription' ? 'subscription' : 'api';
+  const c = loadConfig();
+  c.defaultEngine = e;
+  saveConfig(c);
+  res.json({ ok: true, defaultEngine: e });
+});
+
 // ─── Translate via Claude CLI ─────────────────────────────────────────────────
 // One-shot translation using haiku model, no session persistence.
 // Source text is written to a temp file to avoid OS ARG_MAX limits on large thinking blocks.
@@ -3543,7 +3585,7 @@ app.get('/api/version', (_, res) => {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8'));
   // tmuxAvailable: lets the UI disable the "Subscription" engine up front when the
   // server lacks tmux (e.g. native Windows) instead of failing only after a send.
-  res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable() });
+  res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable(), defaultEngine: (loadMergedConfig().defaultEngine === 'subscription' ? 'subscription' : 'api') });
 });
 
 app.get('/api/health', (_, res) => {
@@ -3746,9 +3788,9 @@ app.post('/api/tasks', (req, res) => {
   const { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
           model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
           depends_on=null, chain_id=null, source_session_id=null,
-          scheduled_at=null, recurrence=null, recurrence_end_at=null, effort=null } = req.body;
+          scheduled_at=null, recurrence=null, recurrence_end_at=null, effort=null, run_engine=null } = req.body;
   const id = genId();
-  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null);
+  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null, sqlVal(run_engine)||null);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -3763,7 +3805,7 @@ app.put('/api/tasks/:id', (req, res) => {
           max_turns=task.max_turns||30, attachments=task.attachments,
           depends_on=task.depends_on, chain_id=task.chain_id, source_session_id=task.source_session_id,
           scheduled_at=task.scheduled_at, recurrence=task.recurrence, recurrence_end_at=task.recurrence_end_at,
-          effort=task.effort } = req.body;
+          effort=task.effort, run_engine=task.run_engine } = req.body;
   // Stop running process when task is moved away from in_progress
   if (task.status === 'in_progress' && status !== 'in_progress') {
     const ctrl = runningTaskAborts.get(req.params.id);
@@ -3784,6 +3826,7 @@ app.put('/api/tasks/:id', (req, res) => {
     sqlVal(depends_on) || null, sqlVal(chain_id) || null, sqlVal(source_session_id) || null,
     sqlVal(scheduled_at) || null, sqlVal(recurrence) || null, sqlVal(recurrence_end_at) || null,
     sqlVal(effort) || null,
+    sqlVal(run_engine) || null,
     req.params.id
   );
   const updated = stmts.getTask.get(req.params.id);
@@ -3905,7 +3948,7 @@ app.post('/api/task-chains/:id/tasks', (req, res) => {
     chain.session_id || null, chain.workdir || null, chain.model || 'sonnet',
     chain.mode || 'auto', chain.agent_mode || 'single', chain.max_turns || 30,
     null, dependsOn, req.params.id, chain.source_session_id || null,
-    chain.scheduled_at || null, null, null, chain.effort || null);
+    chain.scheduled_at || null, null, null, chain.effort || null, chain.run_engine || null);
   if (taskStatus === 'todo') setImmediate(processQueue);
   res.json(stmts.getTask.get(taskId));
 });
@@ -3983,6 +4026,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
     source_session_id,
     claude_session_id,
     effort = null,
+    run_engine = null,
   } = req.body;
 
   if (!planTasks?.length) return res.status(400).json({ error: 'No tasks provided' });
@@ -4060,7 +4104,8 @@ app.post('/api/tasks/dispatch', (req, res) => {
         chainId,
         source_session_id || null,
         null, null, null, // scheduled_at, recurrence, recurrence_end_at
-        sqlVal(t.effort || effort) || null  // per-task override else dispatch-level effort
+        sqlVal(t.effort || effort) || null,  // per-task override else dispatch-level effort
+        sqlVal(t.run_engine || run_engine) || null  // per-task override else dispatch-level engine
       );
       createdTasks.push(stmts.getTask.get(taskId));
     }
@@ -7252,7 +7297,8 @@ wss.on('connection', (ws) => {
                 realDeps.length ? JSON.stringify(realDeps) : null,
                 chainId, sessionId || null,
                 null, null, null,  // scheduled_at, recurrence, recurrence_end_at
-                sqlVal(a.effort || effort) || null
+                sqlVal(a.effort || effort) || null,
+                sqlVal(a.run_engine || source?.run_engine) || null  // run_engine: per-agent override else inherit source session
               );
               created.push(stmts.getTask.get(taskId));
             }
