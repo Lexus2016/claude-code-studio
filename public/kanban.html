@@ -590,11 +590,13 @@ let curWorkdir=null,lastEtag='',refreshTimer=null,modalMode=null,editingId=null,
 let pendingAttachments=[]; // [{name, type, base64}]
 
 // ─── Session settings (persisted) ─────────────────────────────────────────
-let kbSettings={mode:'auto',agent_mode:'single',model:'sonnet',max_turns:30};
+let kbSettings={mode:'auto',agent_mode:'single',model:'sonnet',max_turns:30,run_engine:'api'};
 try{
   const _ks=JSON.parse(localStorage.getItem('kanban_sess_cfg')||'null');
   if(_ks&&typeof _ks==='object') kbSettings={...kbSettings,..._ks};
 }catch{}
+// Subscription engine capability + global default — populated from /api/version on load.
+let _kbTmuxAvailable=true, _kbDefaultEngine='api';
 
 // ─── Utils ────────────────────────────────────────────────────────────────
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
@@ -690,6 +692,15 @@ async function apiFetch(url,opts={}){
 async function loadProjects(){
   try{const r=await apiFetch('/api/projects');projects=await r.json();}catch{projects=[];}
   try{const rc=await apiFetch('/api/config');config=await rc.json();}catch{}
+  try{
+    const ver=await fetch('/api/version').then(r=>r.json());
+    _kbTmuxAvailable=ver.tmuxAvailable!==false;
+    _kbDefaultEngine=ver.defaultEngine==='subscription'?'subscription':'api';
+    // Seed engine default if the user has not chosen one yet.
+    if(kbSettings.run_engine==null||kbSettings.run_engine==='api'){
+      kbSettings.run_engine=(_kbDefaultEngine==='subscription'&&_kbTmuxAvailable)?'subscription':'api';
+    }
+  }catch{}
   renderProjDropdownList('');
   try{
     const s=JSON.parse(localStorage.getItem('cc_ui_state')||'null');
@@ -1300,7 +1311,10 @@ function buildChainForm(chain){
           <button type="button" class="sc-btn${mdl==='haiku'?' on':''}" data-v="haiku" onclick="scOpt(this)">Haiku</button>
           <button type="button" class="sc-btn${mdl==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
           <button type="button" class="sc-btn${mdl==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
+          <button type="button" class="sc-btn${mdl==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)">Fable</button>
         </div>
+        <div class="sc-sep"></div>
+        ${engineSegHtml(chain.run_engine)}
         <div class="sc-sep"></div>
         <div class="sc-seg">
           <span class="sc-lbl">${t('tb.turns')}</span>
@@ -1531,6 +1545,19 @@ async function openEditModal(id){
   setTimeout(()=>$i('fTitle')?.focus(),60);
 }
 
+// Engine (api/subscription) segment — distinct from the vestigial 'engine'
+// (cli) notion. Uses data-group="run_engine". Subscription disabled w/o tmux.
+function engineSegHtml(val){
+  const eng=val||kbSettings.run_engine||'api';
+  const subDisabled=!_kbTmuxAvailable;
+  const subAttrs=subDisabled?` disabled style="opacity:0.4;cursor:not-allowed" title="Потрібен tmux на сервері"`:'';
+  return `<div class="sc-seg" data-group="run_engine">
+    <span class="sc-lbl">${t('tb.engine')}</span>
+    <button type="button" class="sc-btn${eng==='api'?' on':''}" data-v="api" onclick="scOpt(this)">API</button>
+    <button type="button" class="sc-btn${eng==='subscription'&&!subDisabled?' on':''}" data-v="subscription" onclick="scOpt(this)"${subAttrs}>Subscription</button>
+  </div>`;
+}
+
 function buildForm(tk={}){
   const isNew=!tk.id;
   const m=tk.mode||kbSettings.mode||'auto', ag=tk.agent_mode||kbSettings.agent_mode||'single', mdl=tk.model||kbSettings.model||'sonnet', eng=tk.engine||kbSettings.engine||'cli';
@@ -1573,7 +1600,10 @@ function buildForm(tk={}){
           <button type="button" class="sc-btn${mdl==='haiku'?' on':''}" data-v="haiku" onclick="scOpt(this)">Haiku</button>
           <button type="button" class="sc-btn${mdl==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
           <button type="button" class="sc-btn${mdl==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
+          <button type="button" class="sc-btn${mdl==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)">Fable</button>
         </div>
+        <div class="sc-sep"></div>
+        ${engineSegHtml(tk.run_engine)}
         <div class="sc-sep"></div>
         <div class="sc-seg">
           <span class="sc-lbl">${t('tb.turns')}</span>
@@ -1678,7 +1708,7 @@ function onFSessionChange(){
   if(cfg)cfg.classList.toggle('visible',!hasSess);
 }
 function getSessCfg(){
-  const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',maxTurns:30,effort:''};
+  const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',run_engine:kbSettings.run_engine||'api',maxTurns:30,effort:''};
   const cfg=$i('newSessCfg');
   if(!cfg)return defaults;
   const result={};
@@ -1736,6 +1766,7 @@ async function saveTask(){
     agent_mode:cfg.agent,
     max_turns:cfg.maxTurns,
     effort:cfg.effort||null,
+    run_engine:cfg.run_engine||'api',
     attachments:pendingAttachments.length?JSON.stringify(pendingAttachments):null,
   };
   try{
