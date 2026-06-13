@@ -12751,7 +12751,7 @@ function _highlightSearchMatch() {
 // ─── Export session as Markdown ──────────────────────────────────────────────
 function exportSessionMd() {
   if (!currentSessionId || !_allMsgs.length) return;
-  const tab = tabs.find(t => t.id === currentSessionId);
+  const tab = openTabs.find(t => t.id === currentSessionId);
   const title = tab?.title || 'Chat';
   const lines = [`# ${title}\n`];
   for (const m of _allMsgs) {
