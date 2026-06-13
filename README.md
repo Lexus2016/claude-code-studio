@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.55.0** — Export conversation as Markdown, `G` key to jump to latest message, and shareable chat format for any AI or document.
+> **v5.56.0** — Set a **global default engine** (★) for new chats and tasks; the API/Subscription billing choice and the **Fable** model now reach the Kanban board and Scheduler too.
 
 ---
 
@@ -289,6 +289,8 @@ Turn budget: 1–200 (default 50). Auto-continues up to 3x — so 50 turns effec
 
 The active engine is always visible at a glance: a **⚡ Max** badge appears in the session bar whenever your session runs on the Subscription engine — so you never confuse which billing mode is in effect. Hover any engine button in the toolbar for a full explanation before you switch.
 
+**Global default** — set your preferred engine once with the **★** button next to the toolbar selector (the star lights up when the current selection is your default). Every new chat — and every new **Kanban** card and **Scheduler** task — starts on it, while any individual chat or task can still override per-item. The engine selector lives in Chat, the Kanban task form, and the Scheduler form alike, and falls back to **API** automatically when `tmux` is unavailable (e.g. native Windows without WSL) — the Subscription option is disabled with a clear hint rather than failing only after you send.
+
 ### 🌐 Remote Access & SSH
 
 **SSH** — add remote servers, create projects pointing to directories on them. Claude works there as if local. Type `#` in chat for quick multi-server attachment. Screenshots and files auto-upload via SFTP.
@@ -345,9 +347,9 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | Category | Features |
 |----------|----------|
 | **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom |
-| **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, Fable / Opus / Sonnet / Haiku model selector |
-| **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, effort dial per task/chain |
-| **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, effort dial per task, watchdog auto-recovery |
+| **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, global default (★ set-as-default for new chats/tasks), per-item override, available in Chat + Kanban + Scheduler, tmux-aware (auto-disabled without tmux), Fable / Opus / Sonnet / Haiku model selector |
+| **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, engine + model + effort per task/chain |
+| **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, engine + model + effort per task, watchdog auto-recovery |
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
 | **Telegram** | Bot control, push notifications, ask_user forwarding (+ file answers), session bridge, Forum Mode, inline stop, deep-link navigation, rich action buttons (localized EN/UA/RU), Write button, file attachments, interrupt queue while busy |
 | **Delegation** | Cross-agent handoff/sync (Codex, Antigravity, opencode), CONTEXT.md + DIALOG.md protocol, fs.watch + polling, persistent across restarts, Windows support, sidebar agents manager, auto-seeded defaults, test button |
