@@ -2504,6 +2504,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         <div class="mob-sheet-chips">
           <button class="mob-chip on" data-mob="engine" data-v="api" onclick="setMobOpt(this,'engine')">API</button>
           <button class="mob-chip" data-mob="engine" data-v="subscription" onclick="setMobOpt(this,'engine')">Subscription</button>
+          <button class="mob-chip" onclick="setDefaultEngine()" title="Зробити поточний рушій типовим для нових чатів">★ Set as default</button>
         </div>
       </div>
       <div class="mob-sheet-section">
@@ -2638,6 +2639,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <span class="label">Engine</span>
       <button class="tb-btn on" data-v="api" onclick="setOpt(this,'engine')" title="API engine — headless claude -p, billed per token (Claude Pro / API key)">API</button>
       <button class="tb-btn" data-v="subscription" onclick="setOpt(this,'engine')" title="Subscription engine — persistent tmux session, billed on Claude Max subscription (no API credits). Requires: tmux + Claude Max.">Subscription</button>
+      <button class="tb-btn" onclick="setDefaultEngine()" title="Зробити поточний рушій типовим для нових чатів" style="padding:0 8px">★</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -7405,6 +7407,17 @@ function setOpt(btn, group) {
   if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
 }
 
+// Persist the current engine choice as the global default for NEW chats/tasks.
+function setDefaultEngine() {
+  fetch('/api/default-engine', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ engine: curEngine }),
+  }).then(r => r.json()).then(d => {
+    toast('★ ' + (d.defaultEngine === 'subscription' ? 'Subscription' : 'API') + ' — типовий рушій для нових чатів');
+  }).catch(() => toast('⚠ Не вдалося зберегти типовий рушій', true));
+}
+
 function updInd() { /* removed — mode indicator no longer in toolbar */ }
 
 function updateSessBarSkills() {
@@ -8101,6 +8114,13 @@ async function checkVersion() {
   try {
     const local = await fetch('/api/version').then(r => r.json());
     applyTmuxCapability(local.tmuxAvailable !== false);
+    // Seed the engine selector from the global default — ONLY for the fresh
+    // new-chat blank state. An open session's persisted run_engine (restored at
+    // session-load) always wins; never override it here.
+    if (!currentSessionId && local.defaultEngine) {
+      curEngine = (local.defaultEngine === 'subscription' && _tmuxAvailable) ? 'subscription' : 'api';
+      syncBtn('engine', curEngine);
+    }
     const el = $i('versionBadge');
     if (!el) return;
     const cur = local.version || '?';
