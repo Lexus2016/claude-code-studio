@@ -2195,6 +2195,15 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .search-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 4px; }
 .search-close:hover { color: var(--text); }
 .msg-highlight { background: rgba(124,106,239,.25) !important; outline: 2px solid rgba(124,106,239,.5); border-radius: 3px; }
+/* ─── Keyboard shortcuts help overlay ─── */
+#kbHelpOverlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:3500; align-items:center; justify-content:center; }
+#kbHelpOverlay.visible { display:flex; }
+.kb-panel { background:var(--s1); border:1px solid var(--border); border-radius:12px; padding:20px 24px; min-width:300px; max-width:440px; box-shadow:0 20px 60px rgba(0,0,0,.6); animation:fadeUp .18s ease; }
+.kb-panel h3 { margin:0 0 14px; font-size:13px; font-weight:600; color:var(--text); }
+.kb-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,.06); font-size:12px; color:var(--text-dim); gap:12px; }
+.kb-row:last-child { border-bottom:none; }
+.kb-keys { display:flex; gap:3px; flex-shrink:0; }
+.kb-key { background:var(--s3,#1f2637); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-family:monospace; font-size:11px; color:var(--text); }
 </style>
 </head>
 <body>
@@ -2669,6 +2678,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <span id="sessBarSkills" style="display:flex;gap:4px;align-items:center;overflow:hidden;flex-shrink:1;"></span>
     <span style="flex:1"></span>
     <span id="sessBarMaxBadge" style="display:none;font-size:11px;font-weight:600;color:#a78bfa;background:rgba(124,106,239,.15);border:1px solid rgba(124,106,239,.35);padding:1px 7px;border-radius:4px;flex-shrink:0;" title="Running on Claude Max subscription (tmux engine — no API credits consumed)">⚡ Max</span>
+    <span id="sessBarMsgCount" style="display:none;font-size:10px;color:var(--muted);opacity:.7;flex-shrink:0;" title="Messages in this session"></span>
     <span id="sessBarRetry" style="display:none;font-size:11px;color:var(--warn,#f59e0b);opacity:.85;flex-shrink:0;"></span>
     <span id="sessBarClaudeId" style="display:none;font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="" onclick="copySessId()"></span>
     <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openInClaude()">⚡ Claude Code</a>
@@ -7065,6 +7075,12 @@ async function updateSessBar(opts = {}) {
     if (notesBtn) notesBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
     const maxBadge = $i('sessBarMaxBadge');
     if (maxBadge) maxBadge.style.display = (sess.run_engine === 'subscription') ? '' : 'none';
+    const msgCountEl = $i('sessBarMsgCount');
+    if (msgCountEl) {
+      const n = _allMsgs.filter(m => m.role === 'user' || (m.role === 'assistant' && m.type !== 'thinking')).length;
+      if (currentSessionId && n > 0) { msgCountEl.textContent = `${n} msgs`; msgCountEl.style.display = ''; }
+      else { msgCountEl.style.display = 'none'; }
+    }
     loadNotesForSession(sess.notes);
     if (retryIfMissing && !hasClaudeId && tab?.generating && currentSessionId === sessionId) {
       scheduleSessBarRefresh();
@@ -12679,6 +12695,10 @@ function _highlightSearchMatch() {
   _searchMatches[_searchIdx]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
+// ─── Keyboard shortcuts help overlay ────────────────────────────────────────
+function openKbHelp() { const o = $i('kbHelpOverlay'); if (o) o.classList.add('visible'); }
+function closeKbHelp() { const o = $i('kbHelpOverlay'); if (o) o.classList.remove('visible'); }
+
 // Global keyboard shortcuts
 document.addEventListener('keydown', e => {
   // Ctrl/Cmd+F — open message search (only when a session is active and focus is not in an input)
@@ -12689,8 +12709,17 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     openChatSearch();
   }
-  // Escape — close search or notes
+  // ? — keyboard shortcuts help (outside input fields)
+  if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    e.preventDefault();
+    openKbHelp();
+  }
+  // Escape — close overlays, search, notes
   if (e.key === 'Escape') {
+    const kbHelp = $i('kbHelpOverlay');
+    if (kbHelp?.classList.contains('visible')) { closeKbHelp(); return; }
     const bar = $i('chatSearchBar');
     if (bar?.classList.contains('visible')) { closeChatSearch(); return; }
     const np = $i('notesPanel');
@@ -12698,5 +12727,20 @@ document.addEventListener('keydown', e => {
   }
 });
 </script>
+
+<!-- ─── Keyboard Shortcuts Help Overlay ─── -->
+<div id="kbHelpOverlay" onclick="if(event.target===this)closeKbHelp()">
+  <div class="kb-panel">
+    <h3>⌨️ Keyboard Shortcuts</h3>
+    <div class="kb-row"><span>Search messages</span><div class="kb-keys"><span class="kb-key">Ctrl</span><span class="kb-key">F</span></div></div>
+    <div class="kb-row"><span>Send message</span><div class="kb-keys"><span class="kb-key">Enter</span></div></div>
+    <div class="kb-row"><span>New line</span><div class="kb-keys"><span class="kb-key">Shift</span><span class="kb-key">Enter</span></div></div>
+    <div class="kb-row"><span>Paste screenshot</span><div class="kb-keys"><span class="kb-key">Ctrl</span><span class="kb-key">V</span></div></div>
+    <div class="kb-row"><span>Next search result</span><div class="kb-keys"><span class="kb-key">Enter</span></div></div>
+    <div class="kb-row"><span>Prev search result</span><div class="kb-keys"><span class="kb-key">Shift</span><span class="kb-key">Enter</span></div></div>
+    <div class="kb-row"><span>Close / Cancel</span><div class="kb-keys"><span class="kb-key">Esc</span></div></div>
+    <div class="kb-row"><span>Show this panel</span><div class="kb-keys"><span class="kb-key">?</span></div></div>
+  </div>
+</div>
 </body>
 </html>

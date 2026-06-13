@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.53.0** — Subscription engine with ⚡ Max badge, Fable model, and engine tooltips for crystal-clear billing context.
+> **v5.54.0** — Keyboard Shortcuts Help (`?`), live message counter in session bar, and a cleaner session-at-a-glance experience.
 
 ---
 
@@ -130,6 +130,10 @@ Hit **Translate** inside the thinking modal to render the chain of thought in yo
 **Session notes** — every session has a private scratchpad. Click **📝 Notes** in the session bar to open a resizable textarea that auto-saves as you type. Notes are stored in SQLite alongside the session — your context clues, observations, and reminders persist across restarts and never get sent to Claude.
 
 **In-chat message search** — press **Ctrl+F** (or **⌘F** on Mac) to open a search bar above the messages. Type to instantly filter — only matching messages stay visible. Navigate between hits with ▲▼ or **Enter / Shift+Enter**. Press **Esc** to close. Instantly find that command you ran three hundred messages ago.
+
+**Keyboard shortcuts help** — press **`?`** from anywhere outside a text field to open a floating shortcuts reference panel. Every hotkey in the UI — search, send, new line, paste screenshot, close — listed in one place. Dismiss with **Esc** or a click outside. Discoverability without digging through docs.
+
+**Session message counter** — the session bar now shows a live message count ("23 msgs") at a glance. It updates automatically after each generation completes — always reflecting the real depth of the current session. Zero noise when the session is empty.
 
 **Session fork** — hit the ↗ button next to any chat to create a full copy that shares the same Claude CLI session history. Branch your conversation at any point — explore alternative approaches without losing the original thread. Works on SSH hosts too.
 
@@ -336,7 +340,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 
 | Category | Features |
 |----------|----------|
-| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge (Subscription engine indicator) |
+| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge (Subscription engine indicator), keyboard shortcuts help (`?`), session message counter |
 | **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, Fable / Opus / Sonnet / Haiku model selector |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, effort dial per task/chain |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, effort dial per task, watchdog auto-recovery |
