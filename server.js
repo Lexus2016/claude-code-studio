@@ -2020,6 +2020,7 @@ function loadMergedConfig() {
     skills:        { ...(g.skills||{}),     ...(l.skills||{})     },
     slashCommands: [...(l.slashCommands||[])],
     lang:          l.lang || g.lang || 'en',
+    defaultEngine: l.defaultEngine || g.defaultEngine || 'api',
     recentProjectsCount: l.recentProjectsCount ?? g.recentProjectsCount ?? 5,
   });
   return _mergedConfigCache;
