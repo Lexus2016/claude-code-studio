@@ -2204,6 +2204,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .kb-row:last-child { border-bottom:none; }
 .kb-keys { display:flex; gap:3px; flex-shrink:0; }
 .kb-key { background:var(--s3,#1f2637); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-family:monospace; font-size:11px; color:var(--text); }
+#charCounter { font-size:10px; color:var(--muted,#6b7a99); flex-shrink:0; padding:0 4px; align-self:center; transition:color .15s; pointer-events:none; user-select:none; }
+#charCounter.cc-warn { color:#e8a62a; }
+#charCounter.cc-danger { color:#e05252; }
 </style>
 </head>
 <body>
@@ -2790,6 +2793,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
         </svg>
       </button>
       <textarea id="input" rows="1" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @ — файли · # — SSH · 📎 — будь-який файл" autofocus aria-label="Message input" aria-multiline="true"></textarea>
+      <span id="charCounter" style="display:none;" aria-live="polite" aria-label="Character count"></span>
       <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Завдань у черзі"></span>
       <button class="sb stop-btn hidden" id="stopBtn" onclick="confirmStop()" data-i18n-title="stop.agent" title="Stop agent">
         <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
@@ -8122,6 +8126,17 @@ function deleteQueuedMsg(btn) {
 inEl.addEventListener('input', () => {
   inEl.style.height = 'auto';
   inEl.style.height = Math.min(inEl.scrollHeight, 120) + 'px';
+  const n = inEl.value.length;
+  const cc = $i('charCounter');
+  if (cc) {
+    if (n >= 100) {
+      cc.textContent = n + ' chars';
+      cc.className = n >= 1000 ? 'cc-danger' : n >= 500 ? 'cc-warn' : '';
+      cc.style.display = '';
+    } else {
+      cc.style.display = 'none';
+    }
+  }
 });
 inEl.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -12782,6 +12797,14 @@ document.addEventListener('keydown', e => {
     scrollToBottom();
     userScrolled = false;
   }
+  // I — focus message input
+  if (e.key === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    e.preventDefault();
+    inEl.focus();
+    inEl.setSelectionRange(inEl.value.length, inEl.value.length);
+  }
   // Escape — close overlays, search, notes
   if (e.key === 'Escape') {
     const kbHelp = $i('kbHelpOverlay');
@@ -12806,6 +12829,7 @@ document.addEventListener('keydown', e => {
     <div class="kb-row"><span>Prev search result</span><div class="kb-keys"><span class="kb-key">Shift</span><span class="kb-key">Enter</span></div></div>
     <div class="kb-row"><span>Close / Cancel</span><div class="kb-keys"><span class="kb-key">Esc</span></div></div>
     <div class="kb-row"><span>Jump to latest message</span><div class="kb-keys"><span class="kb-key">G</span></div></div>
+    <div class="kb-row"><span>Focus message input</span><div class="kb-keys"><span class="kb-key">I</span></div></div>
     <div class="kb-row"><span>Show this panel</span><div class="kb-keys"><span class="kb-key">?</span></div></div>
   </div>
 </div>

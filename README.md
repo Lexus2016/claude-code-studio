@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.56.0** — Set a **global default engine** (★) for new chats and tasks; the API/Subscription billing choice and the **Fable** model now reach the Kanban board and Scheduler too.
+> **v5.56.0** — Press **`I`** to instantly focus the message input from anywhere; live **character counter** appears as you type longer messages — orange at 500+, red at 1000+.
 
 ---
 
@@ -138,6 +138,10 @@ Hit **Translate** inside the thinking modal to render the chain of thought in yo
 **Keyboard shortcuts help** — press **`?`** from anywhere outside a text field to open a floating shortcuts reference panel. Every hotkey in the UI — search, send, new line, paste screenshot, close — listed in one place. Dismiss with **Esc** or a click outside. Discoverability without digging through docs.
 
 **Session message counter** — the session bar now shows a live message count ("23 msgs") at a glance. It updates automatically after each generation completes — always reflecting the real depth of the current session. Zero noise when the session is empty.
+
+**`I` key — focus message input** — press **`I`** from anywhere outside a text field to instantly move focus to the message input and place the cursor at the end. No mouse required — your hands never leave the keyboard. Works alongside `G` (jump to bottom) and `?` (shortcuts help) as part of the keyboard-first navigation system.
+
+**Character counter** — a compact live counter appears just left of the Send button whenever your message exceeds 100 characters. Shows the exact character count at a glance — helpful when writing detailed prompts or pasting large blocks of context. Turns amber at 500+ chars and red at 1000+ to signal unusually large inputs at a glance. Disappears automatically once you send or clear the input.
 
 **Session fork** — hit the ↗ button next to any chat to create a full copy that shares the same Claude CLI session history. Branch your conversation at any point — explore alternative approaches without losing the original thread. Works on SSH hosts too.
 
@@ -346,7 +350,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 
 | Category | Features |
 |----------|----------|
-| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom |
+| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom, `I` focus input, character counter |
 | **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, global default (★ set-as-default for new chats/tasks), per-item override, available in Chat + Kanban + Scheduler, tmux-aware (auto-disabled without tmux), Fable / Opus / Sonnet / Haiku model selector |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, engine + model + effort per task/chain |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, engine + model + effort per task, watchdog auto-recovery |
