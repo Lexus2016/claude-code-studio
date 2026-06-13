@@ -2685,6 +2685,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
     <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
     <button id="sessBarExportBtn" class="sess-export-btn" style="display:none;" onclick="exportSession()" title="Export session as JSON">↓ Export</button>
+    <button id="sessBarMdExportBtn" class="sess-export-btn" style="display:none;" onclick="exportSessionMd()" title="Export conversation as Markdown (.md)">📄 MD</button>
     <button id="sessBarNotesBtn" class="sess-export-btn" style="display:none;" onclick="toggleNotesPanel()" title="Session notes (private)">📝 Notes</button>
     <input type="file" id="sessImportInput" accept=".json" style="display:none" onchange="importSessionFile(this)">
   </div>
@@ -7071,6 +7072,8 @@ async function updateSessBar(opts = {}) {
     }
     const exportBtn = $i('sessBarExportBtn');
     if (exportBtn) exportBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
+    const mdExportBtn = $i('sessBarMdExportBtn');
+    if (mdExportBtn) mdExportBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
     const notesBtn = $i('sessBarNotesBtn');
     if (notesBtn) notesBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
     const maxBadge = $i('sessBarMaxBadge');
@@ -12695,6 +12698,26 @@ function _highlightSearchMatch() {
   _searchMatches[_searchIdx]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
+// ─── Export session as Markdown ──────────────────────────────────────────────
+function exportSessionMd() {
+  if (!currentSessionId || !_allMsgs.length) return;
+  const tab = tabs.find(t => t.id === currentSessionId);
+  const title = tab?.title || 'Chat';
+  const lines = [`# ${title}\n`];
+  for (const m of _allMsgs) {
+    if (!m.content || m.type === 'thinking' || m.type === 'agent_plan') continue;
+    const header = m.role === 'user' ? '## You' : '## Claude';
+    lines.push(header, m.content.trim(), '');
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${title.replace(/[^a-z0-9\-_ ]/gi, '').trim().replace(/\s+/g, '_').slice(0, 50) || 'chat'}.md`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+
 // ─── Keyboard shortcuts help overlay ────────────────────────────────────────
 function openKbHelp() { const o = $i('kbHelpOverlay'); if (o) o.classList.add('visible'); }
 function closeKbHelp() { const o = $i('kbHelpOverlay'); if (o) o.classList.remove('visible'); }
@@ -12715,6 +12738,14 @@ document.addEventListener('keydown', e => {
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     e.preventDefault();
     openKbHelp();
+  }
+  // G — jump to latest message
+  if (e.key === 'g' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    e.preventDefault();
+    scrollToBottom();
+    userScrolled = false;
   }
   // Escape — close overlays, search, notes
   if (e.key === 'Escape') {
@@ -12739,6 +12770,7 @@ document.addEventListener('keydown', e => {
     <div class="kb-row"><span>Next search result</span><div class="kb-keys"><span class="kb-key">Enter</span></div></div>
     <div class="kb-row"><span>Prev search result</span><div class="kb-keys"><span class="kb-key">Shift</span><span class="kb-key">Enter</span></div></div>
     <div class="kb-row"><span>Close / Cancel</span><div class="kb-keys"><span class="kb-key">Esc</span></div></div>
+    <div class="kb-row"><span>Jump to latest message</span><div class="kb-keys"><span class="kb-key">G</span></div></div>
     <div class="kb-row"><span>Show this panel</span><div class="kb-keys"><span class="kb-key">?</span></div></div>
   </div>
 </div>
