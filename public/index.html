@@ -8070,10 +8070,37 @@ inEl.addEventListener('keydown', e => {
 
 function loadStats() { /* removed */ }
 
+// ─── tmux capability (Subscription engine) ─────────────────────────────────
+// Subscription engine needs tmux on the server. When absent (e.g. native
+// Windows without WSL/Git-Bash), disable the button up front with a reason
+// instead of letting the user discover it via a failed send.
+let _tmuxAvailable = true;
+function applyTmuxCapability(available) {
+  _tmuxAvailable = !!available;
+  const reason = 'Потрібен tmux на сервері (macOS/Linux/Docker/WSL). Недоступно тут.';
+  const sel = [
+    ...document.querySelectorAll('.tb-btn[data-v="subscription"]'),
+    ...document.querySelectorAll('.mob-chip[data-mob="engine"][data-v="subscription"]'),
+  ];
+  for (const btn of sel) {
+    btn.disabled = !_tmuxAvailable;
+    btn.style.opacity = _tmuxAvailable ? '' : '0.4';
+    btn.style.cursor = _tmuxAvailable ? '' : 'not-allowed';
+    if (!_tmuxAvailable) btn.title = reason;
+  }
+  // If a stored session already had Subscription selected but tmux is now gone,
+  // fall back to API in the UI so the user is not stranded on a dead engine.
+  if (!_tmuxAvailable && curEngine === 'subscription') {
+    curEngine = 'api';
+    syncBtn('engine', 'api');
+  }
+}
+
 // ─── Version check ────────────────────────────────────────────────────────
 async function checkVersion() {
   try {
     const local = await fetch('/api/version').then(r => r.json());
+    applyTmuxCapability(local.tmuxAvailable !== false);
     const el = $i('versionBadge');
     if (!el) return;
     const cur = local.version || '?';
@@ -8492,7 +8519,7 @@ async function loadSess(id) {
     if (d.mode) { curMode = d.mode; syncBtn('mode', d.mode); }
     if (d.agent_mode) { curAgent = d.agent_mode; syncBtn('agent', d.agent_mode); }
     if (d.model) { curModel = d.model; syncBtn('model', d.model); }
-    curEngine = d.run_engine === 'subscription' ? 'subscription' : 'api';
+    curEngine = (d.run_engine === 'subscription' && _tmuxAvailable) ? 'subscription' : 'api';
     syncBtn('engine', curEngine);
     updInd();
 

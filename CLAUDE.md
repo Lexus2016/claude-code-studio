@@ -107,6 +107,10 @@ This is intentional — do not introduce build tools.
 - `api` (default) — headless `claude -p` via `runCliSingle` in server.js
 - `subscription` — persistent interactive tmux session (one per chat) via `claude-interactive.js`, billed on the Claude Max subscription (UI button "Subscription"). MCP servers passed via `--mcp-config` at spawn; systemPrompt via `--append-system-prompt` at spawn; config changes (skills/mode/MCP/model) auto-respawn the tmux session with `--resume` — verified to keep writing to the same transcript jsonl. Image attachments saved to temp files, paths appended to the prompt. maxTurns is not applicable. Choice persisted per session in `sessions.run_engine` (the `engine` column belongs to telegram-bot.js — do not reuse it).
 
+**Why tmux (and not node-pty):** the engine needs a PTY that survives the Node process and is readable/writable from outside it. `tmux` delivers that as a plain binary — zero new npm deps, zero build step, matching the project philosophy. `node-pty` (the cross-platform alternative) is a native module requiring compilation — rejected for that reason.
+
+**Platform support — capability-checked, not OS-sniffed.** `/api/version` returns `tmuxAvailable` (server runs `tmux -V` once at boot); the UI disables the "Subscription" button when false. Works on macOS / Linux / Docker (tmux in Dockerfile) / Windows-via-WSL or Git-Bash. Native Windows without tmux → button disabled, user stays on `api`. There is intentionally no Windows special-casing — the capability flag covers every case.
+
 ### WebSocket Protocol — Do Not Break
 The entire UI depends on this exact message contract:
 - Client → Server: `{ type: 'chat', text, mode, model, mcpServers, skills }`

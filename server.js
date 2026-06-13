@@ -14,7 +14,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
-const { runInteractiveSingle, killInteractiveTmux } = require('./claude-interactive');
+const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable } = require('./claude-interactive');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
 const TelegramBot = require('./telegram-bot');
@@ -3541,7 +3541,9 @@ app.post('/api/translate', express.json({ limit: '500kb' }), (req, res) => {
 // Returns HTTP 503 if any critical subsystem is degraded.
 app.get('/api/version', (_, res) => {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8'));
-  res.json({ version: pkg.version, name: pkg.name });
+  // tmuxAvailable: lets the UI disable the "Subscription" engine up front when the
+  // server lacks tmux (e.g. native Windows) instead of failing only after a send.
+  res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable() });
 });
 
 app.get('/api/health', (_, res) => {

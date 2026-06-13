@@ -366,4 +366,4 @@ async function runInteractiveSingle(params) {
   }
 }
 
-module.exports = { runInteractiveSingle, killInteractiveTmux };
+module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable };
