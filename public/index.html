@@ -12805,6 +12805,22 @@ document.addEventListener('keydown', e => {
     inEl.focus();
     inEl.setSelectionRange(inEl.value.length, inEl.value.length);
   }
+  // T — scroll to top of chat
+  if (e.key === 't' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (!msgsEl) return;
+    e.preventDefault();
+    msgsEl.scrollTo({ top: 0, behavior: 'smooth' });
+    userScrolled = true;
+  }
+  // N — new chat session
+  if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    e.preventDefault();
+    newSession();
+  }
   // Escape — close overlays, search, notes
   if (e.key === 'Escape') {
     const kbHelp = $i('kbHelpOverlay');
@@ -12830,6 +12846,8 @@ document.addEventListener('keydown', e => {
     <div class="kb-row"><span>Close / Cancel</span><div class="kb-keys"><span class="kb-key">Esc</span></div></div>
     <div class="kb-row"><span>Jump to latest message</span><div class="kb-keys"><span class="kb-key">G</span></div></div>
     <div class="kb-row"><span>Focus message input</span><div class="kb-keys"><span class="kb-key">I</span></div></div>
+    <div class="kb-row"><span>Scroll to first message</span><div class="kb-keys"><span class="kb-key">T</span></div></div>
+    <div class="kb-row"><span>New chat session</span><div class="kb-keys"><span class="kb-key">N</span></div></div>
     <div class="kb-row"><span>Show this panel</span><div class="kb-keys"><span class="kb-key">?</span></div></div>
   </div>
 </div>
