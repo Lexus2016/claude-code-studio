@@ -30,9 +30,6 @@ const { findClaudeBin } = require('./claude-cli');
 // Overall run timeout — mirrors claude-cli.js MAX_SUBPROCESS_MS (default 30 min)
 const MAX_RUN_MS = parseInt(process.env.CLAUDE_TIMEOUT_MS || '1800000', 10) || 1800000;
 
-// Pane marker shown by the Claude TUI while a turn is in progress
-const BUSY_MARKER = 'esc to interrupt';
-
 // ─── tmux availability (checked once, cached) ───────────────────────────────
 let _tmuxAvailable = null;
 function tmuxAvailable() {
@@ -75,6 +72,32 @@ function capturePane(name) {
   } catch {
     return null;
   }
+}
+
+// Is the Claude TUI actively working a turn? Used to hold completion until the
+// spinner clears — a single assistant message is written to the transcript as
+// SEPARATE records per block (thinking → text → tool_use), all stamped with the
+// SAME final stop_reason, up to ~20s apart. So a terminal stop_reason can latch
+// on the thinking record well before the final text record is flushed; breaking
+// then would drop the trailing text. The spinner animates throughout that gap
+// and only clears when the turn truly ends.
+//
+// Detection is defense-in-depth and version-independent — ANY of three signals
+// means busy, biased so a false "busy" only DELAYS completion (caught by the
+// safety-net) while never risking a premature break that loses text:
+//   1. animation — the spinner's elapsed counter ticks every ~0.5–1s, so the
+//      captured pane changes between polls during a turn (verified on live
+//      2.1.x: idle sessions stay static, working ones change every poll);
+//   2. elapsed-timer pattern — a seconds count followed by a "·" or ")", e.g.
+//      "(8s ·" / "26m 44s ·" / "8s)", shown only during an active turn (the
+//      persistent statusline uses "⏱ 5m" / "🕐 14:12", which don't match);
+//   3. legacy "esc to interrupt" marker (older TUI builds).
+function paneBusy(pane, prevPane) {
+  if (pane === null) return false;
+  if (prevPane !== null && pane !== prevPane) return true;     // 1. spinner animating
+  if (/\d+s\s*[·)]/.test(pane)) return true;                  // 2. elapsed timer "(8s ·" / "43s ·" / "8s)"
+  if (pane.includes('esc to interrupt')) return true;         // 3. legacy marker
+  return false;
 }
 
 // Locate <cid>.jsonl under ~/.claude/projects/* — do NOT hand-encode the cwd→dirname
@@ -258,11 +281,13 @@ async function runInteractiveSingle(params) {
       try { fs.unlinkSync(tmpFile); } catch {}
     }
 
-    // ── Poll loop: tail transcript + watch pane busy marker ────────────────
+    // ── Poll loop: completion = transcript turn-end (stop_reason) gated by the
+    //    TUI spinner having cleared; pane is the gate, never the primary signal ──
     let remainder = '';
-    let endTurnSeen = false;
+    let endTurnSeen = false;          // latched when an assistant record ends the turn (stop_reason ≠ tool_use)
     let sawOutput = false;
-    let quietPolls = 0; // consecutive polls with no busy marker and no new bytes
+    let quietPolls = 0;               // consecutive polls with spinner gone (!busy) AND no new transcript bytes
+    let prevPaneCap = null;           // previous pane capture — for spinner-animation detection in paneBusy()
     const deadline = start + MAX_RUN_MS;
 
     while (true) {
@@ -332,28 +357,52 @@ async function runInteractiveSingle(params) {
                 }
               }
             }
-            if (rec.message?.stop_reason === 'end_turn') endTurnSeen = true;
+            // Turn-completion signal (authoritative, version-independent):
+            // `tool_use` is the ONLY stop_reason meaning "the agent will continue
+            // after the tool result". Every other terminal value — end_turn |
+            // stop_sequence | refusal (the full set observed across the local
+            // transcript corpus) — ends the turn. The old code matched only
+            // `end_turn` AND was gated behind `!busy`, a pane marker
+            // ('esc to interrupt') that no longer exists in the TUI, so `busy`
+            // was always false and completion fell through to a 3s-quiet
+            // heuristic that fired mid-task — reporting "done" while the agent
+            // was still working.
+            const _sr = rec.message?.stop_reason;
+            if (_sr === 'tool_use') endTurnSeen = false;
+            else if (_sr) endTurnSeen = true;
           }
         }
       }
 
-      // Busy detection via pane content
       const pane = capturePane(name);
-      const busy = pane !== null && pane.includes(BUSY_MARKER);
+      const busy = paneBusy(pane, prevPaneCap);
+      prevPaneCap = pane;
 
-      if (busy || gotNewBytes) {
-        quietPolls = 0;
-      } else {
-        quietPolls++;
-      }
+      // COMPLETE on the transcript turn-end signal, but ONLY once the spinner has
+      // cleared and no bytes arrived this poll. `tool_use` is the sole "continue"
+      // stop_reason; any other terminal value latches endTurnSeen. Because a
+      // single message's blocks are written as separate records up to ~20s apart
+      // (thinking → text), endTurnSeen can latch on the thinking record before the
+      // final text is flushed — the !busy guard (spinner still animating during
+      // that gap) holds the break until the whole message is out. Pane text is
+      // never the PRIMARY signal (spinner wording is version-specific); it only
+      // gates when to trust the already-latched transcript signal.
+      if (endTurnSeen && !busy && !gotNewBytes) break;
 
-      // COMPLETE when not busy AND (end_turn seen since send, OR some output arrived
-      // and two consecutive quiet polls passed)
-      if (!busy && (endTurnSeen || (sawOutput && quietPolls >= 2))) break;
+      if (gotNewBytes || busy) quietPolls = 0; else quietPolls++;
 
-      // Dead-end guard: TUI idle for ~30s with zero output and no end_turn —
-      // the message likely never registered; fail fast instead of waiting MAX_RUN_MS
-      if (!busy && !sawOutput && !endTurnSeen && quietPolls >= 20) {
+      // Safety-net completion: output WAS produced, then the spinner cleared and
+      // no new bytes arrived for ~18s. Covers a missed turn-end stop_reason (e.g.
+      // a corrupt final transcript line that failed to JSON.parse). Safe because
+      // a working agent keeps `busy` true (animation/timer), so quietPolls only
+      // climbs once the turn has genuinely ended.
+      if (sawOutput && quietPolls >= 12) break;
+
+      // Dead-end guard: zero output AND spinner gone for ~30s — the message never
+      // registered with the TUI; fail fast instead of blocking until MAX_RUN_MS.
+      // A long thinking phase or slow first tool keeps `busy` true (spinner
+      // animating) or writes a record (sawOutput), so neither trips this.
+      if (!sawOutput && quietPolls >= 20) {
         wsSend({ type: 'error', error: 'interactive session went idle without producing a reply' });
         return { cid, completed: false, resultMeta: { durationMs: Date.now() - start }, fullText, fullThinking, toolEvents };
       }

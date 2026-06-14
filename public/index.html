@@ -3491,6 +3491,28 @@ const inEl = $i('input');
 const MODAL_FOCUSABLE_SEL = 'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const modalStack = [];
 
+// ─── Persist message font size ───────────────────────────────────────────────
+(function() {
+  const saved = localStorage.getItem('ccs:msgFontSize');
+  if (saved) document.documentElement.style.setProperty('--msg-font', saved + 'px');
+})();
+
+// ─── Restore last unsent draft ───────────────────────────────────────────────
+(function() {
+  const draft = localStorage.getItem('ccs:draft');
+  if (draft && inEl && !inEl.value) {
+    inEl.value = draft;
+    inEl.style.height = 'auto';
+    inEl.style.height = Math.min(inEl.scrollHeight, 120) + 'px';
+    const cc = $i('charCounter');
+    if (cc && draft.length >= 100) {
+      cc.textContent = draft.length + ' chars';
+      cc.className = draft.length >= 1000 ? 'cc-danger' : draft.length >= 500 ? 'cc-warn' : '';
+      cc.style.display = '';
+    }
+  }
+})();
+
 function _findModalEntry(id) {
   return modalStack.findIndex(entry => entry.id === id);
 }
@@ -7902,6 +7924,7 @@ async function send() {
   // will see empty input and return early.
   inEl.value = '';
   inEl.style.height = 'auto';
+  localStorage.removeItem('ccs:draft');
 
   // Collect attachment payloads (fetch file contents for @ mentions)
   const attSnapshot = [..._attachments];
@@ -8126,6 +8149,9 @@ function deleteQueuedMsg(btn) {
 inEl.addEventListener('input', () => {
   inEl.style.height = 'auto';
   inEl.style.height = Math.min(inEl.scrollHeight, 120) + 'px';
+  // Persist draft to localStorage
+  if (inEl.value.trim()) localStorage.setItem('ccs:draft', inEl.value);
+  else localStorage.removeItem('ccs:draft');
   const n = inEl.value.length;
   const cc = $i('charCounter');
   if (cc) {
@@ -12821,6 +12847,20 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     newSession();
   }
+  // = / - / 0 — adjust message font size
+  if ((e.key === '=' || e.key === '-' || e.key === '0') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    const SIZES = [11, 12, 13, 14, 15, 16, 17, 18, 20, 22];
+    const cur = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15;
+    let next;
+    if (e.key === '=') { const idx = SIZES.findIndex(s => s >= cur); next = SIZES[Math.min(idx + 1, SIZES.length - 1)]; }
+    else if (e.key === '-') { const idx = SIZES.findLastIndex(s => s <= cur); next = SIZES[Math.max(idx - 1, 0)]; }
+    else { next = 15; }
+    document.documentElement.style.setProperty('--msg-font', next + 'px');
+    localStorage.setItem('ccs:msgFontSize', next);
+    e.preventDefault();
+  }
   // Escape — close overlays, search, notes
   if (e.key === 'Escape') {
     const kbHelp = $i('kbHelpOverlay');
@@ -12848,6 +12888,9 @@ document.addEventListener('keydown', e => {
     <div class="kb-row"><span>Focus message input</span><div class="kb-keys"><span class="kb-key">I</span></div></div>
     <div class="kb-row"><span>Scroll to first message</span><div class="kb-keys"><span class="kb-key">T</span></div></div>
     <div class="kb-row"><span>New chat session</span><div class="kb-keys"><span class="kb-key">N</span></div></div>
+    <div class="kb-row"><span>Increase message font</span><div class="kb-keys"><span class="kb-key">=</span></div></div>
+    <div class="kb-row"><span>Decrease message font</span><div class="kb-keys"><span class="kb-key">-</span></div></div>
+    <div class="kb-row"><span>Reset message font</span><div class="kb-keys"><span class="kb-key">0</span></div></div>
     <div class="kb-row"><span>Show this panel</span><div class="kb-keys"><span class="kb-key">?</span></div></div>
   </div>
 </div>

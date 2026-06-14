@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.57.0** — Press **`T`** to scroll to the very first message; press **`N`** to open a new chat — keyboard navigation now covers the full session lifecycle without touching the mouse.
+> **v5.58.0** — Message font size on demand (`=` bigger, `-` smaller, `0` reset, saved across sessions); unsent drafts now survive page refresh — never lose a half-written prompt again.
 
 ---
 
@@ -146,6 +146,10 @@ Hit **Translate** inside the thinking modal to render the chain of thought in yo
 **`T` key — scroll to first message** — press **`T`** (outside a text field) to smoothly scroll to the very top of the chat — the first message in the session. The perfect counterpart to `G` (jump to bottom): use `T` to get back to the beginning of a long conversation, then `G` to return to the present. Keeps `userScrolled` set so auto-scroll doesn't yank you back down.
 
 **`N` key — new chat session** — press **`N`** from anywhere outside a text field to instantly open a fresh chat. The same action as clicking the **＋ Chat** button — without reaching for the mouse. Combined with `G`, `T`, `I`, and `?`, the Studio now has a complete keyboard-first workflow: navigate history, focus input, compose, send, and start fresh — all without a single click.
+
+**Message font size** — press **`=`** to increase and **`-`** to decrease the chat message font size on the fly. Hit **`0`** to snap back to the default 15px. Nine steps from 11px to 22px — find your comfort zone in under a second. The preference is saved to `localStorage` and restored instantly on every page load, so you only set it once.
+
+**Draft auto-save** — every keystroke in the message input is silently persisted to `localStorage`. Refresh the page, close the tab by accident, lose power — your unsent draft comes back exactly as you left it. Drafts are cleared automatically the moment you hit send, so there's no stale recovery noise. Zero setup, zero UI — it just works.
 
 **Session fork** — hit the ↗ button next to any chat to create a full copy that shares the same Claude CLI session history. Branch your conversation at any point — explore alternative approaches without losing the original thread. Works on SSH hosts too.
 
@@ -354,7 +358,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 
 | Category | Features |
 |----------|----------|
-| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom, `I` focus input, character counter, `T` scroll-to-top, `N` new session |
+| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom, `I` focus input, character counter, `T` scroll-to-top, `N` new session, font size adjust (`=`/`-`/`0`), draft auto-save |
 | **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, global default (★ set-as-default for new chats/tasks), per-item override, available in Chat + Kanban + Scheduler, tmux-aware (auto-disabled without tmux), Fable / Opus / Sonnet / Haiku model selector |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, engine + model + effort per task/chain |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, engine + model + effort per task, watchdog auto-recovery |
