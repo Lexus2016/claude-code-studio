@@ -79,6 +79,29 @@ function getFreePort() {
   });
 }
 
+function isPortFree(port) {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.on('error', () => resolve(false));
+    srv.listen(port, '127.0.0.1', () => srv.close(() => resolve(true)));
+  });
+}
+
+// Reuse the same loopback port across launches. The renderer origin is
+// http://127.0.0.1:<port>; with a fresh random port every launch (plain
+// getFreePort) the origin changed too, wiping ALL origin-scoped localStorage
+// (project tabs, language, font size, draft, reasoning effort) on every
+// restart. Persisting the port keeps the origin — and that state — stable.
+async function getStablePort() {
+  const portFile = path.join(app.getPath('userData'), 'desktop-port');
+  let saved = 0;
+  try { saved = parseInt(String(fs.readFileSync(portFile, 'utf8')).trim(), 10) || 0; } catch (_) {}
+  if (saved >= 1024 && saved <= 65535 && (await isPortFree(saved))) return saved;
+  const port = await getFreePort();
+  try { fs.writeFileSync(portFile, String(port)); } catch (_) {}
+  return port;
+}
+
 function waitForHealth(port, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve, reject) => {
@@ -154,7 +177,7 @@ async function createWindow() {
 async function boot() {
   augmentPath();
   await ensureClaude();
-  serverPort = await getFreePort();
+  serverPort = await getStablePort();
   startServer(serverPort);
   await waitForHealth(serverPort);
   await createWindow();

@@ -5694,7 +5694,12 @@ function _attachTelegramListeners(bot) {
 }
 
 function initTelegramBot() {
-  if (process.env.CCS_DESKTOP === '1') { log.info('[desktop] telegram bot disabled'); return; }
+  // The bot polls Telegram outbound (no tunnel required), and /api/telegram/start
+  // already starts it in desktop mode — so resume it on boot too when the user
+  // enabled it. Previously CCS_DESKTOP returned here, so a saved+enabled bot
+  // silently stopped working after every restart. (Caveat: if you ALSO run the
+  // web-server build with the same token, only one instance may poll — Telegram
+  // permits a single getUpdates consumer per token.)
   const c = loadConfig();
   const tg = c.telegram;
   if (!tg || !tg.enabled || !tg.botToken) return;
