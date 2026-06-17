@@ -42,21 +42,28 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Bump Homebrew Cask to released version
+      - name: Update Homebrew tap cask (skips if HOMEBREW_TAP_TOKEN not set)
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "${TAP_TOKEN:-}" ]; then
+            echo "HOMEBREW_TAP_TOKEN not set — skipping cask bump. See homebrew-tap/README.md to enable the tap."
+            exit 0
+          fi
           VERSION="${GITHUB_REF_NAME#v}"
           DMG="claude-code-studio-${VERSION}-arm64.dmg"
           URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${DMG}"
           echo "Fetching $URL"
           curl -fL "$URL" -o "$DMG"
           SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"
-          CASK="homebrew-tap/Casks/claude-code-studio.rb"
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/${GITHUB_REPOSITORY_OWNER}/homebrew-claude-code-studio.git" tap
+          CASK="tap/Casks/claude-code-studio.rb"
           sed -i -E "s/^  version \".*\"/  version \"${VERSION}\"/" "$CASK"
           sed -i -E "s/^  sha256 .*/  sha256 \"${SHA}\"/" "$CASK"
+          cd tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "$CASK"
-          git commit -m "chore: bump Homebrew cask to ${VERSION}" || echo "cask unchanged"
+          git add Casks/claude-code-studio.rb
+          git commit -m "chore: claude-code-studio ${VERSION}" || echo "cask unchanged"
           git push
