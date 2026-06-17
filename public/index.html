@@ -2692,6 +2692,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <span id="sessBarRetry" style="display:none;font-size:11px;color:var(--warn,#f59e0b);opacity:.85;flex-shrink:0;"></span>
     <span id="sessBarClaudeId" style="display:none;font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="" onclick="copySessId()"></span>
     <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openInClaude()">⚡ Claude Code</a>
+    <button id="sessBarCatchupBtn" style="display:none;font-size:11px;color:var(--accent2);background:transparent;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="catchUpFromTerminal()" title="Дочитати у чат повідомлення, набрані напряму в терміналі (claude --resume)">⤵ Дочитати</button>
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
     <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
     <button id="sessBarExportBtn" class="sess-export-btn" style="display:none;" onclick="exportSession()" title="Export session as JSON">↓ Export</button>
@@ -5294,6 +5295,7 @@ function handleWsMsg(d) {
         }
       }
       { const openBtn = $i('sessBarOpenBtn'); if (openBtn) openBtn.style.display = 'none'; }
+      { const catchupBtn = $i('sessBarCatchupBtn'); if (catchupBtn) catchupBtn.style.display = 'none'; }
       toast('✅ Session restarted - you can continue chatting', false, 3000);
       // Reset streaming state for fresh start
       streaming.el = null; streaming.txt = '';
@@ -7124,6 +7126,7 @@ async function updateSessBar(opts = {}) {
       }
     }
     if (openBtn) { openBtn.style.display = hasClaudeId ? '' : 'none'; }
+    { const catchupBtn = $i('sessBarCatchupBtn'); if (catchupBtn) catchupBtn.style.display = hasClaudeId ? '' : 'none'; }
     updateSessBarSkills();
     const tab = findTabAcrossProjects(sessionId)?.tab || openTabs.find(t => t.id === sessionId);
     // Show compact button when session has messages and is not actively generating
@@ -7174,6 +7177,24 @@ async function openInClaude() {
       copyText(d.command).then(() => toast(t('toast.cmd_copied'))).catch(() => {});
     }
   } catch {}
+}
+
+// Pull conversation typed directly in an opened `claude --resume` terminal into the
+// web chat (complements openInClaude). Server reads new <cid>.jsonl bytes, persists
+// them, returns a count; we re-render the session history on success.
+async function catchUpFromTerminal() {
+  if (!currentSessionId) return;
+  const btn = $i('sessBarCatchupBtn');
+  if (btn) { if (btn.dataset.busy) return; btn.dataset.busy = '1'; btn.style.opacity = '.5'; }
+  try {
+    const r = await fetch(`/api/sessions/${currentSessionId}/catch-up`, { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { toast('⚠ ' + (d.error || 'Не вдалося дочитати'), true); return; }
+    if (d.baseline) { toast('✓ Базову позицію встановлено — попрацюйте в терміналі й натисніть ще раз'); return; }
+    if (d.count > 0) { await loadSess(currentSessionId); toast(`✓ Дочитано з терміналу: ${d.count}`); }
+    else { toast('Нічого нового з терміналу'); }
+  } catch { toast('⚠ Помилка дочитування', true); }
+  finally { if (btn) { delete btn.dataset.busy; btn.style.opacity = ''; } }
 }
 
 async function compactSession() {

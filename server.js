@@ -14,7 +14,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
-const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable } = require('./claude-interactive');
+const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
 const TelegramBot = require('./telegram-bot');
@@ -382,6 +382,9 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN remote_workdir TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN sort_order REAL`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN fork_from_cid TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN notes TEXT DEFAULT ''`); } catch {}
+// transcript_offset: catch-up cursor (byte offset into <cid>.jsonl). NULL = not yet
+// baselined; advanced to transcript EOF after every web turn + by /catch-up.
+try { db.exec(`ALTER TABLE sessions ADD COLUMN transcript_offset INTEGER`); } catch {}
 // Performance indexes — safe to re-run (IF NOT EXISTS)
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
@@ -4694,6 +4697,44 @@ app.post('/api/sessions/:id/open-terminal', (req, res) => {
   res.json({ ok, command: fullCmd });
 });
 
+// Catch up: pull conversation that happened directly in an opened
+// `claude --resume <cid>` terminal (the "⚡ Claude Code" button) into the web chat.
+// Reads <cid>.jsonl bytes appended since the stored cursor, persists them as
+// messages, and advances the cursor. Pull-on-demand — no live watcher.
+app.post('/api/sessions/:id/catch-up', (req, res) => {
+  const id = req.params.id;
+  const session = stmts.getSession.get(id);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+  const cid = sanitizeSessionId(session.claude_session_id);
+  if (!cid) return res.status(400).json({ error: 'No Claude session ID' });
+  // Don't race a live web turn — its own post-turn cursor sync would fight ours.
+  if (activeChatSessions.has(id) || activeTasks.has(id)) {
+    return res.status(409).json({ error: 'Session is busy — wait for the current reply to finish.' });
+  }
+  // First catch-up ever (cursor never set): baseline at the current EOF and import
+  // nothing, so prior history already in SQLite is never re-imported as duplicates.
+  if (session.transcript_offset == null) {
+    const sz = transcriptSize(cid);
+    try { db.prepare(`UPDATE sessions SET transcript_offset=? WHERE id=?`).run(sz == null ? 0 : sz, id); } catch {}
+    return res.json({ ok: true, count: 0, baseline: true });
+  }
+  const r = catchUpFromTranscript({ cid, startOffset: Number(session.transcript_offset) || 0 });
+  if (!r.found) return res.json({ ok: true, count: 0, note: 'no transcript on this host' });
+  try {
+    const persist = db.transaction((events, offset) => {
+      for (const e of events) {
+        stmts.addMsg.run(id, e.role, e.type, e.content, e.tool_name || null, null, null, null);
+      }
+      db.prepare(`UPDATE sessions SET transcript_offset=?, updated_at=datetime('now') WHERE id=?`).run(offset, id);
+    });
+    persist(r.events, r.offset);
+  } catch (e) {
+    log.error('catch-up persist failed', { sessionId: id, err: e.message });
+    return res.status(500).json({ error: 'Failed to persist caught-up messages' });
+  }
+  res.json({ ok: true, count: r.events.length });
+});
+
 // Paginated messages — GET /api/sessions/:id/messages?limit=50&offset=0
 app.get('/api/sessions/:id/messages', (req, res) => {
   const session = stmts.getSession.get(req.params.id);
@@ -6662,6 +6703,11 @@ wss.on('connection', (ws) => {
         resultMeta = result.resultMeta;
       }
       if (newCid) { try { stmts.updateClaudeId.run(newCid, localSessionId); } catch (e) { log.error('updateClaudeId failed', { cid: String(newCid).substring(0,50), sessionId: localSessionId, err: e.message, stack: e.stack }); } }
+      // Catch-up cursor sync: everything in the transcript up to its current EOF is now
+      // reflected in SQLite by this web turn (API via stdout, subscription via transcript
+      // read). A later /catch-up therefore surfaces only bytes appended afterwards — i.e.
+      // work done directly in an opened `claude --resume` terminal.
+      if (newCid) { try { const _tsz = transcriptSize(newCid); if (_tsz != null) db.prepare(`UPDATE sessions SET transcript_offset=? WHERE id=?`).run(_tsz, localSessionId); } catch {} }
       // Clear fork flag after first successful CLI call — session now has its own claude_session_id
       if (_forkCid) { try { db.prepare(`UPDATE sessions SET fork_from_cid=NULL WHERE id=?`).run(localSessionId); } catch {} }
 

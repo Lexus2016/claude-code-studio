@@ -415,4 +415,91 @@ async function runInteractiveSingle(params) {
   }
 }
 
-module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable };
+// ─── Catch-up: pull transcript activity done OUTSIDE the web UI ───────────────
+// When the user opens a real terminal on a session (the "⚡ Claude Code" button →
+// `claude --resume <cid>`), their typing + Claude's replies are appended to the
+// SAME <cid>.jsonl this module reads. These helpers let the server pull that gap
+// into the web chat on demand. Pure: no tmux, no WebSocket, no SQLite — the
+// caller persists the events and re-renders.
+
+// Current byte size of <cid>.jsonl, or null if no transcript exists yet. The
+// server calls this to advance the catch-up cursor to EOF after every web turn,
+// so a later catch-up only surfaces bytes a terminal session appended afterwards.
+function transcriptSize(cid) {
+  const p = cid ? findTranscript(cid) : null;
+  if (!p) return null;
+  try { return fs.statSync(p).size; } catch { return null; }
+}
+
+// Extract the human-typed text from a transcript `user` record. Records carrying
+// only tool_result / image blocks (tool output fed back to the agent, not
+// something a person typed) return '' and are skipped by the caller.
+function userRecordText(rec) {
+  const c = rec && rec.message ? rec.message.content : undefined;
+  if (typeof c === 'string') return c.trim();
+  if (Array.isArray(c)) {
+    const parts = [];
+    for (const b of c) {
+      if (b && b.type === 'text' && typeof b.text === 'string') parts.push(b.text);
+    }
+    return parts.join('\n').trim();
+  }
+  return '';
+}
+
+// Read <cid>.jsonl records appended since `startOffset` and return them as an
+// ordered event list plus the new byte offset. The offset advances ONLY past
+// COMPLETE lines (to the last '\n'); a half-written trailing record is left for
+// the next call. Returns { found, offset, events }.
+function catchUpFromTranscript({ cid, startOffset = 0 } = {}) {
+  const out = { found: false, offset: Number(startOffset) || 0, events: [] };
+  const transcriptPath = cid ? findTranscript(cid) : null;
+  if (!transcriptPath) return out;
+  out.found = true;
+
+  let size = 0;
+  try { size = fs.statSync(transcriptPath).size; } catch { return out; }
+  const from = Math.max(0, Math.min(Number(startOffset) || 0, size));
+  out.offset = from;
+  if (size <= from) return out;
+
+  let buf;
+  try {
+    const fd = fs.openSync(transcriptPath, 'r');
+    try {
+      buf = Buffer.alloc(size - from);
+      const n = fs.readSync(fd, buf, 0, buf.length, from);
+      buf = buf.subarray(0, n);
+    } finally { fs.closeSync(fd); }
+  } catch { return out; }
+
+  const lastNl = buf.lastIndexOf(0x0A);
+  if (lastNl < 0) return out;                 // no complete line yet — keep offset
+  out.offset = from + lastNl + 1;             // byte-accurate advance past last newline
+
+  const text = buf.subarray(0, lastNl + 1).toString('utf8');
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    let rec;
+    try { rec = JSON.parse(line); } catch { continue; }
+    if (rec.type === 'user') {
+      const txt = userRecordText(rec);
+      if (txt) out.events.push({ role: 'user', type: 'text', content: txt });
+    } else if (rec.type === 'assistant') {
+      const blocks = rec.message && rec.message.content;
+      if (!Array.isArray(blocks)) continue;
+      for (const block of blocks) {
+        if (block.type === 'text' && block.text) {
+          out.events.push({ role: 'assistant', type: 'text', content: block.text });
+        } else if (block.type === 'thinking' && block.thinking) {
+          out.events.push({ role: 'assistant', type: 'thinking', content: block.thinking });
+        } else if (block.type === 'tool_use') {
+          out.events.push({ role: 'assistant', type: 'tool', content: JSON.stringify(block.input || {}).substring(0, 600), tool_name: block.name });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize };
