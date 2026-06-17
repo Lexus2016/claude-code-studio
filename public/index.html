@@ -4907,6 +4907,33 @@ function connect() {
 // Stop reconnect loop on page unload to avoid pointless connections
 window.addEventListener('beforeunload', () => { _intentionalClose = true; if (_reconnectTimer) clearTimeout(_reconnectTimer); });
 
+// Self-heal on refocus. While a tab/window is hidden, the browser throttles or
+// suspends it: a queued task that dequeues and starts streaming in the background
+// can fail to render its live bubble (and the socket may be silently dropped),
+// so the chat looks idle/done even though the task is still running — only a manual
+// page refresh (which reloads from the DB) reveals it. On becoming visible again we
+// (a) force an immediate reconnect if the socket died while hidden, or (b) re-issue
+// subscribe_session with catch-up so the server replays any buffered stream we missed.
+// catch-up REPLACES streaming text (no duplication) and replays nothing when the
+// session is idle (chatBuffers exist only for active tasks), so this is safe to run
+// on every refocus.
+let _lastVisibilityResync = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  const now = Date.now();
+  if (now - _lastVisibilityResync < 1000) return; // debounce rapid toggles
+  _lastVisibilityResync = now;
+  if (!ws || ws.readyState !== 1) {
+    // Socket died while hidden — reconnect now instead of waiting out the backoff.
+    if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+    if (!_intentionalClose) connect();
+    return;
+  }
+  // Socket alive — replay any buffered stream we may have missed while throttled.
+  if (currentSessionId) ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: currentSessionId }));
+  subscribeAllTabs();
+});
+
 function handleWsMsg(d) {
   const tabId = d.tabId || activeTabId;
   // Look up tab across current project AND all background projects
