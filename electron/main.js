@@ -5,7 +5,7 @@
 // (unchanged) and renders it in a native window. Web mode (`node server.js`)
 // is unaffected — none of this runs there.
 
-const { app, BrowserWindow, shell, ipcMain, utilityProcess, dialog } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, utilityProcess, dialog, Menu } = require('electron');
 const path = require('path');
 const http = require('http');
 const net = require('net');
@@ -158,6 +158,7 @@ async function boot() {
   startServer(serverPort);
   await waitForHealth(serverPort);
   await createWindow();
+  setupMenu();
 }
 
 // ─── Updates ────────────────────────────────────────────────────────────────
@@ -253,6 +254,113 @@ ipcMain.handle('update:start', async () => {
 });
 
 ipcMain.handle('app:getVersion', () => app.getVersion());
+
+// ─── Import data from the CLI / web version ─────────────────────────────────
+// Native menu item to migrate an existing studio's chat history + settings into
+// the desktop app's userData. Safe: validates the source, backs up current data,
+// copies with the server stopped, then restarts.
+//   data/   — chats.db (history), projects.json, remote-hosts.json, hosts.key, uploads/
+//   skills/ — user-added skill files
+//   config.json — MCP servers + active skills
+// Intentionally NOT imported: .env (PORT/WORKDIR are set by the desktop shell and
+// would conflict) and workspace/ (working files, potentially large — not config).
+const IMPORT_DIRS = ['data', 'skills'];
+const IMPORT_FILES = ['config.json'];
+
+function copyIfExists(src, dst) {
+  try {
+    if (!fs.existsSync(src)) return false;
+    fs.cpSync(src, dst, { recursive: true, force: true });
+    return true;
+  } catch (e) {
+    console.error('[import] copy failed', src, '->', dst, e.message);
+    return false;
+  }
+}
+
+async function importFromCli() {
+  const win = BrowserWindow.getAllWindows()[0] || null;
+  const pick = await dialog.showOpenDialog(win, {
+    title: 'Import from CLI / web Claude Code Studio',
+    message: 'Select the folder of your existing studio (it contains data/ and config.json)',
+    properties: ['openDirectory'],
+    buttonLabel: 'Choose folder',
+  });
+  if (pick.canceled || !pick.filePaths[0]) return;
+  const src = pick.filePaths[0];
+  const dst = app.getPath('userData');
+
+  if (path.resolve(src) === path.resolve(dst)) {
+    await dialog.showMessageBox(win, { type: 'info', message: 'That is already the desktop app’s own data folder — nothing to import.' });
+    return;
+  }
+  const looksRight = fs.existsSync(path.join(src, 'data', 'chats.db')) || fs.existsSync(path.join(src, 'config.json'));
+  if (!looksRight) {
+    await dialog.showMessageBox(win, {
+      type: 'error',
+      message: 'That folder doesn’t look like a Claude Code Studio install.',
+      detail: 'Expected data/chats.db or config.json inside the selected folder.',
+    });
+    return;
+  }
+  const confirm = await dialog.showMessageBox(win, {
+    type: 'warning',
+    buttons: ['Import & Restart', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+    message: 'Import settings and chat history?',
+    detail: `From:\n${src}\n\nThis replaces the desktop app’s current chat history and settings (config.json + skills). A timestamped backup is made first. The app will restart when done.`,
+  });
+  if (confirm.response !== 0) return;
+
+  // Release the SQLite DB before overwriting it.
+  stopServer();
+  await new Promise((r) => setTimeout(r, 700));
+
+  // Back up the current data first (recovery path).
+  const backupDir = path.join(dst, `backup-${Date.now()}`);
+  try { fs.mkdirSync(backupDir, { recursive: true }); } catch (_) {}
+  for (const d of IMPORT_DIRS) copyIfExists(path.join(dst, d), path.join(backupDir, d));
+  for (const f of IMPORT_FILES) copyIfExists(path.join(dst, f), path.join(backupDir, f));
+
+  // Import from the chosen folder.
+  let copied = 0;
+  for (const d of IMPORT_DIRS) { if (copyIfExists(path.join(src, d), path.join(dst, d))) copied++; }
+  for (const f of IMPORT_FILES) { if (copyIfExists(path.join(src, f), path.join(dst, f))) copied++; }
+
+  await dialog.showMessageBox(win, {
+    type: 'info',
+    buttons: ['Restart now'],
+    message: 'Import complete.',
+    detail: `Imported ${copied} item(s). A backup of the previous data is at:\n${backupDir}\n\nThe app will now restart.`,
+  });
+  app.relaunch();
+  app.exit(0);
+}
+
+function setupMenu() {
+  const template = [
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
+    {
+      label: 'File',
+      submenu: [
+        { label: 'Import data from CLI / web version…', click: () => { importFromCli().catch((e) => console.error('[import]', e)); } },
+        { type: 'separator' },
+        process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' },
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        { label: 'Project on GitHub', click: () => shell.openExternal(`https://github.com/${GH_OWNER}/${GH_REPO}`) },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 app.whenReady().then(boot).catch((err) => {
   console.error('[electron] startup failed:', err);
