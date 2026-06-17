@@ -2397,9 +2397,18 @@ async function runCliSingle(p) {
     const _finish = (sid) => { if (!_done) { _done = true; resolve({ resultData, sid, errorText, rateLimitInfo }); } };
     const useFork = pendingFork; pendingFork = false;
 
-    // Inject PreToolUse hook for mid-task interrupt delivery via --settings
+    // Inject PreToolUse + Stop hooks for mid-task interrupt delivery via --settings.
+    // PreToolUse covers tasks that call tools; Stop closes the gap for text-only answers
+    // (or the text tail after the last tool call), where a user clarification would
+    // otherwise be drained undelivered in finally (see pendingInterrupts cleanup below).
+    // Both consume the same one-shot queue, so an emptied queue makes the next Stop
+    // approve — no infinite loop.
+    const interruptCmd = `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`;
     const interruptHookSettings = {
-      hooks: { PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`, timeout: 3 }] }] },
+      hooks: {
+        PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: interruptCmd, timeout: 3 }] }],
+        Stop: [{ hooks: [{ type: 'command', command: interruptCmd, timeout: 3 }] }],
+      },
     };
     const interruptEnv = {
       CCS_INTERRUPT_URL: `http://127.0.0.1:${PORT}`,
