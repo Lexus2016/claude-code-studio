@@ -4735,11 +4735,23 @@ app.post('/api/sessions/:id/catch-up', (req, res) => {
   }
   const r = catchUpFromTranscript({ cid, startOffset: Number(session.transcript_offset) || 0 });
   if (!r.found) return res.json({ ok: true, count: 0, note: 'no transcript on this host' });
+  // Persist with each message's REAL transcript timestamp as created_at (not
+  // datetime('now')): caught-up turns slot into history at the time they actually
+  // happened, and multi-turn imports keep correct order — datetime('now') has 1s
+  // resolution, so same-second ties would let the getMsgsLite "thinking-first"
+  // tiebreaker reorder across turns. Monotonic fallback covers a missing/bad ts.
+  const insertAt = db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,created_at) VALUES (?,?,?,?,?,?,?,?,?)`);
+  const _tsBase = Date.now();
+  const toSqliteTs = (iso, i) => {
+    let d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d.getTime())) d = new Date(_tsBase + i);
+    return d.toISOString().replace('T', ' ').replace('Z', '');
+  };
   try {
     const persist = db.transaction((events, offset) => {
-      for (const e of events) {
-        stmts.addMsg.run(id, e.role, e.type, e.content, e.tool_name || null, null, null, null);
-      }
+      events.forEach((e, i) => {
+        insertAt.run(id, e.role, e.type, e.content, e.tool_name || null, null, null, null, toSqliteTs(e.ts, i));
+      });
       db.prepare(`UPDATE sessions SET transcript_offset=?, updated_at=datetime('now') WHERE id=?`).run(offset, id);
     });
     persist(r.events, r.offset);

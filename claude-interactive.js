@@ -482,19 +482,20 @@ function catchUpFromTranscript({ cid, startOffset = 0 } = {}) {
     if (!line.trim()) continue;
     let rec;
     try { rec = JSON.parse(line); } catch { continue; }
+    const ts = rec.timestamp || null;   // real record time → caller uses it as created_at
     if (rec.type === 'user') {
       const txt = userRecordText(rec);
-      if (txt) out.events.push({ role: 'user', type: 'text', content: txt });
+      if (txt) out.events.push({ role: 'user', type: 'text', content: txt, ts });
     } else if (rec.type === 'assistant') {
       const blocks = rec.message && rec.message.content;
       if (!Array.isArray(blocks)) continue;
       for (const block of blocks) {
         if (block.type === 'text' && block.text) {
-          out.events.push({ role: 'assistant', type: 'text', content: block.text });
+          out.events.push({ role: 'assistant', type: 'text', content: block.text, ts });
         } else if (block.type === 'thinking' && block.thinking) {
-          out.events.push({ role: 'assistant', type: 'thinking', content: block.thinking });
+          out.events.push({ role: 'assistant', type: 'thinking', content: block.thinking, ts });
         } else if (block.type === 'tool_use') {
-          out.events.push({ role: 'assistant', type: 'tool', content: JSON.stringify(block.input || {}).substring(0, 600), tool_name: block.name });
+          out.events.push({ role: 'assistant', type: 'tool', content: JSON.stringify(block.input || {}).substring(0, 600), tool_name: block.name, ts });
         }
       }
     }
