@@ -1,6 +1,14 @@
 appId: studio.claudecode.app
 productName: Claude Code Studio
 copyright: © Claude Code Studio
+
+# GitHub releases are the update feed for electron-updater (Win/Linux) and the
+# source of the dmg for the Homebrew Cask (macOS).
+publish:
+  provider: github
+  owner: Lexus2016
+  repo: claude-code-studio
+
 asar: true
 # Runtime uses Node's built-in node:sqlite (Electron's Node >= 22.13), not the
 # native better-sqlite3, and ssh2 falls back to pure-JS without cpu-features —
@@ -35,13 +43,13 @@ directories:
 mac:
   target: [dmg, zip]
   category: public.app-category.developer-tools
-  artifactName: "${productName}-${version}-${arch}.${ext}"
+  artifactName: "claude-code-studio-${version}-${arch}.${ext}"
 
 win:
   target: [nsis]
-  artifactName: "${productName}-Setup-${version}.${ext}"
+  artifactName: "claude-code-studio-Setup-${version}.${ext}"
 
 linux:
   target: [AppImage, deb]
   category: Development
-  artifactName: "${productName}-${version}.${ext}"
+  artifactName: "claude-code-studio-${version}-${arch}.${ext}"

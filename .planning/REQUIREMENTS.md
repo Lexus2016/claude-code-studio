@@ -56,22 +56,22 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| DESK-01 | Phase 6 — MVP Desktop Build | Pending |
-| DESK-02 | Phase 6 — MVP Desktop Build | Pending |
-| DESK-03 | Phase 6 — MVP Desktop Build | Pending |
-| DESK-04 | Phase 6 — MVP Desktop Build | Pending |
-| DESK-05 | Phase 7 — Desktop Hardening | Pending |
-| DEP-01 | Phase 7 — Desktop Hardening | Pending |
-| DEP-02 | Phase 7 — Desktop Hardening | Pending |
-| UPD-01 | Phase 8 — Update & Distribution | Pending |
-| UPD-02 | Phase 8 — Update & Distribution | Pending |
-| UPD-03 | Phase 8 — Update & Distribution | Pending |
-| UPD-04 | Phase 8 — Update & Distribution | Pending |
-| DIST-01 | Phase 8 — Update & Distribution | Pending |
-| DIST-02 | Phase 8 — Update & Distribution | Pending |
-| DIST-03 | Phase 8 — Update & Distribution | Pending |
-| BUILD-01 | Phase 6 — MVP Desktop Build | Pending |
-| BUILD-02 | Phase 6 — MVP Desktop Build | Pending |
-| BUILD-03 | Phase 6 — MVP Desktop Build | Pending |
+| DESK-01 | Phase 6 — MVP Desktop Build | Done |
+| DESK-02 | Phase 6 — MVP Desktop Build | Done |
+| DESK-03 | Phase 6 — MVP Desktop Build | Done |
+| DESK-04 | Phase 6 — MVP Desktop Build | Done |
+| DESK-05 | Phase 7 — Desktop Hardening | Done |
+| DEP-01 | Phase 7 — Desktop Hardening | Done |
+| DEP-02 | Phase 7 — Desktop Hardening | Done |
+| UPD-01 | Phase 8 — Update & Distribution | Done |
+| UPD-02 | Phase 8 — Update & Distribution | Done |
+| UPD-03 | Phase 8 — Update & Distribution | Done |
+| UPD-04 | Phase 8 — Update & Distribution | Done |
+| DIST-01 | Phase 8 — Update & Distribution | Done |
+| DIST-02 | Phase 8 — Update & Distribution | Done |
+| DIST-03 | Phase 8 — Update & Distribution | Done |
+| BUILD-01 | Phase 6 — MVP Desktop Build | Done |
+| BUILD-02 | Phase 6 — MVP Desktop Build | Done |
+| BUILD-03 | Phase 6 — MVP Desktop Build | Done |
 
 **Coverage:** 17/17 v1.1 requirements mapped to exactly one delivering phase. No orphans, no duplicates.
