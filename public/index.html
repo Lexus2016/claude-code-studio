@@ -368,11 +368,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .status-dot.err::before { color: var(--red); }
 .status-dot.warn { color: var(--orange); }
 .status-dot.warn::before { color: var(--orange); }
-.hdr-btns { display: flex; gap: 5px; flex-shrink: 0; flex-wrap: nowrap; }
+.hdr-btns { display: flex; gap: 5px; flex-shrink: 0; flex-wrap: nowrap; align-items: center; }
+.hdr-btns .status-dot { font-size: 12px; margin-right: 3px; padding-right: 9px; border-right: 1px solid var(--border); }
 .hb { background: var(--s2); border: 1px solid var(--border); color: var(--muted); padding: 5px 11px; border-radius: 7px; cursor: pointer; font-size: 13px; transition: all .15s; font-weight: 500; white-space: nowrap; }
 /* Narrow center (e.g. right panel open): collapse nav to icon-only so the header never overflows into a side panel */
 @container (max-width: 840px) {
   .nav-sw .nav-sw-btn { font-size: 0; gap: 0; padding: 6px 9px; }
+  .hdr-btns .status-dot { display: none; }  /* hide CLI status when the center is narrow (panels open) to avoid header crowding */
 }
 .hb:hover { color: var(--text); border-color: var(--accent2); background: var(--s3); }
 .hb.active { color: var(--accent2); border-color: var(--accent); background: var(--abg); }
@@ -2601,6 +2603,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       </div>
     </div>
     <div class="hdr-btns">
+      <span class="status-dot warn" id="statusEl" data-i18n="status.connecting">Підключення...</span>
       <div id="rlBadge">
         <span class="rl-dot"></span>
         <span class="rl-label" id="rlBadgeLabel">Max ⚠</span>
@@ -2676,8 +2679,6 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <span class="label" data-i18n="tb.turns">Кроки</span>
       <input type="number" class="tb-input" id="maxTurns" value="50" min="1" max="200">
     </div>
-    <div style="flex:1"></div>
-    <span class="status-dot warn" id="statusEl" data-i18n="status.connecting">Підключення...</span>
   </div>
   </div><!-- /hdr-collapse-zone -->
 
