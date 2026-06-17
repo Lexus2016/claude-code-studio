@@ -4664,6 +4664,12 @@ app.post('/api/sessions/:id/open-terminal', (req, res) => {
   if (!_cleanSid) return res.status(400).json({ error: 'No Claude session ID' });
   const safeSid = _cleanSid.replace(/[^a-zA-Z0-9-]/g, '');
   if (!safeSid) return res.status(400).json({ error: 'Invalid session ID' });
+  // Baseline the catch-up cursor on first terminal open (only when never set) so the
+  // next "⤵ Дочитати" captures exactly this terminal session's work — first click, no
+  // throwaway baseline. An existing cursor is left untouched (don't drop prior progress).
+  if (session.transcript_offset == null) {
+    try { const _tsz = transcriptSize(_cleanSid); db.prepare(`UPDATE sessions SET transcript_offset=? WHERE id=?`).run(_tsz == null ? 0 : _tsz, req.params.id); } catch {}
+  }
   const workdir = session.workdir || WORKDIR;
   if (/[&|;<>%^\r\n`]/.test(workdir) || workdir.includes('$(')) {
     return res.status(400).json({ error: 'Invalid directory path: contains unsafe characters' });
