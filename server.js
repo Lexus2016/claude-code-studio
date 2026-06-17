@@ -1035,6 +1035,7 @@ async function startTask(task) {
     let currentTaskPrompt = prompt;
     let currentTaskCid = claudeSessionId;
     let lastTaskResult = null;
+    let lastTaskTurnUsage = null; // usage of the most recent assistant turn → real ctx-window occupancy
     const effectiveTaskMaxTurns = task.max_turns || 30;
 
     // Build MCP config for task execution — user MCPs from config + internal task-manager
@@ -1115,6 +1116,7 @@ async function startTask(task) {
           })
           .onSessionId(sid => { newCid = sid; currentTaskCid = sid; try { stmts.updateClaudeId.run(sid, sessionId); } catch {} })
           .onResult(r => { lastTaskResult = r; })
+          .onUsage(u => { if (u) lastTaskTurnUsage = u; })
           .onError(err => {
             hasError = true;
             console.error(`[taskWorker] task ${task.id} error:`, err);
@@ -1259,7 +1261,7 @@ async function startTask(task) {
       console.error(`[taskWorker] task ${task.id} onDone DB error:`, e);
     }
     const _taskModelInfo = lastTaskResult?.modelUsage ? Object.values(lastTaskResult.modelUsage)[0] : null;
-    const _taskMeta = lastTaskResult ? { cost: lastTaskResult.total_cost_usd, usage: lastTaskResult.usage, numTurns: lastTaskResult.num_turns, durationMs: lastTaskResult.duration_ms, contextWindow: _taskModelInfo?.contextWindow || 0 } : null;
+    const _taskMeta = lastTaskResult ? { cost: lastTaskResult.total_cost_usd, usage: lastTaskResult.usage, lastTurnUsage: lastTaskTurnUsage, numTurns: lastTaskResult.num_turns, durationMs: lastTaskResult.duration_ms, contextWindow: _taskModelInfo?.contextWindow || 0 } : null;
     broadcastToSession(sessionId, { type: 'done', tabId: sessionId, taskId: task.id, duration: Date.now() - _taskStartedAt, ...(_taskMeta ? { resultMeta: _taskMeta } : {}) });
   } catch (err) {
     log.error(`[taskWorker] task ${task.id} exception`, { message: err.message, name: err.name, stack: err.stack });
@@ -2374,6 +2376,9 @@ async function runCliSingle(p) {
   let currentPrompt = prompt;
   let continueCount = 0;
   let rateLimitWaitCount = 0;
+  // Usage of the most recent assistant turn (real context-window occupancy at the
+  // end). Persists across auto-continue iterations; the last write wins.
+  let lastTurnUsage = null;
   // First invocation carries attachments; subsequent auto-continues do not
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
 
@@ -2427,6 +2432,7 @@ async function runCliSingle(p) {
         if (info && info.status === 'rejected') rateLimitInfo = info;
       })
       .onResult(r => { resultData = r; })
+      .onUsage(u => { if (u) lastTurnUsage = u; })
       .onError(err => {
         // Capture error text for the main loop to inspect (e.g. thinking block signature errors)
         errorText += err;
@@ -2604,6 +2610,7 @@ async function runCliSingle(p) {
   const resultMeta = lastResult ? {
     cost: totalCostUsd || lastResult.total_cost_usd,
     usage: lastResult.usage,
+    lastTurnUsage,
     numTurns: lastResult.num_turns,
     durationMs: lastResult.duration_ms,
     contextWindow: _modelInfo?.contextWindow || 0,
@@ -2626,6 +2633,8 @@ async function runSshSingle(p) {
   let currentPrompt = prompt;
   let continueCount = 0;
   let rateLimitWaitCount = 0;
+  // Usage of the most recent assistant turn (real context-window occupancy at the end).
+  let lastTurnUsage = null;
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
 
   const ssh = new ClaudeSSH({ host: remoteHost, workdir: remoteWorkdir, sshKeyPath, password, port });
@@ -2663,6 +2672,7 @@ async function runSshSingle(p) {
         if (info && info.status === 'rejected') rateLimitInfo = info;
       })
       .onResult(r => { resultData = r; })
+      .onUsage(u => { if (u) lastTurnUsage = u; })
       .onError(err => {
         errorText += err;
         try { ws.send(JSON.stringify({ type:'error', error:err.substring(0,500), ...(tabId ? { tabId } : {}) })); } catch {}
@@ -2783,6 +2793,7 @@ async function runSshSingle(p) {
   const resultMeta = lastResult ? {
     cost: totalCostUsd || lastResult.total_cost_usd,
     usage: lastResult.usage,
+    lastTurnUsage,
     numTurns: lastResult.num_turns,
     durationMs: lastResult.duration_ms,
     contextWindow: _modelInfo?.contextWindow || 0,

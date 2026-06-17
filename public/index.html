@@ -5131,9 +5131,15 @@ function handleWsMsg(d) {
             if (inT || outT) parts.push(`${fmt(inT||0)} in / ${fmt(outT||0)} out`);
           }
           if (rm.numTurns) parts.push(`${rm.numTurns} turn${rm.numTurns > 1 ? 's' : ''}`);
-          if (rm.contextWindow && rm.usage) {
-            const ctxUsed = (rm.usage.input_tokens || 0) + (rm.usage.cache_creation_input_tokens || 0) + (rm.usage.cache_read_input_tokens || 0);
-            const ctxPct = Math.round(ctxUsed / rm.contextWindow * 100);
+          if (rm.contextWindow && (rm.lastTurnUsage || rm.usage)) {
+            // Real context-window occupancy = the LAST assistant turn's input side
+            // (fresh input + cache read + cache creation). That equals how full the
+            // window was on the final API call, so it caps at ~100%. We fall back to
+            // the cumulative `usage` only when a turn-level figure isn't available —
+            // that sum counts cache re-reads across every turn and can exceed 100%.
+            const u = rm.lastTurnUsage || rm.usage;
+            const ctxUsed = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
+            const ctxPct = Math.min(100, Math.round(ctxUsed / rm.contextWindow * 100));
             if (ctxPct > 0) parts.push(`${ctxPct}% ctx`);
           }
           const dur = rm.durationMs || d.duration;

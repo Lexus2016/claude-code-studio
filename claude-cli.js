@@ -453,6 +453,7 @@ class ClaudeCLI {
       onThinking(fn) { h.onThinking = fn; return this; },
       onRateLimit(fn) { h.onRateLimit = fn; return this; },
       onResult(fn) { h.onResult = fn; return this; },
+      onUsage(fn) { h.onUsage = fn; return this; },
       process: proc,
     };
   }
@@ -490,6 +491,15 @@ class ClaudeCLI {
     // Handle assistant messages with content blocks (legacy format / tool_use)
     // Skip text/thinking for blocks already streamed via content_block_delta (per-block check)
     if (data.type === 'assistant' || data.role === 'assistant') {
+      // Per-turn usage: each assistant message carries the usage of the API call
+      // that produced it. input_tokens + cache_read + cache_creation = how full
+      // the context window was on THAT call. The last assistant message of the
+      // session therefore reflects real (final) window occupancy — unlike the
+      // cumulative `result.usage`, which sums every turn's cache re-reads.
+      const _usage = data.message?.usage || data.usage;
+      if (_usage && h.onUsage && (_usage.input_tokens != null || _usage.cache_read_input_tokens != null)) {
+        h.onUsage(_usage);
+      }
       const content = data.content || data.message?.content || [];
       const blocks = Array.isArray(content) ? content : [{ type: 'text', text: String(content) }];
       for (let i = 0; i < blocks.length; i++) {
