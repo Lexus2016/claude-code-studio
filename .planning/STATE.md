@@ -94,10 +94,11 @@ None yet for v1.1.
 | 260329-fr1 | implement chat export/import feature: export session+messages as JSON, import creates new session with same messages as context | 2026-03-29 | 45ffdb1 | [260329-fr1-implement-chat-export-import-feature-exp](.planning/quick/260329-fr1-implement-chat-export-import-feature-exp/) |
 | 260404-qlq | hide interrupt pill for SSH project sessions | 2026-04-04 | 4e78d0d | [260404-qlq-hide-interrupt-pill-for-ssh-project-sess](.planning/quick/260404-qlq-hide-interrupt-pill-for-ssh-project-sess/) |
 | 260612-efs | add fable model to picker + subscription (Max) engine via interactive tmux sessions | 2026-06-12 | 0bd851b | [260612-efs-add-fable-model-to-model-picker-interact](.planning/quick/260612-efs-add-fable-model-to-model-picker-interact/) |
+| 260617-tw0 | fix macOS "two Terminal windows" on launch — run AppleScript `do script` before `activate` at both terminal-open call sites | 2026-06-17 | d298c40 | [260617-tw0-fix-macos-two-terminal-windows](.planning/quick/260617-tw0-fix-macos-two-terminal-windows/) |
 
 ## Session Continuity
 
-Last activity: 2026-06-17 — v1.1 Electron Desktop roadmap created (Phases 5-8)
+Last activity: 2026-06-17 — quick fix: macOS terminal opens a single window (do script before activate)
 
 Last session: 2026-06-17
 Stopped at: Roadmap + traceability written; ready to plan Phase 05
