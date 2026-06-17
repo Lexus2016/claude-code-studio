@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 04-01-PLAN.md (server encapsulation)
-last_updated: "2026-03-28T21:35:51.029Z"
-last_activity: 2026-03-28
+status: Awaiting next milestone
+stopped_at: Completed quick task 260612-efs
+last_updated: "2026-06-17T08:19:01.229Z"
+last_activity: 2026-06-17 — Milestone v1.0 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 ## Current Position
 
-Phase: 04
-Plan: Not started
-Status: Phase complete
-Last activity: 2026-03-28
-
-Progress: [##########] 100%
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-17 — Milestone v1.0 completed and archived
 
 ## Performance Metrics
 
@@ -122,3 +120,7 @@ Last activity: 2026-06-12 - Completed quick task 260612-efs: fable model + subsc
 Last session: 2026-06-12T08:40:00Z
 Stopped at: Completed quick task 260612-efs
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
