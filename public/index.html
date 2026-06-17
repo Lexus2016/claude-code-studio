@@ -3328,6 +3328,15 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 <!-- Toast -->
 <div id="toast"></div>
 
+<!-- Full-screen drag-drop overlay (files dropped anywhere → attach to composer) -->
+<div id="dropOverlay" class="drop-overlay" aria-hidden="true">
+  <div class="drop-overlay-inner">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    <p data-i18n="drop.title">Відпустіть, щоб прикріпити</p>
+    <span data-i18n="drop.hint">Зображення та файли буде додано до повідомлення</span>
+  </div>
+</div>
+
 <!-- Image chip hover preview -->
 <div id="imgChipPreview"><img id="imgChipPreviewImg" src="" alt=""></div>
 
@@ -3659,6 +3668,8 @@ const TRANSLATIONS = {
     'proj.del.title':'Видалити проект','proj.rename.title':'Перейменувати проект',
     'chip.remove':'Видалити',
     'attach.file':'Додати файл (📎)',
+    'drop.title':'Відпустіть, щоб прикріпити',
+    'drop.hint':'Зображення та файли буде додано до повідомлення',
     'queue.label':'У черзі','queue.edit.title':'Редагувати повідомлення','queue.del.title':'Видалити з черги',
     'interrupt.label':'Відправити як:','interrupt.stream':'📩 Уточнити поточне','interrupt.queue':'📝 Нове завдання (черга)',
     'interrupt.pill.clarify':'Уточнити','interrupt.pill.queue':'Черга','interrupt.pill.clarify.tip':'Натисніть щоб переключити на режим черги','interrupt.pill.queue.tip':'Натисніть щоб переключити на режим уточнення',
@@ -3888,6 +3899,8 @@ const TRANSLATIONS = {
     'proj.del.title':'Delete project','proj.rename.title':'Rename project',
     'chip.remove':'Remove',
     'attach.file':'Attach file (📎)',
+    'drop.title':'Drop to attach',
+    'drop.hint':'Images and files will be added to your message',
     'queue.label':'In queue','queue.edit.title':'Edit message','queue.del.title':'Remove from queue',
     'interrupt.label':'Send as:','interrupt.stream':'📩 Clarify current','interrupt.queue':'📝 New task (queue)',
     'interrupt.pill.clarify':'Clarify','interrupt.pill.queue':'Queue','interrupt.pill.clarify.tip':'Click to switch to queue mode','interrupt.pill.queue.tip':'Click to switch to clarify mode',
@@ -4117,6 +4130,8 @@ const TRANSLATIONS = {
     'proj.del.title':'Удалить проект','proj.rename.title':'Переименовать проект',
     'chip.remove':'Удалить',
     'attach.file':'Прикрепить файл (📎)',
+    'drop.title':'Отпустите, чтобы прикрепить',
+    'drop.hint':'Изображения и файлы будут добавлены к сообщению',
     'queue.label':'В очереди','queue.edit.title':'Редактировать сообщение','queue.del.title':'Удалить из очереди',
     'interrupt.label':'Отправить как:','interrupt.stream':'📩 Уточнить текущее','interrupt.queue':'📝 Новая задача (очередь)',
     'interrupt.pill.clarify':'Уточнить','interrupt.pill.queue':'Очередь','interrupt.pill.clarify.tip':'Нажмите чтобы переключить на режим очереди','interrupt.pill.queue.tip':'Нажмите чтобы переключить на режим уточнения',
@@ -7606,6 +7621,11 @@ function _addLocalFileChip(name, base64, mimeType, shouldSave = true) {
 function onFilePicker(input) {
   const files = Array.from(input.files);
   input.value = ''; // reset so same file can be re-selected
+  _ingestFiles(files);
+}
+
+// Shared by the file picker (📎) and drag-drop — turns File objects into chips
+function _ingestFiles(files) {
   for (const file of files) {
     const reader = new FileReader();
     if (file.type.startsWith('image/')) {
@@ -7899,6 +7919,46 @@ inEl.addEventListener('paste', e => {
     break;
   }
 });
+
+// ─── Drag-and-drop files anywhere on the page → attach to composer ────────
+// Native HTML5 DnD (no library — matches the no-build philosophy). Gated on
+// 'Files' so it never interferes with internal element-reorder drags (tabs,
+// sessions, projects) which carry only 'text/plain'. Suppressed while a modal
+// is open so it can't cover the config/MCP dialogs or hijack their drop zones.
+(function () {
+  const overlay = $i('dropOverlay');
+  if (!overlay) return;
+  let depth = 0; // dragenter/leave fire per child element — count to avoid flicker
+  const isFileDrag = e => Array.from(e.dataTransfer?.types || []).includes('Files');
+  const blocked = () => modalStack.length > 0;
+  const hide = () => { depth = 0; overlay.classList.remove('active'); };
+
+  window.addEventListener('dragenter', e => {
+    if (!isFileDrag(e) || blocked()) return;
+    e.preventDefault();
+    depth++;
+    overlay.classList.add('active');
+  });
+  window.addEventListener('dragover', e => {
+    if (!isFileDrag(e) || blocked()) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  window.addEventListener('dragleave', e => {
+    if (!isFileDrag(e)) return;
+    depth = Math.max(0, depth - 1);
+    if (depth === 0) overlay.classList.remove('active');
+  });
+  window.addEventListener('drop', e => {
+    if (!isFileDrag(e)) return;
+    hide();
+    // A specific drop zone (e.g. MCP import) already handled it via preventDefault
+    if (e.defaultPrevented || blocked()) return;
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length) _ingestFiles(files);
+  });
+})();
 
 // ─── Send / Stop ─────────────────────────────────────────────────────────
 function sendChat(text) { inEl.value = text; send(); }
