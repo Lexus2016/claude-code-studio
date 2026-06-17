@@ -28,7 +28,38 @@ Claude Code Studio fixes this:
 
 ---
 
-## Get Started in 60 Seconds
+![Chat Interface](public/screenshots/02-main-chat.png)
+
+---
+
+## 🖥 Desktop App
+
+Prefer a native window over a browser tab? Claude Code Studio also ships as a **desktop app for macOS, Windows and Linux**. It runs the same server locally and renders the full Studio in a native window — chat, Kanban, agents, MCP, skills, everything. The web server is unchanged; the desktop build is simply a second way to launch it.
+
+**Install** (from the [latest release](https://github.com/Lexus2016/claude-code-studio/releases/latest)):
+
+- **macOS** — `brew install --cask Lexus2016/claude-code-studio/claude-code-studio`, or download the `.dmg`
+- **Windows** — download the `…-Setup-….exe` installer
+- **Linux** — download the `.AppImage` (portable) or `.deb`
+
+**Prerequisite:** same as the web version — the [Claude Code CLI](https://docs.anthropic.com/en/claude-code) installed and logged in. The app detects it on launch and shows an install hint if it's missing.
+
+**Built-in updates:** the app tells you when a new version ships and updates in one click — Windows/Linux update in place, macOS updates via Homebrew. Auto-update is opt-in (default: notify + one click).
+
+**Coming from the CLI/web version?** In the desktop app use **File → Import data from CLI / web version…** — pick your existing studio folder and it migrates your chat history, settings (`config.json`) and skills (a backup is made first, then the app restarts). No manual file copying.
+
+**Build from source:**
+```bash
+npm install
+npm run electron:dev     # run the desktop app locally
+npm run dist:mac         # build installers — or dist:win / dist:linux
+```
+
+> The desktop app is single-user and binds to `127.0.0.1` (no password screen, no network exposure).
+
+---
+
+## 🌐 Web version (run it yourself)
 
 **Prerequisites:** [Node.js 18+](https://nodejs.org) + [Claude Code CLI](https://docs.anthropic.com/en/claude-code) installed and logged in (Claude Pro or Max subscription)
 
@@ -98,37 +129,6 @@ npm install -g npm@latest
 ```
 
 </details>
-
----
-
-![Chat Interface](public/screenshots/02-main-chat.png)
-
----
-
-## 🖥 Desktop App
-
-Prefer a native window over a browser tab? Claude Code Studio also ships as a **desktop app for macOS, Windows and Linux**. It runs the same server locally and renders the full Studio in a native window — chat, Kanban, agents, MCP, skills, everything. The web server is unchanged; the desktop build is simply a second way to launch it.
-
-**Install** (from the [latest release](https://github.com/Lexus2016/claude-code-studio/releases/latest)):
-
-- **macOS** — `brew install --cask Lexus2016/claude-code-studio/claude-code-studio`, or download the `.dmg`
-- **Windows** — download the `…-Setup-….exe` installer
-- **Linux** — download the `.AppImage` (portable) or `.deb`
-
-**Prerequisite:** same as the web version — the [Claude Code CLI](https://docs.anthropic.com/en/claude-code) installed and logged in. The app detects it on launch and shows an install hint if it's missing.
-
-**Built-in updates:** the app tells you when a new version ships and updates in one click — Windows/Linux update in place, macOS updates via Homebrew. Auto-update is opt-in (default: notify + one click).
-
-**Coming from the CLI/web version?** In the desktop app use **File → Import data from CLI / web version…** — pick your existing studio folder and it migrates your chat history, settings (`config.json`) and skills (a backup is made first, then the app restarts). No manual file copying.
-
-**Build from source:**
-```bash
-npm install
-npm run electron:dev     # run the desktop app locally
-npm run dist:mac         # build installers — or dist:win / dist:linux
-```
-
-> The desktop app is single-user and binds to `127.0.0.1` (no password screen, no network exposure).
 
 ---
 
