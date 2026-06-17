@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-06-17T08:23:51.642Z"
 last_activity: 2026-06-17
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,27 +17,37 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-28)
+See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** A user should be able to send a message to Claude in 2 taps or fewer — from any state, without knowing any slash commands
-**Current focus:** Phase 04 — Server Encapsulation (complete)
+**Current milestone:** v1.1 Electron Desktop — ship a native desktop app (macOS, Linux, Windows) running the existing server.js unchanged, with in-app GUI updates
+**Current focus:** Phase 05 — De-Risk Spikes (roadmap created, ready to plan)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 05 — De-Risk Spikes (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-17 — Milestone v1.1 started
+Status: Roadmap created — ready to plan Phase 05
+Last activity: 2026-06-17 — v1.1 roadmap created (Phases 5-8 mapped to DESIGN.md phases 0-3)
+
+## v1.1 Phase Map
+
+| GSD Phase | DESIGN Phase | Goal | Requirements |
+|-----------|--------------|------|--------------|
+| 05 — De-Risk Spikes | Phase 0 | Prove node:sqlite flag-free + brew-upgrade-from-GUI | none (de-risk gate) |
+| 06 — MVP Desktop Build | Phase 1 | Electron shell forks server.js, chat works on 3 OSes | DESK-01..04, BUILD-01..03 |
+| 07 — Desktop Hardening | Phase 2 | GUI PATH, claude detect, disable server-only, ephemeral port, auto-session | DESK-05, DEP-01, DEP-02 |
+| 08 — Update & Distribution | Phase 3 | In-app updates, Cask/NSIS/AppImage+deb, GitHub + CI cask bump | UPD-01..04, DIST-01..03 |
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0
+- Total plans completed (v1.1): 0
 - Average duration: -
 - Total execution time: 0 hours
 
-**By Phase:**
+**By Phase (v1.1):**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
@@ -45,64 +55,37 @@ Last activity: 2026-06-17 — Milestone v1.1 started
 
 **Recent Trend:**
 
-- Last 5 plans: none yet
+- Last 5 plans: none yet for v1.1
 - Trend: -
 
 *Updated after each plan completion*
-| Phase 01-01 P01 | 2min | 2 tasks | 2 files |
-| Phase 01 P02 | 5min | 2 tasks | 2 files |
-| Phase 02-ux-redesign P02 | 3min | 2 tasks | 1 files |
-| Phase 02-ux-redesign P01 | 9min | 2 tasks | 1 files |
-| Phase 02-ux-redesign P03 | 6min | 2 tasks | 2 files |
-| Phase 02-ux-redesign P04 | 4min | 2 tasks | 2 files |
-| Phase 02-ux-redesign P05 | 2min | 2 tasks | 1 files |
-| Phase 03 P02 | 3min | 2 tasks | 3 files |
-| Phase 03 P03 | 3min | 1 tasks | 3 files |
-| Phase 04-server-encapsulation P01 | 7min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
+Decisions are logged in PROJECT.md Key Decisions table and DESIGN.md §7 (locked).
 Recent decisions affecting current work:
 
-- [Pre-planning]: Phase 1 ships i18n extraction + FSM migration in one atomic PR — splitting creates a window with half-migrated state
-- [Pre-planning]: sendMessageDraft belongs in Phase 2 (with screen redesign), not Phase 1
-- [Pre-planning]: Old callback_data prefixes (m:, p:, c:, ch:, cm:, d:, f:, t:, s:, tn:, ask:) remain functional throughout migration as fallback handlers
-- [Phase 01-01]: BOT_I18N has 217 keys per locale (not 273 as estimated) -- extraction is exact
-- [Phase 01]: server.js uses string literals for FSM states to avoid circular dependency with telegram-bot.js
-- [Phase 01]: COMPOSING auto-resets to IDLE on send (one-shot affordance)
-- [Phase 02-ux-redesign]: sendMessageDraft uses plain text only during streaming (no parse_mode) to avoid malformed HTML failures
-- [Phase 02-ux-redesign]: Draft streaming fallback is permanent per proxy instance — first failure flips flag, no retry
-- [Phase 02-ux-redesign]: Thinking message suppressed in draft mode — draft provides its own streaming indicator
-- [Phase 02-ux-redesign P01]: SCREENS registry uses function parents for dynamic back resolution (CHATS/FILES/TASKS depend on ctx.projectWorkdir)
-- [Phase 02-ux-redesign P01]: editMsgId passed from cbq.message.message_id to screen handlers, replacing ctx.screenMsgId global slot
-- [Phase 02-ux-redesign P01]: Forum callbacks (fs:, fm:, fa:) excluded from opts propagation per Phase 3 boundary
-- [Phase 02-ux-redesign]: SCREEN_TO_CALLBACK reverse map used for back navigation instead of reverse CALLBACK_TO_SCREEN lookup
-- [Phase 02-ux-redesign]: Context header replaces per-screen inline project/chat display for consistency
-- [Phase 02-ux-redesign]: Keyboard context update via separate sendMessage (editMessageText cannot set ReplyKeyboardMarkup)
-- [Phase 02-ux-redesign]: setMyCommands called once at startup with only /start /help /cancel /status
-- [Phase 02-ux-redesign]: LIMIT 2 query pattern for single-item auto-selection in _handleWriteButton
-- [Phase 02-ux-redesign]: Legacy commands kept functional but removed from / menu -- backward compat for power users
-- [Phase 03]: Only forum-mode button labels in server.js TelegramProxy are i18n-ified; Direct Mode buttons left as-is
-- [Phase 03]: Error recovery layout changed from 1 row (3 buttons) to 2 rows (2+2) to accommodate Help button
-- [Phase 03]: Onboarding is stateless — each step edits the same message, no persistent state to clean up
-- [Phase 03]: ft: and fo: prefixes routed before f: in both routing layers to avoid collision
-- [Phase 04]: TelegramProxy moved inside telegram-bot.js -- proxy is bot-internal streaming infrastructure, not a server concern
-- [Phase 04]: broadcastToSession injected as callback to maintain dependency inversion
-- [Phase 04]: startThinking() encapsulates thinking message logic inside proxy
-- [Phase 04]: task.userId used instead of task.proxy._userId in _clearTelegramAskState
+- [v1.1 Design]: Electron (not Tauri) — backend is a multi-process Node app that spawns child node helpers; Tauri would force single-binary packaging + a build step (violates no-build-step rule)
+- [v1.1 Design]: One codebase, two launchers — server.js stays the single source of truth; Electron is a thin shell that forks it; web mode stays byte-for-byte unchanged
+- [v1.1 Design]: utilityProcess.fork(server.js) (not in-process require, not a separate Electron fork of the app)
+- [v1.1 Design]: APP_DIR = app.getPath('userData') for desktop data; ephemeral free port (web keeps 3000); local single-user auto-session (web keeps bcrypt)
+- [v1.1 Design]: Unsigned on all 3 OSes; tiered update — Win/Linux electron-updater, macOS app-triggered detached brew upgrade --cask + relaunch; no custom crypto
+- [v1.1 Design]: Homebrew Cask is the only supported macOS channel (xattr -cr postflight, auto_updates false); dmg/zip is the cask's source artifact only
+- [v1.1 Roadmap]: Phase 05 is a pure de-risk gate owning no delivered REQ — its criteria are the two load-bearing assumptions (node:sqlite flag-free; brew-upgrade-from-GUI)
+- [v1.1 Roadmap]: DESK-04 (ephemeral port) delivered in Phase 06 (part of launching); DESK-05 (auto-session) in Phase 07 (hardening) per DESIGN phasing
 
 ### Pending Todos
 
-None yet.
+None yet for v1.1.
 
 ### Blockers/Concerns
 
-- Phase 2: Validate ReplyKeyboard persistence behavior on iOS, Android, and Desktop before committing to keyboard update strategy
-- Phase 2: Verify sendMessageDraft with a real Claude streaming session before using as primary streaming mechanism
-- Phase 2: Test KeyboardButton style field in a test message before relying on it for visual hierarchy
+- Phase 05: node:sqlite must work flag-free in packaged Electron 37 (Node 22.18) — if it needs --experimental-sqlite, MVP packaging strategy changes
+- Phase 05: detached brew upgrade --cask + relaunch from a GUI-launched app is the riskiest macOS flow (brew-path detection under GUI PATH, quit/replace/relaunch timing) — prove before Phase 08
+- Phase 07: GUI-launch PATH problem (macOS/Linux) — claude/tmux/brew/node not on Dock-launch PATH; mitigate via explicit path probing in electron/main.js
+- Hard constraint (all phases): web-server mode (npm start / Docker) must remain byte-for-byte unchanged; verify after every shared-code change (interpreter resolver is the only shared-runtime change)
 
 ### Quick Tasks Completed
 
@@ -114,12 +97,12 @@ None yet.
 
 ## Session Continuity
 
-Last activity: 2026-06-12 - Completed quick task 260612-efs: fable model + subscription (Max) tmux engine
+Last activity: 2026-06-17 — v1.1 Electron Desktop roadmap created (Phases 5-8)
 
-Last session: 2026-06-12T08:40:00Z
-Stopped at: Completed quick task 260612-efs
+Last session: 2026-06-17
+Stopped at: Roadmap + traceability written; ready to plan Phase 05
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan the first v1.1 phase with /gsd-plan-phase 5

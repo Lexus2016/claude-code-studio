@@ -1,8 +1,9 @@
-# Roadmap: Telegram Bot UX Redesign
+# Roadmap: Claude Code Studio
 
-## Overview
+## Milestones
 
-The 4693-line telegram-bot.js is a working but painful daily driver. The redesign fixes this in four phases ordered by dependency: first establish a stable state machine foundation (Phase 1), then rebuild all user-facing navigation on that foundation (Phase 2), then redesign Forum Mode UX and extract it to a dedicated module (Phase 3), and finally clean up the server.js coupling (Phase 4). The result: Direct Mode users reach Claude in 2 taps, Forum Mode users get native inline keyboards in every topic, and the codebase is split into maintainable modules.
+- ✅ **v1.0 Telegram UX Redesign** - Phases 1-4 (shipped 2026-06-17)
+- 🚧 **v1.1 Electron Desktop** - Phases 5-8 (in progress)
 
 ## Phases
 
@@ -11,89 +12,125 @@ The 4693-line telegram-bot.js is a working but painful daily driver. The redesig
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 Decimal phases appear between their surrounding integers in numeric order.
+Phase numbering is continuous across milestones — v1.1 starts at Phase 5.
 
-- [ ] **Phase 1: Foundation** - Extract i18n to separate file and replace ad-hoc flag state with explicit FSM
-- [ ] **Phase 2: UX Redesign** - Rebuild navigation, screens, persistent keyboard, and streaming on the new FSM
-- [ ] **Phase 3: Forum Mode UX + Extraction** - Full Forum Mode UX redesign (inline keyboards per topic, onboarding, actions) + extract TelegramBotForum to dedicated module
-- [ ] **Phase 4: Server Encapsulation** - Expose public factory method; remove server.js private method calls
-
-## Phase Details
+<details>
+<summary>✅ v1.0 Telegram UX Redesign (Phases 1-4) - SHIPPED 2026-06-17</summary>
 
 ### Phase 1: Foundation
 **Goal**: The bot has a stable, explicit state machine and a separate i18n file — making it safe to build new UX on top
-**Depends on**: Nothing (first phase)
 **Requirements**: ARCH-01, FSM-01, FSM-02, FSM-03, FSM-04, FSM-05
-**Plans:** 2 plans
+**Plans**: 2 plans
+
 Plans:
 - [x] 01-01-PLAN.md — Extract BOT_I18N to telegram-bot-i18n.js (i18n separation)
 - [x] 01-02-PLAN.md — Replace ad-hoc state flags with explicit FSM (ctx.state + ctx.stateData)
-**Success Criteria** (what must be TRUE):
-  1. `telegram-bot-i18n.js` exists as a standalone file; `telegram-bot.js` imports from it and is ~825 lines shorter
-  2. `ctx.state` is the single source of pending-input truth — `ctx.pendingInput`, `ctx.pendingAskRequestId`, and `ctx.composing` no longer exist in any code path
-  3. Sending a task-creation prompt, then typing a different message, routes that message to Claude (not silently captured as a task title)
-  4. Every slash command cancels any in-progress input state before executing
-  5. All previously paired devices continue responding without re-pairing after the migration deploys
 
 ### Phase 2: UX Redesign
 **Goal**: Users can reach Claude in 2 taps from any state, navigate without dead ends, and see their active context at all times
-**Depends on**: Phase 1
 **Requirements**: NAV-01, NAV-02, NAV-03, NAV-04, NAV-05, NAV-06, KB-01, KB-02, KB-03, ARCH-02, ARCH-03, ARCH-04, STREAM-01
-**Plans:** 5 plans
+**Plans**: 5 plans
+
 Plans:
-- [x] 02-01-PLAN.md — SCREENS registry, callback router refactor, screenMsgId removal (editMsgId from callback anchor)
-- [x] 02-02-PLAN.md — sendMessageDraft streaming migration in TelegramProxy (server.js)
+- [x] 02-01-PLAN.md — SCREENS registry, callback router refactor, screenMsgId removal
+- [x] 02-02-PLAN.md — sendMessageDraft streaming migration in TelegramProxy
 - [x] 02-03-PLAN.md — Auto-generated Back buttons + context header on every screen
 - [x] 02-04-PLAN.md — Dynamic persistent keyboard + setMyCommands with 4 commands
-- [x] 02-05-PLAN.md — 2-tap flow validation, slash command pruning, human verification checkpoint
-**Success Criteria** (what must be TRUE):
-  1. From any screen (or fresh /start), a user can send a message to Claude with at most 2 taps — no slash commands typed
-  2. Every inline keyboard screen shows a Back button; tapping it always goes exactly one level up (never a dead end, never a full reset)
-  3. Every screen message shows "Currently: [project name] / [chat name]" (or "none selected") in the header — no navigation required to see active context
-  4. Tapping any navigation button edits the existing screen message in place; no new messages appear in chat for navigation actions
-  5. The persistent bottom keyboard always shows the active project/chat name, and the Write button is always present and routes correctly
-  6. Claude response streaming uses `sendMessageDraft` — no rate-limit freezes or message flickering during long responses
-**UI hint**: yes
+- [x] 02-05-PLAN.md — 2-tap flow validation, slash command pruning, verification checkpoint
 
 ### Phase 3: Forum Mode UX + Extraction
-**Goal**: Forum Mode becomes a first-class UX — every topic has native inline keyboards, guided onboarding, and action buttons — all within a clean `TelegramBotForum` module with isolated state
-**Depends on**: Phase 2
+**Goal**: Forum Mode becomes a first-class UX within a clean TelegramBotForum module with isolated state
 **Requirements**: FORUM-01, FORUM-02, FORUM-03, FORUM-04, FORUM-05, FORUM-06, FORUM-07, FORUM-08, FORUM-09, FORUM-10, FORUM-11
-**Plans:** 3/3 plans executed
+**Plans**: 3 plans
+
 Plans:
-- [x] 03-01-PLAN.md — Extract 21 forum methods to TelegramBotForum class (composition facade, state scoping, threadId explicit)
-- [x] 03-02-PLAN.md — Forum UX enhancements (inline keyboards, activity buttons, error recovery, /help scoping, session display, i18n)
-- [x] 03-03-PLAN.md — Guided onboarding flow + task inline buttons (ft: callback prefix)
-**Success Criteria** (what must be TRUE):
-  1. `telegram-bot-forum.js` exists containing `TelegramBotForum` class; `telegram-bot.js` no longer contains inline forum logic (~860 lines removed)
-  2. A message sent in a Forum Mode topic does not affect `ctx.state` for the same user's Direct Mode conversation (and vice versa)
-  3. All existing Forum Mode supergroups receive messages in the correct topic after extraction — no messages land in General topic
-  4. `threadId` is always passed as an explicit parameter to every forum API call; no class-level `this._currentThreadId` remains
-  5. Forum Mode setup completes via guided inline-button onboarding — user never needs to read a text wall of instructions
-  6. Every Claude response in a project topic has an inline keyboard (Continue, New session, Files, Diff, Last 5) — user never types a command to access these
-  7. Activity topic notifications have action buttons (Go to Project, View Response) — not just read-only text
-  8. Tasks topic shows each task as an inline row with status buttons — user taps to start/done/block, never types `/start #id`
-  9. `/help` in Forum topics shows only the commands relevant to that topic type
-**UI hint**: yes
+- [x] 03-01-PLAN.md — Extract 21 forum methods to TelegramBotForum class
+- [x] 03-02-PLAN.md — Forum UX enhancements (inline keyboards, activity buttons, error recovery)
+- [x] 03-03-PLAN.md — Guided onboarding flow + task inline buttons
 
 ### Phase 4: Server Encapsulation
-**Goal**: `server.js` interacts with the bot only through a public API — no private method calls remain
-**Depends on**: Phase 3
+**Goal**: server.js interacts with the bot only through a public API — no private method calls remain
 **Requirements**: ENC-01, ENC-02
-**Plans:** 1 plan
+**Plans**: 1 plan
+
 Plans:
-- [x] 04-01-PLAN.md — Move TelegramProxy into telegram-bot.js, expose createResponseHandler factory, replace all bot._* calls with public wrappers
+- [x] 04-01-PLAN.md — Expose createResponseHandler factory, replace all bot._* calls
+
+</details>
+
+### 🚧 v1.1 Electron Desktop (In Progress)
+
+**Milestone Goal:** Ship Claude Code Studio as a native desktop app (macOS, Linux, Windows) that runs the existing `server.js` unchanged — one codebase, two launchers — with in-app GUI updates. The web-server mode (`npm start` / Docker) stays byte-for-byte unchanged throughout.
+
+**Authoritative design:** `docs/electron-desktop/DESIGN.md` (locked). GSD phases 5-8 map directly to DESIGN phases 0-3.
+
+- [ ] **Phase 5: De-Risk Spikes** - Prove the two load-bearing assumptions (flag-free `node:sqlite` in packaged Electron 37; detached `brew upgrade --cask` + relaunch from a GUI app) before any build work
+- [ ] **Phase 6: MVP Desktop Build** - Electron shell forks `server.js` and renders it natively; app launches and chat works on all 3 OSes; web mode unchanged
+- [ ] **Phase 7: Desktop Hardening** - GUI PATH fix, `claude` detect + prompt, disable server-only features, ephemeral port, auto-session auth
+- [ ] **Phase 8: Update & Distribution** - In-app GUI updates (banner + one-click + report + fallback + opt-in auto), Homebrew Cask / NSIS / AppImage+deb distribution, GitHub releases, CI cask bump, 3-OS CI
+
+## Phase Details
+
+### Phase 5: De-Risk Spikes
+**Goal**: Prove the two assumptions the whole milestone rests on, so MVP work proceeds without rework risk. This is a pure de-risk gate — it owns no delivered requirement; instead it validates the foundations behind DESK-02/DESK-03 (`node:sqlite` under Electron) and UPD-02 (the macOS brew-upgrade flow).
+**Depends on**: Phase 4
+**Requirements**: none owned (de-risk gate — validates assumptions behind DESK-02, DESK-03, UPD-02)
 **Success Criteria** (what must be TRUE):
-  1. `TelegramBot` exposes `createResponseHandler({ userId, chatId, threadId })` and `server.js` uses it as the sole interface for all bot interactions
-  2. A grep for `bot._` in `server.js` returns zero matches — no private method calls remain
+  1. A packaged Electron 37 build runs `node:sqlite` (via the existing `db-adapter.js` path) with NO `--experimental-sqlite` flag — confirmed by a spike build that reads/writes a SQLite DB
+  2. A detached `brew upgrade --cask` spawned from a GUI-launched (Dock/Finder) app successfully locates `brew` despite the GUI PATH, runs the upgrade, quits the running app, and relaunches it
+  3. Findings (flag requirement, brew-path probe, quit/replace/relaunch timing) are documented in the design notes so Phase 6 and Phase 8 can build against confirmed behavior
+**Plans**: TBD
+
+### Phase 6: MVP Desktop Build
+**Goal**: A native desktop app that boots the existing `server.js` via `utilityProcess.fork` and renders it in a window — launching and running a working Claude chat on macOS, Linux, and Windows — while the web build stays byte-for-byte unchanged.
+**Depends on**: Phase 5
+**Requirements**: DESK-01, DESK-02, DESK-03, DESK-04, BUILD-01, BUILD-02, BUILD-03
+**Success Criteria** (what must be TRUE):
+  1. The user launches the desktop app and can send a message to Claude and watch the response stream, on macOS, Linux, and Windows
+  2. The app boots the unmodified `server.js` via `utilityProcess.fork`, waits for `GET /api/health`, then loads `http://127.0.0.1:<port>` in the window — `server.js` runtime behavior is identical to web mode
+  3. All user data (DB, uploads, .env, workspace) is written under the OS userData dir via the `APP_DIR` override, and the server binds an ephemeral free port (never clashes with web mode's 3000)
+  4. MCP helpers and node-based hooks run inside the packaged app — the interpreter resolver routes them through `process.execPath` + `ELECTRON_RUN_AS_NODE` in desktop and plain `node` in web, with the spawned scripts `asarUnpack`-ed so the child can read them
+  5. Running `npm start` / Docker produces byte-for-byte the same web app — `electron`/`electron-builder`/`electron-updater` are devDependencies only and are never pulled by a web/Docker install
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 7: Desktop Hardening
+**Goal**: The desktop app behaves correctly under real-world launch conditions — finding its tools despite the GUI PATH, prompting helpfully when `claude` is missing, running as a frictionless single-user local app, and not exposing server-only features that don't belong on the desktop.
+**Depends on**: Phase 6
+**Requirements**: DESK-05, DEP-01, DEP-02
+**Success Criteria** (what must be TRUE):
+  1. On a Dock/Finder launch (where the GUI PATH lacks `claude`/`brew`/`node`/`tmux`), the app still locates and runs the `claude` CLI via explicit path probing
+  2. When `claude` is not installed, the app opens a friendly window with install guidance/link instead of failing silently or crashing
+  3. The user opens the desktop app and is taken straight into a working session with no login prompt (local single-user auto-session); web mode keeps its bcrypt auth unchanged
+  4. Server-only features (Telegram bot, tunnel-manager, remote SSH) are off by default in desktop mode and do not appear or activate
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 8: Update & Distribution
+**Goal**: The desktop app is a fully distributable, self-updating product: users always see their version and a one-click in-app update (with a live report and a copy/open-terminal fallback), opt into auto-update if they choose, and install/upgrade through the right channel per OS — all published from CI with the Homebrew Cask auto-bumped.
+**Depends on**: Phase 7
+**Requirements**: UPD-01, UPD-02, UPD-03, UPD-04, DIST-01, DIST-02, DIST-03
+**Success Criteria** (what must be TRUE):
+  1. The app always shows the current version and surfaces an "Update available → vX.Y.Z" banner when a newer release exists (desktop-only UI; absent in web mode)
+  2. Pressing [Update] performs a one-click update — Windows/Linux via `electron-updater` (native progress) and macOS via an app-triggered detached `brew upgrade --cask` with a live in-app report — then the app relaunches
+  3. When one-click update can't run (no `brew` / not brew-managed / non-zero exit), the app shows the exact command with working [Copy] and [Open Terminal] buttons; and the user can opt into automatic updates (default OFF)
+  4. The app installs and upgrades through the correct channel per OS: macOS via a Homebrew Cask (with `xattr -cr` postflight, the only supported macOS channel), Windows via NSIS, Linux via AppImage + deb
+  5. A GitHub release publishes all artifacts from 3-OS CI, and the same CI auto-bumps the Homebrew Cask `version` + `sha256` so an in-app `brew upgrade` finds the new version
+**Plans**: TBD
+**UI hint**: yes
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4
+Phases execute in numeric order: 5 → 6 → 7 → 8
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Foundation | 2/2 | Complete | 2026-03-28 |
-| 2. UX Redesign | 5/5 | Complete | 2026-03-28 |
-| 3. Forum Mode UX + Extraction | 3/3 | Complete | 2026-03-28 |
-| 4. Server Encapsulation | 1/1 | Complete | 2026-03-28 |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. Foundation | v1.0 | 2/2 | Complete | 2026-03-28 |
+| 2. UX Redesign | v1.0 | 5/5 | Complete | 2026-03-28 |
+| 3. Forum Mode UX + Extraction | v1.0 | 3/3 | Complete | 2026-03-28 |
+| 4. Server Encapsulation | v1.0 | 1/1 | Complete | 2026-03-28 |
+| 5. De-Risk Spikes | v1.1 | 0/TBD | Not started | - |
+| 6. MVP Desktop Build | v1.1 | 0/TBD | Not started | - |
+| 7. Desktop Hardening | v1.1 | 0/TBD | Not started | - |
+| 8. Update & Distribution | v1.1 | 0/TBD | Not started | - |
