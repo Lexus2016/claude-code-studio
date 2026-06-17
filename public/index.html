@@ -8295,8 +8295,15 @@ async function checkVersion() {
       if (latest && latest !== cur) {
         el.textContent = `v${cur} → v${latest} ↑`;
         el.className = 'update';
-        el.title = t('ver.update').replace('{tag}', gh.tag_name);
-        el.onclick = () => window.open(gh.html_url, '_blank');
+        if (window.electronAPI && window.electronAPI.update) {
+          // Desktop: the top update banner owns the update flow (brew / electron-updater).
+          // Don't point users at the npx command or the GitHub release page here.
+          el.title = `v${latest}`;
+          el.onclick = null;
+        } else {
+          el.title = t('ver.update').replace('{tag}', gh.tag_name);
+          el.onclick = () => window.open(gh.html_url, '_blank');
+        }
       } else if (latest) {
         el.title = `v${cur}${t('ver.latest')}`;
       }

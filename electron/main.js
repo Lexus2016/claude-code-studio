@@ -227,10 +227,14 @@ async function startUpdate() {
     let managed = false;
     try { execFileSync(brew, ['list', '--cask', CASK_NAME], { stdio: 'ignore' }); managed = true; } catch (_) {}
     if (!managed) return { fallback: true, command: `brew install --cask ${CASK_NAME}`, reason: 'not-brew-managed' };
-    sendUpdateLog('Running: brew upgrade --cask ' + CASK_NAME + ' …');
+    sendUpdateLog('Running: brew update && brew upgrade --cask ' + CASK_NAME + ' …');
+    // `brew update` FIRST: a stale local tap clone otherwise keeps brew pinned to the
+    // installed version, so `brew upgrade` is a no-op while the in-app check (which reads
+    // the GitHub release) keeps re-offering the same version — an endless update loop.
+    // Do NOT set HOMEBREW_NO_AUTO_UPDATE here: it suppresses exactly that tap refresh.
     // brew quits the running app (cask `quit:`); the detached shell then relaunches it.
-    const sh = `'${brew}' upgrade --cask ${CASK_NAME}; open -a "Claude Code Studio"`;
-    const child = spawn('/bin/sh', ['-c', sh], { detached: true, stdio: 'ignore', env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: '1' } });
+    const sh = `'${brew}' update; '${brew}' upgrade --cask ${CASK_NAME}; open -a "Claude Code Studio"`;
+    const child = spawn('/bin/sh', ['-c', sh], { detached: true, stdio: 'ignore' });
     child.unref();
     setTimeout(() => { app.isQuiting = true; stopServer(); app.quit(); }, 1000);
     return { started: true, via: 'brew' };
