@@ -4667,7 +4667,10 @@ app.post('/api/sessions/:id/open-terminal', (req, res) => {
     } else if (platform === 'darwin') {
       const safeWorkdir = workdir.replace(/'/g, "'\\''");
       fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; claude --resume ${safeSid}`;
-      execSync(`osascript -e 'tell application "Terminal" to activate' -e 'tell application "Terminal" to do script "${fullCmd.replace(/"/g, '\\"')}"'`);
+      // do script BEFORE activate: on a cold Terminal launch, activate-first opens an
+      // empty default window and then do script opens a SECOND one. Running do script
+      // first makes it reuse the window Terminal auto-opens on launch (single window).
+      execSync(`osascript -e 'tell application "Terminal" to do script "${fullCmd.replace(/"/g, '\\"')}"' -e 'tell application "Terminal" to activate'`);
       ok = true;
     } else {
       // Linux: try common terminal emulators using spawn+detach (non-blocking)
@@ -6048,7 +6051,9 @@ function openTerminal(shellCommand) {
     // Write command to a temp script file to avoid shell/AppleScript escaping issues
     const tmpScript = path.join(os.tmpdir(), `ccs-delegate-${Date.now()}.sh`);
     fs.writeFileSync(tmpScript, `#!/bin/bash\n${shellCommand}\n`, { mode: 0o755 });
-    const script = `tell application "Terminal"\n  activate\n  do script "${tmpScript}"\nend tell`;
+    // do script BEFORE activate so a cold launch reuses Terminal's auto-opened window
+    // instead of leaving an empty default window plus the command window (two windows).
+    const script = `tell application "Terminal"\n  do script "${tmpScript}"\n  activate\nend tell`;
     try {
       spawnProc('osascript', ['-e', script], { detached: true, stdio: 'ignore' }).unref();
       setTimeout(() => { try { fs.unlinkSync(tmpScript); } catch {} }, 10000);
