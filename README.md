@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.58.0** — Message font size on demand (`=` bigger, `-` smaller, `0` reset, saved across sessions); unsent drafts now survive page refresh — never lose a half-written prompt again.
+> **v5.63.0** — Terminal catch-up: pull a `claude --resume` conversation straight into the web chat. Decluttered header — the CLI status is now a single green/red connection dot. Keyboard Shortcuts panel fully localized (EN/UA/RU).
 
 ---
 
@@ -319,7 +319,7 @@ Add your own, edit them, delete them. As many as you want.
 | **Haiku** | Standard | Fast — simple questions, quick checks |
 | **Sonnet** | **1M tokens** | Balanced (default) — most everyday tasks |
 | **Opus** | **1M tokens** | Most capable — complex architecture, hard bugs |
-| **Fable** | **1M tokens** | Most creative & reasoning-intensive — complex planning, deep analysis |
+| **Fable** | **1M tokens** | Most creative & reasoning-intensive — complex planning, deep analysis *(temporarily hidden in the model picker)* |
 
 Sonnet and Opus run with a **1 million token context window** — entire large codebases, long conversation histories, and massive file sets fit in a single session without hitting limits.
 
@@ -393,8 +393,8 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 
 | Category | Features |
 |----------|----------|
-| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse hook + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom, `I` focus input, character counter, `T` scroll-to-top, `N` new session, font size adjust (`=`/`-`/`0`), draft auto-save |
-| **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, global default (★ set-as-default for new chats/tasks), per-item override, available in Chat + Kanban + Scheduler, tmux-aware (auto-disabled without tmux), Fable / Opus / Sonnet / Haiku model selector |
+| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, terminal catch-up (import a `claude --resume` conversation into the web chat), extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse + Stop hooks + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom, `I` focus input, character counter, `T` scroll-to-top, `N` new session, font size adjust (`=`/`-`/`0`), draft auto-save |
+| **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, global default (★ set-as-default for new chats/tasks), per-item override, available in Chat + Kanban + Scheduler, tmux-aware (auto-disabled without tmux), Opus / Sonnet / Haiku model selector |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, engine + model + effort per task/chain |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, engine + model + effort per task, watchdog auto-recovery |
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
