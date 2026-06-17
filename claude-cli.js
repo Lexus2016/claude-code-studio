@@ -505,7 +505,15 @@ class ClaudeCLI {
       for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i];
         const streamed = h._deltaBlocks.has(i);
-        if (b.type === 'text' && b.text && h.onText && !streamed) { h._hasEmittedText = true; h.onText(b.text); }
+        if (b.type === 'text' && b.text && h.onText && !streamed) {
+          // Separate consecutive text blocks (cross-turn, or multiple text blocks in
+          // one assistant message) so they don't glue into "…end.Start…". Mirrors the
+          // streamed-path separator injected at content_block_start above. Server folds
+          // this into fullText, so it also fixes the run-together wall on session reload.
+          if (h._hasEmittedText) h.onText('\n\n');
+          h._hasEmittedText = true;
+          h.onText(b.text);
+        }
         else if (b.type === 'thinking' && b.thinking && h.onThinking && !streamed) h.onThinking(b.thinking);
         else if (b.type === 'tool_use' && h.onTool) {
           h.onTool(b.name, typeof b.input === 'string' ? b.input : JSON.stringify(b.input, null, 2));
