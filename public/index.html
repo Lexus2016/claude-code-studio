@@ -80,7 +80,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .left-inner { flex: 1; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; min-height: 0; }
 .left-inner::-webkit-scrollbar { width: 3px; }
 .left-inner::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-.center { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+.center { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; container-type: inline-size; }
 .right {
   width: var(--sidebar-r); background: var(--s1);
   border-left: 1px solid var(--border);
@@ -356,7 +356,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 /* ─── Header ─── */
 .hdr { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--s1); border-bottom: 1px solid var(--border); }
-.hdr-l { display: flex; align-items: center; gap: 10px; }
+.hdr-l { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .logo { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), #a855f7); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 10px; color: white; flex-shrink: 0; box-shadow: 0 2px 8px rgba(124,106,239,.4); }
 .hdr h1 { font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
 .hdr-meta { display: flex; align-items: center; gap: 6px; }
@@ -368,12 +368,16 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .status-dot.err::before { color: var(--red); }
 .status-dot.warn { color: var(--orange); }
 .status-dot.warn::before { color: var(--orange); }
-.hdr-btns { display: flex; gap: 5px; }
-.hb { background: var(--s2); border: 1px solid var(--border); color: var(--muted); padding: 5px 11px; border-radius: 7px; cursor: pointer; font-size: 13px; transition: all .15s; font-weight: 500; }
+.hdr-btns { display: flex; gap: 5px; flex-shrink: 0; flex-wrap: nowrap; }
+.hb { background: var(--s2); border: 1px solid var(--border); color: var(--muted); padding: 5px 11px; border-radius: 7px; cursor: pointer; font-size: 13px; transition: all .15s; font-weight: 500; white-space: nowrap; }
+/* Narrow center (e.g. right panel open): collapse nav to icon-only so the header never overflows into a side panel */
+@container (max-width: 840px) {
+  .nav-sw .nav-sw-btn { font-size: 0; gap: 0; padding: 6px 9px; }
+}
 .hb:hover { color: var(--text); border-color: var(--accent2); background: var(--s3); }
 .hb.active { color: var(--accent2); border-color: var(--accent); background: var(--abg); }
 /* ─── Nav switcher (Chat ↔ Kanban) ─── */
-.nav-sw { display: flex; align-items: center; background: var(--s3); border: 1px solid var(--border); border-radius: 8px; padding: 3px; gap: 2px; }
+.nav-sw { display: flex; align-items: center; background: var(--s3); border: 1px solid var(--border); border-radius: 8px; padding: 3px; gap: 2px; flex-shrink: 0; }
 .nav-sw-btn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; transition: all .15s; white-space: nowrap; }
 .nav-sw-btn:hover { color: var(--text); background: rgba(255,255,255,.05); }
 .nav-sw-btn.active { background: var(--s2); color: var(--accent2); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
