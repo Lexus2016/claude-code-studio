@@ -11,7 +11,8 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const fs = require('fs');
-const { execFileSync } = require('child_process');
+const https = require('https');
+const { execFileSync, spawn } = require('child_process');
 
 let serverProc = null;
 let serverPort = null;
@@ -158,6 +159,98 @@ async function boot() {
   await waitForHealth(serverPort);
   await createWindow();
 }
+
+// ─── Updates ────────────────────────────────────────────────────────────────
+// Windows/Linux: electron-updater (GitHub feed). macOS: app-triggered
+// `brew upgrade --cask` (we never use Squirrel.Mac, so no Apple signing needed).
+const GH_OWNER = 'Lexus2016';
+const GH_REPO = 'claude-code-studio';
+const CASK_NAME = 'claude-code-studio';
+
+function semverGt(a, b) {
+  const pa = String(a).replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) { if (pa[i] > pb[i]) return true; if (pa[i] < pb[i]) return false; }
+  return false;
+}
+
+function fetchLatestRelease() {
+  return new Promise((resolve, reject) => {
+    const req = https.get({
+      host: 'api.github.com',
+      path: `/repos/${GH_OWNER}/${GH_REPO}/releases/latest`,
+      headers: { 'User-Agent': 'claude-code-studio', Accept: 'application/vnd.github+json' },
+      timeout: 8000,
+    }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error('GitHub HTTP ' + res.statusCode)); }
+      let buf = '';
+      res.on('data', (d) => (buf += d));
+      res.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('GitHub request timeout')); });
+  });
+}
+
+function findBrew() {
+  for (const b of ['/opt/homebrew/bin/brew', '/usr/local/bin/brew']) {
+    try { if (fs.existsSync(b)) return b; } catch (_) {}
+  }
+  try { return String(execFileSync('which', ['brew'], { encoding: 'utf8' })).trim() || null; } catch (_) { return null; }
+}
+
+function sendUpdateLog(line) {
+  const w = BrowserWindow.getAllWindows()[0];
+  if (w && !w.isDestroyed()) w.webContents.send('update:log', String(line));
+}
+
+async function checkUpdate() {
+  const currentVersion = app.getVersion();
+  if (process.platform === 'darwin') {
+    const rel = await fetchLatestRelease();
+    const version = String(rel.tag_name || '').replace(/^v/, '');
+    return { platform: 'darwin', currentVersion, version, available: !!(version && semverGt(version, currentVersion)) };
+  }
+  const { autoUpdater } = require('electron-updater');
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  const r = await autoUpdater.checkForUpdates();
+  const version = r && r.updateInfo && r.updateInfo.version;
+  return { platform: process.platform, currentVersion, version, available: !!(version && semverGt(version, currentVersion)) };
+}
+
+async function startUpdate() {
+  if (process.platform === 'darwin') {
+    const brew = findBrew();
+    if (!brew) return { fallback: true, command: `brew install --cask ${CASK_NAME}`, reason: 'brew-not-found' };
+    let managed = false;
+    try { execFileSync(brew, ['list', '--cask', CASK_NAME], { stdio: 'ignore' }); managed = true; } catch (_) {}
+    if (!managed) return { fallback: true, command: `brew install --cask ${CASK_NAME}`, reason: 'not-brew-managed' };
+    sendUpdateLog('Running: brew upgrade --cask ' + CASK_NAME + ' …');
+    // brew quits the running app (cask `quit:`); the detached shell then relaunches it.
+    const sh = `'${brew}' upgrade --cask ${CASK_NAME}; open -a "Claude Code Studio"`;
+    const child = spawn('/bin/sh', ['-c', sh], { detached: true, stdio: 'ignore', env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: '1' } });
+    child.unref();
+    setTimeout(() => { app.isQuiting = true; stopServer(); app.quit(); }, 1000);
+    return { started: true, via: 'brew' };
+  }
+  const { autoUpdater } = require('electron-updater');
+  autoUpdater.on('download-progress', (p) => sendUpdateLog(`Downloading… ${Math.round(p.percent)}%`));
+  autoUpdater.on('error', (e) => sendUpdateLog('Update error: ' + e.message));
+  autoUpdater.on('update-downloaded', () => {
+    sendUpdateLog('Downloaded — restarting to install…');
+    setTimeout(() => { app.isQuiting = true; stopServer(); autoUpdater.quitAndInstall(); }, 1000);
+  });
+  await autoUpdater.downloadUpdate();
+  return { started: true, via: 'electron-updater' };
+}
+
+ipcMain.handle('update:check', async () => {
+  try { return await checkUpdate(); } catch (e) { return { available: false, error: e.message, currentVersion: app.getVersion() }; }
+});
+ipcMain.handle('update:start', async () => {
+  try { return await startUpdate(); } catch (e) { return { error: e.message }; }
+});
 
 ipcMain.handle('app:getVersion', () => app.getVersion());
 

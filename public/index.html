@@ -12954,5 +12954,46 @@ document.addEventListener('keydown', e => {
     <div class="kb-row"><span>Show this panel</span><div class="kb-keys"><span class="kb-key">?</span></div></div>
   </div>
 </div>
+<!-- ccs-desktop-update-ui (additive, desktop-only; no-op in web mode) -->
+<script>
+(function(){
+  var api = window.electronAPI && window.electronAPI.update;
+  if (!api) return;
+  var bar, msgEl, logEl, btn;
+  function el(tag, css, txt){ var e=document.createElement(tag); if(css)e.style.cssText=css; if(txt!=null)e.textContent=txt; return e; }
+  function build(){
+    bar = el('div','position:fixed;top:0;left:0;right:0;z-index:2147483600;display:none;align-items:center;gap:10px;padding:8px 14px;background:#1f6feb;color:#fff;font:13px/1.4 -apple-system,system-ui,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.35)');
+    msgEl = el('span','font-weight:600','Update available');
+    btn = el('button','background:#fff;color:#1f6feb;border:0;border-radius:6px;padding:5px 12px;font-weight:600;cursor:pointer','Update');
+    logEl = el('span','opacity:.85;font-weight:400;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap','');
+    var x = el('button','background:transparent;color:#fff;border:0;font-size:15px;cursor:pointer','✕');
+    bar.appendChild(msgEl); bar.appendChild(btn); bar.appendChild(logEl); bar.appendChild(x);
+    document.body.appendChild(bar);
+    x.onclick = function(){ bar.style.display='none'; };
+    btn.onclick = onUpdate;
+  }
+  function onUpdate(){
+    btn.disabled = true; btn.textContent = 'Updating…';
+    api.onLog(function(line){ logEl.textContent = line; });
+    Promise.resolve(api.start()).then(function(res){
+      if (res && res.fallback){
+        btn.disabled=false; btn.textContent='Copy command';
+        msgEl.textContent='Update via Terminal:'; logEl.textContent=res.command;
+        btn.onclick=function(){ if(navigator.clipboard) navigator.clipboard.writeText(res.command); btn.textContent='Copied ✓'; };
+      } else if (res && res.error){
+        btn.disabled=false; btn.textContent='Retry'; logEl.textContent='Error: '+res.error;
+      }
+    });
+  }
+  function check(){
+    Promise.resolve(api.check()).then(function(r){
+      if (r && r.available){ msgEl.textContent='New version '+r.version+' available'; bar.style.display='flex'; }
+    }).catch(function(){});
+  }
+  function init(){ build(); check(); setInterval(function(){ if(bar && bar.style.display==='none') check(); }, 6*3600*1000); }
+  if (document.body) init(); else window.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+
 </body>
 </html>

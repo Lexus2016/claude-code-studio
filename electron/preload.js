@@ -12,4 +12,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   isDesktop: true,
   platform: process.platform,
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  update: {
+    check: () => ipcRenderer.invoke('update:check'),
+    start: () => ipcRenderer.invoke('update:start'),
+    onLog: (cb) => ipcRenderer.on('update:log', (_e, line) => cb(line)),
+  },
 });
