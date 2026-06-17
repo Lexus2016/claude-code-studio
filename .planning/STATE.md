@@ -96,10 +96,11 @@ None yet for v1.1.
 | 260612-efs | add fable model to picker + subscription (Max) engine via interactive tmux sessions | 2026-06-12 | 0bd851b | [260612-efs-add-fable-model-to-model-picker-interact](.planning/quick/260612-efs-add-fable-model-to-model-picker-interact/) |
 | 260617-tw0 | fix macOS "two Terminal windows" on launch — run AppleScript `do script` before `activate` at both terminal-open call sites | 2026-06-17 | d298c40 | [260617-tw0-fix-macos-two-terminal-windows](.planning/quick/260617-tw0-fix-macos-two-terminal-windows/) |
 | 260617-ulp | fix macOS in-app update loop — `brew update` before `brew upgrade` (drop HOMEBREW_NO_AUTO_UPDATE) + desktop-gate the version badge | 2026-06-17 | dff14d1 | [260617-ulp-fix-macos-update-loop](.planning/quick/260617-ulp-fix-macos-update-loop/) |
+| 260617-d62 | desktop: stable loopback port (localStorage persists), telegram bot resumes on restart, Engine switcher hidden + chat forced to API (claude -p) | 2026-06-17 | 34f8c77 | [260617-d62-desktop-port-telegram-engine](.planning/quick/260617-d62-desktop-port-telegram-engine/) |
 
 ## Session Continuity
 
-Last activity: 2026-06-17 — released v5.61.0: fixed macOS in-app update loop (brew update before upgrade)
+Last activity: 2026-06-17 — released v5.62.0: desktop port persistence + telegram resume + Engine switcher hidden
 
 Last session: 2026-06-17
 Stopped at: Roadmap + traceability written; ready to plan Phase 05
