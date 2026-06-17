@@ -3658,6 +3658,7 @@ app.get('/api/stats', (req, res) => {
   });
 });
 app.get('/api/auth/status', (req,res) => {
+  if (process.env.CCS_DESKTOP === '1') return res.json({ setupDone:true, loggedIn:true, displayName:'Desktop' });
   const setupDone = auth.isSetupDone();
   const token = req.cookies?.token || req.headers['x-auth-token'];
   const loggedIn = setupDone && auth.validateToken(token);
@@ -5294,6 +5295,7 @@ app.post('/api/project/init', (req, res) => {
 let tunnelManager = null;
 
 function initTunnelManager() {
+  if (process.env.CCS_DESKTOP === '1') { log.info('[desktop] tunnel disabled'); return; }
   tunnelManager = new TunnelManager({ log, port: PORT });
 
   tunnelManager.on('url', (url) => {
@@ -5678,6 +5680,7 @@ function _attachTelegramListeners(bot) {
 }
 
 function initTelegramBot() {
+  if (process.env.CCS_DESKTOP === '1') { log.info('[desktop] telegram bot disabled'); return; }
   const c = loadConfig();
   const tg = c.telegram;
   if (!tg || !tg.enabled || !tg.botToken) return;
@@ -7459,7 +7462,7 @@ initTelegramBot();
 // Restore delegations from .crosswork/*/state.json (survives server restarts)
 restoreDelegations();
 
-server.listen(PORT, () => {
+server.listen(...(process.env.CCS_DESKTOP === '1' ? [PORT, '127.0.0.1'] : [PORT]), () => {
   log.info('server started', {
     port:      PORT,
     url:       `http://localhost:${PORT}`,

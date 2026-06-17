@@ -5,11 +5,13 @@
 // (unchanged) and renders it in a native window. Web mode (`node server.js`)
 // is unaffected — none of this runs there.
 
-const { app, BrowserWindow, shell, ipcMain, utilityProcess } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, utilityProcess, dialog } = require('electron');
 const path = require('path');
 const http = require('http');
 const net = require('net');
 const os = require('os');
+const fs = require('fs');
+const { execFileSync } = require('child_process');
 
 let serverProc = null;
 let serverPort = null;
@@ -28,6 +30,41 @@ function augmentPath() {
   ];
   const cur = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
   process.env.PATH = Array.from(new Set([...cur, ...extra])).join(path.delimiter);
+}
+
+// The whole app is a front-end for the `claude` CLI. Detect it up front and,
+// if missing, tell the user exactly how to install it instead of silently
+// failing the first chat.
+function findClaude() {
+  const home = os.homedir();
+  const candidates = [
+    path.join(home, '.local', 'bin', 'claude'),
+    path.join(home, '.claude', 'local', 'claude'),
+    '/opt/homebrew/bin/claude',
+    '/usr/local/bin/claude',
+  ];
+  for (const c of candidates) { try { if (fs.existsSync(c)) return c; } catch (_) {} }
+  try {
+    const probe = process.platform === 'win32' ? 'where' : 'which';
+    const out = String(execFileSync(probe, ['claude'], { encoding: 'utf8' })).trim().split(/\r?\n/)[0];
+    if (out) return out;
+  } catch (_) {}
+  return null;
+}
+
+async function ensureClaude() {
+  if (findClaude()) return;
+  const choice = await dialog.showMessageBox({
+    type: 'warning',
+    title: 'Claude CLI not found',
+    message: 'Claude Code Studio needs the “claude” command-line tool.',
+    detail: 'It was not found on your system. Install it, then restart the app:\n\n    npm install -g @anthropic-ai/claude-code\n\nThe app will still open, but chatting will not work until “claude” is installed and on your PATH.',
+    buttons: ['Open install guide', 'Continue anyway', 'Quit'],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (choice.response === 0) shell.openExternal('https://docs.claude.com/en/docs/claude-code');
+  if (choice.response === 2) { app.isQuiting = true; app.quit(); throw new Error('quit: claude missing'); }
 }
 
 function getFreePort() {
@@ -115,6 +152,7 @@ async function createWindow() {
 
 async function boot() {
   augmentPath();
+  await ensureClaude();
   serverPort = await getFreePort();
   startServer(serverPort);
   await waitForHealth(serverPort);

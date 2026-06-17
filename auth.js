@@ -171,6 +171,8 @@ const PUBLIC_PATHS = [
 ];
 
 function authMiddleware(req, res, next) {
+  // Desktop (Electron) runs as a single local user bound to 127.0.0.1 — no auth wall.
+  if (process.env.CCS_DESKTOP === '1') return next();
   const reqPath = req.path.replace(/\/+$/, '') || '/';
   if (PUBLIC_PATHS.includes(reqPath)) return next();
   if (!isSetupDone()) {
@@ -184,6 +186,6 @@ function authMiddleware(req, res, next) {
   return res.status(401).json({ error: 'unauthorized' });
 }
 
-function validateWsToken(token) { return validateToken(token); }
+function validateWsToken(token) { if (process.env.CCS_DESKTOP === '1') return true; return validateToken(token); }
 
 module.exports = { isSetupDone, setupUser, login, validateToken, revokeToken, revokeAll, changePassword, authMiddleware, validateWsToken, loadAuth };
