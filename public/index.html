@@ -369,12 +369,12 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .status-dot.warn { color: var(--orange); }
 .status-dot.warn::before { color: var(--orange); }
 .hdr-btns { display: flex; gap: 5px; flex-shrink: 0; flex-wrap: nowrap; align-items: center; }
-.hdr-btns .status-dot { font-size: 12px; margin-right: 3px; padding-right: 9px; border-right: 1px solid var(--border); }
+.hdr-btns .status-dot { margin-right: 6px; }
+.hdr-btns .status-dot::before { font-size: 10px; }
 .hb { background: var(--s2); border: 1px solid var(--border); color: var(--muted); padding: 5px 11px; border-radius: 7px; cursor: pointer; font-size: 13px; transition: all .15s; font-weight: 500; white-space: nowrap; }
 /* Narrow center (e.g. right panel open): collapse nav to icon-only so the header never overflows into a side panel */
 @container (max-width: 840px) {
   .nav-sw .nav-sw-btn { font-size: 0; gap: 0; padding: 6px 9px; }
-  .hdr-btns .status-dot { display: none; }  /* hide CLI status when the center is narrow (panels open) to avoid header crowding */
 }
 .hb:hover { color: var(--text); border-color: var(--accent2); background: var(--s3); }
 .hb.active { color: var(--accent2); border-color: var(--accent); background: var(--abg); }
@@ -2603,7 +2603,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       </div>
     </div>
     <div class="hdr-btns">
-      <span class="status-dot warn" id="statusEl" data-i18n="status.connecting">Підключення...</span>
+      <span class="status-dot err" id="statusEl" data-i18n-title="status.connecting" title="Підключення..."></span>
       <div id="rlBadge">
         <span class="rl-dot"></span>
         <span class="rl-label" id="rlBadgeLabel">Max ⚠</span>
@@ -5694,9 +5694,13 @@ function handleWsMsg(d) {
 // ─── UI helpers ───────────────────────────────────────────────────────────
 function setStatus(text, cls) {
   const el = $i('statusEl');
-  el.textContent = text;
-  el.className = `status-dot ${cls}`;
-  // Sync mobile status dot
+  // Dot-only connection indicator: the textual label duplicated the mode/model
+  // already shown in the toolbar. Keep the full detail in the hover tooltip.
+  el.textContent = '';
+  el.title = text || '';
+  // Binary: red only when disconnected/errored, otherwise green (connected/busy).
+  el.className = 'status-dot ' + (cls === 'err' ? 'err' : 'ok');
+  // Sync mobile status dot (mobile keeps its own colouring)
   if (typeof updateMobStatus === 'function') updateMobStatus(cls);
 }
 
