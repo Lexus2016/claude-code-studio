@@ -52,15 +52,16 @@ jobs:
             exit 0
           fi
           VERSION="${GITHUB_REF_NAME#v}"
-          DMG="claude-code-studio-${VERSION}-arm64.dmg"
-          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${DMG}"
-          echo "Fetching $URL"
-          curl -fL "$URL" -o "$DMG"
-          SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          curl -fL "$BASE/claude-code-studio-${VERSION}-arm64.dmg" -o arm64.dmg
+          curl -fL "$BASE/claude-code-studio-${VERSION}-x64.dmg" -o x64.dmg
+          ARM_SHA="$(shasum -a 256 arm64.dmg | awk '{print $1}')"
+          X64_SHA="$(shasum -a 256 x64.dmg | awk '{print $1}')"
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/${GITHUB_REPOSITORY_OWNER}/homebrew-claude-code-studio.git" tap
           CASK="tap/Casks/claude-code-studio.rb"
           sed -i -E "s/^  version \".*\"/  version \"${VERSION}\"/" "$CASK"
-          sed -i -E "s/^  sha256 .*/  sha256 \"${SHA}\"/" "$CASK"
+          sed -i -E "s/(arm:[[:space:]]*\")[a-f0-9]{64}/\1${ARM_SHA}/" "$CASK"
+          sed -i -E "s/(intel:[[:space:]]*\")[a-f0-9]{64}/\1${X64_SHA}/" "$CASK"
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
