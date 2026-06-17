@@ -2512,7 +2512,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
           <button class="mob-chip" data-mob="model" data-v="haiku" onclick="setMobOpt(this,'model')">Haiku</button>
           <button class="mob-chip on" data-mob="model" data-v="sonnet" onclick="setMobOpt(this,'model')">Sonnet</button>
           <button class="mob-chip" data-mob="model" data-v="opus" onclick="setMobOpt(this,'model')">Opus</button>
-          <button class="mob-chip" data-mob="model" data-v="fable" onclick="setMobOpt(this,'model')">Fable</button>
+          <button class="mob-chip" data-mob="model" data-v="fable" onclick="setMobOpt(this,'model')" style="display:none">Fable</button>
         </div>
       </div>
       <div class="mob-sheet-section" style="display:none"><!-- Engine switcher hidden: Subscription paused; API/claude -p only -->
@@ -2648,7 +2648,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <button class="tb-btn" data-v="haiku" onclick="setOpt(this,'model')">Haiku</button>
       <button class="tb-btn on" data-v="sonnet" onclick="setOpt(this,'model')">Sonnet</button>
       <button class="tb-btn" data-v="opus" onclick="setOpt(this,'model')">Opus</button>
-      <button class="tb-btn" data-v="fable" onclick="setOpt(this,'model')">Fable</button>
+      <button class="tb-btn" data-v="fable" onclick="setOpt(this,'model')" style="display:none">Fable</button>
     </div>
     <!-- Engine switcher hidden: Subscription (Usage-credits via terminal) is paused by
          Anthropic, so only the API path (claude -p) is active. Un-hide to restore. -->
@@ -3718,6 +3718,7 @@ const TRANSLATIONS = {
     'rl.wait.status':'Ліміт — очікування скидання','rl.wait.resuming':'Ліміт скинуто — продовження…',
     'queue.badge':'{n} у черзі',
     'ver.current':'Поточна версія','ver.update':'Доступне оновлення {tag}!\nЗапустіть: npx github:Lexus2016/claude-code-studio','ver.latest':' — остання версія ✓','ver.checking':'Перевірка версії...',
+    'kb.title':'⌨️ Клавіатурні скорочення','kb.search':'Пошук повідомлень','kb.send':'Надіслати повідомлення','kb.newline':'Новий рядок','kb.paste':'Вставити знімок екрана','kb.nextResult':'Наступний результат пошуку','kb.prevResult':'Попередній результат пошуку','kb.close':'Закрити / Скасувати','kb.jumpLatest':'До останнього повідомлення','kb.focusInput':'Фокус на полі вводу','kb.scrollFirst':'До першого повідомлення','kb.newChat':'Нова сесія чату','kb.fontInc':'Збільшити шрифт повідомлень','kb.fontDec':'Зменшити шрифт повідомлень','kb.fontReset':'Скинути шрифт повідомлень','kb.showPanel':'Показати цю панель',
     'status.connecting':'Підключення...',
     'toast.cmd_copied':'✓ Команду скопійовано','toast.json_req':'Потрібен .json файл','toast.json_enter':'Введіть або завантажте JSON',
     'toast.mcp_imported':'✓ Імпортовано {n} MCP серверів','toast.mcp_import_err':'Помилка імпорту: ','toast.mcp_export_err':'Помилка експорту',
@@ -3949,6 +3950,7 @@ const TRANSLATIONS = {
     'rl.wait.status':'Rate limit — waiting for reset','rl.wait.resuming':'Rate limit reset — resuming…',
     'queue.badge':'{n} in queue',
     'ver.current':'Current version','ver.update':'Update available {tag}!\nRun: npx github:Lexus2016/claude-code-studio','ver.latest':' — latest ✓','ver.checking':'Checking version...',
+    'kb.title':'⌨️ Keyboard Shortcuts','kb.search':'Search messages','kb.send':'Send message','kb.newline':'New line','kb.paste':'Paste screenshot','kb.nextResult':'Next search result','kb.prevResult':'Prev search result','kb.close':'Close / Cancel','kb.jumpLatest':'Jump to latest message','kb.focusInput':'Focus message input','kb.scrollFirst':'Scroll to first message','kb.newChat':'New chat session','kb.fontInc':'Increase message font','kb.fontDec':'Decrease message font','kb.fontReset':'Reset message font','kb.showPanel':'Show this panel',
     'status.connecting':'Connecting...',
     'toast.cmd_copied':'✓ Command copied','toast.json_req':'.json file required','toast.json_enter':'Enter or upload JSON',
     'toast.mcp_imported':'✓ {n} MCP servers imported','toast.mcp_import_err':'Import error: ','toast.mcp_export_err':'Export error',
@@ -4180,6 +4182,7 @@ const TRANSLATIONS = {
     'rl.wait.status':'Лимит — ожидание сброса','rl.wait.resuming':'Лимит сброшен — продолжение…',
     'queue.badge':'{n} в очереди',
     'ver.current':'Текущая версия','ver.update':'Доступно обновление {tag}!\nЗапустите: npx github:Lexus2016/claude-code-studio','ver.latest':' — последняя ✓','ver.checking':'Проверка версии...',
+    'kb.title':'⌨️ Горячие клавиши','kb.search':'Поиск сообщений','kb.send':'Отправить сообщение','kb.newline':'Новая строка','kb.paste':'Вставить снимок экрана','kb.nextResult':'Следующий результат поиска','kb.prevResult':'Предыдущий результат поиска','kb.close':'Закрыть / Отменить','kb.jumpLatest':'К последнему сообщению','kb.focusInput':'Фокус на поле ввода','kb.scrollFirst':'К первому сообщению','kb.newChat':'Новая сессия чата','kb.fontInc':'Увеличить шрифт сообщений','kb.fontDec':'Уменьшить шрифт сообщений','kb.fontReset':'Сбросить шрифт сообщений','kb.showPanel':'Показать эту панель',
     'status.connecting':'Подключение...',
     'toast.cmd_copied':'✓ Команда скопирована','toast.json_req':'Требуется .json файл','toast.json_enter':'Введите или загрузите JSON',
     'toast.mcp_imported':'✓ Импортировано {n} MCP серверов','toast.mcp_import_err':'Ошибка импорта: ','toast.mcp_export_err':'Ошибка экспорта',
@@ -12957,22 +12960,22 @@ document.addEventListener('keydown', e => {
 <!-- ─── Keyboard Shortcuts Help Overlay ─── -->
 <div id="kbHelpOverlay" onclick="if(event.target===this)closeKbHelp()">
   <div class="kb-panel">
-    <h3>⌨️ Keyboard Shortcuts</h3>
-    <div class="kb-row"><span>Search messages</span><div class="kb-keys"><span class="kb-key">Ctrl</span><span class="kb-key">F</span></div></div>
-    <div class="kb-row"><span>Send message</span><div class="kb-keys"><span class="kb-key">Enter</span></div></div>
-    <div class="kb-row"><span>New line</span><div class="kb-keys"><span class="kb-key">Shift</span><span class="kb-key">Enter</span></div></div>
-    <div class="kb-row"><span>Paste screenshot</span><div class="kb-keys"><span class="kb-key">Ctrl</span><span class="kb-key">V</span></div></div>
-    <div class="kb-row"><span>Next search result</span><div class="kb-keys"><span class="kb-key">Enter</span></div></div>
-    <div class="kb-row"><span>Prev search result</span><div class="kb-keys"><span class="kb-key">Shift</span><span class="kb-key">Enter</span></div></div>
-    <div class="kb-row"><span>Close / Cancel</span><div class="kb-keys"><span class="kb-key">Esc</span></div></div>
-    <div class="kb-row"><span>Jump to latest message</span><div class="kb-keys"><span class="kb-key">G</span></div></div>
-    <div class="kb-row"><span>Focus message input</span><div class="kb-keys"><span class="kb-key">I</span></div></div>
-    <div class="kb-row"><span>Scroll to first message</span><div class="kb-keys"><span class="kb-key">T</span></div></div>
-    <div class="kb-row"><span>New chat session</span><div class="kb-keys"><span class="kb-key">N</span></div></div>
-    <div class="kb-row"><span>Increase message font</span><div class="kb-keys"><span class="kb-key">=</span></div></div>
-    <div class="kb-row"><span>Decrease message font</span><div class="kb-keys"><span class="kb-key">-</span></div></div>
-    <div class="kb-row"><span>Reset message font</span><div class="kb-keys"><span class="kb-key">0</span></div></div>
-    <div class="kb-row"><span>Show this panel</span><div class="kb-keys"><span class="kb-key">?</span></div></div>
+    <h3 data-i18n="kb.title">⌨️ Keyboard Shortcuts</h3>
+    <div class="kb-row"><span data-i18n="kb.search">Search messages</span><div class="kb-keys"><span class="kb-key">Ctrl</span><span class="kb-key">F</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.send">Send message</span><div class="kb-keys"><span class="kb-key">Enter</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.newline">New line</span><div class="kb-keys"><span class="kb-key">Shift</span><span class="kb-key">Enter</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.paste">Paste screenshot</span><div class="kb-keys"><span class="kb-key">Ctrl</span><span class="kb-key">V</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.nextResult">Next search result</span><div class="kb-keys"><span class="kb-key">Enter</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.prevResult">Prev search result</span><div class="kb-keys"><span class="kb-key">Shift</span><span class="kb-key">Enter</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.close">Close / Cancel</span><div class="kb-keys"><span class="kb-key">Esc</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.jumpLatest">Jump to latest message</span><div class="kb-keys"><span class="kb-key">G</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.focusInput">Focus message input</span><div class="kb-keys"><span class="kb-key">I</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.scrollFirst">Scroll to first message</span><div class="kb-keys"><span class="kb-key">T</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.newChat">New chat session</span><div class="kb-keys"><span class="kb-key">N</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.fontInc">Increase message font</span><div class="kb-keys"><span class="kb-key">=</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.fontDec">Decrease message font</span><div class="kb-keys"><span class="kb-key">-</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.fontReset">Reset message font</span><div class="kb-keys"><span class="kb-key">0</span></div></div>
+    <div class="kb-row"><span data-i18n="kb.showPanel">Show this panel</span><div class="kb-keys"><span class="kb-key">?</span></div></div>
   </div>
 </div>
 <!-- ccs-desktop-update-ui (additive, desktop-only; no-op in web mode) -->
