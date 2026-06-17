@@ -9,7 +9,13 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "postinstall": "node scripts/install-hooks.js",
-    "release": "node scripts/release.js"
+    "release": "node scripts/release.js",
+    "electron:dev": "electron .",
+    "electron:smoke": "electron electron/smoke.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
+    "dist": "electron-builder -mwl"
   },
   "repository": {
     "type": "git",
@@ -38,5 +44,10 @@
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.0.0"
+  },
+  "main": "electron/main.js",
+  "devDependencies": {
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3"
   }
 }

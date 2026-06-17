@@ -76,6 +76,9 @@ const APP_DIR = process.env.APP_DIR || __dirname;
 const WORKDIR = process.env.WORKDIR || path.join(APP_DIR, 'workspace');
 const CONFIG_PATH = path.join(APP_DIR, 'config.json');
 
+// Dual-mode child interpreter: web=node; desktop(Electron)=Electron-as-Node via CCS_NODE_CMD (set by electron/main.js). A packaged app has no standalone node.
+const NODE_CMD = process.env.CCS_NODE_CMD || 'node';
+
 // ─── Security config ──────────────────────────────────────────────────────────
 // Trust X-Forwarded-For when behind nginx/Caddy (needed for rate limiting)
 if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', 1);
@@ -1050,7 +1053,7 @@ async function startTask(task) {
     } catch {}
     // Always inject internal task-manager MCP
     taskMcpServers['_ccs_task_manager'] = {
-      command: 'node',
+      command: NODE_CMD,
       args: [path.join(__dirname, 'mcp-task-manager.js')],
       env: {
         TASK_MANAGER_SERVER_URL: `http://127.0.0.1:${PORT}`,
@@ -2388,7 +2391,7 @@ async function runCliSingle(p) {
 
     // Inject PreToolUse hook for mid-task interrupt delivery via --settings
     const interruptHookSettings = {
-      hooks: { PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: `node "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`, timeout: 3 }] }] },
+      hooks: { PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`, timeout: 3 }] }] },
     };
     const interruptEnv = {
       CCS_INTERRUPT_URL: `http://127.0.0.1:${PORT}`,
@@ -5445,7 +5448,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
 
     // Internal MCPs (always injected)
     mcpServers['_ccs_ask_user'] = {
-      command: 'node',
+      command: NODE_CMD,
       args: [path.join(__dirname, 'mcp-ask-user.js')],
       env: {
         ASK_USER_SERVER_URL: `http://127.0.0.1:${PORT}`,
@@ -5454,7 +5457,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
       },
     };
     mcpServers['_ccs_notify'] = {
-      command: 'node',
+      command: NODE_CMD,
       args: [path.join(__dirname, 'mcp-notify.js')],
       env: {
         NOTIFY_SERVER_URL: `http://127.0.0.1:${PORT}`,
@@ -5463,7 +5466,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
       },
     };
     mcpServers['_ccs_set_ui_state'] = {
-      command: 'node',
+      command: NODE_CMD,
       args: [path.join(__dirname, 'mcp-set-ui-state.js')],
       env: {
         SET_UI_STATE_SERVER_URL: `http://127.0.0.1:${PORT}`,
@@ -5472,7 +5475,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
       },
     };
     mcpServers['_ccs_user_interrupt'] = {
-      command: 'node',
+      command: NODE_CMD,
       args: [path.join(__dirname, 'mcp-user-interrupt.js')],
       env: {
         INTERRUPT_SERVER_URL: `http://127.0.0.1:${PORT}`,
@@ -6523,7 +6526,7 @@ wss.on('connection', (ws) => {
 
       // --- Internal MCPs (always injected, invisible to user) ---
       mcpServers['_ccs_ask_user'] = {
-        command: 'node',
+        command: NODE_CMD,
         args: [path.join(__dirname, 'mcp-ask-user.js')],
         env: {
           ASK_USER_SERVER_URL: `http://127.0.0.1:${PORT}`,
@@ -6533,7 +6536,7 @@ wss.on('connection', (ws) => {
       };
 
       mcpServers['_ccs_notify'] = {
-        command: 'node',
+        command: NODE_CMD,
         args: [path.join(__dirname, 'mcp-notify.js')],
         env: {
           NOTIFY_SERVER_URL: `http://127.0.0.1:${PORT}`,
@@ -6542,7 +6545,7 @@ wss.on('connection', (ws) => {
         },
       };
       mcpServers['_ccs_set_ui_state'] = {
-        command: 'node',
+        command: NODE_CMD,
         args: [path.join(__dirname, 'mcp-set-ui-state.js')],
         env: {
           SET_UI_STATE_SERVER_URL: `http://127.0.0.1:${PORT}`,
@@ -6551,7 +6554,7 @@ wss.on('connection', (ws) => {
         },
       };
       mcpServers['_ccs_user_interrupt'] = {
-        command: 'node',
+        command: NODE_CMD,
         args: [path.join(__dirname, 'mcp-user-interrupt.js')],
         env: {
           INTERRUPT_SERVER_URL: `http://127.0.0.1:${PORT}`,

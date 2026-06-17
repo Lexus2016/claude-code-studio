@@ -80,3 +80,6 @@ README_RU.html
 test-snapshot-*.md
 *.planning/quick/**
 .playwright-mcp/
+
+# Electron build output
+dist-desktop/
