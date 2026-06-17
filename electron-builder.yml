@@ -8,6 +8,7 @@ publish:
   provider: github
   owner: Lexus2016
   repo: claude-code-studio
+  releaseType: release   # publish directly (not a draft) so it merges cleanly with release.yml
 
 asar: true
 # Runtime uses Node's built-in node:sqlite (Electron's Node >= 22.13), not the
@@ -35,6 +36,10 @@ files:
   - "!.playwright-mcp/**"
   - "!**/*.bak"
   - "!dist-desktop/**"
+  - "!public/screenshots/**"
+  - "!homebrew-tap/**"
+  - "!README*"
+  - "!CLAUDE.md"
 
 directories:
   output: dist-desktop
