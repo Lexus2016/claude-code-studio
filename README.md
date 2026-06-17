@@ -46,7 +46,15 @@ Prefer a native window over a browser tab? Claude Code Studio also ships as a **
 
 **Built-in updates:** the app tells you when a new version ships and updates in one click — Windows/Linux update in place, macOS updates via Homebrew. Auto-update is opt-in (default: notify + one click).
 
-**Coming from the CLI/web version?** In the desktop app use **File → Import data from CLI / web version…** — pick your existing studio folder and it migrates your chat history, settings (`config.json`) and skills (a backup is made first, then the app restarts). No manual file copying.
+**Coming from the CLI/web version?** The desktop app keeps its own data folder, so you can pull your existing history and settings across in one step — no manual file copying:
+
+1. Open the desktop app → menu **File → Import data from CLI / web version…**
+2. Pick the folder of your old install — the one that contains `data/` and `config.json`. For the web/server version that's the project folder where you ran `npm start` (the directory with `server.js`).
+3. Confirm **Import & Restart**.
+
+It migrates your chat history (`data/chats.db`), projects, SSH hosts and uploads, plus MCP servers and skills (`config.json` + `skills/`). It does **not** copy `.env` or `workspace/` (server-only settings and working files). A timestamped backup of the desktop's current data is made first, then the app restarts automatically.
+
+> Where the desktop keeps its own data — macOS: `~/Library/Application Support/claude-code-studio/` · Windows: `%APPDATA%\claude-code-studio\` · Linux: `~/.config/claude-code-studio/`
 
 **Build from source:**
 ```bash
