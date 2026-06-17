@@ -50,5 +50,6 @@
   "devDependencies": {
     "electron": "^42.4.1",
     "electron-builder": "^26.15.3"
-  }
+  },
+  "author": "Lexus2016 <Lexus2016@users.noreply.github.com>"
 }
