@@ -10,6 +10,20 @@ The current bot (telegram-bot.js, ~4693 lines) works functionally but has severe
 
 A user should be able to send a message to Claude in **2 taps or fewer** — from any state, without knowing any slash commands.
 
+## Current Milestone: v1.1 Electron Desktop
+
+**Goal:** Ship Claude Code Studio as a native desktop app (macOS, Linux, Windows) that runs the existing web server unchanged — one codebase, two launchers — with in-app GUI updates.
+
+**Target features:**
+- Electron shell that forks the existing `server.js` and renders it in a native window; **web mode stays byte-for-byte unchanged**
+- User data in OS userData dir (`APP_DIR` override), ephemeral free port, local auto-session auth
+- `claude` CLI detected at startup with friendly install guidance if missing; server-only features (Telegram/tunnel/SSH) off on desktop
+- In-app GUI updates: version banner + one-click **Update** + live report + Copy/Open-Terminal fallback + opt-in auto-update
+- Unsigned, $0: Windows/Linux via `electron-updater`; macOS via app-triggered `brew upgrade --cask`
+- Distribution: Homebrew Cask (macOS, only supported channel), NSIS (Windows), AppImage+deb (Linux); GitHub releases; Cask auto-bumped from CI
+
+**Design:** `docs/electron-desktop/DESIGN.md` (authoritative, locked).
+
 ## Requirements
 
 ### Validated
@@ -24,9 +38,15 @@ A user should be able to send a message to Claude in **2 taps or fewer** — fro
 - ✓ Ask-user interactive questions answered via Telegram — existing
 - ✓ Security: device whitelist, sensitive file blocking, rate limiting — existing
 
-### Active
+### Active (v1.1 Electron Desktop)
 
-All milestone requirements are complete. See Validated sections below.
+- [ ] **Desktop shell** (DESK-01..05) — native app on 3 OSes, server unchanged, userData, ephemeral port, auto-session
+- [ ] **Prerequisites** (DEP-01..02) — `claude` detect + prompt; disable server-only features on desktop
+- [ ] **Updates** (UPD-01..04) — version awareness, one-click update + report, command fallback, opt-in auto
+- [ ] **Distribution** (DIST-01..03) — Homebrew Cask (macOS), NSIS (Win), AppImage+deb (Linux), GitHub + CI cask bump
+- [ ] **Build/packaging** (BUILD-01..03) — interpreter resolver, asarUnpack helpers, devDependencies-only
+
+See `.planning/REQUIREMENTS.md` for full detail. (v1.0 Telegram requirements: all complete — see Validated below.)
 
 ### Validated in Phase 1: Foundation
 
@@ -144,4 +164,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after milestone completion (all 4 phases)*
+*Last updated: 2026-06-17 — started milestone v1.1 Electron Desktop*
