@@ -476,6 +476,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .msg pre code { background: none; padding: 12px 14px; border-radius: 0; font-size: 0.87em; color: var(--text); display: block; overflow-x: auto; line-height: 1.65; }
 .msg a { color: var(--accent2); text-decoration: none; }
 .msg a:hover { text-decoration: underline; }
+.msg a.md-link { color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(88,166,255,.3); transition: color .15s, border-color .15s; }
+.msg a.md-link:hover { color: #a8d0ff; border-bottom-color: var(--blue); text-decoration: none; }
+.msg a.md-link .ext { font-size: .78em; opacity: .7; margin-left: 1px; vertical-align: .05em; }
 .msg blockquote { display: flex; align-items: flex-start; gap: 8px; border-left: 3px solid #3a4560; padding: 7px 12px; margin: 6px 0 10px; background: rgba(20,27,42,.75); border-radius: 0 8px 8px 0; color: #8a9bba; font-size: 0.94em; font-style: italic; line-height: 1.5; }
 .msg blockquote > svg { flex-shrink: 0; margin-top: 3px; opacity: .4; color: #8a9bba; }
 .msg hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
@@ -4579,7 +4582,7 @@ function replaceMarkdownLinks(text) {
     }
     const href = url.trim();
     out += isSafeHref(href)
-      ? `<a href="${href}" target="_blank" rel="noopener">${label}</a>`
+      ? `<a href="${href}" target="_blank" rel="noopener noreferrer" class="md-link">${label}<span class="ext">↗</span></a>`
       : label;
     i = urlEnd + 1;
   }
@@ -4648,6 +4651,29 @@ function reformatInlineNumberedItems(text) {
     parts.push(...items);
     return parts.join('\n');
   }).join('\n');
+}
+
+// Linkify bare http(s) URLs in already-rendered HTML, skipping <a>/<code> regions.
+// Pure (no app globals) so it is unit-testable via test/render/_load.mjs.
+function autolinkBareUrls(html) {
+  // Split into segments, leaving <a…>…</a> and <code>…</code> untouched.
+  const parts = html.split(/(<a\b[^>]*>.*?<\/a>|<code\b[^>]*>.*?<\/code>)/gs);
+  const URL = /\bhttps?:\/\/[^\s<]+/g;
+  return parts.map((seg, idx) => {
+    if (idx % 2 === 1) return seg; // protected <a>/<code> segment
+    return seg.replace(URL, raw => {
+      let url = raw;
+      let trail = '';
+      // strip trailing sentence punctuation
+      const m = url.match(/[.,;:!?]+$/);
+      if (m) { trail = m[0]; url = url.slice(0, -trail.length); }
+      // drop a single unbalanced trailing ')'
+      if (url.endsWith(')') && (url.match(/\(/g) || []).length < (url.match(/\)/g) || []).length) {
+        url = url.slice(0, -1); trail = ')' + trail;
+      }
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="md-link">${url}<span class="ext">↗</span></a>${trail}`;
+    });
+  }).join('');
 }
 
 function renderMd(text) {
@@ -4754,6 +4780,7 @@ function renderMd(text) {
   text = text.replace(/\x04ICODE(\d+)\x05/g, (_, i) => `<code>${inlineCodes[+i]}</code>`);
   // Links
   text = replaceMarkdownLinks(text);
+  text = autolinkBareUrls(text);
 
   // 5. Paragraphs — wrap lines that aren't block elements
   const blockTags = /^<(?:h[1-6]|ul|ol|li|hr|blockquote|pre|div)|^\x02BLOCK\d+\x03/;
