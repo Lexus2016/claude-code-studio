@@ -495,6 +495,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .msg .callout.warn .ct { color: #f0b84a; }
 .msg .callout.danger { border-left-color: var(--red); background: rgba(248,81,73,.06); }
 .msg .callout.danger .ct { color: #ff7b72; }
+.msg .status-pill { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; letter-spacing: .02em; padding: 5px 12px; border-radius: 8px; margin: 6px 0 2px; }
+.msg .status-pill .sp-ic { font-size: 13px; line-height: 1; }
+.msg .status-pill.done { background: rgba(63,185,80,.16); color: #56d364; border: 1px solid rgba(63,185,80,.3); }
+.msg .status-pill.wait { background: rgba(88,166,255,.15); color: #79b8ff; border: 1px solid rgba(88,166,255,.3); }
+.msg .status-pill.warn { background: rgba(229,164,53,.15); color: #f0b84a; border: 1px solid rgba(229,164,53,.3); }
+.msg .status-pill.err  { background: rgba(248,81,73,.15); color: #ff7b72; border: 1px solid rgba(248,81,73,.3); }
+.msg .status-pill.run  { background: rgba(160,141,245,.15); color: #b9a6ff; border: 1px solid rgba(160,141,245,.3); }
 .msg .table-wrap { overflow-x: auto; margin: 12px 0; border-radius: 9px; border: 1px solid var(--border); }
 .msg table { border-collapse: collapse; width: 100%; font-size: 0.9em; }
 .msg th, .msg td { border: none; border-bottom: 1px solid var(--border); padding: 8px 14px; text-align: left; line-height: 1.5; }
@@ -4713,6 +4720,27 @@ function parseAdmonitions(text) {
   });
 }
 
+// Promote a trailing status line "--- \n <emoji> <Label> — <rest>" into a pill.
+// Runs AFTER escH (emits raw HTML that must not be re-escaped). Pure.
+function promoteStatusLine(text) {
+  const KIND = [
+    ['done', ['✅','✓']], ['wait', ['❓','🟡']], ['warn', ['⚠️','⚠']],
+    ['err', ['❌','✗','🔴']], ['run', ['⏳','🔄']],
+  ];
+  return text.replace(/\n?-{3,}[ \t]*\n[ \t]*(\S[^\n]*?)[ \t]*\n?$/, (m, raw) => {
+    const line = raw.trim();
+    const sp = line.indexOf(' ');
+    const icon = sp === -1 ? line : line.slice(0, sp);
+    let kind = '';
+    for (const [k, icons] of KIND) if (icons.some(ic => line.startsWith(ic))) { kind = k; break; }
+    if (!kind) return m;                        // not a status line → leave --- block intact
+    const afterIcon = line.slice(icon.length).trim();
+    const dash = afterIcon.indexOf('—');
+    const rest = dash === -1 ? afterIcon : afterIcon.slice(dash + 1).trim();
+    return `\n<div class="status-pill ${kind}"><span class="sp-ic">${icon}</span>${rest}</div>`;
+  });
+}
+
 function renderMd(text) {
   if (!text) return '';
 
@@ -4741,6 +4769,9 @@ function renderMd(text) {
     inlineCodes.push(code);
     return `\x04ICODE${idx}\x05`;
   });
+
+  // Promote a trailing status line into a colored pill (after escaping; emits raw HTML)
+  text = promoteStatusLine(text);
 
   // 3. Block elements (order matters)
   // Headers (h6→h1 order to avoid partial matches)
