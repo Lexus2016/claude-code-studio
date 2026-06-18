@@ -4625,7 +4625,11 @@ function parseListBlock(blockText) {
 // and reformat as standard markdown list "1. text\n2. text\n3. text"
 function reformatInlineNumberedItems(text) {
   return text.split('\n').map(line => {
-    const regex = /\b(\d+)\)\s+/g;
+    // Skip parenthesized enumerations like "(1) … (2) … (3) …" — those are inline
+    // references inside a sentence, not a list. The opening "(" isn't part of the
+    // match, so treating them as list markers orphaned the "(" and kept ", (" tails.
+    // Only bare "1) … 2) … 3) …" reformats into a list.
+    const regex = /(?<!\()\b(\d+)\)\s+/g;
     const matches = [...line.matchAll(regex)];
     if (matches.length < 2) return line;
     const nums = matches.map(m => parseInt(m[1]));
