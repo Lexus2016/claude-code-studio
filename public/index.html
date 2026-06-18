@@ -502,6 +502,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .msg .status-pill.warn { background: rgba(229,164,53,.15); color: #f0b84a; border: 1px solid rgba(229,164,53,.3); }
 .msg .status-pill.err  { background: rgba(248,81,73,.15); color: #ff7b72; border: 1px solid rgba(248,81,73,.3); }
 .msg .status-pill.run  { background: rgba(160,141,245,.15); color: #b9a6ff; border: 1px solid rgba(160,141,245,.3); }
+.msg .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 8px 0; font-size: .95em; }
+.msg .kv dt { color: var(--muted); }
+.msg .kv dd { color: var(--text); margin: 0; font-weight: 600; }
 .msg .table-wrap { overflow-x: auto; margin: 12px 0; border-radius: 9px; border: 1px solid var(--border); }
 .msg table { border-collapse: collapse; width: 100%; font-size: 0.9em; }
 .msg th, .msg td { border: none; border-bottom: 1px solid var(--border); padding: 8px 14px; text-align: left; line-height: 1.5; }
@@ -4747,6 +4750,18 @@ function promoteStatusLine(text) {
   });
 }
 
+// Convert a run of 2+ "**Key:** value" lines into a key-value grid. Pure.
+// Runs after escH, before bold processing (matches literal ** which survive escaping).
+function parseKeyValueFacts(text) {
+  return text.replace(/(?:^\*\*[^*\n]+:\*\*[ \t].+\n?){2,}/gm, block => {
+    const rows = block.trim().split('\n').map(l => {
+      const m = l.match(/^\*\*([^*\n]+):\*\*[ \t](.+)$/);
+      return m ? `<dt>${m[1]}</dt><dd>${m[2]}</dd>` : '';
+    }).join('');
+    return `<dl class="kv">${rows}</dl>\n`;
+  });
+}
+
 function renderMd(text) {
   if (!text) return '';
 
@@ -4778,6 +4793,8 @@ function renderMd(text) {
 
   // Promote a trailing status line into a colored pill (after escaping; emits raw HTML)
   text = promoteStatusLine(text);
+  // Key-value facts grid from a run of "**Key:** value" lines
+  text = parseKeyValueFacts(text);
 
   // 3. Block elements (order matters)
   // Headers (h6→h1 order to avoid partial matches)
@@ -4860,7 +4877,7 @@ function renderMd(text) {
   text = autolinkBareUrls(text);
 
   // 5. Paragraphs — wrap lines that aren't block elements
-  const blockTags = /^<(?:h[1-6]|ul|ol|li|hr|blockquote|pre|div)|^\x02BLOCK\d+\x03/;
+  const blockTags = /^<(?:h[1-6]|ul|ol|li|hr|blockquote|pre|div|dl)|^\x02BLOCK\d+\x03/;
   const lines = text.split('\n');
   const out = [];
   let para = [];
