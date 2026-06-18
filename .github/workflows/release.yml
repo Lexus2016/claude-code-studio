@@ -36,10 +36,13 @@ jobs:
 
       - name: Create GitHub Release
         uses: actions/github-script@v7
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          CHANGELOG: ${{ steps.changelog.outputs.CHANGELOG }}
         with:
           script: |
-            const baseTag = '${{ steps.version.outputs.VERSION }}';
-            const body = `## What's Changed\n\n${{ steps.changelog.outputs.CHANGELOG }}\n\n## Installation\n\n\`\`\`bash\n# Run latest version directly\nnpx github:Lexus2016/claude-code-studio\n\n# Or install globally\nnpm install -g github:Lexus2016/claude-code-studio\nclaude-code-studio\n\`\`\`\n\n> Open http://localhost:3000 in your browser`;
+            const baseTag = process.env.VERSION;
+            const body = `## What's Changed\n\n${process.env.CHANGELOG}\n\n## Installation\n\n\`\`\`bash\n# Run latest version directly\nnpx github:Lexus2016/claude-code-studio\n\n# Or install globally\nnpm install -g github:Lexus2016/claude-code-studio\nclaude-code-studio\n\`\`\`\n\n> Open http://localhost:3000 in your browser`;
 
             try {
               await github.rest.repos.createRelease({
