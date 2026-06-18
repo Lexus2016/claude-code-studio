@@ -1,5 +1,19 @@
 # Chat Message Visual Hierarchy — Implementation Plan
 
+> ✅ **IMPLEMENTED 2026-06-18** — all 8 tasks committed (`ee4622a`→`5a0eef8`), 8/8 node
+> tests green, visual verified via real-CSS preview screenshot. Deviations from the
+> original plan (applied during execution):
+> - **Task 0 loader:** the brace-balancer overran on `renderMd` (regex-heavy body). Replaced
+>   with a column-0 closing-brace boundary (`\n}`) — robust for all top-level functions here.
+> - **Task 1:** also updated `replaceMarkdownLinks` to emit `class="md-link"` + ↗ so markdown
+>   and bare links are identical and feed the Task 2 button detection (gap in original plan).
+> - **Task 4 status pill:** split `rest` on the em dash (multi-word labels) and run the
+>   transform AFTER `escH` (it emits raw HTML that must not be re-escaped) — the plan's
+>   pre-escape integration point and first-word split were both corrected.
+> - **Task 6 kv:** runs after `escH`, before bold; added `dl` to the block-tag set.
+
+# Chat Message Visual Hierarchy — Implementation Plan (original)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make assistant chat messages scannable — status badge, headline, callouts, key facts, richer code/tables, and active (external-opening) links — driven only by explicit structure, implemented entirely in `public/index.html`.
