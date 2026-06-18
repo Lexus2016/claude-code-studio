@@ -82,8 +82,9 @@ export function loadFn(name) {
     else if (c === '}') { depth--; if (depth === 0) { i++; break; } }
   }
   const body = src.slice(bodyStart, i);             // includes outer braces
+  const signature = src.slice(at, bodyStart);       // `function NAME(origParams) ` — keep real params
   // eslint-disable-next-line no-new-func
-  return new Function(`return (function ${name}(text)${body});`)();
+  return new Function(`return (${signature}${body});`)();
 }
 
 function skipString(s, i, q) {
