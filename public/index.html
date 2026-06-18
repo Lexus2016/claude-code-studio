@@ -479,6 +479,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .msg a.md-link { color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(88,166,255,.3); transition: color .15s, border-color .15s; }
 .msg a.md-link:hover { color: #a8d0ff; border-bottom-color: var(--blue); text-decoration: none; }
 .msg a.md-link .ext { font-size: .78em; opacity: .7; margin-left: 1px; vertical-align: .05em; }
+.msg a.link-btn { display: inline-flex; align-items: center; gap: 7px; border-bottom: none; background: rgba(124,106,239,.12); border: 1px solid rgba(124,106,239,.35); color: var(--accent2); font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 8px; margin: 2px 0; }
+.msg a.link-btn:hover { background: rgba(124,106,239,.2); border-color: var(--accent); color: #cdbcff; }
+.msg a.link-btn .ext { opacity: .8; }
 .msg blockquote { display: flex; align-items: flex-start; gap: 8px; border-left: 3px solid #3a4560; padding: 7px 12px; margin: 6px 0 10px; background: rgba(20,27,42,.75); border-radius: 0 8px 8px 0; color: #8a9bba; font-size: 0.94em; font-style: italic; line-height: 1.5; }
 .msg blockquote > svg { flex-shrink: 0; margin-top: 3px; opacity: .4; color: #8a9bba; }
 .msg hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
@@ -4676,6 +4679,16 @@ function autolinkBareUrls(html) {
   }).join('');
 }
 
+// A paragraph that contains exactly one link and nothing else becomes a button action.
+// Pure; runs after paragraph wrapping.
+function linkifyStandaloneButtons(html) {
+  return html.replace(/<p>(<a\b[^>]*\bclass="md-link)("[^>]*>.*?<\/a>)<\/p>/gs, (m, a, b) => {
+    const inner = m.slice(3, -4); // strip <p> … </p>
+    if (!/^<a\b[^>]*>.*<\/a>$/s.test(inner.trim())) return m;
+    return `<p>${a} link-btn${b}</p>`;
+  });
+}
+
 function renderMd(text) {
   if (!text) return '';
 
@@ -4797,6 +4810,7 @@ function renderMd(text) {
   }
   flushPara();
   text = out.join('\n');
+  text = linkifyStandaloneButtons(text);
 
   // 6. Restore code blocks with header + copy button
   text = text.replace(/\x02BLOCK(\d+)\x03/g, (_, i) => {
