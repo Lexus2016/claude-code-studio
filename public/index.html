@@ -6192,6 +6192,45 @@ function addEl(cls) {
   return d;
 }
 
+// ─── Dev helper: preview the message visual-hierarchy vocabulary ───
+// Renders one sample assistant message through the REAL renderMd (no DB write,
+// no network). Call demoMessages() from DevTools, or load the page with ?demo
+// (web) — in the Electron window just open DevTools and run demoMessages().
+// Ephemeral: the message disappears on reload / session switch.
+function demoMessages() {
+  const SAMPLE = [
+    '# Аудит підсистеми чату завершено',
+    '**Файл:** public/index.html',
+    '**Рядок:** 4626 — reformatInlineNumberedItems',
+    '**Спосіб:** негативний lookbehind',
+    '',
+    '## Що зроблено',
+    'Розділювач між текстовими блоками виправлено в корені — спокійний опис, який не конкурує з важливим.',
+    '',
+    '> [!TIP]',
+    '> Голі посилання тепер активні: https://core.telegram.org/bots/api',
+    '',
+    '> [!WARNING]',
+    '> Перевірити в браузері наживо ще треба.',
+    '',
+    '> [!CAUTION]',
+    '> Не вгадувати «важливість» із прози — це дало два баги.',
+    '',
+    '[Відкрити застосунок](https://example.com)',
+    '',
+    'Звичайний перелік у дужках лишається інлайновим: (1) аудит, (2) ресерч, (3) рекомендації.',
+    '',
+    '---',
+    '✅ Done — закомічено 86180b6, 9/10',
+  ].join('\n');
+  const w = addMsg('assistant');
+  w.querySelector('.msg').innerHTML = renderMd(SAMPLE);
+  scrollBottom();
+  return 'demo message rendered (ephemeral — reload to clear)';
+}
+window.demoMessages = demoMessages;
+if (/[?#&]demo\b/.test(location.href)) window.addEventListener('load', () => setTimeout(demoMessages, 600));
+
 // ─── Agent team card ───
 let _atcAgents = new Map(); // track agent states per current generation
 let _atcPlanData = null;    // stored for dispatch button
