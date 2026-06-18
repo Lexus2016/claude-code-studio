@@ -60,6 +60,24 @@ const messages = [
     + 'dev-хелпер `demoMessages()` для миттєвого тесту, закомічено (`f5f6115`). '
     + 'Запускайте `npm run electron:dev` і кличте `demoMessages()` у DevTools.',
   ].join('\n'),
+  [
+    // Table-heavy report (my most common real structure) + In-progress status.
+    '## Що тепер вміють повідомлення',
+    '',
+    '| Елемент | Тригер |',
+    '|---|---|',
+    '| Статус-pill | трейлінг `--- \\n ✅ Done — …` |',
+    '| Callout | `> [!WARNING]` |',
+    '| Активні посилання | markdown `[t](u)` і голі URL |',
+    '',
+    'І кілька фактів поспіль (мій типовий стиль):',
+    '',
+    '**Файл:** server.js',
+    '**Зміна:** STATUS_LINE_INSTRUCTION',
+    '',
+    '---',
+    '⏳ In progress — лишилося звірити таблиці й крайні випадки, далі продовжу.',
+  ].join('\n'),
 ];
 
 const body = messages.map(m =>
