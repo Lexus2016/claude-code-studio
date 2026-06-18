@@ -51,6 +51,15 @@ const messages = [
     '',
     'І перелік у дужках лишається інлайновим: (1) аудит, (2) ресерч, (3) рекомендації.',
   ].join('\n'),
+  [
+    // Reproduction of the long status line that previously became a giant pill.
+    'Коротка відповідь зі справжнім (довгим) статус-рядком, як я зазвичай пишу:',
+    '',
+    '---',
+    '✅ Done — Electron уже несе нові зміни (нічого створювати не треба), додав '
+    + 'dev-хелпер `demoMessages()` для миттєвого тесту, закомічено (`f5f6115`). '
+    + 'Запускайте `npm run electron:dev` і кличте `demoMessages()` у DevTools.',
+  ].join('\n'),
 ];
 
 const body = messages.map(m =>

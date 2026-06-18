@@ -4744,9 +4744,14 @@ function promoteStatusLine(text) {
     for (const [k, icons] of KIND) if (icons.some(ic => line.startsWith(ic))) { kind = k; break; }
     if (!kind) return m;                        // not a status line → leave --- block intact
     const afterIcon = line.slice(icon.length).trim();
-    const dash = afterIcon.indexOf('—');
-    const rest = dash === -1 ? afterIcon : afterIcon.slice(dash + 1).trim();
-    return `\n<div class="status-pill ${kind}"><span class="sp-ic">${icon}</span>${rest}</div>`;
+    // Pill shows only the short status LABEL (Done / In progress / Waiting for input /
+    // Blocked); the summary after the dash renders as normal calm text — otherwise a long
+    // status line becomes a giant pill. Server format: "<emoji> <Label> — <summary>".
+    const sep = afterIcon.match(/\s*[—–]\s*|\s+-\s+/);
+    const label = (sep ? afterIcon.slice(0, sep.index) : afterIcon).trim();
+    const rest = sep ? afterIcon.slice(sep.index + sep[0].length).trim() : '';
+    const pill = `<div class="status-pill ${kind}"><span class="sp-ic">${icon}</span>${label}</div>`;
+    return rest ? `\n${pill}\n\n${rest}` : `\n${pill}`;
   });
 }
 
