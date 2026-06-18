@@ -485,6 +485,16 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .msg blockquote { display: flex; align-items: flex-start; gap: 8px; border-left: 3px solid #3a4560; padding: 7px 12px; margin: 6px 0 10px; background: rgba(20,27,42,.75); border-radius: 0 8px 8px 0; color: #8a9bba; font-size: 0.94em; font-style: italic; line-height: 1.5; }
 .msg blockquote > svg { flex-shrink: 0; margin-top: 3px; opacity: .4; color: #8a9bba; }
 .msg hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.msg .callout { border-left: 3px solid #3a4560; padding: 8px 13px; border-radius: 0 8px 8px 0; margin: 8px 0; font-size: .95em; line-height: 1.6; background: rgba(255,255,255,.018); }
+.msg .callout .ct { font-weight: 700; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 2px; }
+.msg .callout.success { border-left-color: var(--green); background: rgba(63,185,80,.05); }
+.msg .callout.success .ct { color: #56d364; }
+.msg .callout.info { border-left-color: var(--blue); background: rgba(88,166,255,.05); }
+.msg .callout.info .ct { color: #79b8ff; }
+.msg .callout.warn { border-left-color: var(--orange); background: rgba(229,164,53,.06); }
+.msg .callout.warn .ct { color: #f0b84a; }
+.msg .callout.danger { border-left-color: var(--red); background: rgba(248,81,73,.06); }
+.msg .callout.danger .ct { color: #ff7b72; }
 .msg .table-wrap { overflow-x: auto; margin: 12px 0; border-radius: 9px; border: 1px solid var(--border); }
 .msg table { border-collapse: collapse; width: 100%; font-size: 0.9em; }
 .msg th, .msg td { border: none; border-bottom: 1px solid var(--border); padding: 8px 14px; text-align: left; line-height: 1.5; }
@@ -4689,6 +4699,20 @@ function linkifyStandaloneButtons(html) {
   });
 }
 
+// GitHub-style admonitions. Operates on HTML-escaped text (lines start with '&gt;').
+// Pure. Must run BEFORE the generic blockquote merge so these aren't eaten as quotes.
+function parseAdmonitions(text) {
+  const KIND = { NOTE: ['info','Note'], TIP: ['success','Tip'], IMPORTANT: ['info','Important'],
+                 WARNING: ['warn','Warning'], CAUTION: ['danger','Caution'] };
+  return text.replace(/(?:^&gt;[ \t]*\[!(\w+)\][ \t]*\n(?:^&gt;.*\n?)*)/gim, (block, tag) => {
+    const k = KIND[tag.toUpperCase()];
+    if (!k) return block;                    // unknown marker → leave as-is
+    const lines = block.trim().split('\n').map(l => l.replace(/^&gt;[ \t]?/, ''));
+    const body = lines.slice(1).join('<br>').trim();
+    return `<div class="callout ${k[0]}"><div class="ct">${k[1]}</div>${body}</div>\n`;
+  });
+}
+
 function renderMd(text) {
   if (!text) return '';
 
@@ -4729,6 +4753,9 @@ function renderMd(text) {
 
   // Horizontal rule
   text = text.replace(/^(?:---|\*\*\*|___)\s*$/gm, '<hr>');
+
+  // Admonition callouts (> [!WARNING] …) — must run before generic blockquote merge
+  text = parseAdmonitions(text);
 
   // Blockquote — merge consecutive > lines into single block
   text = text.replace(/((?:^&gt;\s*.+\n?)+)/gm, block => {
