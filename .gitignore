@@ -83,3 +83,5 @@ test-snapshot-*.md
 
 # Electron build output
 dist-desktop/
+
+.superpowers/
