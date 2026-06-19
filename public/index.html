@@ -7220,6 +7220,17 @@ msgsEl.addEventListener('scroll', () => {
     return Math.round(Math.max(SEG_MIN, Math.min(SEG_MAX, len * SEG_K)));
   }
 
+  // Bound the rail to the #messages viewport, NOT the full .center (which is a
+  // flex column that also holds the composer .ia below). offsetTop/offsetHeight
+  // are measured against .center — the positioned offsetParent the rail shares —
+  // so this lines the rail up with the messages box and stops it from drawing
+  // its track/border down over the input composer. Re-run on every resize.
+  function syncRailGeometry() {
+    rail.style.top = msgsEl.offsetTop + 'px';
+    rail.style.height = msgsEl.offsetHeight + 'px';
+    rail.style.bottom = 'auto';
+  }
+
   function ensureTooltip() {
     if (tooltip) return tooltip;
     tooltip = document.createElement('div');
@@ -7337,6 +7348,7 @@ msgsEl.addEventListener('scroll', () => {
     pending = true;
     requestAnimationFrame(() => {
       pending = false;
+      syncRailGeometry();
       rebuildMinimap();
       updateMinimapThumb();
     });
@@ -7346,6 +7358,13 @@ msgsEl.addEventListener('scroll', () => {
   const mo = new MutationObserver(schedule);
   mo.observe(msgsEl, { childList: true, subtree: true, characterData: true });
 
+  // The composer (.ia) growing/shrinking resizes #messages WITHOUT mutating its
+  // subtree, so the MutationObserver never fires for it — a ResizeObserver keeps
+  // the rail bounded to the live messages height (also covers search-bar toggles).
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(schedule).observe(msgsEl);
+  }
+
   // Thumb tracks chat scroll (separate from the #scrollBtn listener above) — rAF-throttled
   let thumbPending = false;
   msgsEl.addEventListener('scroll', () => {
@@ -7353,7 +7372,7 @@ msgsEl.addEventListener('scroll', () => {
     thumbPending = true;
     requestAnimationFrame(() => { thumbPending = false; updateMinimapThumb(); });
   });
-  window.addEventListener('resize', () => { rebuildMinimap(); updateMinimapThumb(); });
+  window.addEventListener('resize', () => { syncRailGeometry(); rebuildMinimap(); updateMinimapThumb(); });
 
   // Initial paint
   schedule();
