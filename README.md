@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.65.0** — Resilience & navigation: turns no longer fail when the server is briefly overloaded (HTTP 429/529) — they pause and auto-retry — and the subprocess timeout is now idle-based, so a long-but-active run is never killed mid-stream (`CLAUDE_IDLE_TIMEOUT_MS` / `CLAUDE_HARD_CAP_MS`). Plus a message minimap rail, a live Activity panel, and a unified session export menu.
+> **v5.66.0** — Minimap rail polish: the message overview now spans the full rail height — every message stays visible and clickable at a glance instead of trailing off into empty space. Long messages are weight-capped so one can't dominate the fill; only extreme-length chats fall back to a scrollable rail.
 
 ---
 
