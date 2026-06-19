@@ -420,7 +420,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .dot-auto { background: var(--orange); }
 
 /* ─── Messages ─── */
-.msgs { flex: 1; overflow-y: auto; padding: 12px 18px 40px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; scroll-padding-bottom: 40px; }
+.msgs { flex: 1; overflow-y: auto; padding: 12px 26px 40px 18px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; scroll-padding-bottom: 40px; }
 .msgs::-webkit-scrollbar { width: 4px; }
 .msgs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
@@ -943,7 +943,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 /* ─── Minimap rail (right-docked message overview) ─── */
 .minimap-rail {
-  position: absolute; top: 0; bottom: 0; right: 0;
+  position: absolute; top: 0; bottom: 0; right: 12px;
   width: 12px; box-sizing: border-box;
   background: var(--s1);
   border-left: 1px solid var(--border);
@@ -957,8 +957,6 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .minimap-seg {
   position: relative;
   width: 100%; box-sizing: border-box;
-  min-height: 3px;
-  margin: 1px 0;
   border-radius: 2px;
   cursor: pointer;
   opacity: .82;
@@ -7202,10 +7200,12 @@ msgsEl.addEventListener('scroll', () => {
   const rail = $i('minimapRail');
   if (!rail || !msgsEl) return; // markup missing → no-op, never throws
 
-  // Proportional-height tuning
-  const SEG_MIN = 5;    // px floor so short messages stay clickable
-  const SEG_MAX = 70;   // px cap so one huge message can't dominate
-  const SEG_K = 0.12;   // px per character
+  // Overview tuning: segments are proportional to message length (floor + cap). When the
+  // natural total exceeds the rail height the whole set is compressed to fit one screen,
+  // so every message stays visible/clickable. Only an extreme chat falls back to scroll.
+  const SEG_FLOOR = 4;     // px floor so short messages stay clickable
+  const SEG_GAP = 1;       // px gap between segments
+  const WEIGHT_CAP = 1500; // chars — clamp so one long message can't dominate the fill
 
   // Shared singletons
   const thumb = document.createElement('div');
@@ -7216,8 +7216,31 @@ msgsEl.addEventListener('scroll', () => {
   // Track current seg nodes for in-place patching (avoid flicker)
   let segs = [];
 
-  function segHeight(len) {
-    return Math.round(Math.max(SEG_MIN, Math.min(SEG_MAX, len * SEG_K)));
+  // Distribute the FULL rail height across all segments so the overview always fills the
+  // screen vertically (no empty slack below). Each segment gets a floor plus a share
+  // proportional to its message length. Only an extreme chat (floors alone overflow) falls
+  // back to scroll + auto-follow so the latest messages stay reachable.
+  function layoutSegments() {
+    const n = segs.length;
+    if (!n) return;
+    const padV = 8; // .minimap-rail vertical padding (4px top + 4px bottom)
+    const availH = rail.clientHeight - padV - SEG_GAP * (n - 1);
+    if (availH >= n * SEG_FLOOR) {
+      rail.style.overflowY = 'hidden';
+      const weights = segs.map(s => Math.max(1, Math.min(WEIGHT_CAP, (s._text || '').length)));
+      const wsum = weights.reduce((a, b) => a + b, 0) || 1;
+      const extra = availH - n * SEG_FLOOR;
+      for (let i = 0; i < n; i++) {
+        segs[i].style.height = (SEG_FLOOR + extra * (weights[i] / wsum)).toFixed(2) + 'px';
+        segs[i].style.marginBottom = (i < n - 1 ? SEG_GAP : 0) + 'px';
+      }
+    } else {
+      rail.style.overflowY = 'auto';
+      for (let i = 0; i < n; i++) {
+        segs[i].style.height = SEG_FLOOR + 'px';
+        segs[i].style.marginBottom = (i < n - 1 ? SEG_GAP : 0) + 'px';
+      }
+    }
   }
 
   // Bound the rail to the #messages viewport, NOT the full .center (which is a
@@ -7300,7 +7323,6 @@ msgsEl.addEventListener('scroll', () => {
       seg._mw = mw;
       seg._text = text;
       seg.className = 'minimap-seg ' + (isUser ? 'user' : 'assistant');
-      seg.style.height = segHeight(text.length) + 'px';
     }
 
     // Remove surplus seg nodes if messages were removed
@@ -7339,6 +7361,12 @@ msgsEl.addEventListener('scroll', () => {
     const height = Math.max(8, (ch / sh) * railContent);
     thumb.style.top = top + 'px';
     thumb.style.height = height + 'px';
+    // Scroll mode (extreme chats only): keep the thumb — the current position — in view
+    // so the most recent messages remain reachable on the rail.
+    if (rail.scrollHeight > rail.clientHeight + 1) {
+      if (top < rail.scrollTop) rail.scrollTop = Math.max(0, top - 8);
+      else if (top + height > rail.scrollTop + rail.clientHeight) rail.scrollTop = top + height - rail.clientHeight + 8;
+    }
   }
 
   // rAF-coalesced rebuild (streaming fires many mutations per frame)
@@ -7350,6 +7378,7 @@ msgsEl.addEventListener('scroll', () => {
       pending = false;
       syncRailGeometry();
       rebuildMinimap();
+      layoutSegments();
       updateMinimapThumb();
     });
   }
@@ -7372,7 +7401,7 @@ msgsEl.addEventListener('scroll', () => {
     thumbPending = true;
     requestAnimationFrame(() => { thumbPending = false; updateMinimapThumb(); });
   });
-  window.addEventListener('resize', () => { syncRailGeometry(); rebuildMinimap(); updateMinimapThumb(); });
+  window.addEventListener('resize', () => { syncRailGeometry(); rebuildMinimap(); layoutSegments(); updateMinimapThumb(); });
 
   // Initial paint
   schedule();
