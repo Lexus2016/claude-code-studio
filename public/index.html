@@ -928,7 +928,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 /* ─── Scroll-to-bottom button ─── */
 #scrollBtn {
-  position: absolute; bottom: 90px; right: 20px;
+  position: absolute; bottom: 90px; right: 26px; /* nudged left of the 12px minimap rail */
   width: 36px; height: 36px;
   background: var(--s2); border: 1px solid var(--border);
   border-radius: 50%; cursor: pointer; display: flex;
@@ -940,6 +940,58 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 }
 #scrollBtn.visible { opacity: 1; pointer-events: all; }
 #scrollBtn:hover { background: var(--accent); border-color: var(--accent); color: white; }
+
+/* ─── Minimap rail (right-docked message overview) ─── */
+.minimap-rail {
+  position: absolute; top: 0; bottom: 0; right: 0;
+  width: 12px; box-sizing: border-box;
+  background: var(--s1);
+  border-left: 1px solid var(--border);
+  overflow-y: auto; overflow-x: hidden;
+  padding: 4px 2px;
+  z-index: 15; /* above messages, below #scrollBtn (z-index:20) */
+  scrollbar-width: none; /* hide native scrollbar on the thin rail */
+}
+.minimap-rail::-webkit-scrollbar { width: 0; height: 0; }
+.minimap-rail.empty { display: none; }
+.minimap-seg {
+  position: relative;
+  width: 100%; box-sizing: border-box;
+  min-height: 3px;
+  margin: 1px 0;
+  border-radius: 2px;
+  cursor: pointer;
+  opacity: .82;
+  transition: filter .12s, opacity .12s;
+}
+.minimap-seg:hover { filter: brightness(1.45); opacity: 1; }
+/* Binary color coding: human = cool blue (from --user-msg), agent = accent purple */
+.minimap-seg.user { background: #3a52d8; }
+.minimap-seg.assistant { background: var(--accent2); }
+.minimap-tooltip {
+  position: fixed; z-index: 60; display: none;
+  max-width: 280px; max-height: 140px; overflow: hidden;
+  background: var(--s3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 8px 10px;
+  font-size: 12px; line-height: 1.45;
+  white-space: pre-wrap; word-break: break-word;
+  pointer-events: none;
+}
+.minimap-thumb {
+  position: absolute; left: 0; right: 0;
+  background: rgba(160,141,245,.22);
+  border: 1px solid var(--accent2);
+  border-radius: 3px;
+  pointer-events: none;
+}
+/* Click highlight flash on the targeted message */
+.mw.minimap-flash { animation: minimapFlash .7s ease-out; }
+@keyframes minimapFlash {
+  0% { box-shadow: 0 0 0 2px var(--accent2); }
+  100% { box-shadow: 0 0 0 2px transparent; }
+}
 
 /* ─── Attachment chips (files & screenshots) ─── */
 .att-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 14px 2px; min-height: 0; }
@@ -2041,6 +2093,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
      CHAT AREA — MAXIMIZED
      ══════════════════════════════════════════════════════ */
   .msgs { padding: 10px 8px 32px; }
+  .minimap-rail { display: none !important; } /* hide rail on narrow/mobile viewports */
   .mw { max-width: 96%; }
   .mw.assistant { padding-left: 26px; }
   .mw.assistant::before { width: 20px; height: 20px; font-size: 7px; }
@@ -2827,6 +2880,9 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
       <button class="welcome-import-btn" onclick="$i('sessImportInput').click()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="welcome.import">Import session from JSON</span></button>
     </div>
   </div>
+
+  <!-- Minimap rail: one segment per chat message, populated by the rail controller JS -->
+  <div class="minimap-rail empty" id="minimapRail" aria-hidden="true"></div>
 
   <button id="scrollBtn" onclick="scrollToBottom()" data-i18n-title="scroll.down" title="Scroll to bottom">↓</button>
 
