@@ -7193,6 +7193,172 @@ msgsEl.addEventListener('scroll', () => {
   }
 });
 
+/* ═══════════════════════════════════════════════════════════
+   MINIMAP RAIL CONTROLLER
+   Single source of truth: a MutationObserver on #messages.
+   Decoupled from addMsg / renderStreaming / WS handlers / history loader.
+   ═══════════════════════════════════════════════════════════ */
+(function initMinimapRail() {
+  const rail = $i('minimapRail');
+  if (!rail || !msgsEl) return; // markup missing → no-op, never throws
+
+  // Proportional-height tuning
+  const SEG_MIN = 5;    // px floor so short messages stay clickable
+  const SEG_MAX = 70;   // px cap so one huge message can't dominate
+  const SEG_K = 0.12;   // px per character
+
+  // Shared singletons
+  const thumb = document.createElement('div');
+  thumb.className = 'minimap-thumb';
+  let tooltip = null; // created lazily on first hover
+
+  // Track current seg nodes for in-place patching (avoid flicker)
+  let segs = [];
+
+  function segHeight(len) {
+    return Math.round(Math.max(SEG_MIN, Math.min(SEG_MAX, len * SEG_K)));
+  }
+
+  function ensureTooltip() {
+    if (tooltip) return tooltip;
+    tooltip = document.createElement('div');
+    tooltip.className = 'minimap-tooltip';
+    document.body.appendChild(tooltip);
+    return tooltip;
+  }
+
+  function showTooltip(text, x, y) {
+    const tt = ensureTooltip();
+    tt.textContent = text;
+    tt.style.display = 'block';
+    // Measure then clamp to viewport
+    const rect = tt.getBoundingClientRect();
+    const pad = 8;
+    let left = x - rect.width - 14; // default: to the LEFT of the cursor (rail is flush-right)
+    if (left < pad) left = x + 14;  // flip right if it would clip the left edge
+    left = Math.max(pad, Math.min(left, window.innerWidth - rect.width - pad));
+    let top = y - rect.height / 2;
+    top = Math.max(pad, Math.min(top, window.innerHeight - rect.height - pad));
+    tt.style.left = left + 'px';
+    tt.style.top = top + 'px';
+  }
+
+  function hideTooltip() {
+    if (tooltip) tooltip.style.display = 'none';
+  }
+
+  function flashMessage(mw) {
+    mw.classList.remove('minimap-flash');
+    // force reflow so the animation restarts on rapid repeats
+    void mw.offsetWidth;
+    mw.classList.add('minimap-flash');
+    setTimeout(() => mw.classList.remove('minimap-flash'), 750);
+  }
+
+  function rebuildMinimap() {
+    const mws = msgsEl.querySelectorAll('.mw');
+
+    if (!mws.length) {
+      rail.classList.add('empty');
+      // clear stale segments but keep the thumb node reference
+      segs.forEach(s => s.remove());
+      segs = [];
+      return;
+    }
+    rail.classList.remove('empty');
+
+    // Patch in place: reuse existing seg nodes, create/remove the delta
+    for (let i = 0; i < mws.length; i++) {
+      const mw = mws[i];
+      const isUser = mw.classList.contains('user');
+      const msgEl = mw.querySelector('.msg');
+      const text = ((msgEl ? msgEl.textContent : mw.textContent) || '').trim();
+
+      let seg = segs[i];
+      if (!seg) {
+        seg = document.createElement('div');
+        seg.className = 'minimap-seg';
+        seg.addEventListener('mouseenter', onSegHover);
+        seg.addEventListener('mousemove', onSegHover);
+        seg.addEventListener('mouseleave', hideTooltip);
+        seg.addEventListener('click', onSegClick);
+        rail.insertBefore(seg, thumb); // keep thumb last so it overlays
+        segs[i] = seg;
+      }
+      seg._mw = mw;
+      seg._text = text;
+      seg.className = 'minimap-seg ' + (isUser ? 'user' : 'assistant');
+      seg.style.height = segHeight(text.length) + 'px';
+    }
+
+    // Remove surplus seg nodes if messages were removed
+    for (let i = mws.length; i < segs.length; i++) {
+      if (segs[i]) segs[i].remove();
+    }
+    segs.length = mws.length;
+
+    // Ensure thumb is attached and last
+    if (thumb.parentNode !== rail) rail.appendChild(thumb);
+    else rail.appendChild(thumb);
+  }
+
+  function onSegHover(e) {
+    const seg = e.currentTarget;
+    let text = seg._text || '';
+    text = text.replace(/\s+/g, ' ').trim().slice(0, 300);
+    if (!text) { hideTooltip(); return; }
+    showTooltip(text, e.clientX, e.clientY);
+  }
+
+  function onSegClick(e) {
+    const mw = e.currentTarget._mw;
+    if (!mw) return;
+    mw.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    flashMessage(mw);
+  }
+
+  function updateMinimapThumb() {
+    if (rail.classList.contains('empty')) return;
+    const sh = msgsEl.scrollHeight;
+    const ch = msgsEl.clientHeight;
+    if (sh <= 0) return;
+    // Rail scroll content height (segments stacked); fall back to clientHeight
+    const railContent = rail.scrollHeight || rail.clientHeight;
+    const top = (msgsEl.scrollTop / sh) * railContent;
+    const height = Math.max(8, (ch / sh) * railContent);
+    thumb.style.top = top + 'px';
+    thumb.style.height = height + 'px';
+  }
+
+  // rAF-coalesced rebuild (streaming fires many mutations per frame)
+  let pending = false;
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      pending = false;
+      rebuildMinimap();
+      updateMinimapThumb();
+    });
+  }
+
+  // Live sync: the ONE data source
+  const mo = new MutationObserver(schedule);
+  mo.observe(msgsEl, { childList: true, subtree: true, characterData: true });
+
+  // Thumb tracks chat scroll (separate from the #scrollBtn listener above) — rAF-throttled
+  let thumbPending = false;
+  msgsEl.addEventListener('scroll', () => {
+    if (thumbPending) return;
+    thumbPending = true;
+    requestAnimationFrame(() => { thumbPending = false; updateMinimapThumb(); });
+  });
+  window.addEventListener('resize', () => { rebuildMinimap(); updateMinimapThumb(); });
+
+  // Initial paint
+  schedule();
+})();
+
 function cpMsg(b) {
   const txt = b.parentElement.querySelector('.msg').textContent;
   copyText(txt).then(() => {
