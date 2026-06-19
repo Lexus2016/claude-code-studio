@@ -1079,11 +1079,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .sess-export-btn:hover { color:var(--green); border-color:rgba(63,185,80,.4); background:rgba(63,185,80,.08); }
 .sess-export-wrap { position:relative; display:inline-flex; flex-shrink:0; }
 .export-menu { position:absolute; top:calc(100% + 4px); left:0; z-index:60; background:var(--s2); border:1px solid var(--border); border-radius:var(--r-sm); padding:6px; display:flex; flex-direction:column; gap:3px; min-width:150px; box-shadow:var(--shadow-md); }
-.export-menu-opt { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text); padding:4px 6px; border-radius:4px; cursor:pointer; user-select:none; }
-.export-menu-opt:hover { background:var(--s3); }
-.export-menu-opt input { cursor:pointer; }
-.export-menu-go { margin-top:3px; font-size:11px; color:var(--text-dim); background:transparent; border:1px solid var(--border); padding:3px 7px; border-radius:4px; cursor:pointer; transition:all .15s; }
-.export-menu-go:hover { color:var(--green); border-color:rgba(63,185,80,.4); background:rgba(63,185,80,.08); }
+.export-menu-opt { display:flex; align-items:center; gap:6px; width:100%; text-align:left; font-family:inherit; font-size:12px; color:var(--text); background:transparent; border:none; padding:5px 7px; border-radius:4px; cursor:pointer; user-select:none; transition:background .15s,color .15s; }
+.export-menu-opt:hover { background:var(--s3); color:var(--green); }
 
 /* ─── Retry indicators ─── */
 .retry-badge { font-size:11px; color:var(--text-dim); opacity:.65; margin-top:3px; letter-spacing:.01em; }
@@ -2767,21 +2764,20 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
     <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
     <div id="sessBarExportWrap" class="sess-export-wrap" style="display:none;">
-      <button id="sessBarExportBtn" class="sess-export-btn" onclick="toggleExportMenu(event)" title="Export conversation">↓ Export ▾</button>
+      <button id="sessBarExportBtn" class="sess-export-btn" onclick="toggleExportMenu(event)" data-i18n-title="export.title" title="Export conversation">↓ <span data-i18n="export.btn">Export</span> ▾</button>
       <div id="sessBarExportMenu" class="export-menu" style="display:none;">
-        <label class="export-menu-opt"><input type="checkbox" id="expFmtJson" checked> JSON</label>
-        <label class="export-menu-opt"><input type="checkbox" id="expFmtMd" checked> Markdown (.md)</label>
-        <button class="export-menu-go" onclick="runSelectedExports()">Export</button>
+        <button type="button" class="export-menu-opt" onclick="closeExportMenu();exportSession()">JSON</button>
+        <button type="button" class="export-menu-opt" onclick="closeExportMenu();exportSessionMd()">Markdown (.md)</button>
       </div>
     </div>
-    <button id="sessBarNotesBtn" class="sess-export-btn" style="display:none;" onclick="toggleNotesPanel()" title="Session notes (private)">📝 Notes</button>
+    <button id="sessBarNotesBtn" class="sess-export-btn" style="display:none;" onclick="toggleNotesPanel()" data-i18n-title="notes.title" title="Session notes (private)">📝 <span data-i18n="notes.btn">Notes</span></button>
     <input type="file" id="sessImportInput" accept=".json" style="display:none" onchange="importSessionFile(this)">
   </div>
 
   <div class="notes-panel" id="notesPanel">
-    <textarea id="notesTextarea" placeholder="Private session notes — not sent to Claude..." rows="3" oninput="scheduleNotesSave()"></textarea>
-    <button class="notes-save-btn" onclick="saveNotes()">Save</button>
-    <span class="notes-saved" id="notesSavedLabel">✓ Saved</span>
+    <textarea id="notesTextarea" data-i18n-ph="notes.ph" placeholder="Private session notes — not sent to Claude..." rows="3" oninput="scheduleNotesSave()"></textarea>
+    <button class="notes-save-btn" onclick="saveNotes()" data-i18n="notes.save">Save</button>
+    <span class="notes-saved" id="notesSavedLabel" data-i18n="notes.saved">✓ Saved</span>
   </div>
 
   <div class="dlg-panel" id="delegatePanel">
@@ -3706,6 +3702,7 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    'export.btn':'Експорт','export.title':'Експортувати розмову','notes.btn':'Нотатки','notes.title':'Нотатки сесії (приватні)','notes.ph':'Приватні нотатки сесії — не надсилаються Claude...','notes.save':'Зберегти','notes.saved':'✓ Збережено',
     'act.title':'Активність','act.group':'Групувати за проєктами ↔ плоский список','act.live':'Активні','act.scheduled':'Заплановані','act.recent':'Нещодавні','act.empty':'Немає активності','act.recovering':'віднов.','act.now':'зараз','act.in':'за','act.u.s':'с','act.u.m':'хв','act.u.h':'г','act.u.d':'д',
     'sec.proactive':'Статус',
     'sec.chats':'Чати','sec.mcp':'MCP',
@@ -3939,6 +3936,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'оновлено {time} тому',
   },
   en: {
+    'export.btn':'Export','export.title':'Export conversation','notes.btn':'Notes','notes.title':'Session notes (private)','notes.ph':'Private session notes — not sent to Claude...','notes.save':'Save','notes.saved':'✓ Saved',
     'act.title':'Activity','act.group':'Group by project ↔ flat list','act.live':'Active','act.scheduled':'Scheduled','act.recent':'Recent','act.empty':'No activity','act.recovering':'recovering','act.now':'now','act.in':'in','act.u.s':'s','act.u.m':'m','act.u.h':'h','act.u.d':'d',
     'sec.proactive':'Status',
     'sec.chats':'Chats','sec.mcp':'MCP',
@@ -4172,6 +4170,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'updated {time} ago',
   },
   ru: {
+    'export.btn':'Экспорт','export.title':'Экспортировать разговор','notes.btn':'Заметки','notes.title':'Заметки сессии (приватные)','notes.ph':'Приватные заметки сессии — не отправляются Claude...','notes.save':'Сохранить','notes.saved':'✓ Сохранено',
     'act.title':'Активность','act.group':'Группировать по проектам ↔ плоский список','act.live':'Активные','act.scheduled':'Запланированные','act.recent':'Недавние','act.empty':'Нет активности','act.recovering':'восст.','act.now':'сейчас','act.in':'через','act.u.s':'с','act.u.m':'мин','act.u.h':'ч','act.u.d':'д',
     'sec.proactive':'Статус',
     'sec.chats':'Чаты','sec.mcp':'MCP',
@@ -7502,14 +7501,6 @@ document.addEventListener('click', (e) => {
   const wrap = $i('sessBarExportWrap');
   if (wrap && !wrap.contains(e.target)) closeExportMenu();
 });
-async function runSelectedExports() {
-  const wantJson = $i('expFmtJson')?.checked;
-  const wantMd = $i('expFmtMd')?.checked;
-  if (!wantJson && !wantMd) { toast('Select at least one format', true); return; }
-  closeExportMenu();
-  if (wantJson) await exportSession();
-  if (wantMd) exportSessionMd();
-}
 
 async function exportSession() {
   if (!currentSessionId) return;
