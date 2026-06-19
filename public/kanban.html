@@ -1311,9 +1311,9 @@ function buildChainForm(chain){
           <button type="button" class="sc-btn${mdl==='haiku'?' on':''}" data-v="haiku" onclick="scOpt(this)">Haiku</button>
           <button type="button" class="sc-btn${mdl==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
           <button type="button" class="sc-btn${mdl==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
-          <button type="button" class="sc-btn${mdl==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)">Fable</button>
+          <button type="button" class="sc-btn${mdl==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)" style="display:none">Fable</button>
         </div>
-        <div class="sc-sep"></div>
+        <div class="sc-sep" style="display:none"></div>
         ${engineSegHtml(chain.run_engine)}
         <div class="sc-sep"></div>
         <div class="sc-seg">
@@ -1553,7 +1553,8 @@ function engineSegHtml(val){
   const eng=(raw==='subscription'&&_kbTmuxAvailable)?'subscription':'api';
   const subDisabled=!_kbTmuxAvailable;
   const subAttrs=subDisabled?` disabled style="opacity:0.4;cursor:not-allowed" title="Потрібен tmux на сервері"`:'';
-  return `<div class="sc-seg" data-group="run_engine">
+  // Engine switcher hidden (Subscription paused; API/claude -p only). Un-hide to restore.
+  return `<div class="sc-seg" data-group="run_engine" style="display:none">
     <span class="sc-lbl">${t('tb.engine')}</span>
     <button type="button" class="sc-btn${eng==='api'?' on':''}" data-v="api" onclick="scOpt(this)">API</button>
     <button type="button" class="sc-btn${eng==='subscription'&&!subDisabled?' on':''}" data-v="subscription" onclick="scOpt(this)"${subAttrs}>Subscription</button>
@@ -1602,9 +1603,9 @@ function buildForm(tk={}){
           <button type="button" class="sc-btn${mdl==='haiku'?' on':''}" data-v="haiku" onclick="scOpt(this)">Haiku</button>
           <button type="button" class="sc-btn${mdl==='sonnet'?' on':''}" data-v="sonnet" onclick="scOpt(this)">Sonnet</button>
           <button type="button" class="sc-btn${mdl==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
-          <button type="button" class="sc-btn${mdl==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)">Fable</button>
+          <button type="button" class="sc-btn${mdl==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)" style="display:none">Fable</button>
         </div>
-        <div class="sc-sep"></div>
+        <div class="sc-sep" style="display:none"></div>
         ${engineSegHtml(tk.run_engine)}
         <div class="sc-sep"></div>
         <div class="sc-seg">

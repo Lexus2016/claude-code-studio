@@ -5,7 +5,7 @@
 // (unchanged) and renders it in a native window. Web mode (`node server.js`)
 // is unaffected — none of this runs there.
 
-const { app, BrowserWindow, shell, ipcMain, utilityProcess, dialog, Menu } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, utilityProcess, dialog, Menu, Tray, nativeImage, Notification } = require('electron');
 const path = require('path');
 const http = require('http');
 const net = require('net');
@@ -16,6 +16,9 @@ const { execFileSync, spawn } = require('child_process');
 
 let serverProc = null;
 let serverPort = null;
+let tray = null;
+let trayReady = false;
+let mainWindow = null;
 
 // GUI launches (Finder/Dock) inherit a minimal PATH — make sure the common
 // locations for `claude`, `brew`, `node`, `git` are present before we fork the
@@ -170,8 +173,70 @@ async function createWindow() {
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
+  mainWindow = win;
+  // Closing the window does NOT quit the app — it hides to the tray so the forked
+  // server.js (and its scheduler / processQueue loop) keeps running and scheduled
+  // tasks keep firing. A real quit sets app.isQuiting (tray "Quit" / before-quit),
+  // which lets this handler fall through so the window actually closes.
+  win.on('close', (e) => {
+    // Hide to tray only when a tray exists to reopen / quit from. Without a working
+    // tray (e.g. some Linux DEs) fall through and close normally, so the user is never
+    // stranded with no window and no tray.
+    if (!app.isQuiting && trayReady) { e.preventDefault(); win.hide(); maybeHintBackground(); }
+  });
+  win.on('closed', () => { if (mainWindow === win) mainWindow = null; });
   await win.loadURL(`http://127.0.0.1:${serverPort}`);
   return win;
+}
+
+// Bring the window back from the tray (or recreate it if it was destroyed).
+function showMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus(); }
+  else if (serverProc) createWindow().catch((e) => console.error('[electron] reopen failed:', e.message));
+}
+
+// Menu-bar / system-tray icon: the visible anchor for the background app and the
+// place the real "Quit" lives once the window can be closed without quitting.
+function createTray() {
+  if (tray) return;
+  try {
+    // The icon must live under electron/ (packed into app.asar). build/ is
+    // electron-builder's buildResources dir and is NOT packed — a path there resolves
+    // to an empty image in a packaged app (dev works only because it reads live files).
+    let img = nativeImage.createFromPath(path.join(__dirname, 'tray-icon.png'));
+    if (!img.isEmpty()) img = img.resize({ width: 18, height: 18 });
+    tray = new Tray(img);
+    tray.setToolTip('Claude Code Studio — running in background');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Open Claude Code Studio', click: showMainWindow },
+      { type: 'separator' },
+      { label: 'Scheduler runs in the background', enabled: false },
+      { type: 'separator' },
+      { label: 'Quit Claude Code Studio', click: () => { app.isQuiting = true; stopServer(); app.quit(); } },
+    ]));
+    tray.on('click', showMainWindow);
+    trayReady = true;
+  } catch (e) {
+    // No usable tray on this platform → keep default quit-on-close so the user can exit.
+    console.error('[electron] tray unavailable; window close will quit the app:', e.message);
+    trayReady = false;
+  }
+}
+
+// One-time heads-up the first time the window is hidden, so closing it doesn't feel
+// like the app vanished while it is in fact still running (by design) in the tray.
+function maybeHintBackground() {
+  try {
+    const flag = path.join(app.getPath('userData'), '.bg-hint-shown');
+    if (fs.existsSync(flag)) return;
+    fs.writeFileSync(flag, '1');
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'Claude Code Studio is still running',
+        body: 'It stays in the menu bar so your scheduled tasks keep firing. Use the icon’s “Quit” to stop it completely.',
+      }).show();
+    }
+  } catch (_) {}
 }
 
 async function boot() {
@@ -182,6 +247,7 @@ async function boot() {
   await waitForHealth(serverPort);
   await createWindow();
   setupMenu();
+  createTray();
 }
 
 // ─── Updates ────────────────────────────────────────────────────────────────
@@ -394,8 +460,9 @@ app.whenReady().then(boot).catch((err) => {
   app.quit();
 });
 
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0 && serverProc) createWindow();
-});
-app.on('window-all-closed', () => { app.isQuiting = true; stopServer(); app.quit(); });
+app.on('activate', () => { showMainWindow(); });
+// With a tray the window only hides on close, so this rarely fires — and when it does we
+// deliberately stay alive (the tray keeps the scheduler reachable). Without a tray there
+// is nothing to return to, so quit normally instead of stranding a headless process.
+app.on('window-all-closed', () => { if (!trayReady) { app.isQuiting = true; stopServer(); app.quit(); } });
 app.on('before-quit', () => { app.isQuiting = true; stopServer(); });

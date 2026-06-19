@@ -127,6 +127,25 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .sec-title:hover { color: var(--text); }
 .sec-title .badge { background: var(--accent); color: white; font-size: 10px; padding: 1px 7px; border-radius: 10px; font-weight: 700; min-width: 20px; text-align: center; }
 .sec-body { padding: 4px 8px 8px; display: flex; flex-direction: column; }
+
+/* ─── Activity panel ─── */
+.act-list { display: flex; flex-direction: column; }
+.act-sub { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); padding: 7px 6px 2px; }
+.act-group-label { font-size: 10px; color: var(--accent2); opacity: .8; padding: 4px 6px 1px; font-weight: 600; }
+.act-item { display: flex; align-items: center; gap: 7px; padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text); transition: background .12s; }
+.act-item:hover { background: var(--s3, #1f2637); }
+.act-item.act-static, .act-item.act-static:hover { cursor: default; background: transparent; }
+.act-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.act-dot.run { background: #22c55e; animation: actPulse 1.6s infinite; }
+.act-dot.recovering { background: #f59e0b; }
+.act-dot.sched { background: #60a5fa; }
+.act-dot.recent { background: var(--border); }
+@keyframes actPulse { 0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)} 70%{box-shadow:0 0 0 5px rgba(34,197,94,0)} 100%{box-shadow:0 0 0 0 rgba(34,197,94,0)} }
+.act-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-meta { font-size: 10px; color: var(--muted); flex-shrink: 0; }
+.act-src { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 1px 4px; border-radius: 3px; background: var(--s3, #1f2637); color: var(--muted); flex-shrink: 0; }
+.act-proj { font-size: 9px; color: var(--accent2); opacity: .85; flex-shrink: 0; }
+.act-empty { font-size: 11px; color: var(--muted); opacity: .55; padding: 8px 6px; text-align: center; }
 .sec-body.collapsed { display: none; }
 /* ─── Scrollable list inside section ─── */
 .sec-list { max-height: 440px; overflow-y: auto; overflow-x: hidden; min-height: 0; }
@@ -415,7 +434,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .mw.assistant { align-self: flex-start; }
 
 /* ─── Message bubbles ─── */
-.msg { line-height: 1.75; font-size: var(--msg-font, 15px); word-break: break-word; }
+.msg { line-height: 1.75; font-size: var(--msg-font, 15px); overflow-wrap: break-word; }
 .mw.user .msg { background: var(--user-msg); padding: 10px 15px; border-radius: 14px 14px 4px 14px; white-space: pre-wrap; border: 1px solid rgba(124,106,239,.3); }
 .mw.assistant .msg { background: var(--s2); padding: 13px 16px; border-radius: 14px 14px 14px 4px; border: 1px solid var(--border); white-space: pre-wrap; }
 
@@ -2259,6 +2278,19 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 <!-- LEFT PANEL -->
 <div class="left" id="leftPanel">
   <div class="left-inner">
+    <!-- Activity: live runs + scheduled + recent, across ALL projects -->
+    <div class="sec" id="activitySec">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('activity')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('activity')}">
+        <span>⚡ <span data-i18n="act.title">Активність</span></span>
+        <span style="display:flex;align-items:center;gap:6px;">
+          <button class="sec-filter-btn" id="actGroupBtn" onclick="event.stopPropagation();toggleActivityGroup()" data-i18n-title="act.group" title="Групувати за проєктами ↔ плоский список">⊞</button>
+          <span class="badge" id="actLiveCount">0</span>
+        </span>
+      </div>
+      <div class="sec-body" id="activityBody">
+        <div class="act-list" id="activityList"><div class="act-empty" data-i18n="act.empty">Немає активності</div></div>
+      </div>
+    </div>
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('proj')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('proj')}">
         <span data-i18n="sec.projects">Проекти</span>
@@ -3674,6 +3706,7 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    'act.title':'Активність','act.group':'Групувати за проєктами ↔ плоский список','act.live':'Активні','act.scheduled':'Заплановані','act.recent':'Нещодавні','act.empty':'Немає активності','act.recovering':'віднов.','act.now':'зараз','act.in':'за','act.u.s':'с','act.u.m':'хв','act.u.h':'г','act.u.d':'д',
     'sec.proactive':'Статус',
     'sec.chats':'Чати','sec.mcp':'MCP',
     'mcp.hint':'Увімкніть інструменти, які Claude може використовувати в цьому чаті.',
@@ -3906,6 +3939,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'оновлено {time} тому',
   },
   en: {
+    'act.title':'Activity','act.group':'Group by project ↔ flat list','act.live':'Active','act.scheduled':'Scheduled','act.recent':'Recent','act.empty':'No activity','act.recovering':'recovering','act.now':'now','act.in':'in','act.u.s':'s','act.u.m':'m','act.u.h':'h','act.u.d':'d',
     'sec.proactive':'Status',
     'sec.chats':'Chats','sec.mcp':'MCP',
     'mcp.hint':'Enable tools that Claude can use in this chat.',
@@ -4138,6 +4172,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'updated {time} ago',
   },
   ru: {
+    'act.title':'Активность','act.group':'Группировать по проектам ↔ плоский список','act.live':'Активные','act.scheduled':'Запланированные','act.recent':'Недавние','act.empty':'Нет активности','act.recovering':'восст.','act.now':'сейчас','act.in':'через','act.u.s':'с','act.u.m':'мин','act.u.h':'ч','act.u.d':'д',
     'sec.proactive':'Статус',
     'sec.chats':'Чаты','sec.mcp':'MCP',
     'mcp.hint':'Включите инструменты, которые Claude может использовать в этом чате.',
@@ -4388,6 +4423,7 @@ function setLang(lang) {
   document.querySelectorAll('[data-i18n-aria]').forEach(el => { const k = el.getAttribute('data-i18n-aria'); if (t[k] !== undefined) el.setAttribute('aria-label', t[k]); });
   if (typeof updateHistBulkBar === 'function') updateHistBulkBar();
   if (typeof renderInterruptPill === 'function') renderInterruptPill();
+  try { if (typeof renderActivity === 'function') renderActivity(_lastActivity); } catch {}
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -4763,6 +4799,11 @@ function promoteStatusLine(text) {
     const sep = afterIcon.match(/\s*[—–]\s*|\s+-\s+/);
     const label = (sep ? afterIcon.slice(0, sep.index) : afterIcon).trim();
     const rest = sep ? afterIcon.slice(sep.index + sep[0].length).trim() : '';
+    // The pill is for a SHORT, plain status word only ("Done" / "Готово"). If the
+    // label is long or carries inline code (placeholder \x04ICODE…\x05) / rich markup,
+    // the line is really prose — boxing it produces an unreadable chip-table. Leave the
+    // whole block as normal markdown text instead.
+    if (label.length > 32 || /\x04ICODE\d+\x05/.test(label) || label.includes('**')) return m;
     const pill = `<div class="status-pill ${kind}"><span class="sp-ic">${icon}</span>${label}</div>`;
     return rest ? `\n${pill}\n\n${rest}` : `\n${pill}`;
   });
@@ -5012,6 +5053,7 @@ function connect() {
     setStatus(t('status.connected'), 'ok');
     loadFiles();
     loadHist();
+    loadActivity();
     // On page refresh: currentSessionId is null (restoreUIState doesn't call loadSess),
     // but activeTabId may point to a real session — load it now so history appears.
     if (!currentSessionId && activeTabId && openTabs.find(t => t.id === activeTabId && !t.isNew)) {
@@ -5086,6 +5128,9 @@ function handleWsMsg(d) {
   const isVisible = isCurrent && tabId === activeTabId;
 
   switch (d.type) {
+    case 'activity_dirty':
+      loadActivity();
+      break;
     case 'task_started':
       // Update chain progress widget if this task belongs to a dispatched chain
       if (d.taskId) _chainProgressUpdate(d.taskId, 'in_progress');
@@ -8621,6 +8666,136 @@ function _initHistDrag(el, container) {
     } catch (err) { console.error('reorder:', err); }
   });
 }
+
+// ─── Activity panel ─────────────────────────────────────────────────────────
+// Global (all-projects) view of live runs + scheduled + recent sessions.
+// Pushed via WS 'activity_dirty' (server-debounced) + a visible-only reconciliation poll.
+let _activityGroupByProject = (() => { try { return localStorage.getItem('actGroup') !== 'flat'; } catch { return true; } })();
+let _activityFetching = false, _activityRefreshQueued = false, _activityPollTimer = null;
+let _lastActivity = { live: [], scheduled: [], recent: [] };
+let _lastActivityRaw = '';
+
+function _actAgo(ms) {
+  if (!ms || ms < 0) return '';
+  const s = Math.floor(ms/1000); if (s < 60) return s+t('act.u.s');
+  const m = Math.floor(s/60); if (m < 60) return m+t('act.u.m');
+  const h = Math.floor(m/60); if (h < 24) return h+t('act.u.h');
+  return Math.floor(h/24)+t('act.u.d');
+}
+// SQLite datetime('now') stores UTC as "YYYY-MM-DD HH:MM:SS" (no zone) — the browser
+// parses that space-form as LOCAL, skewing relative times by the tz offset. Force UTC.
+// Strings already carrying 'T'/'Z' (true ISO) are parsed as-is.
+function _actTs(s) {
+  if (!s) return NaN;
+  return new Date(/[TZ]/.test(s) ? s : s.replace(' ', 'T') + 'Z').getTime();
+}
+function _actElapsed(startMs) {
+  if (!startMs) return '';
+  const sec = Math.max(0, Math.floor((Date.now()-startMs)/1000));
+  const m = Math.floor(sec/60), s = sec%60;
+  return (m < 60) ? `${m}:${String(s).padStart(2,'0')}` : `${Math.floor(m/60)}${t('act.u.h')}${m%60}${t('act.u.m')}`;
+}
+function _actSchedWhen(unixSec) {
+  if (!unixSec) return '';
+  const diff = unixSec*1000 - Date.now();
+  if (diff <= 0) return t('act.now');
+  const m = Math.floor(diff/60000); if (m < 60) return `${t('act.in')} ${m}${t('act.u.m')}`;
+  const h = Math.floor(m/60); if (h < 24) return `${t('act.in')} ${h}${t('act.u.h')}`;
+  let lang; try { lang = localStorage.getItem('lang') || 'en'; } catch { lang = 'en'; }
+  return new Date(unixSec*1000).toLocaleDateString(lang,{day:'numeric',month:'short'});
+}
+
+function toggleActivityGroup() {
+  _activityGroupByProject = !_activityGroupByProject;
+  try { localStorage.setItem('actGroup', _activityGroupByProject ? 'group' : 'flat'); } catch {}
+  renderActivity(_lastActivity);
+}
+
+// Switch to the session behind an activity row (switching project context first if needed).
+function activityOpen(sessionId, projectId) {
+  if (!sessionId) return;
+  if (projectId && projectId !== curProjectId && projects.find(p => p.id === projectId)) {
+    switchProject(projectId);
+  }
+  openTab(sessionId);
+}
+
+async function loadActivity() {
+  if (_activityFetching) { _activityRefreshQueued = true; return; }
+  _activityFetching = true;
+  try {
+    const r = await fetch('/api/activity');
+    if (!r.ok) return;
+    const txt = await r.text();
+    if (txt === _lastActivityRaw) return; // unchanged — skip needless re-render (live timers tick separately)
+    _lastActivityRaw = txt;
+    _lastActivity = JSON.parse(txt);
+    renderActivity(_lastActivity);
+  } catch (e) { /* offline — ws/poll will retry */ }
+  finally {
+    _activityFetching = false;
+    if (_activityRefreshQueued) { _activityRefreshQueued = false; loadActivity(); }
+  }
+}
+
+function _actItemHtml(it, kind) {
+  const proj = it.project_name ? `<span class="act-proj">${escH(it.project_name)}</span>` : '';
+  const clickable = !!it.session_id;
+  const onclick = clickable ? `onclick="activityOpen('${it.session_id}','${it.project_id||''}')"` : '';
+  const staticCls = clickable ? '' : ' act-static';
+  if (kind === 'live') {
+    const dot = it.status === 'recovering' ? 'recovering' : 'run';
+    const meta = it.status === 'recovering'
+      ? `<span class="act-meta">↻ ${escH(t('act.recovering'))}</span>`
+      : (it.started_at ? `<span class="act-meta act-timer" data-start="${it.started_at}">${escH(_actElapsed(it.started_at))}</span>` : '');
+    return `<div class="act-item${staticCls}" ${onclick}><span class="act-dot ${dot}"></span><span class="act-name" title="${escH(it.title)}">${escH(it.title)}</span><span class="act-src">${escH(it.source||'')}</span>${proj}${meta}</div>`;
+  }
+  if (kind === 'scheduled') {
+    const rec = it.recurrence ? ' ↻' : '';
+    return `<div class="act-item${staticCls}" ${onclick}><span class="act-dot sched"></span><span class="act-name" title="${escH(it.title)}">${escH(it.title)}</span>${proj}<span class="act-meta">${escH(_actSchedWhen(it.scheduled_at))}${rec}</span></div>`;
+  }
+  const ago = it.updated_at ? _actAgo(Date.now() - _actTs(it.updated_at)) : '';
+  return `<div class="act-item" onclick="activityOpen('${it.session_id}','${it.project_id||''}')"><span class="act-dot recent"></span><span class="act-name" title="${escH(it.title)}">${escH(it.title)}</span>${proj}<span class="act-meta">${escH(ago)}</span></div>`;
+}
+
+function renderActivity(data) {
+  const el = $i('activityList');
+  if (!el || !data) return;
+  const live = data.live || [], scheduled = data.scheduled || [], recent = data.recent || [];
+  const cnt = $i('actLiveCount'); if (cnt) cnt.textContent = String(live.length);
+  const gb = $i('actGroupBtn'); if (gb) gb.textContent = _activityGroupByProject ? '⊞' : '☰';
+
+  const section = (label, items, kind) => {
+    if (!items.length) return '';
+    let s = `<div class="act-sub">${label} · ${items.length}</div>`;
+    if (_activityGroupByProject) {
+      const groups = new Map();
+      for (const it of items) { const k = it.project_name || '—'; (groups.get(k) || groups.set(k, []).get(k)).push(it); }
+      for (const [pname, arr] of groups) {
+        s += `<div class="act-group-label">${escH(pname)}</div>` + arr.map(it => _actItemHtml(it, kind)).join('');
+      }
+      return s;
+    }
+    return s + items.map(it => _actItemHtml(it, kind)).join('');
+  };
+
+  let html = section('🟢 ' + escH(t('act.live')), live, 'live') + section('⏰ ' + escH(t('act.scheduled')), scheduled, 'scheduled') + section('🕘 ' + escH(t('act.recent')), recent, 'recent');
+  el.innerHTML = html || `<div class="act-empty">${escH(t('act.empty'))}</div>`;
+}
+
+// Tick live elapsed timers each second without refetching.
+setInterval(() => {
+  document.querySelectorAll('#activityList .act-timer[data-start]').forEach(s => {
+    const st = +s.dataset.start; if (st) s.textContent = _actElapsed(st);
+  });
+}, 1000);
+
+// Reconciliation poll — only while the page is visible (backstop for missed WS signals).
+function _startActivityPoll() {
+  if (_activityPollTimer) return;
+  _activityPollTimer = setInterval(() => { if (document.visibilityState === 'visible') loadActivity(); }, 12000);
+}
+_startActivityPoll();
 
 async function loadHist() {
   try {

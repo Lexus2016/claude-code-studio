@@ -928,6 +928,22 @@ function broadcastToSession(sessionId, data) {
   if (!watchers.size) sessionWatchers.delete(sessionId);
 }
 
+// ─── Activity panel: tell ALL connected clients the live/scheduled state changed.
+// Debounced (~400ms) + lightweight signal only — clients re-fetch /api/activity and
+// diff-render just the Activity section. Clients also reconciliation-poll as a
+// backstop, so a missed signal self-heals.
+let _activityDirtyTimer = null;
+function markActivityDirty() {
+  if (_activityDirtyTimer) return;
+  _activityDirtyTimer = setTimeout(() => {
+    _activityDirtyTimer = null;
+    const msg = JSON.stringify({ type: 'activity_dirty' });
+    for (const w of wss.clients) {
+      if (w.readyState === 1) { try { w.send(msg); } catch {} }
+    }
+  }, 400);
+}
+
 // ─── Kanban Task Queue Worker ─────────────────────────────────────────────
 const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '5', 10));
 const taskRunning = new Set();        // task IDs currently executing
@@ -943,6 +959,7 @@ const independentRunning = new Set();
 async function startTask(task) {
   if (taskRunning.has(task.id)) return;
   taskRunning.add(task.id);
+  markActivityDirty();
   console.log(`[taskWorker] starting "${task.title}" (${task.id})`);
   let _retryBackoffMs = 0; // Set by auto-retry logic, used by finally for processQueue delay
   let sessionId = task.session_id;
@@ -1287,19 +1304,49 @@ async function startTask(task) {
     taskBuffers.delete(task.id);
     taskRunning.delete(task.id);
     independentRunning.delete(task.id);
+    markActivityDirty();
     runningTaskAborts.delete(task.id);
     setTimeout(processQueue, _retryBackoffMs || 500);
   }
 }
 
 // ─── Recurring task scheduler ────────────────────────────────────────────────
+// Recurrence token grammar (stored verbatim in the `recurrence` TEXT column):
+//   every:N:unit    unit ∈ hour|day|week|month, N≥1  — fixed interval
+//   times:N:month   N≥1                              — N runs per calendar month
+//   hourly|daily|weekly|monthly                      — legacy aliases (= every:1:<unit>)
+// Returns the next run (unix secs), or null when the token is unrecognised so the
+// caller can end the series instead of spinning the catch-up loop.
+//
+// Design notes:
+// • Local wall-clock arithmetic is intentional — a "daily" task fires at the same
+//   local time the user picked, even across DST. (Trade-off: a DST shift can move an
+//   hourly run by ±1h on the transition day. Acceptable for a personal scheduler.)
+// • Sub-hour intervals are deliberately NOT exposed, so the catch-up loop in
+//   scheduleNextRun stays bounded (guard 10000 ≈ 416 days of hourly catch-up).
+// • "times:N:month" uses a rubber-band step (days-in-current-month / N): ~N runs per
+//   calendar month, phase-relative to the anchor, with no fixed-date pinning.
+const RECUR_ALIASES = { hourly: 'every:1:hour', daily: 'every:1:day', weekly: 'every:1:week', monthly: 'every:1:month' };
 function calcNextRun(scheduled_at, recurrence) {
+  const token = RECUR_ALIASES[recurrence] || recurrence;
   const d = new Date(scheduled_at * 1000);
-  if (recurrence === 'hourly')  d.setHours(d.getHours() + 1);
-  if (recurrence === 'daily')   d.setDate(d.getDate() + 1);
-  if (recurrence === 'weekly')  d.setDate(d.getDate() + 7);
-  if (recurrence === 'monthly') d.setMonth(d.getMonth() + 1);
-  return Math.floor(d.getTime() / 1000);
+  let m;
+  if ((m = /^every:(\d+):(hour|day|week|month)$/.exec(token))) {
+    const n = parseInt(m[1], 10);
+    if (!n) return null;
+    if (m[2] === 'hour')  d.setHours(d.getHours() + n);
+    if (m[2] === 'day')   d.setDate(d.getDate() + n);
+    if (m[2] === 'week')  d.setDate(d.getDate() + 7 * n);
+    if (m[2] === 'month') d.setMonth(d.getMonth() + n);
+    return Math.floor(d.getTime() / 1000);
+  }
+  if ((m = /^times:(\d+):month$/.exec(token))) {
+    const n = parseInt(m[1], 10);
+    if (!n) return null;
+    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    return scheduled_at + Math.floor((daysInMonth * 86400) / n);
+  }
+  return null; // unknown recurrence — caller ends the series
 }
 
 // Returns true if task was re-armed, false if series ended or skipped.
@@ -1309,9 +1356,10 @@ function scheduleNextRun(task) {
   // If no scheduled_at (recurring without fixed date), calculate next from now
   const baseTime = task.scheduled_at || now;
   let next = calcNextRun(baseTime, task.recurrence);
+  if (next == null) { log.warn(`[schedule] Unrecognised recurrence "${task.recurrence}" for "${task.title}", ending series`); return false; }
   let guard = 0;
-  while (next <= now && guard < 10000) { next = calcNextRun(next, task.recurrence); guard++; }
-  if (guard >= 10000) { log.warn(`[schedule] Too many iterations for "${task.title}", skipping`); return false; }
+  while (next != null && next <= now && guard < 10000) { next = calcNextRun(next, task.recurrence); guard++; }
+  if (next == null || guard >= 10000) { log.warn(`[schedule] Could not compute next run for "${task.title}", skipping`); return false; }
   // Respect end date
   if (task.recurrence_end_at && next > task.recurrence_end_at) {
     log.info(`[schedule] Recurrence series ended for "${task.title}"`);
@@ -1330,9 +1378,10 @@ function scheduleNextChainRun(chain, oldTasks) {
   const now = Math.floor(Date.now() / 1000);
   const baseTime = chain.scheduled_at || now;
   let next = calcNextRun(baseTime, chain.recurrence);
+  if (next == null) { log.warn(`[schedule] Unrecognised chain recurrence "${chain.recurrence}": "${chain.title}", ending series`); return; }
   let guard = 0;
-  while (next <= now && guard < 10000) { next = calcNextRun(next, chain.recurrence); guard++; }
-  if (guard >= 10000) { log.warn(`[schedule] Chain recurrence too many iterations: "${chain.title}"`); return; }
+  while (next != null && next <= now && guard < 10000) { next = calcNextRun(next, chain.recurrence); guard++; }
+  if (next == null || guard >= 10000) { log.warn(`[schedule] Could not compute next chain run: "${chain.title}"`); return; }
   if (chain.recurrence_end_at && next > chain.recurrence_end_at) {
     log.info(`[schedule] Chain recurrence ended: "${chain.title}"`); return;
   }
@@ -3812,6 +3861,100 @@ app.get('/api/tasks/running-sessions', (req, res) => {
   const rows = db.prepare(`SELECT DISTINCT session_id FROM tasks WHERE status='in_progress' AND session_id IS NOT NULL`).all();
   res.json(rows.map(r => r.session_id));
 });
+// ─── Activity panel aggregate (live + scheduled + recent, across ALL projects) ──
+// live      = in-memory activeTasks (web/telegram chats) UNION db tasks.status='in_progress'
+//             (scheduler/kanban runs). A task in_progress in the DB but absent from the
+//             in-memory maps (e.g. right after a server restart) is flagged 'recovering'
+//             instead of being shown as a healthy live run.
+// scheduled = upcoming todo tasks that carry a scheduled_at.
+// recent    = most-recently-touched sessions that are not currently live (<=20).
+// Project {id,name} is resolved server-side from workdir so the client never parses paths.
+app.get('/api/activity', (req, res) => {
+  try {
+    const projList = loadProjects();
+    const projByWorkdir = new Map();
+    for (const p of projList) {
+      try { projByWorkdir.set(path.resolve(p.workdir), { id: p.id, name: p.name || path.basename(p.workdir) }); } catch {}
+    }
+    const resolveProj = (workdir) => {
+      if (!workdir) return { project_id: null, project_name: null };
+      let key; try { key = path.resolve(workdir); } catch { key = workdir; }
+      const m = projByWorkdir.get(key);
+      return m ? { project_id: m.id, project_name: m.name }
+               : { project_id: null, project_name: path.basename(workdir) };
+    };
+    const sessMeta = db.prepare('SELECT id,title,workdir,model,updated_at FROM sessions WHERE id=?');
+
+    const live = [];
+    const liveIds = new Set();
+
+    // 1) In-memory active chats (web/telegram) — authoritative "running now".
+    for (const [sid, info] of activeTasks) {
+      const s = sessMeta.get(sid);
+      live.push({
+        kind: 'chat',
+        session_id: sid,
+        title: s?.title || 'Untitled',
+        source: info?.source || 'web',
+        started_at: info?.startedAt || null,
+        status: 'running',
+        ...resolveProj(s?.workdir || null),
+      });
+      liveIds.add(sid);
+    }
+
+    // 2) DB in_progress tasks (scheduler / kanban). Skip ones already represented by an
+    //    in-memory chat (precedence activeTasks > task). No live worker => 'recovering'.
+    const inProg = db.prepare(`SELECT id,title,session_id,workdir FROM tasks WHERE status='in_progress'`).all();
+    for (const tsk of inProg) {
+      const sid = tsk.session_id;
+      if (sid && liveIds.has(sid)) continue;
+      const hasWorker = taskRunning.has(tsk.id) || independentRunning.has(tsk.id);
+      const s = sid ? sessMeta.get(sid) : null;
+      live.push({
+        kind: 'task',
+        session_id: sid || null,
+        task_id: tsk.id,
+        title: tsk.title || s?.title || 'Task',
+        source: 'scheduler',
+        started_at: null,
+        status: hasWorker ? 'running' : 'recovering',
+        ...resolveProj(tsk.workdir || s?.workdir || null),
+      });
+      if (sid) liveIds.add(sid);
+    }
+
+    // 3) Scheduled (upcoming) todo tasks.
+    const sched = db.prepare(`SELECT id,title,session_id,workdir,scheduled_at,recurrence FROM tasks WHERE status='todo' AND scheduled_at IS NOT NULL ORDER BY scheduled_at ASC LIMIT 50`).all();
+    const scheduled = sched.map(tsk => ({
+      task_id: tsk.id,
+      session_id: tsk.session_id || null,
+      title: tsk.title || 'Task',
+      scheduled_at: tsk.scheduled_at, // unix seconds
+      recurrence: tsk.recurrence || null,
+      ...resolveProj(tsk.workdir),
+    }));
+
+    // 4) Recent finished sessions (exclude anything currently live).
+    const recentRows = db.prepare('SELECT id,title,workdir,updated_at FROM sessions ORDER BY updated_at DESC LIMIT 40').all();
+    const recent = [];
+    for (const s of recentRows) {
+      if (liveIds.has(s.id)) continue;
+      recent.push({
+        session_id: s.id,
+        title: s.title || 'Untitled',
+        updated_at: s.updated_at,
+        ...resolveProj(s.workdir),
+      });
+      if (recent.length >= 20) break;
+    }
+
+    res.json({ live, scheduled, recent });
+  } catch (e) {
+    log.error('/api/activity failed', { err: e.message });
+    res.status(500).json({ error: 'activity_failed' });
+  }
+});
 app.post('/api/tasks', (req, res) => {
   const { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
           model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
@@ -5485,6 +5628,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     chatId,
     startedAt: Date.now()
   });
+  markActivityDirty();
   chatBuffers.set(sessionId, '');
 
   try {
@@ -5627,6 +5771,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     proxy.send(JSON.stringify({ type: 'error', error: err.message, tabId: sessionId }));
   } finally {
     activeTasks.delete(sessionId);
+    markActivityDirty();
     chatBuffers.delete(sessionId);
     // Clean up pending ask_user questions for this session
     for (const [rid, entry] of pendingAskUser) {
@@ -6661,6 +6806,7 @@ wss.on('connection', (ws) => {
       try { stmts.setLastUserMsg.run(userMessage, localSessionId); } catch (e) { log.error('setLastUserMsg failed', { err: e.message }); }
       chatBuffers.set(localSessionId, ''); // reset buffer for this session
       activeTasks.set(localSessionId, { proxy, abortController, cleanupTimer: null, source: 'web', startedAt: Date.now() });
+      markActivityDirty();
 
       // Detect fork: if fork_from_cid is set, this is the first message in a forked session
       const _forkCid = existSess?.fork_from_cid || null;
@@ -6778,6 +6924,7 @@ wss.on('connection', (ws) => {
       if (!_ownTask || _ownTask.abortController === myAbortController) {
         activeTasks.delete(localSessionId);
         chatBuffers.delete(localSessionId); // cleanup in-memory buffer — only if we own the session
+        markActivityDirty();
       }
       // Detect stale finally early: if a stop happened, ws._tabAbort was deleted or replaced
       // by a new processChat. In that case, another processChat now owns this tab — our

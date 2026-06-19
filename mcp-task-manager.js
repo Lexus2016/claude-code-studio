@@ -80,7 +80,7 @@ const TOOLS = [
         },
         model: { type: 'string', enum: ['haiku', 'sonnet', 'opus'], description: 'Default model for all tasks' },
         scheduled_at: { type: 'string', description: 'ISO 8601 datetime for delayed execution' },
-        recurrence: { type: 'string', enum: ['hourly', 'daily', 'weekly', 'monthly'], description: 'Repeat schedule' },
+        recurrence: { type: 'string', pattern: '^(hourly|daily|weekly|monthly|every:[1-9][0-9]*:(hour|day|week|month)|times:[1-9][0-9]*:month)$', description: 'Repeat schedule. A preset (hourly|daily|weekly|monthly), or "every:N:unit" where unit = hour|day|week|month (e.g. "every:2:hour", "every:10:day", "every:6:month"), or "times:N:month" = N runs per calendar month (e.g. "times:3:month").' },
         recurrence_end_at: { type: 'string', description: 'ISO 8601 datetime to stop recurring' },
       },
       required: ['title', 'tasks'],
