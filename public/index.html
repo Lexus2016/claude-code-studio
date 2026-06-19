@@ -7210,6 +7210,7 @@ msgsEl.addEventListener('scroll', () => {
   // Shared singletons
   const thumb = document.createElement('div');
   thumb.className = 'minimap-thumb';
+  rail.appendChild(thumb); // attach once so insertBefore(seg, thumb) is always valid
   let tooltip = null; // created lazily on first hover
 
   // Track current seg nodes for in-place patching (avoid flicker)
@@ -7297,9 +7298,8 @@ msgsEl.addEventListener('scroll', () => {
     }
     segs.length = mws.length;
 
-    // Ensure thumb is attached and last
-    if (thumb.parentNode !== rail) rail.appendChild(thumb);
-    else rail.appendChild(thumb);
+    // Keep the thumb as the last child so it overlays the segments
+    rail.appendChild(thumb);
   }
 
   function onSegHover(e) {
