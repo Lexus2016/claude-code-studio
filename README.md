@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.63.0** — Terminal catch-up: pull a `claude --resume` conversation straight into the web chat. Decluttered header — the CLI status is now a single green/red connection dot. Keyboard Shortcuts panel fully localized (EN/UA/RU).
+> **v5.65.0** — Resilience & navigation: turns no longer fail when the server is briefly overloaded (HTTP 429/529) — they pause and auto-retry — and the subprocess timeout is now idle-based, so a long-but-active run is never killed mid-stream (`CLAUDE_IDLE_TIMEOUT_MS` / `CLAUDE_HARD_CAP_MS`). Plus a message minimap rail, a live Activity panel, and a unified session export menu.
 
 ---
 
