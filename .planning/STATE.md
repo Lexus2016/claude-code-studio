@@ -98,10 +98,11 @@ None yet for v1.1.
 | 260617-ulp | fix macOS in-app update loop — `brew update` before `brew upgrade` (drop HOMEBREW_NO_AUTO_UPDATE) + desktop-gate the version badge | 2026-06-17 | dff14d1 | [260617-ulp-fix-macos-update-loop](.planning/quick/260617-ulp-fix-macos-update-loop/) |
 | 260617-d62 | desktop: stable loopback port (localStorage persists), telegram bot resumes on restart, Engine switcher hidden + chat forced to API (claude -p) | 2026-06-17 | 34f8c77 | [260617-d62-desktop-port-telegram-engine](.planning/quick/260617-d62-desktop-port-telegram-engine/) |
 | 260617-qcu | catch-up button — pull conversation from an opened `claude --resume` terminal into the web chat (pull-on-demand transcript sync, engine-agnostic) | 2026-06-17 | f79843e | [260617-qcu-add-catch-up-from-console-session-button](.planning/quick/260617-qcu-add-catch-up-from-console-session-button/) |
+| 260619-oqv | vertical minimap rail in web chat — one proportional, binary-colored segment per message, hover preview, click-scroll, viewport thumb, live MutationObserver sync, mobile-hidden | 2026-06-19 | d69a36d | [260619-oqv-lineyka-minimapa-povidomlen-u-veb-chati](.planning/quick/260619-oqv-lineyka-minimapa-povidomlen-u-veb-chati/) |
 
 ## Session Continuity
 
-Last activity: 2026-06-17 — quick task 260617-qcu: catch-up button (pull `claude --resume` terminal conversation into web chat)
+Last activity: 2026-06-19 — quick task 260619-oqv: minimap rail in web chat (right-docked message overview, hover preview, click-scroll, live sync)
 
 Last session: 2026-06-17
 Stopped at: Roadmap + traceability written; ready to plan Phase 05
