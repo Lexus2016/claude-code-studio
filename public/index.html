@@ -1058,6 +1058,13 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 /* ─── Export / Import buttons ─── */
 .sess-export-btn { font-size:11px; color:var(--text-dim); background:transparent; border:1px solid var(--border); padding:1px 7px; border-radius:4px; cursor:pointer; flex-shrink:0; transition:all .15s; display:inline-flex; align-items:center; gap:3px; }
 .sess-export-btn:hover { color:var(--green); border-color:rgba(63,185,80,.4); background:rgba(63,185,80,.08); }
+.sess-export-wrap { position:relative; display:inline-flex; flex-shrink:0; }
+.export-menu { position:absolute; top:calc(100% + 4px); left:0; z-index:60; background:var(--s2); border:1px solid var(--border); border-radius:var(--r-sm); padding:6px; display:flex; flex-direction:column; gap:3px; min-width:150px; box-shadow:var(--shadow-md); }
+.export-menu-opt { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text); padding:4px 6px; border-radius:4px; cursor:pointer; user-select:none; }
+.export-menu-opt:hover { background:var(--s3); }
+.export-menu-opt input { cursor:pointer; }
+.export-menu-go { margin-top:3px; font-size:11px; color:var(--text-dim); background:transparent; border:1px solid var(--border); padding:3px 7px; border-radius:4px; cursor:pointer; transition:all .15s; }
+.export-menu-go:hover { color:var(--green); border-color:rgba(63,185,80,.4); background:rgba(63,185,80,.08); }
 
 /* ─── Retry indicators ─── */
 .retry-badge { font-size:11px; color:var(--text-dim); opacity:.65; margin-top:3px; letter-spacing:.01em; }
@@ -2727,8 +2734,14 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
     <button id="sessBarCatchupBtn" style="display:none;font-size:11px;color:var(--accent2);background:transparent;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="catchUpFromTerminal()" title="Дочитати у чат повідомлення, набрані напряму в терміналі (claude --resume)">⤵ Дочитати</button>
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
     <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
-    <button id="sessBarExportBtn" class="sess-export-btn" style="display:none;" onclick="exportSession()" title="Export session as JSON">↓ Export</button>
-    <button id="sessBarMdExportBtn" class="sess-export-btn" style="display:none;" onclick="exportSessionMd()" title="Export conversation as Markdown (.md)">📄 MD</button>
+    <div id="sessBarExportWrap" class="sess-export-wrap" style="display:none;">
+      <button id="sessBarExportBtn" class="sess-export-btn" onclick="toggleExportMenu(event)" title="Export conversation">↓ Export ▾</button>
+      <div id="sessBarExportMenu" class="export-menu" style="display:none;">
+        <label class="export-menu-opt"><input type="checkbox" id="expFmtJson" checked> JSON</label>
+        <label class="export-menu-opt"><input type="checkbox" id="expFmtMd" checked> Markdown (.md)</label>
+        <button class="export-menu-go" onclick="runSelectedExports()">Export</button>
+      </div>
+    </div>
     <button id="sessBarNotesBtn" class="sess-export-btn" style="display:none;" onclick="toggleNotesPanel()" title="Session notes (private)">📝 Notes</button>
     <input type="file" id="sessImportInput" accept=".json" style="display:none" onchange="importSessionFile(this)">
   </div>
@@ -7337,10 +7350,8 @@ async function updateSessBar(opts = {}) {
     if (delegateBtn) {
       delegateBtn.style.display = currentSessionId ? '' : 'none';
     }
-    const exportBtn = $i('sessBarExportBtn');
-    if (exportBtn) exportBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
-    const mdExportBtn = $i('sessBarMdExportBtn');
-    if (mdExportBtn) mdExportBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
+    const exportWrap = $i('sessBarExportWrap');
+    if (exportWrap) exportWrap.style.display = currentSessionId ? 'inline-flex' : 'none';
     const notesBtn = $i('sessBarNotesBtn');
     if (notesBtn) notesBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
     const maxBadge = $i('sessBarMaxBadge');
@@ -7429,6 +7440,30 @@ async function compactSession() {
   } finally {
     if (btn) btn.classList.remove('loading');
   }
+}
+
+function toggleExportMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = $i('sessBarExportMenu');
+  if (!menu) return;
+  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+}
+function closeExportMenu() {
+  const menu = $i('sessBarExportMenu');
+  if (menu) menu.style.display = 'none';
+}
+// Close the export menu when clicking outside of it
+document.addEventListener('click', (e) => {
+  const wrap = $i('sessBarExportWrap');
+  if (wrap && !wrap.contains(e.target)) closeExportMenu();
+});
+async function runSelectedExports() {
+  const wantJson = $i('expFmtJson')?.checked;
+  const wantMd = $i('expFmtMd')?.checked;
+  if (!wantJson && !wantMd) { toast('Select at least one format', true); return; }
+  closeExportMenu();
+  if (wantJson) await exportSession();
+  if (wantMd) exportSessionMd();
 }
 
 async function exportSession() {
