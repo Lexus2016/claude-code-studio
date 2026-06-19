@@ -27,8 +27,14 @@ const crypto = require('node:crypto');
 
 const { findClaudeBin } = require('./claude-cli');
 
-// Overall run timeout — mirrors claude-cli.js MAX_SUBPROCESS_MS (default 30 min)
-const MAX_RUN_MS = parseInt(process.env.CLAUDE_TIMEOUT_MS || '1800000', 10) || 1800000;
+// Idle (inactivity) watchdog — the turn is abandoned after this long with no new
+// transcript bytes. A turn that keeps writing output (the normal long-content case)
+// resets the clock and is never cut off; a turn that shows the spinner but writes
+// nothing for this long is treated as stuck. Default 10 min.
+// Config: CLAUDE_IDLE_TIMEOUT_MS (legacy alias CLAUDE_TIMEOUT_MS).
+const IDLE_TIMEOUT_MS = parseInt(process.env.CLAUDE_IDLE_TIMEOUT_MS || process.env.CLAUDE_TIMEOUT_MS || '600000', 10) || 600000;
+// Optional absolute ceiling — backstop against a turn that stays "busy" forever. 0 = off.
+const HARD_CAP_MS = parseInt(process.env.CLAUDE_HARD_CAP_MS || '0', 10) || 0;
 
 // ─── tmux availability (checked once, cached) ───────────────────────────────
 let _tmuxAvailable = null;
@@ -288,7 +294,7 @@ async function runInteractiveSingle(params) {
     let sawOutput = false;
     let quietPolls = 0;               // consecutive polls with spinner gone (!busy) AND no new transcript bytes
     let prevPaneCap = null;           // previous pane capture — for spinner-animation detection in paneBusy()
-    const deadline = start + MAX_RUN_MS;
+    let lastActivityAt = start;       // idle watchdog cursor — bumped on transcript progress (new bytes)
 
     while (true) {
       await sleep(1500);
@@ -299,8 +305,14 @@ async function runInteractiveSingle(params) {
         return { cid, completed: false, resultMeta: { durationMs: Date.now() - start }, fullText, fullThinking, toolEvents };
       }
 
-      if (Date.now() > deadline) {
-        wsSend({ type: 'error', error: 'interactive engine timed out waiting for a reply' });
+      if (Date.now() - lastActivityAt > IDLE_TIMEOUT_MS) {
+        const mins = Math.round(IDLE_TIMEOUT_MS / 60000);
+        wsSend({ type: 'error', error: `interactive engine timed out — no activity for ${mins} min (idle). Raise CLAUDE_IDLE_TIMEOUT_MS to allow longer silences.` });
+        return { cid, completed: false, resultMeta: { durationMs: Date.now() - start }, fullText, fullThinking, toolEvents };
+      }
+      if (HARD_CAP_MS > 0 && Date.now() - start > HARD_CAP_MS) {
+        const mins = Math.round(HARD_CAP_MS / 60000);
+        wsSend({ type: 'error', error: `interactive engine timed out — exceeded hard cap of ${mins} min (CLAUDE_HARD_CAP_MS).` });
         return { cid, completed: false, resultMeta: { durationMs: Date.now() - start }, fullText, fullThinking, toolEvents };
       }
 
@@ -389,6 +401,7 @@ async function runInteractiveSingle(params) {
       // gates when to trust the already-latched transcript signal.
       if (endTurnSeen && !busy && !gotNewBytes) break;
 
+      if (gotNewBytes) lastActivityAt = Date.now(); // transcript progress = real work; resets idle watchdog
       if (gotNewBytes || busy) quietPolls = 0; else quietPolls++;
 
       // Safety-net completion: output WAS produced, then the spinner cleared and
@@ -399,7 +412,7 @@ async function runInteractiveSingle(params) {
       if (sawOutput && quietPolls >= 12) break;
 
       // Dead-end guard: zero output AND spinner gone for ~30s — the message never
-      // registered with the TUI; fail fast instead of blocking until MAX_RUN_MS.
+      // registered with the TUI; fail fast instead of waiting out the idle timeout.
       // A long thinking phase or slow first tool keeps `busy` true (spinner
       // animating) or writes a record (sawOutput), so neither trips this.
       if (!sawOutput && quietPolls >= 20) {

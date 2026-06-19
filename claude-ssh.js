@@ -6,7 +6,12 @@ const path = require('path');
 const fs  = require('fs');
 
 const MAX_LINE_BUFFER    = 10 * 1024 * 1024; // 10 MB
-const MAX_SUBPROCESS_MS  = parseInt(process.env.CLAUDE_TIMEOUT_MS || '1800000', 10);
+// Idle (inactivity) watchdog — the remote process is killed ONLY after it produces no
+// output for this long, so a long-but-active run is never cut off. Reset on every
+// stdout/stderr chunk. Default 10 min. Config: CLAUDE_IDLE_TIMEOUT_MS (alias CLAUDE_TIMEOUT_MS).
+const IDLE_TIMEOUT_MS    = parseInt(process.env.CLAUDE_IDLE_TIMEOUT_MS || process.env.CLAUDE_TIMEOUT_MS || '600000', 10) || 600000;
+// Optional absolute ceiling — backstop against a process that emits forever. 0 = off.
+const HARD_CAP_MS        = parseInt(process.env.CLAUDE_HARD_CAP_MS || '0', 10) || 0;
 
 const MODEL_MAP = { opus: 'opus', sonnet: 'sonnet', haiku: 'haiku' };
 
@@ -127,7 +132,8 @@ class ClaudeSSH {
     const stdoutDecoder = new StringDecoder('utf8');
     const stderrDecoder = new StringDecoder('utf8');
     let buffer = '', stderrBuf = '', detectedSid = sessionId || null;
-    let globalTimer = null;
+    let idleTimer = null;     // idle watchdog — reset on every chunk of remote output
+    let hardCapTimer = null;  // optional absolute ceiling (armed only when HARD_CAP_MS > 0)
     let aborted = false;
     let finished = false;
 
@@ -139,7 +145,8 @@ class ClaudeSSH {
     const finish = (code) => {
       if (finished) return;
       finished = true;
-      if (globalTimer) { clearTimeout(globalTimer); globalTimer = null; }
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+      if (hardCapTimer) { clearTimeout(hardCapTimer); hardCapTimer = null; }
 
       // Flush remaining stdout
       const tail = buffer + stdoutDecoder.end();
@@ -241,6 +248,7 @@ class ClaudeSSH {
             }
 
             stream.stdout.on('data', (chunk) => {
+              armIdleTimer(); // remote output = alive — reset the idle clock
               buffer += stdoutDecoder.write(chunk);
               if (buffer.length > MAX_LINE_BUFFER) { buffer = ''; return; }
               const lines = buffer.split(/\r?\n/);
@@ -257,6 +265,7 @@ class ClaudeSSH {
             });
 
             stream.stderr.on('data', (chunk) => {
+              armIdleTimer(); // stderr activity also counts as alive
               const str = stderrDecoder.write(chunk);
               if (stderrBuf.length < 8192) stderrBuf += str.slice(0, 8192 - stderrBuf.length);
               const sm = str.match(/Session:\s*([a-f0-9-]+)/i)
@@ -283,7 +292,8 @@ class ClaudeSSH {
     });
 
     conn.on('error', (err) => {
-      if (globalTimer) { clearTimeout(globalTimer); globalTimer = null; }
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+      if (hardCapTimer) { clearTimeout(hardCapTimer); hardCapTimer = null; }
       const msg = err.code === 'ECONNREFUSED' ? `SSH connection refused — is sshd running on port ${this.port}?`
         : err.code === 'ENOTFOUND'            ? `Host not found: ${this.hostname}`
         : err.code === 'ETIMEDOUT'            ? `SSH connection timed out to ${this.hostname}`
@@ -293,12 +303,29 @@ class ClaudeSSH {
       if (h.onDone) h.onDone(detectedSid);
     });
 
-    // Global timeout guard
-    globalTimer = setTimeout(() => {
-      globalTimer = null;
-      try { if (h.onError) h.onError('SSH subprocess timed out'); } catch {}
-      try { conn.end(); } catch {}
-    }, MAX_SUBPROCESS_MS);
+    // Idle watchdog — armed now and reset on every chunk of remote output (the
+    // stream.stdout/stderr handlers above call armIdleTimer). Fires only after
+    // IDLE_TIMEOUT_MS of total silence, so a long-but-active run is never cut off.
+    const armIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        idleTimer = null;
+        const mins = Math.round(IDLE_TIMEOUT_MS / 60000);
+        try { if (h.onError) h.onError(`SSH subprocess timed out — no output for ${mins} min (idle). Raise CLAUDE_IDLE_TIMEOUT_MS to allow longer silences.`); } catch {}
+        try { conn.end(); } catch {}
+      }, IDLE_TIMEOUT_MS);
+    };
+    armIdleTimer();
+
+    // Optional absolute ceiling — backstop against a remote process that emits forever.
+    if (HARD_CAP_MS > 0) {
+      hardCapTimer = setTimeout(() => {
+        hardCapTimer = null;
+        const mins = Math.round(HARD_CAP_MS / 60000);
+        try { if (h.onError) h.onError(`SSH subprocess timed out — exceeded hard cap of ${mins} min (CLAUDE_HARD_CAP_MS).`); } catch {}
+        try { conn.end(); } catch {}
+      }, HARD_CAP_MS);
+    }
 
     conn.connect(this._connConfig());
 

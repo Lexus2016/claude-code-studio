@@ -437,7 +437,8 @@ skills/                — .md skill files → system prompt
 PORT=3000
 WORKDIR=./workspace
 MAX_TASK_WORKERS=5
-CLAUDE_TIMEOUT_MS=1800000
+CLAUDE_IDLE_TIMEOUT_MS=600000   # kill subprocess after this idle gap (no output); default 10 min (legacy alias: CLAUDE_TIMEOUT_MS)
+CLAUDE_HARD_CAP_MS=0            # optional absolute timeout ceiling; 0 = disabled (default)
 TRUST_PROXY=false
 LOG_LEVEL=info
 ANTHROPIC_BASE_URL=       # LLM proxy/gateway (LiteLLM, Bifrost, OpenRouter)

@@ -14,6 +14,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
+const { isTransientOverload, shouldRetryOverload } = require('./rate-limit-utils');
 const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
@@ -1052,6 +1053,7 @@ async function startTask(task) {
     }
     // Auto-continue loop: keep resuming until agent completes or budget exhausted
     let taskContinueCount = 0;
+    let taskOverloadRetryCount = 0;
     let currentTaskPrompt = prompt;
     let currentTaskCid = claudeSessionId;
     let lastTaskResult = null;
@@ -1091,6 +1093,7 @@ async function startTask(task) {
     while (true) {
       lastTaskResult = null;
       hasError = false; // Reset per iteration — only the LAST iteration's error state matters for final status
+      const _ftBefore = fullText.length; // baseline to isolate THIS iteration's output (overload detection)
 
       if (_taskEngine === 'subscription') {
         // One-shot: interactive Claude runs to end_turn naturally. The proxy only
@@ -1149,6 +1152,37 @@ async function startTask(task) {
           });
       });
 
+      // 🌐 Transient server overload (HTTP 429/529) — short pause + retry, before the
+      // success break and WITHOUT consuming the auto-continue budget. Same root cause as
+      // the chat loop: the CLI reports the throttle as text/result, not stderr, so it can
+      // ride along with subtype:'success'. Notice text avoids the trigger phrases so it
+      // does not pollute the post-loop isRateLimited classifier (which scans fullText).
+      {
+        const _lastTurn = fullText.slice(_ftBefore);
+        const _resultText = typeof lastTaskResult?.result === 'string' ? lastTaskResult.result : '';
+        if (shouldRetryOverload({ texts: [_lastTurn, _resultText], subtype: lastTaskResult?.subtype, isError: lastTaskResult?.is_error }) &&
+            !(taskAbort?.signal?.aborted || stoppingTasks.has(task.id))) {
+          if (taskOverloadRetryCount < MAX_OVERLOAD_RETRIES) {
+            taskOverloadRetryCount++;
+            const _bMs = Math.min(OVERLOAD_BACKOFF_BASE_MS + (taskOverloadRetryCount - 1) * OVERLOAD_BACKOFF_STEP_MS, OVERLOAD_BACKOFF_MAX_MS);
+            log.warn(`[taskWorker] task ${task.id}: server throttled, backing off ${Math.ceil(_bMs/1000)}s (${taskOverloadRetryCount}/${MAX_OVERLOAD_RETRIES})`);
+            const _n = `\n⏳ Server busy (throttled) — pausing ~${Math.ceil(_bMs/1000)}s and retrying (${taskOverloadRetryCount}/${MAX_OVERLOAD_RETRIES})...\n`;
+            fullText += _n;
+            { const _tb = (taskBuffers.get(task.id) || '') + _n; taskBuffers.set(task.id, _tb.length > MAX_CHAT_BUFFER ? _tb.slice(-MAX_CHAT_BUFFER) : _tb); }
+            broadcastToSession(sessionId, { type: 'text', text: _n, tabId: sessionId });
+            await _sleepAbortable(_bMs, taskAbort?.signal);
+            if (taskAbort?.signal?.aborted || stoppingTasks.has(task.id)) break;
+            // If a session exists, switch to continuation so non-idempotent task work is not
+            // re-executed; with no session yet, keep the original prompt so the retry re-sends it.
+            if (currentTaskCid) {
+              currentTaskPrompt = 'Continue where you left off. Complete the remaining work. When finished, run the MANDATORY POST-TASK VERIFICATION from your original instructions.';
+            }
+            continue; // retry; do not increment taskContinueCount
+          }
+          // Retries exhausted — fall through to normal handling (will be classified rate_limited).
+        }
+      }
+
       // ✅ Success — agent finished naturally
       if (lastTaskResult?.subtype === 'success') break;
       // 💰 Budget limit — can't continue
@@ -1179,7 +1213,8 @@ async function startTask(task) {
       stoppingTasks.delete(task.id);
       if (!wasStopped) {
         const isSuccess = lastTaskResult?.subtype === 'success' && !hasError;
-        const isRateLimited = hasError && (fullText.includes('rate_limit') || fullText.includes('overloaded') || fullText.includes('Too many'));
+        const isRateLimited = isTransientOverload(fullText)
+          || (hasError && (fullText.includes('rate_limit') || fullText.includes('overloaded') || fullText.includes('Too many')));
         const MAX_CHAIN_RETRIES = 2;
 
         if (isSuccess) {
@@ -2398,6 +2433,13 @@ const MAX_AUTO_CONTINUES = 3;
 const MAX_RATE_LIMIT_WAITS = 3;
 const MAX_RATE_LIMIT_WAIT_MS = 30 * 60 * 1000; // 30 min — skip auto-wait if reset is further out
 const MIN_RATE_LIMIT_WAIT_MS = 10 * 1000; // 10s floor to avoid rapid-fire retries
+// Transient server-side overload (HTTP 429/529 "temporarily limiting requests") — a brief
+// throttle, NOT the account usage quota. Short pause + retry (per "15–30s" guidance), not the
+// long reset-based wait above. Backoff grows mildly so a sustained throttle eases off.
+const MAX_OVERLOAD_RETRIES = 5;
+const OVERLOAD_BACKOFF_BASE_MS = 20 * 1000; // 20s — first pause
+const OVERLOAD_BACKOFF_STEP_MS = 10 * 1000; // +10s per subsequent attempt
+const OVERLOAD_BACKOFF_MAX_MS = 60 * 1000;  // cap at 60s
 
 // Sleep that resolves on timeout or when signal fires (whichever first)
 function _sleepAbortable(ms, signal) {
@@ -2428,6 +2470,7 @@ async function runCliSingle(p) {
   let currentPrompt = prompt;
   let continueCount = 0;
   let rateLimitWaitCount = 0;
+  let overloadRetryCount = 0;
   // Usage of the most recent assistant turn (real context-window occupancy at the
   // end). Persists across auto-continue iterations; the last write wins.
   let lastTurnUsage = null;
@@ -2516,6 +2559,61 @@ async function runCliSingle(p) {
     const hadOutputBeforeRateLimit = fullText.length > fullTextBefore;
     lastResult = resultData;
     totalCostUsd += resultData?.total_cost_usd || 0;
+
+    // 🌐 Transient server overload (HTTP 429/529 "temporarily limiting requests").
+    // NOT the account usage quota — the server is briefly throttling and the request
+    // just needs a short pause + retry. The CLI reports it as assistant text or in the
+    // result payload (never stderr), so it bypasses the errorText detector below and can
+    // even ride along with subtype:'success'. Detect it here, before the success break.
+    {
+      const lastTurnText = fullText.slice(fullTextBefore);
+      const resultText = typeof resultData?.result === 'string' ? resultData.result : '';
+      // shouldRetryOverload skips clean successes (incidental phrase, e.g. the user asking
+      // about this very error) and structured usage-quota rejections (own reset-based wait).
+      if (shouldRetryOverload({ texts: [lastTurnText, resultText, errorText], subtype: resultData?.subtype, isError: resultData?.is_error, rateLimitRejected: rateLimitInfo?.status === 'rejected' })) {
+        if (overloadRetryCount >= MAX_OVERLOAD_RETRIES) {
+          const notice = `\n\n⚠️ **Server overloaded** — still limiting after ${MAX_OVERLOAD_RETRIES} retries. Please try again shortly.\n\n`;
+          fullText += notice;
+          { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+          try { ws.send(JSON.stringify({ type:'text', text: notice, session_restart_available: true, sessionId, ...(tabId ? { tabId } : {}) })); } catch {}
+          break;
+        }
+        overloadRetryCount++;
+        const backoffMs = Math.min(OVERLOAD_BACKOFF_BASE_MS + (overloadRetryCount - 1) * OVERLOAD_BACKOFF_STEP_MS, OVERLOAD_BACKOFF_MAX_MS);
+        const backoffSec = Math.ceil(backoffMs / 1000);
+        log.warn('overload-backoff', { sessionId, attempt: overloadRetryCount, maxAttempts: MAX_OVERLOAD_RETRIES, backoffMs });
+        const notice = `\n\n⏳ **Server busy** — temporarily limiting requests (not your usage limit). Pausing ~${backoffSec}s and retrying (${overloadRetryCount}/${MAX_OVERLOAD_RETRIES})...\n\n`;
+        fullText += notice;
+        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+        try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'waiting', secondsLeft: backoffSec, rateLimitType: 'overloaded', attempt: overloadRetryCount, maxAttempts: MAX_OVERLOAD_RETRIES, ...(tabId ? { tabId } : {}) })); } catch {}
+
+        const waitEnd = Date.now() + backoffMs;
+        while (Date.now() < waitEnd) {
+          if (abortController?.signal?.aborted) break;
+          const remaining = Math.max(0, Math.ceil((waitEnd - Date.now()) / 1000));
+          try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'countdown', secondsLeft: remaining, rateLimitType: 'overloaded', ...(tabId ? { tabId } : {}) })); } catch {}
+          await _sleepAbortable(Math.min(5000, remaining * 1000), abortController?.signal);
+        }
+        if (abortController?.signal?.aborted) break;
+
+        try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'resuming', rateLimitType: 'overloaded', ...(tabId ? { tabId } : {}) })); } catch {}
+        const resumeNotice = '\n✅ **Resuming**...\n\n';
+        fullText += resumeNotice;
+        { const _cb = (chatBuffers.get(sessionId) || '') + resumeNotice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        try { ws.send(JSON.stringify({ type:'text', text: resumeNotice, ...(tabId ? { tabId } : {}) })); } catch {}
+
+        // Switch to a continuation prompt only when a session exists to resume AND real
+        // output streamed before the throttle. Otherwise (no session yet, or result-only
+        // error) keep the original prompt + attachments so the retry re-sends the request —
+        // never "continue where you left off" against an empty/non-existent session.
+        if (newCid && hadOutputBeforeRateLimit) {
+          currentPrompt = 'Continue where you left off. Complete the remaining work.';
+          currentContentBlocks = null;
+        }
+        continue;
+      }
+    }
 
     // ✅ Success — agent finished naturally
     if (resultData?.subtype === 'success') break;
@@ -2694,6 +2792,7 @@ async function runSshSingle(p) {
   let currentPrompt = prompt;
   let continueCount = 0;
   let rateLimitWaitCount = 0;
+  let overloadRetryCount = 0;
   // Usage of the most recent assistant turn (real context-window occupancy at the end).
   let lastTurnUsage = null;
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
@@ -2752,6 +2851,51 @@ async function runSshSingle(p) {
     const hadOutputBeforeRateLimit = fullText.length > fullTextBefore;
     lastResult = resultData;
     totalCostUsd += resultData?.total_cost_usd || 0;
+
+    // 🌐 Transient server overload (HTTP 429/529) — short pause + retry, before success break.
+    // See the CLI loop above for the full rationale; mirrored here for the SSH engine.
+    {
+      const lastTurnText = fullText.slice(fullTextBefore);
+      const resultText = typeof resultData?.result === 'string' ? resultData.result : '';
+      if (shouldRetryOverload({ texts: [lastTurnText, resultText, errorText], subtype: resultData?.subtype, isError: resultData?.is_error, rateLimitRejected: rateLimitInfo?.status === 'rejected' })) {
+        if (overloadRetryCount >= MAX_OVERLOAD_RETRIES) {
+          const notice = `\n\n⚠️ **Server overloaded** — still limiting after ${MAX_OVERLOAD_RETRIES} retries. Please try again shortly.\n\n`;
+          fullText += notice;
+          { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+          try { ws.send(JSON.stringify({ type:'text', text: notice, session_restart_available: true, sessionId, ...(tabId ? { tabId } : {}) })); } catch {}
+          break;
+        }
+        overloadRetryCount++;
+        const backoffMs = Math.min(OVERLOAD_BACKOFF_BASE_MS + (overloadRetryCount - 1) * OVERLOAD_BACKOFF_STEP_MS, OVERLOAD_BACKOFF_MAX_MS);
+        const backoffSec = Math.ceil(backoffMs / 1000);
+        log.warn('ssh-overload-backoff', { sessionId, attempt: overloadRetryCount, maxAttempts: MAX_OVERLOAD_RETRIES, backoffMs });
+        const notice = `\n\n⏳ **Server busy** — temporarily limiting requests (not your usage limit). Pausing ~${backoffSec}s and retrying (${overloadRetryCount}/${MAX_OVERLOAD_RETRIES})...\n\n`;
+        fullText += notice;
+        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+        try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'waiting', secondsLeft: backoffSec, rateLimitType: 'overloaded', attempt: overloadRetryCount, maxAttempts: MAX_OVERLOAD_RETRIES, ...(tabId ? { tabId } : {}) })); } catch {}
+        const waitEnd = Date.now() + backoffMs;
+        while (Date.now() < waitEnd) {
+          if (abortController?.signal?.aborted) break;
+          const remaining = Math.max(0, Math.ceil((waitEnd - Date.now()) / 1000));
+          try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'countdown', secondsLeft: remaining, rateLimitType: 'overloaded', ...(tabId ? { tabId } : {}) })); } catch {}
+          await _sleepAbortable(Math.min(5000, remaining * 1000), abortController?.signal);
+        }
+        if (abortController?.signal?.aborted) break;
+        try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'resuming', rateLimitType: 'overloaded', ...(tabId ? { tabId } : {}) })); } catch {}
+        const resumeNotice = '\n✅ **Resuming**...\n\n';
+        fullText += resumeNotice;
+        { const _cb = (chatBuffers.get(sessionId) || '') + resumeNotice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        try { ws.send(JSON.stringify({ type:'text', text: resumeNotice, ...(tabId ? { tabId } : {}) })); } catch {}
+        // Continue only with an established session + streamed output; else retry original (see CLI loop).
+        if (newCid && hadOutputBeforeRateLimit) {
+          currentPrompt = 'Continue where you left off. Complete the remaining work.';
+          currentContentBlocks = null;
+        }
+        continue;
+      }
+    }
+
     if (resultData?.subtype === 'success') break;
 
     // 🚦 Rate limit rejected — wait for reset and auto-retry

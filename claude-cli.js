@@ -62,9 +62,15 @@ function findClaudeBin() {
 
 const CLAUDE_BIN = findClaudeBin();
 
-// Global subprocess timeout — process is killed if it does not exit within this window.
-// Configurable via CLAUDE_TIMEOUT_MS env var; default 10 minutes.
-const MAX_SUBPROCESS_MS = parseInt(process.env.CLAUDE_TIMEOUT_MS || '1800000', 10) || 1800000;
+// Idle (inactivity) watchdog — the subprocess is killed ONLY after it produces no
+// output (stdout or stderr) for this long. A fixed total timeout would kill a process
+// that is still actively streaming output (e.g. a long content-generation run); the
+// timer is reset on every output chunk instead. Default 10 minutes.
+// Configurable via CLAUDE_IDLE_TIMEOUT_MS (legacy alias: CLAUDE_TIMEOUT_MS).
+const IDLE_TIMEOUT_MS = parseInt(process.env.CLAUDE_IDLE_TIMEOUT_MS || process.env.CLAUDE_TIMEOUT_MS || '600000', 10) || 600000;
+// Optional absolute ceiling — final backstop against a process that keeps emitting
+// output but never finishes. 0 = disabled (default), so active work is never killed.
+const HARD_CAP_MS = parseInt(process.env.CLAUDE_HARD_CAP_MS || '0', 10) || 0;
 
 // Maximum size of a single unflushed stdout line — guards against heap exhaustion
 // when the CLI emits a line without \n (should never happen in stream-json mode,
@@ -288,8 +294,10 @@ class ClaudeCLI {
     let buffer = '', stderrBuf = '', detectedSid = sessionId || null;
     // SIGKILL fallback timer — cleared on normal close to avoid zombie timers
     let sigkillTimer = null;
-    // Global timeout — kills subprocess if it doesn't finish within MAX_SUBPROCESS_MS
-    let globalTimer = null;
+    // Idle watchdog — reset on every output chunk; fires only after full silence
+    let idleTimer = null;
+    // Optional absolute-ceiling timer (armed only when HARD_CAP_MS > 0)
+    let hardCapTimer = null;
     // Track MCP config hash for ref-counted cleanup
     let mcpHash = mcpConfigHash;
     let _finished = false;
@@ -298,7 +306,51 @@ class ClaudeCLI {
     let attFiles = _tempFiles.slice();
     let attDir = _tempDir;
 
+    // ─── Watchdog timers ─────────────────────────────────────────────────────
+    // Escalate to SIGKILL 3 s after SIGTERM if the process ignores it (Unix only —
+    // on Windows killProc already force-kills the whole tree). Guarded so it never
+    // signals a PID the OS may have reused after the child already exited.
+    const escalateSigkill = () => {
+      if (process.platform === 'win32') return;
+      if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
+      sigkillTimer = setTimeout(() => {
+        sigkillTimer = null;
+        if (proc.exitCode !== null || proc.signalCode !== null) return;
+        try { proc.kill('SIGKILL'); } catch {}
+      }, 3000);
+    };
+
+    // (Re)arm the idle watchdog. Called on every output chunk so the subprocess is
+    // killed ONLY after IDLE_TIMEOUT_MS of complete silence — never while it is
+    // actively streaming output (the failure the old fixed total-timeout caused).
+    const armIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        idleTimer = null;
+        if (proc.exitCode !== null || proc.signalCode !== null) return;
+        const mins = Math.round(IDLE_TIMEOUT_MS / 60000);
+        try { if (h.onError) h.onError(`Claude subprocess timed out — no output for ${mins} min (idle). Raise CLAUDE_IDLE_TIMEOUT_MS to allow longer silences.`); } catch {}
+        killProc(proc);
+        escalateSigkill();
+      }, IDLE_TIMEOUT_MS);
+    };
+    armIdleTimer(); // start the clock; every output chunk below resets it
+
+    // Optional absolute ceiling — final backstop against a process that keeps emitting
+    // output but never finishes. Armed only when CLAUDE_HARD_CAP_MS > 0.
+    if (HARD_CAP_MS > 0) {
+      hardCapTimer = setTimeout(() => {
+        hardCapTimer = null;
+        if (proc.exitCode !== null || proc.signalCode !== null) return;
+        const mins = Math.round(HARD_CAP_MS / 60000);
+        try { if (h.onError) h.onError(`Claude subprocess timed out — exceeded hard cap of ${mins} min (CLAUDE_HARD_CAP_MS).`); } catch {}
+        killProc(proc);
+        escalateSigkill();
+      }, HARD_CAP_MS);
+    }
+
     proc.stdout.on('data', (chunk) => {
+      armIdleTimer(); // output means the subprocess is alive and working — reset idle clock
       buffer += stdoutDecoder.write(chunk);
       // Guard against a runaway line (no \n) consuming all heap
       if (buffer.length > MAX_LINE_BUFFER) {
@@ -332,6 +384,7 @@ class ClaudeCLI {
     });
 
     proc.stderr.on('data', (chunk) => {
+      armIdleTimer(); // stderr activity (MCP startup, progress) also counts as alive
       const str = stderrDecoder.write(chunk);
       // Cap stderr buffer at 8 KB to prevent unbounded memory growth
       if (stderrBuf.length < 8192) stderrBuf += str.slice(0, 8192 - stderrBuf.length);
@@ -353,8 +406,9 @@ class ClaudeCLI {
         abortController.signal.removeEventListener('abort', _abortListener);
         _abortListener = null;
       }
-      // Clear both timers — process already exited
-      if (globalTimer) { clearTimeout(globalTimer); globalTimer = null; }
+      // Clear all timers — process already exited
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+      if (hardCapTimer) { clearTimeout(hardCapTimer); hardCapTimer = null; }
       if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
       // Flush remaining buffer (including any incomplete multi-byte sequence held by the decoder)
       buffer += stdoutDecoder.end();
@@ -397,7 +451,8 @@ class ClaudeCLI {
         abortController.signal.removeEventListener('abort', _abortListener);
         _abortListener = null;
       }
-      if (globalTimer) { clearTimeout(globalTimer); globalTimer = null; }
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+      if (hardCapTimer) { clearTimeout(hardCapTimer); hardCapTimer = null; }
       if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
       // Clean up MCP config and temp attachments even when the process fails to start
       releaseMcpConfig(mcpHash); mcpHash = null;
@@ -409,37 +464,10 @@ class ClaudeCLI {
       if (h.onDone) h.onDone(detectedSid || h._detectedSid);
     });
 
-    // Global timeout — must be set after all declarations to avoid TDZ with let
-    globalTimer = setTimeout(() => {
-      globalTimer = null;
-      if (proc.exitCode !== null || proc.signalCode !== null) return;
-      try { if (h.onError) h.onError('Claude subprocess timed out'); } catch {}
-      killProc(proc);
-      // Escalate to SIGKILL after 3 s (Unix only — on Windows killProc already force-kills)
-      if (process.platform !== 'win32') {
-        if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
-        sigkillTimer = setTimeout(() => {
-          sigkillTimer = null;
-          if (proc.exitCode !== null || proc.signalCode !== null) return;
-          try { proc.kill('SIGKILL'); } catch {}
-        }, 3000);
-      }
-    }, MAX_SUBPROCESS_MS);
-
     if (abortController) {
       _abortListener = () => {
         killProc(proc);
-        // Escalate to SIGKILL after 3 s (Unix only — on Windows killProc already force-kills).
-        // Guard: if proc already exited (exitCode/signalCode set), skip to avoid
-        // hitting a new process that the OS reused the same PID for.
-        if (process.platform !== 'win32') {
-          if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
-          sigkillTimer = setTimeout(() => {
-            sigkillTimer = null;
-            if (proc.exitCode !== null || proc.signalCode !== null) return;
-            try { proc.kill('SIGKILL'); } catch {}
-          }, 3000);
-        }
+        escalateSigkill(); // force-kill 3 s later if SIGTERM is ignored (Unix only)
       };
       abortController.signal.addEventListener('abort', _abortListener);
     }
