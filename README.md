@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.66.0** — Minimap rail polish: the message overview now spans the full rail height — every message stays visible and clickable at a glance instead of trailing off into empty space. Long messages are weight-capped so one can't dominate the fill; only extreme-length chats fall back to a scrollable rail.
+> **v5.67.0** — Interface polish pass: smoother hover/state transitions across the app, an explicit pointer cursor on every interactive control, tabular-figure counters that don't jitter as they change, balanced/pretty text wrapping for headings and prose, and crisper font smoothing.
 
 ---
 
