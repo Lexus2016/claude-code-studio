@@ -6552,6 +6552,10 @@ function _msfStartTimer(el) {
   if (el._msfTimer) { clearInterval(el._msfTimer); delete el._msfTimer; }
   if (!el._msfStart) el._msfStart = Date.now();
   const write = () => {
+    // Self-terminate if the message element left the DOM (tab closed, session/project
+    // switched, welcome screen shown) — those teardown paths null streaming.el without
+    // calling _msfStopTimer, which would otherwise orphan this interval forever.
+    if (!el.isConnected) { clearInterval(el._msfTimer); delete el._msfTimer; delete el._msfStart; return; }
     const f = el.querySelector('.msg-status-footer.state-streaming .msf-timer');
     if (f) f.textContent = _actElapsed(el._msfStart);
   };
