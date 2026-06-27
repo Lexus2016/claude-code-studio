@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Electron Desktop
 status: planning
-last_updated: "2026-06-17T08:23:51.642Z"
-last_activity: 2026-06-17
+last_updated: "2026-06-27T06:47:51.131Z"
+last_activity: 2026-06-27
 progress:
   total_phases: 4
   completed_phases: 0
@@ -99,10 +99,11 @@ None yet for v1.1.
 | 260617-d62 | desktop: stable loopback port (localStorage persists), telegram bot resumes on restart, Engine switcher hidden + chat forced to API (claude -p) | 2026-06-17 | 34f8c77 | [260617-d62-desktop-port-telegram-engine](.planning/quick/260617-d62-desktop-port-telegram-engine/) |
 | 260617-qcu | catch-up button — pull conversation from an opened `claude --resume` terminal into the web chat (pull-on-demand transcript sync, engine-agnostic) | 2026-06-17 | f79843e | [260617-qcu-add-catch-up-from-console-session-button](.planning/quick/260617-qcu-add-catch-up-from-console-session-button/) |
 | 260619-oqv | vertical minimap rail in web chat — one proportional, binary-colored segment per message, hover preview, click-scroll, viewport thumb, live MutationObserver sync, mobile-hidden | 2026-06-19 | d69a36d | [260619-oqv-lineyka-minimapa-povidomlen-u-veb-chati](.planning/quick/260619-oqv-lineyka-minimapa-povidomlen-u-veb-chati/) |
+| 260627-c7v | live activity indicator in web chat — state-aware streaming footer label (Думаю / Виконую: <tool> / Генерую) + live m:ss elapsed timer, driven by existing WS events; client-only, zero server edits (browser-verify pending) | 2026-06-27 | 1ee2c34 | [260627-c7v-add-a-live-activity-indicator-in-the-web](.planning/quick/260627-c7v-add-a-live-activity-indicator-in-the-web/) |
 
 ## Session Continuity
 
-Last activity: 2026-06-19 — quick task 260619-oqv: minimap rail in web chat (right-docked message overview, hover preview, click-scroll, live sync)
+Last activity: 2026-06-27 — quick task 260627-c7v: live activity indicator in web chat (state-aware footer label + live elapsed timer, client-only)
 
 Last session: 2026-06-17
 Stopped at: Roadmap + traceability written; ready to plan Phase 05
