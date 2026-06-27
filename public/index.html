@@ -732,6 +732,10 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 }
 .msg-status-footer.state-streaming .msf-dots span:nth-child(2) { animation-delay: .15s; }
 .msg-status-footer.state-streaming .msf-dots span:nth-child(3) { animation-delay: .3s; }
+.msg-status-footer.state-streaming .msf-timer {
+  font-size: 11px; font-weight: 600; color: var(--accent2); opacity: .6;
+  margin-left: auto; font-variant-numeric: tabular-nums; letter-spacing: .02em;
+}
 
 /* ─── Done state ─── */
 .msg-status-footer.state-done {
@@ -3878,7 +3882,7 @@ const TRANSLATIONS = {
     'mcp.parse.empty':'Список серверів порожній',
     'mcp.cfg.env_json_err':'Невірний формат ENV JSON',
     'agent.planning':'🧠 Планування...','agent.fallback_single':'⚠️ Перехід до одиночного режиму','agent.done':'✅ Всі агенти завершили','agent.circular_deps':'⚠️ Кругова залежність між агентами',
-    'msf.working':'Працює','msf.done':'Готово','msf.error':'Помилка','msf.waiting':'Очікування',
+    'msf.working':'Працює','msf.done':'Готово','msf.error':'Помилка','msf.waiting':'Очікування','msf.thinking':'Думаю','msf.tool':'Виконую','msf.generating':'Генерую',
     'ta.calls':'операцій','ta.activity':'Активність',
     'msf.team':'Команда агентів',
     'hdr.toggle':'Згорнути/розгорнути панель','msg.show_more':'Показати більше','msg.show_less':'Показати менше',
@@ -4112,7 +4116,7 @@ const TRANSLATIONS = {
     'mcp.parse.empty':'Server list is empty',
     'mcp.cfg.env_json_err':'Invalid ENV JSON format',
     'agent.planning':'🧠 Planning...','agent.fallback_single':'⚠️ Falling back to single mode','agent.done':'✅ All agents done','agent.circular_deps':'⚠️ Circular dependency between agents',
-    'msf.working':'Working','msf.done':'Done','msf.error':'Error','msf.waiting':'Waiting',
+    'msf.working':'Working','msf.done':'Done','msf.error':'Error','msf.waiting':'Waiting','msf.thinking':'Thinking','msf.tool':'Running','msf.generating':'Generating',
     'ta.calls':'calls','ta.activity':'Activity',
     'msf.team':'Agent Team',
     'hdr.toggle':'Collapse/expand header','msg.show_more':'Show more','msg.show_less':'Show less',
@@ -4346,7 +4350,7 @@ const TRANSLATIONS = {
     'mcp.parse.empty':'Список серверов пуст',
     'mcp.cfg.env_json_err':'Неверный формат ENV JSON',
     'agent.planning':'🧠 Планирование...','agent.fallback_single':'⚠️ Переход в одиночный режим','agent.done':'✅ Все агенты завершили','agent.circular_deps':'⚠️ Циклическая зависимость между агентами',
-    'msf.working':'Работает','msf.done':'Готово','msf.error':'Ошибка','msf.waiting':'Ожидание',
+    'msf.working':'Работает','msf.done':'Готово','msf.error':'Ошибка','msf.waiting':'Ожидание','msf.thinking':'Думаю','msf.tool':'Выполняю','msf.generating':'Генерирую',
     'ta.calls':'операций','ta.activity':'Активность',
     'msf.team':'Команда агентов',
     'hdr.toggle':'Свернуть/развернуть панель','msg.show_more':'Показать больше','msg.show_less':'Показать меньше',
@@ -6509,7 +6513,7 @@ function _msfCreate(state, labelText) {
   const f = document.createElement('div');
   f.className = `msg-status-footer state-${state}`;
   if (state === 'streaming') {
-    f.innerHTML = `<div class="msf-icon"></div><span class="msf-label">${labelText}</span><div class="msf-dots"><span></span><span></span><span></span></div>`;
+    f.innerHTML = `<div class="msf-icon"></div><span class="msf-label">${labelText}</span><div class="msf-dots"><span></span><span></span><span></span></div><span class="msf-timer"></span>`;
   } else if (state === 'waiting') {
     f.innerHTML = `<div class="msf-icon"><span></span><span></span><span></span></div><span class="msf-label">${labelText}</span>`;
   } else {
@@ -6522,8 +6526,38 @@ function _msfRemove(el) { const f = _msfGet(el); if (f) f.remove(); }
 
 function addSpinner(el) {
   if (!el || _msfGet(el)) return;
-  const f = _msfCreate('streaming', t('msf.working'));
+  // Dead-air (run sent, no token yet) → "Думаю…". State flips to tool/generating via _msfSetState.
+  const f = _msfCreate('streaming', t('msf.thinking'));
   el.appendChild(f);
+  _msfStartTimer(el); // start the live elapsed counter the instant the run is visibly in-flight
+}
+
+// Live in-flight indicator helpers — the ONLY mutation points for the streaming label/timer.
+// Set the streaming footer's label text. No-op if no streaming footer present.
+function _msfSetState(el, labelText) {
+  const f = el ? el.querySelector('.msg-status-footer.state-streaming') : null;
+  if (!f) return;
+  const lbl = f.querySelector('.msf-label');
+  if (lbl) lbl.textContent = labelText;
+}
+// Start the client-side m:ss elapsed counter. Reuses an existing start time so a mid-run
+// state change does not reset the clock. Clears any prior interval to avoid duplicates.
+function _msfStartTimer(el) {
+  if (!el) return;
+  if (el._msfTimer) { clearInterval(el._msfTimer); delete el._msfTimer; }
+  if (!el._msfStart) el._msfStart = Date.now();
+  const write = () => {
+    const f = el.querySelector('.msg-status-footer.state-streaming .msf-timer');
+    if (f) f.textContent = _actElapsed(el._msfStart);
+  };
+  write(); // show 0:00 immediately, no 1s delay
+  el._msfTimer = setInterval(write, 1000);
+}
+// Stop and clear the elapsed counter. Safe to call when no timer is running.
+function _msfStopTimer(el) {
+  if (!el) return;
+  if (el._msfTimer) { clearInterval(el._msfTimer); delete el._msfTimer; }
+  delete el._msfStart;
 }
 // Map raw Claude tool names to user-friendly short labels
 const _toolLabels = {
