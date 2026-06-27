@@ -5265,6 +5265,7 @@ function handleWsMsg(d) {
       // catchUp = full replay from server after reconnect → replace, not append
       if (d.catchUp) { streaming.txt = d.text; } else { streaming.txt += d.text; }
       streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
+      _msfSetState(streaming.el, t('msf.generating') + '…'); // streaming text → "Генерую…"; timer keeps ticking
       if (d.agent) addAgentBadge(streaming.el, d.agent);
       scrollBottom();
       break;
@@ -5279,6 +5280,7 @@ function handleWsMsg(d) {
         if (!streaming.el) { rmW(); rmStatus(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
         streaming.toolLog.push({ tool: d.tool || 'tool', brief: _toolInputBrief(d.tool, d.input), input: d.input || '' });
         _renderToolLive(streaming.el, streaming.toolLog);
+        _msfSetState(streaming.el, t('msf.tool') + ': ' + _toolLabel(d.tool || 'tool') + '…'); // "Виконую: <tool>…"
         scrollBottom();
       } else {
         // Background tab — accumulate tool log for restoration on tab switch
@@ -5436,6 +5438,7 @@ function handleWsMsg(d) {
             if (footer) streaming.el.insertBefore(statsEl, footer); else streaming.el.appendChild(statsEl);
           }
         }
+        _msfStopTimer(streaming.el); // stop elapsed counter
         markDone(streaming.el);
 
         // ─── Plan Mode: Show "Execute Plan" button ──────────────────────────────
@@ -5625,6 +5628,7 @@ function handleWsMsg(d) {
           _renderToolActivity(streaming.el, streaming.toolCounts);
         }
         if (streaming.el) {
+          _msfStopTimer(streaming.el); // stop the elapsed counter on error
           _msfRemove(streaming.el);
           const ef = _msfCreate('error', t('msf.error'));
           streaming.el.appendChild(ef);
@@ -6256,6 +6260,7 @@ function doStop() {
   if (activeTab) { activeTab.generating = false; renderTabs(); }
   // Remove spinner from current streaming message and show "Stopped" state
   if (streaming.el) {
+    _msfStopTimer(streaming.el); // stop the elapsed counter when the run is interrupted
     _msfRemove(streaming.el);
     streaming.el.appendChild(_msfCreate('error', t('status.stopped')));
     // Finalize any partial text
@@ -9578,7 +9583,7 @@ async function loadSess(id) {
       // Tab-switch restore: recreate streaming element with accumulated text + tool log
       streaming.el = addMsg('assistant');
       streaming.txt = _bgTxt || '';
-      addSpinner(streaming.el);
+      addSpinner(streaming.el); // restored run starts a fresh 0:00 — original start time is not persisted (live "is-working" feedback, not audited duration)
       if (_bgTxt) streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
       // Restore live tool activity panel even if there's no text yet (tools-only phase)
       if (_bgToolLog?.length) {
@@ -9592,7 +9597,7 @@ async function loadSess(id) {
       // partial_text (if any) shown as streaming since session is still live.
       streaming.el = addMsg('assistant');
       streaming.txt = d.partial_text || '';
-      addSpinner(streaming.el);
+      addSpinner(streaming.el); // restored run starts a fresh 0:00 — original start time is not persisted (live "is-working" feedback, not audited duration)
       if (streaming.txt) streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
     } else if (d.partial_text && !d.hasRunningTask) {
       // Session was interrupted (server crash / killed) — show what was saved to DB
