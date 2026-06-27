@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.67.0** — Interface polish pass: smoother hover/state transitions across the app, an explicit pointer cursor on every interactive control, tabular-figure counters that don't jitter as they change, balanced/pretty text wrapping for headings and prose, and crisper font smoothing.
+> **v5.68.0** — Live activity indicator in the web chat: the streaming reply now shows what Claude is doing — "Thinking…", "Running: <tool>…", "Generating…" — with a live elapsed-time counter on the message footer, so you always see it's working and for how long. Includes a fix so the timer never leaks when you close a tab or switch sessions mid-run.
 
 ---
 
