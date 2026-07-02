@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.68.0** — Live activity indicator in the web chat: the streaming reply now shows what Claude is doing — "Thinking…", "Running: <tool>…", "Generating…" — with a live elapsed-time counter on the message footer, so you always see it's working and for how long. Includes a fix so the timer never leaks when you close a tab or switch sessions mid-run.
+> **v5.69.0** — The **Fable** model is selectable again in every model picker — the web chat (toolbar and mobile sheet), Kanban (chain and task forms), and the Scheduler. It had been hidden in a recent build; this brings it back everywhere you choose a model.
 
 ---
 
