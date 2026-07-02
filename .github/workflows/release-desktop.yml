@@ -1,9 +1,16 @@
 name: Release Desktop
 
-# Runs on the same version tags as the web release workflow. The existing
-# release.yml creates the GitHub Release + changelog; this workflow builds the
-# desktop apps for all three OSes and uploads them to that release, then bumps
-# the Homebrew Cask. Unsigned by design (CSC_IDENTITY_AUTO_DISCOVERY=false).
+# Runs on the same version tags as the web release workflow. release.yml creates
+# the GitHub Release + changelog; this workflow builds the desktop apps for all
+# three OSes and uploads them to that release, then bumps the Homebrew Cask.
+#
+# The cask bump depends on the macOS build ONLY (build-mac) — never on the
+# Windows/Linux legs. A slow Windows build no longer delays macOS auto-updates,
+# and a failing Windows/Linux build can no longer block the cask bump entirely
+# (previously `bump-cask: needs: build` waited for the whole matrix and was
+# skipped if any leg failed, so macOS users were stranded on the old version).
+#
+# Unsigned by design (CSC_IDENTITY_AUTO_DISCOVERY=false).
 on:
   push:
     tags: ['v*.*.*']
@@ -13,13 +20,26 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Build & publish desktop app (macOS)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --mac --arm64 --x64 --publish always
+
+  build-others:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            args: "--mac --arm64 --x64"
           - os: windows-latest
             args: "--win"
           - os: ubuntu-latest
@@ -39,7 +59,7 @@ jobs:
         run: npx electron-builder ${{ matrix.args }} --publish always
 
   bump-cask:
-    needs: build
+    needs: build-mac
     runs-on: ubuntu-latest
     steps:
       - name: Update Homebrew tap cask (skips if HOMEBREW_TAP_TOKEN not set)
