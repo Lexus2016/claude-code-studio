@@ -918,6 +918,644 @@ const BOT_I18N = {
     'header_none': '📭 Ничего не выбрано',
     'header_separator': ' / ',
   },
+  fr: {
+    // Pairing & auth
+    'rate_limit': '⚠️ Trop de requêtes. Veuillez patienter une minute.',
+    'notif_on': '🔔 Notifications activées',
+    'notif_off': '🔕 Notifications désactivées',
+    'blocked': '🔒 Trop de tentatives échouées. Réessayez dans 15 minutes.',
+    'new_conn_disabled': '🔒 Les nouvelles connexions sont actuellement désactivées.\n\nContactez l\'administrateur pour activer le mode connexion.',
+    'start_pairing': '👋 <b>Claude Code Studio</b>\n\nPour vous connecter, saisissez le code à 6 caractères depuis le panneau de configuration de votre Studio.\n\n💡 Format du code : <code>XXX·XXX</code>',
+    'new_conn_off': '🔒 Nouvelles connexions désactivées.',
+    'already_paired': '✅ Cet appareil est déjà connecté !',
+    'paired_ok': '✅ <b>Appareil connecté !</b>\n\n📱 {name}\n\nVous recevrez désormais des notifications et pourrez contrôler Studio à distance.\n\nTapez /help pour la liste des commandes.',
+    'use_menu': '🏠 Utilisez le menu ci-dessous ou les boutons dans les messages.',
+    'invalid_code': '❌ Code invalide ou expiré.\n\nTentatives restantes : {remaining}',
+
+    // Keyboard buttons (persistent)
+    'kb_menu': '🏠 Menu',
+    'kb_write': '✉ Écrire',
+    'kb_status': '📊 Statut',
+    'kb_project_prefix': '📁',
+
+    // Command descriptions (setMyCommands)
+    'cmd_start_desc': 'Menu principal',
+    'cmd_help_desc': 'Aide',
+    'cmd_cancel_desc': 'Annuler l\'action en cours',
+    'cmd_status_desc': 'État du système',
+
+    // Main menu
+    'main_title': '🤖 <b>Claude Code Studio</b>',
+    'main_project': '📁 Projet : <code>{name}</code>',
+    'main_chat': '💬 Chat : {title}',
+    'main_choose': '\nChoisissez une action :',
+    'btn_projects': '📁 Projets',
+    'btn_chats': '💬 Chats',
+    'btn_tasks': '📋 Tâches',
+    'btn_status': '📊 Statut',
+    'btn_settings': '⚙ Paramètres',
+    'btn_remote_access': '🌐 Remote Access',
+    'btn_back': '← Retour',
+    'btn_back_menu': '← Menu',
+    'btn_back_projects': '← Projets',
+    'btn_back_chats': '← Chats',
+    'btn_back_overview': '← Aperçu',
+    'btn_next': 'Suivant →',
+    'btn_write': '📝 Écrire',
+    'btn_all_messages': '📜 Tous les messages',
+    'btn_cancel': '❌ Annuler',
+    'btn_write_chat': '✉ Écrire dans le chat',
+    'btn_refresh': '🔄 Actualiser',
+    'btn_full_msg': '📄 Message complet',
+    'btn_more': '📜 Voir plus',
+    'btn_full_response': '📄 Réponse complète',
+    'btn_main_menu': '← Menu principal',
+    'btn_parent_dir': '↑ Dossier parent',
+    'btn_all_tasks': '🌍 Toutes les tâches',
+    'btn_disable_notif': '🔕 Désactiver les notifications',
+    'btn_enable_notif': '🔔 Activer les notifications',
+    'btn_unlink_device': '🔓 Dissocier l\'appareil',
+    'btn_confirm_unlink': '✅ Oui, dissocier',
+
+    // Projects
+    'projects_title': '📁 <b>Projets</b> ({count})',
+    'projects_empty': '📁 Aucun projet avec des chats.',
+    'project_not_found': '❌ Projet introuvable.',
+    'project_choose': '\n\nChoisissez une section :',
+    'project_set': '✅ Projet : <code>{name}</code>\n\nTapez /chats pour voir les chats.',
+    'project_invalid': '❌ Numéro invalide. Exécutez d\'abord /projects',
+    'project_current': '📁 Projet actuel : <code>{name}</code>',
+    'project_hint': '💡 Exécutez d\'abord /projects, puis /project <code>&lt;numéro&gt;</code>',
+    'project_chats_label': '{count} chats',
+    'project_select_hint': '💡 /project <code>&lt;numéro&gt;</code> — sélectionner un projet',
+
+    // Chats
+    'chats_title_project': '💬 <b>Chats</b> — {project}',
+    'chats_title_all': '💬 <b>Tous les chats</b>',
+    'chats_empty': '💬 Aucun chat.',
+    'chat_untitled': 'Sans titre',
+    'chat_not_found': '❌ Chat introuvable.',
+    'session_not_found': '❌ Session introuvable.',
+    'chat_messages': '{count} messages',
+    'chat_no_messages': '📭 Aucun message dans ce chat.',
+    'chat_active': '💬 Chat actif : {title}',
+    'chat_hint': '💡 Exécutez d\'abord /chats, puis /chat <code>&lt;numéro&gt;</code>',
+    'chat_select_hint': '💡 /chat <code>&lt;numéro&gt;</code> — ouvrir un chat',
+    'chat_invalid': '❌ Numéro invalide. Exécutez d\'abord /chats',
+    'chat_select_hint2': '💡 Sélectionnez d\'abord un chat : /chats → /chat <code>&lt;n&gt;</code>',
+
+    // Dialog
+    'dialog_messages': '📄 {count} messages',
+    'dialog_page': '📄 {count} messages | Page {page}/{total}',
+    'dialog_page_short': '📄 Page {page}/{total} | {count} messages',
+    'dialog_separator': '· · ·  <i>{count} messages</i>  · · ·',
+    'dialog_truncated': '...tronqué',
+
+    // Compose
+    'compose_mode': '✉ <b>Mode composition</b>\n\nSaisissez votre message — il sera envoyé au chat Claude.\n\n<i>Tout texte sans / sera envoyé comme message.</i>',
+    'compose_hint': '📝 Écrivez un message — il sera envoyé dans ce chat',
+    'compose_no_session': 'Écrivez simplement vos messages — ils seront envoyés au chat.',
+    'compose_select_first': '💡 Sélectionnez d\'abord un chat :\n/projects → /project <code>&lt;n&gt;</code> → /chats → /chat <code>&lt;n&gt;</code>\n\nEnsuite, écrivez simplement vos messages — ils seront envoyés au chat.',
+    'compose_sent': '⏳ Message envoyé{note}. En attente de réponse...',
+
+    // Tasks
+    'tasks_title': '📋 <b>Tâches</b> ({count})',
+    'tasks_empty': '📋 Aucune tâche.',
+    'btn_new_chat': '➕ Nouveau chat',
+    'btn_new_task': '➕ Nouvelle tâche',
+    'new_task_prompt': '📋 <b>Nouvelle tâche</b>\n\nSaisissez le titre de la tâche :',
+    'new_task_created': '✅ <b>Tâche créée</b>\n\n📋 {title}\n📌 Statut : backlog',
+    'new_task_with_desc': '💡 Saisissez la description de la tâche ou appuyez sur « Passer » :',
+    'btn_skip': '⏭ Passer',
+
+    // Status
+    'status_title': '📊 <b>Studio Status</b>',
+    'status_uptime': '⏱ Uptime : {hours}h {mins}m',
+    'status_sessions': '💬 Sessions : {count}',
+    'status_messages': '📝 Messages : {count}',
+    'status_tasks_count': '📋 Tâches : {count}',
+    'status_tasks_heading': '<b>Tâches :</b>',
+    'status_devices': '📱 Appareils connectés : {count}',
+    'status_new_conn': '🔒 Nouvelles connexions : {status}',
+    'status_conn_on': 'activées',
+    'status_conn_off': 'désactivées',
+    'status_devices_short': '📱 Appareils : {count}',
+    'status_tasks_label': '📋 <b>Tâches</b>',
+    'status_active_chats': '🟢 <b>Chats actifs : {count}</b>',
+    'status_active_none': '⚪ Aucun chat actif',
+    'status_active_source_tg': 'TG',
+    'status_active_source_web': 'Web',
+    'status_updated': '<i>Mis à jour : {time}</i>',
+
+    // Settings
+    'settings_title': '⚙ <b>Paramètres</b>',
+    'settings_paired': '📅 Connecté : {date}',
+    'settings_notif': '🔔 Notifications : <b>{status}</b>',
+    'settings_unlink_confirm': '⚠️ <b>Dissocier l\'appareil ?</b>\n\nVous ne pourrez plus contrôler Studio depuis ce compte.\nUn nouveau code sera nécessaire pour vous reconnecter.',
+    'settings_unlinked': '🔓 Appareil dissocié.\n\nUn nouveau code sera nécessaire pour vous reconnecter.',
+    'unlink_done': '🔓 Appareil dissocié de Studio.\n\nUn nouveau code sera nécessaire pour vous reconnecter.',
+    'unlink_admin': '🔓 Votre appareil a été dissocié par l\'administrateur.',
+
+    // Files
+    'files_denied': '🔒 Accès refusé.',
+    'files_denied_workspace': '🔒 Accès refusé — chemin hors du workspace.',
+    'files_sensitive': '🔒 Ce fichier contient des données sensibles et ne peut pas être consulté via Telegram.',
+    'files_sensitive_short': '🔒 Le fichier contient des données sensibles.',
+    'files_empty_dir': '📂 Répertoire vide.',
+    'files_empty_label': '<i>(vide)</i>',
+    'files_truncated': '✂️ <i>(tronqué, {len} caractères)</i>',
+    'files_truncated_short': '✂️ <i>(tronqué)</i>',
+
+    // Ask User
+    'ask_answered': '✅ Réponse envoyée.',
+    'ask_skipped': '⏭ Passé — Claude continuera de lui-même.',
+    'ask_selected': '✅ Sélectionné : {option}',
+    'ask_no_pending': '💡 Aucune question en attente.',
+    'ask_title': 'Claude demande :',
+    'ask_skip_btn': '⏭ Passer',
+    'ask_choose_hint': 'Choisissez une option ou appuyez sur « Passer » :',
+    'ask_text_hint': 'Saisissez votre réponse ou appuyez sur « Passer » :',
+    'ask_notify_title': 'Claude attend votre réponse',
+    'ask_notify_session': '📋 Session : <i>{title}</i>',
+    'ask_notify_go_to_chat': '💬 Aller au chat',
+    'ask_timeout': '⏱ Délai expiré — Claude a continué de lui-même.',
+
+    // Errors
+    'error_prefix': '❌ Erreur : {msg}',
+    'error_unknown_cmd': '❓ Commande inconnue : <code>{cmd}</code>\n\nTapez /help pour la liste des commandes.',
+
+    // Time
+    'time_ago_now': 'à l\'instant',
+    'time_ago_min': 'il y a {n} min',
+    'time_ago_hour': 'il y a {n} h',
+    'time_ago_day': 'il y a {n} j',
+    'time_ago_long': 'il y a longtemps',
+
+    // Help
+    'help_text': '📖 <b>Commandes Claude Code Studio</b>\n\n<b>Navigation :</b>\n/projects — liste des projets\n/project <code>&lt;n&gt;</code> — sélectionner un projet\n/chats — chats du projet actuel\n/chat <code>&lt;n&gt;</code> — ouvrir un chat\n/back — revenir en arrière\n\n<b>Affichage :</b>\n/last <code>[n]</code> — les N derniers messages (5)\n/full — dernière réponse complète\n/tasks — tâches (Kanban)\n/files <code>[path]</code> — fichiers du workspace\n/cat <code>&lt;file&gt;</code> — contenu d\'un fichier\n/diff — git diff du workspace\n/log <code>[n]</code> — derniers commits git\n\n<b>Actions :</b>\n/new <code>[title]</code> — nouvelle session\n/stop — arrêter la tâche en cours\n\n<b>Remote Access :</b>\n/tunnel — gérer l\'accès distant\n/url — afficher l\'URL publique\n\n<b>Forum Mode :</b>\n/forum — configurer le Forum Mode\n\n<b>Paramètres :</b>\n/status — état de Studio\n/notify <code>on/off</code> — notifications\n/unlink — dissocier cet appareil',
+
+    // Back navigation
+    'back_to_chats': '↩️ Retour à la liste des chats. Tapez /chats',
+    'back_to_projects': '↩️ Retour à la liste des projets. Tapez /projects',
+    'back_at_top': '📍 Vous êtes au niveau supérieur. Tapez /projects',
+
+    // Notify
+    'notify_on': '🔔 Notifications activées.',
+    'notify_off': '🔕 Notifications désactivées.',
+    'notify_current': '🔔 Notifications : <b>{status}</b>\n\n💡 /notify <code>on</code> ou /notify <code>off</code>',
+
+    // Remote Access
+    'tn_btn_start': '▶ Activer',
+    'tn_btn_stop': '⏹ Désactiver',
+    'tn_btn_status': '📊 Statut',
+    'tn_screen_active': '🟢 <b>Remote Access actif</b>\n\n🔗 {url}',
+    'tn_screen_inactive': '⚪ <b>Remote Access</b>\n\nNon démarré. Appuyez sur « Activer » pour exposer Studio sur internet.',
+    'tn_not_running': '⚪ L\'accès distant n\'est pas démarré.',
+    'tn_notify_started': '🟢 <b>Remote Access ouvert</b>\n\n🔗 {url}',
+    'tn_notify_stopped': '⬛ Remote Access fermé.',
+
+    // Git
+    'git_no_changes': '📊 Aucun changement ou pas un dépôt git.',
+    'git_not_repo': '📊 Pas un dépôt git.',
+    'git_last_commits': '📜 <b>{n} derniers commits</b>',
+
+    // Misc
+    'no_responses': '📭 Aucune réponse dans ce chat.',
+    'select_chat_first': '💡 Sélectionnez d\'abord un chat.',
+    'select_chat_hint': '💡 Sélectionnez d\'abord un chat : /chats → /chat <code>&lt;n&gt;</code>',
+    'cat_usage': '💡 Utilisation : /cat <code>&lt;fichier&gt;</code>',
+    'msg_full_hint': '📎 /full — dernière réponse complète',
+    'msg_compose_hint': '📝 Écrivez un message — il sera envoyé dans ce chat',
+
+    // Attach
+    'attach_cleared': '🗑 Pièces jointes effacées.',
+
+    // Project screen buttons
+    'btn_files': '📁 Fichiers',
+    'btn_git_log': '📜 Git Log',
+    'btn_diff': '📊 Diff',
+
+    // Compose
+    'compose_prompt': '📝 Envoyez votre message :',
+    'compose_select_first_short': '❌ Sélectionnez d\'abord une session de chat',
+
+    // File errors
+    'files_too_large': '❌ Fichier trop volumineux (max 10MB)',
+    'files_download_error': '❌ Impossible de télécharger le fichier',
+    'files_download_failed': '❌ Échec du téléchargement',
+    'files_process_error': '❌ Impossible de traiter le fichier',
+
+    // Stop / New
+    'error_no_session': '❌ Aucune session active sélectionnée',
+    'stop_sent': '🛑 Signal d\'arrêt envoyé...',
+    'new_session_created': '✅ <b>Nouvelle session créée</b> (#{id})\n\nEnvoyez votre message :',
+
+    // Forum mode
+    'forum_instructions': '🏗 <b>Configuration du Forum Mode</b>\n\n1. Créez un nouveau groupe privé dans Telegram\n2. Nommez-le, par ex. « Claude Studio »\n3. Activez les <b>Topics</b> dans les paramètres du groupe\n4. Ajoutez-moi comme admin avec le droit « Manage Topics »\n5. Écrivez /connect dans le groupe',
+    'forum_already': '✅ Le Forum est déjà connecté.',
+    'forum_connected': '✅ <b>Forum connecté !</b>\n\nCréation de la structure...',
+    'forum_syncing': '🔄 <b>Synchronisation du Forum</b>\n\nCréation des topics manquants...',
+    'forum_created_topics': '✅ Structure créée :\n\n📋 <b>Tasks</b> — gestion des tâches\n🔔 <b>Activity</b> — notifications\n\nLes topics des projets apparaîtront automatiquement.',
+    'forum_not_supergroup': '❌ Cette commande ne fonctionne que dans un supergroupe avec les Topics activés.',
+    'forum_not_admin': '❌ Ajoutez le bot comme admin avec le droit « Manage Topics ».',
+    'forum_not_paired': '❌ Associez-vous d\'abord au bot dans un chat privé.',
+    'forum_disconnected': '✅ Forum déconnecté.',
+    'forum_topic_project': '📁 <b>{name}</b>\n📂 {path}\n\nÉcrivez simplement vos messages — ils vont à Claude.\n\n/new — nouvelle session\n/history — sessions précédentes\n/files — fichiers du projet\n/diff — git diff\n/log — git log',
+    'forum_topic_tasks': '📋 <b>Tâches</b>\n\nCommandes :\n/new <i>titre</i> — créer une tâche\n/list — tout afficher\n/done <i>#id</i> — terminer une tâche\n/start <i>#id</i> — démarrer une tâche',
+    'forum_topic_activity': '🔔 <b>Notifications</b>\n\nLes fins de tâches et les erreurs apparaîtront ici.',
+    'forum_help_project': '📖 <b>Commandes du projet</b>\n\n<b>Sessions :</b>\n/new — nouvelle session\n/history — liste des sessions\n/session <code>&lt;n&gt;</code> — changer de session\n/info — session actuelle et état\n\n<b>Affichage :</b>\n/last <code>[n]</code> — les N derniers messages\n/full — dernière réponse complète\n/files <code>[path]</code> — fichiers du projet\n/cat <code>&lt;file&gt;</code> — contenu d\'un fichier\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Actions :</b>\n/stop — arrêter la tâche en cours\n/status — état du système',
+    'forum_help_tasks': '📖 <b>Commandes des tâches</b>\n\n/new <code>&lt;titre&gt;</code> — créer une tâche\n/list — tout afficher\n/start <code>#id</code> — démarrer\n/done <code>#id</code> — terminer\n/todo <code>#id</code> — mettre en « todo »\n/block <code>#id</code> — bloquer\n/backlog <code>#id</code> — mettre en backlog\n/delete <code>#id</code> — supprimer\n\n💡 Écrivez simplement du texte — il deviendra une tâche.',
+    'forum_help_general': '📖 <b>Commandes Forum</b>\n\n/status — état du système\n/help — cette aide\n\n💡 Allez dans un topic de projet pour discuter avec Claude.',
+    'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}',
+    'forum_task_updated': '{icon} <b>#{id}</b> {title} → {status}',
+    'forum_task_not_found': '❌ Tâche introuvable.',
+    'forum_no_text': '💡 Envoyez un message texte pour parler à Claude.',
+    'forum_session_started': '💬 <b>Nouvelle session</b>\n\nÉcrivez vos messages — ils vont à Claude.',
+    'forum_history_title': '📜 <b>Sessions</b> ({count})\n',
+    'forum_history_empty': '📜 Aucune session précédente.',
+    'forum_switch_session': '💬 Passé à la session : <b>{title}</b>',
+    'forum_unknown_topic': '❓ Ce topic n\'est pas lié à un projet.\n\nUtilisez les topics créés par le bot.',
+    'forum_unknown_cmd': '❓ Commande inconnue : {cmd}\n\nTapez /help pour la liste des commandes.',
+    'forum_activity_readonly': '🔔 Ce topic est réservé aux notifications.\n\nUtilisez les boutons ci-dessus ou allez dans un topic de projet.',
+    'btn_forum_setup': '🏗 Forum Mode',
+    'btn_forum_disconnect': '🔌 Déconnecter le Forum',
+
+    // Forum mode buttons (inline)
+    'fm_btn_continue': '💬 Continuer',
+    'fm_btn_diff': '📋 Diff',
+    'fm_btn_files': '📁 Fichiers',
+    'fm_btn_history': '📜 Historique',
+    'fm_btn_new': '🆕 Nouvelle',
+    'fm_btn_info': 'ℹ️ Infos',
+    'fm_btn_view': '💬 Voir',
+    'fm_btn_resume': '📝 Continuer',
+    'fm_btn_last5': '📄 Les 5 derniers',
+    'fm_btn_full': '📄 En entier',
+    'fm_btn_go_project': '➡️ Vers le projet',
+    'fm_btn_go_project_files': '📁 Vers le projet',
+    'fm_btn_open_chat': '💬 Ouvrir le chat',
+    'fm_btn_help': '❓ Aide',
+    'fm_btn_retry': '🔄 Réessayer',
+    'fm_btn_stop': '🛑 Stop',
+    'fm_btn_go_topic': '➡️ Vers le topic',
+    'fm_session_switched': '💬 Session : <b>{title}</b>\n📊 {count} messages',
+    'fm_cmd_help_desc': 'Aide',
+    'fm_cmd_status_desc': 'Statut',
+    'fm_cmd_new_desc': 'Nouvelle session / tâche',
+    'fm_cmd_stop_desc': 'Arrêter la tâche en cours',
+    'fm_session_activated_hint': '💡 <i>Session activée — écrivez dans le topic du projet pour continuer.</i>',
+    'fm_session_activated_short': '✅ Session activée dans le topic du projet.',
+    'fm_write_in_topic': '📁 <i>Écrivez un message dans le topic du projet pour commencer à travailler avec Claude.</i>',
+
+    // Forum onboarding steps
+    'forum_setup_title': '🏗 <b>Forum Mode</b>',
+    'forum_setup_intro': 'Le Forum Mode crée un supergroupe avec un topic dédié par projet.\n\nChaque projet a son propre topic. Les tâches et l\'activité sont des topics séparés.',
+    'forum_setup_step1_title': '📱 <b>Étape 1 sur 3 : Créez le groupe</b>',
+    'forum_setup_step1_text': '1. Ouvrez Telegram → Nouveau groupe\n2. Nommez-le (par ex. « Claude Studio »)\n3. Dans les paramètres du groupe, activez les <b>Topics</b>',
+    'forum_setup_step2_title': '🤖 <b>Étape 2 sur 3 : Ajoutez le bot</b>',
+    'forum_setup_step2_text': '1. Ouvrez le groupe → Ajouter des membres\n2. Recherchez @{bot_username}\n3. Promouvez-le admin avec le droit « Manage Topics »',
+    'forum_setup_step3_title': '🔗 <b>Étape 3 sur 3 : Connectez</b>',
+    'forum_setup_step3_text': 'Envoyez <code>/connect</code> dans le groupe.\n\nLe bot créera automatiquement les topics Tasks et Activity.',
+    'forum_setup_btn_next': 'Suivant ➡️',
+    'forum_setup_btn_done': 'Fait, suivant ➡️',
+    'forum_setup_btn_cancel': '❌ Annuler',
+
+    // Task inline button labels
+    'ft_btn_start': '▶ Start',
+    'ft_btn_done': '✅ Done',
+    'ft_btn_block': '🚫 Block',
+    'ft_btn_todo': '📝 Todo',
+    'ft_btn_reopen': '🔄 Reopen',
+
+    // Media attachment
+    'attach_pending': '📎 <b>{name}</b> joint ({size}KB)\nEnvoyez un message texte pour l\'inclure, ou ajoutez d\'autres fichiers.',
+    'attach_pending_ask': '📎 <b>{name}</b> joint\nEnvoyez maintenant un message texte avec votre question sur ce fichier.',
+
+    // Context header
+    'header_project': '📁 <b>{name}</b>',
+    'header_chat': '💬 <b>{title}</b>',
+    'header_none': '📭 Rien de sélectionné',
+    'header_separator': ' / ',
+  },
+  he: {
+    // Pairing & auth
+    'rate_limit': '⚠️ יותר מדי בקשות. המתינו דקה.',
+    'notif_on': '🔔 התראות הופעלו',
+    'notif_off': '🔕 התראות כובו',
+    'blocked': '🔒 יותר מדי ניסיונות כושלים. נסו שוב בעוד 15 דקות.',
+    'new_conn_disabled': '🔒 חיבורים חדשים מושבתים כרגע.\n\nפנו למנהל המערכת להפעלת מצב חיבור.',
+    'start_pairing': '👋 <b>Claude Code Studio</b>\n\nלחיבור, הזינו את הקוד בן 6 התווים מלוח ההגדרות של ה-Studio שלכם.\n\n💡 פורמט הקוד: <code>XXX·XXX</code>',
+    'new_conn_off': '🔒 חיבורים חדשים מושבתים.',
+    'already_paired': '✅ המכשיר הזה כבר מחובר!',
+    'paired_ok': '✅ <b>המכשיר חובר!</b>\n\n📱 {name}\n\nמעכשיו תקבלו התראות ותוכלו לשלוט ב-Studio מרחוק.\n\nהקלידו /help לרשימת הפקודות.',
+    'use_menu': '🏠 השתמשו בתפריט למטה או בכפתורים שבהודעות.',
+    'invalid_code': '❌ קוד שגוי או שפג תוקפו.\n\nניסיונות שנותרו: {remaining}',
+
+    // Keyboard buttons (persistent)
+    'kb_menu': '🏠 תפריט',
+    'kb_write': '✉ כתיבה',
+    'kb_status': '📊 סטטוס',
+    'kb_project_prefix': '📁',
+
+    // Command descriptions (setMyCommands)
+    'cmd_start_desc': 'תפריט ראשי',
+    'cmd_help_desc': 'עזרה',
+    'cmd_cancel_desc': 'ביטול הפעולה הנוכחית',
+    'cmd_status_desc': 'סטטוס המערכת',
+
+    // Main menu
+    'main_title': '🤖 <b>Claude Code Studio</b>',
+    'main_project': '📁 פרויקט: <code>{name}</code>',
+    'main_chat': '💬 צ\'אט: {title}',
+    'main_choose': '\nבחרו פעולה:',
+    'btn_projects': '📁 פרויקטים',
+    'btn_chats': '💬 צ\'אטים',
+    'btn_tasks': '📋 משימות',
+    'btn_status': '📊 סטטוס',
+    'btn_settings': '⚙ הגדרות',
+    'btn_remote_access': '🌐 Remote Access',
+    'btn_back': '← חזרה',
+    'btn_back_menu': '← תפריט',
+    'btn_back_projects': '← פרויקטים',
+    'btn_back_chats': '← צ\'אטים',
+    'btn_back_overview': '← סקירה',
+    'btn_next': 'הבא →',
+    'btn_write': '📝 כתיבה',
+    'btn_all_messages': '📜 כל ההודעות',
+    'btn_cancel': '❌ ביטול',
+    'btn_write_chat': '✉ כתיבה בצ\'אט',
+    'btn_refresh': '🔄 רענון',
+    'btn_full_msg': '📄 הודעה מלאה',
+    'btn_more': '📜 עוד',
+    'btn_full_response': '📄 תשובה מלאה',
+    'btn_main_menu': '← תפריט ראשי',
+    'btn_parent_dir': '↑ תיקיית האב',
+    'btn_all_tasks': '🌍 כל המשימות',
+    'btn_disable_notif': '🔕 כיבוי התראות',
+    'btn_enable_notif': '🔔 הפעלת התראות',
+    'btn_unlink_device': '🔓 ניתוק המכשיר',
+    'btn_confirm_unlink': '✅ כן, לנתק',
+
+    // Projects
+    'projects_title': '📁 <b>פרויקטים</b> ({count})',
+    'projects_empty': '📁 אין פרויקטים עם צ\'אטים.',
+    'project_not_found': '❌ הפרויקט לא נמצא.',
+    'project_choose': '\n\nבחרו מדור:',
+    'project_set': '✅ פרויקט: <code>{name}</code>\n\nהקלידו /chats לצפייה בצ\'אטים.',
+    'project_invalid': '❌ מספר שגוי. הריצו קודם /projects',
+    'project_current': '📁 הפרויקט הנוכחי: <code>{name}</code>',
+    'project_hint': '💡 הריצו קודם /projects, ואז /project <code>&lt;מספר&gt;</code>',
+    'project_chats_label': '{count} צ\'אטים',
+    'project_select_hint': '💡 /project <code>&lt;מספר&gt;</code> — בחירת פרויקט',
+
+    // Chats
+    'chats_title_project': '💬 <b>צ\'אטים</b> — {project}',
+    'chats_title_all': '💬 <b>כל הצ\'אטים</b>',
+    'chats_empty': '💬 אין צ\'אטים.',
+    'chat_untitled': 'ללא שם',
+    'chat_not_found': '❌ הצ\'אט לא נמצא.',
+    'session_not_found': '❌ הסשן לא נמצא.',
+    'chat_messages': '{count} הודעות',
+    'chat_no_messages': '📭 אין הודעות בצ\'אט הזה.',
+    'chat_active': '💬 צ\'אט פעיל: {title}',
+    'chat_hint': '💡 קודם /chats, ואז /chat <code>&lt;מספר&gt;</code>',
+    'chat_select_hint': '💡 /chat <code>&lt;מספר&gt;</code> — פתיחת צ\'אט',
+    'chat_invalid': '❌ מספר שגוי. הריצו קודם /chats',
+    'chat_select_hint2': '💡 בחרו קודם צ\'אט: /chats → /chat <code>&lt;n&gt;</code>',
+
+    // Dialog
+    'dialog_messages': '📄 {count} הודעות',
+    'dialog_page': '📄 {count} הודעות | עמוד {page}/{total}',
+    'dialog_page_short': '📄 עמוד {page}/{total} | {count} הודעות',
+    'dialog_separator': '· · ·  <i>{count} הודעות</i>  · · ·',
+    'dialog_truncated': '...קוצר',
+
+    // Compose
+    'compose_mode': '✉ <b>מצב כתיבה</b>\n\nהקלידו הודעה — היא תישלח לצ\'אט של Claude.\n\n<i>כל טקסט ללא / יישלח כהודעה.</i>',
+    'compose_hint': '📝 כתבו הודעה — היא תישלח לצ\'אט הזה',
+    'compose_no_session': 'עכשיו פשוט כתבו הודעות — הן יישלחו לצ\'אט.',
+    'compose_select_first': '💡 בחרו קודם צ\'אט:\n/projects → /project <code>&lt;n&gt;</code> → /chats → /chat <code>&lt;n&gt;</code>\n\nאחר כך פשוט כתבו הודעות — הן יישלחו לצ\'אט.',
+    'compose_sent': '⏳ ההודעה נשלחה{note}. ממתין לתשובה...',
+
+    // Tasks
+    'tasks_title': '📋 <b>משימות</b> ({count})',
+    'tasks_empty': '📋 אין משימות.',
+    'btn_new_chat': '➕ צ\'אט חדש',
+    'btn_new_task': '➕ משימה חדשה',
+    'new_task_prompt': '📋 <b>משימה חדשה</b>\n\nהזינו את שם המשימה:',
+    'new_task_created': '✅ <b>המשימה נוצרה</b>\n\n📋 {title}\n📌 סטטוס: backlog',
+    'new_task_with_desc': '💡 הזינו תיאור למשימה או לחצו על «דילוג»:',
+    'btn_skip': '⏭ דילוג',
+
+    // Status
+    'status_title': '📊 <b>Studio Status</b>',
+    'status_uptime': '⏱ זמן פעילות: {hours}h {mins}m',
+    'status_sessions': '💬 סשנים: {count}',
+    'status_messages': '📝 הודעות: {count}',
+    'status_tasks_count': '📋 משימות: {count}',
+    'status_tasks_heading': '<b>משימות:</b>',
+    'status_devices': '📱 מכשירים מחוברים: {count}',
+    'status_new_conn': '🔒 חיבורים חדשים: {status}',
+    'status_conn_on': 'מופעלים',
+    'status_conn_off': 'מושבתים',
+    'status_devices_short': '📱 מכשירים: {count}',
+    'status_tasks_label': '📋 <b>משימות</b>',
+    'status_active_chats': '🟢 <b>צ\'אטים פעילים: {count}</b>',
+    'status_active_none': '⚪ אין צ\'אטים פעילים',
+    'status_active_source_tg': 'TG',
+    'status_active_source_web': 'Web',
+    'status_updated': '<i>עודכן: {time}</i>',
+
+    // Settings
+    'settings_title': '⚙ <b>הגדרות</b>',
+    'settings_paired': '📅 חובר: {date}',
+    'settings_notif': '🔔 התראות: <b>{status}</b>',
+    'settings_unlink_confirm': '⚠️ <b>לנתק את המכשיר?</b>\n\nלא תוכלו עוד לשלוט ב-Studio מהחשבון הזה.\nלחיבור מחדש יידרש קוד חדש.',
+    'settings_unlinked': '🔓 המכשיר נותק.\n\nלחיבור מחדש יידרש קוד חדש.',
+    'unlink_done': '🔓 המכשיר נותק מ-Studio.\n\nלחיבור מחדש יידרש קוד חדש.',
+    'unlink_admin': '🔓 המכשיר שלכם נותק על ידי מנהל המערכת.',
+
+    // Files
+    'files_denied': '🔒 הגישה נדחתה.',
+    'files_denied_workspace': '🔒 הגישה נדחתה — הנתיב מחוץ ל-workspace.',
+    'files_sensitive': '🔒 הקובץ הזה מכיל מידע רגיש ולא ניתן לצפות בו דרך Telegram.',
+    'files_sensitive_short': '🔒 הקובץ מכיל מידע רגיש.',
+    'files_empty_dir': '📂 תיקייה ריקה.',
+    'files_empty_label': '<i>(ריק)</i>',
+    'files_truncated': '✂️ <i>(קוצר, {len} תווים)</i>',
+    'files_truncated_short': '✂️ <i>(קוצר)</i>',
+
+    // Ask User
+    'ask_answered': '✅ התשובה נשלחה.',
+    'ask_skipped': '⏭ דולג — Claude ימשיך בעצמו.',
+    'ask_selected': '✅ נבחר: {option}',
+    'ask_no_pending': '💡 אין שאלה פעילה.',
+    'ask_title': 'Claude שואל:',
+    'ask_skip_btn': '⏭ דילוג',
+    'ask_choose_hint': 'בחרו אפשרות או לחצו על «דילוג»:',
+    'ask_text_hint': 'הקלידו תשובה או לחצו על «דילוג»:',
+    'ask_notify_title': 'Claude ממתין לתשובה שלכם',
+    'ask_notify_session': '📋 סשן: <i>{title}</i>',
+    'ask_notify_go_to_chat': '💬 מעבר לצ\'אט',
+    'ask_timeout': '⏱ הזמן אזל — Claude המשיך בעצמו.',
+
+    // Errors
+    'error_prefix': '❌ שגיאה: {msg}',
+    'error_unknown_cmd': '❓ פקודה לא מוכרת: <code>{cmd}</code>\n\nהקלידו /help לרשימת הפקודות.',
+
+    // Time
+    'time_ago_now': 'הרגע',
+    'time_ago_min': 'לפני {n} דקות',
+    'time_ago_hour': 'לפני {n} שעות',
+    'time_ago_day': 'לפני {n} ימים',
+    'time_ago_long': 'מזמן',
+
+    // Help
+    'help_text': '📖 <b>פקודות Claude Code Studio</b>\n\n<b>ניווט:</b>\n/projects — רשימת פרויקטים\n/project <code>&lt;n&gt;</code> — בחירת פרויקט\n/chats — צ\'אטים של הפרויקט הנוכחי\n/chat <code>&lt;n&gt;</code> — פתיחת צ\'אט\n/back — חזרה אחורה\n\n<b>תצוגה:</b>\n/last <code>[n]</code> — N ההודעות האחרונות (5)\n/full — התשובה האחרונה במלואה\n/tasks — משימות (Kanban)\n/files <code>[path]</code> — קבצים ב-workspace\n/cat <code>&lt;file&gt;</code> — תוכן קובץ\n/diff — git diff ב-workspace\n/log <code>[n]</code> — קומיטים אחרונים\n\n<b>פעולות:</b>\n/new <code>[title]</code> — סשן חדש\n/stop — עצירת המשימה הנוכחית\n\n<b>Remote Access:</b>\n/tunnel — ניהול גישה מרחוק\n/url — הצגת ה-URL הציבורי\n\n<b>Forum Mode:</b>\n/forum — הגדרת Forum Mode\n\n<b>הגדרות:</b>\n/status — מצב Studio\n/notify <code>on/off</code> — התראות\n/unlink — ניתוק המכשיר הזה',
+
+    // Back navigation
+    'back_to_chats': '↩️ חזרנו לרשימת הצ\'אטים. הקלידו /chats',
+    'back_to_projects': '↩️ חזרנו לרשימת הפרויקטים. הקלידו /projects',
+    'back_at_top': '📍 אתם ברמה העליונה. הקלידו /projects',
+
+    // Notify
+    'notify_on': '🔔 התראות הופעלו.',
+    'notify_off': '🔕 התראות כובו.',
+    'notify_current': '🔔 התראות: <b>{status}</b>\n\n💡 /notify <code>on</code> או /notify <code>off</code>',
+
+    // Remote Access
+    'tn_btn_start': '▶ הפעלה',
+    'tn_btn_stop': '⏹ כיבוי',
+    'tn_btn_status': '📊 סטטוס',
+    'tn_screen_active': '🟢 <b>Remote Access פעיל</b>\n\n🔗 {url}',
+    'tn_screen_inactive': '⚪ <b>Remote Access</b>\n\nלא פועל. לחצו על "הפעלה" כדי לפתוח גישה ל-Studio דרך האינטרנט.',
+    'tn_not_running': '⚪ הגישה מרחוק לא פועלת.',
+    'tn_notify_started': '🟢 <b>Remote Access נפתח</b>\n\n🔗 {url}',
+    'tn_notify_stopped': '⬛ Remote Access נסגר.',
+
+    // Git
+    'git_no_changes': '📊 אין שינויים או שזה לא ריפוזיטורי git.',
+    'git_not_repo': '📊 לא ריפוזיטורי git.',
+    'git_last_commits': '📜 <b>{n} הקומיטים האחרונים</b>',
+
+    // Misc
+    'no_responses': '📭 אין תשובות בצ\'אט הזה.',
+    'select_chat_first': '💡 בחרו קודם צ\'אט.',
+    'select_chat_hint': '💡 בחרו קודם צ\'אט: /chats → /chat <code>&lt;n&gt;</code>',
+    'cat_usage': '💡 שימוש: /cat <code>&lt;קובץ&gt;</code>',
+    'msg_full_hint': '📎 /full — התשובה האחרונה במלואה',
+    'msg_compose_hint': '📝 כתבו הודעה — היא תישלח לצ\'אט הזה',
+
+    // Attach
+    'attach_cleared': '🗑 הקבצים המצורפים נוקו.',
+
+    // Project screen buttons
+    'btn_files': '📁 קבצים',
+    'btn_git_log': '📜 Git Log',
+    'btn_diff': '📊 Diff',
+
+    // Compose
+    'compose_prompt': '📝 שלחו את ההודעה שלכם:',
+    'compose_select_first_short': '❌ בחרו קודם סשן צ\'אט',
+
+    // File errors
+    'files_too_large': '❌ הקובץ גדול מדי (מקסימום 10MB)',
+    'files_download_error': '❌ לא ניתן להוריד את הקובץ',
+    'files_download_failed': '❌ ההורדה נכשלה',
+    'files_process_error': '❌ עיבוד הקובץ נכשל',
+
+    // Stop / New
+    'error_no_session': '❌ לא נבחר סשן פעיל',
+    'stop_sent': '🛑 אות עצירה נשלח...',
+    'new_session_created': '✅ <b>נוצר סשן חדש</b> (#{id})\n\nשלחו את ההודעה שלכם:',
+
+    // Forum mode
+    'forum_instructions': '🏗 <b>הגדרת Forum Mode</b>\n\n1. צרו קבוצה פרטית חדשה ב-Telegram\n2. תנו לה שם, למשל «Claude Studio»\n3. הפעילו <b>Topics</b> בהגדרות הקבוצה\n4. הוסיפו אותי כמנהל עם הרשאת «Manage Topics»\n5. כתבו בקבוצה: /connect',
+    'forum_already': '✅ ה-Forum כבר מחובר.',
+    'forum_connected': '✅ <b>ה-Forum חובר!</b>\n\nיוצר את המבנה...',
+    'forum_syncing': '🔄 <b>סנכרון Forum</b>\n\nיוצר טופיקים חסרים...',
+    'forum_created_topics': '✅ המבנה נוצר:\n\n📋 <b>Tasks</b> — ניהול משימות\n🔔 <b>Activity</b> — התראות\n\nטופיקים של פרויקטים יופיעו אוטומטית.',
+    'forum_not_supergroup': '❌ הפקודה הזו עובדת רק בסופר-קבוצה עם Topics מופעלים.',
+    'forum_not_admin': '❌ הוסיפו את הבוט כמנהל עם הרשאת «Manage Topics».',
+    'forum_not_paired': '❌ קודם התחברו לבוט בצ\'אט פרטי.',
+    'forum_disconnected': '✅ ה-Forum נותק.',
+    'forum_topic_project': '📁 <b>{name}</b>\n📂 {path}\n\nפשוט כתבו הודעות — הן מגיעות ל-Claude.\n\n/new — סשן חדש\n/history — סשנים קודמים\n/files — קבצי הפרויקט\n/diff — git diff\n/log — git log',
+    'forum_topic_tasks': '📋 <b>משימות</b>\n\nפקודות:\n/new <i>שם</i> — יצירת משימה\n/list — הצגת הכול\n/done <i>#id</i> — סיום משימה\n/start <i>#id</i> — התחלת משימה',
+    'forum_topic_activity': '🔔 <b>התראות</b>\n\nכאן יופיעו עדכונים על סיום משימות ושגיאות.',
+    'forum_help_project': '📖 <b>פקודות פרויקט</b>\n\n<b>סשנים:</b>\n/new — סשן חדש\n/history — רשימת סשנים\n/session <code>&lt;n&gt;</code> — החלפת סשן\n/info — הסשן הנוכחי והמצב\n\n<b>תצוגה:</b>\n/last <code>[n]</code> — N ההודעות האחרונות\n/full — התשובה האחרונה במלואה\n/files <code>[path]</code> — קבצי הפרויקט\n/cat <code>&lt;file&gt;</code> — תוכן קובץ\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>פעולות:</b>\n/stop — עצירת המשימה\n/status — מצב המערכת',
+    'forum_help_tasks': '📖 <b>פקודות משימות</b>\n\n/new <code>&lt;שם&gt;</code> — יצירת משימה\n/list — הצגת הכול\n/start <code>#id</code> — התחלה\n/done <code>#id</code> — סיום\n/todo <code>#id</code> — העברה ל-«todo»\n/block <code>#id</code> — חסימה\n/backlog <code>#id</code> — העברה ל-backlog\n/delete <code>#id</code> — מחיקה\n\n💡 פשוט כתבו טקסט — הוא יהפוך למשימה.',
+    'forum_help_general': '📖 <b>פקודות Forum</b>\n\n/status — מצב המערכת\n/help — העזרה הזו\n\n💡 עברו לטופיק של פרויקט כדי לדבר עם Claude.',
+    'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}',
+    'forum_task_updated': '{icon} <b>#{id}</b> {title} → {status}',
+    'forum_task_not_found': '❌ המשימה לא נמצאה.',
+    'forum_no_text': '💡 שלחו הודעת טקסט כדי לדבר עם Claude.',
+    'forum_session_started': '💬 <b>סשן חדש</b>\n\nכתבו הודעות — הן מגיעות ל-Claude.',
+    'forum_history_title': '📜 <b>סשנים</b> ({count})\n',
+    'forum_history_empty': '📜 אין סשנים קודמים.',
+    'forum_switch_session': '💬 הוחלף לסשן: <b>{title}</b>',
+    'forum_unknown_topic': '❓ הטופיק הזה לא מקושר לפרויקט.\n\nהשתמשו בטופיקים שנוצרו על ידי הבוט.',
+    'forum_unknown_cmd': '❓ פקודה לא מוכרת: {cmd}\n\nהקלידו /help לרשימת הפקודות.',
+    'forum_activity_readonly': '🔔 הטופיק הזה מיועד להתראות בלבד.\n\nהשתמשו בכפתורים למעלה או עברו לטופיק של פרויקט.',
+    'btn_forum_setup': '🏗 Forum Mode',
+    'btn_forum_disconnect': '🔌 ניתוק Forum',
+
+    // Forum mode buttons (inline)
+    'fm_btn_continue': '💬 המשך',
+    'fm_btn_diff': '📋 Diff',
+    'fm_btn_files': '📁 קבצים',
+    'fm_btn_history': '📜 היסטוריה',
+    'fm_btn_new': '🆕 חדש',
+    'fm_btn_info': 'ℹ️ מידע',
+    'fm_btn_view': '💬 צפייה',
+    'fm_btn_resume': '📝 המשך',
+    'fm_btn_last5': '📄 5 האחרונות',
+    'fm_btn_full': '📄 במלואה',
+    'fm_btn_go_project': '➡️ לפרויקט',
+    'fm_btn_go_project_files': '📁 לפרויקט',
+    'fm_btn_open_chat': '💬 פתיחת צ\'אט',
+    'fm_btn_help': '❓ עזרה',
+    'fm_btn_retry': '🔄 ניסיון חוזר',
+    'fm_btn_stop': '🛑 עצירה',
+    'fm_btn_go_topic': '➡️ לטופיק',
+    'fm_session_switched': '💬 סשן: <b>{title}</b>\n📊 {count} הודעות',
+    'fm_cmd_help_desc': 'עזרה',
+    'fm_cmd_status_desc': 'סטטוס',
+    'fm_cmd_new_desc': 'סשן / משימה חדשים',
+    'fm_cmd_stop_desc': 'עצירה',
+    'fm_session_activated_hint': '💡 <i>הסשן הופעל — כתבו בטופיק הפרויקט כדי להמשיך.</i>',
+    'fm_session_activated_short': '✅ הסשן הופעל בטופיק הפרויקט.',
+    'fm_write_in_topic': '📁 <i>כתבו הודעה בטופיק הפרויקט כדי להתחיל לעבוד עם Claude.</i>',
+
+    // Forum onboarding steps
+    'forum_setup_title': '🏗 <b>Forum Mode</b>',
+    'forum_setup_intro': 'Forum Mode יוצר סופר-קבוצה עם טופיק נפרד לכל פרויקט.\n\nלכל פרויקט טופיק משלו. משימות ופעילות הם טופיקים נפרדים.',
+    'forum_setup_step1_title': '📱 <b>שלב 1 מתוך 3: צרו קבוצה</b>',
+    'forum_setup_step1_text': '1. פתחו את Telegram ← קבוצה חדשה\n2. תנו לה שם (למשל «Claude Studio»)\n3. בהגדרות הקבוצה הפעילו <b>Topics</b>',
+    'forum_setup_step2_title': '🤖 <b>שלב 2 מתוך 3: הוסיפו את הבוט</b>',
+    'forum_setup_step2_text': '1. פתחו את הקבוצה ← הוספת חברים\n2. חפשו את @{bot_username}\n3. הפכו אותו למנהל עם הרשאת «Manage Topics»',
+    'forum_setup_step3_title': '🔗 <b>שלב 3 מתוך 3: התחברו</b>',
+    'forum_setup_step3_text': 'שלחו <code>/connect</code> בקבוצה.\n\nהבוט ייצור אוטומטית את הטופיקים Tasks ו-Activity.',
+    'forum_setup_btn_next': 'הבא ➡️',
+    'forum_setup_btn_done': 'בוצע, הבא ➡️',
+    'forum_setup_btn_cancel': '❌ ביטול',
+
+    // Task inline button labels
+    'ft_btn_start': '▶ Start',
+    'ft_btn_done': '✅ Done',
+    'ft_btn_block': '🚫 Block',
+    'ft_btn_todo': '📝 Todo',
+    'ft_btn_reopen': '🔄 Reopen',
+
+    // Media attachment
+    'attach_pending': '📎 <b>{name}</b> צורף ({size}KB)\nשלחו הודעת טקסט כדי לכלול אותו, או שלחו קבצים נוספים.',
+    'attach_pending_ask': '📎 <b>{name}</b> צורף\nעכשיו שלחו הודעת טקסט עם השאלה שלכם על הקובץ.',
+
+    // Context header
+    'header_project': '📁 <b>{name}</b>',
+    'header_chat': '💬 <b>{title}</b>',
+    'header_none': '📭 לא נבחר כלום',
+    'header_separator': ' / ',
+  },
 };
 
 module.exports = BOT_I18N;

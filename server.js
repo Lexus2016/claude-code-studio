@@ -143,6 +143,8 @@ const SERVER_I18N = {
   uk: { newSession: 'Нова сесія', newTask: 'Нове завдання' },
   en: { newSession: 'New session', newTask: 'New task' },
   ru: { newSession: 'Новая сессия', newTask: 'Новая задача' },
+  fr: { newSession: 'Nouvelle session', newTask: 'Nouvelle tâche' },
+  he: { newSession: 'סשן חדש', newTask: 'משימה חדשה' },
 };
 // All possible default session titles across languages (used to detect "untitled" sessions)
 const DEFAULT_SESSION_TITLES = new Set(Object.values(SERVER_I18N).map(v => v.newSession));
@@ -2158,7 +2160,7 @@ const BASE_SYSTEM_INSTRUCTIONS = `When you are answering a specific question or 
 Then provide your answer below it. Do not add the blockquote if the message contains only a single question or task.`;
 
 // Language names for UI language instruction
-const LANG_NAMES = { en: 'English', uk: 'Ukrainian', ru: 'Russian' };
+const LANG_NAMES = { en: 'English', uk: 'Ukrainian', ru: 'Russian', fr: 'French', he: 'Hebrew' };
 
 // Internal MCP tool instructions — compact versions (~140 tokens vs original ~240)
 const ASK_USER_INSTRUCTION = `\n\nYou have access to an "ask_user" tool (via MCP server "_ccs_ask_user"). When you need user input BEFORE proceeding — such as choosing between approaches, confirming an action, or clarifying requirements — you MUST call ask_user instead of writing questions as text. The ask_user tool pauses execution and waits for the user's response. Do NOT ask questions in your text output and then continue working — always use the ask_user tool for questions.`;
@@ -3694,7 +3696,7 @@ app.get('/api/lang', (req, res) => {
 
 app.put('/api/lang', express.json(), (req, res) => {
   const lang = req.body.lang;
-  if (!['uk', 'en', 'ru'].includes(lang)) return res.status(400).json({ error: 'Invalid lang' });
+  if (!['uk', 'en', 'ru', 'fr', 'he'].includes(lang)) return res.status(400).json({ error: 'Invalid lang' });
   const c = loadConfig();
   c.lang = lang;
   saveConfig(c);
