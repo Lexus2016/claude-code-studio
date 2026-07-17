@@ -327,8 +327,11 @@ async function startUpdate() {
     // interrupted attempts can leave a half-swapped ("damaged") app bundle. `brew trust`
     // is idempotent and persists; on older Homebrew (no `trust` subcommand) it errors
     // harmlessly and the `;`-chain continues.
+    // Relaunch the app whether the upgrade succeeds or fails (it must never just vanish);
+    // on failure show a notification instead of silently reopening the SAME version — that
+    // silent no-op is exactly what makes a failed update look like a broken button.
     const tap = `${GH_OWNER.toLowerCase()}/${GH_REPO}`;
-    const sh = `'${brew}' trust ${tap} 2>/dev/null; '${brew}' update; '${brew}' upgrade --cask ${CASK_NAME}; open -a "Claude Code Studio"`;
+    const sh = `'${brew}' trust ${tap} 2>/dev/null; '${brew}' update; if '${brew}' upgrade --cask ${CASK_NAME}; then open -a "Claude Code Studio"; else osascript -e 'display notification "Update failed — run in Terminal: brew upgrade --cask ${CASK_NAME}" with title "Claude Code Studio"'; open -a "Claude Code Studio"; fi`;
     const child = spawn('/bin/sh', ['-c', sh], { detached: true, stdio: 'ignore' });
     child.unref();
     setTimeout(() => { app.isQuiting = true; stopServer(); app.quit(); }, 1000);
