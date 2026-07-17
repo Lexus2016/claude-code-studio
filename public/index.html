@@ -5319,6 +5319,10 @@ function renderMd(text) {
     return `<pre><div class="pre-header"><span class="lang">${escH(langLabel)}</span><button class="copy-code-btn" onclick="copyCode('${id}',this)">${t('copy.code')}</button></div><code id="${id}">${escH(code)}</code></pre>`;
   });
 
+  // 7. Per-block auto direction: a Hebrew paragraph after an LTR code block (or
+  //    vice-versa) still reads correctly, regardless of the container's direction.
+  text = text.replace(/<(p|li|h[1-6]|blockquote)(?=[ >])/g, '<$1 dir="auto"');
+
   return text;
 }
 
