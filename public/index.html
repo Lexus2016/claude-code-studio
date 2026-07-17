@@ -2323,6 +2323,32 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 #charCounter { font-size:10px; color:var(--muted,#6b7a99); flex-shrink:0; padding:0 4px; align-self:center; transition:color .15s; pointer-events:none; user-select:none; }
 #charCounter.cc-warn { color:#e8a62a; }
 #charCounter.cc-danger { color:#e05252; }
+
+/* ─── RTL (Hebrew) overrides ─── */
+/* Flexbox, text-align and source order already mirror under dir=rtl; these rules
+   flip the physical-direction properties (avatars, action buttons, accent borders,
+   toast rail) that dir alone does not. Scoped to [dir="rtl"] — LTR is untouched. */
+html[dir="rtl"] .mw.assistant { padding-left: 0; padding-right: 34px; }
+html[dir="rtl"] .mw.assistant::before { left: auto; right: 0; }
+html[dir="rtl"] .mw.user { padding-right: 0; padding-left: 34px; }
+html[dir="rtl"] .mw.user::after { right: auto; left: 0; }
+html[dir="rtl"] .cpb { right: auto; left: 5px; }
+html[dir="rtl"] .cpmd { right: auto; left: 38px; }
+html[dir="rtl"] .reply-btn,
+html[dir="rtl"] .fork-btn,
+html[dir="rtl"] .use-btn { right: auto; left: 5px; }
+html[dir="rtl"] .mw.user .cpb { left: 39px; }
+html[dir="rtl"] .mw.user .cpmd { left: 72px; }
+html[dir="rtl"] .mw.user .reply-btn,
+html[dir="rtl"] .mw.user .fork-btn,
+html[dir="rtl"] .mw.user .use-btn { left: 39px; }
+html[dir="rtl"] .msg blockquote,
+html[dir="rtl"] .msg .callout,
+html[dir="rtl"] .ask-user-card .ask-q blockquote {
+  border-left: none; border-right: 3px solid #3a4560; border-radius: 8px 0 0 8px;
+}
+html[dir="rtl"] #notifContainer { right: auto; left: 16px; }
+html[dir="rtl"] .notif-card { border-left: none; border-right: 3px solid var(--blue); }
 </style>
 </head>
 <body>
@@ -4607,7 +4633,7 @@ const TRANSLATIONS = {
     "sec.projects":"פרויקטים","proj.add":"＋ הוספת פרויקט","tip.new":"צ'אט חדש","tip.cfg":"הגדרות","tip.logout":"התנתקות","tip.panels.left":"הצגה/הסתרה של הפאנל השמאלי",
     "tip.panels.right":"הצגה/הסתרה של הפאנל הימני","btn.new":"צ'אט","btn.cfg":"הגדרות","btn.logout":"התנתקות","mob.files":"קבצים","mob.tabs":"סשנים","tb.mode":"מצב","tb.agent":"Agent","tb.model":"מודל",
     "tb.turns":"תורות","welcome.title":"סשן חדש","welcome.ready":"מוכן לעבודה","welcome.desc":"בחרו MCP ו-Skills משמאל, קבצים מימין.",
-    "input.ph":"כתבו משימה... Ctrl+V — צילום מסך · @ — קבצים · # — SSH · 📎 — כל קובץ","files.title":"Workspace","files.refresh":"רענון","queue.title":"משימות ממתינות בתור","cfg.title":"הגדרות",
+    "input.ph":"כתבו משימה... Ctrl+V — צילום מסך · @ — קבצים · # — SSH · 📎 — כל קובץ","files.title":"סביבת עבודה","files.refresh":"רענון","queue.title":"משימות ממתינות בתור","cfg.title":"הגדרות",
     "cfg.saved":"✓ נשמר","cfg.close":"סגירה","cfg.save":"שמירה","dir.title":"פרויקט חדש","toast.loading":"טוען...","scroll.down":"גלילה לתחתית","at.search":"חיפוש קובץ...","reply.cancel":"ביטול תגובה",
     "stop.agent":"עצירת ה-agent","send.msg":"שליחה (Enter)","dir.cancel":"ביטול","confirm.stop.h":"לעצור את המשימה?","confirm.stop.yes":"כן, לעצור","confirm.stop.cancel":"ביטול","copy.code":"העתקה",
     "copy.msg":"העתקה","msg.reply":"תגובה","fork.title":"המשך בצ'אט חדש","use.input":"הכנסה לשדה הקלט","tab.new":"צ'אט חדש","you.label":"אתם","err.stop.switch":"עצרו את ה-agent לפני המעבר",
@@ -4682,10 +4708,10 @@ const TRANSLATIONS = {
     "tg.device.remove_confirm":"לנתק את המכשיר \"{name}\"?","tg.time.now":"הרגע","tg.time.min":"לפני {n} דקות","tg.time.hour":"לפני {n} שעות","tg.time.day":"לפני {n} ימים","bulk.info":"{n} נבחרו",
     "bulk.all":"הכול","bulk.deselect":"ביטול בחירת הכול","bulk.del":"מחיקה","hist.sel.title":"בחירה מרובה","toast.del_err":"שגיאת מחיקה","proj.type.local":"📁 מקומי","proj.type.remote":"🌐 SSH מרוחק",
     "dir.ssh_host":"SSH Host:","dir.remote.path":"נתיב בשרת:","dir.remote.test":"🔌 בדיקת חיבור","dir.remote.add_new":"＋ חדש","dir.remote.err.no_host":"בחרו host של SSH",
-    "dir.remote.err.no_path":"הזינו נתיב בשרת","cpc.running":"רץ","cpc.done":"הושלם","cpc.failed":"נכשל","cpc.retrying":"מנסה שוב","mcp.cfg.env":"Environment","mcp.cfg.env_add":"＋ הוספה",
-    "mcp.cfg.env_empty":"אין משתני environment","me.title.add":"הוספת שרת MCP","me.title.edit":"עריכת שרת MCP","me.tab.form":"טופס","me.tab.json":"JSON","me.label":"תווית","me.desc":"תיאור",
+    "dir.remote.err.no_path":"הזינו נתיב בשרת","cpc.running":"רץ","cpc.done":"הושלם","cpc.failed":"נכשל","cpc.retrying":"מנסה שוב","mcp.cfg.env":"משתני סביבה","mcp.cfg.env_add":"＋ הוספה",
+    "mcp.cfg.env_empty":"אין משתני סביבה","me.title.add":"הוספת שרת MCP","me.title.edit":"עריכת שרת MCP","me.tab.form":"טופס","me.tab.json":"JSON","me.label":"תווית","me.desc":"תיאור",
     "me.desc.ph":"מה השרת הזה עושה?","me.type":"סוג","me.type.stdio":"פקודה / תהליך מקומי","me.type.http":"נקודת קצה HTTP מרוחקת","me.cmd":"פקודה","me.args":"ארגומנטים","me.args.hint":"אחד בכל שורה",
-    "me.env":"משתני Environment","me.headers":"Headers","me.env.add":"＋ הוספת משתנה","me.header.add":"＋ הוספת header",
+    "me.env":"משתני סביבה","me.headers":"כותרות","me.env.add":"＋ הוספת משתנה","me.header.add":"＋ הוספת כותרת",
     "me.json.hint":"ערכו את קונפיגורציית השרת הגולמית ב-JSON. במעבר חזרה לטופס, ה-JSON יפורש והשדות יתמלאו אוטומטית.","me.cancel":"ביטול","me.save.add":"הוספת שרת","me.save.edit":"שמירת שינויים",
     "me.saving.add":"מוסיף…","me.saving.edit":"שומר…","me.id.locked":"לא ניתן לשנות את ה-ID של השרת","me.err.json":"JSON לא תקין — תקנו קודם את התחביר.","me.err.json_save":"JSON לא תקין — לא ניתן לשמור.",
     "me.err.id_req":"נדרש ID לשרת.","me.err.id_fmt":"ה-ID של השרת יכול להכיל רק אותיות, ספרות, מקפים וקווים תחתונים.","me.err.id_dup":"כבר קיים שרת עם ID הזה.","me.err.url_req":"נדרש URL לשרתי HTTP.",
