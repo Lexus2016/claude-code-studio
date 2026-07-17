@@ -2327,7 +2327,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 /* ─── RTL (Hebrew) overrides ─── */
 /* Flexbox, text-align and source order already mirror under dir=rtl; these rules
    flip the physical-direction properties (avatars, action buttons, accent borders,
-   toast rail) that dir alone does not. Scoped to [dir="rtl"] — LTR is untouched. */
+   markdown content, toast rail) that dir alone does not. Scoped to [dir="rtl"] —
+   LTR is untouched. */
 html[dir="rtl"] .mw.assistant { padding-left: 0; padding-right: 34px; }
 html[dir="rtl"] .mw.assistant::before { left: auto; right: 0; }
 html[dir="rtl"] .mw.user { padding-right: 0; padding-left: 34px; }
@@ -2337,18 +2338,48 @@ html[dir="rtl"] .cpmd { right: auto; left: 38px; }
 html[dir="rtl"] .reply-btn,
 html[dir="rtl"] .fork-btn,
 html[dir="rtl"] .use-btn { right: auto; left: 5px; }
-html[dir="rtl"] .mw.user .cpb { left: 39px; }
-html[dir="rtl"] .mw.user .cpmd { left: 72px; }
+html[dir="rtl"] .mw.user .cpb { right: auto; left: 39px; }
+html[dir="rtl"] .mw.user .cpmd { right: auto; left: 72px; }
 html[dir="rtl"] .mw.user .reply-btn,
 html[dir="rtl"] .mw.user .fork-btn,
-html[dir="rtl"] .mw.user .use-btn { left: 39px; }
+html[dir="rtl"] .mw.user .use-btn { right: auto; left: 39px; }
+html[dir="rtl"] .mw.user .msg-time { text-align: left; }
+html[dir="rtl"] .mw.assistant .msg-time { text-align: right; }
+/* accent-bordered blocks flip to the right edge (keep semantic colours) */
 html[dir="rtl"] .msg blockquote,
 html[dir="rtl"] .msg .callout,
 html[dir="rtl"] .ask-user-card .ask-q blockquote {
   border-left: none; border-right: 3px solid #3a4560; border-radius: 8px 0 0 8px;
 }
+html[dir="rtl"] .msg .callout.success { border-right-color: var(--green); }
+html[dir="rtl"] .msg .callout.info    { border-right-color: var(--blue); }
+html[dir="rtl"] .msg .callout.warn    { border-right-color: var(--orange); }
+html[dir="rtl"] .msg .callout.danger  { border-right-color: var(--red); }
+/* code blocks are always LTR (the <code> child is the scrollable box) */
+html[dir="rtl"] .msg pre,
+html[dir="rtl"] .msg pre code { direction: ltr; text-align: left; }
+/* inline code stays LTR and isolated so English/paths/commands don't bidi-scramble */
+html[dir="rtl"] .msg code:not(pre code) { direction: ltr; unicode-bidi: isolate; }
+/* per-message direction is handled by dir="auto" on the .msg container (set in the
+   message builders) so a Hebrew reply reads RTL and an English/code reply reads LTR */
+/* lists indent from the reading (right) edge */
+html[dir="rtl"] .msg ul,
+html[dir="rtl"] .msg ol { margin-left: 0; margin-right: 20px; }
+/* tables align to the reading edge and mirror edge padding */
+html[dir="rtl"] .msg th,
+html[dir="rtl"] .msg td { text-align: right; }
+html[dir="rtl"] .msg td:first-child,
+html[dir="rtl"] .msg th:first-child { padding-left: 14px; padding-right: 16px; }
+html[dir="rtl"] .msg td:last-child,
+html[dir="rtl"] .msg th:last-child { padding-right: 14px; padding-left: 16px; }
+/* notification toast rail (keep semantic colours) */
 html[dir="rtl"] #notifContainer { right: auto; left: 16px; }
 html[dir="rtl"] .notif-card { border-left: none; border-right: 3px solid var(--blue); }
+html[dir="rtl"] .notif-card.notif-info      { border-right-color: var(--blue); }
+html[dir="rtl"] .notif-card.notif-warning   { border-right-color: var(--orange); }
+html[dir="rtl"] .notif-card.notif-error     { border-right-color: var(--red); }
+html[dir="rtl"] .notif-card.notif-milestone { border-right-color: var(--green); }
+html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 </style>
 </head>
 <body>
@@ -2959,7 +2990,7 @@ html[dir="rtl"] .notif-card { border-left: none; border-right: 3px solid var(--b
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
         </svg>
       </button>
-      <textarea id="input" rows="1" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @ — файли · # — SSH · 📎 — будь-який файл" autofocus aria-label="Message input" aria-multiline="true"></textarea>
+      <textarea id="input" rows="1" dir="auto" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @ — файли · # — SSH · 📎 — будь-який файл" autofocus aria-label="Message input" aria-multiline="true"></textarea>
       <span id="charCounter" style="display:none;" aria-live="polite" aria-label="Character count"></span>
       <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Завдань у черзі"></span>
       <button class="sb stop-btn hidden" id="stopBtn" onclick="confirmStop()" data-i18n-title="stop.agent" title="Stop agent">
@@ -6575,7 +6606,7 @@ function addMsg(role, opts = {}) {
   }
   const forkBtn = role === 'assistant' ? `<button class="fork-btn" onclick="forkFromMsg(this)" title="${t('fork.title')}">↗</button>` : '';
   const useBtn = `<button class="use-btn" onclick="useAsInput(this)" title="${t('use.input')}">↓</button>`;
-  w.innerHTML = `${quoteHtml}<div class="msg"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>${forkBtn}${useBtn}`;
+  w.innerHTML = `${quoteHtml}<div class="msg" dir="auto"></div><button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>${forkBtn}${useBtn}`;
   msgsEl.appendChild(w);
   scrollBottom();
   return w;
@@ -9548,7 +9579,7 @@ function _renderMsgAt(idx, prepend = false) {
   const useBtn = `<button class="use-btn" onclick="useAsInput(this)" title="${t('use.input')}">↓</button>`;
   // Format timestamp
   const timeHtml = m.created_at ? `<div class="msg-time">${formatMsgTime(m.created_at)}</div>` : '';
-  w.innerHTML = `${histQuoteHtml}<div class="msg"></div>${timeHtml}<button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>${forkBtn}${useBtn}`;
+  w.innerHTML = `${histQuoteHtml}<div class="msg" dir="auto"></div>${timeHtml}<button class="cpb" onclick="cpMsg(this)" title="${t('copy.msg')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="reply-btn" onclick="setReply(this)" title="${t('msg.reply')}">↩</button>${forkBtn}${useBtn}`;
   // Render saved attachments (images/files) as chips above message text
   if (m.attachments) {
     try {
