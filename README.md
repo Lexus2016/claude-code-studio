@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.69.0** — The **Fable** model is selectable again in every model picker — the web chat (toolbar and mobile sheet), Kanban (chain and task forms), and the Scheduler. It had been hidden in a recent build; this brings it back everywhere you choose a model.
+> **v5.70.0** — **French and Hebrew** join the interface languages, bringing the total to five (EN/UA/RU/FR/HE). Every string across the web app and the Telegram bot is translated. Hebrew ships full right-to-left support: the layout, message avatars, action buttons, tables, lists, and callouts all mirror, while code blocks and inline commands stay left-to-right and each message auto-detects its own direction — so mixed Hebrew/English replies read correctly.
 
 ---
 
@@ -409,7 +409,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | **Dashboard** | Activity heatmap, tool usage, model distribution, Automation Index, peak hours |
 | **Reliability** | security-hardened Telegram uploads, self-healing sessions, crash protection, atomic writes, instant stop, rate limit auto-wait, concurrency safety (session lock + busy_timeout), orphaned session lock auto-cleanup |
 | **Security** | bcrypt auth, AES-256-GCM SSH, Helmet.js, path traversal protection, XSS/SQLi prevention |
-| **Platform** | Windows/macOS/Linux, Docker (non-root, registry mirror), LLM proxy/gateway, 3 languages (EN/UA/RU), OpenRouter support |
+| **Platform** | Windows/macOS/Linux, Docker (non-root, registry mirror), LLM proxy/gateway, 5 languages (EN/UA/RU/FR/HE), OpenRouter support |
 
 ---
 
