@@ -322,7 +322,13 @@ async function startUpdate() {
     // the GitHub release) keeps re-offering the same version — an endless update loop.
     // Do NOT set HOMEBREW_NO_AUTO_UPDATE here: it suppresses exactly that tap refresh.
     // brew quits the running app (cask `quit:`); the detached shell then relaunches it.
-    const sh = `'${brew}' update; '${brew}' upgrade --cask ${CASK_NAME}; open -a "Claude Code Studio"`;
+    // Homebrew 6.0+ refuses to load a cask from a third-party tap until it is trusted, so
+    // `brew upgrade --cask` errors and the update silently no-ops — an endless loop, and
+    // interrupted attempts can leave a half-swapped ("damaged") app bundle. `brew trust`
+    // is idempotent and persists; on older Homebrew (no `trust` subcommand) it errors
+    // harmlessly and the `;`-chain continues.
+    const tap = `${GH_OWNER.toLowerCase()}/${GH_REPO}`;
+    const sh = `'${brew}' trust ${tap} 2>/dev/null; '${brew}' update; '${brew}' upgrade --cask ${CASK_NAME}; open -a "Claude Code Studio"`;
     const child = spawn('/bin/sh', ['-c', sh], { detached: true, stdio: 'ignore' });
     child.unref();
     setTimeout(() => { app.isQuiting = true; stopServer(); app.quit(); }, 1000);
