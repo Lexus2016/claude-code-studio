@@ -8,35 +8,35 @@
 
 ### Desktop Shell (DESK)
 
-- [ ] **DESK-01**: User can launch Claude Code Studio as a native desktop app on macOS, Linux, and Windows.
-- [ ] **DESK-02**: Desktop app runs the existing `server.js` via `utilityProcess.fork`, unmodified; web mode behavior is unchanged.
-- [ ] **DESK-03**: Desktop app stores all user data in the OS userData directory via the `APP_DIR` override (DB, uploads, .env, workspace).
-- [ ] **DESK-04**: Desktop app binds the server to an ephemeral free port (no clash with the web mode's default 3000).
-- [ ] **DESK-05**: Desktop app creates a local single-user session automatically (no login prompt); web mode keeps bcrypt auth.
+- [x] **DESK-01**: User can launch Claude Code Studio as a native desktop app on macOS, Linux, and Windows.
+- [x] **DESK-02**: Desktop app runs the existing `server.js` via `utilityProcess.fork`, unmodified; web mode behavior is unchanged.
+- [x] **DESK-03**: Desktop app stores all user data in the OS userData directory via the `APP_DIR` override (DB, uploads, .env, workspace).
+- [x] **DESK-04**: Desktop app binds the server to an ephemeral free port (no clash with the web mode's default 3000).
+- [x] **DESK-05**: Desktop app creates a local single-user session automatically (no login prompt); web mode keeps bcrypt auth.
 
 ### Prerequisites & Desktop Behavior (DEP)
 
-- [ ] **DEP-01**: On startup the app detects the `claude` CLI (handling the GUI-launch PATH); if missing, it shows a friendly window with install guidance.
-- [ ] **DEP-02**: Server-only features (Telegram bot, tunnel-manager, remote SSH) are disabled by default in desktop mode.
+- [x] **DEP-01**: On startup the app detects the `claude` CLI (handling the GUI-launch PATH); if missing, it shows a friendly window with install guidance.
+- [x] **DEP-02**: Server-only features (Telegram bot, tunnel-manager, remote SSH) are disabled by default in desktop mode.
 
 ### Updates (UPD)
 
-- [ ] **UPD-01**: The app always shows the current version and indicates when a newer release exists (version banner).
-- [ ] **UPD-02**: User can update with one click — Windows/Linux via `electron-updater`; macOS via app-triggered `brew upgrade --cask` with a live in-app report — then the app relaunches.
-- [ ] **UPD-03**: If one-click update cannot run (no `brew` / not brew-managed / non-zero exit), the app shows the exact command with Copy and Open-Terminal buttons.
-- [ ] **UPD-04**: User can opt into automatic updates (default OFF).
+- [x] **UPD-01**: The app always shows the current version and indicates when a newer release exists (version banner).
+- [x] **UPD-02**: User can update with one click — Windows/Linux via `electron-updater`; macOS via app-triggered `brew upgrade --cask` with a live in-app report — then the app relaunches.
+- [x] **UPD-03**: If one-click update cannot run (no `brew` / not brew-managed / non-zero exit), the app shows the exact command with Copy and Open-Terminal buttons.
+- [x] **UPD-04**: User can opt into automatic updates (default OFF).
 
 ### Distribution (DIST)
 
-- [ ] **DIST-01**: macOS is distributed via a Homebrew Cask (the only supported macOS channel), with an `xattr -cr` postflight; dmg/zip is only the cask's source artifact.
-- [ ] **DIST-02**: Windows is distributed as an NSIS installer; Linux as AppImage + deb.
-- [ ] **DIST-03**: Releases are published to GitHub; the Homebrew Cask `version`+`sha256` are auto-bumped from release CI.
+- [x] **DIST-01**: macOS is distributed via a Homebrew Cask (the only supported macOS channel), with an `xattr -cr` postflight; dmg/zip is only the cask's source artifact.
+- [x] **DIST-02**: Windows is distributed as an NSIS installer; Linux as AppImage + deb.
+- [x] **DIST-03**: Releases are published to GitHub; the Homebrew Cask `version`+`sha256` are auto-bumped from release CI.
 
 ### Build & Packaging (BUILD)
 
-- [ ] **BUILD-01**: An interpreter resolver replaces the 9 hardcoded `command:'node'` spawns (+ the node-based hook) so MCP helpers/hooks run in both web (`node`) and desktop (`process.execPath` + `ELECTRON_RUN_AS_NODE`) modes.
-- [ ] **BUILD-02**: Spawned helper scripts (`mcp-*.js`, `hooks/check-interrupt.js`) are `asarUnpack`-ed so the child interpreter can read them from disk.
-- [ ] **BUILD-03**: `electron` / `electron-builder` / `electron-updater` live in `devDependencies` only — web/Docker installs never pull them.
+- [x] **BUILD-01**: An interpreter resolver replaces the 9 hardcoded `command:'node'` spawns (+ the node-based hook) so MCP helpers/hooks run in both web (`node`) and desktop (`process.execPath` + `ELECTRON_RUN_AS_NODE`) modes.
+- [x] **BUILD-02**: Spawned helper scripts (`mcp-*.js`, `hooks/check-interrupt.js`) are `asarUnpack`-ed so the child interpreter can read them from disk.
+- [x] **BUILD-03**: `electron` / `electron-builder` / `electron-updater` live in `devDependencies` only — web/Docker installs never pull them.
 
 ## Out of Scope
 

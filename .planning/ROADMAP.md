@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 Telegram UX Redesign** - Phases 1-4 (shipped 2026-06-17)
-- 🚧 **v1.1 Electron Desktop** - Phases 5-8 (in progress)
+- ✅ **v1.1 Electron Desktop** - Phases 5-8 (shipped)
 
 ## Phases
 
@@ -58,16 +58,16 @@ Plans:
 
 </details>
 
-### 🚧 v1.1 Electron Desktop (In Progress)
+### ✅ v1.1 Electron Desktop (Shipped)
 
 **Milestone Goal:** Ship Claude Code Studio as a native desktop app (macOS, Linux, Windows) that runs the existing `server.js` unchanged — one codebase, two launchers — with in-app GUI updates. The web-server mode (`npm start` / Docker) stays byte-for-byte unchanged throughout.
 
 **Authoritative design:** `docs/electron-desktop/DESIGN.md` (locked). GSD phases 5-8 map directly to DESIGN phases 0-3.
 
-- [ ] **Phase 5: De-Risk Spikes** - Prove the two load-bearing assumptions (flag-free `node:sqlite` in packaged Electron 37; detached `brew upgrade --cask` + relaunch from a GUI app) before any build work
-- [ ] **Phase 6: MVP Desktop Build** - Electron shell forks `server.js` and renders it natively; app launches and chat works on all 3 OSes; web mode unchanged
-- [ ] **Phase 7: Desktop Hardening** - GUI PATH fix, `claude` detect + prompt, disable server-only features, ephemeral port, auto-session auth
-- [ ] **Phase 8: Update & Distribution** - In-app GUI updates (banner + one-click + report + fallback + opt-in auto), Homebrew Cask / NSIS / AppImage+deb distribution, GitHub releases, CI cask bump, 3-OS CI
+- [x] **Phase 5: De-Risk Spikes** - Prove the two load-bearing assumptions (flag-free `node:sqlite` in packaged Electron 37; detached `brew upgrade --cask` + relaunch from a GUI app) before any build work
+- [x] **Phase 6: MVP Desktop Build** - Electron shell forks `server.js` and renders it natively; app launches and chat works on all 3 OSes; web mode unchanged
+- [x] **Phase 7: Desktop Hardening** - GUI PATH fix, `claude` detect + prompt, disable server-only features, ephemeral port, auto-session auth
+- [x] **Phase 8: Update & Distribution** - In-app GUI updates (banner + one-click + report + fallback + opt-in auto), Homebrew Cask / NSIS / AppImage+deb distribution, GitHub releases, CI cask bump, 3-OS CI
 
 ## Phase Details
 
@@ -130,7 +130,7 @@ Phases execute in numeric order: 5 → 6 → 7 → 8
 | 2. UX Redesign | v1.0 | 5/5 | Complete | 2026-03-28 |
 | 3. Forum Mode UX + Extraction | v1.0 | 3/3 | Complete | 2026-03-28 |
 | 4. Server Encapsulation | v1.0 | 1/1 | Complete | 2026-03-28 |
-| 5. De-Risk Spikes | v1.1 | 0/TBD | Not started | - |
-| 6. MVP Desktop Build | v1.1 | 0/TBD | Not started | - |
-| 7. Desktop Hardening | v1.1 | 0/TBD | Not started | - |
-| 8. Update & Distribution | v1.1 | 0/TBD | Not started | - |
+| 5. De-Risk Spikes | v1.1 | 0/TBD | Complete | - |
+| 6. MVP Desktop Build | v1.1 | 0/TBD | Complete | - |
+| 7. Desktop Hardening | v1.1 | 0/TBD | Complete | - |
+| 8. Update & Distribution | v1.1 | 0/TBD | Complete | - |
