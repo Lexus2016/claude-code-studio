@@ -126,6 +126,7 @@ class ClaudeSSH {
     const h = {
       onText: null, onTool: null, onDone: null, onError: null,
       onSessionId: null, onThinking: null, onRateLimit: null, onResult: null,
+      onUsage: null,
       _deltaBlocks: new Set(), _hasEmittedText: false,
     };
 
@@ -338,6 +339,7 @@ class ClaudeSSH {
       onThinking(fn)  { h.onThinking  = fn; return this; },
       onRateLimit(fn) { h.onRateLimit = fn; return this; },
       onResult(fn)    { h.onResult    = fn; return this; },
+      onUsage(fn)     { h.onUsage     = fn; return this; },
     };
   }
 
@@ -358,6 +360,12 @@ class ClaudeSSH {
     }
 
     if (data.type === 'assistant' || data.role === 'assistant') {
+      // Per-turn usage: the last assistant message reflects real context-window
+      // occupancy (mirrors claude-cli.js:527-530).
+      const _usage = data.message?.usage || data.usage;
+      if (_usage && h.onUsage && (_usage.input_tokens != null || _usage.cache_read_input_tokens != null)) {
+        h.onUsage(_usage);
+      }
       const content = data.content || data.message?.content || [];
       const blocks = Array.isArray(content) ? content : [{ type: 'text', text: String(content) }];
       for (let i = 0; i < blocks.length; i++) {
