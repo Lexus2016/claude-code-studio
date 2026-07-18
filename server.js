@@ -5085,6 +5085,10 @@ app.get('/api/config', (_,res) => {
 });
 app.post('/api/mcp/add', (req,res) => {
   const{id,label,description,type,command,args,env,url,headers}=req.body;
+  // Validate id server-side (same rule as /api/mcp/import) — it lands unescaped
+  // in inline onclick handlers in the MCP list, so reject anything but a safe
+  // identifier to prevent stored JS injection (audit MEDIUM).
+  if(!id||!/^[a-zA-Z0-9_-]{1,64}$/.test(id)) return res.status(400).json({error:'invalid_id'});
   const c=loadConfig();
   const entry={label:label||id,description:description||'',enabled:true,custom:true};
   if(type==='sse'||type==='http'){
@@ -6696,6 +6700,9 @@ server.on('upgrade', (req, socket, head) => {
 
 wss.on('connection', (ws) => {
   log.info('ws connected', { clients: wss.clients.size });
+  // A socket-level 'error' event with no listener is thrown by EventEmitter →
+  // uncaughtException → whole-process crash. Swallow+log it instead (audit H5).
+  ws.on('error', (e) => { try { log.warn('ws socket error', { msg: e?.message }); } catch {} });
   // Per-tab concurrency tracking
   ws._tabBusy  = {};  // tabId → bool
   ws._tabQueue = {};  // tabId → msg[]
@@ -7848,6 +7855,17 @@ initTelegramBot();
 
 // Restore delegations from .crosswork/*/state.json (survives server restarts)
 restoreDelegations();
+
+// Terminal error handler — MUST be last (after every route). Returns JSON
+// instead of leaking an HTML stack trace with filesystem paths on e.g. a
+// malformed JSON body (audit H7).
+app.use((err, _req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = err?.status || err?.statusCode || 500;
+  const body = err?.type === 'entity.parse.failed' ? { error: 'invalid_json' } : { error: 'internal_error' };
+  try { log.warn('request error', { status, msg: err?.message }); } catch {}
+  res.status(status).json(body);
+});
 
 server.listen(...(process.env.CCS_DESKTOP === '1' ? [PORT, '127.0.0.1'] : [PORT]), () => {
   log.info('server started', {

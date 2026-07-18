@@ -10455,7 +10455,7 @@ async function saveMcpModal() {
     data = _mcpEditCollectForm();
   }
   if (!data.id) { _mcpEditSetError(t('me.err.id_req')); $i('meId').focus(); return; }
-  if (!/^[\w\-]+$/.test(data.id)) { _mcpEditSetError(t('me.err.id_fmt')); $i('meId').focus(); return; }
+  if (!/^[\w\-]{1,64}$/.test(data.id)) { _mcpEditSetError(t('me.err.id_fmt')); $i('meId').focus(); return; }
   if (_mcpEditMode === 'add' && config.mcpServers[data.id]) { _mcpEditSetError(t('me.err.id_dup')); $i('meId').focus(); return; }
   if (data.type === 'http' && !data.url) { _mcpEditSetError(t('me.err.url_req')); _applyMcpTab('form'); $i('meUrl').focus(); return; }
   if (data.type === 'stdio' && !data.command) { _mcpEditSetError(t('me.err.cmd_req')); _applyMcpTab('form'); $i('meCmd').focus(); return; }
