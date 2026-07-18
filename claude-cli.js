@@ -103,7 +103,13 @@ function getMcpConfigPath(mcpServers) {
     return { path: cached.path, hash, isNew: false };
   }
   const filePath = path.join(os.tmpdir(), `mcp-${hash}.json`);
-  fs.writeFileSync(filePath, json);
+  // 0600: this config embeds internal MCP bearer secrets (ASK_USER_SECRET etc.)
+  // and any user MCP API keys — must not be world-readable in shared /tmp
+  // (mirrors claude-interactive.js:137). chmod AFTER write: the `mode` write
+  // option only applies when the file is created, so a pre-existing 0644 file
+  // (deterministic hash name) would otherwise keep its loose permissions.
+  fs.writeFileSync(filePath, json, { mode: 0o600 });
+  try { fs.chmodSync(filePath, 0o600); } catch {}
   _mcpConfigCache.set(hash, { path: filePath, refCount: 1 });
   return { path: filePath, hash, isNew: true };
 }
