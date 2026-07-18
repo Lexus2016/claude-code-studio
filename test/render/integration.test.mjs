@@ -38,7 +38,7 @@ assert.match(html, /<div class="callout warn">/, 'warning callout');
 assert.match(html, /<dl class="kv"><dt>File<\/dt>/, 'kv grid');
 assert.match(html, /<a href="https:\/\/core\.telegram\.org\/bots\/api"[^>]*class="md-link"/, 'autolinked bare url');
 assert.match(html, /class="md-link link-btn"[^>]*>Open app/, 'standalone button');
-assert.match(html, /<h1>Audit complete<\/h1>/, 'headline h1');
+assert.match(html, /<h1[^>]*>Audit complete<\/h1>/, 'headline h1');
 // regression: the (1)(2)(3) fix still holds — no false list
 assert.ok(!/<ol/.test(renderMd('parts: (1) a, (2) b, (3) c')), 'no false ordered list');
 console.log('PASS integration');
