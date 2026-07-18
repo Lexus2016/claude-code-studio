@@ -13,7 +13,7 @@ const IDLE_TIMEOUT_MS    = parseInt(process.env.CLAUDE_IDLE_TIMEOUT_MS || proces
 // Optional absolute ceiling — backstop against a process that emits forever. 0 = off.
 const HARD_CAP_MS        = parseInt(process.env.CLAUDE_HARD_CAP_MS || '0', 10) || 0;
 
-const MODEL_MAP = { opus: 'opus', sonnet: 'sonnet', haiku: 'haiku' };
+const MODEL_MAP = { opus: 'opus', sonnet: 'sonnet', haiku: 'haiku', fable: 'fable' };
 
 // Shell-escape a string using POSIX single-quotes
 function shellEscape(str) {
