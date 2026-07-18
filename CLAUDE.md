@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting, no tests, no build step configured.
+No linting and no build step configured. A render + overload-detector test suite lives under `test/` (`test/render/*.test.mjs` + `test/overload-detector.test.js`) — run it with `npm test`. No CI is wired up yet.
 
 ## Architecture
 
@@ -76,11 +76,7 @@ Environment (`.env`, see `.env.example`):
 - `WORKDIR` — Claude working directory, default `./workspace`
 - `TRUST_PROXY` — set `true` behind nginx/Caddy
 
-**Models** (defined in `server.js`):
-- `haiku` → `claude-haiku-4-5-20251001`
-- `sonnet` → `claude-sonnet-4-5-20250929` (default)
-- `opus` → `claude-opus-4-6`
-- `fable` → alias `fable`, display "Fable" (CLI resolves the alias internally)
+**Models** — the UI exposes four choices: `haiku`, `sonnet` (default), `opus`, `fable`. The short aliases are mapped in `claude-cli.js` (`MODEL_MAP`, lines 81-89) and passed to the `claude` CLI **as-is** (`opus`→`opus`, `sonnet`→`sonnet`, `haiku`→`haiku`, `fable`→`fable`); the CLI resolves each alias internally. `server.js` defines no model map — it defers to `claude-cli.js`. Dated model IDs are kept commented out in `MODEL_MAP` and are not used.
 
 ## MCP & Skills
 
@@ -143,14 +139,14 @@ These are non-obvious bugs that caused real failures:
 | Subprocess crashes in dev | `delete env.CLAUDECODE` before spawning — the parent Claude Code session sets this env var which confuses the child |
 | Streaming not working | `--output-format stream-json` + `--include-partial-messages` are both needed |
 
-### Model IDs (exact strings)
+### Model aliases (exact strings)
 ```
-claude-opus-4-6
-claude-sonnet-4-6
-claude-haiku-4-5
+opus
+sonnet
+haiku
 fable
 ```
-Use these in `claude-cli.js`. Do not use dated suffixes in CLI flags. Short aliases (`opus`, `sonnet`, `haiku`, `fable`) are resolved by the CLI internally — pass them through as-is.
+These short aliases are exactly what `claude-cli.js` (`MODEL_MAP`) passes to the CLI — pass them through **as-is**; the `claude` binary resolves each one internally. Do not use dated model-ID suffixes in CLI flags (the dated IDs are kept commented out in `MODEL_MAP`).
 
 ### Markdown Rendering in SPA
 - During streaming: `renderStreaming()` handles unclosed code fences
@@ -161,7 +157,7 @@ Use these in `claude-cli.js`. Do not use dated suffixes in CLI flags. Short alia
 
 ## How to Verify Changes
 
-No automated tests exist. Verify manually:
+A render + overload-detector test suite exists under `test/` — run it with `npm test`. There is no CI yet, and it does not cover the UI/WebSocket paths, so also verify those manually:
 
 ```bash
 # 1. Start server

@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.70.0** — **French and Hebrew** join the interface languages, bringing the total to five (EN/UA/RU/FR/HE). Every string across the web app and the Telegram bot is translated. Hebrew ships full right-to-left support: the layout, message avatars, action buttons, tables, lists, and callouts all mirror, while code blocks and inline commands stay left-to-right and each message auto-detects its own direction — so mixed Hebrew/English replies read correctly.
+> **v5.70.1** — **French and Hebrew** join the interface languages, bringing the total to five (EN/UA/RU/FR/HE). Every string across the web app and the Telegram bot is translated. Hebrew ships full right-to-left support: the layout, message avatars, action buttons, tables, lists, and callouts all mirror, while code blocks and inline commands stay left-to-right and each message auto-detects its own direction — so mixed Hebrew/English replies read correctly.
 
 ---
 
@@ -150,7 +150,7 @@ Not a chatbot. "Refactor this function and add tests" → Claude opens files, ed
 
 **Claude CLI session import** — import existing sessions from Claude Code CLI (`~/.claude/projects/`) directly into Studio. Click the ↓ button in the header, pick a project path, select sessions, import. Already-imported sessions are marked so you don't duplicate them. Works on Windows (`C:\...`), macOS, and Linux; supports `~` path expansion.
 
-**Extended thinking** — when Claude uses extended thinking, each thinking block appears as a "Chain of thought" badge showing estimated word count. Click to open the full reasoning in a modal with a copy button. The CLI import modal and thinking modal are fully localized (EN/UA/RU) — all labels, status messages, and dates adapt to the selected interface language.
+**Extended thinking** — when Claude uses extended thinking, each thinking block appears as a "Chain of thought" badge showing estimated word count. Click to open the full reasoning in a modal with a copy button. The CLI import modal and thinking modal are fully localized (EN/UA/RU/FR/HE) — all labels, status messages, and dates adapt to the selected interface language.
 
 Thinking blocks are now **fully persistent**: switching tabs mid-generation no longer loses the chain of thought — it's saved to SQLite on completion. Live **thinking badges** appear in real time as Claude reasons, so you can watch the thought process unfold. Imported CLI sessions preserve thinking blocks too, so every past reasoning trace is available for review. Session recovery is also correct: thinking blocks are excluded from the context sent back to Claude on resume, so it never sees its own internal reasoning as a prior message. Press **ESC** to close the thinking modal from the keyboard.
 
@@ -252,7 +252,7 @@ Pair in 30 seconds (6-digit code from Settings). Your phone becomes a full remot
 - **✉ Write button:** Quick-compose shortcut in the persistent keyboard — start typing without navigating menus
 - **File attachments:** Send photos/files directly in the bot — get size confirmation, then attach your question
 
-**Forum Mode** — Telegram supergroup with Topics. Each project gets its own thread with deep-link navigation between topics. Rich inline action buttons on every message — fully localized in EN/UA/RU — Continue, Diff, Files, History, New session. Auto-creates project topics on demand. Tasks topic for Kanban management. Activity topic with direct URL buttons to jump into any project.
+**Forum Mode** — Telegram supergroup with Topics. Each project gets its own thread with deep-link navigation between topics. Rich inline action buttons on every message — fully localized in EN/UA/RU/FR/HE — Continue, Diff, Files, History, New session. Auto-creates project topics on demand. Tasks topic for Kanban management. Activity topic with direct URL buttons to jump into any project.
 
 Forum Mode is now powered by a **dedicated standalone module** (`telegram-bot-forum.js`). Each project topic runs in fully isolated per-thread state — switching between projects in different threads never leaks context or session data. Rock-solid multi-project setup, even across a dozen simultaneous Forum topics. The **Open Chat** button always uses a callback so the bot properly switches session context and shows a live chat preview — not just a raw topic URL jump.
 
@@ -285,7 +285,7 @@ Send tasks to external AI CLIs — OpenAI Codex, Antigravity CLI, opencode, Aide
 
 How it works: click **Delegate** in the session bar, pick an agent and mode, describe the task. Studio generates a `CONTEXT.md` with conversation history and opens a terminal with the external agent. In Sync mode, both agents communicate through a shared `DIALOG.md` — responses appear directly in the main chat with real-time notifications.
 
-**Agents sidebar** — managing external agents is now effortless. A dedicated **Agents** section in the sidebar lets you add, edit, and delete agents without touching `config.json`. Codex, Antigravity CLI, and opencode come **pre-configured out of the box** — seeded automatically on first run. Hit the **Test** button next to any agent to verify connectivity before delegating. Agent IDs auto-generate from the label (with Cyrillic transliteration), and the full UI is localized in EN/UA/RU. Works on **Windows** too — delegation now routes through `cmd.exe` with proper shell escaping. Delegations survive server restarts via persistent state files.
+**Agents sidebar** — managing external agents is now effortless. A dedicated **Agents** section in the sidebar lets you add, edit, and delete agents without touching `config.json`. Codex, Antigravity CLI, and opencode come **pre-configured out of the box** — seeded automatically on first run. Hit the **Test** button next to any agent to verify connectivity before delegating. Agent IDs auto-generate from the label (with Cyrillic transliteration), and the full UI is localized in EN/UA/RU/FR/HE. Works on **Windows** too — delegation now routes through `cmd.exe` with proper shell escaping. Delegations survive server restarts via persistent state files.
 
 ### 🎛 Chat Modes
 
@@ -302,7 +302,7 @@ Plugin skills auto-discovered from installed Claude Code plugins. Add custom `.m
 
 ### ⚡ Slash Commands
 
-Type `/` — pick a saved prompt. 8 built-in:
+Type `/` — pick a saved prompt. 10 built-in:
 
 | `/check` | `/review` | `/fix` | `/explain` |
 |-----------|-----------|--------|------------|
@@ -319,7 +319,7 @@ Add your own, edit them, delete them. As many as you want.
 | **Haiku** | Standard | Fast — simple questions, quick checks |
 | **Sonnet** | **1M tokens** | Balanced (default) — most everyday tasks |
 | **Opus** | **1M tokens** | Most capable — complex architecture, hard bugs |
-| **Fable** | **1M tokens** | Most creative & reasoning-intensive — complex planning, deep analysis *(temporarily hidden in the model picker)* |
+| **Fable** | **1M tokens** | Most creative & reasoning-intensive — complex planning, deep analysis |
 
 Sonnet and Opus run with a **1 million token context window** — entire large codebases, long conversation histories, and massive file sets fit in a single session without hitting limits.
 
@@ -398,12 +398,12 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, engine + model + effort per task/chain |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, engine + model + effort per task, watchdog auto-recovery |
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
-| **Telegram** | Bot control, push notifications, ask_user forwarding (+ file answers), session bridge, Forum Mode, inline stop, deep-link navigation, rich action buttons (localized EN/UA/RU), Write button, file attachments, interrupt queue while busy |
+| **Telegram** | Bot control, push notifications, ask_user forwarding (+ file answers), session bridge, Forum Mode, inline stop, deep-link navigation, rich action buttons (localized EN/UA/RU/FR/HE), Write button, file attachments, interrupt queue while busy |
 | **Delegation** | Cross-agent handoff/sync (Codex, Antigravity, opencode), CONTEXT.md + DIALOG.md protocol, fs.watch + polling, persistent across restarts, Windows support, sidebar agents manager, auto-seeded defaults, test button |
 | **Agents** | Single, Multi (2–5 in-chat, schema-validated planning), Dispatch (Kanban), auto-retry, cascade cancellation, effort propagation |
 | **Modes** | Auto, Plan (read-only + Execute Plan), Task, auto mode switching |
 | **Skills** | 28 built-in, auto-classification, plugin discovery, custom `.md` files |
-| **Commands** | 8 built-in slash commands, custom commands |
+| **Commands** | 10 built-in slash commands, custom commands |
 | **Remote** | SSH servers, SFTP upload, `#` quick-attach, cloudflared/ngrok tunnels |
 | **Mobile** | Native-feel UI, bottom sheet, scroll-snap Kanban, iOS-safe, touch-optimized |
 | **Dashboard** | Activity heatmap, tool usage, model distribution, Automation Index, peak hours |
