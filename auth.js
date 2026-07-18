@@ -20,7 +20,10 @@ function loadAuth() {
 
 function atomicWrite(filePath, content) {
   const tmp = filePath + '.tmp';
-  fs.writeFileSync(tmp, content);
+  // 0600: auth.json / sessions-auth.json hold the password hash and live bearer
+  // tokens — must not be world-readable on multi-user hosts (audit MEDIUM).
+  fs.writeFileSync(tmp, content, { mode: 0o600 });
+  try { fs.chmodSync(tmp, 0o600); } catch {}
   fs.renameSync(tmp, filePath);
 }
 
