@@ -40,6 +40,15 @@ files:
   - "!homebrew-tap/**"
   - "!README*"
   - "!CLAUDE.md"
+  # SECURITY: never ship developer secrets or repo test/junk into the app bundle.
+  # The desktop app reads config.json/.env from userData (APP_DIR), NOT the bundle
+  # (electron/main.js:128), and loadConfig() tolerates a missing file (server.js:1864),
+  # so excluding these is safe. Verified via `asar list` that they were leaking.
+  - "!.env*"
+  - "!config.json"
+  - "!tasks/**"
+  - "!test-snapshot*"
+  - "!test-*.sh"
 
 directories:
   output: dist-desktop
