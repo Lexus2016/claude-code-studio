@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.70.1** — **French and Hebrew** join the interface languages, bringing the total to five (EN/UA/RU/FR/HE). Every string across the web app and the Telegram bot is translated. Hebrew ships full right-to-left support: the layout, message avatars, action buttons, tables, lists, and callouts all mirror, while code blocks and inline commands stay left-to-right and each message auto-detects its own direction — so mixed Hebrew/English replies read correctly.
+> **v5.71.0** — **Security & reliability hardening.** Restores the SSH chat engine (a regression had broken SSH-project messages), stops the desktop build from bundling local secrets, adds a WebSocket crash-guard and a JSON API error handler, tightens auth-file permissions to `0600`, and wires up the automated test suite (`npm test`).
 
 ---
 
