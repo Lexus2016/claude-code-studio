@@ -3147,6 +3147,109 @@ async function runSshSingle(p) {
 // MAX_AUTO_CONTINUES times, so the worst case per agent is cap × (1 + MAX_AUTO_CONTINUES).
 const MULTI_AGENT_MAX_TURNS_CAP = parseInt(process.env.MULTI_AGENT_MAX_TURNS_CAP || '200', 10) || 200;
 
+
+// ─── Bot dispatch ────────────────────────────────────────────────────────────
+// Runs the bots a user @mentioned, in order, each seeing what the ones before it
+// produced. Simpler than runMultiAgent on purpose:
+//   - bots run SEQUENTIALLY, so there is no concurrent-resume race and no need for
+//     --fork-session; each bot instead owns a persistent session of its own
+//     (bot_sessions), so it remembers its side of this chat across turns.
+//   - the first turn passes the bot's system prompt; later turns resume, where
+//     claude-cli.js deliberately does NOT resend it (the prompt is already baked into
+//     the session, and changing it invalidates thinking-block signatures).
+// Returns the chat's own claude_session_id unchanged: a bot turn must never move the
+// assistant's session pointer.
+async function runBotTurns(p, { bots, prompt, rosterBots }) {
+  const { mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort } = p;
+  const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
+  const botTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'];
+  const turnCap = Math.min(maxTurns || 30, MULTI_AGENT_MAX_TURNS_CAP);
+  const previous = [];
+
+  for (const bot of bots) {
+    if (abortController?.signal?.aborted) break;
+
+    const ctx = previous.length
+      ? '\n\nWhat the bots before you produced in this same turn:\n'
+        + previous.map(x => `[@${x.handle}]: ${x.text.substring(0, 4000)}`).join('\n\n')
+      : '';
+    const botPrompt = prompt + ctx;
+    const botSp = botsLogic.buildBotSystemPrompt(bot, rosterBots);
+    const prior = stmts.getBotSession.get(sessionId, bot.id);
+    let botSession = prior?.claude_session_id || null;
+
+    ws.send(JSON.stringify({ type: 'agent_status', agent: bot.id, status: `${bot.avatar || '🤖'} ${bot.label}`, ...(tabId ? { tabId } : {}) }));
+
+    let botText = '', botResult = null, botErrored = false;
+    await new Promise(res => {
+      let _settled = false;
+      const _res = () => { if (!_settled) { _settled = true; res(); } };
+      cli.send({
+        prompt: botPrompt,
+        sessionId: botSession,
+        // A bot may pin its own model; otherwise it follows the chat's.
+        model: bot.model || model,
+        maxTurns: turnCap,
+        // Only applied when there is no session to resume — that is exactly why each
+        // bot needs its own session rather than sharing the chat's.
+        systemPrompt: botSp,
+        mcpServers,
+        allowedTools: botTools,
+        abortController,
+        effort,
+        name: bot.label,
+        // 'project,local' deliberately omits 'user': a bot must follow the project's
+        // conventions, but the user's personal CLAUDE.md is an agreement between them
+        // and their own assistant. Inheriting it made every bot reply open with the
+        // user's activation-token preamble — noise the bot was never asked for.
+        settingSources: 'project,local',
+      })
+        .onText(t => {
+          botText += t;
+          const _cb = (chatBuffers.get(sessionId) || '') + t;
+          chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb);
+          try { ws.send(JSON.stringify({ type: 'text', text: t, agent: bot.id, ...(tabId ? { tabId } : {}) })); } catch {}
+        })
+        .onTool((n, i) => {
+          if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') {
+            try { ws.send(JSON.stringify({ type: 'tool', tool: n, input: (i || '').substring(0, 600), agent: bot.id, ...(tabId ? { tabId } : {}) })); } catch {}
+          }
+          try { stmts.addMsg.run(sessionId, 'assistant', 'tool', (i || '').substring(0, 500), n, bot.id, null, null); } catch {}
+        })
+        .onResult(r => { botResult = r; })
+        .onSessionId(sid => { botSession = sid; })
+        .onError(err => {
+          botErrored = true;
+          try { ws.send(JSON.stringify({ type: 'agent_status', agent: bot.id, status: `❌ ${String(err).substring(0, 200)}`, ...(tabId ? { tabId } : {}) })); } catch {}
+          _res();
+        })
+        .onDone(() => _res());
+    });
+
+    // Remember this bot's session so the next mention resumes the same thread. The id
+    // can arrive either from .onSessionId (first run) or in the result frame (resume) —
+    // same normalisation as claude-cli.js.
+    const _rid = botResult?.session_id;
+    const _sid = typeof _rid === 'string' ? _rid
+      : (_rid && typeof _rid === 'object' && typeof _rid.session_id === 'string') ? _rid.session_id
+      : botSession;
+    if (_sid) { try { stmts.setBotSession.run(sessionId, bot.id, _sid); } catch {} }
+
+    if (botText) { try { stmts.addMsg.run(sessionId, 'assistant', 'text', botText, null, bot.id, null, null); } catch {} }
+
+    // An incomplete answer is never handed to the next bot: a truncated or failed run
+    // reads as fact to whoever receives it, and the error compounds down the chain.
+    const ok = !botErrored && isAgentSuccess(botResult);
+    if (ok) {
+      previous.push({ handle: bot.id, text: botText });
+    } else if (bots.indexOf(bot) < bots.length - 1) {
+      const note = `\n\n⚠️ @${bot.id} did not finish (${agentStopReason(botResult, botErrored)}) — its output is not passed to the next bot.\n\n`;
+      try { ws.send(JSON.stringify({ type: 'text', text: note, agent: bot.id, ...(tabId ? { tabId } : {}) })); } catch {}
+    }
+  }
+  return claudeSessionId || null;
+}
+
 async function runMultiAgent(p) {
   const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort } = p;
   // Entry guard: the caller creates the AbortController before prompt classification and
@@ -7304,6 +7407,34 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      // ── Bot mentions ────────────────────────────────────────────────────────
+      // Resolution runs against EVERY handle, not just this project's, so that
+      // mentioning a bot that exists elsewhere gives a clear answer instead of
+      // silently falling through to the file-attachment meaning of '@'.
+      let mentionedBots = [], projectBots = [], botPrompt = msg.text || '';
+      try {
+        const allBots = stmts.listBots.all();
+        if (allBots.length) {
+          const wd = existSess?.workdir || msg.workdir || WORKDIR;
+          const proj = loadProjects().find(pr => pr.workdir === wd);
+          projectBots = proj ? stmts.listProjectBots.all(proj.id) : [];
+          const available = new Set(projectBots.map(b => b.id));
+          const parsed = botsLogic.parseMentions(msg.text || '', allBots.map(b => b.id));
+          if (parsed.handles.length) {
+            botPrompt = parsed.cleaned;
+            const byId = new Map(allBots.map(b => [b.id, b]));
+            mentionedBots = parsed.handles.filter(h => available.has(h)).map(h => byId.get(h));
+            const elsewhere = parsed.handles.filter(h => !available.has(h));
+            for (const h of elsewhere) {
+              const label = byId.get(h)?.label || h;
+              proxy.send(JSON.stringify({ type: 'text',
+                text: `ℹ️ **@${h}** (${label}) exists but is not in this project. Add it to this project to use it here.\n\n`,
+                ...(tabId ? { tabId } : {}) }));
+            }
+          }
+        }
+      } catch (e) { log.warn('bot mention resolution failed', { err: e.message }); }
+
       // Validate workdir: if the session belongs to a different project, don't reuse it.
       if (existSess && msg.workdir && existSess.workdir && existSess.workdir !== msg.workdir) {
         log.warn('workdir mismatch — refusing to reuse session from different project', { sessionId: localSessionId, sessionWorkdir: existSess.workdir, msgWorkdir: msg.workdir });
@@ -7575,6 +7706,11 @@ wss.on('connection', (ws) => {
         }
         newCid = r.cid;
         resultMeta = r.resultMeta;
+      } else if (mentionedBots.length) {
+        // @mentions take precedence over the agent-mode setting: naming a bot is an
+        // explicit instruction about who answers, and it would be wrong to hand the
+        // turn to the planner instead.
+        newCid = await runBotTurns(params, { bots: mentionedBots, prompt: botPrompt, rosterBots: projectBots });
       } else if (agentMode==='multi') {
         newCid = await runMultiAgent(params);
       } else {
