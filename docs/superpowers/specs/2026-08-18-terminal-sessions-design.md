@@ -153,6 +153,15 @@ Verified from Node on tmux 3.7b:
 3. **Protocol chatter must never reach the browser.** `%begin`/`%end`/`%error` framing,
    `%session-changed`, `%window-*` and command reply bodies are not terminal output.
    `%output` can arrive *between* `%begin` and `%end`.
+
+3a. **Agent death needs a subscription, not a notification.** `%exit` is the only exit
+   notification control mode sends, and its reason field is empty on every path in
+   3.7b. `%pane-exited`, `%session-closed` and `%pane-died` **do not exist** — checked
+   against the full list in `man tmux`. Under `remain-on-exit on` an exiting agent
+   produces *no* notification at all (measured: `pane_dead=1`, control client silent),
+   which is precisely the case that option exists for. Subscribe instead:
+   `refresh-client -B "deadwatch:%*:#{pane_dead}"`, then treat
+   `%subscription-changed deadwatch … : 1` as the exit signal.
 4. **`window-size manual` and `refresh-client -C` conflict.** With manual sizing the
    window ignores the client's size — measured: `refresh-client -C 100x30` left the
    window at 80x24. Manual sizing is what we want (it stops a second browser tab from
@@ -161,7 +170,19 @@ Verified from Node on tmux 3.7b:
 5. **`remain-on-exit on`** so an exited agent leaves a dead pane (scrollback preserved,
    `respawn-pane` revives it in place) instead of destroying the session silently.
 6. **Input chunking.** A paste becomes a `send-keys` command line ~3x its byte length;
-   chunk at 512 bytes so no command line runs past ~1.6 KB.
+   chunk at 512 bytes so no command line runs past ~1.6 KB. The 512-byte figure is
+   arithmetic, not a measured ceiling — tmux's real command-line limit was not probed.
+
+7. **Chunk splitting is defensive, not observed.** Two bursts (480 KB / 274 chunks and
+   200 KB written as one line) produced zero mid-line splits: tmux caps each `%output`
+   around 2 KB. An independent run reached the same result at 944 KB and additionally
+   proved the parser byte-identical when fed the same stream in adversarial 1-7 byte
+   fragments. Keep the buffering — it is correct and free — but the motivating case is
+   unreproduced on macOS with tmux 3.7b.
+
+8. **No backpressure exists yet.** `p.stdout` runs in flowing mode and `onData` is
+   called per line with no bound. A slow WebSocket consumer will buffer without limit;
+   the WS layer (Task 5) must check `bufferedAmount` and pause the stream.
 
 ### Known limitation: bootstrap is not full state restore
 
