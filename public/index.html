@@ -13481,7 +13481,7 @@ function openDelegateModal() {
     // but no template) cannot be delegated to — the server rejects them with 400 —
     // so they must not appear as pickable cards here. They stay visible in the
     // agent settings list, which is where they are configured.
-    const agents = Object.entries(_externalAgents).filter(([, cfg]) => !!cfg?.template);
+    const agents = Object.entries(_externalAgents).filter(([, cfg]) => !!String(cfg?.template || '').trim());
     if (agents.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'dlg-agent-empty';

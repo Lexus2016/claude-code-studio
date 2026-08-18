@@ -6637,7 +6637,11 @@ app.post('/api/external-agents', express.json(), (req, res) => {
   if (!id || !label || !template) return res.status(400).json({ error: 'id, label, template required' });
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) return res.status(400).json({ error: 'id must be alphanumeric (a-z, 0-9, -, _)' });
   const config = loadConfig();
-  config.externalAgents[id] = { label, template };
+  // Preserve fields this endpoint does not manage. The editor form only submits
+  // label + template, so a plain overwrite would silently wipe an agent's terminal
+  // commands (interactive / newIdFlag / resume / resumeLast) the moment anyone
+  // renames it — and the next terminal session for that agent would fail to start.
+  config.externalAgents[id] = { ...(config.externalAgents[id] || {}), label, template };
   // If re-adding a previously removed default, clear the removal marker
   if (config._removedAgents) {
     config._removedAgents = config._removedAgents.filter(r => r !== id);
@@ -6695,7 +6699,7 @@ app.post('/api/delegate', express.json(), (req, res) => {
   // buildTerminalCommand yields a bare `cd <workdir> && `, a terminal window opens
   // and exits, the API answers {ok:true}, and sync mode waits forever on a
   // DIALOG.md that no agent will ever write. Fail loudly instead.
-  if (!agentConfig.template) {
+  if (!String(agentConfig.template || '').trim()) {
     return res.status(400).json({ error: `Agent "${agentId}" does not support delegation (no template configured)` });
   }
 
@@ -6899,6 +6903,17 @@ wss.on('connection', (ws) => {
 
       // Single DB lookup — reused for workdir check, existence check, claude_session_id, and auto-title
       let existSess = localSessionId ? stmts.getSession.get(localSessionId) : null;
+
+      // A terminal session is driven by a human through the terminal WebSocket and
+      // must never be driven by the chat engine as well. Two drivers on one tmux
+      // session is the exact failure the typed-session design exists to prevent:
+      // the engine's paste-buffer lands in the same input box the human is typing
+      // in, and paneBusy() reads the human's keystrokes as "agent still working"
+      // until the 10-minute idle watchdog fires. Refuse instead of silently racing.
+      if (existSess && existSess.kind === 'terminal') {
+        proxy.send(JSON.stringify({ type: 'error', error: 'This is a terminal session — open it in the terminal view instead of sending chat messages.', ...(tabId ? { tabId } : {}) }));
+        return;
+      }
 
       // Validate workdir: if the session belongs to a different project, don't reuse it.
       if (existSess && msg.workdir && existSess.workdir && existSess.workdir !== msg.workdir) {

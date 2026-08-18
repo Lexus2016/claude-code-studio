@@ -23,6 +23,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'привіт');
   check('NUL byte decodes', [...bridge.decodeOutputPayload('\\000')], [0]);
 
+  console.log('session-name safety:');
+  for (const bad of ['ccsterm-a\nkill-server', 'ccsterm a', 'ccsterm-a;ls', '', null]) {
+    let threw = false;
+    try { bridge.attach({ name: bad, cols: 80, rows: 24, onData: () => {}, onExit: () => {} }); } catch { threw = true; }
+    check(`attach rejects ${JSON.stringify(bad)}`, threw, true);
+  }
+  {
+    let threw = false;
+    try { bridge.ensureSession({ name: 'ccsterm-a\nkill-server', workdir: '/tmp', launchCommand: 'true' }); } catch { threw = true; }
+    check('ensureSession rejects a newline in the name', threw, true);
+  }
+
   if (!bridge.tmuxAvailable()) {
     console.log('SKIP tmux-dependent checks — tmux not available on this host');
     console.log(`\n${pass} passed, ${fail} failed`);
@@ -32,6 +44,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   bridge.killSession(name);
 
   check('cold start reports cold', bridge.ensureSession({ name, workdir: '/tmp', launchCommand: `sh -c 'while true; do echo tick; sleep 1; done'` }), 'cold');
+
+  // A tmux failure must surface, not be reported as a successful cold start —
+  // otherwise the caller attaches to a session that was never created, or to one
+  // running in the wrong directory.
+  {
+    let threw = false;
+    try { bridge.ensureSession({ name: 'ccsterm-nodir', workdir: '/no/such/dir/anywhere', launchCommand: 'true' }); } catch { threw = true; }
+    check('missing workdir throws (tmux would silently use $HOME)', threw, true);
+    bridge.killSession('ccsterm-nodir');
+  }
+  {
+    let threw = false;
+    try { bridge.ensureSession({ name: 'ccsterm-nobin', workdir: '/tmp', launchCommand: '/nonexistent/binary' }); } catch { threw = true; }
+    check('agent that dies instantly throws (tmux still exits 0)', threw, true);
+    bridge.killSession('ccsterm-nobin');
+  }
   await sleep(1500);
   let info = bridge.sessionInfo(name);
   check('session exists after cold start', info.exists, true);

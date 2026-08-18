@@ -31,6 +31,17 @@ function have(bin, args) {
 let _tmux = null;
 function tmuxAvailable() { if (_tmux === null) _tmux = have('tmux', ['-V']); return _tmux; }
 
+// Control-mode commands are newline-delimited, so a session name carrying a newline
+// would split the line and let a caller smuggle a second tmux command. tmuxNameFor()
+// already sanitises, but attach()/ensureSession() must not depend on their caller
+// having used it.
+function assertName(name) {
+  if (typeof name !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(name)) {
+    throw new Error(`unsafe tmux session name: ${JSON.stringify(name)}`);
+  }
+  return name;
+}
+
 function tmux(args, opts = {}) {
   try { return spawnSync('tmux', args, { encoding: 'utf8', ...opts }); }
   catch { return { status: 1, stdout: '', stderr: '' }; }
@@ -72,7 +83,11 @@ function listTerminalSessions() {
   return String(r.stdout || '').split('\n').map(s => s.trim()).filter(s => s.startsWith(TMUX_PREFIX));
 }
 
-// Create or revive the tmux session. Returns which path was taken.
+// Create or revive the tmux session. Returns which path was taken, or throws when
+// tmux refuses — a missing workdir, an unreachable tmux socket or a bad launch
+// command must not be reported as a successful cold start, or the caller attaches
+// to a session that does not exist.
+//
 // remain-on-exit: an agent that exits leaves a DEAD pane instead of destroying the
 // session, so the scrollback survives and respawn-pane can revive it in place.
 // window-size manual: the window size is server-driven, so a second browser tab
@@ -80,15 +95,32 @@ function listTerminalSessions() {
 // `latest` — the most recent client wins). Sizing goes through resize-window;
 // `refresh-client -C` is ignored under manual sizing (measured).
 function ensureSession({ name, workdir, launchCommand }) {
+  assertName(name);
   const state = resolveState({ hasSession: hasSession(name), paneDead: sessionInfo(name).paneDead });
   if (state === 'attach') return state;
   if (state === 'respawn') {
-    tmux(['respawn-pane', '-k', '-t', name, launchCommand]);
+    const r = tmux(['respawn-pane', '-k', '-t', name, launchCommand]);
+    if (r.status !== 0) throw new Error(`tmux respawn-pane failed: ${String(r.stderr || '').trim() || 'unknown error'}`);
     return state;
   }
   const env = { ...process.env };
   delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses the child
-  spawnSync('tmux', ['new-session', '-d', '-s', name, '-c', workdir, launchCommand], { env, stdio: 'ignore' });
+  // tmux does NOT fail on a missing -c directory: it silently falls back to $HOME
+  // (measured — exit 0, pane_current_path=~). The agent would then run against the
+  // wrong tree, so check before creating.
+  if (!workdir || !fs.existsSync(workdir)) {
+    throw new Error(`workdir does not exist: ${workdir}`);
+  }
+  const r = spawnSync('tmux', ['new-session', '-d', '-s', name, '-c', workdir, launchCommand], { env, encoding: 'utf8' });
+  if (r.error || r.status !== 0) {
+    throw new Error(`tmux new-session failed: ${String(r.stderr || r.error?.message || '').trim() || 'unknown error'}`);
+  }
+  // A launch command that dies immediately also exits 0 here: the pane dies before
+  // remain-on-exit can be applied and the session disappears with it (measured with
+  // a nonexistent binary). The only reliable signal is whether the session is there.
+  if (!hasSession(name)) {
+    throw new Error(`agent command exited immediately: ${launchCommand}`);
+  }
   tmux(['set-option', '-t', name, 'remain-on-exit', 'on']);
   tmux(['set-option', '-t', name, 'window-size', 'manual']);
   return state;
@@ -125,16 +157,21 @@ function captureScreen(name) {
 
 // Attach a control-mode client.
 //
-// Sequencing on attach: spawn first and BUFFER every %output, then capture the
-// screen, emit the capture, then flush the buffer. Capturing first would drop
-// whatever the agent wrote between the capture and the attach.
+// Bootstrap sequencing. Control mode replays nothing from before the attach, so the
+// browser is painted from a capture-pane snapshot. The snapshot is taken with a
+// SYNCHRONOUS spawnSync, which is the load-bearing detail: Node cannot run the
+// stdout 'data' handler while it blocks, so every %output buffered up to that moment
+// is output tmux had already applied to the pane — i.e. it is already inside the
+// snapshot. Replaying it would double-print and can corrupt a TUI's screen, so the
+// buffer is DISCARDED, not flushed. Anything arriving after the snapshot returns is
+// streamed live.
 function attach({ name, cols, rows, onData, onExit }) {
+  assertName(name);
   const env = { ...process.env };
   delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses children
   const p = spawn('tmux', ['-C', 'attach-session', '-t', name], { env, stdio: ['pipe', 'pipe', 'pipe'] });
 
   let booted = false;
-  const pending = [];
   const emit = (buf) => { if (!buf || !buf.length) return; try { onData(buf); } catch {} };
   // A dying session reports twice — once as a `%…-closed`/`%exit` notification and
   // again when the control client process exits. Callers close a WebSocket in this
@@ -156,8 +193,8 @@ function attach({ name, cols, rows, onData, onExit }) {
         // payload itself contains spaces and must not be tokenised.
         const rest = line.slice('%output '.length);
         const sp = rest.indexOf(' ');
-        const data = decodeOutputPayload(sp === -1 ? '' : rest.slice(sp + 1));
-        if (booted) emit(data); else pending.push(data);
+        // Pre-boot output is already inside the snapshot below — drop it.
+        if (booted) emit(decodeOutputPayload(sp === -1 ? '' : rest.slice(sp + 1)));
       } else if (line.startsWith('%exit') || line.startsWith('%pane-exited')
               || line.startsWith('%session-closed') || line.startsWith('%pane-died')) {
         fireExit();
@@ -198,10 +235,10 @@ function attach({ name, cols, rows, onData, onExit }) {
   // Bootstrap once the client is registered: give tmux a moment to attach, then
   // paint the current screen and release everything buffered since.
   setTimeout(() => {
-    const screen = captureScreen(name);
+    if (exited) return;
+    const screen = captureScreen(name);   // synchronous — see the bootstrap note above
+    booted = true;                        // set in the same tick, before any data event
     if (screen) emit(Buffer.concat([Buffer.from('\x1b[H\x1b[2J', 'latin1'), screen]));
-    booted = true;
-    while (pending.length) emit(pending.shift());
   }, 150);
 
   return {
