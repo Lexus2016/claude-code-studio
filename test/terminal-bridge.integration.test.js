@@ -117,6 +117,21 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check('onExit fires exactly once on kill-while-attached', exitCalls, 1);
   h2.close();
 
+  // The agent process exiting under remain-on-exit sends NO tmux notification —
+  // the pane just becomes dead. Without the pane_dead subscription the browser
+  // would sit on a frozen frame forever, which is the exact case remain-on-exit
+  // was introduced for.
+  bridge.killSession(name);
+  bridge.ensureSession({ name, workdir: '/tmp', launchCommand: `sh -c 'echo alive; sleep 2'` });
+  await sleep(600);
+  let deadExit = 0;
+  const h3 = bridge.attach({ name, cols: 80, rows: 24, onData: () => {}, onExit: () => { deadExit++; } });
+  await sleep(5000);
+  check('agent death under remain-on-exit reaches onExit', deadExit, 1);
+  check('the session itself is still alive (scrollback kept)', bridge.sessionInfo(name).exists, true);
+  check('and its pane is marked dead', bridge.sessionInfo(name).paneDead, true);
+  h3.close();
+
   // A session whose command exits must leave a DEAD pane, not vanish — that is the
   // 'respawn' restore path, and it is what preserves the scrollback of a crashed agent.
   bridge.ensureSession({ name, workdir: '/tmp', launchCommand: `sh -c 'echo bye; sleep 1'` });

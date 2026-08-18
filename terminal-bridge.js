@@ -90,10 +90,12 @@ function listTerminalSessions() {
 //
 // remain-on-exit: an agent that exits leaves a DEAD pane instead of destroying the
 // session, so the scrollback survives and respawn-pane can revive it in place.
-// window-size manual: the window size is server-driven, so a second browser tab
-// cannot resize the window out from under the first (tmux's default policy is
-// `latest` — the most recent client wins). Sizing goes through resize-window;
-// `refresh-client -C` is ignored under manual sizing (measured).
+// window-size manual: the size stops following clients, so a tab attaching or
+// detaching no longer resizes the window under the other tabs (tmux's default
+// `latest` re-sizes to whichever client acted last, including on detach). It does
+// NOT arbitrate between two tabs actively resizing — there the last resize still
+// wins, same as `latest`. Sizing goes through resize-window; `refresh-client -C`
+// works only under the default policy and is silently ignored here (measured).
 function ensureSession({ name, workdir, launchCommand }) {
   assertName(name);
   const state = resolveState({ hasSession: hasSession(name), paneDead: sessionInfo(name).paneDead });
@@ -195,9 +197,19 @@ function attach({ name, cols, rows, onData, onExit }) {
         const sp = rest.indexOf(' ');
         // Pre-boot output is already inside the snapshot below — drop it.
         if (booted) emit(decodeOutputPayload(sp === -1 ? '' : rest.slice(sp + 1)));
-      } else if (line.startsWith('%exit') || line.startsWith('%pane-exited')
-              || line.startsWith('%session-closed') || line.startsWith('%pane-died')) {
+      } else if (line.startsWith('%exit')) {
+        // %exit is the ONLY exit notification tmux control mode sends (session
+        // killed, server killed, or we detached). Its reason field is empty on
+        // every path in 3.7b, so it cannot be branched on — treat any %exit as
+        // "gone". Note: %pane-exited / %session-closed / %pane-died do NOT exist
+        // in the protocol (checked against the full list in `man tmux`).
         fireExit();
+      } else if (line.startsWith('%subscription-changed deadwatch ')) {
+        // The agent process exiting under `remain-on-exit on` fires NO notification
+        // at all — verified: the pane goes pane_dead=1 and the control client hears
+        // nothing, so without this the browser would sit on a frozen frame forever.
+        // A format subscription is the only mechanism that reports it.
+        if (/:\s*1\s*$/.test(line)) fireExit();
       }
       // Everything else (%begin/%end/%error command framing, %session-changed,
       // %window-* notifications and command reply bodies) is protocol chatter and
@@ -222,16 +234,15 @@ function attach({ name, cols, rows, onData, onExit }) {
   const doResize = (c, r) => {
     const cc = Math.max(20, Math.min(500, parseInt(c, 10) || 80));
     const rr = Math.max(5, Math.min(200, parseInt(r, 10) || 24));
-    // resize-window, NOT `refresh-client -C`: ensureSession sets `window-size manual`,
-    // which makes the window size server-driven and ignores the client's own size.
-    // The two conflict — verified: with manual sizing, refresh-client -C leaves the
-    // window at its old dimensions. Manual sizing is what we want, because it stops
-    // a second browser tab from resizing the window out from under the first
-    // (tmux's default policy is `latest` — the most recent client wins).
+    // resize-window, NOT `refresh-client -C`: ensureSession sets `window-size manual`
+    // and the two conflict — verified in both directions (refresh-client -C leaves a
+    // manually-sized window untouched). See the policy note on ensureSession.
     tmux(['resize-window', '-t', name, '-x', String(cc), '-y', String(rr)]);
   };
 
   doResize(cols, rows);
+  // Subscribe to the pane's liveness — see the %subscription-changed branch above.
+  try { p.stdin.write('refresh-client -B "deadwatch:%*:#{pane_dead}"\n'); } catch {}
   // Bootstrap once the client is registered: give tmux a moment to attach, then
   // paint the current screen and release everything buffered since.
   setTimeout(() => {
