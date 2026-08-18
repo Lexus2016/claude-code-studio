@@ -75,9 +75,10 @@ function listTerminalSessions() {
 // Create or revive the tmux session. Returns which path was taken.
 // remain-on-exit: an agent that exits leaves a DEAD pane instead of destroying the
 // session, so the scrollback survives and respawn-pane can revive it in place.
-// window-size manual: SIGWINCH cannot be delivered through `script`, so sizing is
-// driven explicitly by resize(); tmux's default (`latest`) would let any client
-// resize the window out from under the others.
+// window-size manual: the window size is server-driven, so a second browser tab
+// cannot resize the window out from under the first (tmux's default policy is
+// `latest` — the most recent client wins). Sizing goes through resize-window;
+// `refresh-client -C` is ignored under manual sizing (measured).
 function ensureSession({ name, workdir, launchCommand }) {
   const state = resolveState({ hasSession: hasSession(name), paneDead: sessionInfo(name).paneDead });
   if (state === 'attach') return state;
@@ -135,6 +136,11 @@ function attach({ name, cols, rows, onData, onExit }) {
   let booted = false;
   const pending = [];
   const emit = (buf) => { if (!buf || !buf.length) return; try { onData(buf); } catch {} };
+  // A dying session reports twice — once as a `%…-closed`/`%exit` notification and
+  // again when the control client process exits. Callers close a WebSocket in this
+  // handler, so it must fire at most once.
+  let exited = false;
+  const fireExit = () => { if (exited) return; exited = true; try { onExit(); } catch {} };
 
   // Line assembly: a tmux notification can be split across chunk boundaries, and
   // several can arrive in one chunk. Accumulate raw bytes and cut on LF only.
@@ -154,7 +160,7 @@ function attach({ name, cols, rows, onData, onExit }) {
         if (booted) emit(data); else pending.push(data);
       } else if (line.startsWith('%exit') || line.startsWith('%pane-exited')
               || line.startsWith('%session-closed') || line.startsWith('%pane-died')) {
-        try { onExit(); } catch {}
+        fireExit();
       }
       // Everything else (%begin/%end/%error command framing, %session-changed,
       // %window-* notifications and command reply bodies) is protocol chatter and
@@ -162,8 +168,8 @@ function attach({ name, cols, rows, onData, onExit }) {
     }
   });
 
-  p.on('exit', () => { try { onExit(); } catch {} });
-  p.on('error', () => { try { onExit(); } catch {} });
+  p.on('exit', fireExit);
+  p.on('error', fireExit);
 
   const write = (data) => {
     const b = Buffer.isBuffer(data) ? data : Buffer.from(String(data), 'utf8');

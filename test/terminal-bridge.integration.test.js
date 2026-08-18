@@ -76,6 +76,19 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   bridge.killSession(name);
   check('killSession removes it', bridge.sessionInfo(name).exists, false);
 
+  // Killing a session while a client is attached reports twice — once as a tmux
+  // notification and once as the client process exiting. onExit must be idempotent:
+  // the WebSocket handler closes a socket in it.
+  bridge.ensureSession({ name, workdir: '/tmp', launchCommand: `sh -c 'while true; do echo x; sleep 1; done'` });
+  await sleep(1200);
+  let exitCalls = 0;
+  const h2 = bridge.attach({ name, cols: 80, rows: 24, onData: () => {}, onExit: () => { exitCalls++; } });
+  await sleep(1200);
+  bridge.killSession(name);
+  await sleep(2000);
+  check('onExit fires exactly once on kill-while-attached', exitCalls, 1);
+  h2.close();
+
   // A session whose command exits must leave a DEAD pane, not vanish — that is the
   // 'respawn' restore path, and it is what preserves the scrollback of a crashed agent.
   bridge.ensureSession({ name, workdir: '/tmp', launchCommand: `sh -c 'echo bye; sleep 1'` });
