@@ -41,7 +41,29 @@ const req = http.request({
       const messages = result.messages || [];
       if (messages.length === 0) return approve();
 
-      const content = messages.map(m => m.content).join('\n\n');
+      // A hook can only hand back TEXT, so an attached image cannot be inlined the
+      // way the MCP path does. Every interrupt attachment is written to disk by
+      // saveInterruptAttachments before it reaches here, so the file path is given
+      // instead — the Read tool opens images as well as text. Without this the
+      // attachment was dropped silently while the UI reported it as delivered.
+      const parts = [];
+      for (const m of messages) {
+        if (m.content) parts.push(m.content);
+        for (const att of (Array.isArray(m.attachments) ? m.attachments : [])) {
+          if (att.type === 'ssh') {
+            let ssh = `[SSH host: ${att.label || att.host || 'SSH'}]\nHost: ${att.host}:${att.port || 22}`;
+            if (att.sshKeyPath) ssh += `\nSSH key: ${att.sshKeyPath}`;
+            parts.push(ssh);
+          } else if (att.path) {
+            const isImage = typeof att.mimeType === 'string' && att.mimeType.startsWith('image/');
+            parts.push(`[Attached ${isImage ? 'image' : 'file'}: ${att.name || 'file'}]\n`
+              + `Saved at: ${att.path}\n`
+              + `Use the Read tool on that path to see it. Do this before continuing.`);
+          }
+        }
+      }
+      const content = parts.join('\n\n');
+      if (!content.trim()) return approve();
       process.stdout.write(JSON.stringify({
         decision: 'block',
         reason: `USER CLARIFICATION (sent while you were working):\n\n${content}\n\nAcknowledge this, adjust your approach if needed, then continue.`,

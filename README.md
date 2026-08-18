@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v5.71.0** — **Security & reliability hardening.** Restores the SSH chat engine (a regression had broken SSH-project messages), stops the desktop build from bundling local secrets, adds a WebSocket crash-guard and a JSON API error handler, tightens auth-file permissions to `0600`, and wires up the automated test suite (`npm test`).
+> **v7.1.1** — **Bots and terminal agents.** Create named AI specialists with their own prompt, model and memory, and call several in one chat with `@@handle` — in the browser, on Kanban, in the Scheduler and from Telegram. Open any CLI agent as a live terminal tab that survives a restart. Plus a Telegram audit pass: no more lost answers on a deleted topic, broken code blocks in long replies, or duplicated prompts.
 
 ---
 
@@ -194,6 +194,57 @@ Use cases beyond backup:
 - **Transfer between machines** — export on your desktop, import on your laptop or server. Same conversation, different computer.
 - **Feed to any AI agent** — drop the exported JSON into ChatGPT, Gemini, or any other AI and say "review what we discussed and let's continue." The format is human-readable and self-contained.
 - **Import from any AI** — had a productive session in another tool? Ask it to save the dialog as `{ "session": { "title": "..." }, "messages": [{ "role": "user"|"assistant", "type": "text", "content": "..." }] }` and import the result into Studio. Your conversations aren't locked to one platform.
+
+### 🤝 Bots — Build Your Own Named AI Team
+
+One assistant answering everything is a generalist. **Bots** let you create *named specialists* — each with its own system prompt, its own model, its own conversation memory — and put several of them in the **same chat**, addressed by name.
+
+Create a bot in the sidebar: give it a name, an avatar, a description, pick a model, write its instructions (or start from a built-in template — Analyst, Editor, Reviewer, Explainer). Then just call it:
+
+```
+@@analyst @@writer Analyse this quarter's crypto market and produce a PDF report for the traders' club.
+```
+
+Both bots work the turn **in order**, and each one sees what the previous one produced — so the analyst digs through the data and the writer turns that analysis into the finished report. No copy-pasting between chats, no re-explaining context.
+
+**Why this beats one big prompt:**
+
+| | One generic assistant | Named bots |
+|---|---|---|
+| Instructions | One prompt tries to cover everything | Each bot has a focused, short prompt it always follows |
+| Model | One model for every job | Cheap model for routine work, strong model where it matters |
+| Memory | One thread, everything blurs together | Each bot keeps its own CLI session — its own continuity |
+| Review | The same "voice" checks its own work | A reviewer bot with a different brief challenges the result |
+| Cost | Big context on every message | Only the bots you actually called run |
+
+**What makes it genuinely useful:**
+
+- **`@@` calls a bot, `@` still attaches a file** — two separate sigils, so a mention is never ambiguous. Unknown handle? You get told, not silence.
+- **Per-project availability, global identity** — a bot lives in your library once; you choose which projects it appears in. No philosopher bot cluttering a crypto project.
+- **They know about each other** — every bot gets a roster of its teammates, so it can hand work over instead of doing someone else's job badly.
+- **Evidence clause built in** — every bot is instructed to state the file, command output, or source behind a factual claim, and to label a guess as a guess.
+- **Visible attribution** — in chat, each bot answers in its own bubble with its name, avatar and colour. In Telegram, each answer carries its own header line.
+- **Assign a bot to work, not just chat** — pick a bot on a **Kanban** card or a **Scheduler** task, and that bot runs the job on autopilot.
+- **Works from your phone** — mention a bot in Telegram and it answers there, correctly attributed.
+- **Autocomplete** — type `@@` and pick from the palette; you never have to remember a handle.
+
+A bot that fails mid-turn says so, and its unfinished output is never passed to the next bot as if it were fact.
+
+### >_ Terminal Agents — Any CLI Agent, Live in a Tab
+
+Sometimes you don't want a chat abstraction — you want **the actual agent CLI, running, with its real interface**. Claude Code, Codex, Grok, opencode, Antigravity, Kimi, Cursor Agent — or just a shell.
+
+Open a new tab, choose **Terminal agent**, pick who to launch. A real terminal appears **as a tab in the same workspace**, next to your chat tabs:
+
+- **Full TUI, not a transcript** — the agent's own interface, colours, prompts, keystrokes. Everything works because it *is* the real thing.
+- **Tabs, not a takeover** — keep a chat tab and two terminal tabs open and switch between them. Same window, same sidebars, same project.
+- **Survives everything** — close the tab, close the browser, restart the server: the session keeps running in `tmux` on the host. Reopen it from history and you're back exactly where you were, scrollback included.
+- **Reopened, not restarted** — when a session was reaped to free memory, Studio restores that agent's *specific conversation* by id, not "the most recent one".
+- **Idle sessions are reaped** — terminals nobody is watching are shut down after a timeout so they don't sit in RAM; the next time you open one, it comes back.
+- **The font slider works here too** — one control resizes chat and terminal alike; the terminal reflows its columns live.
+- **Capability-checked, not OS-guessed** — the server probes for `tmux` at boot and disables the button when it isn't there. Works on macOS, Linux, Docker, and Windows via WSL/Git-Bash.
+
+A session is typed **chat** *or* **terminal** at creation and never switches — so two drivers can never fight over one conversation.
 
 ### 📋 Kanban Board
 
@@ -394,6 +445,8 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | Category | Features |
 |----------|----------|
 | **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, terminal catch-up (import a `claude --resume` conversation into the web chat), extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse + Stop hooks + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom, `I` focus input, character counter, `T` scroll-to-top, `N` new session, font size adjust (`=`/`-`/`0`), draft auto-save |
+| **Bots** | Named AI specialists with own prompt/model/memory, several per chat via `@@handle`, sequential turns with context hand-off, `@@` autocomplete palette, built-in templates (Analyst / Editor / Reviewer / Explainer), per-project availability with a global library, teammate roster, evidence clause, per-bot chat bubbles with name + avatar + colour, assignable to Kanban cards and Scheduler tasks, works from Telegram with per-bot headers |
+| **Terminal agents** | Any CLI agent live in a workspace tab (Claude Code, Codex, Grok, opencode, Antigravity, Kimi, Cursor Agent, shell), full TUI over tmux control mode, several tabs side by side with chat, survives browser/server restart, exact conversation restore by id, idle reaping with revive on reopen, shared font-size control, capability-checked (tmux) on macOS/Linux/Docker/WSL |
 | **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, global default (★ set-as-default for new chats/tasks), per-item override, available in Chat + Kanban + Scheduler, tmux-aware (auto-disabled without tmux), Opus / Sonnet / Haiku model selector |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, engine + model + effort per task/chain |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, engine + model + effort per task, watchdog auto-recovery |

@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const url = require('url');
-const { execSync, spawn: spawnProc } = require('child_process');
+const { execSync, spawnSync, spawn: spawnProc } = require('child_process');
 const crypto = require('crypto');
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
@@ -38,6 +38,17 @@ const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
 const { isTransientOverload, shouldRetryOverload } = require('./rate-limit-utils');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
+const {
+  resolveAgentCommands, supportsTerminal, mergeAgentDefaults, parseNewIdOutput,
+  tmuxNameFor, buildLaunchCommand, isReapCandidate, shouldReap, pickOverflow,
+} = require('./terminal-session');
+const termBridge = require('./terminal-bridge');
+const botsLogic = require('./bots');
+// A message that is nothing but a mention ("@@analyst") strips to an empty string —
+// that used to become the literal `-p ''` prompt, starting the bot's CLI with no
+// instruction at all. One line stands in for "you were addressed with nothing else
+// to go on".
+const BARE_MENTION_PROMPT = "You were addressed directly with no other text — greet them and ask what they need, or continue naturally if there is relevant prior context in this conversation.";
 const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
@@ -75,6 +86,10 @@ const log = (() => {
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
+// Terminal sessions get their own endpoint: a different protocol (raw PTY bytes),
+// a different lifecycle, and a hard capability/security gate the chat socket has no
+// reason to carry.
+const wssTerm = new WebSocketServer({ noServer: true });
 
 const PORT = process.env.PORT || 3000;
 // When launched via npx/global install, cli.js sets APP_DIR to cwd so user
@@ -394,6 +409,17 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN notes TEXT DEFAULT ''`); } catch 
 // transcript_offset: catch-up cursor (byte offset into <cid>.jsonl). NULL = not yet
 // baselined; advanced to transcript EOF after every web turn + by /catch-up.
 try { db.exec(`ALTER TABLE sessions ADD COLUMN transcript_offset INTEGER`); } catch {}
+// Terminal sessions: kind is fixed at creation and never switched — a session is
+// either driven by the chat engine or by a human in a terminal, never both. That
+// removes the two-drivers contention (engine send-keys vs human typing) by
+// construction instead of policing it at runtime.
+try { db.exec(`ALTER TABLE sessions ADD COLUMN kind TEXT DEFAULT 'chat'`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN terminal_agent TEXT`); } catch {}   // external-agent id, e.g. 'claude'
+try { db.exec(`ALTER TABLE sessions ADD COLUMN agent_conv_id TEXT`); } catch {}    // the agent's own conversation id, for exact resume
+// Whether this terminal session has ever been launched. A minted-but-unused
+// conversation id is NOT resumable: starting with `--resume <uuid>` before the
+// first run makes the agent fail on a conversation that does not exist yet.
+try { db.exec(`ALTER TABLE sessions ADD COLUMN terminal_started INTEGER DEFAULT 0`); } catch {}
 // Performance indexes — safe to re-run (IF NOT EXISTS)
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
@@ -450,8 +476,75 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_chain_session ON task_chains(session_id);
   CREATE INDEX IF NOT EXISTS idx_chain_workdir ON task_chains(workdir);
+
+  -- Bots: named participants a user can @mention inside a normal chat. Their id IS
+  -- the handle. Kept in SQLite rather than config.json because system prompts run to
+  -- kilobytes, the roster grows, and it joins against messages.agent_id — config.json
+  -- is rewritten wholesale on every settings change.
+  CREATE TABLE IF NOT EXISTS bots (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    engine TEXT NOT NULL DEFAULT 'claude',
+    model TEXT,
+    system_prompt TEXT NOT NULL DEFAULT '',
+    active_skills TEXT NOT NULL DEFAULT '[]',
+    active_mcp TEXT NOT NULL DEFAULT '[]',
+    avatar TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    -- Soft delete. A freed handle that is later reused would make a new bot appear
+    -- as the author of the old one's messages, since messages.agent_id stores the
+    -- handle. The row stays; the handle is reserved forever.
+    deleted_at TEXT
+  );
+
+  -- One CLI session per (chat, bot). Required, not an optimisation: claude-cli.js
+  -- passes --system-prompt only when there is NO session to resume, so a bot sharing
+  -- the chat's session would silently run with no system prompt at all — its identity
+  -- would not exist. A private session also gives the bot memory of its own thread.
+  -- Which bots are available in which project. Identity stays global — the handle is
+  -- the identity and messages.agent_id stores it — but AVAILABILITY is per project, so
+  -- a crypto-research project does not offer a philosophy bot in its @ palette.
+  -- Queued chat messages. The in-memory queue dies with the process, so a message
+  -- waiting behind a running turn used to vanish on restart with no trace anywhere.
+  -- The row is written when the message is queued and deleted the moment it is
+  -- dequeued — BEFORE the run starts. A crash mid-run therefore loses that one
+  -- message rather than replaying it, which is the safer direction: re-running a
+  -- chat turn spends money and can edit files a second time.
+  CREATE TABLE IF NOT EXISTS queued_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    payload    TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_queued_session ON queued_messages(session_id);
+
+  CREATE TABLE IF NOT EXISTS project_bots (
+    project_id TEXT NOT NULL,
+    bot_id     TEXT NOT NULL,
+    added_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (project_id, bot_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS bot_sessions (
+    chat_session_id   TEXT NOT NULL,
+    bot_id            TEXT NOT NULL,
+    claude_session_id TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (chat_session_id, bot_id)
+  );
 `);
 try { db.exec(`ALTER TABLE task_chains ADD COLUMN effort TEXT`); } catch {}      // claude --effort dial; chain-level default for new tasks
+// bots.deleted_at was added after the table shipped, so CREATE TABLE IF NOT EXISTS is a
+// no-op on an existing install and every /api/bots query would fail with
+// "no such column: deleted_at". Same pattern as every other schema change here.
+try { db.exec(`ALTER TABLE bots ADD COLUMN deleted_at TEXT`); } catch {}
+// A task can be assigned to a bot: it then runs with that bot's system prompt and
+// model, and its output is attributed to the bot. Combined with the scheduling
+// columns already here (scheduled_at / recurrence) this is what makes a recurring
+// job belong to a named specialist rather than to nobody.
+try { db.exec(`ALTER TABLE tasks ADD COLUMN bot_id TEXT`); } catch {}
 
 // Sanitize a value for better-sqlite3 bind parameters.
 // better-sqlite3 EXPANDS arrays: each element counts as a separate bind value.
@@ -507,6 +600,41 @@ function wrapStmt(stmt, label) {
 
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir) VALUES (?,?,?,?,?,?,?,?)`),
+  // Terminal sessions get their own INSERT: createSession is called from eight
+  // places and must not grow parameters. kind is literal here — a terminal session
+  // can never be created as anything else.
+  markTerminalStarted: db.prepare(`UPDATE sessions SET terminal_started=1 WHERE id=?`),
+  addQueuedMsg: db.prepare(`INSERT INTO queued_messages (session_id,payload) VALUES (?,?)`),
+  delQueuedMsg: db.prepare(`DELETE FROM queued_messages WHERE id=?`),
+  delQueuedBySession: db.prepare(`DELETE FROM queued_messages WHERE session_id=?`),
+  allQueuedMsgs: db.prepare(`SELECT * FROM queued_messages ORDER BY id`),
+  listBots: db.prepare(`SELECT * FROM bots WHERE deleted_at IS NULL ORDER BY label COLLATE NOCASE`),
+  getBot: db.prepare(`SELECT * FROM bots WHERE id=? AND deleted_at IS NULL`),
+  // Includes soft-deleted rows: used to reserve handles and to attribute old messages.
+  getBotAny: db.prepare(`SELECT * FROM bots WHERE id=?`),
+  // Every handle ever used, including soft-deleted ones — a handle is reserved forever.
+  allBotHandles: db.prepare(`SELECT id FROM bots`),
+  listProjectBots: db.prepare(`SELECT b.* FROM bots b JOIN project_bots pb ON pb.bot_id=b.id
+    WHERE pb.project_id=? AND b.deleted_at IS NULL ORDER BY b.label COLLATE NOCASE`),
+  addBotToProject: db.prepare(`INSERT INTO project_bots (project_id,bot_id) VALUES (?,?)
+    ON CONFLICT(project_id,bot_id) DO NOTHING`),
+  removeBotFromProject: db.prepare(`DELETE FROM project_bots WHERE project_id=? AND bot_id=?`),
+  softDeleteBot: db.prepare(`UPDATE bots SET deleted_at=datetime('now') WHERE id=?`),
+  getBotSession: db.prepare(`SELECT claude_session_id FROM bot_sessions WHERE chat_session_id=? AND bot_id=?`),
+  setBotSession: db.prepare(`INSERT INTO bot_sessions (chat_session_id,bot_id,claude_session_id) VALUES (?,?,?)
+    ON CONFLICT(chat_session_id,bot_id) DO UPDATE SET claude_session_id=excluded.claude_session_id`),
+  // Positional parameters, like every other statement here: this runtime may be
+  // node:sqlite (Node >= 22.5), whose named-parameter binding differs from
+  // better-sqlite3's and rejects `@name` objects with "column index out of range".
+  // `excluded.` lets the upsert reuse the same nine values without repeating them.
+  upsertBot: db.prepare(`INSERT INTO bots (id,label,description,engine,model,system_prompt,active_skills,active_mcp,avatar)
+    VALUES (?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET
+      label=excluded.label, description=excluded.description, engine=excluded.engine,
+      model=excluded.model, system_prompt=excluded.system_prompt,
+      active_skills=excluded.active_skills, active_mcp=excluded.active_mcp,
+      avatar=excluded.avatar, updated_at=datetime('now')`),
+  createTerminalSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir,kind,terminal_agent,agent_conv_id) VALUES (?,?,'[]','[]','auto','single',?,?,'terminal',?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: (() => {
     const _stmt = db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`);
@@ -545,8 +673,8 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at,effort,run_engine) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
-  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,effort=?,run_engine=?,updated_at=datetime('now') WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at,effort,run_engine,bot_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,effort=?,run_engine=?,bot_id=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
@@ -858,6 +986,12 @@ const TASK_MANAGER_SECRET = require('crypto').randomBytes(16).toString('hex');
 
 // ─── User Interrupt (Internal MCP) ──────────────────────────────────────
 const INTERRUPT_SECRET = require('crypto').randomBytes(16).toString('hex');
+// How long an interrupt's saved files stay on disk after the agent is told about
+// them. 60 s was too short: the agent is handed a path and may run several other
+// tools before reading it, and a long turn can easily outlast a minute — the Read
+// would then fail on a path that no longer exists. These live in the OS temp
+// directory, so an occasional leftover is swept up by the system anyway.
+const INTERRUPT_FILE_TTL_MS = parseInt(process.env.CCS_INTERRUPT_FILE_TTL_MS || '1800000', 10) || 1800000;
 const pendingInterrupts = new Map(); // sessionId → [{ id, content, attachments?, createdAt }]
 let _interruptIdCounter = 0;
 
@@ -1033,6 +1167,16 @@ async function startTask(task) {
       try { const parsed = JSON.parse(task.context); contextStr = typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2); } catch {}
       parts.push(`---\nContext from parent task:\n${contextStr}`);
     }
+    // A bot-owned task runs AS that bot: its system prompt defines who is working,
+    // and the roster lets it hand work on. Falls back to an ordinary task run if the
+    // bot was deleted — the handle stays reserved, so history still reads correctly.
+    let taskBot = null;
+    if (task.bot_id) {
+      try {
+        taskBot = stmts.getBot.get(task.bot_id) || null;
+        if (!taskBot) log.warn('task bot not found — running without it', { taskId: task.id, botId: task.bot_id });
+      } catch {}
+    }
     // Task manager instruction: inform Claude about available task management tools
     parts.push(TASK_MANAGER_INSTRUCTION);
     const prompt = parts.join('\n\n') + TASK_VERIFICATION_SUFFIX;
@@ -1090,6 +1234,17 @@ async function startTask(task) {
       }
     } catch {}
     // Always inject internal task-manager MCP
+    // The pull channel too: with the tool absent the worker cannot check for messages
+    // even if it wants to.
+    taskMcpServers['_ccs_user_interrupt'] = {
+      command: NODE_CMD,
+      args: [path.join(__dirname, 'mcp-user-interrupt.js')],
+      env: {
+        INTERRUPT_SERVER_URL: `http://127.0.0.1:${PORT}`,
+        INTERRUPT_SESSION_ID: sessionId,
+        INTERRUPT_SECRET,
+      },
+    };
     taskMcpServers['_ccs_task_manager'] = {
       command: NODE_CMD,
       args: [path.join(__dirname, 'mcp-task-manager.js')],
@@ -1134,7 +1289,34 @@ async function startTask(task) {
         break; // one-shot: interactive runs to end_turn, no auto-continue
       }
 
-      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort, name: task.title, effort: task.effort || null });
+      // Interrupt delivery, same as a chat turn. A running task ACCEPTS clarifications
+      // — the interrupt handler explicitly checks activeTasks — but without these the
+      // message was stored, never handed to the worker, and cleaned up at the end.
+      const taskInterruptCmd = `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`;
+      const taskInterruptSettings = {
+        hooks: {
+          PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: taskInterruptCmd, timeout: 3 }] }],
+          Stop: [{ hooks: [{ type: 'command', command: taskInterruptCmd, timeout: 3 }] }],
+        },
+      };
+      const taskInterruptEnv = {
+        CCS_INTERRUPT_URL: `http://127.0.0.1:${PORT}`,
+        CCS_INTERRUPT_SESSION: sessionId,
+        CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
+      };
+      const taskBotSp = taskBot
+        ? botsLogic.buildBotSystemPrompt(taskBot, stmts.listBots.all()) + USER_INTERRUPT_INSTRUCTION
+        : undefined;
+      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid,
+        // The bot's own model wins over the task's: picking a bot is picking who does
+        // the work, and its model is part of that choice.
+        model: taskBot?.model || session?.model || task.model || 'sonnet',
+        systemPrompt: taskBotSp,
+        // A bot-owned task follows the project's conventions but not the user's
+        // personal CLAUDE.md — same boundary as a bot answering in chat, or every
+        // reply opens with the user's own activation preamble.
+        ...(taskBot ? { settingSources: 'project,local' } : {}),
+        maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort, name: taskBot?.label || task.title, effort: task.effort || null, extraEnv: taskInterruptEnv, extraSettings: taskInterruptSettings });
       // Save subprocess PID so startup recovery can kill orphans on restart
       if (stream.process?.pid) {
         db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
@@ -1621,12 +1803,24 @@ class WsProxy {
       this._ws.send(data);
     } else if (this._buffer.length < 1000) {
       this._buffer.push(data);
+    } else {
+      // Past the cap the stream is dropped rather than grown without bound. Count it
+      // so the reattaching client can be told its view is incomplete instead of
+      // quietly missing tool cards.
+      this._dropped = (this._dropped || 0) + 1;
     }
   }
   attach(newWs) {
     this._ws = newWs;
     const buf = this._buffer.splice(0);
     for (const msg of buf) { try { newWs.send(msg); } catch {} }
+    // Tell the client its replay is incomplete instead of letting it believe an
+    // unbroken stream. The text itself is re-read from the database on done; what
+    // goes missing here is live activity, so say so rather than show a gap.
+    if (this._dropped) {
+      try { newWs.send(JSON.stringify({ type: 'stream_gap', dropped: this._dropped })); } catch {}
+      this._dropped = 0;
+    }
   }
   detach() { this._ws = null; }
 }
@@ -1850,10 +2044,28 @@ function buildSessionReplayContent(sessionId) {
 // ============================================
 
 /** Default slash commands — seeded into config.json on first run / fresh install. */
+// `template` is the one-shot delegation form (existing behaviour). The terminal
+// fields are what a live attached session needs: `interactive` starts a TUI,
+// `newIdFlag` pins the conversation id we generate so a later resume is exact,
+// `resume`/`resumeLast` restore after a host reboot or a reap.
+//
+// Every modern agent CLI can resume by id — the flag spelling is all that differs,
+// which is why it lives in config and not in code. Only some can PIN the id of a
+// new conversation (`newIdFlag`); for the rest we resume by id once we know one and
+// otherwise fall back to "the agent's most recent conversation".
+//
+// Flags measured against the binaries installed on 2026-08-18 (codex-cli 0.147.0
+// has no --session-id / --resume: it uses the `codex resume <id>` subcommand). A
+// user whose CLI version differs edits these in the agent settings.
 const DEFAULT_EXTERNAL_AGENTS = {
-  codex:    { label: 'OpenAI Codex',    template: 'codex {prompt}' },
-  agy:      { label: 'Antigravity CLI', template: 'agy -i {prompt}' },
-  opencode: { label: 'opencode',        template: 'opencode run {prompt}' },
+  claude:       { label: 'Claude Code',    interactive: 'claude',       newIdFlag: '--session-id {sid}', resume: 'claude --resume {sid}',       resumeLast: 'claude --continue' },
+  codex:        { label: 'OpenAI Codex',   template: 'codex {prompt}',        interactive: 'codex',        resume: 'codex resume {sid}',        resumeLast: 'codex resume --last' },
+  grok:         { label: 'Grok CLI',       interactive: 'grok',         newIdFlag: '-s {sid}',          resume: 'grok --resume {sid}',         resumeLast: 'grok --continue' },
+  agy:          { label: 'Antigravity CLI', template: 'agy -i {prompt}',      interactive: 'agy',          resume: 'agy --conversation {sid}',  resumeLast: 'agy --continue' },
+  opencode:     { label: 'opencode',       template: 'opencode run {prompt}', interactive: 'opencode',     resume: 'opencode -s {sid}',         resumeLast: 'opencode -c' },
+  hermes:       { label: 'Hermes',         interactive: 'hermes',       resume: 'hermes --resume {sid}',       resumeLast: 'hermes --continue' },
+  'cursor-agent': { label: 'Cursor Agent', interactive: 'cursor-agent', newIdCommand: 'cursor-agent create-chat', resume: 'cursor-agent --resume {sid}', resumeLast: 'cursor-agent --continue' },
+  kimi:         { label: 'Kimi',           interactive: 'kimi',         resume: 'kimi --session {sid}',        resumeLast: 'kimi --continue' },
 };
 
 const DEFAULT_SLASH_COMMANDS = [
@@ -1889,14 +2101,14 @@ function loadConfig() {
     c.slashCommands.push(...toAdd);
     dirty = true;
   }
-  // Merge-in default external agents (skip explicitly removed ones)
-  const removed = new Set(c._removedAgents);
-  for (const [id, def] of Object.entries(DEFAULT_EXTERNAL_AGENTS)) {
-    if (!c.externalAgents[id] && !removed.has(id)) {
-      c.externalAgents[id] = { ...def };
-      dirty = true;
-    }
-  }
+  // Merge-in default external agents (skip explicitly removed ones). Backfills
+  // newly-introduced fields (interactive/resume/...) onto agents the user already
+  // customised, without touching any field they set themselves.
+  if (mergeAgentDefaults(c, DEFAULT_EXTERNAL_AGENTS).dirty) dirty = true;
+  // Terminal sessions are off until explicitly enabled: a browser terminal is
+  // remote code execution by design, and this studio can be published through a
+  // tunnel.
+  if (!c.terminal) { c.terminal = { enabled: false, idleTimeoutMin: 30, maxLive: 3 }; dirty = true; }
   if (dirty) {
     try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); } catch {}
   }
@@ -3029,8 +3241,166 @@ async function runSshSingle(p) {
 // MAX_AUTO_CONTINUES times, so the worst case per agent is cap × (1 + MAX_AUTO_CONTINUES).
 const MULTI_AGENT_MAX_TURNS_CAP = parseInt(process.env.MULTI_AGENT_MAX_TURNS_CAP || '200', 10) || 200;
 
+
+// ─── Bot dispatch ────────────────────────────────────────────────────────────
+// Runs the bots a user @mentioned, in order, each seeing what the ones before it
+// produced. Simpler than runMultiAgent on purpose:
+//   - bots run SEQUENTIALLY, so there is no concurrent-resume race and no need for
+//     --fork-session; each bot instead owns a persistent session of its own
+//     (bot_sessions), so it remembers its side of this chat across turns.
+//   - the first turn passes the bot's system prompt; later turns resume, where
+//     claude-cli.js deliberately does NOT resend it (the prompt is already baked into
+//     the session, and changing it invalidates thinking-block signatures).
+// Returns the chat's own claude_session_id unchanged: a bot turn must never move the
+// assistant's session pointer.
+async function runBotTurns(p, { bots, prompt, rosterBots }) {
+  const { mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort, userContent } = p;
+  const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
+  // Same tool set as a normal turn, plus the internal MCP tools — without
+  // check_user_messages a bot cannot see a clarification the user sends mid-run.
+  const botMcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user',
+                       'mcp___ccs_notify__notify_user', 'mcp___ccs_user_interrupt__check_user_messages'];
+  const botTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', ...botMcpTools];
+  // Interrupt delivery, identical to runCliSingle: a PreToolUse hook fires on every
+  // tool call and a Stop hook covers a text-only answer, so a message sent while a
+  // bot is working reaches it during the run instead of waiting for the next turn.
+  const botInterruptCmd = `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`;
+  const botInterruptSettings = {
+    hooks: {
+      PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: botInterruptCmd, timeout: 3 }] }],
+      Stop: [{ hooks: [{ type: 'command', command: botInterruptCmd, timeout: 3 }] }],
+    },
+  };
+  const botInterruptEnv = {
+    CCS_INTERRUPT_URL: `http://127.0.0.1:${PORT}`,
+    CCS_INTERRUPT_SESSION: sessionId,
+    CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
+  };
+  const turnCap = Math.min(maxTurns || 30, MULTI_AGENT_MAX_TURNS_CAP);
+  const previous = [];
+
+  // Announce the whole line-up before the first one starts, so the UI can show who
+  // is queued instead of revealing participants one at a time as they begin.
+  try {
+    ws.send(JSON.stringify({
+      type: 'bots_turn',
+      bots: bots.map(b => ({ id: b.id, label: b.label, avatar: b.avatar || '🤖', model: b.model || model })),
+      ...(tabId ? { tabId } : {}),
+    }));
+  } catch {}
+
+  const emitState = (id, state, detail) => {
+    try { ws.send(JSON.stringify({ type: 'bot_state', bot: id, state, detail: detail || '', ...(tabId ? { tabId } : {}) })); } catch {}
+  };
+
+  for (const bot of bots) {
+    if (abortController?.signal?.aborted) {
+      // Everyone still waiting is skipped, not silently dropped.
+      emitState(bot.id, 'skipped');
+      continue;
+    }
+    emitState(bot.id, 'running');
+
+    const ctx = previous.length
+      ? '\n\nWhat the bots before you produced in this same turn:\n'
+        + previous.map(x => `[@${x.handle}]: ${x.text.substring(0, 4000)}`).join('\n\n')
+      : '';
+    const botPrompt = prompt + ctx;
+    const isFirst = previous.length === 0;
+    // The same standing instruction a normal turn gets: tell the bot the tool exists
+    // and when to call it, or it will not think to look.
+    const botSp = botsLogic.buildBotSystemPrompt(bot, rosterBots) + USER_INTERRUPT_INSTRUCTION;
+    const prior = stmts.getBotSession.get(sessionId, bot.id);
+    let botSession = prior?.claude_session_id || null;
+
+    ws.send(JSON.stringify({ type: 'agent_status', agent: bot.id, status: `${bot.avatar || '🤖'} ${bot.label}`, ...(tabId ? { tabId } : {}) }));
+
+    let botText = '', botResult = null, botErrored = false;
+    await new Promise(res => {
+      let _settled = false;
+      const _res = () => { if (!_settled) { _settled = true; res(); } };
+      cli.send({
+        prompt: botPrompt,
+        // Images and files the user attached go to the FIRST bot only: the ones after
+        // it receive that bot's output as context, and re-sending the same screenshot
+        // to each in turn would pay for it several times over.
+        contentBlocks: (isFirst && Array.isArray(userContent)) ? userContent : null,
+        sessionId: botSession,
+        // A bot may pin its own model; otherwise it follows the chat's.
+        model: bot.model || model,
+        maxTurns: turnCap,
+        // Only applied when there is no session to resume — that is exactly why each
+        // bot needs its own session rather than sharing the chat's.
+        systemPrompt: botSp,
+        mcpServers,
+        allowedTools: botTools,
+        abortController,
+        effort,
+        name: bot.label,
+        extraEnv: botInterruptEnv,
+        extraSettings: botInterruptSettings,
+        // 'project,local' deliberately omits 'user': a bot must follow the project's
+        // conventions, but the user's personal CLAUDE.md is an agreement between them
+        // and their own assistant. Inheriting it made every bot reply open with the
+        // user's activation-token preamble — noise the bot was never asked for.
+        settingSources: 'project,local',
+      })
+        .onText(t => {
+          botText += t;
+          const _cb = (chatBuffers.get(sessionId) || '') + t;
+          chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb);
+          try { ws.send(JSON.stringify({ type: 'text', text: t, agent: bot.id, ...(tabId ? { tabId } : {}) })); } catch {}
+        })
+        .onTool((n, i) => {
+          if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') {
+            try { ws.send(JSON.stringify({ type: 'tool', tool: n, input: (i || '').substring(0, 600), agent: bot.id, ...(tabId ? { tabId } : {}) })); } catch {}
+          }
+          try { stmts.addMsg.run(sessionId, 'assistant', 'tool', (i || '').substring(0, 500), n, bot.id, null, null); } catch {}
+        })
+        .onResult(r => { botResult = r; })
+        .onSessionId(sid => { botSession = sid; })
+        .onError(err => {
+          botErrored = true;
+          try { ws.send(JSON.stringify({ type: 'agent_status', agent: bot.id, status: `❌ ${String(err).substring(0, 200)}`, ...(tabId ? { tabId } : {}) })); } catch {}
+          _res();
+        })
+        .onDone(() => _res());
+    });
+
+    // Remember this bot's session so the next mention resumes the same thread. The id
+    // can arrive either from .onSessionId (first run) or in the result frame (resume) —
+    // same normalisation as claude-cli.js.
+    const _rid = botResult?.session_id;
+    const _sid = typeof _rid === 'string' ? _rid
+      : (_rid && typeof _rid === 'object' && typeof _rid.session_id === 'string') ? _rid.session_id
+      : botSession;
+    if (_sid) { try { stmts.setBotSession.run(sessionId, bot.id, _sid); } catch {} }
+
+    if (botText) { try { stmts.addMsg.run(sessionId, 'assistant', 'text', botText, null, bot.id, null, null); } catch {} }
+
+    // An incomplete answer is never handed to the next bot: a truncated or failed run
+    // reads as fact to whoever receives it, and the error compounds down the chain.
+    const ok = !botErrored && isAgentSuccess(botResult);
+    emitState(bot.id, abortController?.signal?.aborted ? 'stopped' : (ok ? 'done' : 'failed'),
+      ok ? '' : agentStopReason(botResult, botErrored));
+    if (ok) {
+      previous.push({ handle: bot.id, text: botText });
+    } else {
+      // Always visible as `text` — not just when another bot follows. `agent_status`/
+      // `bot_state` reach the web UI's sidebar, but TelegramProxy.send() does not
+      // handle either type at all, so on Telegram those are silently dropped; `text`
+      // is the one event type every surface renders. A failure on the LAST bot used
+      // to emit nothing anywhere but the sidebar — Telegram just showed "✅ Done".
+      const note = `\n\n⚠️ @${bot.id} did not finish (${agentStopReason(botResult, botErrored)})`
+        + (bots.indexOf(bot) < bots.length - 1 ? ' — its output is not passed to the next bot.\n\n' : '.\n\n');
+      try { ws.send(JSON.stringify({ type: 'text', text: note, agent: bot.id, ...(tabId ? { tabId } : {}) })); } catch {}
+    }
+  }
+  return claudeSessionId || null;
+}
+
 async function runMultiAgent(p) {
-  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort } = p;
+  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort, userContent } = p;
   // Entry guard: the caller creates the AbortController before prompt classification and
   // does not re-check it before dispatching here, so Stop during that phase lands us with
   // an already-aborted signal. cli.send() only listens for a FUTURE abort
@@ -3136,8 +3506,26 @@ async function runMultiAgent(p) {
       ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`🔄 ${agent.role}`, ...(tabId ? { tabId } : {}) }));
       const depCtx = (agent.depends_on||[]).map(d => results[d] ? `\n[${d}]:${results[d].substring(0,2000)}` : '').join('');
       const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
-      const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.`;
-      const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'];
+      // Same standing instruction a single-agent turn gets: without it a worker does
+      // not know user clarifications can arrive mid-run.
+      const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.` + USER_INTERRUPT_INSTRUCTION;
+      const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write',
+        'mcp___ccs_user_interrupt__check_user_messages'];
+      // Interrupt delivery, identical to runCliSingle. Workers had neither the hooks
+      // nor the tool, so a clarification sent while the team was working was silently
+      // discarded at the end of the turn.
+      const agentInterruptCmd = `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`;
+      const agentInterruptSettings = {
+        hooks: {
+          PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: agentInterruptCmd, timeout: 3 }] }],
+          Stop: [{ hooks: [{ type: 'command', command: agentInterruptCmd, timeout: 3 }] }],
+        },
+      };
+      const agentInterruptEnv = {
+        CCS_INTERRUPT_URL: `http://127.0.0.1:${PORT}`,
+        CCS_INTERRUPT_SESSION: sessionId,
+        CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
+      };
       const agentTurnCap = Math.min(maxTurns||30, MULTI_AGENT_MAX_TURNS_CAP);
       let agentText = '';
       let agentResult = null;   // CLI result frame — carries why the run stopped
@@ -3158,7 +3546,13 @@ async function runMultiAgent(p) {
         await new Promise(res => {
           let _settled = false;
           const _res = () => { if (!_settled) { _settled = true; res(); } };
-          cli.send({ prompt:agentPromptNow, sessionId: agentSessionId, model, maxTurns:agentTurnCap, systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController, forkSession: agentFork, effort })
+          cli.send({ prompt:agentPromptNow,
+            // Attachments go to the first wave only: later agents receive their
+            // dependencies' output as context, and re-sending the same image to every
+            // worker would pay for it once per agent.
+            contentBlocks: (agentContinues === 0 && !completed.size && Array.isArray(userContent)) ? userContent : null,
+            sessionId: agentSessionId, model, maxTurns:agentTurnCap, systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController, forkSession: agentFork, effort,
+            extraEnv: agentInterruptEnv, extraSettings: agentInterruptSettings })
             .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
             .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,500),n,agent.id,null,null); } catch {} })
             .onResult(r => { agentResult = r; })
@@ -3780,7 +4174,7 @@ app.post('/api/internal/user-interrupt', express.json(), (req, res) => {
     }
 
     // Schedule temp file cleanup after delay (Claude needs time to read attached files)
-    cleanupInterruptAttachments(messages, 60_000);
+    cleanupInterruptAttachments(messages, INTERRUPT_FILE_TTL_MS);
   }
 
   return res.json({ messages });
@@ -3919,6 +4313,22 @@ app.get('/api/version', (_, res) => {
   // tmuxAvailable: lets the UI disable the "Subscription" engine up front when the
   // server lacks tmux (e.g. native Windows) instead of failing only after a send.
   res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable(), defaultEngine: (loadMergedConfig().defaultEngine === 'subscription' ? 'subscription' : 'api') });
+});
+
+// Capability-checked, never OS-sniffed — the same pattern as tmuxAvailable for the
+// subscription engine. Native Windows has no tmux (and Node has no ConPTY API
+// without a native module), so terminal sessions are simply unavailable there and
+// the UI disables the entry point instead of failing after a click.
+app.get('/api/terminal/capability', (_, res) => {
+  const cfg = loadConfig();
+  const enabled = cfg.terminal?.enabled === true;
+  const tmuxOk = termBridge.tmuxAvailable();
+  const tunnelOn = !!tunnelManager?.isRunning?.();
+  let reason = '';
+  if (!enabled) reason = 'disabled in config (terminal.enabled)';
+  else if (!tmuxOk) reason = 'tmux not found on this host';
+  else if (tunnelOn) reason = 'a public tunnel is active — terminal access is blocked';
+  res.json({ available: enabled && tmuxOk && !tunnelOn, reason });
 });
 
 app.get('/api/health', (_, res) => {
@@ -4216,9 +4626,10 @@ app.post('/api/tasks', (req, res) => {
   const { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
           model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
           depends_on=null, chain_id=null, source_session_id=null,
-          scheduled_at=null, recurrence=null, recurrence_end_at=null, effort=null, run_engine=null } = req.body;
+          scheduled_at=null, recurrence=null, recurrence_end_at=null, effort=null, run_engine=null,
+          bot_id=null } = req.body;
   const id = genId();
-  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null, sqlVal(run_engine)||null);
+  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null, sqlVal(run_engine)||null, sqlVal(bot_id)||null);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -4233,7 +4644,8 @@ app.put('/api/tasks/:id', (req, res) => {
           max_turns=task.max_turns||30, attachments=task.attachments,
           depends_on=task.depends_on, chain_id=task.chain_id, source_session_id=task.source_session_id,
           scheduled_at=task.scheduled_at, recurrence=task.recurrence, recurrence_end_at=task.recurrence_end_at,
-          effort=task.effort, run_engine=task.run_engine } = req.body;
+          effort=task.effort, run_engine=task.run_engine,
+          bot_id=task.bot_id } = req.body;
   // Stop running process when task is moved away from in_progress
   if (task.status === 'in_progress' && status !== 'in_progress') {
     const ctrl = runningTaskAborts.get(req.params.id);
@@ -4255,6 +4667,7 @@ app.put('/api/tasks/:id', (req, res) => {
     sqlVal(scheduled_at) || null, sqlVal(recurrence) || null, sqlVal(recurrence_end_at) || null,
     sqlVal(effort) || null,
     sqlVal(run_engine) || null,
+    sqlVal(bot_id) || null,
     req.params.id
   );
   const updated = stmts.getTask.get(req.params.id);
@@ -4550,8 +4963,37 @@ app.get('/api/sessions', (req,res) => {
   res.json(workdir ? stmts.getSessionsByWorkdir.all(workdir) : stmts.getSessions.all());
 });
 app.post('/api/sessions', (req, res) => {
-  const { title = i18nSession(), workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single' } = req.body || {};
+  const { title = i18nSession(), workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single', kind = 'chat', terminalAgent = null } = req.body || {};
   const id = genId();
+  if (kind === 'terminal') {
+    // loadConfig(), not loadMergedConfig(): the merged view is a whitelist of
+    // mcpServers/skills/slashCommands/lang/defaultEngine and does NOT carry
+    // externalAgents — same reason /api/external-agents reads loadConfig().
+    const agents = loadConfig().externalAgents || {};
+    if (!terminalAgent || !supportsTerminal(agents[terminalAgent])) {
+      return res.status(400).json({ error: 'terminalAgent must name an agent with an "interactive" command' });
+    }
+    // Get an exact conversation id up front so a later restore targets THIS
+    // conversation instead of "the agent's most recent one". Two mechanisms:
+    //   newIdFlag    — we mint the id and pass it at launch (claude, grok)
+    //   newIdCommand — the CLI mints it and prints it (cursor-agent create-chat)
+    // Agents with neither stay on the resumeLast fallback.
+    const cmds = resolveAgentCommands(agents[terminalAgent]);
+    let convId = null;
+    if (cmds.newIdFlag) {
+      convId = crypto.randomUUID();
+    } else if (cmds.newIdCommand) {
+      try {
+        const r = spawnSync('/bin/sh', ['-c', cmds.newIdCommand], { encoding: 'utf8', timeout: 30000 });
+        convId = r.status === 0 ? parseNewIdOutput(r.stdout) : null;
+        if (!convId) log.warn('newIdCommand produced no usable id', { agent: terminalAgent, status: r.status });
+      } catch (e) {
+        log.warn('newIdCommand failed', { agent: terminalAgent, err: e.message });
+      }
+    }
+    stmts.createTerminalSession.run(id, String(title).substring(0, 200), sqlVal(model), sqlVal(workdir) || null, terminalAgent, convId);
+    return res.json(stmts.getSession.get(id));
+  }
   stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', sqlVal(mode), sqlVal(agentMode), sqlVal(model), sqlVal(workdir) || null);
   res.json(stmts.getSession.get(id));
 });
@@ -5048,11 +5490,18 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
   archiveSessionStats(ids);
   // Best-effort: kill interactive tmux sessions tied to these studio sessions
   for (const id of ids) { try { killInteractiveTmux(id); } catch {} }
+  // Terminal sessions live under their own tmux prefix and need their own cleanup,
+  // plus the scrollback file the reaper may have left behind.
+  for (const id of ids) {
+    try { termBridge.killSession(tmuxNameFor(id)); } catch {}
+    try { fs.unlinkSync(path.join(os.tmpdir(), `ccsterm-sb-${id}.txt`)); } catch {}
+  }
   const del = db.transaction(() => {
     for (const id of ids) {
       // Unlink recurring tasks from session (preserve the schedule), delete the rest
       db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(id);
       stmts.deleteTasksBySession.run(id); stmts.deleteSession.run(id); sessionQueues.delete(id);
+      try { stmts.delQueuedBySession.run(id); } catch {}
     }
   });
   del();
@@ -5831,6 +6280,15 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
   // Check if session is busy — queue as interrupt instead of dropping the message.
   // activeTasks covers both web and Telegram chat workers; activeChatSessions covers
   // the early phase of web processChat before activeTasks.set() is called.
+  // This check must fire for EVERY engine, remote included: skipping it for remote
+  // sessions used to let a second message dispatch a fully parallel run against the
+  // SAME sessionId — two overlapping `activeTasks.set()`/`chatBuffers.set()` calls
+  // stomping on each other, and two `claude --resume` processes racing to write the
+  // same claude_session_id. A remote (SSH) session still cannot receive an interrupt
+  // MID-run — the hook script's callback URL is 127.0.0.1, unreachable from the
+  // remote host — so a queued message there is not delivered until the run in
+  // progress finishes, at which point the `finally` block below runs it as the next
+  // message rather than discarding it.
   if (activeTasks.has(sessionId) || activeChatSessions.has(sessionId)) {
     // Queue as interrupt (same mechanism as web UI mid-task clarifications)
     if (!pendingInterrupts.has(sessionId)) pendingInterrupts.set(sessionId, []);
@@ -5874,7 +6332,10 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
   // Load session from DB
   const session = stmts.getSession.get(sessionId);
   if (!session) {
-    await telegramBot.sendMessage(chatId, '❌ Session not found.');
+    // Explicit threadId, not the bot's mutable `_currentThreadId` — this runs after
+    // an await, by which point a concurrently-processed update from a DIFFERENT
+    // topic may already have overwritten that field, misdelivering this notice.
+    await telegramBot.sendMessage(chatId, '❌ Session not found.', threadId ? { message_thread_id: threadId } : {});
     return;
   }
 
@@ -5912,6 +6373,18 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     const model = session.model || 'sonnet';
     const mode = session.mode || 'auto';
     const workdir = session.workdir || WORKDIR;
+
+    // The web UI branches on agent_mode === 'multi' (routes to runMultiAgent, warns
+    // on the subscription engine); Telegram did neither — a session left in multi
+    // mode from the web UI just silently ran as a single agent here with no signal
+    // that the orchestrator/subtask plan it would normally get was skipped.
+    if (session.agent_mode === 'multi') {
+      try {
+        await telegramBot.sendMessage(chatId,
+          'ℹ️ This chat is set to multi-agent mode, which Telegram cannot run yet — answering as a single agent instead.',
+          threadId ? { message_thread_id: threadId } : {});
+      } catch {}
+    }
 
     // Parse active MCP and skills
     let mcpIds = [];
@@ -5979,9 +6452,51 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     // Send visible "Processing..." indicator (deleted when first content arrives or on finalize)
     await proxy.startThinking();
 
+    // ── Bot mentions from Telegram ──────────────────────────────────────────
+    // Resolved against every handle so a bot that exists in another project gets a
+    // useful answer instead of silence, same as the web path.
+    let tgBots = [], tgProjectBots = [], tgPrompt = text;
+    try {
+      const allBots = stmts.listBots.all();
+      if (allBots.length) {
+        const wd = session?.workdir || WORKDIR;
+        const proj = loadProjects().find(pr => pr.workdir === wd);
+        tgProjectBots = proj ? stmts.listProjectBots.all(proj.id) : [];
+        const available = new Set(tgProjectBots.map(b => b.id));
+        const parsed = botsLogic.parseMentions(text || '', allBots.map(b => b.id));
+        if (parsed.handles.length || parsed.unknown.length) {
+          tgPrompt = parsed.cleaned || BARE_MENTION_PROMPT;
+          const byId = new Map(allBots.map(b => [b.id, b]));
+          tgBots = parsed.handles.filter(h => available.has(h)).map(h => byId.get(h));
+          const notes = [
+            ...parsed.handles.filter(h => !available.has(h))
+              .map(h => `ℹ️ @@${h} (${byId.get(h)?.label || h}) is not in this project.`),
+            ...parsed.unknown.map(h => `ℹ️ There is no bot @@${h}.`),
+          ];
+          for (const n of notes) {
+            try { await telegramBot.sendMessage(chatId, n, threadId ? { message_thread_id: threadId } : {}); } catch {}
+          }
+        }
+      }
+    } catch (e) { log.warn('telegram bot mention resolution failed', { err: e.message }); }
+
+    // A SEPARATE content-blocks build from `tgPrompt` (mention-stripped), not the
+    // `userContent` built above from raw `text` — that one is for DB/broadcast
+    // display, where showing the mention verbatim is correct. Dispatching it to the
+    // CLI as well used to duplicate the message: claude-cli.js only drops an
+    // attachment's trailing text block when it exactly equals the top-level
+    // `prompt`, and raw-with-mention never equals cleaned, so the mention text came
+    // back as a "prefix" ahead of the cleaned prompt.
+    const dispatchUserContent = buildUserContent(tgPrompt, attachments || []);
+
     const params = {
-      prompt: text,
-      userContent,
+      // Defaults to `text` unchanged when there was no mention; becomes the
+      // mention-stripped/bare-mention-fallback text otherwise. Using raw `text` here
+      // unconditionally used to leave a leftover "@@unknownbot" token in the prompt
+      // whenever every mentioned handle turned out unknown/unavailable and the run
+      // fell through to the plain single-agent path below instead of a bot.
+      prompt: tgPrompt,
+      userContent: dispatchUserContent,
       systemPrompt,
       mcpServers,
       model,
@@ -5997,6 +6512,18 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
 
     // Check if the active project is a remote SSH project
     const _activeProj = loadProjects().find(p => p.workdir === workdir && p.isRemote);
+    const _isSubscriptionEngine = (session.run_engine || 'api') === 'subscription';
+    if (tgBots.length && (_activeProj || _isSubscriptionEngine)) {
+      // Bots run through the headless `api` engine only (runBotTurns spawns its own
+      // ClaudeCLI per bot) — SSH and subscription/tmux sessions silently ran the
+      // mention as a normal single-agent turn with no bot involved and no word to
+      // the user about why. Say so explicitly instead.
+      try {
+        await telegramBot.sendMessage(chatId,
+          `ℹ️ Bots aren't available on this chat's engine (${_activeProj ? 'SSH' : 'subscription'}) — answering as the regular assistant instead. Switch this chat to the API engine to use @@mentions.`,
+          threadId ? { message_thread_id: threadId } : {});
+      } catch {}
+    }
     if (_activeProj) {
       await runSshSingle({
         ...params,
@@ -6006,11 +6533,23 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
         password:      decryptPassword(_activeProj.password) || '',
         port:          _activeProj.port || 22,
       });
-    } else if ((session.run_engine || 'api') === 'subscription') {
+    } else if (_isSubscriptionEngine) {
       // Respect the chat's billing engine choice from Telegram too — interactive
       // module collects output without touching SQLite, so persist it here
       // (mirrors the WS chat handler's subscription branch).
-      const r = await runInteractiveSingle(params);
+      const r = await runInteractiveSingle({
+        ...params,
+        // Matches the web WS handler's subscription branch (server.js ~7927):
+        // without a drain function, a clarification typed into a busy Telegram
+        // chat on this engine sat in pendingInterrupts and was NEVER delivered —
+        // this engine has no hook to pull it mid-run, only this explicit drain call.
+        drainInterrupts: () => {
+          const msgs = pendingInterrupts.get(sessionId) || [];
+          if (msgs.length) pendingInterrupts.delete(sessionId);
+          for (const m of msgs) { try { if (m.dbId) stmts.markInterruptDelivered.run(m.dbId); } catch {} }
+          return msgs;
+        },
+      });
       for (const ev of r.toolEvents) {
         try { stmts.addMsg.run(sessionId,'assistant','tool',(ev.input||'').substring(0,500),ev.name,null,null,null); } catch {}
       }
@@ -6021,6 +6560,13 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
         chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb);
       }
       if (r.cid) { try { stmts.updateClaudeId.run(r.cid, sessionId); } catch {} }
+    } else if (tgBots.length) {
+      // Mentions work from Telegram exactly as they do in the chat: same parser, same
+      // sequential dispatch, same per-bot session. The reply carries a header per bot
+      // so a phone screen still shows who said what. `params` already carries the
+      // mention-stripped prompt/content built above.
+      proxy._botsById = Object.fromEntries(tgProjectBots.map(b => [b.id, b]));
+      await runBotTurns(params, { bots: tgBots, prompt: tgPrompt, rosterBots: tgProjectBots });
     } else {
       await runCliSingle(params);
     }
@@ -6051,6 +6597,26 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
       }
     }
     try { stmts.clearLastUserMsg.run(sessionId); } catch {}
+
+    // A message that arrived while this run was busy is queued in pendingInterrupts
+    // (see the busy check above). The local `api` engine's PreToolUse/Stop hook
+    // usually drains it mid-run via /api/internal/user-interrupt, which deletes the
+    // queue entry — so by the time we get here it is normally already empty. What's
+    // still here is exactly what could NOT be delivered mid-run (subscription/tmux
+    // without a drain call, SSH, or a race that finished before the hook polled).
+    // Run it now as the next message instead of leaving it to rot until cleanup.
+    const _queued = pendingInterrupts.get(sessionId);
+    if (_queued?.length) {
+      pendingInterrupts.delete(sessionId);
+      for (const m of _queued) { if (m.dbId) { try { stmts.markInterruptDelivered.run(m.dbId); } catch {} } }
+      const _followText = _queued.map(m => m.content).join('\n\n');
+      const _followAttachments = _queued.flatMap(m => m.attachments || []);
+      setImmediate(() => {
+        processTelegramChat({ sessionId, text: _followText, userId, chatId, threadId, attachments: _followAttachments })
+          .catch(e => log.error('[processTelegramChat] follow-up run failed', { sessionId, err: e.message }));
+      });
+      cleanupInterruptAttachments(_queued, INTERRUPT_FILE_TTL_MS);
+    }
   }
 }
 
@@ -6156,13 +6722,27 @@ function _attachTelegramListeners(bot) {
   });
 
   // Phase 2: Stop running task from Telegram
-  bot.on('stop_task', async ({ sessionId, chatId }) => {
+  bot.on('stop_task', async ({ sessionId, chatId, threadId }) => {
+    const opts = threadId ? { message_thread_id: threadId } : {};
     const task = activeTasks.get(sessionId);
     if (task && task.abortController) {
       task.abortController.abort();
-      await bot.sendMessage(chatId, '🛑 Task stopped.');
+      // Mirror the web /stop handler (server.js ~8268): drop anything queued as an
+      // interrupt for this session too — otherwise a stopped run still leaves
+      // clarifications and saved attachment files behind that would silently feed
+      // into whatever the NEXT run of this session happens to be.
+      const _stoppedInterrupts = pendingInterrupts.get(sessionId);
+      pendingInterrupts.delete(sessionId);
+      cleanupInterruptAttachments(_stoppedInterrupts);
+      await bot.sendMessage(chatId, '🛑 Task stopped.', opts);
+    } else if (stmts.hasRunningTask.get(sessionId)) {
+      // A Kanban/Schedule task worker runs this session without an activeTasks
+      // entry (that map covers web + Telegram chat workers only) — "No active
+      // task" would be a flat lie here, telling the user nothing is running when
+      // a task genuinely is, just not one Telegram's /stop can reach.
+      await bot.sendMessage(chatId, 'ℹ️ A Kanban/Schedule task is running on this session — stop it from the Kanban board, not /stop.', opts);
     } else {
-      await bot.sendMessage(chatId, 'No active task in this session.');
+      await bot.sendMessage(chatId, 'No active task in this session.', opts);
     }
   });
 }
@@ -6597,6 +7177,127 @@ function startDelegationWatcher(delegationId, delegationDir) {
   }
 }
 
+// --- Bots API ---
+// A bot is a named chat participant: handle (= id), label, description, engine,
+// model and system prompt. Mirrors the external-agents API in shape.
+
+// Without ?project= this is the whole library (the bot management screen). With it,
+// only the bots available in that project — which is what the @ palette offers.
+app.get('/api/bots', (req, res) => {
+  // Either identifier works: the chat knows the project id, the Kanban board only
+  // knows the working directory. Making the caller resolve that mapping is how the
+  // board silently ended up showing an empty roster.
+  let projectId = req.query.project ? String(req.query.project) : null;
+  if (!projectId && req.query.workdir) {
+    const proj = loadProjects().find(pr => pr.workdir === String(req.query.workdir));
+    if (proj) projectId = proj.id;
+    else return res.json([]);   // a directory with no project has no roster
+  }
+  res.json(projectId ? stmts.listProjectBots.all(projectId) : stmts.listBots.all());
+});
+
+app.post('/api/projects/:projectId/bots/:botId', (req, res) => {
+  if (!stmts.getBot.get(req.params.botId)) return res.status(404).json({ error: 'bot not found' });
+  stmts.addBotToProject.run(String(req.params.projectId), req.params.botId);
+  res.json({ ok: true });
+});
+
+app.delete('/api/projects/:projectId/bots/:botId', (req, res) => {
+  // Removing a bot from a project never deletes the bot or its past messages — it
+  // only stops offering it here.
+  stmts.removeBotFromProject.run(String(req.params.projectId), req.params.botId);
+  res.json({ ok: true });
+});
+
+// Length caps. A system prompt is re-sent on every turn, so it is a running cost,
+// not a one-off — an unbounded one would be paid for forever.
+const BOT_PROMPT_MAX = 8192;
+const BOT_DESC_MAX = 500;
+const BOT_LABEL_MAX = 100;
+
+// Shared writer for create and update. `mode` decides what an existing handle means:
+// creating over one is a conflict, updating a missing one is a 404.
+function saveBot(req, res, mode) {
+  const body = req.body || {};
+  const cleanLabel = String(body.label || '').trim();
+  if (!cleanLabel) return res.status(400).json({ error: 'label required' });
+  const engine = body.engine || 'claude';
+  if (engine !== 'claude') {
+    // The column exists so adding an engine later is not a migration, but only the
+    // Claude path is wired into a chat turn today.
+    return res.status(400).json({ error: `engine "${engine}" is not supported yet` });
+  }
+
+  let handle;
+  if (mode === 'update') {
+    handle = String(req.params.id || '').toLowerCase();
+    if (!stmts.getBot.get(handle)) return res.status(404).json({ error: 'bot not found' });
+  } else {
+    const asked = String(body.id || '').trim().toLowerCase();
+    if (asked) {
+      if (!botsLogic.isValidHandle(asked)) {
+        return res.status(400).json({ error: 'handle must be 2-32 chars of a-z, 0-9, - or _, and may not end in - or _' });
+      }
+      // getBotAny, not getBot: a soft-deleted handle stays reserved so a new bot can
+      // never inherit authorship of the old one's messages.
+      if (stmts.getBotAny.get(asked)) return res.status(409).json({ error: `handle "${asked}" is taken` });
+      handle = asked;
+    } else {
+      const base = botsLogic.handleFromLabel(cleanLabel);
+      if (!base) return res.status(400).json({ error: 'could not derive a handle from that label' });
+      handle = botsLogic.uniqueHandle(base, stmts.allBotHandles.all().map(b => b.id));
+      if (!handle) return res.status(400).json({ error: 'could not allocate a free handle' });
+    }
+  }
+
+  const prompt = String(body.systemPrompt ?? '');
+  if (prompt.length > BOT_PROMPT_MAX) {
+    return res.status(400).json({ error: `system prompt is too long (${prompt.length} > ${BOT_PROMPT_MAX} characters)` });
+  }
+
+  try {
+    // A field absent from the request keeps its stored value; a field present but
+    // empty clears it. A partial edit must never wipe what it did not mention.
+    const prev = stmts.getBot.get(handle) || {};
+    const keep = (key, fallback) => (body[key] === undefined ? fallback : body[key]);
+    const jsonList = (v) => JSON.stringify(Array.isArray(v) ? v : []);
+    stmts.upsertBot.run(
+      handle,
+      cleanLabel.substring(0, BOT_LABEL_MAX),
+      String(keep('description', prev.description || '')).substring(0, BOT_DESC_MAX),
+      engine,
+      keep('model', prev.model) ? String(keep('model', prev.model)) : null,
+      body.systemPrompt === undefined ? (prev.system_prompt || '') : prompt,
+      body.activeSkills === undefined ? (prev.active_skills || '[]') : jsonList(body.activeSkills),
+      body.activeMcp === undefined ? (prev.active_mcp || '[]') : jsonList(body.activeMcp),
+      // Array.from, not substring: an emoji is several UTF-16 units and a family/ZWJ
+      // sequence is many, so slicing by unit can cut a surrogate pair in half.
+      Array.from(String(keep('avatar', prev.avatar || ''))).slice(0, 8).join(''),
+    );
+  } catch (e) {
+    log.error('bot save failed', { handle, err: e.message });
+    return res.status(500).json({ error: 'could not save the bot' });
+  }
+  // A bot created while a project is open belongs to that project immediately —
+  // otherwise every creation would be followed by a separate "add it here" step.
+  if (mode === 'create' && body.projectId) {
+    try { stmts.addBotToProject.run(String(body.projectId), handle); } catch {}
+  }
+  res.json(stmts.getBot.get(handle));
+}
+
+app.post('/api/bots', express.json(), (req, res) => saveBot(req, res, 'create'));
+app.put('/api/bots/:id', express.json(), (req, res) => saveBot(req, res, 'update'));
+
+app.delete('/api/bots/:id', (req, res) => {
+  const bot = stmts.getBot.get(req.params.id);
+  if (!bot) return res.status(404).json({ error: 'bot not found' });
+  // Soft: past messages keep their agent_id, and the handle can never be reused by a
+  // different bot that would then look like their author.
+  stmts.softDeleteBot.run(req.params.id);
+  res.json({ ok: true });
+});
+
 // --- External agents config API ---
 
 app.get('/api/external-agents', (_, res) => {
@@ -6605,11 +7306,27 @@ app.get('/api/external-agents', (_, res) => {
 });
 
 app.post('/api/external-agents', express.json(), (req, res) => {
-  const { id, label, template } = req.body;
-  if (!id || !label || !template) return res.status(400).json({ error: 'id, label, template required' });
+  const { id, label, template, interactive, newIdFlag, resume, resumeLast } = req.body;
+  if (!id || !label) return res.status(400).json({ error: 'id and label required' });
+  // An agent is useful for delegation (template), for terminal sessions
+  // (interactive), or both — but at least one, or it can do nothing.
+  const hasTemplate = String(template || '').trim();
+  const hasInteractive = String(interactive || '').trim();
+  if (!hasTemplate && !hasInteractive) {
+    return res.status(400).json({ error: 'either a delegation template or an interactive command is required' });
+  }
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) return res.status(400).json({ error: 'id must be alphanumeric (a-z, 0-9, -, _)' });
   const config = loadConfig();
-  config.externalAgents[id] = { label, template };
+  // Preserve fields this request does not carry, so editing one half of an agent
+  // never wipes the other half.
+  const prev = config.externalAgents[id] || {};
+  const next = { ...prev, label };
+  for (const [k, v] of Object.entries({ template, interactive, newIdFlag, resume, resumeLast })) {
+    if (v === undefined) continue;              // not submitted — keep whatever is stored
+    const s = String(v).trim();
+    if (s) next[k] = s; else delete next[k];    // submitted empty — clear it
+  }
+  config.externalAgents[id] = next;
   // If re-adding a previously removed default, clear the removal marker
   if (config._removedAgents) {
     config._removedAgents = config._removedAgents.filter(r => r !== id);
@@ -6622,8 +7339,11 @@ app.post('/api/external-agents/:id/test', (req, res) => {
   const config = loadConfig();
   const agentConfig = config.externalAgents[req.params.id];
   if (!agentConfig) return res.status(404).json({ error: 'Agent not found' });
-  // Extract base command from template (first word before space)
-  const baseCmd = (agentConfig.template || '').split(/\s+/)[0];
+  // Extract base command from template (first word before space). A terminal-only
+  // agent has no template — fall back to its interactive command, otherwise a
+  // perfectly working agent is reported as "Empty template".
+  const baseSource = agentConfig.template || resolveAgentCommands(agentConfig).interactive || '';
+  const baseCmd = baseSource.split(/\s+/)[0];
   if (!baseCmd) return res.json({ ok: false, error: 'Empty template' });
   // Validate command name to prevent injection (only allow safe chars)
   if (!/^[a-zA-Z0-9._-]+$/.test(baseCmd)) return res.json({ ok: false, error: 'Invalid command name' });
@@ -6659,6 +7379,14 @@ app.post('/api/delegate', express.json(), (req, res) => {
   const config = loadConfig();
   const agentConfig = config.externalAgents[agentId];
   if (!agentConfig) return res.status(404).json({ error: `Agent "${agentId}" not configured` });
+  // Delegation needs a one-shot `template`. Terminal-only agents (interactive but
+  // no template, e.g. the built-in `claude` entry) would otherwise sail through:
+  // buildTerminalCommand yields a bare `cd <workdir> && `, a terminal window opens
+  // and exits, the API answers {ok:true}, and sync mode waits forever on a
+  // DIALOG.md that no agent will ever write. Fail loudly instead.
+  if (!String(agentConfig.template || '').trim()) {
+    return res.status(400).json({ error: `Agent "${agentId}" does not support delegation (no template configured)` });
+  }
 
   const session = sessionId ? stmts.getSession.get(sessionId) : null;
   const workdir = session?.workdir || WORKDIR;
@@ -6806,7 +7534,130 @@ server.on('upgrade', (req, socket, head) => {
   const bearerToken = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null;
   const token = cookies.token || req.headers['x-auth-token'] || bearerToken;
   if (!auth.validateWsToken(token)) { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); socket.destroy(); return; }
+  // Route AFTER the auth check — the terminal endpoint reuses it verbatim and must
+  // never grow an auth path of its own.
+  let pathname = req.url;
+  try { pathname = new URL(req.url, 'http://x').pathname; } catch {}
+  if (pathname === '/ws/terminal') {
+    wssTerm.handleUpgrade(req, socket, head, ws => wssTerm.emit('connection', ws, req));
+    return;
+  }
   wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
+});
+
+// ─── Terminal sessions WebSocket ─────────────────────────────────────────────
+// Protocol:
+//   server → client: binary frames = raw terminal bytes; JSON text = control
+//   client → server: {type:'input',data} | {type:'resize',cols,rows} | {type:'kill'}
+wssTerm.on('connection', (ws, req) => {
+  ws.on('error', (e) => { try { log.warn('terminal ws error', { msg: e?.message }); } catch {} });
+  const send = (obj) => { try { ws.send(JSON.stringify(obj)); } catch {} };
+  const fail = (error) => { send({ type: 'error', error }); try { ws.close(); } catch {} };
+
+  const cfg = loadConfig();
+  if (cfg.terminal?.enabled !== true) return fail('terminal sessions are disabled');
+  // A published tunnel plus a browser terminal is a public shell. Refuse regardless
+  // of the enable flag.
+  if (tunnelManager?.isRunning?.()) return fail('blocked while a public tunnel is active');
+  if (!termBridge.tmuxAvailable()) return fail('tmux unavailable on this host');
+
+  let sessionId = null;
+  try { sessionId = new URL(req.url, 'http://x').searchParams.get('session'); } catch {}
+  const session = sessionId ? stmts.getSession.get(sessionId) : null;
+  if (!session || session.kind !== 'terminal') return fail('not a terminal session');
+
+  const agents = loadConfig().externalAgents || {};
+  const commands = resolveAgentCommands(agents[session.terminal_agent]);
+  if (!commands.interactive) return fail(`agent "${session.terminal_agent}" has no interactive command`);
+
+  const name = tmuxNameFor(session.id);
+  const sbFile = path.join(os.tmpdir(), `ccsterm-sb-${session.id}.txt`);
+  let handle = null;
+  let attempts = 0;
+
+  // Start the agent and attach a client. `asRestore` picks the resume command over
+  // the fresh-start one.
+  //
+  // Self-healing: an exact conversation id can exist on OUR side and not on the
+  // agent's — we mint it at session creation, but an agent only persists the
+  // conversation once it has actually been used (verified: `claude --resume <unused
+  // uuid>` answers "No conversation found with session ID"). A restore that dies
+  // within seconds therefore means "nothing to resume", not "broken", so we start
+  // fresh once instead of leaving the user with a dead terminal.
+  function startAndAttach(asRestore) {
+    attempts++;
+    const launch = buildLaunchCommand({ commands, convId: session.agent_conv_id, isRestore: asRestore });
+    let state;
+    try {
+      state = termBridge.ensureSession({ name, workdir: session.workdir || WORKDIR, launchCommand: launch });
+    } catch (e) {
+      log.warn('terminal session start failed', { sessionId: session.id, err: e.message });
+      fail(`could not start the agent: ${e.message}`);
+      return;
+    }
+
+    send({
+      type: 'ready',
+      state,
+      agent: session.terminal_agent,
+      restored: asRestore,
+      restoredExact: asRestore && !!(session.agent_conv_id && commands.resume),
+    });
+
+    // Replay the scrollback the reaper saved before killing this session, so a
+    // reaped terminal returns with the picture the user last saw.
+    if (attempts === 1 && state !== 'attach') {
+      try {
+        if (fs.existsSync(sbFile)) ws.send(Buffer.from(fs.readFileSync(sbFile, 'utf8').replace(/\n/g, '\r\n') + '\r\n'));
+      } catch {}
+    }
+
+    const startedAt = Date.now();
+    try {
+      handle = termBridge.attach({
+        name, cols: 80, rows: 24,
+        onData: (buf) => {
+          // Drop output rather than let a slow browser grow an unbounded send queue.
+          if (ws.bufferedAmount > 4 * 1024 * 1024) return;
+          try { ws.send(buf); } catch {}
+        },
+        onExit: () => {
+          if (asRestore && attempts === 1 && Date.now() - startedAt < 10000) {
+            log.info('terminal restore found nothing to resume — starting fresh', { sessionId: session.id });
+            try { handle?.close(); } catch {}
+            termBridge.killSession(name);
+            send({ type: 'restore_failed' });
+            startAndAttach(false);
+            return;
+          }
+          send({ type: 'exit' });
+          try { ws.close(); } catch {}
+        },
+      });
+    } catch (e) {
+      fail(`could not attach: ${e.message}`);
+    }
+  }
+
+  if (!session.terminal_started) { try { stmts.markTerminalStarted.run(session.id); } catch {} }
+  startAndAttach(session.terminal_started === 1);
+
+  ws.on('message', (raw, isBinary) => {
+    if (!handle) return;
+    if (isBinary) { handle.write(raw); return; }
+    let msg = null;
+    try { msg = JSON.parse(raw.toString('utf8')); } catch { return; }
+    if (msg.type === 'input') handle.write(msg.data);
+    else if (msg.type === 'resize') handle.resize(msg.cols, msg.rows);
+    else if (msg.type === 'kill') {
+      termBridge.killSession(name);
+      try { fs.unlinkSync(sbFile); } catch {}
+      try { ws.close(); } catch {}
+    }
+  });
+
+  // Closing the browser tab detaches the CLIENT only — the agent keeps working.
+  ws.on('close', () => { try { handle?.close(); } catch {} });
 });
 
 wss.on('connection', (ws) => {
@@ -6860,6 +7711,52 @@ wss.on('connection', (ws) => {
 
       // Single DB lookup — reused for workdir check, existence check, claude_session_id, and auto-title
       let existSess = localSessionId ? stmts.getSession.get(localSessionId) : null;
+
+      // A terminal session is driven by a human through the terminal WebSocket and
+      // must never be driven by the chat engine as well. Two drivers on one tmux
+      // session is the exact failure the typed-session design exists to prevent:
+      // the engine's paste-buffer lands in the same input box the human is typing
+      // in, and paneBusy() reads the human's keystrokes as "agent still working"
+      // until the 10-minute idle watchdog fires. Refuse instead of silently racing.
+      if (existSess && existSess.kind === 'terminal') {
+        proxy.send(JSON.stringify({ type: 'error', error: 'This is a terminal session — open it in the terminal view instead of sending chat messages.', ...(tabId ? { tabId } : {}) }));
+        return;
+      }
+
+      // ── Bot mentions ────────────────────────────────────────────────────────
+      // '@@handle' calls a bot; a single '@' remains the file-attachment trigger.
+      // Resolution runs against EVERY handle, not just this project's, so a bot
+      // that exists elsewhere gets a useful answer rather than silence.
+      let mentionedBots = [], projectBots = [], botPrompt = msg.text || '';
+      try {
+        const allBots = stmts.listBots.all();
+        if (allBots.length) {
+          const wd = existSess?.workdir || msg.workdir || WORKDIR;
+          const proj = loadProjects().find(pr => pr.workdir === wd);
+          projectBots = proj ? stmts.listProjectBots.all(proj.id) : [];
+          const available = new Set(projectBots.map(b => b.id));
+          const parsed = botsLogic.parseMentions(msg.text || '', allBots.map(b => b.id));
+          if (parsed.handles.length || (parsed.unknown || []).length) {
+            botPrompt = parsed.cleaned || BARE_MENTION_PROMPT;
+            const byId = new Map(allBots.map(b => [b.id, b]));
+            mentionedBots = parsed.handles.filter(h => available.has(h)).map(h => byId.get(h));
+            for (const h of parsed.handles.filter(x => !available.has(x))) {
+              const label = byId.get(h)?.label || h;
+              proxy.send(JSON.stringify({ type: 'text',
+                text: `ℹ️ **@@${h}** (${label}) exists but is not in this project.\n`
+                    + `Open the Bots panel and add it here, or mention a bot from this project.\n\n`,
+                ...(tabId ? { tabId } : {}) }));
+            }
+            // '@@' states the intent outright, so an unknown handle is answered
+            // rather than passed through as prose the assistant has to guess at.
+            for (const h of (parsed.unknown || [])) {
+              proxy.send(JSON.stringify({ type: 'text',
+                text: `ℹ️ There is no bot **@@${h}**. Create one in the Bots panel.\n\n`,
+                ...(tabId ? { tabId } : {}) }));
+            }
+          }
+        }
+      } catch (e) { log.warn('bot mention resolution failed', { err: e.message }); }
 
       // Validate workdir: if the session belongs to a different project, don't reuse it.
       if (existSess && msg.workdir && existSess.workdir && existSess.workdir !== msg.workdir) {
@@ -7121,7 +8018,17 @@ wss.on('connection', (ws) => {
         if (agentMode === 'multi') {
           try { proxy.send(JSON.stringify({ type: 'text', text: 'ℹ️ Multi-agent mode uses the API engine — running in single-agent interactive mode instead.\n\n', tabId: effectiveTabId })); } catch {}
         }
-        const r = await runInteractiveSingle(params);
+        // The interactive engine has no hooks to inject, so it is handed a drain
+        // function and types clarifications into the live pane itself.
+        const r = await runInteractiveSingle({
+          ...params,
+          drainInterrupts: () => {
+            const msgs = pendingInterrupts.get(localSessionId) || [];
+            if (msgs.length) pendingInterrupts.delete(localSessionId);
+            for (const m of msgs) { try { if (m.dbId) stmts.markInterruptDelivered.run(m.dbId); } catch {} }
+            return msgs;
+          },
+        });
         for (const ev of r.toolEvents) {
           try { stmts.addMsg.run(localSessionId,'assistant','tool',(ev.input||'').substring(0,500),ev.name,null,null,null); } catch {}
         }
@@ -7132,6 +8039,17 @@ wss.on('connection', (ws) => {
         }
         newCid = r.cid;
         resultMeta = r.resultMeta;
+      } else if (mentionedBots.length) {
+        // @mentions take precedence over the agent-mode setting: naming a bot is an
+        // explicit instruction about who answers, and it would be wrong to hand the
+        // turn to the planner instead.
+        // params.userContent was built from the RAW message (mention still in it, if
+        // one was attached alongside a file) — claude-cli.js only drops an
+        // attachment's trailing text block when it exactly equals the prompt text, so
+        // passing the raw block next to the cleaned `botPrompt` would duplicate the
+        // message (same class of bug fixed for the Telegram bot path).
+        const botUserContent = buildUserContent(botPrompt, enrichedAttachments);
+        newCid = await runBotTurns({ ...params, userContent: botUserContent }, { bots: mentionedBots, prompt: botPrompt, rosterBots: projectBots });
       } else if (agentMode==='multi') {
         newCid = await runMultiAgent(params);
       } else {
@@ -7216,6 +8134,9 @@ wss.on('connection', (ws) => {
         const tabQ = ws._tabQueue[effectiveTabId] || [];
         if (tabQ.length > 0) {
           const next = tabQ.shift();
+          // Delete before running: see the table comment — losing one message on a
+          // crash beats running the same turn twice.
+          if (next?._dbQueueId) { try { stmts.delQueuedMsg.run(next._dbQueueId); } catch {} }
           if (tabQ.length === 0) { delete ws._tabQueue[effectiveTabId]; sessionQueues.delete(effectiveTabId); }
           try { ws.send(queuePayload(effectiveTabId)); } catch {}
           processChat(next).catch(err => log.error('processChat tab-queue error', { message: err.message }));
@@ -7330,10 +8251,19 @@ wss.on('connection', (ws) => {
           }
           // Prevent unbounded queue growth
           if (ws._tabQueue[tabId].length >= 20) {
-            ws.send(JSON.stringify({ type: 'error', error: 'Queue full (max 20). Wait for current task to finish.', tabId }));
+            // Hand the text back: the composer cleared it before sending, so a bare
+            // error left the user with their message gone and no way to recover it.
+            ws.send(JSON.stringify({ type: 'error', error: 'Queue full (max 20). Wait for current task to finish.', tabId,
+              restoreText: msg.text || '', queueRejected: true }));
             return;
           }
           msg._queueId = ++ws._queueIdCounter;
+          // Persist before enqueuing, so a crash between the two cannot leave a
+          // message the user believes is waiting but which exists nowhere.
+          try {
+            const info = stmts.addQueuedMsg.run(tabId, JSON.stringify(msg));
+            msg._dbQueueId = Number(info.lastInsertRowid);
+          } catch (e) { log.warn('queue persist failed', { err: e.message }); }
           ws._tabQueue[tabId].push(msg);
           ws.send(queuePayload(tabId));
           return;
@@ -7358,19 +8288,38 @@ wss.on('connection', (ws) => {
       const hasAttachments = Array.isArray(msg.attachments) && msg.attachments.length > 0;
       if (!tabId || (!text && !hasAttachments)) return;
 
-      // Soft guard: warn if no active task is found, but still store the interrupt.
-      // Race window: between session_started (client renames tab) and activeTasks.set()
-      // both _tabBusy and activeTasks can be momentarily empty for the new session ID.
-      // Storing the interrupt is harmless — it'll be consumed by MCP or cleaned up in finally.
-      if (!ws._tabBusy[tabId] && !activeTasks.has(tabId)) {
-        log.warn('[interrupt] no active task found (race window?)', { tabId });
+      // Nothing is running: this is not a clarification, it is a new message. Storing
+      // it anyway meant it survived in memory and was injected into the NEXT,
+      // unrelated run — the agent would suddenly react to a remark from a finished
+      // task. The SPA sends `interrupt` while it still believes the tab is
+      // generating, and the server may already have finished, so this window is
+      // reached in normal use, not only under load.
+      // hasRunningTask is essential here, not belt-and-braces: a Kanban task worker is
+      // NOT registered in activeTasks (that map holds web and Telegram chat runs), so
+      // without this check a clarification sent to a running task would be dispatched
+      // as a fresh chat turn on the same session — two `claude --resume` processes on
+      // one session id, which is the write race the rest of this file works to avoid.
+      const _taskRunning = (() => { try { return !!stmts.hasRunningTask.get(tabId); } catch { return false; } })();
+      if (!ws._tabBusy[tabId] && !activeTasks.has(tabId) && !activeChatSessions.has(tabId) && !_taskRunning) {
+        log.info('[interrupt] session is idle — handling as a normal message', { tabId });
+        processChat({
+          type: 'chat',
+          text,
+          tabId,
+          sessionId: tabId,
+          attachments: Array.isArray(msg.attachments) ? msg.attachments : undefined,
+          model: msg.model,
+          workdir: msg.workdir,
+        }).catch(err => log.error('processChat error', { message: err.message }));
+        return;
       }
 
       // Store pending interrupt
       if (!pendingInterrupts.has(tabId)) pendingInterrupts.set(tabId, []);
       const queue = pendingInterrupts.get(tabId);
       if (queue.length >= 10) {
-        ws.send(JSON.stringify({ type: 'error', error: 'Interrupt queue full (max 10).', tabId }));
+        ws.send(JSON.stringify({ type: 'error', error: 'Interrupt queue full (max 10).', tabId,
+          restoreText: text || '', queueRejected: true }));
         return;
       }
       const interruptId = ++_interruptIdCounter;
@@ -7983,6 +8932,102 @@ app.use((err, _req, res, next) => {
   try { log.warn('request error', { status, msg: err?.message }); } catch {}
   res.status(status).json(body);
 });
+
+// ─── Terminal reaper ─────────────────────────────────────────────────────────
+// Agents are expensive and tmux is not — measured RSS: opencode ~1.8 GB, claude
+// ~1 GB, tmux server 3.7 MB. So the target is the agent process.
+//
+// Every check short-circuits to "keep", cheapest first:
+//   1. attached          — somebody is watching
+//   2. session age       — never reap something just created
+//   3. window_activity   — cheap idle filter. NOT session_activity: that one does
+//                          not move when the pane produces output (measured), so a
+//                          reaper built on it would kill working agents.
+//   4. pane hash x2      — the decisive busy check. A redrawing pane means the
+//                          agent is working, and killing it mid-edit can leave a
+//                          half-written file on disk. Resume restores the
+//                          conversation; it does not restore that file.
+function startTerminalReaper({ intervalMs = 60000 } = {}) {
+  if (!termBridge.tmuxAvailable()) return null;
+  const tick = async () => {
+    try {
+      const cfg = loadConfig();
+      if (cfg.terminal?.enabled !== true) return;
+      const idleThresholdSec = Math.max(60, (cfg.terminal?.idleTimeoutMin ?? 30) * 60);
+      const maxLive = cfg.terminal?.maxLive ?? 3;
+
+      const live = termBridge.listTerminalSessions()
+        .map(name => ({ name, ...termBridge.sessionInfo(name) }))
+        .filter(s => s.exists);
+      if (!live.length) return;
+
+      // Over-cap sessions are closed because of the cap, not because they are idle
+      // long enough — so they skip the idle threshold but still face the busy check.
+      const overflow = new Set(pickOverflow(live, maxLive));
+      const candidates = live.filter(s => overflow.has(s.name)
+        || isReapCandidate({ attached: s.attached, idleSec: s.activityAgeSec, sessionAgeSec: s.ageSec, idleThresholdSec }));
+      if (!candidates.length) return;
+
+      const first = new Map();
+      for (const s of candidates) first.set(s.name, termBridge.paneHash(s.name));
+      await new Promise(r => setTimeout(r, 3000));
+
+      for (const s of candidates) {
+        const info = termBridge.sessionInfo(s.name);
+        if (!info.exists || info.attached > 0) continue;   // someone connected meanwhile
+        const decided = shouldReap({
+          attached: info.attached,
+          idleSec: info.activityAgeSec,
+          sessionAgeSec: info.ageSec,
+          paneHashA: first.get(s.name),
+          paneHashB: termBridge.paneHash(s.name),
+          idleThresholdSec: overflow.has(s.name) ? 0 : idleThresholdSec,
+          minAgeSec: overflow.has(s.name) ? 0 : undefined,
+        });
+        if (!decided) continue;
+        const sid = s.name.slice('ccsterm-'.length);
+        // Keep the picture the user last saw: it is replayed on the next open.
+        termBridge.saveScrollback(s.name, path.join(os.tmpdir(), `ccsterm-sb-${sid}.txt`));
+        termBridge.killSession(s.name);
+        log.info('terminal session reaped', { name: s.name, idleSec: info.activityAgeSec, overCap: overflow.has(s.name) });
+      }
+    } catch (e) {
+      log.warn('terminal reaper failed', { msg: e?.message });
+    }
+  };
+  return setInterval(tick, intervalMs);
+}
+
+// Restore queued chat messages left by a previous process. They never started —
+// dequeue deletes the row before the run begins — so re-queuing them cannot
+// duplicate work. They land in sessionQueues and the next WebSocket that owns the
+// session drains them, exactly as a live queue would.
+try {
+  const rows = stmts.allQueuedMsgs.all();
+  if (rows.length) {
+    let restored = 0;
+    for (const row of rows) {
+      let msg = null;
+      try { msg = JSON.parse(row.payload); } catch { }
+      if (!msg || !row.session_id) { try { stmts.delQueuedMsg.run(row.id); } catch {} ; continue; }
+      msg._dbQueueId = row.id;
+      if (!sessionQueues.has(row.session_id)) sessionQueues.set(row.session_id, []);
+      sessionQueues.get(row.session_id).push(msg);
+      restored++;
+    }
+    if (restored) log.info('restored queued messages from a previous run', { count: restored });
+  }
+} catch (e) { log.warn('queue restore failed', { err: e.message }); }
+
+// The `tmux -C` clients are children of this process and SURVIVE a studio restart,
+// staying attached and pinning session_attached above zero — which would stop the
+// reaper from ever firing. Drop them before anything else can attach.
+try {
+  if (termBridge.tmuxAvailable()) {
+    for (const name of termBridge.listTerminalSessions()) termBridge.detachClients(name);
+  }
+} catch {}
+startTerminalReaper({ intervalMs: 60000 });
 
 server.listen(...(process.env.CCS_DESKTOP === '1' ? [PORT, '127.0.0.1'] : [PORT]), () => {
   log.info('server started', {

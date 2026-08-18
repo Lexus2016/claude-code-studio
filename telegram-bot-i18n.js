@@ -238,6 +238,7 @@ const BOT_I18N = {
     // Forum mode
     'forum_instructions': '🏗 <b>Налаштування Forum Mode</b>\n\n1. Створіть нову приватну групу в Telegram\n2. Назвіть її, наприклад, «Claude Studio»\n3. Увімкніть <b>Topics</b> в налаштуваннях групи\n4. Додайте мене як адміна з правом «Manage Topics»\n5. Напишіть у групі: /connect',
     'forum_already': '✅ Forum вже підключено.',
+    'forum_already_owned': '⚠️ Цю супергрупу вже підключив інший користувач ({name}). Одна група — один власник: попросіть його від\u02BCєднати її через /forum, або створіть окрему групу.',
     'forum_connected': '✅ <b>Forum підключено!</b>\n\nСтворюю структуру...',
     'forum_syncing': '🔄 <b>Синхронізація Forum</b>\n\nСтворюю відсутні топіки...',
     'forum_created_topics': '✅ Структуру створено:\n\n📋 <b>Tasks</b> — управління завданнями\n🔔 <b>Activity</b> — сповіщення\n\nТеми проєктів з\'являться автоматично.',
@@ -536,6 +537,7 @@ const BOT_I18N = {
     // Forum mode
     'forum_instructions': '🏗 <b>Forum Mode Setup</b>\n\n1. Create a new private group in Telegram\n2. Name it, e.g. "Claude Studio"\n3. Enable <b>Topics</b> in group settings\n4. Add me as admin with "Manage Topics" permission\n5. Write /connect in the group',
     'forum_already': '✅ Forum is already connected.',
+    'forum_already_owned': '⚠️ This supergroup is already connected by another user ({name}). One group, one owner — ask them to disconnect it via /forum, or use a separate group.',
     'forum_connected': '✅ <b>Forum connected!</b>\n\nCreating structure...',
     'forum_syncing': '🔄 <b>Syncing Forum</b>\n\nCreating missing topics...',
     'forum_created_topics': '✅ Structure created:\n\n📋 <b>Tasks</b> — task management\n🔔 <b>Activity</b> — notifications\n\nProject topics will appear automatically.',
@@ -834,6 +836,7 @@ const BOT_I18N = {
     // Forum mode
     'forum_instructions': '🏗 <b>Настройка Forum Mode</b>\n\n1. Создайте новую приватную группу в Telegram\n2. Назовите её, например, «Claude Studio»\n3. Включите <b>Темы</b> в настройках группы\n4. Добавьте меня как админа с правом «Управление темами»\n5. Напишите в группе: /connect',
     'forum_already': '✅ Forum уже подключён.',
+    'forum_already_owned': '⚠️ Эту супергруппу уже подключил другой пользователь ({name}). Одна группа — один владелец: попросите его отключить её через /forum или создайте отдельную группу.',
     'forum_connected': '✅ <b>Forum подключён!</b>\n\nСоздаю структуру...',
     'forum_syncing': '🔄 <b>Синхронизация Forum</b>\n\nСоздаю недостающие топики...',
     'forum_created_topics': '✅ Структура создана:\n\n📋 <b>Tasks</b> — управление задачами\n🔔 <b>Activity</b> — уведомления\n\nТемы проектов появятся автоматически.',
@@ -1153,6 +1156,7 @@ const BOT_I18N = {
     // Forum mode
     'forum_instructions': '🏗 <b>Configuration du Forum Mode</b>\n\n1. Créez un nouveau groupe privé dans Telegram\n2. Nommez-le, par ex. « Claude Studio »\n3. Activez les <b>Topics</b> dans les paramètres du groupe\n4. Ajoutez-moi comme admin avec le droit « Manage Topics »\n5. Écrivez /connect dans le groupe',
     'forum_already': '✅ Le Forum est déjà connecté.',
+    'forum_already_owned': "⚠️ Ce supergroupe est déjà connecté par un autre utilisateur ({name}). Un groupe, un propriétaire — demandez-lui de le déconnecter via /forum, ou utilisez un autre groupe.",
     'forum_connected': '✅ <b>Forum connecté !</b>\n\nCréation de la structure...',
     'forum_syncing': '🔄 <b>Synchronisation du Forum</b>\n\nCréation des topics manquants...',
     'forum_created_topics': '✅ Structure créée :\n\n📋 <b>Tasks</b> — gestion des tâches\n🔔 <b>Activity</b> — notifications\n\nLes topics des projets apparaîtront automatiquement.',
@@ -1472,6 +1476,7 @@ const BOT_I18N = {
     // Forum mode
     'forum_instructions': '🏗 <b>הגדרת Forum Mode</b>\n\n1. צרו קבוצה פרטית חדשה ב-Telegram\n2. תנו לה שם, למשל «Claude Studio»\n3. הפעילו <b>Topics</b> בהגדרות הקבוצה\n4. הוסיפו אותי כמנהל עם הרשאת «Manage Topics»\n5. כתבו בקבוצה: /connect',
     'forum_already': '✅ ה-Forum כבר מחובר.',
+    'forum_already_owned': '⚠️ הסופר-קבוצה הזו כבר מחוברת על ידי משתמש אחר ({name}). קבוצה אחת, בעלים אחד — בקשו ממנו לנתק אותה דרך /forum, או השתמשו בקבוצה נפרדת.',
     'forum_connected': '✅ <b>ה-Forum חובר!</b>\n\nיוצר את המבנה...',
     'forum_syncing': '🔄 <b>סנכרון Forum</b>\n\nיוצר טופיקים חסרים...',
     'forum_created_topics': '✅ המבנה נוצר:\n\n📋 <b>Tasks</b> — ניהול משימות\n🔔 <b>Activity</b> — התראות\n\nטופיקים של פרויקטים יופיעו אוטומטית.',

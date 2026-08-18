@@ -7,6 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c6cf6'/><text x='16' y='23' font-size='16' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="/vendor/xterm.css">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -327,8 +328,21 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .af textarea { resize: vertical; min-height: 44px; font-family: var(--font-mono); font-size: 11px; }
 .fr { display: flex; gap: 6px; }
 .fr button { padding: 5px 13px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 500; }
-.bp { background: var(--accent); color: white; }
+/* .bp / .bg used to supply only colours: the border, radius, padding and font came
+   from the `.fr button` selector, so every one of these buttons placed outside a
+   .fr row fell back to browser chrome — a 2px outset border, square corners and
+   Arial. Making the classes self-sufficient fixes them all at once; `.fr button`
+   has higher specificity, so buttons inside a row keep their existing metrics. */
+.bp, .bg {
+  border: none; border-radius: 7px;
+  padding: 6px 13px; font-family: inherit; font-size: 12px; font-weight: 600;
+  line-height: 1.35; cursor: pointer;
+  transition: background-color .15s, filter .15s, scale .12s cubic-bezier(.2,0,0,1);
+}
+.bp:active, .bg:active { scale: .96; }
+.bp { background: var(--accent); color: white; box-shadow: 0 1px 2px rgba(0,0,0,.28); }
 .bp:hover { background: var(--accent2); }
+.bp:disabled, .bg:disabled { opacity: .5; cursor: not-allowed; scale: none; }
 .bg { background: var(--s2); color: var(--muted); border: 1px solid var(--border) !important; }
 
 /* ─── History ─── */
@@ -1038,6 +1052,200 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .at-popup-hdr { padding: 7px 12px; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .at-popup-hdr input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-size: 12px; }
 .at-popup-list { overflow-y: auto; flex: 1; }
+
+.tab.tab-term .tab-title { font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 11.5px; }
+.tab.tab-term::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%; flex: none;
+  background: var(--accent2, #7c6aef); margin-right: 1px;
+}
+
+/* Terminal mode: the same column, a different surface. One class on .center swaps
+   the whole chat apparatus (composer, minimap, search, panels) for the terminal,
+   so nothing chat-shaped can be left dangling over it. */
+#termPane { display: none; flex: 1; min-height: 0; flex-direction: column; background: #0b0b0f; }
+.center.term-mode > #termPane { display: flex; }
+.center.term-mode > .msgs,
+.center.term-mode > .ia,
+.center.term-mode > #minimapRail,
+.center.term-mode > #scrollBtn,
+.center.term-mode > .chat-search-bar,
+.center.term-mode > .sess-bar,
+.center.term-mode > .notes-panel,
+.center.term-mode > .dlg-panel,
+.center.term-mode > #dlgDialogContainer { display: none !important; }
+.term-hdr {
+  display: flex; align-items: center; gap: 9px; padding: 8px 13px; flex-shrink: 0;
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,.09);
+}
+.term-hdr .term-title { font-size: 12px; font-weight: 650; opacity: .9; letter-spacing: -.01em; }
+.term-hdr .term-state { font-size: 11px; opacity: .55; }
+#termDot { width: 8px; height: 8px; border-radius: 50%; background: #8b949e; flex: none;
+           transition: background-color .25s cubic-bezier(.2,0,0,1); }
+#termHost { flex: 1; min-height: 0; padding: 6px 8px; }
+
+/* New-tab chooser: two ways to start work, side by side, each explaining itself.
+   A bare '+' that always meant 'chat' hid the terminal entirely — the owner had to
+   ask how to open one. */
+.nt-choices { display: flex; flex-direction: column; gap: 9px; }
+.nt-card {
+  display: flex; align-items: flex-start; gap: 11px; width: 100%;
+  padding: 12px 13px; border: none; border-radius: 11px; cursor: pointer;
+  background: var(--s2); color: var(--text); font-family: inherit; text-align: left;
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: box-shadow .15s, background-color .15s, scale .12s cubic-bezier(.2,0,0,1);
+}
+.nt-card:hover { background: var(--s3); box-shadow: inset 0 0 0 1px var(--accent); }
+.nt-card:active { scale: .98; }
+.nt-card .nt-ic { font-size: 20px; line-height: 1.15; flex: none; }
+.nt-card .nt-name { font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+.nt-card .nt-desc { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-top: 2px; }
+.nt-card[disabled] { opacity: .45; cursor: not-allowed; }
+.nt-sub { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.nt-sub button {
+  font-size: 11.5px; padding: 5px 11px; border: none; border-radius: 999px; cursor: pointer;
+  background: var(--s3); color: var(--text); font-family: inherit;
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: box-shadow .15s, scale .12s cubic-bezier(.2,0,0,1);
+}
+.nt-sub button:hover { box-shadow: inset 0 0 0 1px var(--accent2); }
+.nt-sub button:active { scale: .96; }
+
+/* Primary action inside a panel's empty state. It cannot borrow .bp: that class
+   only supplies a background, while the border, radius and padding come from the
+   `.fr button` selector — used outside a .fr row it inherits the browser's default
+   chrome, which is a hard grey border and square corners. */
+.empty-cta {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 2px; padding: 7px 14px;
+  border: none; border-radius: 9px;
+  background: linear-gradient(180deg, var(--accent2) 0%, var(--accent) 100%);
+  color: #fff; font-family: inherit; font-size: 12px; font-weight: 650;
+  letter-spacing: -.01em; cursor: pointer;
+  box-shadow: 0 1px 0 rgba(255,255,255,.14) inset,
+              0 2px 8px -2px rgba(124,106,239,.55),
+              0 1px 2px rgba(0,0,0,.35);
+  transition: filter .15s, box-shadow .15s, scale .12s cubic-bezier(.2,0,0,1);
+}
+.empty-cta:hover { filter: brightness(1.08); box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 4px 14px -3px rgba(124,106,239,.7), 0 1px 2px rgba(0,0,0,.35); }
+.empty-cta:active { scale: .96; }
+.empty-cta:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+
+/* Bot mention inside a sent message — reads as the bot, not as its handle.
+   Depth comes from layered transparent shadows rather than a hard border, so the
+   chip sits on any bubble colour without a visible seam. The emoji is nudged up
+   half a pixel: emoji sit optically low against Latin/Cyrillic text. */
+.bot-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bc) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc) 38%, transparent),
+              0 1px 2px rgba(0,0,0,.28);
+  color: var(--text);
+  font-weight: 650; font-size: .92em; line-height: 1.45;
+  white-space: nowrap; vertical-align: baseline;
+}
+.bot-chip .bc-ic { font-size: 1.02em; transform: translateY(-.5px); }
+
+/* Capability tags on an agent row: one record, shown once, saying what it can do. */
+.ag-cap { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px;
+  font-size: 10px; letter-spacing: .02em; color: var(--muted);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.09); }
+.ag-cap-term { color: var(--accent2); box-shadow: inset 0 0 0 1px rgba(124,106,239,.35); }
+
+/* A bot's message: its own header and a stripe in its own colour, so two speakers
+   in one conversation are told apart before a word is read. The stripe fades out
+   downward — a flat 3px rule reads as a border, a fading one reads as attribution. */
+.mw.from-bot { position: relative; padding-left: 13px; }
+.mw.from-bot::before {
+  content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--bc) 0%, color-mix(in srgb, var(--bc) 22%, transparent) 100%);
+}
+.bot-hd {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11.5px; margin-bottom: 5px;
+  animation: bh-in .3s cubic-bezier(.2,0,0,1) both;
+}
+@keyframes bh-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+.bot-hd .bh-ic { font-size: 14px; line-height: 1; transform: translateY(-.5px); }
+.bot-hd .bh-name { color: var(--bc); font-weight: 700; letter-spacing: -.01em; }
+.bot-hd .bh-handle { color: var(--muted); opacity: .75; font-family: var(--font-mono); font-size: 10.5px; }
+.bot-hd .bh-model { color: var(--muted); opacity: .5; font-size: 10.5px; }
+.bot-hd .bh-model::before { content: '· '; }
+
+/* Starter-prompt buttons: a press should feel like a press. */
+#botTemplates button { transition: background-color .15s, box-shadow .15s, scale .12s cubic-bezier(.2,0,0,1); }
+#botTemplates button:active { scale: .96; }
+
+/* The bots panel row: the mention button is the primary action, so it carries the
+   accent; edit and delete stay quiet until hovered. */
+#botsList .ci .bot-use-btn { color: var(--accent2); font-weight: 700; }
+#botsList .ci .bot-use-btn, #botsList .ci .bot-edit-btn, #botsList .ci .bot-del-btn {
+  transition: background-color .15s, opacity .15s, scale .12s cubic-bezier(.2,0,0,1);
+}
+#botsList .ci .bot-use-btn:active, #botsList .ci .bot-edit-btn:active, #botsList .ci .bot-del-btn:active { scale: .96; }
+
+/* Modal radii are concentric: a 16px shell around 8px fields with 14px of padding
+   would read as mismatched, so the fields carry the difference. */
+.bot-modal .cmd-field label { letter-spacing: .07em; }
+.bot-modal .modal-footer .bp { transition: filter .15s, scale .12s cubic-bezier(.2,0,0,1); }
+.bot-modal .modal-footer .bp:active { scale: .96; }
+
+/* Bot turn strip — who is in this turn and where each one is. Sits above the
+   composer so it never scrolls away while work is running: with two or three bots
+   the chat itself is a poor status display, because the one you want to check on
+   may be far above the viewport.
+   Radii are concentric — 999px pills inside a 7px-padded bar — and depth comes
+   from layered shadows rather than a hard divider line. */
+.bots-strip {
+  display: none; flex-wrap: wrap; align-items: center; gap: 7px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, rgba(24,30,43,.72), rgba(17,22,32,.92));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.045), 0 -6px 18px -12px rgba(0,0,0,.7);
+  backdrop-filter: blur(7px);
+}
+.bots-strip.on { display: flex; }
+.bots-strip .bs-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; padding: 4px 11px 4px 9px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.035);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.07);
+  transition: box-shadow .2s cubic-bezier(.2,0,0,1), opacity .2s cubic-bezier(.2,0,0,1), background-color .2s;
+  animation: bs-in .32s cubic-bezier(.2,0,0,1) both;
+}
+/* Staggered entrance: the line-up arrives as a sequence, not a block. */
+.bots-strip .bs-item:nth-child(1) { animation-delay: 0ms; }
+.bots-strip .bs-item:nth-child(2) { animation-delay: 70ms; }
+.bots-strip .bs-item:nth-child(3) { animation-delay: 140ms; }
+.bots-strip .bs-item:nth-child(4) { animation-delay: 210ms; }
+.bots-strip .bs-item:nth-child(n+5) { animation-delay: 280ms; }
+@keyframes bs-in { from { opacity: 0; transform: translateY(4px) scale(.97); } to { opacity: 1; transform: none; } }
+.bots-strip .bs-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: none; transition: background-color .2s; }
+.bots-strip .bs-name { font-weight: 650; letter-spacing: -.005em; }
+.bots-strip .bs-state { opacity: .55; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.bots-strip .bs-item.running { background: var(--abg); box-shadow: inset 0 0 0 1px rgba(124,106,239,.45), 0 0 0 3px rgba(124,106,239,.09); }
+.bots-strip .bs-item.running .bs-dot { background: var(--accent2); animation: bs-pulse 1.15s ease-in-out infinite; }
+.bots-strip .bs-item.done { opacity: .5; }
+.bots-strip .bs-item.done .bs-dot { background: #3fb950; }
+.bots-strip .bs-item.failed .bs-dot, .bots-strip .bs-item.stopped .bs-dot, .bots-strip .bs-item.skipped .bs-dot { background: #f85149; }
+.bots-strip .bs-item.failed, .bots-strip .bs-item.stopped, .bots-strip .bs-item.skipped { box-shadow: inset 0 0 0 1px rgba(248,81,73,.35); }
+@keyframes bs-pulse { 0%,100% { opacity: 1; transform: scale(1) } 50% { opacity: .4; transform: scale(.82) } }
+/* Hit area padded to 40px tall via the pseudo-element: the visible pill is smaller
+   than a comfortable target, and Stop is the one control you reach for in a hurry. */
+.bots-strip .bs-stop {
+  position: relative; margin-left: auto;
+  font-size: 11.5px; font-weight: 600; padding: 5px 13px;
+  border-radius: 8px; background: transparent; color: #ff9b95;
+  border: none; box-shadow: inset 0 0 0 1px rgba(248,81,73,.38);
+  cursor: pointer;
+  transition: background-color .16s, box-shadow .16s, scale .12s cubic-bezier(.2,0,0,1);
+}
+.bots-strip .bs-stop::after { content: ''; position: absolute; inset: -9px -4px; }
+.bots-strip .bs-stop:hover { background: rgba(248,81,73,.13); box-shadow: inset 0 0 0 1px rgba(248,81,73,.6); }
+.bots-strip .bs-stop:active { scale: .96; }
+.at-group { padding: 6px 12px 3px; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); opacity: .7; }
 .at-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; font-size: 12px; transition: background .1s; }
 .at-item:hover, .at-item.active { background: var(--s3); }
 .at-item .at-info { display: flex; flex-direction: column; overflow: hidden; flex: 1; min-width: 0; }
@@ -1436,6 +1644,41 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .cmd-modal .modal-hdr { padding: 18px 20px 14px; }
 .cmd-modal .modal-hdr h2 { display: flex; align-items: center; gap: 10px; font-size: 17px; }
 .cmd-modal .modal-body { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px 20px; background: linear-gradient(180deg, rgba(124,106,239,.04) 0%, rgba(124,106,239,0) 100%); }
+
+/* Bot form fields — the app's own form language (surface --s2, --border, 6-9px
+   radius, accent on focus), scoped so it cannot leak into other modals. Without
+   this the select and textarea fall back to browser chrome, which reads as
+   foreign next to everything else in the portal. */
+.bot-modal .modal-body { display: flex; flex-direction: column; gap: 14px; }
+.bot-modal .cmd-field { gap: 6px; }
+.bot-modal input,
+.bot-modal select,
+.bot-modal textarea {
+  width: 100%;
+  background: var(--s2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .12s, box-shadow .12s;
+}
+.bot-modal textarea { font-family: var(--font-mono); font-size: 12px; line-height: 1.6; resize: vertical; min-height: 120px; }
+.bot-modal select { cursor: pointer; appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px; }
+.bot-modal input:focus,
+.bot-modal select:focus,
+.bot-modal textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--abg); }
+.bot-modal input::placeholder,
+.bot-modal textarea::placeholder { color: var(--muted); opacity: .65; }
+.bot-modal .cmd-name-hint { font-size: 11px; color: var(--muted); line-height: 1.45; }
+.bot-modal .cmd-name-hint b { color: var(--accent2); font-family: var(--font-mono); }
 .cmd-field { display: flex; flex-direction: column; gap: 8px; }
 .cmd-field label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .cmd-modal input,
@@ -2505,6 +2748,20 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
 
     <div class="sec">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('bots')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('bots')}">
+        <span data-i18n="sec.bots">Боти</span>
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
+          <button class="sec-add-btn" onclick="event.stopPropagation();openBotForm()" title="Створити бота" data-i18n-title="bot.add.new">＋</button>
+          <span class="badge" id="botsCount">0</span>
+        </div>
+      </div>
+      <div class="sec-body" id="botsBody">
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="bots.hint">Учасники цього проєкту. Згадайте бота через @ у повідомленні.</div>
+        <div class="sec-list"><div id="botsList"></div></div>
+      </div>
+    </div>
+
+    <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('agents')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('agents')}">
         <span data-i18n="sec.agents">Агенти</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
@@ -2517,6 +2774,8 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <div class="sec-list"><div id="agentsList"></div></div>
       </div>
     </div>
+
+    
 
     <!-- Tunnel Manager -->
     <div class="sec">
@@ -2927,6 +3186,16 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     <button class="search-close" onclick="closeChatSearch()" title="Close search (Esc)">✕</button>
   </div>
 
+  <div id="termPane">
+    <div class="term-hdr">
+      <span id="termDot"></span>
+      <span class="term-title" id="termTitle"></span>
+      <span class="term-state" id="termState"></span>
+      <span style="flex:1"></span>
+      <button id="termKillBtn" class="bg" style="font-size:11px;padding:4px 10px"></button>
+    </div>
+    <div id="termHost"></div>
+  </div>
   <div class="msgs" id="messages" role="log" aria-live="polite" aria-label="Chat messages">
     <div class="welcome">
       <div class="wi">CCS</div>
@@ -2981,6 +3250,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       </div>
       <button class="reply-preview-close" onclick="clearReply()" data-i18n-title="reply.cancel" title="Cancel reply">✕</button>
     </div>
+    <div class="bots-strip" id="botsStrip"></div>
     <div class="iw">
       <div id="interruptPill" class="interrupt-pill">
         <button class="interrupt-pill-btn" id="interruptPillBtn" data-mode="interrupt" onclick="cycleInterruptMode()"></button>
@@ -2990,7 +3260,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
         </svg>
       </button>
-      <textarea id="input" rows="1" dir="auto" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @ — файли · # — SSH · 📎 — будь-який файл" autofocus aria-label="Message input" aria-multiline="true"></textarea>
+      <textarea id="input" rows="1" dir="auto" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @@ — бот · @ — файл · # — SSH · 📎 — будь-який файл" autofocus aria-label="Message input" aria-multiline="true"></textarea>
       <span id="charCounter" style="display:none;" aria-live="polite" aria-label="Character count"></span>
       <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Завдань у черзі"></span>
       <button class="sb stop-btn hidden" id="stopBtn" onclick="confirmStop()" data-i18n-title="stop.agent" title="Stop agent">
@@ -3429,6 +3699,64 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 </div>
 
 <!-- Agent Add/Edit Modal -->
+<div class="modal-overlay hidden" id="newTabModal" onclick="if(event.target===this)closeModalOverlay('newTabModal')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <span id="newTabTitle" data-i18n="newtab.title">Що відкрити?</span>
+      <button class="modal-close" onclick="closeModalOverlay('newTabModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="nt-choices" id="ntChoices"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="botModal">
+  <div class="modal bot-modal" style="max-width:560px">
+    <div class="modal-header">
+      <span id="botModalTitle" data-i18n="bot.modal.add.title">Новий бот</span>
+      <button class="modal-close" onclick="cancelBotForm()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="botId">
+      <div class="cmd-field">
+        <label for="botLabel" data-i18n="bot.modal.label.label">Ім'я</label>
+        <input id="botLabel" placeholder="Крипто-аналітик" autocomplete="off" oninput="_botHandlePreview()">
+        <div class="cmd-name-hint"><span data-i18n="bot.modal.handle.hint">Звертання у чаті:</span> <b id="botHandlePreview">@—</b></div>
+      </div>
+      <div class="cmd-field">
+        <label for="botAvatar" data-i18n="bot.modal.avatar.label">Емодзі</label>
+        <input id="botAvatar" placeholder="📈" autocomplete="off" style="max-width:110px">
+      </div>
+      <div class="cmd-field">
+        <label for="botDesc" data-i18n="bot.modal.desc.label">Призначення</label>
+        <input id="botDesc" placeholder="аналіз ринку криптовалют" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="bot.modal.desc.hint">Одним рядком. Це бачать інші боти, щоб знати, кому передати роботу.</div>
+      </div>
+      <div class="cmd-field">
+        <label for="botModel" data-i18n="bot.modal.model.label">Модель</label>
+        <select id="botModel">
+          <option value="" data-i18n="bot.model.inherit">Як у чаті</option>
+          <option value="haiku">haiku</option>
+          <option value="sonnet">sonnet</option>
+          <option value="opus">opus</option>
+          <option value="fable">fable</option>
+        </select>
+      </div>
+      <div class="cmd-field">
+        <label for="botPrompt" data-i18n="bot.modal.prompt.label">Системний промпт</label>
+        <div id="botTemplates" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:2px"></div>
+        <textarea id="botPrompt" rows="7" placeholder="Ти аналітик крипторинку..."></textarea>
+        <div class="cmd-name-hint" data-i18n="bot.modal.prompt.hint">Хто цей бот і як він працює. До 8000 символів.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="bg" onclick="cancelBotForm()" data-i18n="agent.modal.cancel">Скасувати</button>
+      <button class="bp" id="botSaveBtn" onclick="saveBot()" data-i18n="bot.add.btn">Створити</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="agentModal" aria-hidden="true" onclick="if(event.target===this)cancelAgentForm()">
   <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="agentModalTitle" tabindex="-1">
     <div class="modal-hdr">
@@ -3445,6 +3773,31 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <label for="agentTemplate" data-i18n="agent.modal.template.label">Command template</label>
         <input id="agentTemplate" data-i18n-ph="agent.template.ph" placeholder="codex {prompt}" autocomplete="off">
         <div class="cmd-name-hint" data-i18n="agent.modal.template.hint">{prompt} — placeholder for task text</div>
+      </div>
+      <div class="cmd-field">
+        <label for="agentInteractive" data-i18n="agent.modal.interactive.label">Interactive command</label>
+        <input id="agentInteractive" placeholder="codex" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="agent.modal.interactive.hint">Starts the agent's TUI for a terminal session. Leave empty for a delegation-only agent.</div>
+      </div>
+      <div class="cmd-field">
+        <label for="agentResume" data-i18n="agent.modal.resume.label">Resume command</label>
+        <input id="agentResume" placeholder="codex resume {sid}" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="agent.modal.resume.hint">{sid} — the conversation id. Used to restore the session after a reboot.</div>
+      </div>
+      <div class="cmd-field">
+        <label for="agentResumeLast" data-i18n="agent.modal.resumeLast.label">Resume last (fallback)</label>
+        <input id="agentResumeLast" placeholder="codex resume --last" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="agent.modal.resumeLast.hint">Used when no conversation id is known. May restore a different conversation.</div>
+      </div>
+      <div class="cmd-field">
+        <label for="agentNewIdFlag" data-i18n="agent.modal.newIdFlag.label">New-conversation id flag</label>
+        <input id="agentNewIdFlag" placeholder="--session-id {sid}" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="agent.modal.newIdFlag.hint">If the CLI can be told the id of a NEW conversation, restore becomes exact. Leave empty if unsupported.</div>
+      </div>
+      <div class="cmd-field">
+        <label for="agentNewIdCommand" data-i18n="agent.modal.newIdCommand.label">New-conversation command</label>
+        <input id="agentNewIdCommand" placeholder="cursor-agent create-chat" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="agent.modal.newIdCommand.hint">Alternative to the flag: a command that creates a conversation and prints its id. Run once when the session is created.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -3819,6 +4172,16 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    'newtab.title':'Що відкрити?','newtab.chat':'Чат','newtab.chat.desc':'Звичайна розмова. Ботів кличте через @@','newtab.term':'Термінальний агент','newtab.term.desc':'Живий термінал CLI-агента у вкладці. Оберіть, кого запустити:','term.tab':'термінал',
+    'stream.gap':'Частину подій не показано — зʼєднання переривалось. Текст відповіді повний.',
+    'agent.cap.delegate':'делегування','agent.cap.terminal':'термінал',
+    'bots.empty.what':'Бот — це named учасник чату зі своїм промптом, моделлю і памʼяттю. Аналітик, редактор, рецензент — кожен знає своє.','bots.empty.how':'Створіть бота і покличте його в повідомленні:','bots.empty.cta':'Створити першого бота','bot.tpl.replace':'Замінити те, що вже написано в промпті?','bot.tpl.analyst.name':'Аналітик','bot.tpl.analyst.desc':'аналіз даних і висновки','bot.tpl.analyst.prompt':'Ти аналітик. Розбираєш дані й даєш висновки, на які можна спертися.\n\nПравила:\n- Спершу цифри, потім інтерпретація.\n- Кожен висновок має спиратися на конкретне джерело.\n- Якщо даних бракує — скажи прямо, чого саме бракує.\n- Без води: короткі абзаци, ключове винось у список.','bot.tpl.writer.name':'Редактор','bot.tpl.writer.desc':'тексти і звіти','bot.tpl.writer.prompt':'Ти редактор. Перетворюєш чернетки й дані на текст, який приємно читати.\n\nПравила:\n- Пиши для людини, не для галочки.\n- Структура: заголовок, суть у першому абзаці, деталі нижче.\n- Не вигадуй фактів. Якщо чогось нема у вихідних даних — постав питання.\n- Прибирай канцелярит і повтори.','bot.tpl.reviewer.name':'Рецензент','bot.tpl.reviewer.desc':'перевірка коду і рішень','bot.tpl.reviewer.prompt':'Ти рецензент. Шукаєш, де рішення ламається, а не де воно гарне.\n\nПравила:\n- Кожна знахідка: що саме зламається, за яких вхідних даних, з посиланням на файл і рядок.\n- Розділяй «це помилка» і «мені так не подобається».\n- Якщо не впевнений — кажи, що це припущення.\n- Наприкінці: найважливіше першим.','bot.tpl.explainer.name':'Пояснювач','bot.tpl.explainer.desc':'пояснює складне просто','bot.tpl.explainer.prompt':'Ти пояснюєш складні речі простими словами.\n\nПравила:\n- Спочатку одне речення суті, потім деталі.\n- Приклад важливіший за визначення.\n- Терміни розшифровуй при першій згадці.\n- Не спрощуй до неправди: якщо є важливий нюанс — назви його.',
+    'bot.state.queued':'у черзі','bot.state.running':'працює','bot.state.done':'готово','bot.state.failed':'помилка','bot.state.stopped':'зупинено','bot.state.skipped':'пропущено','bot.stop.all':'Зупинити',
+    'at.no_bots':'Ботів не знайдено',
+    'sec.bots':'Боти','bots.hint':'Учасники цього проєкту. Згадайте бота через @ у повідомленні.','bot.add.new':'Створити бота','bot.add.btn':'Створити','bot.use.title':'Вставити згадку','bot.modal.add.title':'Новий бот','bot.modal.edit.title':'Редагувати бота','bot.modal.label.label':'Ім\'я','bot.modal.handle.hint':'Звертання у чаті:','bot.modal.avatar.label':'Емодзі','bot.modal.desc.label':'Призначення','bot.modal.desc.hint':'Одним рядком. Це бачать інші боти, щоб знати, кому передати роботу.','bot.modal.model.label':'Модель','bot.model.inherit':'Як у чаті','bot.modal.prompt.label':'Системний промпт','bot.modal.prompt.hint':'Хто цей бот і як він працює. До 8000 символів.','bot.err.label':'Вкажіть імʼя бота','bot.del.confirm':'Видалити бота','bot.del.note':'Його минулі повідомлення лишаться, а звертання більше ніколи не дістанеться іншому боту.','bot.deleted':'видалений бот','toast.bot_added':'✓ Бота створено','toast.bot_updated':'✓ Бота оновлено','toast.bot_deleted':'✓ Бота видалено','at.group.bots':'Боти','at.group.files':'Файли',
+    'term.open.title':'Відкрити живий термінал цього агента у вкладці','term.kill':'Завершити','term.killConfirm':'Завершити цю термінальну сесію? Розмову можна буде відновити пізніше.','term.unavailable':'Термінальні сесії недоступні','term.state.attached':'підключено','term.state.started':'запущено','term.state.restored':'відновлено','term.state.restoredLast':'відновлено останню розмову агента','term.state.restoreFailed':'відновлювати не було чого — почато заново','term.state.exited':'агент завершився','term.state.error':'помилка',
+    'agent.modal.newIdCommand.label':'Команда створення розмови','agent.modal.newIdCommand.hint':'Альтернатива прапорцю: команда, що створює розмову і друкує її id. Виконується один раз при створенні сесії.',
+    'agent.modal.interactive.label':'Інтерактивна команда','agent.modal.interactive.hint':'Запускає TUI агента для термінальної сесії. Порожньо — агент лише для делегування.','agent.modal.resume.label':'Команда відновлення','agent.modal.resume.hint':'{sid} — ідентифікатор розмови. Використовується для відновлення сесії після перезавантаження.','agent.modal.resumeLast.label':'Відновити останню (запасний варіант)','agent.modal.resumeLast.hint':'Використовується, коли ідентифікатор невідомий. Може відновити іншу розмову.','agent.modal.newIdFlag.label':'Прапорець id нової розмови','agent.modal.newIdFlag.hint':'Якщо CLI дозволяє задати id НОВОЇ розмови, відновлення стає точним. Порожньо — не підтримується.',
     'export.btn':'Експорт','export.title':'Експортувати розмову','notes.btn':'Нотатки','notes.title':'Нотатки сесії (приватні)','notes.ph':'Приватні нотатки сесії — не надсилаються Claude...','notes.save':'Зберегти','notes.saved':'✓ Збережено',
     'act.title':'Активність','act.group':'Групувати за проєктами ↔ плоский список','act.live':'Активні','act.scheduled':'Заплановані','act.recent':'Нещодавні','act.empty':'Немає активності','act.recovering':'віднов.','act.now':'зараз','act.in':'за','act.u.s':'с','act.u.m':'хв','act.u.h':'г','act.u.d':'д',
     'sec.proactive':'Статус',
@@ -3834,7 +4197,7 @@ const TRANSLATIONS = {
     'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки',
     'welcome.title':'Нова сесія','welcome.ready':'Готовий до роботи',
     'welcome.desc':'Виберіть MCP та Навички зліва, файли — справа.',
-    'input.ph':'Напишіть завдання... Ctrl+V — скріншот · @ — файли · # — SSH · 📎 — будь-який файл',
+    'input.ph':'Напишіть завдання... Ctrl+V — скріншот · @@ — бот · @ — файл · # — SSH · 📎 — будь-який файл',
     'files.title':'Робоча директорія','files.refresh':'Оновити','queue.title':'Завдань у черзі',
     'cfg.title':'Налаштування','cfg.saved':'✓ Збережено','cfg.close':'Закрити','cfg.save':'Зберегти',
     'dir.title':'Новий проект','toast.loading':'Завантаження...',
@@ -4053,6 +4416,16 @@ const TRANSLATIONS = {
     'dlg.last_update':'оновлено {time} тому',
   },
   en: {
+    'newtab.title':'What would you like to open?','newtab.chat':'Chat','newtab.chat.desc':'An ordinary conversation. Call bots with @@','newtab.term':'Terminal agent','newtab.term.desc':"A CLI agent's live terminal in a tab. Pick which one:",'term.tab':'terminal',
+    'stream.gap':'Some live activity was not shown — the connection dropped. The answer itself is complete.',
+    'agent.cap.delegate':'delegation','agent.cap.terminal':'terminal',
+    'bots.empty.what':'A bot is a named chat participant with its own prompt, model and memory. An analyst, an editor, a reviewer — each one knows its job.','bots.empty.how':'Create a bot, then call it in a message:','bots.empty.cta':'Create your first bot','bot.tpl.replace':'Replace what is already written in the prompt?','bot.tpl.analyst.name':'Analyst','bot.tpl.analyst.desc':'data analysis and conclusions','bot.tpl.analyst.prompt':'You are an analyst. You work through data and give conclusions someone can rely on.\n\nRules:\n- Numbers first, interpretation second.\n- Every conclusion names the source it rests on.\n- If the data is not enough, say exactly what is missing.\n- No padding: short paragraphs, key points as a list.','bot.tpl.writer.name':'Editor','bot.tpl.writer.desc':'documents and reports','bot.tpl.writer.prompt':'You are an editor. You turn drafts and data into text people actually want to read.\n\nRules:\n- Write for a reader, not for the record.\n- Structure: title, the point in the first paragraph, detail below.\n- Invent nothing. If a fact is not in the source, ask for it.\n- Cut jargon and repetition.','bot.tpl.reviewer.name':'Reviewer','bot.tpl.reviewer.desc':'reviews code and decisions','bot.tpl.reviewer.prompt':'You are a reviewer. You look for where a solution breaks, not where it is nice.\n\nRules:\n- Each finding: what breaks, on which input, with the file and line.\n- Separate \'this is a bug\' from \'I would have done it differently\'.\n- If you are unsure, say it is a guess.\n- Most severe first.','bot.tpl.explainer.name':'Explainer','bot.tpl.explainer.desc':'makes hard things clear','bot.tpl.explainer.prompt':'You explain difficult things in plain language.\n\nRules:\n- One sentence of the point first, then the detail.\n- An example beats a definition.\n- Unpack a term the first time it appears.\n- Do not simplify into being wrong: if a caveat matters, name it.',
+    'bot.state.queued':'queued','bot.state.running':'working','bot.state.done':'done','bot.state.failed':'failed','bot.state.stopped':'stopped','bot.state.skipped':'skipped','bot.stop.all':'Stop',
+    'at.no_bots':'No bots found',
+    'sec.bots':'Bots','bots.hint':'Participants in this project. Mention one with @ in a message.','bot.add.new':'Create bot','bot.add.btn':'Create','bot.use.title':'Insert mention','bot.modal.add.title':'New bot','bot.modal.edit.title':'Edit bot','bot.modal.label.label':'Name','bot.modal.handle.hint':'Addressed in chat as:','bot.modal.avatar.label':'Emoji','bot.modal.desc.label':'Purpose','bot.modal.desc.hint':'One line. Other bots see this, so they know who to hand work to.','bot.modal.model.label':'Model','bot.model.inherit':'Same as chat','bot.modal.prompt.label':'System prompt','bot.modal.prompt.hint':'Who this bot is and how it works. Up to 8000 characters.','bot.err.label':'Give the bot a name','bot.del.confirm':'Delete bot','bot.del.note':'Its past messages stay, and its handle can never be taken by another bot.','bot.deleted':'deleted bot','toast.bot_added':'✓ Bot created','toast.bot_updated':'✓ Bot updated','toast.bot_deleted':'✓ Bot deleted','at.group.bots':'Bots','at.group.files':'Files',
+    'term.open.title':"Open this agent's live terminal in a tab",'term.kill':'Kill','term.killConfirm':'Kill this terminal session? The conversation can be resumed later.','term.unavailable':'Terminal sessions are unavailable','term.state.attached':'attached','term.state.started':'started','term.state.restored':'restored','term.state.restoredLast':"restored the agent's last conversation",'term.state.restoreFailed':'nothing to resume — started fresh','term.state.exited':'agent exited','term.state.error':'error',
+    'agent.modal.newIdCommand.label':'New-conversation command','agent.modal.newIdCommand.hint':'Alternative to the flag: a command that creates a conversation and prints its id. Run once when the session is created.',
+    'agent.modal.interactive.label':'Interactive command','agent.modal.interactive.hint':"Starts the agent's TUI for a terminal session. Leave empty for a delegation-only agent.",'agent.modal.resume.label':'Resume command','agent.modal.resume.hint':'{sid} — the conversation id. Used to restore the session after a reboot.','agent.modal.resumeLast.label':'Resume last (fallback)','agent.modal.resumeLast.hint':'Used when no conversation id is known. May restore a different conversation.','agent.modal.newIdFlag.label':'New-conversation id flag','agent.modal.newIdFlag.hint':'If the CLI can be told the id of a NEW conversation, restore becomes exact. Leave empty if unsupported.',
     'export.btn':'Export','export.title':'Export conversation','notes.btn':'Notes','notes.title':'Session notes (private)','notes.ph':'Private session notes — not sent to Claude...','notes.save':'Save','notes.saved':'✓ Saved',
     'act.title':'Activity','act.group':'Group by project ↔ flat list','act.live':'Active','act.scheduled':'Scheduled','act.recent':'Recent','act.empty':'No activity','act.recovering':'recovering','act.now':'now','act.in':'in','act.u.s':'s','act.u.m':'m','act.u.h':'h','act.u.d':'d',
     'sec.proactive':'Status',
@@ -4068,7 +4441,7 @@ const TRANSLATIONS = {
     'tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns',
     'welcome.title':'New session','welcome.ready':'Ready to work',
     'welcome.desc':'Choose MCP and Skills on the left, files on the right.',
-    'input.ph':'Write a task... Ctrl+V — screenshot · @ — files · # — SSH · 📎 — any file',
+    'input.ph':'Write a task... Ctrl+V — screenshot · @@ — bot · @ — file · # — SSH · 📎 — any file',
     'files.title':'Workspace','files.refresh':'Refresh','queue.title':'Tasks waiting in queue',
     'cfg.title':'Configuration','cfg.saved':'✓ Saved','cfg.close':'Close','cfg.save':'Save',
     'dir.title':'New project','toast.loading':'Loading...',
@@ -4287,6 +4660,16 @@ const TRANSLATIONS = {
     'dlg.last_update':'updated {time} ago',
   },
   ru: {
+    'newtab.title':'Что открыть?','newtab.chat':'Чат','newtab.chat.desc':'Обычный разговор. Ботов зовите через @@','newtab.term':'Терминальный агент','newtab.term.desc':'Живой терминал CLI-агента во вкладке. Выберите, кого запустить:','term.tab':'терминал',
+    'stream.gap':'Часть событий не показана — соединение прерывалось. Текст ответа полный.',
+    'agent.cap.delegate':'делегирование','agent.cap.terminal':'терминал',
+    'bots.empty.what':'Бот — это именованный участник чата со своим промптом, моделью и памятью. Аналитик, редактор, рецензент — каждый знает своё.','bots.empty.how':'Создайте бота и позовите его в сообщении:','bots.empty.cta':'Создать первого бота','bot.tpl.replace':'Заменить то, что уже написано в промпте?','bot.tpl.analyst.name':'Аналитик','bot.tpl.analyst.desc':'анализ данных и выводы','bot.tpl.analyst.prompt':'Ты аналитик. Разбираешь данные и даёшь выводы, на которые можно опереться.\n\nПравила:\n- Сначала цифры, потом интерпретация.\n- Каждый вывод опирается на конкретный источник.\n- Если данных не хватает — скажи, чего именно.\n- Без воды: короткие абзацы, ключевое списком.','bot.tpl.writer.name':'Редактор','bot.tpl.writer.desc':'тексты и отчёты','bot.tpl.writer.prompt':'Ты редактор. Превращаешь черновики и данные в текст, который приятно читать.\n\nПравила:\n- Пиши для человека.\n- Структура: заголовок, суть в первом абзаце, детали ниже.\n- Не выдумывай фактов. Чего нет в источнике — спроси.\n- Убирай канцелярит и повторы.','bot.tpl.reviewer.name':'Рецензент','bot.tpl.reviewer.desc':'проверка кода и решений','bot.tpl.reviewer.prompt':'Ты рецензент. Ищешь, где решение ломается.\n\nПравила:\n- Каждая находка: что ломается, при каких данных, файл и строка.\n- Разделяй «это ошибка» и «мне не нравится».\n- Не уверен — скажи, что это предположение.\n- Самое важное первым.','bot.tpl.explainer.name':'Объяснятель','bot.tpl.explainer.desc':'объясняет сложное просто','bot.tpl.explainer.prompt':'Ты объясняешь сложное простыми словами.\n\nПравила:\n- Сначала суть одним предложением, потом детали.\n- Пример важнее определения.\n- Термин расшифровывай при первом упоминании.\n- Не упрощай до неправды: важный нюанс называй.',
+    'bot.state.queued':'в очереди','bot.state.running':'работает','bot.state.done':'готово','bot.state.failed':'ошибка','bot.state.stopped':'остановлен','bot.state.skipped':'пропущен','bot.stop.all':'Остановить',
+    'at.no_bots':'Боты не найдены',
+    'sec.bots':'Боты','bots.hint':'Участники этого проекта. Упомяните бота через @ в сообщении.','bot.add.new':'Создать бота','bot.add.btn':'Создать','bot.use.title':'Вставить упоминание','bot.modal.add.title':'Новый бот','bot.modal.edit.title':'Редактировать бота','bot.modal.label.label':'Имя','bot.modal.handle.hint':'Обращение в чате:','bot.modal.avatar.label':'Эмодзи','bot.modal.desc.label':'Назначение','bot.modal.desc.hint':'Одной строкой. Это видят другие боты, чтобы знать, кому передать работу.','bot.modal.model.label':'Модель','bot.model.inherit':'Как в чате','bot.modal.prompt.label':'Системный промпт','bot.modal.prompt.hint':'Кто этот бот и как он работает. До 8000 символов.','bot.err.label':'Укажите имя бота','bot.del.confirm':'Удалить бота','bot.del.note':'Его прошлые сообщения останутся, а обращение больше никогда не достанется другому боту.','bot.deleted':'удалённый бот','toast.bot_added':'✓ Бот создан','toast.bot_updated':'✓ Бот обновлён','toast.bot_deleted':'✓ Бот удалён','at.group.bots':'Боты','at.group.files':'Файлы',
+    'term.open.title':'Открыть живой терминал этого агента во вкладке','term.kill':'Завершить','term.killConfirm':'Завершить эту терминальную сессию? Разговор можно будет восстановить позже.','term.unavailable':'Терминальные сессии недоступны','term.state.attached':'подключено','term.state.started':'запущено','term.state.restored':'восстановлено','term.state.restoredLast':'восстановлен последний разговор агента','term.state.restoreFailed':'восстанавливать было нечего — начато заново','term.state.exited':'агент завершился','term.state.error':'ошибка',
+    'agent.modal.newIdCommand.label':'Команда создания разговора','agent.modal.newIdCommand.hint':'Альтернатива флагу: команда, создающая разговор и печатающая его id. Выполняется один раз при создании сессии.',
+    'agent.modal.interactive.label':'Интерактивная команда','agent.modal.interactive.hint':'Запускает TUI агента для терминальной сессии. Пусто — агент только для делегирования.','agent.modal.resume.label':'Команда восстановления','agent.modal.resume.hint':'{sid} — идентификатор разговора. Используется для восстановления сессии после перезагрузки.','agent.modal.resumeLast.label':'Восстановить последний (запасной вариант)','agent.modal.resumeLast.hint':'Используется, когда идентификатор неизвестен. Может восстановить другой разговор.','agent.modal.newIdFlag.label':'Флаг id нового разговора','agent.modal.newIdFlag.hint':'Если CLI позволяет задать id НОВОГО разговора, восстановление становится точным. Пусто — не поддерживается.',
     'export.btn':'Экспорт','export.title':'Экспортировать разговор','notes.btn':'Заметки','notes.title':'Заметки сессии (приватные)','notes.ph':'Приватные заметки сессии — не отправляются Claude...','notes.save':'Сохранить','notes.saved':'✓ Сохранено',
     'act.title':'Активность','act.group':'Группировать по проектам ↔ плоский список','act.live':'Активные','act.scheduled':'Запланированные','act.recent':'Недавние','act.empty':'Нет активности','act.recovering':'восст.','act.now':'сейчас','act.in':'через','act.u.s':'с','act.u.m':'мин','act.u.h':'ч','act.u.d':'д',
     'sec.proactive':'Статус',
@@ -4302,7 +4685,7 @@ const TRANSLATIONS = {
     'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги',
     'welcome.title':'Новая сессия','welcome.ready':'Готов к работе',
     'welcome.desc':'Выберите MCP и Навыки слева, файлы — справа.',
-    'input.ph':'Напишите задание... Ctrl+V — скриншот · @ — файлы · # — SSH · 📎 — любой файл',
+    'input.ph':'Напишите задание... Ctrl+V — скриншот · @@ — бот · @ — файл · # — SSH · 📎 — любой файл',
     'files.title':'Рабочая директория','files.refresh':'Обновить','queue.title':'Задач в очереди',
     'cfg.title':'Настройки','cfg.saved':'✓ Сохранено','cfg.close':'Закрыть','cfg.save':'Сохранить',
     'dir.title':'Новый проект','toast.loading':'Загрузка...',
@@ -4521,6 +4904,16 @@ const TRANSLATIONS = {
     'dlg.last_update':'обновлено {time} назад',
   },
   fr: {
+    "newtab.title":"Que voulez-vous ouvrir ?","newtab.chat":"Chat","newtab.chat.desc":"Une conversation ordinaire. Appelez les bots avec @@","newtab.term":"Agent terminal","newtab.term.desc":"Le terminal vivant d'un agent CLI dans un onglet. Choisissez :","term.tab":"terminal",
+    "stream.gap":"Une partie de l'activité n'a pas été affichée — la connexion a été interrompue. La réponse elle-même est complète.",
+    "agent.cap.delegate":"délégation","agent.cap.terminal":"terminal",
+    "bots.empty.what":"Un bot est un participant nommé du chat, avec son propre prompt, son modèle et sa mémoire.","bots.empty.how":"Créez un bot puis appelez-le dans un message :","bots.empty.cta":"Créer votre premier bot","bot.tpl.replace":"Remplacer ce qui est déjà écrit dans le prompt ?","bot.tpl.analyst.name":"Analyste","bot.tpl.analyst.desc":"analyse de données et conclusions","bot.tpl.analyst.prompt":"Tu es analyste. Tu examines les données et donnes des conclusions sur lesquelles on peut s'appuyer.\n\nRègles :\n- Les chiffres d'abord, l'interprétation ensuite.\n- Chaque conclusion nomme la source sur laquelle elle repose.\n- Si les données sont insuffisantes, dis précisément ce qui manque.\n- Pas de remplissage : paragraphes courts, points clés en liste.","bot.tpl.writer.name":"Rédacteur","bot.tpl.writer.desc":"textes et rapports","bot.tpl.writer.prompt":"Tu es rédacteur. Tu transformes brouillons et données en un texte qu'on a envie de lire.\n\nRègles :\n- Écris pour un lecteur, pas pour la forme.\n- Structure : titre, l'essentiel dans le premier paragraphe, les détails ensuite.\n- N'invente rien. Si un fait ne figure pas dans la source, demande-le.\n- Supprime le jargon et les répétitions.","bot.tpl.reviewer.name":"Relecteur","bot.tpl.reviewer.desc":"revue du code et des décisions","bot.tpl.reviewer.prompt":"Tu es relecteur. Tu cherches où la solution casse, pas où elle est élégante.\n\nRègles :\n- Chaque constat : ce qui casse, avec quelles entrées, fichier et ligne à l'appui.\n- Distingue « c'est un bug » de « je l'aurais fait autrement ».\n- Si tu n'es pas sûr, dis que c'est une hypothèse.\n- Le plus grave en premier.","bot.tpl.explainer.name":"Vulgarisateur","bot.tpl.explainer.desc":"rend le complexe clair","bot.tpl.explainer.prompt":"Tu expliques les choses difficiles en langage simple.\n\nRègles :\n- Une phrase pour l'essentiel, puis le détail.\n- Un exemple vaut mieux qu'une définition.\n- Explique un terme dès sa première apparition.\n- Ne simplifie pas jusqu'à l'erreur : si une nuance compte, nomme-la.",
+    "bot.state.queued":"en attente","bot.state.running":"en cours","bot.state.done":"terminé","bot.state.failed":"échec","bot.state.stopped":"arrêté","bot.state.skipped":"ignoré","bot.stop.all":"Arrêter",
+    "at.no_bots":"Aucun bot trouvé",
+    "sec.bots":"Bots","bots.hint":"Participants de ce projet. Mentionnez un bot avec @ dans un message.","bot.add.new":"Créer un bot","bot.add.btn":"Créer","bot.use.title":"Insérer la mention","bot.modal.add.title":"Nouveau bot","bot.modal.edit.title":"Modifier le bot","bot.modal.label.label":"Nom","bot.modal.handle.hint":"Adressé dans le chat comme :","bot.modal.avatar.label":"Émoji","bot.modal.desc.label":"Rôle","bot.modal.desc.hint":"Une ligne. Les autres bots la voient pour savoir à qui passer le travail.","bot.modal.model.label":"Modèle","bot.model.inherit":"Comme le chat","bot.modal.prompt.label":"Invite système","bot.modal.prompt.hint":"Qui est ce bot et comment il travaille. Jusqu'à 8000 caractères.","bot.err.label":"Donnez un nom au bot","bot.del.confirm":"Supprimer le bot","bot.del.note":"Ses anciens messages restent, et son identifiant ne sera jamais repris par un autre bot.","bot.deleted":"bot supprimé","toast.bot_added":"✓ Bot créé","toast.bot_updated":"✓ Bot mis à jour","toast.bot_deleted":"✓ Bot supprimé","at.group.bots":"Bots","at.group.files":"Fichiers",
+    "term.open.title":"Ouvrir le terminal","term.kill":"Terminer","term.killConfirm":"Terminer cette session terminal ? La conversation pourra être reprise plus tard.","term.unavailable":"Sessions terminal indisponibles","term.state.attached":"connecté","term.state.started":"démarré","term.state.restored":"restauré","term.state.restoredLast":"dernière conversation de l'agent restaurée","term.state.restoreFailed":"rien à reprendre — nouveau départ","term.state.exited":"agent terminé","term.state.error":"erreur",
+    "agent.modal.newIdCommand.label":"Commande de nouvelle conversation","agent.modal.newIdCommand.hint":"Alternative à l'indicateur : une commande qui crée une conversation et affiche son id. Exécutée une fois à la création de la session.",
+    "agent.modal.interactive.label":"Commande interactive","agent.modal.interactive.hint":"Lance le TUI de l'agent pour une session terminal. Vide — agent de délégation uniquement.","agent.modal.resume.label":"Commande de reprise","agent.modal.resume.hint":"{sid} — identifiant de la conversation. Sert à restaurer la session après un redémarrage.","agent.modal.resumeLast.label":"Reprendre la dernière (repli)","agent.modal.resumeLast.hint":"Utilisée quand aucun identifiant n'est connu. Peut restaurer une autre conversation.","agent.modal.newIdFlag.label":"Indicateur d'id de nouvelle conversation","agent.modal.newIdFlag.hint":"Si la CLI accepte l'id d'une NOUVELLE conversation, la restauration devient exacte. Vide si non pris en charge.",
     "export.btn":"Exporter","export.title":"Exporter la conversation","notes.btn":"Notes","notes.title":"Notes de session (privées)","notes.ph":"Notes de session privées — non envoyées à Claude...",
     "notes.save":"Enregistrer","notes.saved":"✓ Enregistré","act.title":"Activité","act.group":"Regrouper par projet ↔ liste à plat","act.live":"Actif","act.scheduled":"Planifié","act.recent":"Récent",
     "act.empty":"Aucune activité","act.recovering":"récupération","act.now":"maintenant","act.in":"dans","act.u.s":"s","act.u.m":"m","act.u.h":"h","act.u.d":"j","sec.proactive":"Statut",
@@ -4656,6 +5049,16 @@ const TRANSLATIONS = {
     "dlg.toast.no_changes":"Aucun changement","dlg.last_update":"mis à jour il y a {time}",
   },
   he: {
+    "newtab.title":"מה לפתוח?","newtab.chat":"צ׳אט","newtab.chat.desc":"שיחה רגילה. קראו לבוטים עם @@","newtab.term":"סוכן טרמינל","newtab.term.desc":"טרמינל חי של סוכן CLI בלשונית. בחרו את מי:","term.tab":"טרמינל",
+    "stream.gap":"חלק מהפעילות לא הוצג — החיבור נותק. התשובה עצמה מלאה.",
+    "agent.cap.delegate":"האצלה","agent.cap.terminal":"טרמינל",
+    "bots.empty.what":"בוט הוא משתתף בעל שם בצ׳אט, עם הנחיה, מודל וזיכרון משלו.","bots.empty.how":"צרו בוט ואז קראו לו בהודעה:","bots.empty.cta":"צרו את הבוט הראשון","bot.tpl.replace":"להחליף את מה שכבר כתוב בהנחיה?","bot.tpl.analyst.name":"אנליסט","bot.tpl.analyst.desc":"ניתוח נתונים ומסקנות","bot.tpl.analyst.prompt":"אתה אנליסט. אתה מנתח נתונים ונותן מסקנות שאפשר להישען עליהן.\n\nכללים:\n- קודם המספרים, אחר כך הפרשנות.\n- כל מסקנה מציינת את המקור שעליו היא נשענת.\n- אם הנתונים אינם מספיקים, אמור בדיוק מה חסר.\n- בלי מילוי מיותר: פסקאות קצרות, עיקרי הדברים ברשימה.","bot.tpl.writer.name":"עורך","bot.tpl.writer.desc":"טקסטים ודוחות","bot.tpl.writer.prompt":"אתה עורך. אתה הופך טיוטות ונתונים לטקסט שנעים לקרוא.\n\nכללים:\n- כתוב עבור קורא, לא לפרוטוקול.\n- מבנה: כותרת, העיקר בפסקה הראשונה, הפרטים מתחת.\n- אל תמציא עובדות. מה שאינו במקור — בקש.\n- הסר ז׳רגון וחזרות.","bot.tpl.reviewer.name":"סוקר","bot.tpl.reviewer.desc":"סקירת קוד והחלטות","bot.tpl.reviewer.prompt":"אתה סוקר. אתה מחפש היכן הפתרון נשבר, לא היכן הוא יפה.\n\nכללים:\n- כל ממצא: מה נשבר, באילו קלטים, עם קובץ ושורה.\n- הפרד בין ״זה באג״ ל״הייתי עושה אחרת״.\n- אם אינך בטוח, אמור שזו השערה.\n- החמור ביותר ראשון.","bot.tpl.explainer.name":"מסביר","bot.tpl.explainer.desc":"הופך מסובך לברור","bot.tpl.explainer.prompt":"אתה מסביר דברים מורכבים בשפה פשוטה.\n\nכללים:\n- משפט אחד של העיקר, ואז הפירוט.\n- דוגמה עדיפה על הגדרה.\n- פרש מונח בהופעתו הראשונה.\n- אל תפשט עד כדי טעות: אם יש סייג חשוב, ציין אותו.",
+    "bot.state.queued":"בתור","bot.state.running":"עובד","bot.state.done":"הושלם","bot.state.failed":"נכשל","bot.state.stopped":"נעצר","bot.state.skipped":"דולג","bot.stop.all":"עצור",
+    "at.no_bots":"לא נמצאו בוטים",
+    "sec.bots":"בוטים","bots.hint":"משתתפים בפרויקט הזה. אזכרו בוט עם @ בהודעה.","bot.add.new":"צור בוט","bot.add.btn":"צור","bot.use.title":"הוסף אזכור","bot.modal.add.title":"בוט חדש","bot.modal.edit.title":"עריכת בוט","bot.modal.label.label":"שם","bot.modal.handle.hint":"פנייה בצ׳אט:","bot.modal.avatar.label":"אמוג׳י","bot.modal.desc.label":"ייעוד","bot.modal.desc.hint":"שורה אחת. בוטים אחרים רואים אותה כדי לדעת למי להעביר עבודה.","bot.modal.model.label":"מודל","bot.model.inherit":"כמו בצ׳אט","bot.modal.prompt.label":"הנחיית מערכת","bot.modal.prompt.hint":"מי הבוט הזה ואיך הוא עובד. עד 8000 תווים.","bot.err.label":"תנו שם לבוט","bot.del.confirm":"למחוק בוט","bot.del.note":"ההודעות הקודמות שלו נשארות, והמזהה שלו לעולם לא יעבור לבוט אחר.","bot.deleted":"בוט שנמחק","toast.bot_added":"✓ הבוט נוצר","toast.bot_updated":"✓ הבוט עודכן","toast.bot_deleted":"✓ הבוט נמחק","at.group.bots":"בוטים","at.group.files":"קבצים",
+    "term.open.title":"פתח טרמינל","term.kill":"סיים","term.killConfirm":"לסיים את שיחת הטרמינל הזו? אפשר יהיה לשחזר אותה בהמשך.","term.unavailable":"שיחות טרמינל אינן זמינות","term.state.attached":"מחובר","term.state.started":"הופעל","term.state.restored":"שוחזר","term.state.restoredLast":"שוחזרה השיחה האחרונה של הסוכן","term.state.restoreFailed":"לא היה מה לשחזר — התחלה מחדש","term.state.exited":"הסוכן הסתיים","term.state.error":"שגיאה",
+    "agent.modal.newIdCommand.label":"פקודת יצירת שיחה","agent.modal.newIdCommand.hint":"חלופה לדגל: פקודה שיוצרת שיחה ומדפיסה את המזהה שלה. מורצת פעם אחת ביצירת השיחה.",
+    "agent.modal.interactive.label":"פקודה אינטראקטיבית","agent.modal.interactive.hint":"מפעילה את ה-TUI של הסוכן עבור שיחת טרמינל. ריק — סוכן להאצלה בלבד.","agent.modal.resume.label":"פקודת שחזור","agent.modal.resume.hint":"{sid} — מזהה השיחה. משמש לשחזור השיחה לאחר הפעלה מחדש.","agent.modal.resumeLast.label":"שחזר אחרונה (גיבוי)","agent.modal.resumeLast.hint":"משמש כאשר המזהה אינו ידוע. עשוי לשחזר שיחה אחרת.","agent.modal.newIdFlag.label":"דגל מזהה לשיחה חדשה","agent.modal.newIdFlag.hint":"אם ה-CLI מאפשר לקבוע מזהה לשיחה חדשה, השחזור נעשה מדויק. ריק אם אינו נתמך.",
     "export.btn":"ייצוא","export.title":"ייצוא שיחה","notes.btn":"הערות","notes.title":"הערות סשן (פרטי)","notes.ph":"הערות פרטיות לסשן — לא נשלחות ל-Claude...","notes.save":"שמירה",
     "notes.saved":"✓ נשמר","act.title":"פעילות","act.group":"קיבוץ לפי פרויקט ↔ רשימה שטוחה","act.live":"פעיל","act.scheduled":"מתוזמן","act.recent":"אחרונים","act.empty":"אין פעילות",
     "act.recovering":"מתאושש","act.now":"עכשיו","act.in":"בעוד","act.u.s":"שנ'","act.u.m":"דק'","act.u.h":"שע'","act.u.d":"יום","sec.proactive":"סטטוס","sec.chats":"צ'אטים","sec.mcp":"MCP",
@@ -5502,7 +5905,7 @@ function handleWsMsg(d) {
         // Show user message (task prompt) before assistant response
         if (d.prompt) {
           const um = addMsg('user');
-          um.querySelector('.msg').textContent = d.prompt;
+          setUserMsgText(um, d.prompt);
           applyMsgClamp(um);
         }
         setStatus('⚙ ' + (d.title || 'Task') + '…', 'warn');
@@ -5521,7 +5924,7 @@ function handleWsMsg(d) {
         // Show user message (task prompt) if not already visible
         if (d.prompt && !msgsEl.querySelector('.mw.user')) {
           const um = addMsg('user');
-          um.querySelector('.msg').textContent = d.prompt;
+          setUserMsgText(um, d.prompt);
           applyMsgClamp(um);
         }
         const ind = document.createElement('div');
@@ -5560,7 +5963,23 @@ function handleWsMsg(d) {
         break;
       }
       rmStatus();
+      // A turn normally streams into ONE bubble. Bots break that assumption: several
+      // answer in the same turn, one after another, and merging them would leave the
+      // reader unable to tell who said what. So when the speaker changes and either
+      // side is a bot, the current bubble is finalised and the next one starts fresh.
+      // Multi-agent roles (agent-1, agent-2) deliberately keep the single bubble —
+      // they run CONCURRENTLY, so switching per chunk would shred the output.
+      if (streaming.el && d.agent !== streaming.agent
+          && (_botsById[d.agent] || _botsById[streaming.agent] || _deletedBotIds.has(streaming.agent))) {
+        try {
+          streaming.el.querySelector('.msg').innerHTML = renderMd(streaming.txt);
+          _msfStopTimer(streaming.el);
+          _msfRemove(streaming.el);
+        } catch {}
+        streaming.el = null; streaming.txt = '';
+      }
       if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
+      streaming.agent = d.agent || null;
       // Ensure paragraph break between text blocks separated by tool calls
       if (!d.catchUp && streaming.txt && getTS(tabId)._hadTool) {
         if (!streaming.txt.endsWith('\n\n') && !d.text.startsWith('\n')) {
@@ -5606,6 +6025,16 @@ function handleWsMsg(d) {
       }
       break;
 
+    case 'bots_turn': {
+      _turnBots = d.bots || [];
+      _turnStates = {};
+      renderBotsStrip();
+      break;
+    }
+    case 'bot_state': {
+      if (d.bot) { _turnStates[d.bot] = d.state; renderBotsStrip(); }
+      break;
+    }
     case 'agent_status': {
       const _asTxt = (d.agent ? d.agent + ' · ' : '') + escH(d.statusKey ? t(d.statusKey) : d.status);
       getTS(tabId).agentStatus = _asTxt; // persist for tab-switch restoration
@@ -5668,6 +6097,9 @@ function handleWsMsg(d) {
       break;
 
     case 'done':
+      // Keep the finished line-up visible for a moment — it is the record of who did
+      // what — then clear it so the composer area does not accumulate old turns.
+      if (_turnBots.length) setTimeout(clearBotsStrip, 6000);
       // Allow future retries for this session (task_interrupted dedup)
       _retryingSessions.delete(tabId);
       // Update chain progress: check if this task completed or failed
@@ -5926,7 +6358,27 @@ function handleWsMsg(d) {
       }
       break;
 
+    case 'stream_gap':
+      // Honest about an incomplete replay: the buffer overflowed while this browser
+      // was away, so some live activity never arrived. The answer itself is re-read
+      // from the database, which is why this is a note and not an error.
+      if (isVisible) toast(t('stream.gap'), true, 5000);
+      break;
+
     case 'error':
+      // A rejected message is not a failed run: the composer cleared the text before
+      // sending, so hand it back rather than leaving the user to retype it. Only if
+      // they have not already started typing something else.
+      if (d.queueRejected && d.restoreText && isVisible) {
+        if (!inEl.value.trim()) {
+          inEl.value = d.restoreText;
+          inEl.dispatchEvent(new Event('input'));
+          inEl.focus();
+        }
+        // The optimistic 'queued' bubble is a lie once the server refused it.
+        const q = [...msgsEl.querySelectorAll('.msg-queued')].pop();
+        if (q) q.remove();
+      }
       getTS(tabId).agentStatus = ''; // task errored — clear saved status
       if (isVisible) {
         rmStatus();
@@ -6103,7 +6555,7 @@ function handleWsMsg(d) {
           if (item.queueId && !_existQIds.has(item.queueId)) {
             const w = addMsg('user');
             w.dataset.queueId = item.queueId;
-            w.querySelector('.msg').textContent = item.text || '';
+            setUserMsgText(w, item.text || '');
             // Restore attachment chips if any
             if (item.attachments?.length) {
               const chipsDiv = document.createElement('div');
@@ -6589,15 +7041,295 @@ function doStop() {
 }
 function stopAgent() { confirmStop(); }
 
+
+
+
+// A sent message shows "@@druhyy" — the machine's name for a bot, not the human's.
+// Rendered as the bot's own chip (its icon, its name, its colour) the same message
+// reads "1️⃣ Перший 2️⃣ Другий go", and it is obvious at a glance who was asked to
+// do what. Splitting the raw text before escaping avoids any interaction between
+// the escaping and the mention pattern.
+function renderBotMentionsHtml(text) {
+  const src = String(text ?? '');
+  const re = /(^|[\s(\[{'",;])@@([a-z0-9][a-z0-9_-]{0,30}[a-z0-9])(?![a-z0-9_-])(?!\.[a-z0-9])/gi;
+  let out = '', last = 0, m;
+  while ((m = re.exec(src)) !== null) {
+    const h = m[2].toLowerCase();
+    const bot = _botsById[h];
+    const known = !!bot || _deletedBotIds.has(h);
+    if (!known) continue;                       // unknown handle stays literal text
+    out += escH(src.slice(last, m.index)) + escH(m[1]);
+    const avatar = bot ? (bot.avatar || '🤖') : '🚫';
+    const label = bot ? bot.label : t('bot.deleted');
+    out += `<span class="bot-chip" style="--bc:${_botAccent(h)}" title="@@${escH(h)}">`
+         + `<span class="bc-ic">${escH(avatar)}</span>${escH(label)}</span>`;
+    last = m.index + m[0].length;
+  }
+  out += escH(src.slice(last));
+  return out;
+}
+
+// Single writer for user message bodies, so every path renders mentions the same
+// way — there are five places that used to assign textContent directly.
+function setUserMsgText(el, text) {
+  const body = el ? el.querySelector('.msg') : null;
+  if (!body) return;
+  body.innerHTML = renderBotMentionsHtml(text);
+}
+
+// ─── Bot turn strip ──────────────────────────────────────────────────────────
+// One row per bot in the current turn, each with its own state. Built for several
+// bots even though v1 runs them one at a time, so adding parallel execution later
+// changes the order things happen in, not the surface the user reads.
+let _turnBots = [], _turnStates = {};
+
+function renderBotsStrip() {
+  const strip = $i('botsStrip'); if (!strip) return;
+  if (!_turnBots.length) { strip.classList.remove('on'); strip.innerHTML = ''; return; }
+  const anyLive = _turnBots.some(b => (_turnStates[b.id] || 'queued') === 'queued' || _turnStates[b.id] === 'running');
+  strip.classList.add('on');
+  strip.innerHTML = _turnBots.map(b => {
+    const st = _turnStates[b.id] || 'queued';
+    return `<span class="bs-item ${st}" title="@@${escH(b.id)}${b.model ? ' · ' + escH(b.model) : ''}">
+      <span class="bs-dot"></span>
+      <span>${escH(b.avatar || '🤖')}</span>
+      <span class="bs-name">${escH(b.label)}</span>
+      <span class="bs-state">${escH(t('bot.state.' + st))}</span>
+    </span>`;
+  }).join('') + (anyLive ? `<button class="bs-stop" onclick="stopBotsTurn()">${escH(t('bot.stop.all'))}</button>` : '');
+}
+
+// v1 has one abort per turn, so stopping is all-or-nothing. Saying "Stop" rather
+// than offering a per-bot control that quietly does the same thing keeps the
+// button honest: the running bot stops and the queued ones are marked skipped.
+function stopBotsTurn() { try { stopGen(); } catch {} }
+
+function clearBotsStrip() { _turnBots = []; _turnStates = {}; renderBotsStrip(); }
+
+// ─── Bots ────────────────────────────────────────────────────────────────────
+// A bot is a named chat participant the user @mentions. Its handle is its
+// identity: global and never reused, so a message attributed to @analyst always
+// means the same bot. Which bots a PROJECT offers is separate — see
+// docs/superpowers/specs/2026-08-18-bots-design.md
+let _bots = [], _botsById = {}, _editingBotId = null;
+// Handles seen in the transcript that are no longer in the roster. Populated as
+// history renders, so an old message from a deleted bot still reads as one.
+const _deletedBotIds = new Set();
+
+async function loadBots() {
+  try {
+    const url = curProjectId ? `/api/bots?project=${encodeURIComponent(curProjectId)}` : '/api/bots';
+    const r = await fetch(url);
+    _bots = await r.json();
+    if (!Array.isArray(_bots)) _bots = [];
+  } catch { _bots = []; }
+  _botsById = {};
+  for (const b of _bots) _botsById[b.id] = b;
+  renderBots();
+}
+
+function renderBots() {
+  const el = $i('botsList'); if (!el) return;
+  el.innerHTML = '';
+  const cnt = $i('botsCount'); if (cnt) cnt.textContent = _bots.length;
+  // An empty list should teach, not just report emptiness: this is where a user
+  // first meets the feature, and "0 bots" alone explains nothing about what a bot
+  // is or how it would be used.
+  if (!_bots.length) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'font-size:11px;color:var(--muted);line-height:1.6;padding:4px 2px 8px';
+    empty.innerHTML = `${escH(t('bots.empty.what'))}<br><br>`
+      + `<span style="opacity:.85">${escH(t('bots.empty.how'))}</span> <code style="font-family:var(--font-mono);color:var(--accent2)">@@analyst</code><br><br>`
+      + `<button class="empty-cta" onclick="openBotForm()">＋ ${escH(t('bots.empty.cta'))}</button>`;
+    el.appendChild(empty);
+    return;
+  }
+  for (const b of _bots) {
+    const div = document.createElement('div');
+    div.className = 'ci';
+    div.innerHTML = `
+      <div class="inf" style="flex:1;min-width:0">
+        <div class="nm">${escH(b.avatar || '🤖')} ${escH(b.label)}</div>
+        <div class="ds" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px">@${escH(b.id)}${b.description ? ' · ' + escH(b.description) : ''}</div>
+      </div>
+      <button class="cfg bot-use-btn" title="${t('bot.use.title')}" style="font-size:12px">@</button>
+      <button class="cfg bot-edit-btn" title="${t('agent.edit.title')}">✏️</button>
+      <button class="rm bot-del-btn" title="${t('agent.del.title')}">✕</button>`;
+    div.querySelector('.bot-use-btn').addEventListener('click', e => { e.stopPropagation(); insertBotMention(b.id); });
+    div.querySelector('.bot-edit-btn').addEventListener('click', e => { e.stopPropagation(); openBotForm(b.id); });
+    div.querySelector('.bot-del-btn').addEventListener('click', e => { e.stopPropagation(); deleteBot(b.id); });
+    el.appendChild(div);
+  }
+}
+
+// The shortest path from "I made a bot" to "I used it".
+function insertBotMention(handle) {
+  const val = inEl.value;
+  const sep = val && !val.endsWith(' ') && !val.endsWith('\n') ? ' ' : '';
+  inEl.value = val + sep + '@@' + handle + ' ';
+  inEl.focus();
+  inEl.selectionStart = inEl.selectionEnd = inEl.value.length;
+  inEl.dispatchEvent(new Event('input'));
+}
+
+
+// Starter prompts. A blank textarea is the real barrier to making a good bot: the
+// user knows what they want the bot to DO but not how a system prompt is shaped.
+// These are one click away and fully editable — a starting point, not a preset.
+const BOT_TEMPLATES = [
+  { key: 'analyst', avatar: '📈' },
+  { key: 'writer',  avatar: '📄' },
+  { key: 'reviewer', avatar: '🔍' },
+  { key: 'explainer', avatar: '💡' },
+];
+
+function renderBotTemplates() {
+  const box = $i('botTemplates'); if (!box) return;
+  box.innerHTML = BOT_TEMPLATES.map((tpl, i) =>
+    `<button type="button" class="cfg" style="font-size:11px;padding:3px 9px;border-radius:999px"
+       onclick="applyBotTemplate(${i})">${tpl.avatar} ${escH(t('bot.tpl.' + tpl.key + '.name'))}</button>`
+  ).join('');
+}
+
+function applyBotTemplate(i) {
+  const tpl = BOT_TEMPLATES[i]; if (!tpl) return;
+  const cur = $i('botPrompt').value.trim();
+  if (cur && !confirm(t('bot.tpl.replace'))) return;
+  $i('botPrompt').value = t('bot.tpl.' + tpl.key + '.prompt');
+  if (!$i('botLabel').value.trim()) { $i('botLabel').value = t('bot.tpl.' + tpl.key + '.name'); _botHandlePreview(); }
+  if (!$i('botAvatar').value.trim()) $i('botAvatar').value = tpl.avatar;
+  if (!$i('botDesc').value.trim()) $i('botDesc').value = t('bot.tpl.' + tpl.key + '.desc');
+}
+
+function _botHandlePreview() {
+  const el = $i('botHandlePreview'); if (!el) return;
+  const label = $i('botLabel').value.trim();
+  el.textContent = '@' + (_editingBotId || _slugifyHandle(label) || '—');
+}
+
+// Mirrors handleFromLabel in bots.js closely enough for a live preview; the server
+// is authoritative and may add a -2 suffix on collision.
+function _slugifyHandle(label) {
+  const cyr = {'а':'a','б':'b','в':'v','г':'h','ґ':'g','д':'d','е':'e','є':'ye','ж':'zh','з':'z','и':'y','і':'i','ї':'yi','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ь':'','ю':'yu','я':'ya','ы':'y','э':'e','ё':'yo','ъ':''};
+  const latin = String(label || '').toLowerCase().replace(/[а-яёіїєґ]/g, c => (cyr[c] !== undefined ? cyr[c] : ''));
+  return latin.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32).replace(/-+$/, '');
+}
+
+function openBotForm(id) {
+  _editingBotId = id || null;
+  const bot = id ? _botsById[id] : null;
+  if (id && !bot) return;
+  $i('botId').value = id || '';
+  $i('botLabel').value = bot?.label || '';
+  $i('botAvatar').value = bot?.avatar || '';
+  $i('botDesc').value = bot?.description || '';
+  $i('botModel').value = bot?.model || '';
+  $i('botPrompt').value = bot?.system_prompt || '';
+  const btn = $i('botSaveBtn'), title = $i('botModalTitle');
+  const btnKey = id ? 'agent.save.btn' : 'bot.add.btn';
+  const titleKey = id ? 'bot.modal.edit.title' : 'bot.modal.add.title';
+  btn.textContent = t(btnKey); btn.setAttribute('data-i18n', btnKey);
+  title.textContent = t(titleKey); title.setAttribute('data-i18n', titleKey);
+  _botHandlePreview();
+  renderBotTemplates();
+  openModalOverlay('botModal', { initialFocus: '#botLabel', labelId: 'botModalTitle', onEscape: cancelBotForm });
+}
+
+function cancelBotForm() { closeModalOverlay('botModal'); _editingBotId = null; }
+
+async function saveBot() {
+  const label = $i('botLabel').value.trim();
+  if (!label) { toast(t('bot.err.label'), true); return; }
+  const payload = {
+    label,
+    avatar: $i('botAvatar').value.trim(),
+    description: $i('botDesc').value.trim(),
+    model: $i('botModel').value || null,
+    systemPrompt: $i('botPrompt').value,
+  };
+  // A bot created while a project is open joins it at once, so creating is never
+  // followed by a separate "now add it here" step.
+  if (!_editingBotId && curProjectId) payload.projectId = curProjectId;
+  const url = _editingBotId ? `/api/bots/${encodeURIComponent(_editingBotId)}` : '/api/bots';
+  try {
+    const r = await fetch(url, {
+      method: _editingBotId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (d.error) { toast(d.error, true); return; }
+    const created = !_editingBotId;
+    cancelBotForm();
+    await loadBots();
+    toast(created ? t('toast.bot_added') : t('toast.bot_updated'));
+    if (created && d.id) insertBotMention(d.id);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function deleteBot(id) {
+  const bot = _botsById[id];
+  if (!confirm(`${t('bot.del.confirm')} @${id}?\n${t('bot.del.note')}`)) return;
+  try {
+    const r = await fetch(`/api/bots/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.error) { toast(d.error, true); return; }
+    await loadBots();
+    toast(t('toast.bot_deleted'));
+  } catch (e) { toast(e.message, true); }
+  void bot;
+}
+
+// A stable accent per bot so the eye can tell two speakers apart without reading.
+function _botAccent(handle) {
+  const palette = ['#7c6cf6', '#3fb950', '#e3b341', '#db6d28', '#58a6ff', '#db61a2'];
+  let h = 0;
+  for (let i = 0; i < handle.length; i++) h = (h * 31 + handle.charCodeAt(i)) >>> 0;
+  return palette[h % palette.length];
+}
+
+// Two speakers, two treatments. A registered bot gets a real header — avatar,
+// name, handle, and a stable accent stripe — because the reader has to know who is
+// talking and be able to tell two bots apart at a glance. An ephemeral multi-agent
+// role (agent-1, agent-2) keeps the old tiny badge: it exists for one turn and has
+// no identity worth a header.
 function addAgentBadge(el, agent) {
-  if (el.querySelector('.ab')) return;
-  const b = document.createElement('span');
-  b.className = 'ab';
-  b.style.cssText = 'position:absolute;top:-9px;left:10px;font-size:8px';
-  b.textContent = agent;
-  el.style.position = 'relative';
-  el.style.marginTop = '10px';
-  el.appendChild(b);
+  if (el.querySelector('.ab') || el.querySelector('.bot-hd')) return;
+  let bot = _botsById[agent];
+  // A handle that looks like a bot's but is not in the roster belongs to a deleted
+  // one — the handle is reserved forever, so the transcript can still name it
+  // honestly instead of showing a bare id or borrowing a new bot's identity.
+  if (!bot && _deletedBotIds.has(agent)) {
+    bot = { id: agent, label: t('bot.deleted'), avatar: '🚫', model: '' };
+  }
+  if (!bot) {
+    const b = document.createElement('span');
+    b.className = 'ab';
+    b.style.cssText = 'position:absolute;top:-9px;left:10px;font-size:8px';
+    b.textContent = agent;
+    el.style.position = 'relative';
+    el.style.marginTop = '10px';
+    el.appendChild(b);
+    return;
+  }
+  const accent = _botAccent(agent);
+  const hd = document.createElement('div');
+  hd.className = 'bot-hd';
+  hd.style.setProperty('--bc', accent);
+  hd.innerHTML = `<span class="bh-ic">${escH(bot.avatar || '🤖')}</span>`
+    + `<b class="bh-name">${escH(bot.label)}</b>`
+    + `<span class="bh-handle">@@${escH(agent)}</span>`
+    + (bot.model ? `<span class="bh-model">${escH(bot.model)}</span>` : '');
+  el.classList.add('from-bot');
+  el.style.setProperty('--bc', accent);
+  el.insertBefore(hd, el.firstChild);
+}
+
+// A bot that was deleted must not borrow a later bot's identity — its handle is
+// reserved forever, so old messages still name it, plainly marked as gone.
+function botDisplayName(handle) {
+  const b = _botsById[handle];
+  return b ? `${b.avatar || '🤖'} ${b.label}` : `${t('bot.deleted')} · @${handle}`;
 }
 
 function addMsg(role, opts = {}) {
@@ -6808,6 +7540,10 @@ function _chainProgressUpdate(taskId, status) {
 
 function rmW() { const w = msgsEl.querySelector('.welcome'); if (w) w.remove(); }
 function showW() {
+  // The welcome screen is a chat surface — reaching it always means we are no longer
+  // in terminal mode. Doing it here covers every entry point (new tab, closed last
+  // tab, project switch) rather than each of them remembering.
+  hideTerminalView();
   streaming.el = null;
   // Welcome/blank screen = no active chat → engine selector reflects the global default
   _curSessionRunEngine = null;
@@ -7848,7 +8584,9 @@ function renderTabs() {
   bar.appendChild(hdrBtn);
   for (const tab of openTabs) {
     const el = document.createElement('div');
-    el.className = 'tab' + (tab.id === activeTabId ? ' active' : '');
+    // A terminal tab reads differently from a chat tab at a glance: same bar, same
+    // behaviour, but a monospace title, so the two kinds never get confused.
+    el.className = 'tab' + (tab.id === activeTabId ? ' active' : '') + (tab.kind === 'terminal' ? ' tab-term' : '');
     el.dataset.tabId = tab.id;
     el.draggable = true;
     el.onclick = () => switchTab(tab.id);
@@ -7882,8 +8620,8 @@ function renderTabs() {
     bar.appendChild(el);
   }
   const nb = document.createElement('button');
-  nb.className = 'tab-new'; nb.title = t('tab.new'); nb.textContent = '+';
-  nb.onclick = newTab;
+  nb.className = 'tab-new'; nb.title = t('newtab.title'); nb.textContent = '+';
+  nb.onclick = openNewTabChooser;
   bar.appendChild(nb);
   // Font size slider
   const curFont = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15.5;
@@ -8164,6 +8902,17 @@ async function importSessionFile(input) {
 
 function switchTab(id) {
   if (activeTabId === id) return;
+  // A terminal tab shows a different surface in the same column. Handled before the
+  // chat-state bookkeeping below, none of which applies to it.
+  const target = openTabs.find(x => x.id === id);
+  if (target?.kind === 'terminal') {
+    if (activeTabId) saveComposerState(activeTabId);
+    activeTabId = id; currentSessionId = id;
+    renderTabs(); saveUIState();
+    showTerminalView(id, target.termLabel || target.title);
+    return;
+  }
+  hideTerminalView();
   // Save state for current tab before switching
   if (activeTabId) {
     const oldTS = getTS(activeTabId);
@@ -8205,6 +8954,9 @@ function switchTab(id) {
 }
 
 function closeTab(id) {
+  // Closing a terminal tab detaches this viewer only — the agent keeps running in its
+  // tmux session and the tab can be reopened from history.
+  if (_termSessionId === id) { detachTerminal(); hideTerminalView(); }
   if (isGen && activeTabId === id) { isGen = false; setSendStop(false); generatingTabId = null; streaming.el = null; }
   const idx = openTabs.findIndex(t => t.id === id);
   if (idx === -1) return;
@@ -8229,7 +8981,7 @@ function newTab() {
   if (!curProjectId) { _onProjectCreated = () => newTab(); openAddProject(); return; }
   // Save current tab's state before switching
   if (activeTabId) saveComposerState(activeTabId);
-  openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true });
+  openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true, kind: 'chat' });
   activeTabId = tempId;
   currentSessionId = null;
   inEl.value = '';
@@ -8370,6 +9122,13 @@ function toggleHeader() {
 
 function setFontSize(px) {
   document.documentElement.style.setProperty('--msg-font', px + 'px');
+  // One slider, one size, everywhere: the terminal reads its size off the same
+  // CSS variable at open time, so an already-open terminal must be told live too.
+  if (_term) {
+    _term.options.fontSize = px;
+    try { _termFit.fit(); } catch {}
+    sendTermResize();
+  }
   saveUIState();
 }
 
@@ -8626,8 +9385,13 @@ function _closeAtPopup() {
 }
 
 async function _fetchAtFiles(query) {
+  _atQuery = query || '';
+  if (_atKind === 'bot') { _atFiles = []; _renderAtList(); return; }
+  // Bots are already in memory, so they render even when there is no project
+  // directory to search for files in.
   if (!curWorkdir) {
-    $i('atList').innerHTML = `<div class="at-empty">${t('at.no_project')}</div>`;
+    _atFiles = [];
+    _renderAtList();
     return;
   }
   $i('atList').innerHTML = `<div class="at-loading">${t('at.searching')}</div>`;
@@ -8639,21 +9403,82 @@ async function _fetchAtFiles(query) {
   } catch { $i('atList').innerHTML = `<div class="at-empty">${t('at.search_err')}</div>`; }
 }
 
+// '@' means two things now: a bot and a file. One palette, two groups, bots first
+// because the list is short and the intent is more specific — never a second
+// trigger character, and never a mode that swallows following messages.
+let _atItems = [], _atQuery = '', _atKind = 'file';
+
+function _atMatchingBots(query) {
+  const q = String(query || '').toLowerCase();
+  return _bots.filter(b => !q || b.id.includes(q) || (b.label || '').toLowerCase().includes(q));
+}
+
 function _renderAtList() {
   const list = $i('atList');
-  if (!_atFiles.length) { list.innerHTML = `<div class="at-empty">${t('at.no_files')}</div>`; return; }
-  list.innerHTML = _atFiles.slice(0, 60).map((f, i) => {
-    const slashIdx = f.relPath.lastIndexOf('/');
-    const dir = slashIdx > 0 ? f.relPath.slice(0, slashIdx) : '.';
-    return `
-    <div class="at-item${i === _atActiveIdx ? ' active' : ''}" onclick="selectAtFile(${i})">
-      <span class="at-icon">📄</span>
-      <div class="at-info">
-        <span class="at-name">${escH(f.name)}</span>
-        <span class="at-dir">${escH(dir)}</span>
-      </div>
-    </div>`;
-  }).join('');
+  const bots = _atKind === 'bot' ? _atMatchingBots(_atQuery) : [];
+  const files = _atKind === 'bot' ? [] : _atFiles.slice(0, 60);
+  _atItems = [
+    ...bots.map(b => ({ kind: 'bot', bot: b })),
+    ...files.map(f => ({ kind: 'file', file: f })),
+  ];
+  if (!_atItems.length) {
+    list.innerHTML = `<div class="at-empty">${_atKind === 'bot' ? escH(t('at.no_bots')) : t('at.no_files')}</div>`;
+    return;
+  }
+
+  let html = '';
+  let i = 0;
+  if (bots.length) {
+    html += `<div class="at-group">${escH(t('at.group.bots'))}</div>`;
+    for (const b of bots) {
+      html += `
+      <div class="at-item${i === _atActiveIdx ? ' active' : ''}" onclick="selectAtItem(${i})">
+        <span class="at-icon">${escH(b.avatar || '🤖')}</span>
+        <div class="at-info">
+          <span class="at-name">@${escH(b.id)}</span>
+          <span class="at-dir">${escH(b.label)}${b.description ? ' · ' + escH(b.description) : ''}</span>
+        </div>
+      </div>`;
+      i++;
+    }
+  }
+  if (files.length) {
+    html += `<div class="at-group">${escH(t('at.group.files'))}</div>`;
+    for (const f of files) {
+      const slashIdx = f.relPath.lastIndexOf('/');
+      const dir = slashIdx > 0 ? f.relPath.slice(0, slashIdx) : '.';
+      html += `
+      <div class="at-item${i === _atActiveIdx ? ' active' : ''}" onclick="selectAtItem(${i})">
+        <span class="at-icon">📄</span>
+        <div class="at-info">
+          <span class="at-name">${escH(f.name)}</span>
+          <span class="at-dir">${escH(dir)}</span>
+        </div>
+      </div>`;
+      i++;
+    }
+  }
+  list.innerHTML = html;
+}
+
+// One entry point for both kinds so the keyboard and the mouse take the same path.
+function selectAtItem(idx) {
+  const item = _atItems[idx];
+  if (!item) return;
+  if (item.kind === 'file') { selectAtFile(_atFiles.indexOf(item.file)); return; }
+  // A bot replaces the @query with the handle as plain text — the server parses it,
+  // so what the user sees typed is exactly what is sent.
+  const val = inEl.value, cur = inEl.selectionStart;
+  const before = val.slice(0, cur), atIdx = before.lastIndexOf('@');
+  if (atIdx >= 0) {
+    // atIdx points at the SECOND '@' of the trigger, so back up one to replace both.
+    const start = (atIdx > 0 && val[atIdx - 1] === '@') ? atIdx - 1 : atIdx;
+    inEl.value = val.slice(0, start) + '@@' + item.bot.id + ' ' + val.slice(cur);
+    const pos = start + item.bot.id.length + 3;
+    inEl.selectionStart = inEl.selectionEnd = pos;
+  }
+  _closeAtPopup();
+  inEl.focus();
 }
 
 // ─── # SSH picker ─────────────────────────────────────────────────────────
@@ -8757,13 +9582,16 @@ inEl.addEventListener('input', () => {
   const val = inEl.value, cur = inEl.selectionStart;
   const before = val.slice(0, cur);
 
-  // @ file picker
+  // '@@' picks a bot, a single '@' picks a file. Two sigils rather than one
+  // overloaded trigger: the user says which they mean, and neither list has to be
+  // filtered against the other.
   const atIdx = before.lastIndexOf('@');
   if (atIdx >= 0) {
     const afterAt = before.slice(atIdx + 1);
-    if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
+    if (!afterAt.includes(' ') && !afterAt.includes('\n') && !afterAt.includes('@')) {
       if (_slashOpen) _closeSlashPopup();
       if (_sshMode) _closeSshPopup();
+      _atKind = (atIdx > 0 && before[atIdx - 1] === '@') ? 'bot' : 'file';
       _openAtPopup(afterAt); return;
     }
   }
@@ -8797,10 +9625,13 @@ inEl.addEventListener('input', () => {
 inEl.addEventListener('keydown', e => {
   if ($i('atPopup').classList.contains('hidden')) return;
   if (e.key === 'Escape') { _closeAtPopup(); e.preventDefault(); return; }
-  if (e.key === 'ArrowDown') { e.preventDefault(); _atActiveIdx = Math.min(_atActiveIdx + 1, _atFiles.length - 1); _renderAtList(); $i('atList').querySelector('.active')?.scrollIntoView({ block: 'nearest' }); return; }
+  if (e.key === 'ArrowDown') { e.preventDefault(); _atActiveIdx = Math.min(_atActiveIdx + 1, _atItems.length - 1); _renderAtList(); $i('atList').querySelector('.active')?.scrollIntoView({ block: 'nearest' }); return; }
   if (e.key === 'ArrowUp') { e.preventDefault(); _atActiveIdx = Math.max(_atActiveIdx - 1, -1); _renderAtList(); return; }
-  if (e.key === 'Enter') { e.preventDefault(); if (_atActiveIdx >= 0) selectAtFile(_atActiveIdx); return; }
-  if (e.key === 'Tab' && _atActiveIdx >= 0) { e.preventDefault(); selectAtFile(_atActiveIdx); return; }
+  // stopImmediatePropagation, not just preventDefault: the send handler skips Enter
+  // only while the popup is OPEN, and picking a bot closes it — so without this the
+  // same keystroke would select the bot and then immediately send the message.
+  if (e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); if (_atActiveIdx >= 0) selectAtItem(_atActiveIdx); return; }
+  if (e.key === 'Tab' && _atActiveIdx >= 0) { e.preventDefault(); e.stopImmediatePropagation(); selectAtItem(_atActiveIdx); return; }
 });
 
 // Keyboard navigation inside slash popup
@@ -8960,7 +9791,7 @@ async function send() {
     ).join('');
     msgEl.querySelector('.msg').before(chipsDiv);
   }
-  if (txt) msgEl.querySelector('.msg').textContent = txt;
+  if (txt) setUserMsgText(msgEl, txt);
   userScrolled = false;
 
   const queueId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
@@ -9002,7 +9833,7 @@ async function send() {
     // Auto-create a tab if project is active but no tab is open
     if (!activeTabId && curProjectId) {
       const tempId = 'new-' + Date.now();
-      openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true });
+      openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true, kind: 'chat' });
       activeTabId = tempId;
       currentSessionId = null;
       renderTabs();
@@ -9053,7 +9884,40 @@ async function send() {
   }
 }
 
-function newSession() { newTab(); }
+function newSession() { openNewTabChooser(); }
+
+// The '+' asks what kind of tab to open instead of assuming a chat. Both surfaces
+// live in the same workspace, so this is the one place the choice belongs.
+async function openNewTabChooser() {
+  if (!curProjectId) { _onProjectCreated = () => openNewTabChooser(); openAddProject(); return; }
+  if (_terminalAvailable === null) await loadTerminalCapability();
+  await _loadExternalAgents().catch(() => {});
+  const termAgents = Object.entries(_externalAgents || {})
+    .filter(([, c]) => !!String(c?.interactive || '').trim());
+
+  const box = $i('ntChoices');
+  box.innerHTML = `
+    <button class="nt-card" onclick="closeModalOverlay('newTabModal');newTab()">
+      <span class="nt-ic">💬</span>
+      <span>
+        <span class="nt-name">${escH(t('newtab.chat'))}</span>
+        <div class="nt-desc">${escH(t('newtab.chat.desc'))}</div>
+      </span>
+    </button>
+    <div class="nt-card" ${_terminalAvailable ? '' : 'disabled'} style="cursor:default;flex-direction:column;align-items:stretch">
+      <div style="display:flex;align-items:flex-start;gap:11px">
+        <span class="nt-ic">&gt;_</span>
+        <span>
+          <span class="nt-name">${escH(t('newtab.term'))}</span>
+          <div class="nt-desc">${_terminalAvailable ? escH(t('newtab.term.desc')) : escH(_termCapabilityReason || t('term.unavailable'))}</div>
+        </span>
+      </div>
+      ${_terminalAvailable && termAgents.length ? `<div class="nt-sub">${
+        termAgents.map(([id, c]) => `<button onclick="closeModalOverlay('newTabModal');createTerminalSession('${escH(id)}','${escH((c.label || id).replace(/'/g, ''))}')">${escH((_agentIcons[id] || '🤖') + ' ' + (c.label || id))}</button>`).join('')
+      }</div>` : ''}
+    </div>`;
+  openModalOverlay('newTabModal', { labelId: 'newTabTitle', onEscape: () => closeModalOverlay('newTabModal') });
+}
 
 // ─── Queue edit / delete ──────────────────────────────────────────────────
 function editQueuedMsg(btn) {
@@ -9202,6 +10066,8 @@ async function checkVersion() {
   try {
     const local = await fetch('/api/version').then(r => r.json());
     applyTmuxCapability(local.tmuxAvailable !== false);
+    loadTerminalCapability();
+    loadBots();
     // Store the global default and resolve the current view's engine. An open
     // chat's explicit run_engine wins; a chat without one inherits this default.
     _globalDefaultEngine = local.defaultEngine === 'subscription' ? 'subscription' : 'api';
@@ -9644,7 +10510,7 @@ function _renderMsgAt(idx, prepend = false) {
   } else if (m.role === 'assistant') {
     w.querySelector('.msg').innerHTML = renderMd(m.content);
   } else {
-    w.querySelector('.msg').textContent = m.content;
+    setUserMsgText(w, m.content);
     if (m.type === 'interrupt' || m.type === 'interrupt_delivered') {
       // Interrupt messages from history — show delivery status from DB
       const wasDelivered = m.type === 'interrupt_delivered';
@@ -9671,7 +10537,12 @@ function _renderMsgAt(idx, prepend = false) {
       w.appendChild(_msfCreate('done', t('msf.done')));
     }
   }
-  if (m.agent_id) addAgentBadge(w, m.agent_id);
+  if (m.agent_id) {
+    // agent-1/agent-2 are ephemeral multi-agent roles, not bots — only a handle that
+    // is absent from the roster AND not shaped like those counts as a deleted bot.
+    if (!_botsById[m.agent_id] && !/^agent-\d+$/.test(m.agent_id) && m.agent_id !== 'orchestrator') _deletedBotIds.add(m.agent_id);
+    addAgentBadge(w, m.agent_id);
+  }
   if (prepend) {
     const firstMsg = msgsEl.querySelector('.mw');
     if (firstMsg) msgsEl.insertBefore(w, firstMsg);
@@ -9728,6 +10599,14 @@ async function loadSess(id) {
     if (!r.ok) { closeTab(id); toast(t('toast.sess_not_found'), true); return; }
     const d = await r.json();
     if (id !== activeTabId) return; // tab was switched while parsing — discard stale load
+    // A terminal session has no chat history to render — it opens as a live
+    // terminal instead. Its kind is fixed at creation and never changes.
+    if (d.kind === 'terminal') {
+      // Opened from history: become a terminal tab rather than rendering a transcript.
+      openTerminalTab(d.id, d.terminal_agent || t('term.tab'), '>_');
+      return;
+    }
+    hideTerminalView();
     // ── Save background-accumulated state BEFORE resetting the streaming proxy ──
     // BUG FIX: streaming.txt = '' writes through proxy to getTS(activeTabId).curTxt,
     // which destroys accumulated background text before line 6227 can read it.
@@ -11065,24 +11944,35 @@ document.addEventListener('keydown', e => {
 let _editingAgentId = null;
 
 function renderAgents() {
-  const el = $i('agentsList'); if (!el) return; el.innerHTML = '';
+  // ONE row per agent. An agent is a single config record with two independent
+  // capabilities — `template` for one-shot delegation, `interactive` for a live
+  // terminal — so splitting the list by capability showed the same object twice
+  // under two headings. The row states what it can do instead.
+  const el = $i('agentsList'); if (!el) return;
+  el.innerHTML = '';
   const agents = Object.entries(_externalAgents);
-  $i('agentsCount').textContent = agents.length;
+  const cnt = $i('agentsCount'); if (cnt) cnt.textContent = agents.length;
   for (const [id, cfg] of agents) {
     const icon = _agentIcons[id] || '🤖';
+    const canDelegate = !!String(cfg?.template || '').trim();
+    const canTerminal = !!String(cfg?.interactive || '').trim();
+    const caps = [
+      canDelegate ? `<span class="ag-cap">${escH(t('agent.cap.delegate'))}</span>` : '',
+      canTerminal ? `<span class="ag-cap ag-cap-term">${escH(t('agent.cap.terminal'))}</span>` : '',
+    ].join('');
     const div = document.createElement('div');
     div.className = 'ci';
     div.innerHTML = `
       <div class="inf" style="flex:1;min-width:0">
         <div class="nm">${icon} ${escH(cfg.label || id)}</div>
-        <div class="ds" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:monospace;font-size:11px">${escH(cfg.template || '')}</div>
+        <div class="ds" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;font-size:11px">${caps}</div>
       </div>
-      <button class="cfg agent-test-btn" data-agent-id="${escH(id)}" title="${t('agent.test.title')}" style="font-size:12px">▶</button>
-      <button class="cfg" data-agent-id="${escH(id)}" title="${t('agent.edit.title')}">✏️</button>
-      <button class="rm" data-agent-id="${escH(id)}" title="${t('agent.del.title')}">✕</button>`;
+      <button class="cfg agent-test-btn" title="${t('agent.test.title')}" style="font-size:12px">▶</button>
+      <button class="cfg agent-edit-btn" title="${t('agent.edit.title')}">✏️</button>
+      <button class="rm agent-del-btn" title="${t('agent.del.title')}">✕</button>`;
     div.querySelector('.agent-test-btn').addEventListener('click', e => { e.stopPropagation(); testAgent(id, e.currentTarget); });
-    div.querySelector('.cfg:not(.agent-test-btn)').addEventListener('click', e => { e.stopPropagation(); openAgentForm(id); });
-    div.querySelector('.rm').addEventListener('click', e => { e.stopPropagation(); deleteAgent(id); });
+    div.querySelector('.agent-edit-btn').addEventListener('click', e => { e.stopPropagation(); openAgentForm(id); });
+    div.querySelector('.agent-del-btn').addEventListener('click', e => { e.stopPropagation(); deleteAgent(id); });
     el.appendChild(div);
   }
 }
@@ -11104,24 +11994,28 @@ function _agentUniqueId(label) {
   return `${base}-${Date.now()}`;
 }
 
+// One form for every agent: delegation and terminal are two capability fields on the
+// same record, not two kinds of thing.
 function openAgentForm(id) {
   _editingAgentId = id || null;
   const btn = $i('agentSaveBtn');
   const title = $i('agentModalTitle');
+  const cfg = id ? _externalAgents[id] : null;
+  if (id && !cfg) return;
+  $i('agentId').value = id || '';
+  $i('agentLabel').value = cfg?.label || '';
+  $i('agentTemplate').value = cfg?.template || '';
+  $i('agentInteractive').value = cfg?.interactive || '';
+  $i('agentResume').value = cfg?.resume || '';
+  $i('agentResumeLast').value = cfg?.resumeLast || '';
+  $i('agentNewIdFlag').value = cfg?.newIdFlag || '';
+  $i('agentNewIdCommand').value = cfg?.newIdCommand || '';
   if (id) {
-    const cfg = _externalAgents[id];
-    if (!cfg) return;
-    $i('agentId').value = id;
-    $i('agentLabel').value = cfg.label || '';
-    $i('agentTemplate').value = cfg.template || '';
     btn.textContent = t('agent.save.btn');
     btn.setAttribute('data-i18n', 'agent.save.btn');
     title.textContent = t('agent.modal.edit.title');
     title.setAttribute('data-i18n', 'agent.modal.edit.title');
   } else {
-    $i('agentId').value = '';
-    $i('agentLabel').value = '';
-    $i('agentTemplate').value = '';
     btn.textContent = t('agent.add.btn');
     btn.setAttribute('data-i18n', 'agent.add.btn');
     title.textContent = t('agent.modal.add.title');
@@ -11141,18 +12035,30 @@ function cancelAgentForm() {
 
 async function saveAgent() {
   const label = $i('agentLabel').value.trim();
-  const template = $i('agentTemplate').value.trim();
-  if (!label || !template) { toast(t('agent.err.empty'), true); return; }
+  const fields = {
+    template:    $i('agentTemplate').value.trim(),
+    interactive: $i('agentInteractive').value.trim(),
+    resume:      $i('agentResume').value.trim(),
+    resumeLast:  $i('agentResumeLast').value.trim(),
+    newIdFlag:   $i('agentNewIdFlag').value.trim(),
+    newIdCommand: $i('agentNewIdCommand').value.trim(),
+  };
+  // An agent needs at least one capability: delegation (template) or a terminal
+  // session (interactive). Both is fine.
+  if (!label || (!fields.template && !fields.interactive)) { toast(t('agent.err.empty'), true); return; }
   // Use existing ID when editing, generate unique slug when creating
   const id = _editingAgentId || _agentUniqueId(label);
   try {
     const r = await fetch('/api/external-agents', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ id, label, template })
+      body: JSON.stringify({ id, label, ...fields })
     });
     const d = await r.json();
     if (d.error) { toast(d.error, true); return; }
-    _externalAgents[id] = { label, template };
+    // Mirror the server's merge semantics: an empty field clears, a filled one sets.
+    const next = { ...(_externalAgents[id] || {}), label };
+    for (const [k, v] of Object.entries(fields)) { if (v) next[k] = v; else delete next[k]; }
+    _externalAgents[id] = next;
     toast(_editingAgentId ? t('toast.agent_updated') : t('toast.agent_added'));
   } catch (e) { toast(e.message, true); return; }
   cancelAgentForm();
@@ -11799,7 +12705,7 @@ function switchProject(id) {
   } else {
     const saved = loadProjTabs(id);
     if (saved?.tabs?.length) {
-      openTabs = saved.tabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false }));
+      openTabs = saved.tabs.map(restoreTab);
       activeTabId = saved.activeTabId || openTabs[0]?.id || null;
     } else {
       openTabs = []; activeTabId = null;
@@ -12925,6 +13831,16 @@ setTimeout(tgLoadStatus, 500);
 
 // ─── Persist UI state across page refreshes ──────────────────────────────
 const LS_KEY = 'cc_ui_state';
+// One shape for a restored tab, used by every restore path — they drifted apart
+// before and a field added in one place was silently missing in the others.
+function restoreTab(t) {
+  return {
+    id: t.id, title: t.title, generating: false, done: false, isNew: !!t.isNew,
+    kind: t.kind === 'terminal' ? 'terminal' : 'chat',
+    termLabel: t.termLabel || null, termAvatar: t.termAvatar || null,
+  };
+}
+
 function saveUIState() {
   try {
     const c = id => $i(id)?.classList.contains('collapsed');
@@ -12940,6 +13856,11 @@ function saveUIState() {
         id: tab.id,
         title: tab.title,
         isNew: !!tab.isNew,
+        // A terminal tab must come back AS a terminal after a reload: without its
+        // kind it would restore as a chat and clicking it would load an empty log.
+        kind: tab.kind || 'chat',
+        termLabel: tab.termLabel || null,
+        termAvatar: tab.termAvatar || null,
         draft: ts.draft || '',
         attachments: cloneAttachmentsForState(ts.attachments),
         replyTo: ts.replyTo ? { ...ts.replyTo } : null,
@@ -13017,7 +13938,7 @@ function restoreUIState() {
     }
     // Restore current project's tabs
     if (s.openTabs?.length) {
-      openTabs = s.openTabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false, isNew: !!t.isNew }));
+      openTabs = s.openTabs.map(restoreTab);
       s.openTabs.forEach(restoreTabState);
       activeTabId = s.activeTabId || null;
     }
@@ -13026,7 +13947,7 @@ function restoreUIState() {
       for (const [pid, saved] of Object.entries(s.allProjTabs)) {
         if (pid === curProjectId) continue; // current project already restored above
         if (saved?.tabs?.length) {
-          projectTabs[pid] = saved.tabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false, isNew: !!t.isNew }));
+          projectTabs[pid] = saved.tabs.map(restoreTab);
           saved.tabs.forEach(restoreTabState);
           projectActiveTab[pid] = saved.activeTabId || projectTabs[pid][0]?.id || null;
         }
@@ -13477,7 +14398,11 @@ function openDelegateModal() {
     const container = $i('dlgAgentCards');
     if (!container) return;
     container.textContent = '';
-    const agents = Object.entries(_externalAgents);
+    // Delegation needs a one-shot `template`. Terminal-only agents (interactive
+    // but no template) cannot be delegated to — the server rejects them with 400 —
+    // so they must not appear as pickable cards here. They stay visible in the
+    // agent settings list, which is where they are configured.
+    const agents = Object.entries(_externalAgents).filter(([, cfg]) => !!String(cfg?.template || '').trim());
     if (agents.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'dlg-agent-empty';
@@ -14063,6 +14988,142 @@ document.addEventListener('keydown', e => {
   function init(){ build(); check(); setInterval(function(){ if(bar && bar.style.display==='none') check(); }, 6*3600*1000); }
   if (document.body) init(); else window.addEventListener('DOMContentLoaded', init);
 })();
+</script>
+
+
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/xterm-addon-fit.js"></script>
+<script>
+// ── Terminal sessions ────────────────────────────────────────────────────────
+// A terminal session is a different species from a chat session: it is driven by
+// the human through a raw byte stream, never by the chat engine. See
+// docs/superpowers/specs/2026-08-18-terminal-sessions-design.md
+// null = not yet asked. Restoring a terminal tab at boot can race the capability
+// probe, and a `false` default would silently refuse to reopen it.
+let _terminalAvailable = null, _term = null, _termFit = null, _termWs = null, _termSessionId = null;
+
+async function loadTerminalCapability() {
+  try {
+    const r = await fetch('/api/terminal/capability');
+    const j = await r.json();
+    _terminalAvailable = !!j.available;
+    _termCapabilityReason = j.reason || '';
+  } catch { _terminalAvailable = false; }
+  return _terminalAvailable;
+}
+let _termCapabilityReason = '';
+
+async function createTerminalSession(agentId, label) {
+  try {
+    const r = await fetch('/api/sessions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'terminal', terminalAgent: agentId, title: (label || agentId) + ' · terminal', workdir: curWorkdir || null }),
+    });
+    const s = await r.json();
+    if (s.error) { toast(s.error, true); return; }
+    await loadHist();
+    openTerminalTab(s.id, label || agentId, '>_');
+  } catch (e) { toast(e.message, true); }
+}
+
+// A terminal is a TAB in the same workspace, not an overlay: the user keeps several
+// tabs open — some chat, some terminal — and switches between them. Everything about
+// a tab (order, drag, close, the bar itself) therefore works for it unchanged.
+async function openTerminalTab(sessionId, label, avatar) {
+  if (_terminalAvailable === null) await loadTerminalCapability();
+  if (!_terminalAvailable) { toast(_termCapabilityReason || t('term.unavailable'), true); return; }
+  if (typeof Terminal === 'undefined') { toast('xterm.js failed to load', true); return; }
+  if (!openTabs.some(x => x.id === sessionId)) {
+    openTabs.push({ id: sessionId, title: (avatar ? avatar + ' ' : '') + (label || 'terminal'),
+                    generating: false, done: false, kind: 'terminal', termLabel: label, termAvatar: avatar });
+  }
+  activeTabId = sessionId;
+  currentSessionId = sessionId;
+  renderTabs(); saveUIState();
+  showTerminalView(sessionId, label);
+}
+
+// Swap the chat surface for the terminal one. Both live in the same column, so the
+// header, tab bar, sidebars and layout stay exactly where they were.
+function showTerminalView(sessionId, label) {
+  document.querySelector('.center').classList.add('term-mode');
+  $i('termTitle').textContent = label || '';
+  $i('termState').textContent = '';
+  $i('termKillBtn').textContent = t('term.kill');
+
+  // Already attached to this session — just show it again.
+  if (_termSessionId === sessionId && _term) { try { _term.focus(); sendTermResize(); } catch {} return; }
+  detachTerminal();
+  _termSessionId = sessionId;
+
+  const curFontPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15.5;
+  _term = new Terminal({
+    fontSize: curFontPx,
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+    theme: { background: '#0b0b0f', foreground: '#e6e6e6' },
+    cursorBlink: true, scrollback: 10000, allowProposedApi: true,
+  });
+  _termFit = new FitAddon.FitAddon();
+  _term.loadAddon(_termFit);
+  $i('termHost').innerHTML = '';
+  _term.open($i('termHost'));
+  try { _termFit.fit(); } catch {}
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  _termWs = new WebSocket(`${proto}//${location.host}/ws/terminal?session=${encodeURIComponent(sessionId)}`);
+  _termWs.binaryType = 'arraybuffer';
+  _termWs.onopen = () => sendTermResize();
+  _termWs.onmessage = (ev) => {
+    if (typeof ev.data !== 'string') { _term.write(new Uint8Array(ev.data)); return; }
+    let msg = null; try { msg = JSON.parse(ev.data); } catch { return; }
+    if (msg.type === 'ready') {
+      const key = msg.state === 'attach' ? 'term.state.attached'
+        : !msg.restored ? 'term.state.started'
+        : msg.restoredExact ? 'term.state.restored' : 'term.state.restoredLast';
+      $i('termState').textContent = t(key);
+      $i('termDot').style.background = '#3fb950';
+    } else if (msg.type === 'restore_failed') {
+      $i('termState').textContent = t('term.state.restoreFailed');
+    } else if (msg.type === 'exit') {
+      $i('termDot').style.background = '#8b949e';
+      $i('termState').textContent = t('term.state.exited');
+    } else if (msg.type === 'error') {
+      _term.write(`\r\n\x1b[31m${msg.error}\x1b[0m\r\n`);
+      $i('termDot').style.background = '#f85149';
+      $i('termState').textContent = t('term.state.error');
+    }
+  };
+  _termWs.onclose = () => { $i('termDot').style.background = '#8b949e'; };
+  _term.onData(d => { if (_termWs && _termWs.readyState === 1) _termWs.send(JSON.stringify({ type: 'input', data: d })); });
+  window.addEventListener('resize', sendTermResize);
+  $i('termKillBtn').onclick = () => {
+    if (!confirm(t('term.killConfirm'))) return;
+    if (_termWs && _termWs.readyState === 1) _termWs.send(JSON.stringify({ type: 'kill' }));
+    closeTab(_termSessionId);
+  };
+  setTimeout(() => { try { _term.focus(); } catch {} }, 50);
+}
+
+// Restore the chat surface when switching to a chat tab. Detaching the socket is
+// deliberate: the agent keeps running server-side, only this viewer goes away.
+function hideTerminalView() {
+  document.querySelector('.center').classList.remove('term-mode');
+}
+
+function detachTerminal() {
+  window.removeEventListener('resize', sendTermResize);
+  try { if (_termWs) _termWs.close(); } catch {}
+  try { if (_term) _term.dispose(); } catch {}
+  _termWs = null; _term = null; _termFit = null; _termSessionId = null;
+}
+
+function sendTermResize() {
+  if (!_term || !_termFit) return;
+  try { _termFit.fit(); } catch { return; }
+  if (_termWs && _termWs.readyState === 1) _termWs.send(JSON.stringify({ type: 'resize', cols: _term.cols, rows: _term.rows }));
+}
+
+function closeTerminalPane() { detachTerminal(); hideTerminalView(); }
 </script>
 
 </body>

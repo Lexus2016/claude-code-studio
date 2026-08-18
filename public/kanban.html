@@ -452,6 +452,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TR = {
   uk: {
+    'tb.bot':'Бот','tb.bot.none':'без бота','tb.bot.tip':'Задача виконається промптом і моделлю цього бота',
     'hdr.title':'Kanban','hdr.add':'Завдання',
     'proj.label':'Проект:','proj.all':'— Всі проекти —','proj.recent':'Нещодавні','proj.search':'Пошук проекту...','search.empty':'Не знайдено',
     'col.backlog':'Backlog','col.todo':'До виконання','col.in_progress':'В процесі',
@@ -488,6 +489,7 @@ const TR = {
     'group.edit_task':'Редагувати завдання','group.task_saved':'✓ Завдання збережено',
   },
   en: {
+    'tb.bot':'Bot','tb.bot.none':'no bot','tb.bot.tip':'The task runs with this bot\'s prompt and model',
     'hdr.title':'Kanban','hdr.add':'Task',
     'proj.label':'Project:','proj.all':'— All projects —','proj.recent':'Recent','proj.search':'Search project...','search.empty':'Not found',
     'col.backlog':'Backlog','col.todo':'To Do','col.in_progress':'In Progress',
@@ -524,6 +526,7 @@ const TR = {
     'group.edit_task':'Edit task','group.task_saved':'✓ Task saved',
   },
   ru: {
+    'tb.bot':'Бот','tb.bot.none':'без бота','tb.bot.tip':'Задача выполнится промптом и моделью этого бота',
     'hdr.title':'Kanban','hdr.add':'Задача',
     'proj.label':'Проект:','proj.all':'— Все проекты —','proj.recent':'Недавние','proj.search':'Поиск проекта...','search.empty':'Не найдено',
     'col.backlog':'Backlog','col.todo':'К выполнению','col.in_progress':'В процессе',
@@ -1317,6 +1320,15 @@ function buildChainForm(chain){
         ${engineSegHtml(chain.run_engine)}
         <div class="sc-sep"></div>
         <div class="sc-seg">
+          <span class="sc-lbl">${t('tb.bot')}</span>
+          <select class="sc-turns" id="fBot" style="width:auto" title="${t('tb.bot.tip')}">
+            <option value="">${t('tb.bot.none')}</option>
+            ${kbBots.map(b=>`<option value="${escH(b.id)}"${tk.bot_id===b.id?' selected':''}>${escH((b.avatar||'🤖')+' '+b.label)}</option>`).join('')}
+            ${tk.bot_id&&!kbBots.some(b=>b.id===tk.bot_id)?`<option value="${escH(tk.bot_id)}" selected>🚫 @@${escH(tk.bot_id)}</option>`:''}
+          </select>
+        </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg">
           <span class="sc-lbl">${t('tb.turns')}</span>
           <input type="number" class="sc-turns" id="fChainMaxTurns" value="${chain.max_turns||kbSettings.max_turns||30}" min="1" max="100">
         </div>
@@ -1506,9 +1518,10 @@ async function saveChainTaskEdit(){
 }
 
 // ─── Modal: Add ────────────────────────────────────────────────────────────
-function openAddModal(defaultStatus='backlog'){
+async function openAddModal(defaultStatus='backlog'){
   if(!curWorkdir){toast(t('toast.no_project'),true);return;}
   modalMode='add';editingId=null;pendingAttachments=[];
+  await loadKbBots();
   $i('modalTitle').textContent=t('modal.add');
   $i('modalBody').innerHTML=buildForm({status:defaultStatus,...kbSettings});
   $i('modalFt').innerHTML=`
@@ -1522,6 +1535,7 @@ async function openEditModal(id){
   const tk=tasks.find(x=>x.id===id);
   if(!tk)return;
   modalMode='edit';editingId=id;
+  await loadKbBots();
   try{pendingAttachments=tk.attachments?JSON.parse(tk.attachments):[];}catch{pendingAttachments=[];}
   $i('modalTitle').textContent=t('modal.edit');
   $i('modalBody').innerHTML=buildForm(tk);
@@ -1607,6 +1621,15 @@ function buildForm(tk={}){
         </div>
         <div class="sc-sep" style="display:none"></div>
         ${engineSegHtml(tk.run_engine)}
+        <div class="sc-sep"></div>
+        <div class="sc-seg">
+          <span class="sc-lbl">${t('tb.bot')}</span>
+          <select class="sc-turns" id="fBot" style="width:auto" title="${t('tb.bot.tip')}">
+            <option value="">${t('tb.bot.none')}</option>
+            ${kbBots.map(b=>`<option value="${escH(b.id)}"${tk.bot_id===b.id?' selected':''}>${escH((b.avatar||'🤖')+' '+b.label)}</option>`).join('')}
+            ${tk.bot_id&&!kbBots.some(b=>b.id===tk.bot_id)?`<option value="${escH(tk.bot_id)}" selected>🚫 @@${escH(tk.bot_id)}</option>`:''}
+          </select>
+        </div>
         <div class="sc-sep"></div>
         <div class="sc-seg">
           <span class="sc-lbl">${t('tb.turns')}</span>
@@ -1711,7 +1734,7 @@ function onFSessionChange(){
   if(cfg)cfg.classList.toggle('visible',!hasSess);
 }
 function getSessCfg(){
-  const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',run_engine:kbSettings.run_engine||'api',maxTurns:30,effort:''};
+  const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',run_engine:kbSettings.run_engine||'api',maxTurns:30,effort:'',bot_id:null};
   const cfg=$i('newSessCfg');
   if(!cfg)return defaults;
   const result={};
@@ -1721,7 +1744,22 @@ function getSessCfg(){
   });
   result.maxTurns=parseInt($i('fMaxTurns')?.value||30);
   result.effort=($i('fEffort')?.value||'').trim();
+  result.bot_id=($i('fBot')?.value||'').trim()||null;
   return{...defaults,...result};
+}
+
+// Bots available in this project. A task assigned to one runs with that bot's
+// system prompt and model, and — combined with the scheduling columns already on a
+// task — that is how a recurring job belongs to a named specialist.
+let kbBots=[];
+async function loadKbBots(){
+  try{
+    // The board tracks a working directory, not a project id — the server maps it.
+    const qs=curWorkdir?('?workdir='+encodeURIComponent(curWorkdir)):'';
+    const r=await apiFetch('/api/bots'+qs);
+    kbBots=await r.json();
+    if(!Array.isArray(kbBots))kbBots=[];
+  }catch{kbBots=[];}
 }
 
 function buildChatPanel(tk,msgs){
@@ -1770,6 +1808,7 @@ async function saveTask(){
     max_turns:cfg.maxTurns,
     effort:cfg.effort||null,
     run_engine:cfg.run_engine||'api',
+    bot_id:cfg.bot_id||null,
     attachments:pendingAttachments.length?JSON.stringify(pendingAttachments):null,
   };
   try{
