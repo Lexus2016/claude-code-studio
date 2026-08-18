@@ -6654,8 +6654,11 @@ app.post('/api/external-agents/:id/test', (req, res) => {
   const config = loadConfig();
   const agentConfig = config.externalAgents[req.params.id];
   if (!agentConfig) return res.status(404).json({ error: 'Agent not found' });
-  // Extract base command from template (first word before space)
-  const baseCmd = (agentConfig.template || '').split(/\s+/)[0];
+  // Extract base command from template (first word before space). A terminal-only
+  // agent has no template — fall back to its interactive command, otherwise a
+  // perfectly working agent is reported as "Empty template".
+  const baseSource = agentConfig.template || resolveAgentCommands(agentConfig).interactive || '';
+  const baseCmd = baseSource.split(/\s+/)[0];
   if (!baseCmd) return res.json({ ok: false, error: 'Empty template' });
   // Validate command name to prevent injection (only allow safe chars)
   if (!/^[a-zA-Z0-9._-]+$/.test(baseCmd)) return res.json({ ok: false, error: 'Invalid command name' });
@@ -6691,6 +6694,14 @@ app.post('/api/delegate', express.json(), (req, res) => {
   const config = loadConfig();
   const agentConfig = config.externalAgents[agentId];
   if (!agentConfig) return res.status(404).json({ error: `Agent "${agentId}" not configured` });
+  // Delegation needs a one-shot `template`. Terminal-only agents (interactive but
+  // no template, e.g. the built-in `claude` entry) would otherwise sail through:
+  // buildTerminalCommand yields a bare `cd <workdir> && `, a terminal window opens
+  // and exits, the API answers {ok:true}, and sync mode waits forever on a
+  // DIALOG.md that no agent will ever write. Fail loudly instead.
+  if (!agentConfig.template) {
+    return res.status(400).json({ error: `Agent "${agentId}" does not support delegation (no template configured)` });
+  }
 
   const session = sessionId ? stmts.getSession.get(sessionId) : null;
   const workdir = session?.workdir || WORKDIR;
