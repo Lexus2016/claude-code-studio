@@ -570,6 +570,8 @@ const stmts = {
   getBot: db.prepare(`SELECT * FROM bots WHERE id=? AND deleted_at IS NULL`),
   // Includes soft-deleted rows: used to reserve handles and to attribute old messages.
   getBotAny: db.prepare(`SELECT * FROM bots WHERE id=?`),
+  // Every handle ever used, including soft-deleted ones — a handle is reserved forever.
+  allBotHandles: db.prepare(`SELECT id FROM bots`),
   softDeleteBot: db.prepare(`UPDATE bots SET deleted_at=datetime('now') WHERE id=?`),
   getBotSession: db.prepare(`SELECT claude_session_id FROM bot_sessions WHERE chat_session_id=? AND bot_id=?`),
   setBotSession: db.prepare(`INSERT INTO bot_sessions (chat_session_id,bot_id,claude_session_id) VALUES (?,?,?)
@@ -6789,7 +6791,7 @@ function saveBot(req, res, mode) {
     } else {
       const base = botsLogic.handleFromLabel(cleanLabel);
       if (!base) return res.status(400).json({ error: 'could not derive a handle from that label' });
-      handle = botsLogic.uniqueHandle(base, db.prepare('SELECT id FROM bots').all().map(b => b.id));
+      handle = botsLogic.uniqueHandle(base, stmts.allBotHandles.all().map(b => b.id));
       if (!handle) return res.status(400).json({ error: 'could not allocate a free handle' });
     }
   }
