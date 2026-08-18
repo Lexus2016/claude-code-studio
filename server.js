@@ -498,6 +498,16 @@ db.exec(`
   -- passes --system-prompt only when there is NO session to resume, so a bot sharing
   -- the chat's session would silently run with no system prompt at all — its identity
   -- would not exist. A private session also gives the bot memory of its own thread.
+  -- Which bots are available in which project. Identity stays global — the handle is
+  -- the identity and messages.agent_id stores it — but AVAILABILITY is per project, so
+  -- a crypto-research project does not offer a philosophy bot in its @ palette.
+  CREATE TABLE IF NOT EXISTS project_bots (
+    project_id TEXT NOT NULL,
+    bot_id     TEXT NOT NULL,
+    added_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (project_id, bot_id)
+  );
+
   CREATE TABLE IF NOT EXISTS bot_sessions (
     chat_session_id   TEXT NOT NULL,
     bot_id            TEXT NOT NULL,
@@ -576,6 +586,11 @@ const stmts = {
   getBotAny: db.prepare(`SELECT * FROM bots WHERE id=?`),
   // Every handle ever used, including soft-deleted ones — a handle is reserved forever.
   allBotHandles: db.prepare(`SELECT id FROM bots`),
+  listProjectBots: db.prepare(`SELECT b.* FROM bots b JOIN project_bots pb ON pb.bot_id=b.id
+    WHERE pb.project_id=? AND b.deleted_at IS NULL ORDER BY b.label COLLATE NOCASE`),
+  addBotToProject: db.prepare(`INSERT INTO project_bots (project_id,bot_id) VALUES (?,?)
+    ON CONFLICT(project_id,bot_id) DO NOTHING`),
+  removeBotFromProject: db.prepare(`DELETE FROM project_bots WHERE project_id=? AND bot_id=?`),
   softDeleteBot: db.prepare(`UPDATE bots SET deleted_at=datetime('now') WHERE id=?`),
   getBotSession: db.prepare(`SELECT claude_session_id FROM bot_sessions WHERE chat_session_id=? AND bot_id=?`),
   setBotSession: db.prepare(`INSERT INTO bot_sessions (chat_session_id,bot_id,claude_session_id) VALUES (?,?,?)
@@ -6755,8 +6770,24 @@ function startDelegationWatcher(delegationId, delegationDir) {
 // A bot is a named chat participant: handle (= id), label, description, engine,
 // model and system prompt. Mirrors the external-agents API in shape.
 
-app.get('/api/bots', (_, res) => {
-  res.json(stmts.listBots.all());
+// Without ?project= this is the whole library (the bot management screen). With it,
+// only the bots available in that project — which is what the @ palette offers.
+app.get('/api/bots', (req, res) => {
+  const projectId = req.query.project;
+  res.json(projectId ? stmts.listProjectBots.all(String(projectId)) : stmts.listBots.all());
+});
+
+app.post('/api/projects/:projectId/bots/:botId', (req, res) => {
+  if (!stmts.getBot.get(req.params.botId)) return res.status(404).json({ error: 'bot not found' });
+  stmts.addBotToProject.run(String(req.params.projectId), req.params.botId);
+  res.json({ ok: true });
+});
+
+app.delete('/api/projects/:projectId/bots/:botId', (req, res) => {
+  // Removing a bot from a project never deletes the bot or its past messages — it
+  // only stops offering it here.
+  stmts.removeBotFromProject.run(String(req.params.projectId), req.params.botId);
+  res.json({ ok: true });
 });
 
 // Length caps. A system prompt is re-sent on every turn, so it is a running cost,
@@ -6827,6 +6858,11 @@ function saveBot(req, res, mode) {
   } catch (e) {
     log.error('bot save failed', { handle, err: e.message });
     return res.status(500).json({ error: 'could not save the bot' });
+  }
+  // A bot created while a project is open belongs to that project immediately —
+  // otherwise every creation would be followed by a separate "add it here" step.
+  if (mode === 'create' && body.projectId) {
+    try { stmts.addBotToProject.run(String(body.projectId), handle); } catch {}
   }
   res.json(stmts.getBot.get(handle));
 }

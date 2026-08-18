@@ -96,33 +96,49 @@ First mention of a bot in a chat: a fresh CLI session, prompt applied. Later men
 resume that session. This also gives a bot memory of its own thread inside that chat,
 which is what "work with it as an agent" means.
 
-## Scope: a bot is global, and its handle is its identity
+## Scope: global identity, per-project availability
 
-Reviewed as a separate question by the same panel. They split on the small part and
-agreed on the part that cannot be undone.
+Two questions that look like one. Separating them is the whole answer.
 
-**Rejected: per-project bots.** `messages.agent_id` stores the handle, so the same
-handle owned by two projects would mean two different identities inside one stored
-history. Every later cross-project feature — search, Telegram, "what did @analyst say" —
-would need a permanent (project, handle) map and a backfill. Both reviewers named this
-as the one choice with no migration path.
+**Identity is global.** `messages.agent_id` stores the handle, so a handle owned by two
+projects would mean two different people inside one stored history, and every later
+cross-project feature would need a permanent (project, handle) map plus a backfill. Both
+reviewers named per-project *identity* as the one choice with no migration path. So a
+handle is unique across the installation, soft-delete reserves it forever, and the handle
+IS the identity — no separate UUID is needed. Two specialists are two handles:
+`@analyst-rust` and `@analyst-crypto`, never one handle meaning different things.
 
-**Chosen: one installation-wide roster.** A bot is someone the user hired, not a folder;
-typing `@analyst` should mean the same specialist everywhere. Because a handle is
-globally unique and soft-delete reserves it forever, the handle IS a stable identity and
-no separate UUID is needed.
+**Availability is per project.** The product owner's objection settled this: *"why do I
+need a philosopher bot in a project about crypto research?"* A roster that shows every
+bot everywhere becomes a junk drawer as soon as a user works across several projects, and
+sorting by recency only pushes the irrelevant ones down the list — it never removes them.
 
-Two different specialists must be two handles — `@analyst-rust` and `@analyst-crypto` —
-never one handle meaning different things in different places.
+```sql
+CREATE TABLE IF NOT EXISTS project_bots (
+  project_id TEXT NOT NULL,
+  bot_id     TEXT NOT NULL,
+  added_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (project_id, bot_id)
+);
+```
 
-Roster noise is treated as a **ranking** problem, not an identity one: autocomplete
-sorts by most recently mentioned in this project, then this chat, then the rest. A
-per-project enablement table can be added later without touching a single stored
-message; it is deliberately not built now, because its only failure mode is a mention
-that resolves to a real bot and then refuses — a confusing failure the user never asked
-for.
+`GET /api/bots` is the library (the management screen); `GET /api/bots?project=<id>` is
+what a project offers, and what its `@` palette lists. A bot created while a project is
+open joins that project immediately, so creating is never followed by a separate "now add
+it here" step. Removing a bot from a project deletes neither the bot nor its past
+messages — it only stops offering it there.
 
-## Storage
+**The failure mode this introduces, and its answer.** Mentioning a bot that exists but is
+not in this project must not silently fall through to the file-attachment path. Mention
+detection therefore resolves against ALL handles and then partitions: available bots are
+dispatched, and a mention of a known-but-not-added bot answers *"@philosopher exists but
+is not in this project"* with an **Add** action. A confusing failure becomes a one-click
+affordance.
+
+**Context comes for free.** A bot answers inside a chat that already carries the
+project's workdir, so it works in that project's files with no extra plumbing.
+
+## Storage## Storage
 
 SQLite, not `config.json`. Config is rewritten wholesale on every settings change, and a
 growing roster of multi-KB system prompts does not belong there; bots also need joins
