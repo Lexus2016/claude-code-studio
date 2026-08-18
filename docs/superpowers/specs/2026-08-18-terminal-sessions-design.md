@@ -53,16 +53,35 @@ the user edits them in the agent settings.
 
 Measured against the binaries installed on this machine (all eight present):
 
-| Agent | `interactive` | `newIdFlag` (pin id of a NEW conversation) | `resume` (by id) | `resumeLast` |
+| Agent | `interactive` | exact id up front | `resume` (by id) | `resumeLast` |
 |---|---|---|---|---|
-| claude | `claude` | `--session-id {sid}` | `claude --resume {sid}` | `claude --continue` |
-| grok | `grok` | `-s {sid}` | `grok --resume {sid}` | `grok --continue` |
+| claude | `claude` | flag `--session-id {sid}` | `claude --resume {sid}` | `claude --continue` |
+| grok | `grok` | flag `-s {sid}` | `grok --resume {sid}` | `grok --continue` |
+| cursor-agent | `cursor-agent` | cmd `cursor-agent create-chat` | `cursor-agent --resume {sid}` | `cursor-agent --continue` |
 | codex | `codex` | — | `codex resume {sid}` | `codex resume --last` |
 | agy | `agy` | — | `agy --conversation {sid}` | `agy --continue` |
 | opencode | `opencode` | — | `opencode -s {sid}` | `opencode -c` |
 | hermes | `hermes` | — | `hermes --resume {sid}` | `hermes --continue` |
-| cursor-agent | `cursor-agent` | — | `cursor-agent --resume {sid}` | `cursor-agent --continue` |
 | kimi | `kimi` | — | `kimi --session {sid}` | `kimi --continue` |
+
+### Getting an exact conversation id
+
+Passing `{sid}` is useless unless we actually know this session's id, so there are two
+ways to obtain one at creation time, and one fallback:
+
+1. **`newIdFlag`** — we mint a UUID and the CLI accepts it for a NEW conversation
+   (claude, grok). Deterministic.
+2. **`newIdCommand`** — the CLI mints it and prints it; we run the command once when
+   the studio session is created and store the output (cursor-agent `create-chat`,
+   verified: prints a bare UUID, exit 0). Deterministic.
+3. **Neither** — the id stays unknown and restore falls back to `resumeLast`.
+
+Why there is no third generic mechanism: reading the id back out of the agent's own
+store does not work at launch. Measured — codex writes no session file until the first
+message is sent (755 rollout files before and after starting its TUI), and the stores
+are not uniform anyway: codex keeps the id in a `.jsonl` filename, cursor-agent nests
+`~/.cursor/chats/<hash>/<uuid>`, opencode keeps everything in a SQLite database with
+no id in any path, and agy/hermes/kimi expose no discoverable conversation store.
 
 Version note: `codex-cli 0.147.0` accepts neither `--session-id` nor `--resume` as a
 top-level flag (both error with "unexpected argument"); it uses the `codex resume <id>`

@@ -3480,6 +3480,11 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <input id="agentNewIdFlag" placeholder="--session-id {sid}" autocomplete="off">
         <div class="cmd-name-hint" data-i18n="agent.modal.newIdFlag.hint">If the CLI can be told the id of a NEW conversation, restore becomes exact. Leave empty if unsupported.</div>
       </div>
+      <div class="cmd-field">
+        <label for="agentNewIdCommand" data-i18n="agent.modal.newIdCommand.label">New-conversation command</label>
+        <input id="agentNewIdCommand" placeholder="cursor-agent create-chat" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="agent.modal.newIdCommand.hint">Alternative to the flag: a command that creates a conversation and prints its id. Run once when the session is created.</div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="bg" onclick="cancelAgentForm()" data-i18n="agent.modal.cancel">Скасувати</button>
@@ -3853,6 +3858,7 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    'agent.modal.newIdCommand.label':'Команда створення розмови','agent.modal.newIdCommand.hint':'Альтернатива прапорцю: команда, що створює розмову і друкує її id. Виконується один раз при створенні сесії.',
     'sec.termAgents':'Термінальні агенти','termAgent.add.new':'Додати термінального агента','termAgents.hint':'CLI-агенти, яких можна відкрити живим терміналом у сесії.','termAgent.modal.add.title':'Новий термінальний агент','agent.modal.interactive.label':'Інтерактивна команда','agent.modal.interactive.hint':'Запускає TUI агента для термінальної сесії. Порожньо — агент лише для делегування.','agent.modal.resume.label':'Команда відновлення','agent.modal.resume.hint':'{sid} — ідентифікатор розмови. Використовується для відновлення сесії після перезавантаження.','agent.modal.resumeLast.label':'Відновити останню (запасний варіант)','agent.modal.resumeLast.hint':'Використовується, коли ідентифікатор невідомий. Може відновити іншу розмову.','agent.modal.newIdFlag.label':'Прапорець id нової розмови','agent.modal.newIdFlag.hint':'Якщо CLI дозволяє задати id НОВОЇ розмови, відновлення стає точним. Порожньо — не підтримується.',
     'export.btn':'Експорт','export.title':'Експортувати розмову','notes.btn':'Нотатки','notes.title':'Нотатки сесії (приватні)','notes.ph':'Приватні нотатки сесії — не надсилаються Claude...','notes.save':'Зберегти','notes.saved':'✓ Збережено',
     'act.title':'Активність','act.group':'Групувати за проєктами ↔ плоский список','act.live':'Активні','act.scheduled':'Заплановані','act.recent':'Нещодавні','act.empty':'Немає активності','act.recovering':'віднов.','act.now':'зараз','act.in':'за','act.u.s':'с','act.u.m':'хв','act.u.h':'г','act.u.d':'д',
@@ -4088,6 +4094,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'оновлено {time} тому',
   },
   en: {
+    'agent.modal.newIdCommand.label':'New-conversation command','agent.modal.newIdCommand.hint':'Alternative to the flag: a command that creates a conversation and prints its id. Run once when the session is created.',
     'sec.termAgents':'Terminal agents','termAgent.add.new':'Add terminal agent','termAgents.hint':'CLI agents you can open as a live terminal inside a session.','termAgent.modal.add.title':'New terminal agent','agent.modal.interactive.label':'Interactive command','agent.modal.interactive.hint':"Starts the agent's TUI for a terminal session. Leave empty for a delegation-only agent.",'agent.modal.resume.label':'Resume command','agent.modal.resume.hint':'{sid} — the conversation id. Used to restore the session after a reboot.','agent.modal.resumeLast.label':'Resume last (fallback)','agent.modal.resumeLast.hint':'Used when no conversation id is known. May restore a different conversation.','agent.modal.newIdFlag.label':'New-conversation id flag','agent.modal.newIdFlag.hint':'If the CLI can be told the id of a NEW conversation, restore becomes exact. Leave empty if unsupported.',
     'export.btn':'Export','export.title':'Export conversation','notes.btn':'Notes','notes.title':'Session notes (private)','notes.ph':'Private session notes — not sent to Claude...','notes.save':'Save','notes.saved':'✓ Saved',
     'act.title':'Activity','act.group':'Group by project ↔ flat list','act.live':'Active','act.scheduled':'Scheduled','act.recent':'Recent','act.empty':'No activity','act.recovering':'recovering','act.now':'now','act.in':'in','act.u.s':'s','act.u.m':'m','act.u.h':'h','act.u.d':'d',
@@ -4323,6 +4330,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'updated {time} ago',
   },
   ru: {
+    'agent.modal.newIdCommand.label':'Команда создания разговора','agent.modal.newIdCommand.hint':'Альтернатива флагу: команда, создающая разговор и печатающая его id. Выполняется один раз при создании сессии.',
     'sec.termAgents':'Терминальные агенты','termAgent.add.new':'Добавить терминального агента','termAgents.hint':'CLI-агенты, которых можно открыть живым терминалом в сессии.','termAgent.modal.add.title':'Новый терминальный агент','agent.modal.interactive.label':'Интерактивная команда','agent.modal.interactive.hint':'Запускает TUI агента для терминальной сессии. Пусто — агент только для делегирования.','agent.modal.resume.label':'Команда восстановления','agent.modal.resume.hint':'{sid} — идентификатор разговора. Используется для восстановления сессии после перезагрузки.','agent.modal.resumeLast.label':'Восстановить последний (запасной вариант)','agent.modal.resumeLast.hint':'Используется, когда идентификатор неизвестен. Может восстановить другой разговор.','agent.modal.newIdFlag.label':'Флаг id нового разговора','agent.modal.newIdFlag.hint':'Если CLI позволяет задать id НОВОГО разговора, восстановление становится точным. Пусто — не поддерживается.',
     'export.btn':'Экспорт','export.title':'Экспортировать разговор','notes.btn':'Заметки','notes.title':'Заметки сессии (приватные)','notes.ph':'Приватные заметки сессии — не отправляются Claude...','notes.save':'Сохранить','notes.saved':'✓ Сохранено',
     'act.title':'Активность','act.group':'Группировать по проектам ↔ плоский список','act.live':'Активные','act.scheduled':'Запланированные','act.recent':'Недавние','act.empty':'Нет активности','act.recovering':'восст.','act.now':'сейчас','act.in':'через','act.u.s':'с','act.u.m':'мин','act.u.h':'ч','act.u.d':'д',
@@ -4558,6 +4566,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'обновлено {time} назад',
   },
   fr: {
+    "agent.modal.newIdCommand.label":"Commande de nouvelle conversation","agent.modal.newIdCommand.hint":"Alternative à l'indicateur : une commande qui crée une conversation et affiche son id. Exécutée une fois à la création de la session.",
     "sec.termAgents":"Agents terminal","termAgent.add.new":"Ajouter un agent terminal","termAgents.hint":"Agents CLI que vous pouvez ouvrir comme terminal vivant dans une session.","termAgent.modal.add.title":"Nouvel agent terminal","agent.modal.interactive.label":"Commande interactive","agent.modal.interactive.hint":"Lance le TUI de l'agent pour une session terminal. Vide — agent de délégation uniquement.","agent.modal.resume.label":"Commande de reprise","agent.modal.resume.hint":"{sid} — identifiant de la conversation. Sert à restaurer la session après un redémarrage.","agent.modal.resumeLast.label":"Reprendre la dernière (repli)","agent.modal.resumeLast.hint":"Utilisée quand aucun identifiant n'est connu. Peut restaurer une autre conversation.","agent.modal.newIdFlag.label":"Indicateur d'id de nouvelle conversation","agent.modal.newIdFlag.hint":"Si la CLI accepte l'id d'une NOUVELLE conversation, la restauration devient exacte. Vide si non pris en charge.",
     "export.btn":"Exporter","export.title":"Exporter la conversation","notes.btn":"Notes","notes.title":"Notes de session (privées)","notes.ph":"Notes de session privées — non envoyées à Claude...",
     "notes.save":"Enregistrer","notes.saved":"✓ Enregistré","act.title":"Activité","act.group":"Regrouper par projet ↔ liste à plat","act.live":"Actif","act.scheduled":"Planifié","act.recent":"Récent",
@@ -4694,6 +4703,7 @@ const TRANSLATIONS = {
     "dlg.toast.no_changes":"Aucun changement","dlg.last_update":"mis à jour il y a {time}",
   },
   he: {
+    "agent.modal.newIdCommand.label":"פקודת יצירת שיחה","agent.modal.newIdCommand.hint":"חלופה לדגל: פקודה שיוצרת שיחה ומדפיסה את המזהה שלה. מורצת פעם אחת ביצירת השיחה.",
     "sec.termAgents":"סוכני טרמינל","termAgent.add.new":"הוסף סוכן טרמינל","termAgents.hint":"סוכני CLI שניתן לפתוח כטרמינל חי בתוך שיחה.","termAgent.modal.add.title":"סוכן טרמינל חדש","agent.modal.interactive.label":"פקודה אינטראקטיבית","agent.modal.interactive.hint":"מפעילה את ה-TUI של הסוכן עבור שיחת טרמינל. ריק — סוכן להאצלה בלבד.","agent.modal.resume.label":"פקודת שחזור","agent.modal.resume.hint":"{sid} — מזהה השיחה. משמש לשחזור השיחה לאחר הפעלה מחדש.","agent.modal.resumeLast.label":"שחזר אחרונה (גיבוי)","agent.modal.resumeLast.hint":"משמש כאשר המזהה אינו ידוע. עשוי לשחזר שיחה אחרת.","agent.modal.newIdFlag.label":"דגל מזהה לשיחה חדשה","agent.modal.newIdFlag.hint":"אם ה-CLI מאפשר לקבוע מזהה לשיחה חדשה, השחזור נעשה מדויק. ריק אם אינו נתמך.",
     "export.btn":"ייצוא","export.title":"ייצוא שיחה","notes.btn":"הערות","notes.title":"הערות סשן (פרטי)","notes.ph":"הערות פרטיות לסשן — לא נשלחות ל-Claude...","notes.save":"שמירה",
     "notes.saved":"✓ נשמר","act.title":"פעילות","act.group":"קיבוץ לפי פרויקט ↔ רשימה שטוחה","act.live":"פעיל","act.scheduled":"מתוזמן","act.recent":"אחרונים","act.empty":"אין פעילות",
@@ -11169,6 +11179,7 @@ function openAgentForm(id, kind) {
   $i('agentResume').value = cfg?.resume || '';
   $i('agentResumeLast').value = cfg?.resumeLast || '';
   $i('agentNewIdFlag').value = cfg?.newIdFlag || '';
+  $i('agentNewIdCommand').value = cfg?.newIdCommand || '';
   if (id) {
     btn.textContent = t('agent.save.btn');
     btn.setAttribute('data-i18n', 'agent.save.btn');
@@ -11201,6 +11212,7 @@ async function saveAgent() {
     resume:      $i('agentResume').value.trim(),
     resumeLast:  $i('agentResumeLast').value.trim(),
     newIdFlag:   $i('agentNewIdFlag').value.trim(),
+    newIdCommand: $i('agentNewIdCommand').value.trim(),
   };
   // An agent needs at least one capability: delegation (template) or a terminal
   // session (interactive). Both is fine.

@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const url = require('url');
-const { execSync, spawn: spawnProc } = require('child_process');
+const { execSync, spawnSync, spawn: spawnProc } = require('child_process');
 const crypto = require('crypto');
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
@@ -38,7 +38,7 @@ const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
 const { isTransientOverload, shouldRetryOverload } = require('./rate-limit-utils');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
-const { resolveAgentCommands, supportsTerminal, mergeAgentDefaults } = require('./terminal-session');
+const { resolveAgentCommands, supportsTerminal, mergeAgentDefaults, parseNewIdOutput } = require('./terminal-session');
 const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
@@ -1882,7 +1882,7 @@ const DEFAULT_EXTERNAL_AGENTS = {
   agy:          { label: 'Antigravity CLI', template: 'agy -i {prompt}',      interactive: 'agy',          resume: 'agy --conversation {sid}',  resumeLast: 'agy --continue' },
   opencode:     { label: 'opencode',       template: 'opencode run {prompt}', interactive: 'opencode',     resume: 'opencode -s {sid}',         resumeLast: 'opencode -c' },
   hermes:       { label: 'Hermes',         interactive: 'hermes',       resume: 'hermes --resume {sid}',       resumeLast: 'hermes --continue' },
-  'cursor-agent': { label: 'Cursor Agent', interactive: 'cursor-agent', resume: 'cursor-agent --resume {sid}', resumeLast: 'cursor-agent --continue' },
+  'cursor-agent': { label: 'Cursor Agent', interactive: 'cursor-agent', newIdCommand: 'cursor-agent create-chat', resume: 'cursor-agent --resume {sid}', resumeLast: 'cursor-agent --continue' },
   kimi:         { label: 'Kimi',           interactive: 'kimi',         resume: 'kimi --session {sid}',        resumeLast: 'kimi --continue' },
 };
 
@@ -4586,9 +4586,24 @@ app.post('/api/sessions', (req, res) => {
     if (!terminalAgent || !supportsTerminal(agents[terminalAgent])) {
       return res.status(400).json({ error: 'terminalAgent must name an agent with an "interactive" command' });
     }
-    // Pin the conversation id up front when the agent supports it (claude --session-id),
-    // so a later restore resumes THIS conversation instead of "the most recent one".
-    const convId = resolveAgentCommands(agents[terminalAgent]).newIdFlag ? crypto.randomUUID() : null;
+    // Get an exact conversation id up front so a later restore targets THIS
+    // conversation instead of "the agent's most recent one". Two mechanisms:
+    //   newIdFlag    — we mint the id and pass it at launch (claude, grok)
+    //   newIdCommand — the CLI mints it and prints it (cursor-agent create-chat)
+    // Agents with neither stay on the resumeLast fallback.
+    const cmds = resolveAgentCommands(agents[terminalAgent]);
+    let convId = null;
+    if (cmds.newIdFlag) {
+      convId = crypto.randomUUID();
+    } else if (cmds.newIdCommand) {
+      try {
+        const r = spawnSync('/bin/sh', ['-c', cmds.newIdCommand], { encoding: 'utf8', timeout: 30000 });
+        convId = r.status === 0 ? parseNewIdOutput(r.stdout) : null;
+        if (!convId) log.warn('newIdCommand produced no usable id', { agent: terminalAgent, status: r.status });
+      } catch (e) {
+        log.warn('newIdCommand failed', { agent: terminalAgent, err: e.message });
+      }
+    }
     stmts.createTerminalSession.run(id, String(title).substring(0, 200), sqlVal(model), sqlVal(workdir) || null, terminalAgent, convId);
     return res.json(stmts.getSession.get(id));
   }

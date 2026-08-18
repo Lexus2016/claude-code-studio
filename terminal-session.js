@@ -37,9 +37,28 @@ function resolveAgentCommands(agentConfig) {
   return {
     interactive: str(c.interactive),
     newIdFlag: str(c.newIdFlag),
+    newIdCommand: str(c.newIdCommand),
     resume: str(c.resume),
     resumeLast: str(c.resumeLast),
   };
+}
+
+// Extract a conversation id from the stdout of a `newIdCommand`.
+//
+// Three ways to get an exact id, in order of preference:
+//   newIdFlag    — we generate it and the CLI accepts it (claude, grok)
+//   newIdCommand — the CLI generates it and prints it (cursor-agent create-chat)
+//   neither      — unknown until the agent writes its own store; resumeLast is
+//                  the only fallback and may restore a different conversation
+//
+// Only the last non-empty line is considered, and it must look like a bare id:
+// banners, warnings and error text all contain spaces or punctuation and are
+// rejected rather than stored as a bogus id.
+function parseNewIdOutput(stdout) {
+  const lines = String(stdout || '').split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  const last = lines[lines.length - 1];
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{5,127}$/.test(last) ? last : null;
 }
 
 function supportsTerminal(agentConfig) {
@@ -124,6 +143,6 @@ function mergeAgentDefaults(config, defaults) {
 
 module.exports = {
   TMUX_PREFIX, tmuxNameFor, isTerminalTmuxName, resolveState,
-  resolveAgentCommands, supportsTerminal, buildLaunchCommand,
+  resolveAgentCommands, supportsTerminal, buildLaunchCommand, parseNewIdOutput,
   isReapCandidate, shouldReap, mergeAgentDefaults,
 };

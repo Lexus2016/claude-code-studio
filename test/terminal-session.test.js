@@ -4,7 +4,7 @@ const assert = require('assert');
 const {
   tmuxNameFor, isTerminalTmuxName, resolveState,
   resolveAgentCommands, supportsTerminal, buildLaunchCommand,
-  isReapCandidate, shouldReap,
+  isReapCandidate, shouldReap, parseNewIdOutput,
 } = require('../terminal-session');
 
 let pass = 0, fail = 0;
@@ -34,9 +34,9 @@ check('session with live pane -> attach', resolveState({ hasSession: true, paneD
 check('session with dead pane -> respawn', resolveState({ hasSession: true, paneDead: true }), 'respawn');
 
 console.log('agent commands:');
-check('reads all four fields', resolveAgentCommands(CLAUDE), { interactive: 'claude', newIdFlag: '--session-id {sid}', resume: 'claude --resume {sid}', resumeLast: 'claude --continue' });
-check('missing fields become null', resolveAgentCommands(DELEGATE_ONLY), { interactive: null, newIdFlag: null, resume: null, resumeLast: null });
-check('blank strings become null', resolveAgentCommands({ interactive: '   ' }), { interactive: null, newIdFlag: null, resume: null, resumeLast: null });
+check('reads every command field', resolveAgentCommands(CLAUDE), { interactive: 'claude', newIdFlag: '--session-id {sid}', newIdCommand: null, resume: 'claude --resume {sid}', resumeLast: 'claude --continue' });
+check('missing fields become null', resolveAgentCommands(DELEGATE_ONLY), { interactive: null, newIdFlag: null, newIdCommand: null, resume: null, resumeLast: null });
+check('blank strings become null', resolveAgentCommands({ interactive: '   ' }), { interactive: null, newIdFlag: null, newIdCommand: null, resume: null, resumeLast: null });
 check('delegation-only agent unsupported', supportsTerminal(DELEGATE_ONLY), false);
 check('interactive agent supported', supportsTerminal(CODEX), true);
 
@@ -59,6 +59,16 @@ check('restore with no resume options starts clean',
 check('unsupported agent yields null',
   buildLaunchCommand({ commands: resolveAgentCommands(DELEGATE_ONLY), convId: null, isRestore: false }),
   null);
+
+console.log('new-conversation id from a CLI that mints it:');
+check('bare uuid is accepted', parseNewIdOutput('96357f0d-4ea3-404a-88f5-57555c2dafb2\n'), '96357f0d-4ea3-404a-88f5-57555c2dafb2');
+check('banner lines are skipped, last line wins', parseNewIdOutput('Logging in...\nok\nabc123def456\n'), 'abc123def456');
+check('an error sentence is rejected', parseNewIdOutput('Error: not logged in'), null);
+check('empty output is rejected', parseNewIdOutput(''), null);
+check('whitespace-only is rejected', parseNewIdOutput('   \n\n'), null);
+check('a too-short token is rejected', parseNewIdOutput('ok'), null);
+check('a path is rejected', parseNewIdOutput('/tmp/some/file'), null);
+check('newIdCommand is read from config', resolveAgentCommands({ interactive: 'x', newIdCommand: 'x create-chat' }).newIdCommand, 'x create-chat');
 
 console.log('reaper:');
 const BASE = { attached: 0, idleSec: 3600, sessionAgeSec: 3600, paneHashA: 'x', paneHashB: 'x' };
