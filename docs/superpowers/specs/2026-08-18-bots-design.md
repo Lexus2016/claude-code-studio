@@ -46,10 +46,14 @@ on it. Measured on this project on 2026-08-18, across three agent runs:
   what was already built.
 
 Agents are reliable in proportion to how checkable their claims are. So every bot's
-system prompt carries a standing requirement: **state what a claim rests on** — the
-file, the command output, the source — and say plainly when something is unverified.
-This is a prompt convention, not machinery, and it is the highest-value line in the
-feature.
+system prompt carries a standing requirement: for **factual and technical** claims,
+state the basis actually held — the file and line, the command and its output, the
+source read — cite only what was genuinely accessed, and label inference as inference.
+
+Scoped to factual claims deliberately: demanding a citation per sentence would turn an
+editorial or conversational bot into noise. And a prompt line cannot make a model
+truthful. What it can do is make the difference between a checked claim and a guess
+visible to whoever reads the answer next — which is exactly what failed above.
 
 ## Session model
 
@@ -162,14 +166,21 @@ cannot fire twice in the same chain, and a round that dispatches nobody new ends
 Output from a run flagged incomplete by `multi-agent-result.js` never dispatches
 anything — a truncated answer must not summon more work.
 
-## Several bots in one message (v2)
+## Several bots in one message
 
-Mention order is **not** the execution order: word order is an accident of typing, not a
-decision about who leads. The existing planner produces a `depends_on` DAG, which
-already expresses both parallel and sequential work per subtask; it is repointed from
-inventing roles to assigning work among the mentioned bots, with the roster (handle,
-description, and what each bot did recently in this chat, via `messages.agent_id`) in
-its context.
+**v1** dispatches them sequentially in mention order, each seeing the previous ones'
+output. This is a loop around the single-bot path, and it already delivers the owner's
+example ("together do the analysis and make the report").
+
+**v2** stops using mention order: word order is an accident of typing, not a decision
+about who leads, and if the bot that should coordinate happens to be typed second the
+work runs backwards. The existing planner already emits a `depends_on` DAG expressing
+parallel and sequential work per subtask; it is repointed from inventing roles to
+assigning work among the mentioned bots, with the roster (handle, description, and what
+each bot did recently in this chat, via `messages.agent_id`) in its context.
+
+Mention order therefore survives only as a v1 placeholder, and the UI's per-bot blocks
+are built in dispatch order from the start so v2 changes the order, not the surface.
 
 ## The roster is data, not instructions
 
