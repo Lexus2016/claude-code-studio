@@ -3160,9 +3160,28 @@ const MULTI_AGENT_MAX_TURNS_CAP = parseInt(process.env.MULTI_AGENT_MAX_TURNS_CAP
 // Returns the chat's own claude_session_id unchanged: a bot turn must never move the
 // assistant's session pointer.
 async function runBotTurns(p, { bots, prompt, rosterBots }) {
-  const { mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort } = p;
+  const { mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort, userContent } = p;
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
-  const botTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'];
+  // Same tool set as a normal turn, plus the internal MCP tools — without
+  // check_user_messages a bot cannot see a clarification the user sends mid-run.
+  const botMcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user',
+                       'mcp___ccs_notify__notify_user', 'mcp___ccs_user_interrupt__check_user_messages'];
+  const botTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', ...botMcpTools];
+  // Interrupt delivery, identical to runCliSingle: a PreToolUse hook fires on every
+  // tool call and a Stop hook covers a text-only answer, so a message sent while a
+  // bot is working reaches it during the run instead of waiting for the next turn.
+  const botInterruptCmd = `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`;
+  const botInterruptSettings = {
+    hooks: {
+      PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: botInterruptCmd, timeout: 3 }] }],
+      Stop: [{ hooks: [{ type: 'command', command: botInterruptCmd, timeout: 3 }] }],
+    },
+  };
+  const botInterruptEnv = {
+    CCS_INTERRUPT_URL: `http://127.0.0.1:${PORT}`,
+    CCS_INTERRUPT_SESSION: sessionId,
+    CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
+  };
   const turnCap = Math.min(maxTurns || 30, MULTI_AGENT_MAX_TURNS_CAP);
   const previous = [];
 
@@ -3193,7 +3212,10 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
         + previous.map(x => `[@${x.handle}]: ${x.text.substring(0, 4000)}`).join('\n\n')
       : '';
     const botPrompt = prompt + ctx;
-    const botSp = botsLogic.buildBotSystemPrompt(bot, rosterBots);
+    const isFirst = previous.length === 0;
+    // The same standing instruction a normal turn gets: tell the bot the tool exists
+    // and when to call it, or it will not think to look.
+    const botSp = botsLogic.buildBotSystemPrompt(bot, rosterBots) + USER_INTERRUPT_INSTRUCTION;
     const prior = stmts.getBotSession.get(sessionId, bot.id);
     let botSession = prior?.claude_session_id || null;
 
@@ -3205,6 +3227,10 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
       const _res = () => { if (!_settled) { _settled = true; res(); } };
       cli.send({
         prompt: botPrompt,
+        // Images and files the user attached go to the FIRST bot only: the ones after
+        // it receive that bot's output as context, and re-sending the same screenshot
+        // to each in turn would pay for it several times over.
+        contentBlocks: (isFirst && Array.isArray(userContent)) ? userContent : null,
         sessionId: botSession,
         // A bot may pin its own model; otherwise it follows the chat's.
         model: bot.model || model,
@@ -3217,6 +3243,8 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
         abortController,
         effort,
         name: bot.label,
+        extraEnv: botInterruptEnv,
+        extraSettings: botInterruptSettings,
         // 'project,local' deliberately omits 'user': a bot must follow the project's
         // conventions, but the user's personal CLAUDE.md is an agreement between them
         // and their own assistant. Inheriting it made every bot reply open with the
