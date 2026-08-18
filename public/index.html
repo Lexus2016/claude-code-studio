@@ -1039,6 +1039,23 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .at-popup-hdr { padding: 7px 12px; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .at-popup-hdr input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-size: 12px; }
 .at-popup-list { overflow-y: auto; flex: 1; }
+
+/* Bot turn strip — who is in this turn and where each one is. Sits above the
+   composer so it never scrolls away while work is running: with two or three bots
+   the chat itself is a poor status display, because the one you want to check on
+   may be far above the viewport. */
+.bots-strip { display: none; flex-wrap: wrap; gap: 6px; padding: 7px 12px; border-top: 1px solid var(--border); background: var(--s1); }
+.bots-strip.on { display: flex; }
+.bots-strip .bs-item { display: flex; align-items: center; gap: 6px; font-size: 11px; padding: 3px 9px; border-radius: 999px; background: var(--s2); border: 1px solid var(--border); }
+.bots-strip .bs-item .bs-name { font-weight: 600; }
+.bots-strip .bs-item .bs-state { opacity: .6; }
+.bots-strip .bs-item.running { border-color: var(--accent); box-shadow: 0 0 0 2px var(--abg); }
+.bots-strip .bs-item.done { opacity: .55; }
+.bots-strip .bs-item.failed, .bots-strip .bs-item.stopped, .bots-strip .bs-item.skipped { opacity: .7; border-color: #f85149; }
+.bots-strip .bs-stop { margin-left: auto; font-size: 11px; padding: 3px 10px; border-radius: 6px; background: transparent; color: var(--text); border: 1px solid rgba(248,81,73,.4); cursor: pointer; }
+.bots-strip .bs-stop:hover { background: rgba(248,81,73,.12); }
+@keyframes bs-pulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
+.bots-strip .bs-item.running .bs-state { animation: bs-pulse 1.2s ease-in-out infinite; }
 .at-group { padding: 6px 12px 3px; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); opacity: .7; }
 .at-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; font-size: 12px; transition: background .1s; }
 .at-item:hover, .at-item.active { background: var(--s3); }
@@ -3046,6 +3063,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       </div>
       <button class="reply-preview-close" onclick="clearReply()" data-i18n-title="reply.cancel" title="Cancel reply">✕</button>
     </div>
+    <div class="bots-strip" id="botsStrip"></div>
     <div class="iw">
       <div id="interruptPill" class="interrupt-pill">
         <button class="interrupt-pill-btn" id="interruptPillBtn" data-mode="interrupt" onclick="cycleInterruptMode()"></button>
@@ -3528,6 +3546,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       </div>
       <div class="cmd-field">
         <label for="botPrompt" data-i18n="bot.modal.prompt.label">Системний промпт</label>
+        <div id="botTemplates" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:2px"></div>
         <textarea id="botPrompt" rows="7" placeholder="Ти аналітик крипторинку..."></textarea>
         <div class="cmd-name-hint" data-i18n="bot.modal.prompt.hint">Хто цей бот і як він працює. До 8000 символів.</div>
       </div>
@@ -3954,6 +3973,8 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    'bots.empty.what':'Бот — це named учасник чату зі своїм промптом, моделлю і памʼяттю. Аналітик, редактор, рецензент — кожен знає своє.','bots.empty.how':'Створіть бота і покличте його в повідомленні:','bots.empty.cta':'Створити першого бота','bot.tpl.replace':'Замінити те, що вже написано в промпті?','bot.tpl.analyst.name':'Аналітик','bot.tpl.analyst.desc':'аналіз даних і висновки','bot.tpl.analyst.prompt':'Ти аналітик. Розбираєш дані й даєш висновки, на які можна спертися.\n\nПравила:\n- Спершу цифри, потім інтерпретація.\n- Кожен висновок має спиратися на конкретне джерело.\n- Якщо даних бракує — скажи прямо, чого саме бракує.\n- Без води: короткі абзаци, ключове винось у список.','bot.tpl.writer.name':'Редактор','bot.tpl.writer.desc':'тексти і звіти','bot.tpl.writer.prompt':'Ти редактор. Перетворюєш чернетки й дані на текст, який приємно читати.\n\nПравила:\n- Пиши для людини, не для галочки.\n- Структура: заголовок, суть у першому абзаці, деталі нижче.\n- Не вигадуй фактів. Якщо чогось нема у вихідних даних — постав питання.\n- Прибирай канцелярит і повтори.','bot.tpl.reviewer.name':'Рецензент','bot.tpl.reviewer.desc':'перевірка коду і рішень','bot.tpl.reviewer.prompt':'Ти рецензент. Шукаєш, де рішення ламається, а не де воно гарне.\n\nПравила:\n- Кожна знахідка: що саме зламається, за яких вхідних даних, з посиланням на файл і рядок.\n- Розділяй «це помилка» і «мені так не подобається».\n- Якщо не впевнений — кажи, що це припущення.\n- Наприкінці: найважливіше першим.','bot.tpl.explainer.name':'Пояснювач','bot.tpl.explainer.desc':'пояснює складне просто','bot.tpl.explainer.prompt':'Ти пояснюєш складні речі простими словами.\n\nПравила:\n- Спочатку одне речення суті, потім деталі.\n- Приклад важливіший за визначення.\n- Терміни розшифровуй при першій згадці.\n- Не спрощуй до неправди: якщо є важливий нюанс — назви його.',
+    'bot.state.queued':'у черзі','bot.state.running':'працює','bot.state.done':'готово','bot.state.failed':'помилка','bot.state.stopped':'зупинено','bot.state.skipped':'пропущено','bot.stop.all':'Зупинити',
     'at.no_bots':'Ботів не знайдено',
     'sec.bots':'Боти','bots.hint':'Учасники цього проєкту. Згадайте бота через @ у повідомленні.','bot.add.new':'Створити бота','bot.add.btn':'Створити','bot.use.title':'Вставити згадку','bot.modal.add.title':'Новий бот','bot.modal.edit.title':'Редагувати бота','bot.modal.label.label':'Ім\'я','bot.modal.handle.hint':'Звертання у чаті:','bot.modal.avatar.label':'Емодзі','bot.modal.desc.label':'Призначення','bot.modal.desc.hint':'Одним рядком. Це бачать інші боти, щоб знати, кому передати роботу.','bot.modal.model.label':'Модель','bot.model.inherit':'Як у чаті','bot.modal.prompt.label':'Системний промпт','bot.modal.prompt.hint':'Хто цей бот і як він працює. До 8000 символів.','bot.err.label':'Вкажіть імʼя бота','bot.del.confirm':'Видалити бота','bot.del.note':'Його минулі повідомлення лишаться, а звертання більше ніколи не дістанеться іншому боту.','bot.deleted':'видалений бот','toast.bot_added':'✓ Бота створено','toast.bot_updated':'✓ Бота оновлено','toast.bot_deleted':'✓ Бота видалено','at.group.bots':'Боти','at.group.files':'Файли',
     'term.open.title':'Відкрити термінал','term.kill':'Завершити','term.killConfirm':'Завершити цю термінальну сесію? Розмову можна буде відновити пізніше.','term.unavailable':'Термінальні сесії недоступні','term.state.attached':'підключено','term.state.started':'запущено','term.state.restored':'відновлено','term.state.restoredLast':'відновлено останню розмову агента','term.state.restoreFailed':'відновлювати не було чого — почато заново','term.state.exited':'агент завершився','term.state.error':'помилка',
@@ -4193,6 +4214,8 @@ const TRANSLATIONS = {
     'dlg.last_update':'оновлено {time} тому',
   },
   en: {
+    'bots.empty.what':'A bot is a named chat participant with its own prompt, model and memory. An analyst, an editor, a reviewer — each one knows its job.','bots.empty.how':'Create a bot, then call it in a message:','bots.empty.cta':'Create your first bot','bot.tpl.replace':'Replace what is already written in the prompt?','bot.tpl.analyst.name':'Analyst','bot.tpl.analyst.desc':'data analysis and conclusions','bot.tpl.analyst.prompt':'You are an analyst. You work through data and give conclusions someone can rely on.\n\nRules:\n- Numbers first, interpretation second.\n- Every conclusion names the source it rests on.\n- If the data is not enough, say exactly what is missing.\n- No padding: short paragraphs, key points as a list.','bot.tpl.writer.name':'Editor','bot.tpl.writer.desc':'documents and reports','bot.tpl.writer.prompt':'You are an editor. You turn drafts and data into text people actually want to read.\n\nRules:\n- Write for a reader, not for the record.\n- Structure: title, the point in the first paragraph, detail below.\n- Invent nothing. If a fact is not in the source, ask for it.\n- Cut jargon and repetition.','bot.tpl.reviewer.name':'Reviewer','bot.tpl.reviewer.desc':'reviews code and decisions','bot.tpl.reviewer.prompt':'You are a reviewer. You look for where a solution breaks, not where it is nice.\n\nRules:\n- Each finding: what breaks, on which input, with the file and line.\n- Separate \'this is a bug\' from \'I would have done it differently\'.\n- If you are unsure, say it is a guess.\n- Most severe first.','bot.tpl.explainer.name':'Explainer','bot.tpl.explainer.desc':'makes hard things clear','bot.tpl.explainer.prompt':'You explain difficult things in plain language.\n\nRules:\n- One sentence of the point first, then the detail.\n- An example beats a definition.\n- Unpack a term the first time it appears.\n- Do not simplify into being wrong: if a caveat matters, name it.',
+    'bot.state.queued':'queued','bot.state.running':'working','bot.state.done':'done','bot.state.failed':'failed','bot.state.stopped':'stopped','bot.state.skipped':'skipped','bot.stop.all':'Stop',
     'at.no_bots':'No bots found',
     'sec.bots':'Bots','bots.hint':'Participants in this project. Mention one with @ in a message.','bot.add.new':'Create bot','bot.add.btn':'Create','bot.use.title':'Insert mention','bot.modal.add.title':'New bot','bot.modal.edit.title':'Edit bot','bot.modal.label.label':'Name','bot.modal.handle.hint':'Addressed in chat as:','bot.modal.avatar.label':'Emoji','bot.modal.desc.label':'Purpose','bot.modal.desc.hint':'One line. Other bots see this, so they know who to hand work to.','bot.modal.model.label':'Model','bot.model.inherit':'Same as chat','bot.modal.prompt.label':'System prompt','bot.modal.prompt.hint':'Who this bot is and how it works. Up to 8000 characters.','bot.err.label':'Give the bot a name','bot.del.confirm':'Delete bot','bot.del.note':'Its past messages stay, and its handle can never be taken by another bot.','bot.deleted':'deleted bot','toast.bot_added':'✓ Bot created','toast.bot_updated':'✓ Bot updated','toast.bot_deleted':'✓ Bot deleted','at.group.bots':'Bots','at.group.files':'Files',
     'term.open.title':'Open terminal','term.kill':'Kill','term.killConfirm':'Kill this terminal session? The conversation can be resumed later.','term.unavailable':'Terminal sessions are unavailable','term.state.attached':'attached','term.state.started':'started','term.state.restored':'restored','term.state.restoredLast':"restored the agent's last conversation",'term.state.restoreFailed':'nothing to resume — started fresh','term.state.exited':'agent exited','term.state.error':'error',
@@ -4432,6 +4455,8 @@ const TRANSLATIONS = {
     'dlg.last_update':'updated {time} ago',
   },
   ru: {
+    'bots.empty.what':'Бот — это именованный участник чата со своим промптом, моделью и памятью. Аналитик, редактор, рецензент — каждый знает своё.','bots.empty.how':'Создайте бота и позовите его в сообщении:','bots.empty.cta':'Создать первого бота','bot.tpl.replace':'Заменить то, что уже написано в промпте?','bot.tpl.analyst.name':'Аналитик','bot.tpl.analyst.desc':'анализ данных и выводы','bot.tpl.analyst.prompt':'Ты аналитик. Разбираешь данные и даёшь выводы, на которые можно опереться.\n\nПравила:\n- Сначала цифры, потом интерпретация.\n- Каждый вывод опирается на конкретный источник.\n- Если данных не хватает — скажи, чего именно.\n- Без воды: короткие абзацы, ключевое списком.','bot.tpl.writer.name':'Редактор','bot.tpl.writer.desc':'тексты и отчёты','bot.tpl.writer.prompt':'Ты редактор. Превращаешь черновики и данные в текст, который приятно читать.\n\nПравила:\n- Пиши для человека.\n- Структура: заголовок, суть в первом абзаце, детали ниже.\n- Не выдумывай фактов. Чего нет в источнике — спроси.\n- Убирай канцелярит и повторы.','bot.tpl.reviewer.name':'Рецензент','bot.tpl.reviewer.desc':'проверка кода и решений','bot.tpl.reviewer.prompt':'Ты рецензент. Ищешь, где решение ломается.\n\nПравила:\n- Каждая находка: что ломается, при каких данных, файл и строка.\n- Разделяй «это ошибка» и «мне не нравится».\n- Не уверен — скажи, что это предположение.\n- Самое важное первым.','bot.tpl.explainer.name':'Объяснятель','bot.tpl.explainer.desc':'объясняет сложное просто','bot.tpl.explainer.prompt':'Ты объясняешь сложное простыми словами.\n\nПравила:\n- Сначала суть одним предложением, потом детали.\n- Пример важнее определения.\n- Термин расшифровывай при первом упоминании.\n- Не упрощай до неправды: важный нюанс называй.',
+    'bot.state.queued':'в очереди','bot.state.running':'работает','bot.state.done':'готово','bot.state.failed':'ошибка','bot.state.stopped':'остановлен','bot.state.skipped':'пропущен','bot.stop.all':'Остановить',
     'at.no_bots':'Боты не найдены',
     'sec.bots':'Боты','bots.hint':'Участники этого проекта. Упомяните бота через @ в сообщении.','bot.add.new':'Создать бота','bot.add.btn':'Создать','bot.use.title':'Вставить упоминание','bot.modal.add.title':'Новый бот','bot.modal.edit.title':'Редактировать бота','bot.modal.label.label':'Имя','bot.modal.handle.hint':'Обращение в чате:','bot.modal.avatar.label':'Эмодзи','bot.modal.desc.label':'Назначение','bot.modal.desc.hint':'Одной строкой. Это видят другие боты, чтобы знать, кому передать работу.','bot.modal.model.label':'Модель','bot.model.inherit':'Как в чате','bot.modal.prompt.label':'Системный промпт','bot.modal.prompt.hint':'Кто этот бот и как он работает. До 8000 символов.','bot.err.label':'Укажите имя бота','bot.del.confirm':'Удалить бота','bot.del.note':'Его прошлые сообщения останутся, а обращение больше никогда не достанется другому боту.','bot.deleted':'удалённый бот','toast.bot_added':'✓ Бот создан','toast.bot_updated':'✓ Бот обновлён','toast.bot_deleted':'✓ Бот удалён','at.group.bots':'Боты','at.group.files':'Файлы',
     'term.open.title':'Открыть терминал','term.kill':'Завершить','term.killConfirm':'Завершить эту терминальную сессию? Разговор можно будет восстановить позже.','term.unavailable':'Терминальные сессии недоступны','term.state.attached':'подключено','term.state.started':'запущено','term.state.restored':'восстановлено','term.state.restoredLast':'восстановлен последний разговор агента','term.state.restoreFailed':'восстанавливать было нечего — начато заново','term.state.exited':'агент завершился','term.state.error':'ошибка',
@@ -4671,6 +4696,8 @@ const TRANSLATIONS = {
     'dlg.last_update':'обновлено {time} назад',
   },
   fr: {
+    "bots.empty.what":"Un bot est un participant nommé du chat, avec son propre prompt, son modèle et sa mémoire.","bots.empty.how":"Créez un bot puis appelez-le dans un message :","bots.empty.cta":"Créer votre premier bot","bot.tpl.replace":"Remplacer ce qui est déjà écrit dans le prompt ?",
+    "bot.state.queued":"en attente","bot.state.running":"en cours","bot.state.done":"terminé","bot.state.failed":"échec","bot.state.stopped":"arrêté","bot.state.skipped":"ignoré","bot.stop.all":"Arrêter",
     "at.no_bots":"Aucun bot trouvé",
     "sec.bots":"Bots","bots.hint":"Participants de ce projet. Mentionnez un bot avec @ dans un message.","bot.add.new":"Créer un bot","bot.add.btn":"Créer","bot.use.title":"Insérer la mention","bot.modal.add.title":"Nouveau bot","bot.modal.edit.title":"Modifier le bot","bot.modal.label.label":"Nom","bot.modal.handle.hint":"Adressé dans le chat comme :","bot.modal.avatar.label":"Émoji","bot.modal.desc.label":"Rôle","bot.modal.desc.hint":"Une ligne. Les autres bots la voient pour savoir à qui passer le travail.","bot.modal.model.label":"Modèle","bot.model.inherit":"Comme le chat","bot.modal.prompt.label":"Invite système","bot.modal.prompt.hint":"Qui est ce bot et comment il travaille. Jusqu'à 8000 caractères.","bot.err.label":"Donnez un nom au bot","bot.del.confirm":"Supprimer le bot","bot.del.note":"Ses anciens messages restent, et son identifiant ne sera jamais repris par un autre bot.","bot.deleted":"bot supprimé","toast.bot_added":"✓ Bot créé","toast.bot_updated":"✓ Bot mis à jour","toast.bot_deleted":"✓ Bot supprimé","at.group.bots":"Bots","at.group.files":"Fichiers",
     "term.open.title":"Ouvrir le terminal","term.kill":"Terminer","term.killConfirm":"Terminer cette session terminal ? La conversation pourra être reprise plus tard.","term.unavailable":"Sessions terminal indisponibles","term.state.attached":"connecté","term.state.started":"démarré","term.state.restored":"restauré","term.state.restoredLast":"dernière conversation de l'agent restaurée","term.state.restoreFailed":"rien à reprendre — nouveau départ","term.state.exited":"agent terminé","term.state.error":"erreur",
@@ -4811,6 +4838,8 @@ const TRANSLATIONS = {
     "dlg.toast.no_changes":"Aucun changement","dlg.last_update":"mis à jour il y a {time}",
   },
   he: {
+    "bots.empty.what":"בוט הוא משתתף בעל שם בצ׳אט, עם הנחיה, מודל וזיכרון משלו.","bots.empty.how":"צרו בוט ואז קראו לו בהודעה:","bots.empty.cta":"צרו את הבוט הראשון","bot.tpl.replace":"להחליף את מה שכבר כתוב בהנחיה?",
+    "bot.state.queued":"בתור","bot.state.running":"עובד","bot.state.done":"הושלם","bot.state.failed":"נכשל","bot.state.stopped":"נעצר","bot.state.skipped":"דולג","bot.stop.all":"עצור",
     "at.no_bots":"לא נמצאו בוטים",
     "sec.bots":"בוטים","bots.hint":"משתתפים בפרויקט הזה. אזכרו בוט עם @ בהודעה.","bot.add.new":"צור בוט","bot.add.btn":"צור","bot.use.title":"הוסף אזכור","bot.modal.add.title":"בוט חדש","bot.modal.edit.title":"עריכת בוט","bot.modal.label.label":"שם","bot.modal.handle.hint":"פנייה בצ׳אט:","bot.modal.avatar.label":"אמוג׳י","bot.modal.desc.label":"ייעוד","bot.modal.desc.hint":"שורה אחת. בוטים אחרים רואים אותה כדי לדעת למי להעביר עבודה.","bot.modal.model.label":"מודל","bot.model.inherit":"כמו בצ׳אט","bot.modal.prompt.label":"הנחיית מערכת","bot.modal.prompt.hint":"מי הבוט הזה ואיך הוא עובד. עד 8000 תווים.","bot.err.label":"תנו שם לבוט","bot.del.confirm":"למחוק בוט","bot.del.note":"ההודעות הקודמות שלו נשארות, והמזהה שלו לעולם לא יעבור לבוט אחר.","bot.deleted":"בוט שנמחק","toast.bot_added":"✓ הבוט נוצר","toast.bot_updated":"✓ הבוט עודכן","toast.bot_deleted":"✓ הבוט נמחק","at.group.bots":"בוטים","at.group.files":"קבצים",
     "term.open.title":"פתח טרמינל","term.kill":"סיים","term.killConfirm":"לסיים את שיחת הטרמינל הזו? אפשר יהיה לשחזר אותה בהמשך.","term.unavailable":"שיחות טרמינל אינן זמינות","term.state.attached":"מחובר","term.state.started":"הופעל","term.state.restored":"שוחזר","term.state.restoredLast":"שוחזרה השיחה האחרונה של הסוכן","term.state.restoreFailed":"לא היה מה לשחזר — התחלה מחדש","term.state.exited":"הסוכן הסתיים","term.state.error":"שגיאה",
@@ -5720,7 +5749,23 @@ function handleWsMsg(d) {
         break;
       }
       rmStatus();
+      // A turn normally streams into ONE bubble. Bots break that assumption: several
+      // answer in the same turn, one after another, and merging them would leave the
+      // reader unable to tell who said what. So when the speaker changes and either
+      // side is a bot, the current bubble is finalised and the next one starts fresh.
+      // Multi-agent roles (agent-1, agent-2) deliberately keep the single bubble —
+      // they run CONCURRENTLY, so switching per chunk would shred the output.
+      if (streaming.el && d.agent !== streaming.agent
+          && (_botsById[d.agent] || _botsById[streaming.agent] || _deletedBotIds.has(streaming.agent))) {
+        try {
+          streaming.el.querySelector('.msg').innerHTML = renderMd(streaming.txt);
+          _msfStopTimer(streaming.el);
+          _msfRemove(streaming.el);
+        } catch {}
+        streaming.el = null; streaming.txt = '';
+      }
       if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
+      streaming.agent = d.agent || null;
       // Ensure paragraph break between text blocks separated by tool calls
       if (!d.catchUp && streaming.txt && getTS(tabId)._hadTool) {
         if (!streaming.txt.endsWith('\n\n') && !d.text.startsWith('\n')) {
@@ -5766,6 +5811,16 @@ function handleWsMsg(d) {
       }
       break;
 
+    case 'bots_turn': {
+      _turnBots = d.bots || [];
+      _turnStates = {};
+      renderBotsStrip();
+      break;
+    }
+    case 'bot_state': {
+      if (d.bot) { _turnStates[d.bot] = d.state; renderBotsStrip(); }
+      break;
+    }
     case 'agent_status': {
       const _asTxt = (d.agent ? d.agent + ' · ' : '') + escH(d.statusKey ? t(d.statusKey) : d.status);
       getTS(tabId).agentStatus = _asTxt; // persist for tab-switch restoration
@@ -5828,6 +5883,9 @@ function handleWsMsg(d) {
       break;
 
     case 'done':
+      // Keep the finished line-up visible for a moment — it is the record of who did
+      // what — then clear it so the composer area does not accumulate old turns.
+      if (_turnBots.length) setTimeout(clearBotsStrip, 6000);
       // Allow future retries for this session (task_interrupted dedup)
       _retryingSessions.delete(tabId);
       // Update chain progress: check if this task completed or failed
@@ -6750,12 +6808,44 @@ function doStop() {
 function stopAgent() { confirmStop(); }
 
 
+
+// ─── Bot turn strip ──────────────────────────────────────────────────────────
+// One row per bot in the current turn, each with its own state. Built for several
+// bots even though v1 runs them one at a time, so adding parallel execution later
+// changes the order things happen in, not the surface the user reads.
+let _turnBots = [], _turnStates = {};
+
+function renderBotsStrip() {
+  const strip = $i('botsStrip'); if (!strip) return;
+  if (!_turnBots.length) { strip.classList.remove('on'); strip.innerHTML = ''; return; }
+  const anyLive = _turnBots.some(b => (_turnStates[b.id] || 'queued') === 'queued' || _turnStates[b.id] === 'running');
+  strip.classList.add('on');
+  strip.innerHTML = _turnBots.map(b => {
+    const st = _turnStates[b.id] || 'queued';
+    return `<span class="bs-item ${st}" title="${escH(b.label)} · ${escH(b.model || '')}">
+      <span>${escH(b.avatar || '🤖')}</span>
+      <span class="bs-name">${escH(b.label)}</span>
+      <span class="bs-state">${escH(t('bot.state.' + st))}</span>
+    </span>`;
+  }).join('') + (anyLive ? `<button class="bs-stop" onclick="stopBotsTurn()">${escH(t('bot.stop.all'))}</button>` : '');
+}
+
+// v1 has one abort per turn, so stopping is all-or-nothing. Saying "Stop" rather
+// than offering a per-bot control that quietly does the same thing keeps the
+// button honest: the running bot stops and the queued ones are marked skipped.
+function stopBotsTurn() { try { stopGen(); } catch {} }
+
+function clearBotsStrip() { _turnBots = []; _turnStates = {}; renderBotsStrip(); }
+
 // ─── Bots ────────────────────────────────────────────────────────────────────
 // A bot is a named chat participant the user @mentions. Its handle is its
 // identity: global and never reused, so a message attributed to @analyst always
 // means the same bot. Which bots a PROJECT offers is separate — see
 // docs/superpowers/specs/2026-08-18-bots-design.md
 let _bots = [], _botsById = {}, _editingBotId = null;
+// Handles seen in the transcript that are no longer in the roster. Populated as
+// history renders, so an old message from a deleted bot still reads as one.
+const _deletedBotIds = new Set();
 
 async function loadBots() {
   try {
@@ -6773,6 +6863,18 @@ function renderBots() {
   const el = $i('botsList'); if (!el) return;
   el.innerHTML = '';
   const cnt = $i('botsCount'); if (cnt) cnt.textContent = _bots.length;
+  // An empty list should teach, not just report emptiness: this is where a user
+  // first meets the feature, and "0 bots" alone explains nothing about what a bot
+  // is or how it would be used.
+  if (!_bots.length) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'font-size:11px;color:var(--muted);line-height:1.6;padding:4px 2px 8px';
+    empty.innerHTML = `${escH(t('bots.empty.what'))}<br><br>`
+      + `<span style="opacity:.85">${escH(t('bots.empty.how'))}</span> <code style="font-family:var(--font-mono);color:var(--accent2)">@@analyst</code><br><br>`
+      + `<button class="bp" style="font-size:11px;padding:5px 12px" onclick="openBotForm()">${escH(t('bots.empty.cta'))}</button>`;
+    el.appendChild(empty);
+    return;
+  }
   for (const b of _bots) {
     const div = document.createElement('div');
     div.className = 'ci';
@@ -6799,6 +6901,35 @@ function insertBotMention(handle) {
   inEl.focus();
   inEl.selectionStart = inEl.selectionEnd = inEl.value.length;
   inEl.dispatchEvent(new Event('input'));
+}
+
+
+// Starter prompts. A blank textarea is the real barrier to making a good bot: the
+// user knows what they want the bot to DO but not how a system prompt is shaped.
+// These are one click away and fully editable — a starting point, not a preset.
+const BOT_TEMPLATES = [
+  { key: 'analyst', avatar: '📈' },
+  { key: 'writer',  avatar: '📄' },
+  { key: 'reviewer', avatar: '🔍' },
+  { key: 'explainer', avatar: '💡' },
+];
+
+function renderBotTemplates() {
+  const box = $i('botTemplates'); if (!box) return;
+  box.innerHTML = BOT_TEMPLATES.map((tpl, i) =>
+    `<button type="button" class="cfg" style="font-size:11px;padding:3px 9px;border-radius:999px"
+       onclick="applyBotTemplate(${i})">${tpl.avatar} ${escH(t('bot.tpl.' + tpl.key + '.name'))}</button>`
+  ).join('');
+}
+
+function applyBotTemplate(i) {
+  const tpl = BOT_TEMPLATES[i]; if (!tpl) return;
+  const cur = $i('botPrompt').value.trim();
+  if (cur && !confirm(t('bot.tpl.replace'))) return;
+  $i('botPrompt').value = t('bot.tpl.' + tpl.key + '.prompt');
+  if (!$i('botLabel').value.trim()) { $i('botLabel').value = t('bot.tpl.' + tpl.key + '.name'); _botHandlePreview(); }
+  if (!$i('botAvatar').value.trim()) $i('botAvatar').value = tpl.avatar;
+  if (!$i('botDesc').value.trim()) $i('botDesc').value = t('bot.tpl.' + tpl.key + '.desc');
 }
 
 function _botHandlePreview() {
@@ -6831,6 +6962,7 @@ function openBotForm(id) {
   btn.textContent = t(btnKey); btn.setAttribute('data-i18n', btnKey);
   title.textContent = t(titleKey); title.setAttribute('data-i18n', titleKey);
   _botHandlePreview();
+  renderBotTemplates();
   openModalOverlay('botModal', { initialFocus: '#botLabel', labelId: 'botModalTitle', onEscape: cancelBotForm });
 }
 
@@ -6894,7 +7026,13 @@ function _botAccent(handle) {
 // no identity worth a header.
 function addAgentBadge(el, agent) {
   if (el.querySelector('.ab') || el.querySelector('.bot-hd')) return;
-  const bot = _botsById[agent];
+  let bot = _botsById[agent];
+  // A handle that looks like a bot's but is not in the roster belongs to a deleted
+  // one — the handle is reserved forever, so the transcript can still name it
+  // honestly instead of showing a bare id or borrowing a new bot's identity.
+  if (!bot && _deletedBotIds.has(agent)) {
+    bot = { id: agent, label: t('bot.deleted'), avatar: '🚫', model: '' };
+  }
   if (!bot) {
     const b = document.createElement('span');
     b.className = 'ab';
@@ -10070,7 +10208,12 @@ function _renderMsgAt(idx, prepend = false) {
       w.appendChild(_msfCreate('done', t('msf.done')));
     }
   }
-  if (m.agent_id) addAgentBadge(w, m.agent_id);
+  if (m.agent_id) {
+    // agent-1/agent-2 are ephemeral multi-agent roles, not bots — only a handle that
+    // is absent from the roster AND not shaped like those counts as a deleted bot.
+    if (!_botsById[m.agent_id] && !/^agent-\d+$/.test(m.agent_id) && m.agent_id !== 'orchestrator') _deletedBotIds.add(m.agent_id);
+    addAgentBadge(w, m.agent_id);
+  }
   if (prepend) {
     const firstMsg = msgsEl.querySelector('.mw');
     if (firstMsg) msgsEl.insertBefore(w, firstMsg);

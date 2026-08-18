@@ -3166,8 +3166,27 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
   const turnCap = Math.min(maxTurns || 30, MULTI_AGENT_MAX_TURNS_CAP);
   const previous = [];
 
+  // Announce the whole line-up before the first one starts, so the UI can show who
+  // is queued instead of revealing participants one at a time as they begin.
+  try {
+    ws.send(JSON.stringify({
+      type: 'bots_turn',
+      bots: bots.map(b => ({ id: b.id, label: b.label, avatar: b.avatar || '🤖', model: b.model || model })),
+      ...(tabId ? { tabId } : {}),
+    }));
+  } catch {}
+
+  const emitState = (id, state, detail) => {
+    try { ws.send(JSON.stringify({ type: 'bot_state', bot: id, state, detail: detail || '', ...(tabId ? { tabId } : {}) })); } catch {}
+  };
+
   for (const bot of bots) {
-    if (abortController?.signal?.aborted) break;
+    if (abortController?.signal?.aborted) {
+      // Everyone still waiting is skipped, not silently dropped.
+      emitState(bot.id, 'skipped');
+      continue;
+    }
+    emitState(bot.id, 'running');
 
     const ctx = previous.length
       ? '\n\nWhat the bots before you produced in this same turn:\n'
@@ -3240,6 +3259,8 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
     // An incomplete answer is never handed to the next bot: a truncated or failed run
     // reads as fact to whoever receives it, and the error compounds down the chain.
     const ok = !botErrored && isAgentSuccess(botResult);
+    emitState(bot.id, abortController?.signal?.aborted ? 'stopped' : (ok ? 'done' : 'failed'),
+      ok ? '' : agentStopReason(botResult, botErrored));
     if (ok) {
       previous.push({ handle: bot.id, text: botText });
     } else if (bots.indexOf(bot) < bots.length - 1) {
@@ -7427,7 +7448,8 @@ wss.on('connection', (ws) => {
             for (const h of parsed.handles.filter(x => !available.has(x))) {
               const label = byId.get(h)?.label || h;
               proxy.send(JSON.stringify({ type: 'text',
-                text: `ℹ️ **@@${h}** (${label}) exists but is not in this project. Add it here to use it.\n\n`,
+                text: `ℹ️ **@@${h}** (${label}) exists but is not in this project.\n`
+                    + `Open the Bots panel and add it here, or mention a bot from this project.\n\n`,
                 ...(tabId ? { tabId } : {}) }));
             }
             // '@@' states the intent outright, so an unknown handle is answered
