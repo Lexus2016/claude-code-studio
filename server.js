@@ -43,6 +43,7 @@ const {
   tmuxNameFor, buildLaunchCommand, isReapCandidate, shouldReap, pickOverflow,
 } = require('./terminal-session');
 const termBridge = require('./terminal-bridge');
+const botsLogic = require('./bots');
 const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
@@ -470,6 +471,24 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_chain_session ON task_chains(session_id);
   CREATE INDEX IF NOT EXISTS idx_chain_workdir ON task_chains(workdir);
+
+  -- Bots: named participants a user can @mention inside a normal chat. Their id IS
+  -- the handle. Kept in SQLite rather than config.json because system prompts run to
+  -- kilobytes, the roster grows, and it joins against messages.agent_id — config.json
+  -- is rewritten wholesale on every settings change.
+  CREATE TABLE IF NOT EXISTS bots (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    engine TEXT NOT NULL DEFAULT 'claude',
+    model TEXT,
+    system_prompt TEXT NOT NULL DEFAULT '',
+    active_skills TEXT NOT NULL DEFAULT '[]',
+    active_mcp TEXT NOT NULL DEFAULT '[]',
+    avatar TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 try { db.exec(`ALTER TABLE task_chains ADD COLUMN effort TEXT`); } catch {}      // claude --effort dial; chain-level default for new tasks
 
@@ -531,6 +550,20 @@ const stmts = {
   // places and must not grow parameters. kind is literal here — a terminal session
   // can never be created as anything else.
   markTerminalStarted: db.prepare(`UPDATE sessions SET terminal_started=1 WHERE id=?`),
+  listBots: db.prepare(`SELECT * FROM bots ORDER BY label COLLATE NOCASE`),
+  getBot: db.prepare(`SELECT * FROM bots WHERE id=?`),
+  // Positional parameters, like every other statement here: this runtime may be
+  // node:sqlite (Node >= 22.5), whose named-parameter binding differs from
+  // better-sqlite3's and rejects `@name` objects with "column index out of range".
+  // `excluded.` lets the upsert reuse the same nine values without repeating them.
+  upsertBot: db.prepare(`INSERT INTO bots (id,label,description,engine,model,system_prompt,active_skills,active_mcp,avatar)
+    VALUES (?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET
+      label=excluded.label, description=excluded.description, engine=excluded.engine,
+      model=excluded.model, system_prompt=excluded.system_prompt,
+      active_skills=excluded.active_skills, active_mcp=excluded.active_mcp,
+      avatar=excluded.avatar, updated_at=datetime('now')`),
+  deleteBot: db.prepare(`DELETE FROM bots WHERE id=?`),
   createTerminalSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir,kind,terminal_agent,agent_conv_id) VALUES (?,?,'[]','[]','auto','single',?,?,'terminal',?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: (() => {
@@ -6690,6 +6723,71 @@ function startDelegationWatcher(delegationId, delegationDir) {
     return null;
   }
 }
+
+// --- Bots API ---
+// A bot is a named chat participant: handle (= id), label, description, engine,
+// model and system prompt. Mirrors the external-agents API in shape.
+
+app.get('/api/bots', (_, res) => {
+  res.json(stmts.listBots.all());
+});
+
+app.post('/api/bots', express.json(), (req, res) => {
+  const body = req.body || {};
+  const { id, label, engine = 'claude' } = body;
+  const cleanLabel = String(label || '').trim();
+  if (!cleanLabel) return res.status(400).json({ error: 'label required' });
+
+  // Editing keeps the handle: it is the primary key AND what the user types after
+  // '@', so renaming it would silently orphan every past message attributed to it.
+  let handle = String(id || '').trim().toLowerCase();
+  if (handle) {
+    if (!botsLogic.isValidHandle(handle)) {
+      return res.status(400).json({ error: 'handle must be 2-32 chars of a-z, 0-9, - or _' });
+    }
+  } else {
+    const base = botsLogic.handleFromLabel(cleanLabel);
+    if (!base) return res.status(400).json({ error: 'could not derive a handle from that label' });
+    handle = botsLogic.uniqueHandle(base, stmts.listBots.all().map(b => b.id));
+    if (!handle) return res.status(400).json({ error: 'could not allocate a free handle' });
+  }
+  if (engine !== 'claude') {
+    // The field exists so adding engines later is not a migration, but only the
+    // Claude path is wired into a chat turn today.
+    return res.status(400).json({ error: `engine "${engine}" is not supported yet` });
+  }
+  try {
+    // A field absent from the request keeps its stored value; a field present but
+    // empty clears it. A partial edit must never wipe what it did not mention.
+    const prev = stmts.getBot.get(handle) || {};
+    const keep = (key, fallback) => (body[key] === undefined ? fallback : body[key]);
+    const jsonList = (v) => JSON.stringify(Array.isArray(v) ? v : []);
+    stmts.upsertBot.run(
+      handle,
+      cleanLabel.substring(0, 100),
+      String(keep('description', prev.description || '')).substring(0, 500),
+      engine,
+      keep('model', prev.model) ? String(keep('model', prev.model)) : null,
+      String(keep('systemPrompt', prev.system_prompt || '')),
+      body.activeSkills === undefined ? (prev.active_skills || '[]') : jsonList(body.activeSkills),
+      body.activeMcp === undefined ? (prev.active_mcp || '[]') : jsonList(body.activeMcp),
+      String(keep('avatar', prev.avatar || '')).substring(0, 8),
+    );
+  } catch (e) {
+    log.error('bot save failed', { handle, err: e.message });
+    return res.status(500).json({ error: 'could not save the bot' });
+  }
+  res.json(stmts.getBot.get(handle));
+});
+
+app.delete('/api/bots/:id', (req, res) => {
+  const bot = stmts.getBot.get(req.params.id);
+  if (!bot) return res.status(404).json({ error: 'bot not found' });
+  stmts.deleteBot.run(req.params.id);
+  // Past messages keep their agent_id on purpose: the transcript should still say
+  // who wrote what after the bot is gone.
+  res.json({ ok: true });
+});
 
 // --- External agents config API ---
 
