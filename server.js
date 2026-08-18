@@ -7408,9 +7408,9 @@ wss.on('connection', (ws) => {
       }
 
       // ── Bot mentions ────────────────────────────────────────────────────────
-      // Resolution runs against EVERY handle, not just this project's, so that
-      // mentioning a bot that exists elsewhere gives a clear answer instead of
-      // silently falling through to the file-attachment meaning of '@'.
+      // '@@handle' calls a bot; a single '@' remains the file-attachment trigger.
+      // Resolution runs against EVERY handle, not just this project's, so a bot
+      // that exists elsewhere gets a useful answer rather than silence.
       let mentionedBots = [], projectBots = [], botPrompt = msg.text || '';
       try {
         const allBots = stmts.listBots.all();
@@ -7420,15 +7420,21 @@ wss.on('connection', (ws) => {
           projectBots = proj ? stmts.listProjectBots.all(proj.id) : [];
           const available = new Set(projectBots.map(b => b.id));
           const parsed = botsLogic.parseMentions(msg.text || '', allBots.map(b => b.id));
-          if (parsed.handles.length) {
+          if (parsed.handles.length || (parsed.unknown || []).length) {
             botPrompt = parsed.cleaned;
             const byId = new Map(allBots.map(b => [b.id, b]));
             mentionedBots = parsed.handles.filter(h => available.has(h)).map(h => byId.get(h));
-            const elsewhere = parsed.handles.filter(h => !available.has(h));
-            for (const h of elsewhere) {
+            for (const h of parsed.handles.filter(x => !available.has(x))) {
               const label = byId.get(h)?.label || h;
               proxy.send(JSON.stringify({ type: 'text',
-                text: `ℹ️ **@${h}** (${label}) exists but is not in this project. Add it to this project to use it here.\n\n`,
+                text: `ℹ️ **@@${h}** (${label}) exists but is not in this project. Add it here to use it.\n\n`,
+                ...(tabId ? { tabId } : {}) }));
+            }
+            // '@@' states the intent outright, so an unknown handle is answered
+            // rather than passed through as prose the assistant has to guess at.
+            for (const h of (parsed.unknown || [])) {
+              proxy.send(JSON.stringify({ type: 'text',
+                text: `ℹ️ There is no bot **@@${h}**. Create one in the Bots panel.\n\n`,
                 ...(tabId ? { tabId } : {}) }));
             }
           }

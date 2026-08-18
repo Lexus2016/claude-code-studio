@@ -49,83 +49,69 @@ check('a taken handle is suffixed', uniqueHandle('analyst', ['analyst']), 'analy
 check('suffixing continues past collisions', uniqueHandle('analyst', ['analyst', 'analyst-2']), 'analyst-3');
 check('an invalid base yields null', uniqueHandle('A', []), null);
 
-console.log('mention parsing (only registered handles count — @ is also the file trigger):');
+console.log('mention parsing (@@ calls a bot; a single @ stays the file trigger):');
 const KNOWN = ['bot1', 'bot_andrey', 'analyst'];
+const M = (text, known = KNOWN) => parseMentions(text, known);
+
 check('a single mention is found and stripped',
-  parseMentions('@analyst look at this', KNOWN),
-  { handles: ['analyst'], cleaned: 'look at this' });
+  M('@@analyst look at this'), { handles: ['analyst'], unknown: [], cleaned: 'look at this' });
 check('two mentions keep first-appearance order',
-  parseMentions('@bot1 @bot_andrey together do the analysis', KNOWN),
-  { handles: ['bot1', 'bot_andrey'], cleaned: 'together do the analysis' });
-check('a path-like mention does not resolve to a registered handle',
-  parseMentions('open @bot1.dev/readme please', KNOWN),
-  { handles: [], cleaned: 'open @bot1.dev/readme please' });
+  M('@@bot1 @@bot_andrey together do the analysis'),
+  { handles: ['bot1', 'bot_andrey'], unknown: [], cleaned: 'together do the analysis' });
+
+// The whole point of the second sigil: a single @ still means a file, untouched.
+check('a single @ is left for the file path',
+  M('@README.md check this'), { handles: [], unknown: [], cleaned: '@README.md check this' });
+check('a bot mention and a file mention coexist',
+  M('@@analyst read @notes.txt'), { handles: ['analyst'], unknown: [], cleaned: 'read @notes.txt' });
+check('a single @ on a registered handle is still a file',
+  M('@bot1 hello'), { handles: [], unknown: [], cleaned: '@bot1 hello' });
+
+// Because @@ makes the intent explicit, an unknown handle is reported rather than
+// silently read as text — the user clearly meant to address someone.
+check('an unknown handle is reported, not silently ignored',
+  M('@@nosuchbot hi'), { handles: [], unknown: ['nosuchbot'], cleaned: 'hi' });
+check('with an empty roster every mention is unknown',
+  M('@@bot1 hi', []), { handles: [], unknown: ['bot1'], cleaned: 'hi' });
+
+check('a path-like mention does not resolve',
+  M('open @@bot1.dev/readme please'), { handles: [], unknown: [], cleaned: 'open @@bot1.dev/readme please' });
 check('a mention in brackets is found',
-  parseMentions('ask (@bot1) about it', KNOWN),
-  { handles: ['bot1'], cleaned: 'ask () about it' });
-check('an unregistered @word is left for the file path',
-  parseMentions('@README.md check this', KNOWN),
-  { handles: [], cleaned: '@README.md check this' });
-check('a registered and an unregistered mention coexist',
-  parseMentions('@analyst read @notes.txt', KNOWN),
-  { handles: ['analyst'], cleaned: 'read @notes.txt' });
-// An address like name@bot1.dev must not read as a mention of @bot1: the regex
-// requires start-of-string or whitespace immediately before the '@'.
+  M('ask (@@bot1) about it'), { handles: ['bot1'], unknown: [], cleaned: 'ask () about it' });
 check('an address embedded in a word is not a mention',
-  parseMentions('write to someone' + '@' + 'bot1.dev now', KNOWN),
-  { handles: [], cleaned: 'write to someone' + '@' + 'bot1.dev now' });
+  M('write to someone' + '@@' + 'bot1.dev now'),
+  { handles: [], unknown: [], cleaned: 'write to someone' + '@@' + 'bot1.dev now' });
+
 // The most common shape a mention takes: at the end of a sentence.
 check('a trailing sentence dot does not break the mention',
-  parseMentions('please ask @bot1.', KNOWN),
-  { handles: ['bot1'], cleaned: 'please ask.' });
+  M('please ask @@bot1.'), { handles: ['bot1'], unknown: [], cleaned: 'please ask.' });
 check('a mid-sentence mention leaves the comma attached',
-  parseMentions('ask @bot1, then continue', KNOWN),
-  { handles: ['bot1'], cleaned: 'ask, then continue' });
-check('a mention quoted in inline code is not dispatched',
-  parseMentions('type `@bot1` to call it', KNOWN),
-  { handles: [], cleaned: 'type `@bot1` to call it' });
+  M('ask @@bot1, then continue'), { handles: ['bot1'], unknown: [], cleaned: 'ask, then continue' });
 check('punctuation left by a stripped leading mention is removed',
-  parseMentions('@bot1, please look', KNOWN),
-  { handles: ['bot1'], cleaned: 'please look' });
-check('a mention on its own line is found',
-  parseMentions('line one\n@bot1 line two', KNOWN),
-  { handles: ['bot1'], cleaned: 'line one\n line two' });
-// Found by audit: a comma is a natural separator when addressing two bots.
+  M('@@bot1, please look'), { handles: ['bot1'], unknown: [], cleaned: 'please look' });
 check('a comma separates two mentions',
-  parseMentions('@bot1,@analyst look', KNOWN),
-  { handles: ['bot1', 'analyst'], cleaned: 'look' });
-// Found by audit: RTL keyboards and clipboards insert bidi marks automatically.
-check('a bidi mark before the mention does not hide it',
-  parseMentions('\u202b@bot1\u202c hello', KNOWN).handles,
-  ['bot1']);
-// Found by audit: pasted code must survive verbatim — a handle in it is content.
+  M('@@bot1,@@analyst look'), { handles: ['bot1', 'analyst'], unknown: [], cleaned: 'look' });
+
+check('a mention quoted in inline code is not dispatched',
+  M('type `@@bot1` to call it'), { handles: [], unknown: [], cleaned: 'type `@@bot1` to call it' });
 check('a mention inside a fenced code block is left alone',
-  parseMentions('see this:\n```\n@bot1 do X\n```', KNOWN),
-  { handles: [], cleaned: 'see this:\n```\n@bot1 do X\n```' });
+  M('see this:\n```\n@@bot1 do X\n```'),
+  { handles: [], unknown: [], cleaned: 'see this:\n```\n@@bot1 do X\n```' });
 check('a mention outside the fence still resolves',
-  parseMentions('@bot1 run\n```\n@analyst inside\n```', KNOWN).handles,
-  ['bot1']);
+  M('@@bot1 run\n```\n@@analyst inside\n```').handles, ['bot1']);
 check('an unterminated fence still protects what follows',
-  parseMentions('```\n@bot1 pasted', KNOWN).handles,
-  []);
+  M('```\n@@bot1 pasted').handles, []);
+
+check('a bidi mark before the mention does not hide it',
+  M('\u202b@@bot1\u202c hello').handles, ['bot1']);
+check('a mention on its own line is found',
+  M('line one\n@@bot1 line two'), { handles: ['bot1'], unknown: [], cleaned: 'line one\n line two' });
 check('a repeated mention is deduplicated',
-  parseMentions('@bot1 and again @bot1', KNOWN),
-  { handles: ['bot1'], cleaned: 'and again' });
-check('case is normalised',
-  parseMentions('@Analyst hello', KNOWN),
-  { handles: ['analyst'], cleaned: 'hello' });
-check('a mention mid-sentence works',
-  parseMentions('please ask @bot1 about it', KNOWN),
-  { handles: ['bot1'], cleaned: 'please ask about it' });
+  M('@@bot1 and again @@bot1'), { handles: ['bot1'], unknown: [], cleaned: 'and again' });
+check('case is normalised', M('@@Analyst hello'), { handles: ['analyst'], unknown: [], cleaned: 'hello' });
 check('a message that is only a mention leaves empty text',
-  parseMentions('@bot1', KNOWN),
-  { handles: ['bot1'], cleaned: '' });
-check('no known handles means no mentions',
-  parseMentions('@bot1 hi', []),
-  { handles: [], cleaned: '@bot1 hi' });
-check('empty input is safe',
-  parseMentions('', KNOWN),
-  { handles: [], cleaned: '' });
+  M('@@bot1'), { handles: ['bot1'], unknown: [], cleaned: '' });
+check('empty input is safe', M(''), { handles: [], unknown: [], cleaned: '' });
 
 console.log('roster:');
 const BOTS = [

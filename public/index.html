@@ -1039,6 +1039,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .at-popup-hdr { padding: 7px 12px; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .at-popup-hdr input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-size: 12px; }
 .at-popup-list { overflow-y: auto; flex: 1; }
+.at-group { padding: 6px 12px 3px; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); opacity: .7; }
 .at-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; font-size: 12px; transition: background .1s; }
 .at-item:hover, .at-item.active { background: var(--s3); }
 .at-item .at-info { display: flex; flex-direction: column; overflow: hidden; flex: 1; min-width: 0; }
@@ -1437,6 +1438,41 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .cmd-modal .modal-hdr { padding: 18px 20px 14px; }
 .cmd-modal .modal-hdr h2 { display: flex; align-items: center; gap: 10px; font-size: 17px; }
 .cmd-modal .modal-body { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px 20px; background: linear-gradient(180deg, rgba(124,106,239,.04) 0%, rgba(124,106,239,0) 100%); }
+
+/* Bot form fields — the app's own form language (surface --s2, --border, 6-9px
+   radius, accent on focus), scoped so it cannot leak into other modals. Without
+   this the select and textarea fall back to browser chrome, which reads as
+   foreign next to everything else in the portal. */
+.bot-modal .modal-body { display: flex; flex-direction: column; gap: 14px; }
+.bot-modal .cmd-field { gap: 6px; }
+.bot-modal input,
+.bot-modal select,
+.bot-modal textarea {
+  width: 100%;
+  background: var(--s2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .12s, box-shadow .12s;
+}
+.bot-modal textarea { font-family: var(--font-mono); font-size: 12px; line-height: 1.6; resize: vertical; min-height: 120px; }
+.bot-modal select { cursor: pointer; appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px; }
+.bot-modal input:focus,
+.bot-modal select:focus,
+.bot-modal textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--abg); }
+.bot-modal input::placeholder,
+.bot-modal textarea::placeholder { color: var(--muted); opacity: .65; }
+.bot-modal .cmd-name-hint { font-size: 11px; color: var(--muted); line-height: 1.45; }
+.bot-modal .cmd-name-hint b { color: var(--accent2); font-family: var(--font-mono); }
 .cmd-field { display: flex; flex-direction: column; gap: 8px; }
 .cmd-field label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .cmd-modal input,
@@ -2506,6 +2542,20 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
 
     <div class="sec">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('bots')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('bots')}">
+        <span data-i18n="sec.bots">Боти</span>
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
+          <button class="sec-add-btn" onclick="event.stopPropagation();openBotForm()" title="Створити бота" data-i18n-title="bot.add.new">＋</button>
+          <span class="badge" id="botsCount">0</span>
+        </div>
+      </div>
+      <div class="sec-body" id="botsBody">
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="bots.hint">Учасники цього проєкту. Згадайте бота через @ у повідомленні.</div>
+        <div class="sec-list"><div id="botsList"></div></div>
+      </div>
+    </div>
+
+    <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('agents')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('agents')}">
         <span data-i18n="sec.agents">Агенти</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
@@ -3005,7 +3055,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
         </svg>
       </button>
-      <textarea id="input" rows="1" dir="auto" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @ — файли · # — SSH · 📎 — будь-який файл" autofocus aria-label="Message input" aria-multiline="true"></textarea>
+      <textarea id="input" rows="1" dir="auto" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @@ — бот · @ — файл · # — SSH · 📎 — будь-який файл" autofocus aria-label="Message input" aria-multiline="true"></textarea>
       <span id="charCounter" style="display:none;" aria-live="polite" aria-label="Character count"></span>
       <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Завдань у черзі"></span>
       <button class="sb stop-btn hidden" id="stopBtn" onclick="confirmStop()" data-i18n-title="stop.agent" title="Stop agent">
@@ -3444,6 +3494,51 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 </div>
 
 <!-- Agent Add/Edit Modal -->
+<div class="modal-overlay hidden" id="botModal">
+  <div class="modal bot-modal" style="max-width:560px">
+    <div class="modal-header">
+      <span id="botModalTitle" data-i18n="bot.modal.add.title">Новий бот</span>
+      <button class="modal-close" onclick="cancelBotForm()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="botId">
+      <div class="cmd-field">
+        <label for="botLabel" data-i18n="bot.modal.label.label">Ім'я</label>
+        <input id="botLabel" placeholder="Крипто-аналітик" autocomplete="off" oninput="_botHandlePreview()">
+        <div class="cmd-name-hint"><span data-i18n="bot.modal.handle.hint">Звертання у чаті:</span> <b id="botHandlePreview">@—</b></div>
+      </div>
+      <div class="cmd-field">
+        <label for="botAvatar" data-i18n="bot.modal.avatar.label">Емодзі</label>
+        <input id="botAvatar" placeholder="📈" autocomplete="off" style="max-width:110px">
+      </div>
+      <div class="cmd-field">
+        <label for="botDesc" data-i18n="bot.modal.desc.label">Призначення</label>
+        <input id="botDesc" placeholder="аналіз ринку криптовалют" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="bot.modal.desc.hint">Одним рядком. Це бачать інші боти, щоб знати, кому передати роботу.</div>
+      </div>
+      <div class="cmd-field">
+        <label for="botModel" data-i18n="bot.modal.model.label">Модель</label>
+        <select id="botModel">
+          <option value="" data-i18n="bot.model.inherit">Як у чаті</option>
+          <option value="haiku">haiku</option>
+          <option value="sonnet">sonnet</option>
+          <option value="opus">opus</option>
+          <option value="fable">fable</option>
+        </select>
+      </div>
+      <div class="cmd-field">
+        <label for="botPrompt" data-i18n="bot.modal.prompt.label">Системний промпт</label>
+        <textarea id="botPrompt" rows="7" placeholder="Ти аналітик крипторинку..."></textarea>
+        <div class="cmd-name-hint" data-i18n="bot.modal.prompt.hint">Хто цей бот і як він працює. До 8000 символів.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="bg" onclick="cancelBotForm()" data-i18n="agent.modal.cancel">Скасувати</button>
+      <button class="bp" id="botSaveBtn" onclick="saveBot()" data-i18n="bot.add.btn">Створити</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="agentModal" aria-hidden="true" onclick="if(event.target===this)cancelAgentForm()">
   <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="agentModalTitle" tabindex="-1">
     <div class="modal-hdr">
@@ -3859,6 +3954,8 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    'at.no_bots':'Ботів не знайдено',
+    'sec.bots':'Боти','bots.hint':'Учасники цього проєкту. Згадайте бота через @ у повідомленні.','bot.add.new':'Створити бота','bot.add.btn':'Створити','bot.use.title':'Вставити згадку','bot.modal.add.title':'Новий бот','bot.modal.edit.title':'Редагувати бота','bot.modal.label.label':'Ім\'я','bot.modal.handle.hint':'Звертання у чаті:','bot.modal.avatar.label':'Емодзі','bot.modal.desc.label':'Призначення','bot.modal.desc.hint':'Одним рядком. Це бачать інші боти, щоб знати, кому передати роботу.','bot.modal.model.label':'Модель','bot.model.inherit':'Як у чаті','bot.modal.prompt.label':'Системний промпт','bot.modal.prompt.hint':'Хто цей бот і як він працює. До 8000 символів.','bot.err.label':'Вкажіть імʼя бота','bot.del.confirm':'Видалити бота','bot.del.note':'Його минулі повідомлення лишаться, а звертання більше ніколи не дістанеться іншому боту.','bot.deleted':'видалений бот','toast.bot_added':'✓ Бота створено','toast.bot_updated':'✓ Бота оновлено','toast.bot_deleted':'✓ Бота видалено','at.group.bots':'Боти','at.group.files':'Файли',
     'term.open.title':'Відкрити термінал','term.kill':'Завершити','term.killConfirm':'Завершити цю термінальну сесію? Розмову можна буде відновити пізніше.','term.unavailable':'Термінальні сесії недоступні','term.state.attached':'підключено','term.state.started':'запущено','term.state.restored':'відновлено','term.state.restoredLast':'відновлено останню розмову агента','term.state.restoreFailed':'відновлювати не було чого — почато заново','term.state.exited':'агент завершився','term.state.error':'помилка',
     'agent.modal.newIdCommand.label':'Команда створення розмови','agent.modal.newIdCommand.hint':'Альтернатива прапорцю: команда, що створює розмову і друкує її id. Виконується один раз при створенні сесії.',
     'sec.termAgents':'Термінальні агенти','termAgent.add.new':'Додати термінального агента','termAgents.hint':'CLI-агенти, яких можна відкрити живим терміналом у сесії.','termAgent.modal.add.title':'Новий термінальний агент','agent.modal.interactive.label':'Інтерактивна команда','agent.modal.interactive.hint':'Запускає TUI агента для термінальної сесії. Порожньо — агент лише для делегування.','agent.modal.resume.label':'Команда відновлення','agent.modal.resume.hint':'{sid} — ідентифікатор розмови. Використовується для відновлення сесії після перезавантаження.','agent.modal.resumeLast.label':'Відновити останню (запасний варіант)','agent.modal.resumeLast.hint':'Використовується, коли ідентифікатор невідомий. Може відновити іншу розмову.','agent.modal.newIdFlag.label':'Прапорець id нової розмови','agent.modal.newIdFlag.hint':'Якщо CLI дозволяє задати id НОВОЇ розмови, відновлення стає точним. Порожньо — не підтримується.',
@@ -3877,7 +3974,7 @@ const TRANSLATIONS = {
     'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки',
     'welcome.title':'Нова сесія','welcome.ready':'Готовий до роботи',
     'welcome.desc':'Виберіть MCP та Навички зліва, файли — справа.',
-    'input.ph':'Напишіть завдання... Ctrl+V — скріншот · @ — файли · # — SSH · 📎 — будь-який файл',
+    'input.ph':'Напишіть завдання... Ctrl+V — скріншот · @@ — бот · @ — файл · # — SSH · 📎 — будь-який файл',
     'files.title':'Робоча директорія','files.refresh':'Оновити','queue.title':'Завдань у черзі',
     'cfg.title':'Налаштування','cfg.saved':'✓ Збережено','cfg.close':'Закрити','cfg.save':'Зберегти',
     'dir.title':'Новий проект','toast.loading':'Завантаження...',
@@ -4096,6 +4193,8 @@ const TRANSLATIONS = {
     'dlg.last_update':'оновлено {time} тому',
   },
   en: {
+    'at.no_bots':'No bots found',
+    'sec.bots':'Bots','bots.hint':'Participants in this project. Mention one with @ in a message.','bot.add.new':'Create bot','bot.add.btn':'Create','bot.use.title':'Insert mention','bot.modal.add.title':'New bot','bot.modal.edit.title':'Edit bot','bot.modal.label.label':'Name','bot.modal.handle.hint':'Addressed in chat as:','bot.modal.avatar.label':'Emoji','bot.modal.desc.label':'Purpose','bot.modal.desc.hint':'One line. Other bots see this, so they know who to hand work to.','bot.modal.model.label':'Model','bot.model.inherit':'Same as chat','bot.modal.prompt.label':'System prompt','bot.modal.prompt.hint':'Who this bot is and how it works. Up to 8000 characters.','bot.err.label':'Give the bot a name','bot.del.confirm':'Delete bot','bot.del.note':'Its past messages stay, and its handle can never be taken by another bot.','bot.deleted':'deleted bot','toast.bot_added':'✓ Bot created','toast.bot_updated':'✓ Bot updated','toast.bot_deleted':'✓ Bot deleted','at.group.bots':'Bots','at.group.files':'Files',
     'term.open.title':'Open terminal','term.kill':'Kill','term.killConfirm':'Kill this terminal session? The conversation can be resumed later.','term.unavailable':'Terminal sessions are unavailable','term.state.attached':'attached','term.state.started':'started','term.state.restored':'restored','term.state.restoredLast':"restored the agent's last conversation",'term.state.restoreFailed':'nothing to resume — started fresh','term.state.exited':'agent exited','term.state.error':'error',
     'agent.modal.newIdCommand.label':'New-conversation command','agent.modal.newIdCommand.hint':'Alternative to the flag: a command that creates a conversation and prints its id. Run once when the session is created.',
     'sec.termAgents':'Terminal agents','termAgent.add.new':'Add terminal agent','termAgents.hint':'CLI agents you can open as a live terminal inside a session.','termAgent.modal.add.title':'New terminal agent','agent.modal.interactive.label':'Interactive command','agent.modal.interactive.hint':"Starts the agent's TUI for a terminal session. Leave empty for a delegation-only agent.",'agent.modal.resume.label':'Resume command','agent.modal.resume.hint':'{sid} — the conversation id. Used to restore the session after a reboot.','agent.modal.resumeLast.label':'Resume last (fallback)','agent.modal.resumeLast.hint':'Used when no conversation id is known. May restore a different conversation.','agent.modal.newIdFlag.label':'New-conversation id flag','agent.modal.newIdFlag.hint':'If the CLI can be told the id of a NEW conversation, restore becomes exact. Leave empty if unsupported.',
@@ -4114,7 +4213,7 @@ const TRANSLATIONS = {
     'tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns',
     'welcome.title':'New session','welcome.ready':'Ready to work',
     'welcome.desc':'Choose MCP and Skills on the left, files on the right.',
-    'input.ph':'Write a task... Ctrl+V — screenshot · @ — files · # — SSH · 📎 — any file',
+    'input.ph':'Write a task... Ctrl+V — screenshot · @@ — bot · @ — file · # — SSH · 📎 — any file',
     'files.title':'Workspace','files.refresh':'Refresh','queue.title':'Tasks waiting in queue',
     'cfg.title':'Configuration','cfg.saved':'✓ Saved','cfg.close':'Close','cfg.save':'Save',
     'dir.title':'New project','toast.loading':'Loading...',
@@ -4333,6 +4432,8 @@ const TRANSLATIONS = {
     'dlg.last_update':'updated {time} ago',
   },
   ru: {
+    'at.no_bots':'Боты не найдены',
+    'sec.bots':'Боты','bots.hint':'Участники этого проекта. Упомяните бота через @ в сообщении.','bot.add.new':'Создать бота','bot.add.btn':'Создать','bot.use.title':'Вставить упоминание','bot.modal.add.title':'Новый бот','bot.modal.edit.title':'Редактировать бота','bot.modal.label.label':'Имя','bot.modal.handle.hint':'Обращение в чате:','bot.modal.avatar.label':'Эмодзи','bot.modal.desc.label':'Назначение','bot.modal.desc.hint':'Одной строкой. Это видят другие боты, чтобы знать, кому передать работу.','bot.modal.model.label':'Модель','bot.model.inherit':'Как в чате','bot.modal.prompt.label':'Системный промпт','bot.modal.prompt.hint':'Кто этот бот и как он работает. До 8000 символов.','bot.err.label':'Укажите имя бота','bot.del.confirm':'Удалить бота','bot.del.note':'Его прошлые сообщения останутся, а обращение больше никогда не достанется другому боту.','bot.deleted':'удалённый бот','toast.bot_added':'✓ Бот создан','toast.bot_updated':'✓ Бот обновлён','toast.bot_deleted':'✓ Бот удалён','at.group.bots':'Боты','at.group.files':'Файлы',
     'term.open.title':'Открыть терминал','term.kill':'Завершить','term.killConfirm':'Завершить эту терминальную сессию? Разговор можно будет восстановить позже.','term.unavailable':'Терминальные сессии недоступны','term.state.attached':'подключено','term.state.started':'запущено','term.state.restored':'восстановлено','term.state.restoredLast':'восстановлен последний разговор агента','term.state.restoreFailed':'восстанавливать было нечего — начато заново','term.state.exited':'агент завершился','term.state.error':'ошибка',
     'agent.modal.newIdCommand.label':'Команда создания разговора','agent.modal.newIdCommand.hint':'Альтернатива флагу: команда, создающая разговор и печатающая его id. Выполняется один раз при создании сессии.',
     'sec.termAgents':'Терминальные агенты','termAgent.add.new':'Добавить терминального агента','termAgents.hint':'CLI-агенты, которых можно открыть живым терминалом в сессии.','termAgent.modal.add.title':'Новый терминальный агент','agent.modal.interactive.label':'Интерактивная команда','agent.modal.interactive.hint':'Запускает TUI агента для терминальной сессии. Пусто — агент только для делегирования.','agent.modal.resume.label':'Команда восстановления','agent.modal.resume.hint':'{sid} — идентификатор разговора. Используется для восстановления сессии после перезагрузки.','agent.modal.resumeLast.label':'Восстановить последний (запасной вариант)','agent.modal.resumeLast.hint':'Используется, когда идентификатор неизвестен. Может восстановить другой разговор.','agent.modal.newIdFlag.label':'Флаг id нового разговора','agent.modal.newIdFlag.hint':'Если CLI позволяет задать id НОВОГО разговора, восстановление становится точным. Пусто — не поддерживается.',
@@ -4351,7 +4452,7 @@ const TRANSLATIONS = {
     'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги',
     'welcome.title':'Новая сессия','welcome.ready':'Готов к работе',
     'welcome.desc':'Выберите MCP и Навыки слева, файлы — справа.',
-    'input.ph':'Напишите задание... Ctrl+V — скриншот · @ — файлы · # — SSH · 📎 — любой файл',
+    'input.ph':'Напишите задание... Ctrl+V — скриншот · @@ — бот · @ — файл · # — SSH · 📎 — любой файл',
     'files.title':'Рабочая директория','files.refresh':'Обновить','queue.title':'Задач в очереди',
     'cfg.title':'Настройки','cfg.saved':'✓ Сохранено','cfg.close':'Закрыть','cfg.save':'Сохранить',
     'dir.title':'Новый проект','toast.loading':'Загрузка...',
@@ -4570,6 +4671,8 @@ const TRANSLATIONS = {
     'dlg.last_update':'обновлено {time} назад',
   },
   fr: {
+    "at.no_bots":"Aucun bot trouvé",
+    "sec.bots":"Bots","bots.hint":"Participants de ce projet. Mentionnez un bot avec @ dans un message.","bot.add.new":"Créer un bot","bot.add.btn":"Créer","bot.use.title":"Insérer la mention","bot.modal.add.title":"Nouveau bot","bot.modal.edit.title":"Modifier le bot","bot.modal.label.label":"Nom","bot.modal.handle.hint":"Adressé dans le chat comme :","bot.modal.avatar.label":"Émoji","bot.modal.desc.label":"Rôle","bot.modal.desc.hint":"Une ligne. Les autres bots la voient pour savoir à qui passer le travail.","bot.modal.model.label":"Modèle","bot.model.inherit":"Comme le chat","bot.modal.prompt.label":"Invite système","bot.modal.prompt.hint":"Qui est ce bot et comment il travaille. Jusqu'à 8000 caractères.","bot.err.label":"Donnez un nom au bot","bot.del.confirm":"Supprimer le bot","bot.del.note":"Ses anciens messages restent, et son identifiant ne sera jamais repris par un autre bot.","bot.deleted":"bot supprimé","toast.bot_added":"✓ Bot créé","toast.bot_updated":"✓ Bot mis à jour","toast.bot_deleted":"✓ Bot supprimé","at.group.bots":"Bots","at.group.files":"Fichiers",
     "term.open.title":"Ouvrir le terminal","term.kill":"Terminer","term.killConfirm":"Terminer cette session terminal ? La conversation pourra être reprise plus tard.","term.unavailable":"Sessions terminal indisponibles","term.state.attached":"connecté","term.state.started":"démarré","term.state.restored":"restauré","term.state.restoredLast":"dernière conversation de l'agent restaurée","term.state.restoreFailed":"rien à reprendre — nouveau départ","term.state.exited":"agent terminé","term.state.error":"erreur",
     "agent.modal.newIdCommand.label":"Commande de nouvelle conversation","agent.modal.newIdCommand.hint":"Alternative à l'indicateur : une commande qui crée une conversation et affiche son id. Exécutée une fois à la création de la session.",
     "sec.termAgents":"Agents terminal","termAgent.add.new":"Ajouter un agent terminal","termAgents.hint":"Agents CLI que vous pouvez ouvrir comme terminal vivant dans une session.","termAgent.modal.add.title":"Nouvel agent terminal","agent.modal.interactive.label":"Commande interactive","agent.modal.interactive.hint":"Lance le TUI de l'agent pour une session terminal. Vide — agent de délégation uniquement.","agent.modal.resume.label":"Commande de reprise","agent.modal.resume.hint":"{sid} — identifiant de la conversation. Sert à restaurer la session après un redémarrage.","agent.modal.resumeLast.label":"Reprendre la dernière (repli)","agent.modal.resumeLast.hint":"Utilisée quand aucun identifiant n'est connu. Peut restaurer une autre conversation.","agent.modal.newIdFlag.label":"Indicateur d'id de nouvelle conversation","agent.modal.newIdFlag.hint":"Si la CLI accepte l'id d'une NOUVELLE conversation, la restauration devient exacte. Vide si non pris en charge.",
@@ -4708,6 +4811,8 @@ const TRANSLATIONS = {
     "dlg.toast.no_changes":"Aucun changement","dlg.last_update":"mis à jour il y a {time}",
   },
   he: {
+    "at.no_bots":"לא נמצאו בוטים",
+    "sec.bots":"בוטים","bots.hint":"משתתפים בפרויקט הזה. אזכרו בוט עם @ בהודעה.","bot.add.new":"צור בוט","bot.add.btn":"צור","bot.use.title":"הוסף אזכור","bot.modal.add.title":"בוט חדש","bot.modal.edit.title":"עריכת בוט","bot.modal.label.label":"שם","bot.modal.handle.hint":"פנייה בצ׳אט:","bot.modal.avatar.label":"אמוג׳י","bot.modal.desc.label":"ייעוד","bot.modal.desc.hint":"שורה אחת. בוטים אחרים רואים אותה כדי לדעת למי להעביר עבודה.","bot.modal.model.label":"מודל","bot.model.inherit":"כמו בצ׳אט","bot.modal.prompt.label":"הנחיית מערכת","bot.modal.prompt.hint":"מי הבוט הזה ואיך הוא עובד. עד 8000 תווים.","bot.err.label":"תנו שם לבוט","bot.del.confirm":"למחוק בוט","bot.del.note":"ההודעות הקודמות שלו נשארות, והמזהה שלו לעולם לא יעבור לבוט אחר.","bot.deleted":"בוט שנמחק","toast.bot_added":"✓ הבוט נוצר","toast.bot_updated":"✓ הבוט עודכן","toast.bot_deleted":"✓ הבוט נמחק","at.group.bots":"בוטים","at.group.files":"קבצים",
     "term.open.title":"פתח טרמינל","term.kill":"סיים","term.killConfirm":"לסיים את שיחת הטרמינל הזו? אפשר יהיה לשחזר אותה בהמשך.","term.unavailable":"שיחות טרמינל אינן זמינות","term.state.attached":"מחובר","term.state.started":"הופעל","term.state.restored":"שוחזר","term.state.restoredLast":"שוחזרה השיחה האחרונה של הסוכן","term.state.restoreFailed":"לא היה מה לשחזר — התחלה מחדש","term.state.exited":"הסוכן הסתיים","term.state.error":"שגיאה",
     "agent.modal.newIdCommand.label":"פקודת יצירת שיחה","agent.modal.newIdCommand.hint":"חלופה לדגל: פקודה שיוצרת שיחה ומדפיסה את המזהה שלה. מורצת פעם אחת ביצירת השיחה.",
     "sec.termAgents":"סוכני טרמינל","termAgent.add.new":"הוסף סוכן טרמינל","termAgents.hint":"סוכני CLI שניתן לפתוח כטרמינל חי בתוך שיחה.","termAgent.modal.add.title":"סוכן טרמינל חדש","agent.modal.interactive.label":"פקודה אינטראקטיבית","agent.modal.interactive.hint":"מפעילה את ה-TUI של הסוכן עבור שיחת טרמינל. ריק — סוכן להאצלה בלבד.","agent.modal.resume.label":"פקודת שחזור","agent.modal.resume.hint":"{sid} — מזהה השיחה. משמש לשחזור השיחה לאחר הפעלה מחדש.","agent.modal.resumeLast.label":"שחזר אחרונה (גיבוי)","agent.modal.resumeLast.hint":"משמש כאשר המזהה אינו ידוע. עשוי לשחזר שיחה אחרת.","agent.modal.newIdFlag.label":"דגל מזהה לשיחה חדשה","agent.modal.newIdFlag.hint":"אם ה-CLI מאפשר לקבוע מזהה לשיחה חדשה, השחזור נעשה מדויק. ריק אם אינו נתמך.",
@@ -6644,15 +6749,180 @@ function doStop() {
 }
 function stopAgent() { confirmStop(); }
 
+
+// ─── Bots ────────────────────────────────────────────────────────────────────
+// A bot is a named chat participant the user @mentions. Its handle is its
+// identity: global and never reused, so a message attributed to @analyst always
+// means the same bot. Which bots a PROJECT offers is separate — see
+// docs/superpowers/specs/2026-08-18-bots-design.md
+let _bots = [], _botsById = {}, _editingBotId = null;
+
+async function loadBots() {
+  try {
+    const url = curProjectId ? `/api/bots?project=${encodeURIComponent(curProjectId)}` : '/api/bots';
+    const r = await fetch(url);
+    _bots = await r.json();
+    if (!Array.isArray(_bots)) _bots = [];
+  } catch { _bots = []; }
+  _botsById = {};
+  for (const b of _bots) _botsById[b.id] = b;
+  renderBots();
+}
+
+function renderBots() {
+  const el = $i('botsList'); if (!el) return;
+  el.innerHTML = '';
+  const cnt = $i('botsCount'); if (cnt) cnt.textContent = _bots.length;
+  for (const b of _bots) {
+    const div = document.createElement('div');
+    div.className = 'ci';
+    div.innerHTML = `
+      <div class="inf" style="flex:1;min-width:0">
+        <div class="nm">${escH(b.avatar || '🤖')} ${escH(b.label)}</div>
+        <div class="ds" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px">@${escH(b.id)}${b.description ? ' · ' + escH(b.description) : ''}</div>
+      </div>
+      <button class="cfg bot-use-btn" title="${t('bot.use.title')}" style="font-size:12px">@</button>
+      <button class="cfg bot-edit-btn" title="${t('agent.edit.title')}">✏️</button>
+      <button class="rm bot-del-btn" title="${t('agent.del.title')}">✕</button>`;
+    div.querySelector('.bot-use-btn').addEventListener('click', e => { e.stopPropagation(); insertBotMention(b.id); });
+    div.querySelector('.bot-edit-btn').addEventListener('click', e => { e.stopPropagation(); openBotForm(b.id); });
+    div.querySelector('.bot-del-btn').addEventListener('click', e => { e.stopPropagation(); deleteBot(b.id); });
+    el.appendChild(div);
+  }
+}
+
+// The shortest path from "I made a bot" to "I used it".
+function insertBotMention(handle) {
+  const val = inEl.value;
+  const sep = val && !val.endsWith(' ') && !val.endsWith('\n') ? ' ' : '';
+  inEl.value = val + sep + '@@' + handle + ' ';
+  inEl.focus();
+  inEl.selectionStart = inEl.selectionEnd = inEl.value.length;
+  inEl.dispatchEvent(new Event('input'));
+}
+
+function _botHandlePreview() {
+  const el = $i('botHandlePreview'); if (!el) return;
+  const label = $i('botLabel').value.trim();
+  el.textContent = '@' + (_editingBotId || _slugifyHandle(label) || '—');
+}
+
+// Mirrors handleFromLabel in bots.js closely enough for a live preview; the server
+// is authoritative and may add a -2 suffix on collision.
+function _slugifyHandle(label) {
+  const cyr = {'а':'a','б':'b','в':'v','г':'h','ґ':'g','д':'d','е':'e','є':'ye','ж':'zh','з':'z','и':'y','і':'i','ї':'yi','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ь':'','ю':'yu','я':'ya','ы':'y','э':'e','ё':'yo','ъ':''};
+  const latin = String(label || '').toLowerCase().replace(/[а-яёіїєґ]/g, c => (cyr[c] !== undefined ? cyr[c] : ''));
+  return latin.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32).replace(/-+$/, '');
+}
+
+function openBotForm(id) {
+  _editingBotId = id || null;
+  const bot = id ? _botsById[id] : null;
+  if (id && !bot) return;
+  $i('botId').value = id || '';
+  $i('botLabel').value = bot?.label || '';
+  $i('botAvatar').value = bot?.avatar || '';
+  $i('botDesc').value = bot?.description || '';
+  $i('botModel').value = bot?.model || '';
+  $i('botPrompt').value = bot?.system_prompt || '';
+  const btn = $i('botSaveBtn'), title = $i('botModalTitle');
+  const btnKey = id ? 'agent.save.btn' : 'bot.add.btn';
+  const titleKey = id ? 'bot.modal.edit.title' : 'bot.modal.add.title';
+  btn.textContent = t(btnKey); btn.setAttribute('data-i18n', btnKey);
+  title.textContent = t(titleKey); title.setAttribute('data-i18n', titleKey);
+  _botHandlePreview();
+  openModalOverlay('botModal', { initialFocus: '#botLabel', labelId: 'botModalTitle', onEscape: cancelBotForm });
+}
+
+function cancelBotForm() { closeModalOverlay('botModal'); _editingBotId = null; }
+
+async function saveBot() {
+  const label = $i('botLabel').value.trim();
+  if (!label) { toast(t('bot.err.label'), true); return; }
+  const payload = {
+    label,
+    avatar: $i('botAvatar').value.trim(),
+    description: $i('botDesc').value.trim(),
+    model: $i('botModel').value || null,
+    systemPrompt: $i('botPrompt').value,
+  };
+  // A bot created while a project is open joins it at once, so creating is never
+  // followed by a separate "now add it here" step.
+  if (!_editingBotId && curProjectId) payload.projectId = curProjectId;
+  const url = _editingBotId ? `/api/bots/${encodeURIComponent(_editingBotId)}` : '/api/bots';
+  try {
+    const r = await fetch(url, {
+      method: _editingBotId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (d.error) { toast(d.error, true); return; }
+    const created = !_editingBotId;
+    cancelBotForm();
+    await loadBots();
+    toast(created ? t('toast.bot_added') : t('toast.bot_updated'));
+    if (created && d.id) insertBotMention(d.id);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function deleteBot(id) {
+  const bot = _botsById[id];
+  if (!confirm(`${t('bot.del.confirm')} @${id}?\n${t('bot.del.note')}`)) return;
+  try {
+    const r = await fetch(`/api/bots/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.error) { toast(d.error, true); return; }
+    await loadBots();
+    toast(t('toast.bot_deleted'));
+  } catch (e) { toast(e.message, true); }
+  void bot;
+}
+
+// A stable accent per bot so the eye can tell two speakers apart without reading.
+function _botAccent(handle) {
+  const palette = ['#7c6cf6', '#3fb950', '#e3b341', '#db6d28', '#58a6ff', '#db61a2'];
+  let h = 0;
+  for (let i = 0; i < handle.length; i++) h = (h * 31 + handle.charCodeAt(i)) >>> 0;
+  return palette[h % palette.length];
+}
+
+// Two speakers, two treatments. A registered bot gets a real header — avatar,
+// name, handle, and a stable accent stripe — because the reader has to know who is
+// talking and be able to tell two bots apart at a glance. An ephemeral multi-agent
+// role (agent-1, agent-2) keeps the old tiny badge: it exists for one turn and has
+// no identity worth a header.
 function addAgentBadge(el, agent) {
-  if (el.querySelector('.ab')) return;
-  const b = document.createElement('span');
-  b.className = 'ab';
-  b.style.cssText = 'position:absolute;top:-9px;left:10px;font-size:8px';
-  b.textContent = agent;
-  el.style.position = 'relative';
-  el.style.marginTop = '10px';
-  el.appendChild(b);
+  if (el.querySelector('.ab') || el.querySelector('.bot-hd')) return;
+  const bot = _botsById[agent];
+  if (!bot) {
+    const b = document.createElement('span');
+    b.className = 'ab';
+    b.style.cssText = 'position:absolute;top:-9px;left:10px;font-size:8px';
+    b.textContent = agent;
+    el.style.position = 'relative';
+    el.style.marginTop = '10px';
+    el.appendChild(b);
+    return;
+  }
+  const accent = _botAccent(agent);
+  const hd = document.createElement('div');
+  hd.className = 'bot-hd';
+  hd.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:4px;opacity:.9';
+  hd.innerHTML = `<span style="font-size:14px">${escH(bot.avatar || '🤖')}</span>`
+    + `<b style="color:${accent}">${escH(bot.label)}</b>`
+    + `<span style="opacity:.55">@${escH(agent)}</span>`
+    + (bot.model ? `<span style="opacity:.4">· ${escH(bot.model)}</span>` : '');
+  el.style.borderLeft = `3px solid ${accent}`;
+  el.style.paddingLeft = '9px';
+  el.insertBefore(hd, el.firstChild);
+}
+
+// A bot that was deleted must not borrow a later bot's identity — its handle is
+// reserved forever, so old messages still name it, plainly marked as gone.
+function botDisplayName(handle) {
+  const b = _botsById[handle];
+  return b ? `${b.avatar || '🤖'} ${b.label}` : `${t('bot.deleted')} · @${handle}`;
 }
 
 function addMsg(role, opts = {}) {
@@ -8681,8 +8951,13 @@ function _closeAtPopup() {
 }
 
 async function _fetchAtFiles(query) {
+  _atQuery = query || '';
+  if (_atKind === 'bot') { _atFiles = []; _renderAtList(); return; }
+  // Bots are already in memory, so they render even when there is no project
+  // directory to search for files in.
   if (!curWorkdir) {
-    $i('atList').innerHTML = `<div class="at-empty">${t('at.no_project')}</div>`;
+    _atFiles = [];
+    _renderAtList();
     return;
   }
   $i('atList').innerHTML = `<div class="at-loading">${t('at.searching')}</div>`;
@@ -8694,21 +8969,82 @@ async function _fetchAtFiles(query) {
   } catch { $i('atList').innerHTML = `<div class="at-empty">${t('at.search_err')}</div>`; }
 }
 
+// '@' means two things now: a bot and a file. One palette, two groups, bots first
+// because the list is short and the intent is more specific — never a second
+// trigger character, and never a mode that swallows following messages.
+let _atItems = [], _atQuery = '', _atKind = 'file';
+
+function _atMatchingBots(query) {
+  const q = String(query || '').toLowerCase();
+  return _bots.filter(b => !q || b.id.includes(q) || (b.label || '').toLowerCase().includes(q));
+}
+
 function _renderAtList() {
   const list = $i('atList');
-  if (!_atFiles.length) { list.innerHTML = `<div class="at-empty">${t('at.no_files')}</div>`; return; }
-  list.innerHTML = _atFiles.slice(0, 60).map((f, i) => {
-    const slashIdx = f.relPath.lastIndexOf('/');
-    const dir = slashIdx > 0 ? f.relPath.slice(0, slashIdx) : '.';
-    return `
-    <div class="at-item${i === _atActiveIdx ? ' active' : ''}" onclick="selectAtFile(${i})">
-      <span class="at-icon">📄</span>
-      <div class="at-info">
-        <span class="at-name">${escH(f.name)}</span>
-        <span class="at-dir">${escH(dir)}</span>
-      </div>
-    </div>`;
-  }).join('');
+  const bots = _atKind === 'bot' ? _atMatchingBots(_atQuery) : [];
+  const files = _atKind === 'bot' ? [] : _atFiles.slice(0, 60);
+  _atItems = [
+    ...bots.map(b => ({ kind: 'bot', bot: b })),
+    ...files.map(f => ({ kind: 'file', file: f })),
+  ];
+  if (!_atItems.length) {
+    list.innerHTML = `<div class="at-empty">${_atKind === 'bot' ? escH(t('at.no_bots')) : t('at.no_files')}</div>`;
+    return;
+  }
+
+  let html = '';
+  let i = 0;
+  if (bots.length) {
+    html += `<div class="at-group">${escH(t('at.group.bots'))}</div>`;
+    for (const b of bots) {
+      html += `
+      <div class="at-item${i === _atActiveIdx ? ' active' : ''}" onclick="selectAtItem(${i})">
+        <span class="at-icon">${escH(b.avatar || '🤖')}</span>
+        <div class="at-info">
+          <span class="at-name">@${escH(b.id)}</span>
+          <span class="at-dir">${escH(b.label)}${b.description ? ' · ' + escH(b.description) : ''}</span>
+        </div>
+      </div>`;
+      i++;
+    }
+  }
+  if (files.length) {
+    html += `<div class="at-group">${escH(t('at.group.files'))}</div>`;
+    for (const f of files) {
+      const slashIdx = f.relPath.lastIndexOf('/');
+      const dir = slashIdx > 0 ? f.relPath.slice(0, slashIdx) : '.';
+      html += `
+      <div class="at-item${i === _atActiveIdx ? ' active' : ''}" onclick="selectAtItem(${i})">
+        <span class="at-icon">📄</span>
+        <div class="at-info">
+          <span class="at-name">${escH(f.name)}</span>
+          <span class="at-dir">${escH(dir)}</span>
+        </div>
+      </div>`;
+      i++;
+    }
+  }
+  list.innerHTML = html;
+}
+
+// One entry point for both kinds so the keyboard and the mouse take the same path.
+function selectAtItem(idx) {
+  const item = _atItems[idx];
+  if (!item) return;
+  if (item.kind === 'file') { selectAtFile(_atFiles.indexOf(item.file)); return; }
+  // A bot replaces the @query with the handle as plain text — the server parses it,
+  // so what the user sees typed is exactly what is sent.
+  const val = inEl.value, cur = inEl.selectionStart;
+  const before = val.slice(0, cur), atIdx = before.lastIndexOf('@');
+  if (atIdx >= 0) {
+    // atIdx points at the SECOND '@' of the trigger, so back up one to replace both.
+    const start = (atIdx > 0 && val[atIdx - 1] === '@') ? atIdx - 1 : atIdx;
+    inEl.value = val.slice(0, start) + '@@' + item.bot.id + ' ' + val.slice(cur);
+    const pos = start + item.bot.id.length + 3;
+    inEl.selectionStart = inEl.selectionEnd = pos;
+  }
+  _closeAtPopup();
+  inEl.focus();
 }
 
 // ─── # SSH picker ─────────────────────────────────────────────────────────
@@ -8812,13 +9148,16 @@ inEl.addEventListener('input', () => {
   const val = inEl.value, cur = inEl.selectionStart;
   const before = val.slice(0, cur);
 
-  // @ file picker
+  // '@@' picks a bot, a single '@' picks a file. Two sigils rather than one
+  // overloaded trigger: the user says which they mean, and neither list has to be
+  // filtered against the other.
   const atIdx = before.lastIndexOf('@');
   if (atIdx >= 0) {
     const afterAt = before.slice(atIdx + 1);
-    if (!afterAt.includes(' ') && !afterAt.includes('\n')) {
+    if (!afterAt.includes(' ') && !afterAt.includes('\n') && !afterAt.includes('@')) {
       if (_slashOpen) _closeSlashPopup();
       if (_sshMode) _closeSshPopup();
+      _atKind = (atIdx > 0 && before[atIdx - 1] === '@') ? 'bot' : 'file';
       _openAtPopup(afterAt); return;
     }
   }
@@ -8852,10 +9191,13 @@ inEl.addEventListener('input', () => {
 inEl.addEventListener('keydown', e => {
   if ($i('atPopup').classList.contains('hidden')) return;
   if (e.key === 'Escape') { _closeAtPopup(); e.preventDefault(); return; }
-  if (e.key === 'ArrowDown') { e.preventDefault(); _atActiveIdx = Math.min(_atActiveIdx + 1, _atFiles.length - 1); _renderAtList(); $i('atList').querySelector('.active')?.scrollIntoView({ block: 'nearest' }); return; }
+  if (e.key === 'ArrowDown') { e.preventDefault(); _atActiveIdx = Math.min(_atActiveIdx + 1, _atItems.length - 1); _renderAtList(); $i('atList').querySelector('.active')?.scrollIntoView({ block: 'nearest' }); return; }
   if (e.key === 'ArrowUp') { e.preventDefault(); _atActiveIdx = Math.max(_atActiveIdx - 1, -1); _renderAtList(); return; }
-  if (e.key === 'Enter') { e.preventDefault(); if (_atActiveIdx >= 0) selectAtFile(_atActiveIdx); return; }
-  if (e.key === 'Tab' && _atActiveIdx >= 0) { e.preventDefault(); selectAtFile(_atActiveIdx); return; }
+  // stopImmediatePropagation, not just preventDefault: the send handler skips Enter
+  // only while the popup is OPEN, and picking a bot closes it — so without this the
+  // same keystroke would select the bot and then immediately send the message.
+  if (e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); if (_atActiveIdx >= 0) selectAtItem(_atActiveIdx); return; }
+  if (e.key === 'Tab' && _atActiveIdx >= 0) { e.preventDefault(); e.stopImmediatePropagation(); selectAtItem(_atActiveIdx); return; }
 });
 
 // Keyboard navigation inside slash popup
@@ -9258,6 +9600,7 @@ async function checkVersion() {
     const local = await fetch('/api/version').then(r => r.json());
     applyTmuxCapability(local.tmuxAvailable !== false);
     loadTerminalCapability();
+    loadBots();
     // Store the global default and resolve the current view's engine. An open
     // chat's explicit run_engine wins; a chat without one inherits this default.
     _globalDefaultEngine = local.defaultEngine === 'subscription' ? 'subscription' : 'api';

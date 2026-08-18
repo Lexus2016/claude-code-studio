@@ -196,21 +196,36 @@ that refuses to be created.
 `engine` ships in v1 even though only `claude` is honoured, so adding Codex later is not
 a migration.
 
-## Mentions
+## Mentions: `@@` calls a bot, `@` stays files
 
-`@` is **already** the file-attachment trigger in the composer (`'@ — files'` in the
-input placeholder). Agent mentions therefore only resolve against **registered bot
-handles**; anything else falls through to the existing file path untouched.
+`@` was already the composer's file-attachment trigger. The first design overloaded it —
+a mention resolved only if it named a registered handle, everything else fell through to
+files — but that made the meaning depend on state the user cannot see, and an unknown
+handle was indistinguishable from a filename.
 
-Parsing is a pure function over the message text plus the known-handle set, unit-tested
-like `terminal-session.js` — no regex scattered through the request handler.
+A second sigil removes the ambiguity: **`@@handle` calls a bot, a single `@` picks a
+file.** The intent is stated outright, so `@@nosuchbot` can be answered ("there is no
+bot @@nosuchbot") instead of silently passing through as prose.
 
-Three boundary rules, each from a real failure the reviewers pointed at:
-- the `@` must follow start-of-string, whitespace, or an opening bracket or quote, so
-  an address never reads as a mention while `(@bot)` still does;
-- the character after the handle must not continue a path or domain, so `@bot1.dev`
-  does not resolve to a registered `@bot1`;
-- a handle may not end in `-` or `_`, or it could be created and then never matched.
+Parsing is a pure function over the text plus the known-handle set, unit-tested like
+`terminal-session.js` — no regex scattered through the request handler. It returns
+`{ handles, unknown, cleaned }`: registered handles in first-appearance order, handles
+addressed but not registered, and the text with every mention stripped (a bot should
+read "analyse this", not "@@analyst analyse this").
+
+Boundary rules, each from a real failure:
+- the `@@` must follow start-of-string, whitespace, an opening bracket or quote, a comma
+  or semicolon (`@@a,@@b` addresses both), or a Unicode bidi mark — RTL keyboards insert
+  those automatically, and without the rule a mention typed in Hebrew silently missed;
+- the character after the handle may not continue a path or domain, so `@@bot1.dev` is
+  not a mention, while a plain sentence-ending `@@analyst.` is;
+- a handle may not end in `-` or `_`, or it could be created and never matched;
+- a handle inside a ``` fenced block or inline backticks is content, not a call — pasted
+  code must survive verbatim.
+
+In the composer the two triggers open the same palette in two modes: `@@` lists bots,
+`@` lists files. Picking a bot inserts `@@handle` as plain text — what the user sees
+typed is exactly what is sent and what the server parses.
 
 ## Bot-to-bot (v2)
 

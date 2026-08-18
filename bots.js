@@ -52,15 +52,16 @@ function uniqueHandle(base, taken) {
 
 // Find bot mentions in a message.
 //
-// '@' is ALREADY the composer's file-attachment trigger, so a mention only counts
-// when it names a REGISTERED handle — everything else is left alone and continues
-// to mean "attach a file". That is why this takes the known set rather than
-// matching any @word.
+// '@@handle' calls a bot; a single '@' stays the composer's file-attachment
+// trigger. Two separate sigils rather than one overloaded '@' means the intent is
+// explicit: '@@analyst' is unambiguously a bot even when no such bot exists, so an
+// unknown handle can be reported instead of silently reading as a filename.
 //
-// Returns { handles, cleaned }:
+// Returns { handles, unknown, cleaned }:
 //   handles — registered handles in first-appearance order, deduplicated
-//   cleaned — the text with those mentions removed, for use as the actual prompt
-//             (a bot should read "analyse this", not "@analyst analyse this")
+//   unknown — handles that were addressed but are not registered anywhere
+//   cleaned — the text with every bot mention removed, for use as the actual prompt
+//             (a bot should read "analyse this", not "@@analyst analyse this")
 // Byte ranges covered by ``` fenced code blocks. Text pasted as code must survive
 // verbatim: a handle inside it is content, not an instruction, and stripping it would
 // silently corrupt what the user pasted. (Inline `backticks` are already safe because
@@ -79,34 +80,37 @@ function parseMentions(text, knownHandles) {
   const fenced = fencedRanges(src);
   const inFence = (i) => fenced.some(([a, b]) => i >= a && i < b);
   const handles = [];
+  const unknown = [];
   const seen = new Set();
-  // Three boundary rules, each earning its place:
-  //   lead  — start of string, whitespace, or an opening bracket/quote, so an address
-  //           like someone@bot1.dev is never read as a mention, while "(@bot)" is.
+  // Boundary rules, each earning its place:
+  //   lead  — start of string, whitespace, an opening bracket or quote, a comma or
+  //           semicolon (so "@@a,@@b" addresses both), or a Unicode bidi mark, which
+  //           RTL keyboards and clipboards insert automatically — without it a
+  //           mention typed in a Hebrew or Arabic context silently would not match.
   //   name  — the handle itself.
   //   tail  — the handle may not continue into a longer word, and may not be followed
-  //           by a dot that starts another label, so "@bot1.dev" is a hostname and not
-  //           a mention. A bare trailing dot IS allowed: "ask @analyst." ends a
-  //           sentence and is the single most common way a mention appears.
-  // The lead class also accepts a comma or semicolon, so "@a,@b" addresses both, and
-  // the Unicode bidi marks that RTL keyboards and clipboards insert automatically —
-  // without them a mention typed in Hebrew or Arabic context silently does not match.
-  const re = /(^|[\s(\[{'",;\u200e\u200f\u202a-\u202e])@([a-z0-9][a-z0-9_-]{0,30}[a-z0-9])(?![a-z0-9_-])(?!\.[a-z0-9])/gi;
+  //           by a dot that starts another label, so "@@bot.dev" is not a mention of
+  //           @@bot. A bare trailing dot IS allowed: "ask @@analyst." ends a sentence
+  //           and is the most common shape a mention takes.
+  const re = /(^|[\s(\[{'",;\u200e\u200f\u202a-\u202e])@@([a-z0-9][a-z0-9_-]{0,30}[a-z0-9])(?![a-z0-9_-])(?!\.[a-z0-9])/gi;
   let cleaned = src.replace(re, (whole, lead, name, offset) => {
     const h = name.toLowerCase();
-    if (!known.has(h)) return whole;       // not a bot — leave it for the file path
     if (inFence(offset)) return whole;     // inside a code block — content, not a call
-    if (!seen.has(h)) { seen.add(h); handles.push(h); }
+    if (seen.has(h)) return lead;
+    seen.add(h);
+    // Unknown handles are still stripped from the prompt and reported: the user
+    // clearly meant to address someone, so silence would be the wrong answer.
+    if (known.has(h)) handles.push(h); else unknown.push(h);
     return lead;
   });
   cleaned = cleaned.replace(/[ \t]{2,}/g, ' ').trim();
-  if (handles.length) {
+  if (handles.length || unknown.length) {
     // Removing a mention leaves punctuation stranded: "ask @bot." becomes "ask ." and
     // "@bot, please" becomes ", please". Reattach the one and drop the other, so the
     // bot reads a normal sentence rather than the debris of its own name.
     cleaned = cleaned.replace(/\s+([,.:;!?])/g, '$1').replace(/^[\s,.:;!?]+/, '').trim();
   }
-  return { handles, cleaned };
+  return { handles, unknown, cleaned };
 }
 
 // The roster block injected into a bot's system prompt so it knows who else exists
