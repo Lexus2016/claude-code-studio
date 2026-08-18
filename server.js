@@ -38,7 +38,11 @@ const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
 const { isTransientOverload, shouldRetryOverload } = require('./rate-limit-utils');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
-const { resolveAgentCommands, supportsTerminal, mergeAgentDefaults, parseNewIdOutput } = require('./terminal-session');
+const {
+  resolveAgentCommands, supportsTerminal, mergeAgentDefaults, parseNewIdOutput,
+  tmuxNameFor, buildLaunchCommand,
+} = require('./terminal-session');
+const termBridge = require('./terminal-bridge');
 const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
@@ -76,6 +80,10 @@ const log = (() => {
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
+// Terminal sessions get their own endpoint: a different protocol (raw PTY bytes),
+// a different lifecycle, and a hard capability/security gate the chat socket has no
+// reason to carry.
+const wssTerm = new WebSocketServer({ noServer: true });
 
 const PORT = process.env.PORT || 3000;
 // When launched via npx/global install, cli.js sets APP_DIR to cwd so user
@@ -402,6 +410,10 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN transcript_offset INTEGER`); } ca
 try { db.exec(`ALTER TABLE sessions ADD COLUMN kind TEXT DEFAULT 'chat'`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN terminal_agent TEXT`); } catch {}   // external-agent id, e.g. 'claude'
 try { db.exec(`ALTER TABLE sessions ADD COLUMN agent_conv_id TEXT`); } catch {}    // the agent's own conversation id, for exact resume
+// Whether this terminal session has ever been launched. A minted-but-unused
+// conversation id is NOT resumable: starting with `--resume <uuid>` before the
+// first run makes the agent fail on a conversation that does not exist yet.
+try { db.exec(`ALTER TABLE sessions ADD COLUMN terminal_started INTEGER DEFAULT 0`); } catch {}
 // Performance indexes — safe to re-run (IF NOT EXISTS)
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
@@ -518,6 +530,7 @@ const stmts = {
   // Terminal sessions get their own INSERT: createSession is called from eight
   // places and must not grow parameters. kind is literal here — a terminal session
   // can never be created as anything else.
+  markTerminalStarted: db.prepare(`UPDATE sessions SET terminal_started=1 WHERE id=?`),
   createTerminalSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir,kind,terminal_agent,agent_conv_id) VALUES (?,?,'[]','[]','auto','single',?,?,'terminal',?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: (() => {
@@ -1923,6 +1936,10 @@ function loadConfig() {
   // newly-introduced fields (interactive/resume/...) onto agents the user already
   // customised, without touching any field they set themselves.
   if (mergeAgentDefaults(c, DEFAULT_EXTERNAL_AGENTS).dirty) dirty = true;
+  // Terminal sessions are off until explicitly enabled: a browser terminal is
+  // remote code execution by design, and this studio can be published through a
+  // tunnel.
+  if (!c.terminal) { c.terminal = { enabled: false, idleTimeoutMin: 30, maxLive: 3 }; dirty = true; }
   if (dirty) {
     try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); } catch {}
   }
@@ -3947,6 +3964,22 @@ app.get('/api/version', (_, res) => {
   res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable(), defaultEngine: (loadMergedConfig().defaultEngine === 'subscription' ? 'subscription' : 'api') });
 });
 
+// Capability-checked, never OS-sniffed — the same pattern as tmuxAvailable for the
+// subscription engine. Native Windows has no tmux (and Node has no ConPTY API
+// without a native module), so terminal sessions are simply unavailable there and
+// the UI disables the entry point instead of failing after a click.
+app.get('/api/terminal/capability', (_, res) => {
+  const cfg = loadConfig();
+  const enabled = cfg.terminal?.enabled === true;
+  const tmuxOk = termBridge.tmuxAvailable();
+  const tunnelOn = !!tunnelManager?.isRunning?.();
+  let reason = '';
+  if (!enabled) reason = 'disabled in config (terminal.enabled)';
+  else if (!tmuxOk) reason = 'tmux not found on this host';
+  else if (tunnelOn) reason = 'a public tunnel is active — terminal access is blocked';
+  res.json({ available: enabled && tmuxOk && !tunnelOn, reason });
+});
+
 app.get('/api/health', (_, res) => {
   let dbOk = false;
   try { db.prepare('SELECT 1').get(); dbOk = true; } catch { /* db unavailable */ }
@@ -5103,6 +5136,12 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
   archiveSessionStats(ids);
   // Best-effort: kill interactive tmux sessions tied to these studio sessions
   for (const id of ids) { try { killInteractiveTmux(id); } catch {} }
+  // Terminal sessions live under their own tmux prefix and need their own cleanup,
+  // plus the scrollback file the reaper may have left behind.
+  for (const id of ids) {
+    try { termBridge.killSession(tmuxNameFor(id)); } catch {}
+    try { fs.unlinkSync(path.join(os.tmpdir(), `ccsterm-sb-${id}.txt`)); } catch {}
+  }
   const del = db.transaction(() => {
     for (const id of ids) {
       // Unlink recurring tasks from session (preserve the schedule), delete the rest
@@ -6888,7 +6927,130 @@ server.on('upgrade', (req, socket, head) => {
   const bearerToken = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null;
   const token = cookies.token || req.headers['x-auth-token'] || bearerToken;
   if (!auth.validateWsToken(token)) { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); socket.destroy(); return; }
+  // Route AFTER the auth check — the terminal endpoint reuses it verbatim and must
+  // never grow an auth path of its own.
+  let pathname = req.url;
+  try { pathname = new URL(req.url, 'http://x').pathname; } catch {}
+  if (pathname === '/ws/terminal') {
+    wssTerm.handleUpgrade(req, socket, head, ws => wssTerm.emit('connection', ws, req));
+    return;
+  }
   wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
+});
+
+// ─── Terminal sessions WebSocket ─────────────────────────────────────────────
+// Protocol:
+//   server → client: binary frames = raw terminal bytes; JSON text = control
+//   client → server: {type:'input',data} | {type:'resize',cols,rows} | {type:'kill'}
+wssTerm.on('connection', (ws, req) => {
+  ws.on('error', (e) => { try { log.warn('terminal ws error', { msg: e?.message }); } catch {} });
+  const send = (obj) => { try { ws.send(JSON.stringify(obj)); } catch {} };
+  const fail = (error) => { send({ type: 'error', error }); try { ws.close(); } catch {} };
+
+  const cfg = loadConfig();
+  if (cfg.terminal?.enabled !== true) return fail('terminal sessions are disabled');
+  // A published tunnel plus a browser terminal is a public shell. Refuse regardless
+  // of the enable flag.
+  if (tunnelManager?.isRunning?.()) return fail('blocked while a public tunnel is active');
+  if (!termBridge.tmuxAvailable()) return fail('tmux unavailable on this host');
+
+  let sessionId = null;
+  try { sessionId = new URL(req.url, 'http://x').searchParams.get('session'); } catch {}
+  const session = sessionId ? stmts.getSession.get(sessionId) : null;
+  if (!session || session.kind !== 'terminal') return fail('not a terminal session');
+
+  const agents = loadConfig().externalAgents || {};
+  const commands = resolveAgentCommands(agents[session.terminal_agent]);
+  if (!commands.interactive) return fail(`agent "${session.terminal_agent}" has no interactive command`);
+
+  const name = tmuxNameFor(session.id);
+  const sbFile = path.join(os.tmpdir(), `ccsterm-sb-${session.id}.txt`);
+  let handle = null;
+  let attempts = 0;
+
+  // Start the agent and attach a client. `asRestore` picks the resume command over
+  // the fresh-start one.
+  //
+  // Self-healing: an exact conversation id can exist on OUR side and not on the
+  // agent's — we mint it at session creation, but an agent only persists the
+  // conversation once it has actually been used (verified: `claude --resume <unused
+  // uuid>` answers "No conversation found with session ID"). A restore that dies
+  // within seconds therefore means "nothing to resume", not "broken", so we start
+  // fresh once instead of leaving the user with a dead terminal.
+  function startAndAttach(asRestore) {
+    attempts++;
+    const launch = buildLaunchCommand({ commands, convId: session.agent_conv_id, isRestore: asRestore });
+    let state;
+    try {
+      state = termBridge.ensureSession({ name, workdir: session.workdir || WORKDIR, launchCommand: launch });
+    } catch (e) {
+      log.warn('terminal session start failed', { sessionId: session.id, err: e.message });
+      fail(`could not start the agent: ${e.message}`);
+      return;
+    }
+
+    send({
+      type: 'ready',
+      state,
+      agent: session.terminal_agent,
+      restored: asRestore,
+      restoredExact: asRestore && !!(session.agent_conv_id && commands.resume),
+    });
+
+    // Replay the scrollback the reaper saved before killing this session, so a
+    // reaped terminal returns with the picture the user last saw.
+    if (attempts === 1 && state !== 'attach') {
+      try {
+        if (fs.existsSync(sbFile)) ws.send(Buffer.from(fs.readFileSync(sbFile, 'utf8').replace(/\n/g, '\r\n') + '\r\n'));
+      } catch {}
+    }
+
+    const startedAt = Date.now();
+    try {
+      handle = termBridge.attach({
+        name, cols: 80, rows: 24,
+        onData: (buf) => {
+          // Drop output rather than let a slow browser grow an unbounded send queue.
+          if (ws.bufferedAmount > 4 * 1024 * 1024) return;
+          try { ws.send(buf); } catch {}
+        },
+        onExit: () => {
+          if (asRestore && attempts === 1 && Date.now() - startedAt < 10000) {
+            log.info('terminal restore found nothing to resume — starting fresh', { sessionId: session.id });
+            try { handle?.close(); } catch {}
+            termBridge.killSession(name);
+            send({ type: 'restore_failed' });
+            startAndAttach(false);
+            return;
+          }
+          send({ type: 'exit' });
+          try { ws.close(); } catch {}
+        },
+      });
+    } catch (e) {
+      fail(`could not attach: ${e.message}`);
+    }
+  }
+
+  if (!session.terminal_started) { try { stmts.markTerminalStarted.run(session.id); } catch {} }
+  startAndAttach(session.terminal_started === 1);
+
+  ws.on('message', (raw, isBinary) => {
+    if (!handle) return;
+    if (isBinary) { handle.write(raw); return; }
+    let msg = null;
+    try { msg = JSON.parse(raw.toString('utf8')); } catch { return; }
+    if (msg.type === 'input') handle.write(msg.data);
+    else if (msg.type === 'resize') handle.resize(msg.cols, msg.rows);
+    else if (msg.type === 'kill') {
+      termBridge.killSession(name);
+      try { fs.unlinkSync(sbFile); } catch {}
+      try { ws.close(); } catch {}
+    }
+  });
+
+  // Closing the browser tab detaches the CLIENT only — the agent keeps working.
+  ws.on('close', () => { try { handle?.close(); } catch {} });
 });
 
 wss.on('connection', (ws) => {
@@ -8076,6 +8238,15 @@ app.use((err, _req, res, next) => {
   try { log.warn('request error', { status, msg: err?.message }); } catch {}
   res.status(status).json(body);
 });
+
+// The `tmux -C` clients are children of this process and SURVIVE a studio restart,
+// staying attached and pinning session_attached above zero — which would stop the
+// reaper from ever firing. Drop them before anything else can attach.
+try {
+  if (termBridge.tmuxAvailable()) {
+    for (const name of termBridge.listTerminalSessions()) termBridge.detachClients(name);
+  }
+} catch {}
 
 server.listen(...(process.env.CCS_DESKTOP === '1' ? [PORT, '127.0.0.1'] : [PORT]), () => {
   log.info('server started', {
