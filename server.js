@@ -487,7 +487,23 @@ db.exec(`
     active_mcp TEXT NOT NULL DEFAULT '[]',
     avatar TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    -- Soft delete. A freed handle that is later reused would make a new bot appear
+    -- as the author of the old one's messages, since messages.agent_id stores the
+    -- handle. The row stays; the handle is reserved forever.
+    deleted_at TEXT
+  );
+
+  -- One CLI session per (chat, bot). Required, not an optimisation: claude-cli.js
+  -- passes --system-prompt only when there is NO session to resume, so a bot sharing
+  -- the chat's session would silently run with no system prompt at all — its identity
+  -- would not exist. A private session also gives the bot memory of its own thread.
+  CREATE TABLE IF NOT EXISTS bot_sessions (
+    chat_session_id   TEXT NOT NULL,
+    bot_id            TEXT NOT NULL,
+    claude_session_id TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (chat_session_id, bot_id)
   );
 `);
 try { db.exec(`ALTER TABLE task_chains ADD COLUMN effort TEXT`); } catch {}      // claude --effort dial; chain-level default for new tasks
@@ -550,8 +566,14 @@ const stmts = {
   // places and must not grow parameters. kind is literal here — a terminal session
   // can never be created as anything else.
   markTerminalStarted: db.prepare(`UPDATE sessions SET terminal_started=1 WHERE id=?`),
-  listBots: db.prepare(`SELECT * FROM bots ORDER BY label COLLATE NOCASE`),
-  getBot: db.prepare(`SELECT * FROM bots WHERE id=?`),
+  listBots: db.prepare(`SELECT * FROM bots WHERE deleted_at IS NULL ORDER BY label COLLATE NOCASE`),
+  getBot: db.prepare(`SELECT * FROM bots WHERE id=? AND deleted_at IS NULL`),
+  // Includes soft-deleted rows: used to reserve handles and to attribute old messages.
+  getBotAny: db.prepare(`SELECT * FROM bots WHERE id=?`),
+  softDeleteBot: db.prepare(`UPDATE bots SET deleted_at=datetime('now') WHERE id=?`),
+  getBotSession: db.prepare(`SELECT claude_session_id FROM bot_sessions WHERE chat_session_id=? AND bot_id=?`),
+  setBotSession: db.prepare(`INSERT INTO bot_sessions (chat_session_id,bot_id,claude_session_id) VALUES (?,?,?)
+    ON CONFLICT(chat_session_id,bot_id) DO UPDATE SET claude_session_id=excluded.claude_session_id`),
   // Positional parameters, like every other statement here: this runtime may be
   // node:sqlite (Node >= 22.5), whose named-parameter binding differs from
   // better-sqlite3's and rejects `@name` objects with "column index out of range".
@@ -563,7 +585,6 @@ const stmts = {
       model=excluded.model, system_prompt=excluded.system_prompt,
       active_skills=excluded.active_skills, active_mcp=excluded.active_mcp,
       avatar=excluded.avatar, updated_at=datetime('now')`),
-  deleteBot: db.prepare(`DELETE FROM bots WHERE id=?`),
   createTerminalSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir,kind,terminal_agent,agent_conv_id) VALUES (?,?,'[]','[]','auto','single',?,?,'terminal',?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: (() => {
@@ -6732,30 +6753,52 @@ app.get('/api/bots', (_, res) => {
   res.json(stmts.listBots.all());
 });
 
-app.post('/api/bots', express.json(), (req, res) => {
-  const body = req.body || {};
-  const { id, label, engine = 'claude' } = body;
-  const cleanLabel = String(label || '').trim();
-  if (!cleanLabel) return res.status(400).json({ error: 'label required' });
+// Length caps. A system prompt is re-sent on every turn, so it is a running cost,
+// not a one-off — an unbounded one would be paid for forever.
+const BOT_PROMPT_MAX = 8192;
+const BOT_DESC_MAX = 500;
+const BOT_LABEL_MAX = 100;
 
-  // Editing keeps the handle: it is the primary key AND what the user types after
-  // '@', so renaming it would silently orphan every past message attributed to it.
-  let handle = String(id || '').trim().toLowerCase();
-  if (handle) {
-    if (!botsLogic.isValidHandle(handle)) {
-      return res.status(400).json({ error: 'handle must be 2-32 chars of a-z, 0-9, - or _' });
-    }
-  } else {
-    const base = botsLogic.handleFromLabel(cleanLabel);
-    if (!base) return res.status(400).json({ error: 'could not derive a handle from that label' });
-    handle = botsLogic.uniqueHandle(base, stmts.listBots.all().map(b => b.id));
-    if (!handle) return res.status(400).json({ error: 'could not allocate a free handle' });
-  }
+// Shared writer for create and update. `mode` decides what an existing handle means:
+// creating over one is a conflict, updating a missing one is a 404.
+function saveBot(req, res, mode) {
+  const body = req.body || {};
+  const cleanLabel = String(body.label || '').trim();
+  if (!cleanLabel) return res.status(400).json({ error: 'label required' });
+  const engine = body.engine || 'claude';
   if (engine !== 'claude') {
-    // The field exists so adding engines later is not a migration, but only the
+    // The column exists so adding an engine later is not a migration, but only the
     // Claude path is wired into a chat turn today.
     return res.status(400).json({ error: `engine "${engine}" is not supported yet` });
   }
+
+  let handle;
+  if (mode === 'update') {
+    handle = String(req.params.id || '').toLowerCase();
+    if (!stmts.getBot.get(handle)) return res.status(404).json({ error: 'bot not found' });
+  } else {
+    const asked = String(body.id || '').trim().toLowerCase();
+    if (asked) {
+      if (!botsLogic.isValidHandle(asked)) {
+        return res.status(400).json({ error: 'handle must be 2-32 chars of a-z, 0-9, - or _, and may not end in - or _' });
+      }
+      // getBotAny, not getBot: a soft-deleted handle stays reserved so a new bot can
+      // never inherit authorship of the old one's messages.
+      if (stmts.getBotAny.get(asked)) return res.status(409).json({ error: `handle "${asked}" is taken` });
+      handle = asked;
+    } else {
+      const base = botsLogic.handleFromLabel(cleanLabel);
+      if (!base) return res.status(400).json({ error: 'could not derive a handle from that label' });
+      handle = botsLogic.uniqueHandle(base, db.prepare('SELECT id FROM bots').all().map(b => b.id));
+      if (!handle) return res.status(400).json({ error: 'could not allocate a free handle' });
+    }
+  }
+
+  const prompt = String(body.systemPrompt ?? '');
+  if (prompt.length > BOT_PROMPT_MAX) {
+    return res.status(400).json({ error: `system prompt is too long (${prompt.length} > ${BOT_PROMPT_MAX} characters)` });
+  }
+
   try {
     // A field absent from the request keeps its stored value; a field present but
     // empty clears it. A partial edit must never wipe what it did not mention.
@@ -6764,11 +6807,11 @@ app.post('/api/bots', express.json(), (req, res) => {
     const jsonList = (v) => JSON.stringify(Array.isArray(v) ? v : []);
     stmts.upsertBot.run(
       handle,
-      cleanLabel.substring(0, 100),
-      String(keep('description', prev.description || '')).substring(0, 500),
+      cleanLabel.substring(0, BOT_LABEL_MAX),
+      String(keep('description', prev.description || '')).substring(0, BOT_DESC_MAX),
       engine,
       keep('model', prev.model) ? String(keep('model', prev.model)) : null,
-      String(keep('systemPrompt', prev.system_prompt || '')),
+      body.systemPrompt === undefined ? (prev.system_prompt || '') : prompt,
       body.activeSkills === undefined ? (prev.active_skills || '[]') : jsonList(body.activeSkills),
       body.activeMcp === undefined ? (prev.active_mcp || '[]') : jsonList(body.activeMcp),
       String(keep('avatar', prev.avatar || '')).substring(0, 8),
@@ -6778,14 +6821,17 @@ app.post('/api/bots', express.json(), (req, res) => {
     return res.status(500).json({ error: 'could not save the bot' });
   }
   res.json(stmts.getBot.get(handle));
-});
+}
+
+app.post('/api/bots', express.json(), (req, res) => saveBot(req, res, 'create'));
+app.put('/api/bots/:id', express.json(), (req, res) => saveBot(req, res, 'update'));
 
 app.delete('/api/bots/:id', (req, res) => {
   const bot = stmts.getBot.get(req.params.id);
   if (!bot) return res.status(404).json({ error: 'bot not found' });
-  stmts.deleteBot.run(req.params.id);
-  // Past messages keep their agent_id on purpose: the transcript should still say
-  // who wrote what after the bot is gone.
+  // Soft: past messages keep their agent_id, and the handle can never be reused by a
+  // different bot that would then look like their author.
+  stmts.softDeleteBot.run(req.params.id);
   res.json({ ok: true });
 });
 
