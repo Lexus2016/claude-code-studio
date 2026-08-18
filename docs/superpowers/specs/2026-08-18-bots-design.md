@@ -96,6 +96,32 @@ First mention of a bot in a chat: a fresh CLI session, prompt applied. Later men
 resume that session. This also gives a bot memory of its own thread inside that chat,
 which is what "work with it as an agent" means.
 
+## Scope: a bot is global, and its handle is its identity
+
+Reviewed as a separate question by the same panel. They split on the small part and
+agreed on the part that cannot be undone.
+
+**Rejected: per-project bots.** `messages.agent_id` stores the handle, so the same
+handle owned by two projects would mean two different identities inside one stored
+history. Every later cross-project feature — search, Telegram, "what did @analyst say" —
+would need a permanent (project, handle) map and a backfill. Both reviewers named this
+as the one choice with no migration path.
+
+**Chosen: one installation-wide roster.** A bot is someone the user hired, not a folder;
+typing `@analyst` should mean the same specialist everywhere. Because a handle is
+globally unique and soft-delete reserves it forever, the handle IS a stable identity and
+no separate UUID is needed.
+
+Two different specialists must be two handles — `@analyst-rust` and `@analyst-crypto` —
+never one handle meaning different things in different places.
+
+Roster noise is treated as a **ranking** problem, not an identity one: autocomplete
+sorts by most recently mentioned in this project, then this chat, then the rest. A
+per-project enablement table can be added later without touching a single stored
+message; it is deliberately not built now, because its only failure mode is a mention
+that resolves to a real bot and then refuses — a confusing failure the user never asked
+for.
+
 ## Storage
 
 SQLite, not `config.json`. Config is rewritten wholesale on every settings change, and a
