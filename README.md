@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.1.1** — **Bots and terminal agents.** Create named AI specialists with their own prompt, model and memory, and call several in one chat with `@@handle` — in the browser, on Kanban, in the Scheduler and from Telegram. Open any CLI agent as a live terminal tab that survives a restart. Plus a Telegram audit pass: no more lost answers on a deleted topic, broken code blocks in long replies, or duplicated prompts.
+> **v7.1.2** — **Terminals stay put when you switch tabs.** Each terminal tab now keeps its own live session, so moving between them no longer reconnects or repaints anything and scrollback survives. Also fixes the two new dialogs: a proper header and a real close button, larger pick targets, template chips that no longer render as white pills, an emoji picker for bot avatars, and English placeholders that were stuck in Ukrainian.
 
 ---
 
