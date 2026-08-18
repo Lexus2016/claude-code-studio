@@ -67,6 +67,22 @@ check('a registered and an unregistered mention coexist',
 check('an address embedded in a word is not a mention',
   parseMentions('write to someone' + '@' + 'bot1.dev now', KNOWN),
   { handles: [], cleaned: 'write to someone' + '@' + 'bot1.dev now' });
+// The most common shape a mention takes: at the end of a sentence.
+check('a trailing sentence dot does not break the mention',
+  parseMentions('please ask @bot1.', KNOWN),
+  { handles: ['bot1'], cleaned: 'please ask.' });
+check('a mid-sentence mention leaves the comma attached',
+  parseMentions('ask @bot1, then continue', KNOWN),
+  { handles: ['bot1'], cleaned: 'ask, then continue' });
+check('a mention quoted in inline code is not dispatched',
+  parseMentions('type `@bot1` to call it', KNOWN),
+  { handles: [], cleaned: 'type `@bot1` to call it' });
+check('punctuation left by a stripped leading mention is removed',
+  parseMentions('@bot1, please look', KNOWN),
+  { handles: ['bot1'], cleaned: 'please look' });
+check('a mention on its own line is found',
+  parseMentions('line one\n@bot1 line two', KNOWN),
+  { handles: ['bot1'], cleaned: 'line one\n line two' });
 check('a repeated mention is deduplicated',
   parseMentions('@bot1 and again @bot1', KNOWN),
   { handles: ['bot1'], cleaned: 'and again' });

@@ -65,9 +65,11 @@ function parseMentions(text, knownHandles) {
   //   lead  — start of string, whitespace, or an opening bracket/quote, so an address
   //           like someone@bot1.dev is never read as a mention, while "(@bot)" is.
   //   name  — the handle itself.
-  //   tail  — the next character must not continue a path or domain, so "@bot.example"
-  //           does NOT resolve to a mention of a registered @bot.
-  const re = /(^|[\s(\[{'"])@([a-z0-9][a-z0-9_-]{0,30}[a-z0-9])(?![a-z0-9_.-])/gi;
+  //   tail  — the handle may not continue into a longer word, and may not be followed
+  //           by a dot that starts another label, so "@bot1.dev" is a hostname and not
+  //           a mention. A bare trailing dot IS allowed: "ask @analyst." ends a
+  //           sentence and is the single most common way a mention appears.
+  const re = /(^|[\s(\[{'"])@([a-z0-9][a-z0-9_-]{0,30}[a-z0-9])(?![a-z0-9_-])(?!\.[a-z0-9])/gi;
   let cleaned = src.replace(re, (whole, lead, name) => {
     const h = name.toLowerCase();
     if (!known.has(h)) return whole;       // not a bot — leave it for the file path
@@ -75,6 +77,12 @@ function parseMentions(text, knownHandles) {
     return lead;
   });
   cleaned = cleaned.replace(/[ \t]{2,}/g, ' ').trim();
+  if (handles.length) {
+    // Removing a mention leaves punctuation stranded: "ask @bot." becomes "ask ." and
+    // "@bot, please" becomes ", please". Reattach the one and drop the other, so the
+    // bot reads a normal sentence rather than the debris of its own name.
+    cleaned = cleaned.replace(/\s+([,.:;!?])/g, '$1').replace(/^[\s,.:;!?]+/, '').trim();
+  }
   return { handles, cleaned };
 }
 
