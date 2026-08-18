@@ -1866,12 +1866,24 @@ function buildSessionReplayContent(sessionId) {
 // fields are what a live attached session needs: `interactive` starts a TUI,
 // `newIdFlag` pins the conversation id we generate so a later resume is exact,
 // `resume`/`resumeLast` restore after a host reboot or a reap.
-// Commands verified against the installed CLIs on 2026-08-18.
+//
+// Every modern agent CLI can resume by id — the flag spelling is all that differs,
+// which is why it lives in config and not in code. Only some can PIN the id of a
+// new conversation (`newIdFlag`); for the rest we resume by id once we know one and
+// otherwise fall back to "the agent's most recent conversation".
+//
+// Flags measured against the binaries installed on 2026-08-18 (codex-cli 0.147.0
+// has no --session-id / --resume: it uses the `codex resume <id>` subcommand). A
+// user whose CLI version differs edits these in the agent settings.
 const DEFAULT_EXTERNAL_AGENTS = {
-  claude:   { label: 'Claude Code',                                          interactive: 'claude',   newIdFlag: '--session-id {sid}', resume: 'claude --resume {sid}',    resumeLast: 'claude --continue' },
-  codex:    { label: 'OpenAI Codex',    template: 'codex {prompt}',          interactive: 'codex',    resume: 'codex resume {sid}',    resumeLast: 'codex resume --last' },
-  agy:      { label: 'Antigravity CLI', template: 'agy -i {prompt}',         interactive: 'agy',      resume: 'agy --conversation {sid}', resumeLast: 'agy --continue' },
-  opencode: { label: 'opencode',        template: 'opencode run {prompt}',   interactive: 'opencode', resume: 'opencode -s {sid}',     resumeLast: 'opencode -c' },
+  claude:       { label: 'Claude Code',    interactive: 'claude',       newIdFlag: '--session-id {sid}', resume: 'claude --resume {sid}',       resumeLast: 'claude --continue' },
+  codex:        { label: 'OpenAI Codex',   template: 'codex {prompt}',        interactive: 'codex',        resume: 'codex resume {sid}',        resumeLast: 'codex resume --last' },
+  grok:         { label: 'Grok CLI',       interactive: 'grok',         newIdFlag: '-s {sid}',          resume: 'grok --resume {sid}',         resumeLast: 'grok --continue' },
+  agy:          { label: 'Antigravity CLI', template: 'agy -i {prompt}',      interactive: 'agy',          resume: 'agy --conversation {sid}',  resumeLast: 'agy --continue' },
+  opencode:     { label: 'opencode',       template: 'opencode run {prompt}', interactive: 'opencode',     resume: 'opencode -s {sid}',         resumeLast: 'opencode -c' },
+  hermes:       { label: 'Hermes',         interactive: 'hermes',       resume: 'hermes --resume {sid}',       resumeLast: 'hermes --continue' },
+  'cursor-agent': { label: 'Cursor Agent', interactive: 'cursor-agent', resume: 'cursor-agent --resume {sid}', resumeLast: 'cursor-agent --continue' },
+  kimi:         { label: 'Kimi',           interactive: 'kimi',         resume: 'kimi --session {sid}',        resumeLast: 'kimi --continue' },
 };
 
 const DEFAULT_SLASH_COMMANDS = [
@@ -6633,15 +6645,27 @@ app.get('/api/external-agents', (_, res) => {
 });
 
 app.post('/api/external-agents', express.json(), (req, res) => {
-  const { id, label, template } = req.body;
-  if (!id || !label || !template) return res.status(400).json({ error: 'id, label, template required' });
+  const { id, label, template, interactive, newIdFlag, resume, resumeLast } = req.body;
+  if (!id || !label) return res.status(400).json({ error: 'id and label required' });
+  // An agent is useful for delegation (template), for terminal sessions
+  // (interactive), or both — but at least one, or it can do nothing.
+  const hasTemplate = String(template || '').trim();
+  const hasInteractive = String(interactive || '').trim();
+  if (!hasTemplate && !hasInteractive) {
+    return res.status(400).json({ error: 'either a delegation template or an interactive command is required' });
+  }
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) return res.status(400).json({ error: 'id must be alphanumeric (a-z, 0-9, -, _)' });
   const config = loadConfig();
-  // Preserve fields this endpoint does not manage. The editor form only submits
-  // label + template, so a plain overwrite would silently wipe an agent's terminal
-  // commands (interactive / newIdFlag / resume / resumeLast) the moment anyone
-  // renames it — and the next terminal session for that agent would fail to start.
-  config.externalAgents[id] = { ...(config.externalAgents[id] || {}), label, template };
+  // Preserve fields this request does not carry, so editing one half of an agent
+  // never wipes the other half.
+  const prev = config.externalAgents[id] || {};
+  const next = { ...prev, label };
+  for (const [k, v] of Object.entries({ template, interactive, newIdFlag, resume, resumeLast })) {
+    if (v === undefined) continue;              // not submitted — keep whatever is stored
+    const s = String(v).trim();
+    if (s) next[k] = s; else delete next[k];    // submitted empty — clear it
+  }
+  config.externalAgents[id] = next;
   // If re-adding a previously removed default, clear the removal marker
   if (config._removedAgents) {
     config._removedAgents = config._removedAgents.filter(r => r !== id);

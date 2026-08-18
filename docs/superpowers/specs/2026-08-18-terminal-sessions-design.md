@@ -45,26 +45,41 @@ plus `#{pane_dead}`:
 | `respawn` | session exists, pane dead (`remain-on-exit on`) | `respawn-pane -k` with the resume command |
 | `cold` | no tmux session | `new-session -d` with the resume command |
 
-## Agent command matrix — verified on 2026-08-18
+## Agent command matrix — measured on 2026-08-18
 
-Every supported agent can both start interactively and resume. The delegation
-`template` field is **not** reusable for terminal sessions: it encodes a one-shot
-invocation with an embedded prompt, and for opencode `run` is explicitly
-non-interactive. Hence new config fields.
+**Every modern agent CLI can resume a session by id.** Only the flag spelling differs,
+which is why these live in config rather than code — a CLI upgrade can change them and
+the user edits them in the agent settings.
 
-| Agent | `interactive` | `newIdFlag` | `resume` | `resumeLast` |
+Measured against the binaries installed on this machine (all eight present):
+
+| Agent | `interactive` | `newIdFlag` (pin id of a NEW conversation) | `resume` (by id) | `resumeLast` |
 |---|---|---|---|---|
 | claude | `claude` | `--session-id {sid}` | `claude --resume {sid}` | `claude --continue` |
+| grok | `grok` | `-s {sid}` | `grok --resume {sid}` | `grok --continue` |
 | codex | `codex` | — | `codex resume {sid}` | `codex resume --last` |
 | agy | `agy` | — | `agy --conversation {sid}` | `agy --continue` |
 | opencode | `opencode` | — | `opencode -s {sid}` | `opencode -c` |
+| hermes | `hermes` | — | `hermes --resume {sid}` | `hermes --continue` |
+| cursor-agent | `cursor-agent` | — | `cursor-agent --resume {sid}` | `cursor-agent --continue` |
+| kimi | `kimi` | — | `kimi --session {sid}` | `kimi --continue` |
 
-`newIdFlag` is what makes a restore deterministic: for Claude we generate the UUID
-ourselves and pass `--session-id <uuid>` at first start, so `--resume <uuid>` later
-targets exactly this conversation. Agents without it fall back to `resumeLast`, which
-means "the agent's most recent conversation" — for codex this is most-recent
-**globally**, so a conversation started elsewhere in between wins. The UI must label a
-`resumeLast` restore as "restored the last conversation", not as this one.
+Version note: `codex-cli 0.147.0` accepts neither `--session-id` nor `--resume` as a
+top-level flag (both error with "unexpected argument"); it uses the `codex resume <id>`
+subcommand. Newer builds may add the flag forms — that is exactly what the editable
+config is for.
+
+The delegation `template` field is **not** reusable for terminal sessions: it encodes a
+one-shot invocation with an embedded prompt, and for opencode `run` is explicitly
+non-interactive. Hence the separate fields. The two capabilities are independent: an
+agent may have a template (delegation), an interactive command (terminal), or both.
+
+`newIdFlag` is what makes a restore deterministic — we generate the UUID and pass it at
+first start, so the later resume targets exactly this conversation. Two of the eight
+support it. For the rest we resume by id once one is known, and otherwise fall back to
+`resumeLast` ("the agent's most recent conversation"), which for codex is most-recent
+**globally** — the UI must label that restore as "restored the last conversation", not
+as this one.
 
 ## Reaper — verified signals
 
