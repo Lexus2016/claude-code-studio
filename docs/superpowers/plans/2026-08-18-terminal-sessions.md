@@ -1,5 +1,22 @@
 # Terminal Sessions — Implementation Plan
 
+> ✅ **IMPLEMENTED 2026-08-18** — all 7 tasks committed on `feat/terminal-sessions`.
+> `npm test` green (5 suites), `node test/terminal-bridge.integration.test.js` 37/37,
+> verified end to end in a real browser. Deviations applied during execution:
+> - **Transport rewritten.** The `script`-based PTY shim does not work from Node
+>   (`tcgetattr/ioctl: Operation not supported on socket`) — replaced with tmux
+>   control mode. See the spec's "PTY transport" section.
+> - **`terminal_started` column added** (not in the original plan): a conversation id
+>   we mint does not exist on the agent's side until the session has run, so the first
+>   start must PASS the id, not resume it.
+> - **Self-healing restore added**: a resume that dies within 10s means there was
+>   nothing to resume, so the session restarts fresh once.
+> - **`newIdCommand` added**: a second way to obtain an exact id, for CLIs that mint
+>   it themselves (`cursor-agent create-chat`).
+> - **Eight built-in agents** instead of four, with flags measured against the
+>   installed binaries.
+> - **Separate "Terminal agents" settings section** (product decision during review).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let a studio session be a live terminal running an agent CLI (Claude Code, codex, agy, opencode) in the browser, restorable after a studio restart or host reboot, and reaped from memory when idle.
@@ -35,7 +52,7 @@
 - Consumes: nothing.
 - Produces: `tmuxNameFor(sessionId) -> string`, `isTerminalTmuxName(name) -> boolean`, `resolveState({hasSession, paneDead}) -> 'attach'|'respawn'|'cold'`, `resolveAgentCommands(agentConfig) -> {interactive, newIdFlag, resume, resumeLast}`, `supportsTerminal(agentConfig) -> boolean`, `buildLaunchCommand({commands, convId, isRestore}) -> string|null`, `isReapCandidate({attached, idleSec, sessionAgeSec, idleThresholdSec, minAgeSec}) -> boolean`, `shouldReap({...candidate fields, paneHashA, paneHashB}) -> boolean`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/terminal-session.test.js`:
 
@@ -122,12 +139,12 @@ console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `node test/terminal-session.test.js`
 Expected: FAIL — `Cannot find module '../terminal-session'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `terminal-session.js`:
 
@@ -239,12 +256,12 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `node test/terminal-session.test.js`
 Expected: `30 passed, 0 failed`, exit code 0
 
-- [ ] **Step 5: Wire into `npm test`**
+- [x] **Step 5: Wire into `npm test`**
 
 In `package.json`, append to the `test` script (keep the existing `&&` chain):
 
@@ -255,7 +272,7 @@ In `package.json`, append to the `test` script (keep the existing `&&` chain):
 Run: `npm test`
 Expected: all existing suites plus the new one pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add terminal-session.js test/terminal-session.test.js package.json
@@ -275,7 +292,7 @@ git commit -m "feat(terminal): pure decision logic for terminal sessions"
 - Consumes: `resolveAgentCommands`, `supportsTerminal` from Task 1.
 - Produces: `DEFAULT_EXTERNAL_AGENTS` entries carrying `interactive` / `newIdFlag` / `resume` / `resumeLast`; a `claude` entry usable as a terminal agent; `mergeAgentDefaults(config, defaults) -> {config, dirty}` exported from `terminal-session.js`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `test/terminal-session.test.js`, before the final `console.log` summary:
 
@@ -311,12 +328,12 @@ const DEFAULTS = {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `node test/terminal-session.test.js`
 Expected: FAIL — `mergeAgentDefaults is not a function`
 
-- [ ] **Step 3: Implement `mergeAgentDefaults` in `terminal-session.js`**
+- [x] **Step 3: Implement `mergeAgentDefaults` in `terminal-session.js`**
 
 Add before `module.exports` and extend the export list with `mergeAgentDefaults`:
 
@@ -346,12 +363,12 @@ function mergeAgentDefaults(config, defaults) {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `node test/terminal-session.test.js`
 Expected: all checks pass, exit code 0
 
-- [ ] **Step 5: Update the defaults in `server.js`**
+- [x] **Step 5: Update the defaults in `server.js`**
 
 First add the module requires next to the existing top-level ones (grep `require('./multi-agent-result')`). `path`, `fs`, `os` and `crypto` are already required at the top of `server.js` — verified — so nothing else is needed:
 
@@ -379,7 +396,7 @@ const DEFAULT_EXTERNAL_AGENTS = {
 };
 ```
 
-- [ ] **Step 6: Use the tested merge in `loadConfig`**
+- [x] **Step 6: Use the tested merge in `loadConfig`**
 
 Replace the hand-rolled merge loop (grep `// Merge-in default external agents`) with a call to the tested helper:
 
@@ -389,7 +406,7 @@ Replace the hand-rolled merge loop (grep `// Merge-in default external agents`) 
   if (merged.dirty) dirty = true;
 ```
 
-- [ ] **Step 7: Verify against the real config**
+- [x] **Step 7: Verify against the real config**
 
 ```bash
 cp config.json /tmp/config.json.bak
@@ -400,7 +417,7 @@ node -e "const c=require('./config.json'); console.log(JSON.stringify(c.external
 Expected: every agent has `interactive`; `codex`/`agy`/`opencode` keep their original `template`; a `claude` entry now exists.
 Restore if anything looks wrong: `cp /tmp/config.json.bak config.json`
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add server.js terminal-session.js test/terminal-session.test.js
@@ -422,7 +439,7 @@ git commit -m "feat(terminal): interactive + resume commands for external agents
 - Consumes: `supportsTerminal` from Task 1.
 - Produces: `sessions.kind` (`'chat'` default), `sessions.terminal_agent`, `sessions.agent_conv_id`; `POST /api/sessions` accepting `{kind, terminalAgent}`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/terminal-schema.test.js`:
 
@@ -471,12 +488,12 @@ console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `node test/terminal-schema.test.js`
 Expected: FAIL — `kind added` fails, because the migration list is only in the test so far; if `db-adapter` resolves, the failure is the assertion, not a crash. (If it crashes on `openDatabase`, install the optional dep first: `npm install`.)
 
-- [ ] **Step 3: Add the migrations to `server.js`**
+- [x] **Step 3: Add the migrations to `server.js`**
 
 Immediately after the `transcript_offset` migration line, add:
 
@@ -488,12 +505,12 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN terminal_agent TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN agent_conv_id TEXT`); } catch {}    // the agent's own conversation id, for exact resume
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `node test/terminal-schema.test.js`
 Expected: `5 passed, 0 failed`
 
-- [ ] **Step 5: Accept `kind` at session creation**
+- [x] **Step 5: Accept `kind` at session creation**
 
 Add a prepared statement next to `createSession` (do NOT change `createSession` itself — it is called from eight places):
 
@@ -527,7 +544,7 @@ app.post('/api/sessions', (req, res) => {
 });
 ```
 
-- [ ] **Step 6: Verify by hand**
+- [x] **Step 6: Verify by hand**
 
 ```bash
 npm run dev &
@@ -541,7 +558,7 @@ kill %1
 
 Expected: the first returns a session with `"kind":"terminal"`, `"terminal_agent":"claude"` and a UUID in `agent_conv_id`; the second returns HTTP 400 with the `terminalAgent must name…` error.
 
-- [ ] **Step 7: Add the suite to `npm test` and commit**
+- [x] **Step 7: Add the suite to `npm test` and commit**
 
 Append `&& node test/terminal-schema.test.js` to the `test` script, then:
 
@@ -571,7 +588,7 @@ git commit -m "feat(terminal): session kind, agent and conversation id columns"
 > `terminal-bridge.js`. Code blocks in this task are kept for the record but are
 > superseded by the committed module.
 
-- [ ] **Step 1: Write the failing integration test**
+- [x] **Step 1: Write the failing integration test**
 
 Create `test/terminal-bridge.integration.test.js`:
 
@@ -629,7 +646,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 })();
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `node test/terminal-bridge.integration.test.js`
 Expected: FAIL — `Cannot find module '../terminal-bridge'`
@@ -643,14 +660,14 @@ records why `script` and `pipe-pane -IO` were both rejected. The public contract
 unchanged from what Task 5 consumes: `attach()` still returns `{write, resize, close}`
 and still calls `onData(Buffer)` / `onExit()`.
 
-- [ ] **Step 4: Run the integration test**
+- [x] **Step 4: Run the integration test**
 
 Run: `node test/terminal-bridge.integration.test.js`
 Expected: `25 passed, 0 failed` on a host with tmux; the six pure decoder checks still run and the tmux-dependent ones SKIP without tmux.
 
 Do NOT add this suite to `npm test` — it depends on tmux and takes ~8 s. Note it in the commit message as a manual suite.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add terminal-bridge.js test/terminal-bridge.integration.test.js
@@ -659,7 +676,7 @@ git commit -m "feat(terminal): tmux bridge with script-based PTY attach
 Manual suite (needs tmux): node test/terminal-bridge.integration.test.js"
 ```
 
-- [ ] **Step 6: Add the bridge require to `server.js`**
+- [x] **Step 6: Add the bridge require to `server.js`**
 
 Now that the module exists, add it next to the `terminal-session` require from Task 2:
 
@@ -681,7 +698,7 @@ Run: `npm run dev` — the server must still boot cleanly (it does not use `term
 - Consumes: everything from Tasks 1, 3, 4.
 - Produces: `GET /api/terminal/capability -> {available, reason}`; WS endpoint `/ws/terminal?session=<id>`; startup cleanup; delete cleanup.
 
-- [ ] **Step 1: Add the capability endpoint**
+- [x] **Step 1: Add the capability endpoint**
 
 Next to the `/api/version` handler:
 
@@ -705,7 +722,7 @@ app.get('/api/terminal/capability', (_, res) => {
 
 Adjust `tunnelManager?.getStatus?.()` to the actual instance name — grep `new TunnelManager` in `server.js` and check the field name `getStatus()` returns for "running"; if it is not `active`, use whatever field it exposes.
 
-- [ ] **Step 2: Route the WebSocket**
+- [x] **Step 2: Route the WebSocket**
 
 Create a second `WebSocketServer({ noServer: true })` next to the existing `wss`, then extend the upgrade handler (grep `server.on('upgrade'`) — keep the existing auth check exactly as it is and branch on pathname AFTER it:
 
@@ -723,7 +740,7 @@ const wssTerm = new WebSocketServer({ noServer: true });
   wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
 ```
 
-- [ ] **Step 3: Implement the terminal connection handler**
+- [x] **Step 3: Implement the terminal connection handler**
 
 ```js
 // Terminal WS protocol:
@@ -787,7 +804,7 @@ wssTerm.on('connection', (ws, req) => {
 });
 ```
 
-- [ ] **Step 4: Clean up orphaned clients at startup**
+- [x] **Step 4: Clean up orphaned clients at startup**
 
 In the server-start block (grep `server.listen(`), after the listen callback logs:
 
@@ -799,7 +816,7 @@ try {
 } catch {}
 ```
 
-- [ ] **Step 5: Kill the tmux session when the studio session is deleted**
+- [x] **Step 5: Kill the tmux session when the studio session is deleted**
 
 At the delete handler (grep `killInteractiveTmux(id)`), add alongside it:
 
@@ -807,7 +824,7 @@ At the delete handler (grep `killInteractiveTmux(id)`), add alongside it:
   for (const id of ids) { try { termBridge.killSession(tmuxNameFor(id)); } catch {} }
 ```
 
-- [ ] **Step 6: Add the config defaults**
+- [x] **Step 6: Add the config defaults**
 
 Where config defaults are seeded (grep `defaultEngine`), add a `terminal` block if absent:
 
@@ -815,7 +832,7 @@ Where config defaults are seeded (grep `defaultEngine`), add a `terminal` block 
   if (!c.terminal) { c.terminal = { enabled: false, idleTimeoutMin: 30, maxLive: 3 }; dirty = true; }
 ```
 
-- [ ] **Step 7: Verify by hand**
+- [x] **Step 7: Verify by hand**
 
 ```bash
 npm run dev &
@@ -834,7 +851,7 @@ kill %1
 
 Expected: capability flips from unavailable to available; session creation returns an id. The tmux session appears only once a WebSocket connects (Task 7 provides the client; until then verify with `websocat` or the browser console).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add server.js
@@ -853,7 +870,7 @@ git commit -m "feat(terminal): websocket endpoint, capability gate and lifecycle
 - Consumes: `shouldReap` (Task 1), `sessionInfo`/`paneHash`/`saveScrollback`/`killSession` (Task 4).
 - Produces: `startTerminalReaper({ intervalMs })` in `server.js`; `pickOverflow(sessions, maxLive) -> string[]` in `terminal-session.js`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `test/terminal-session.test.js`:
 
@@ -873,12 +890,12 @@ check('never picks an attached session', pickOverflow(LIVE, 1), ['ccsterm-b', 'c
 check('cap of zero still spares attached', pickOverflow(LIVE, 0), ['ccsterm-b', 'ccsterm-d', 'ccsterm-a']);
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `node test/terminal-session.test.js`
 Expected: FAIL — `pickOverflow is not a function`
 
-- [ ] **Step 3: Implement `pickOverflow`**
+- [x] **Step 3: Implement `pickOverflow`**
 
 Add to `terminal-session.js` and its exports:
 
@@ -899,12 +916,12 @@ function pickOverflow(sessions, maxLive) {
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `node test/terminal-session.test.js`
 Expected: all checks pass.
 
-- [ ] **Step 5: Wire the reaper into `server.js`**
+- [x] **Step 5: Wire the reaper into `server.js`**
 
 ```js
 // Terminal reaper. Agents are expensive (measured: opencode ~1.8 GB, claude ~1 GB);
@@ -971,7 +988,7 @@ Start it next to the startup cleanup from Task 5:
 startTerminalReaper({ intervalMs: 60000 });
 ```
 
-- [ ] **Step 6: Verify the reaper end-to-end**
+- [x] **Step 6: Verify the reaper end-to-end**
 
 ```bash
 node -e "const f='config.json';const c=require('./'+f);c.terminal={enabled:true,idleTimeoutMin:1,maxLive:3};require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
@@ -987,7 +1004,7 @@ kill %1
 
 Expected after ~3 minutes: `ccsterm-reaptest` is gone, `ccsterm-busytest` is still listed, and a scrollback file exists at `/tmp/ccsterm-sb-reaptest.txt`. Reset `idleTimeoutMin` to 30 afterwards.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 npm test
@@ -1007,7 +1024,7 @@ git commit -m "feat(terminal): idle reaper with pane-hash busy check and live-se
 - Consumes: `GET /api/terminal/capability`, `POST /api/sessions` with `{kind:'terminal', terminalAgent}`, WS `/ws/terminal?session=<id>`.
 - Produces: `openTerminalSession(sessionId)`, `closeTerminalPane()`, global `_terminalAvailable`.
 
-- [ ] **Step 1: Vendor xterm.js**
+- [x] **Step 1: Vendor xterm.js**
 
 ```bash
 mkdir -p public/vendor
@@ -1019,7 +1036,7 @@ ls -la public/vendor
 
 Expected: three files, `xterm.js` roughly 250-300 KB. These are plain static assets served by the existing Express static handler — no build step is introduced.
 
-- [ ] **Step 2: Add the markup and styles**
+- [x] **Step 2: Add the markup and styles**
 
 In `public/index.html`, next to the other top-level panes, add:
 
@@ -1039,7 +1056,7 @@ In `public/index.html`, next to the other top-level panes, add:
 <script src="/vendor/xterm-addon-fit.js"></script>
 ```
 
-- [ ] **Step 3: Add the client logic**
+- [x] **Step 3: Add the client logic**
 
 ```js
 let _terminalAvailable = false, _term = null, _termFit = null, _termWs = null, _termSessionId = null;
@@ -1130,14 +1147,14 @@ function closeTerminalPane() {
 }
 ```
 
-- [ ] **Step 4: Wire the entry points**
+- [x] **Step 4: Wire the entry points**
 
 1. Call `loadTerminalCapability()` where `applyTmuxCapability` is called (grep `applyTmuxCapability`).
 2. Add a `+ Terminal` button next to the new-chat control that opens a small agent picker built from `GET /api/external-agents` (offer only agents whose `interactive` field is set) and calls `createTerminalSession(id)`.
 3. In `switchTab(id)` and wherever a session is opened from the history list, check the session's `kind`: if `'terminal'`, call `openTerminalSession(session.id, session.terminal_agent)` and return early instead of rendering the chat pane; otherwise call `closeTerminalPane()` first so switching back to a chat hides the terminal.
 4. In the sessions list renderer, show a `▮` marker for `kind === 'terminal'` rows.
 
-- [ ] **Step 5: Add the i18n strings**
+- [x] **Step 5: Add the i18n strings**
 
 Add to every language table already present in `public/index.html` (English values shown; translate for the others, Ukrainian included):
 
@@ -1151,7 +1168,7 @@ Add to every language table already present in `public/index.html` (English valu
 'term.state.exited': 'agent exited',
 ```
 
-- [ ] **Step 6: Verify in the browser**
+- [x] **Step 6: Verify in the browser**
 
 ```bash
 npm run dev
@@ -1167,7 +1184,7 @@ Then in the browser at `http://localhost:3000`:
 7. Open a chat session → the terminal pane hides and chat works as before.
 8. `curl -s localhost:3000/api/terminal/capability` with `terminal.enabled=false` → the button is disabled with the reason in its tooltip.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add public/vendor public/index.html
