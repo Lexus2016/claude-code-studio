@@ -76,5 +76,35 @@ check('attached is not a candidate', isReapCandidate({ attached: 1, idleSec: 360
 check('young session is not a candidate', isReapCandidate({ attached: 0, idleSec: 3600, sessionAgeSec: 10 }), false);
 check('recently active is not a candidate', isReapCandidate({ attached: 0, idleSec: 10, sessionAgeSec: 3600 }), false);
 
+const { mergeAgentDefaults } = require('../terminal-session');
+
+console.log('config merge:');
+const DEFAULTS = {
+  claude: { label: 'Claude Code', interactive: 'claude', newIdFlag: '--session-id {sid}', resume: 'claude --resume {sid}', resumeLast: 'claude --continue' },
+  codex:  { label: 'OpenAI Codex', template: 'codex {prompt}', interactive: 'codex', resume: 'codex resume {sid}', resumeLast: 'codex resume --last' },
+};
+{
+  const r = mergeAgentDefaults({ externalAgents: {}, _removedAgents: [] }, DEFAULTS);
+  check('adds missing agents', Object.keys(r.config.externalAgents).sort(), ['claude', 'codex']);
+  check('marks dirty when it added something', r.dirty, true);
+}
+{
+  // An existing user agent keeps its own template but gains the new terminal fields.
+  const existing = { externalAgents: { codex: { label: 'My Codex', template: 'codex --yolo {prompt}' } }, _removedAgents: [] };
+  const r = mergeAgentDefaults(existing, DEFAULTS);
+  check('never overwrites a user template', r.config.externalAgents.codex.template, 'codex --yolo {prompt}');
+  check('never overwrites a user label', r.config.externalAgents.codex.label, 'My Codex');
+  check('backfills interactive', r.config.externalAgents.codex.interactive, 'codex');
+  check('backfills resume', r.config.externalAgents.codex.resume, 'codex resume {sid}');
+}
+{
+  const r = mergeAgentDefaults({ externalAgents: {}, _removedAgents: ['codex'] }, DEFAULTS);
+  check('respects _removedAgents', Object.keys(r.config.externalAgents), ['claude']);
+}
+{
+  const already = { externalAgents: { claude: { ...DEFAULTS.claude }, codex: { ...DEFAULTS.codex } }, _removedAgents: [] };
+  check('idempotent second run is not dirty', mergeAgentDefaults(already, DEFAULTS).dirty, false);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

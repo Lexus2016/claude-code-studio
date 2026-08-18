@@ -98,8 +98,32 @@ function shouldReap(opts) {
   return true;
 }
 
+// Merge default agent definitions into a loaded config. Existing user fields win;
+// only genuinely missing keys are backfilled, so an upgrade adds the new terminal
+// fields (interactive/resume/...) to agents the user already customised without
+// clobbering their command line.
+function mergeAgentDefaults(config, defaults) {
+  const cfg = config || {};
+  const agents = cfg.externalAgents || {};
+  const removed = new Set(cfg._removedAgents || []);
+  let dirty = false;
+  for (const [id, def] of Object.entries(defaults || {})) {
+    if (removed.has(id)) continue;
+    if (!agents[id]) {
+      agents[id] = { ...def };
+      dirty = true;
+      continue;
+    }
+    for (const [k, v] of Object.entries(def)) {
+      if (agents[id][k] === undefined) { agents[id][k] = v; dirty = true; }
+    }
+  }
+  cfg.externalAgents = agents;
+  return { config: cfg, dirty };
+}
+
 module.exports = {
   TMUX_PREFIX, tmuxNameFor, isTerminalTmuxName, resolveState,
   resolveAgentCommands, supportsTerminal, buildLaunchCommand,
-  isReapCandidate, shouldReap,
+  isReapCandidate, shouldReap, mergeAgentDefaults,
 };

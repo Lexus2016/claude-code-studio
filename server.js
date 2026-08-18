@@ -38,6 +38,10 @@ const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
 const { isTransientOverload, shouldRetryOverload } = require('./rate-limit-utils');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
+const {
+  tmuxNameFor, resolveAgentCommands, supportsTerminal, buildLaunchCommand,
+  isReapCandidate, shouldReap, mergeAgentDefaults,
+} = require('./terminal-session');
 const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
@@ -1850,10 +1854,16 @@ function buildSessionReplayContent(sessionId) {
 // ============================================
 
 /** Default slash commands — seeded into config.json on first run / fresh install. */
+// `template` is the one-shot delegation form (existing behaviour). The terminal
+// fields are what a live attached session needs: `interactive` starts a TUI,
+// `newIdFlag` pins the conversation id we generate so a later resume is exact,
+// `resume`/`resumeLast` restore after a host reboot or a reap.
+// Commands verified against the installed CLIs on 2026-08-18.
 const DEFAULT_EXTERNAL_AGENTS = {
-  codex:    { label: 'OpenAI Codex',    template: 'codex {prompt}' },
-  agy:      { label: 'Antigravity CLI', template: 'agy -i {prompt}' },
-  opencode: { label: 'opencode',        template: 'opencode run {prompt}' },
+  claude:   { label: 'Claude Code',                                          interactive: 'claude',   newIdFlag: '--session-id {sid}', resume: 'claude --resume {sid}',    resumeLast: 'claude --continue' },
+  codex:    { label: 'OpenAI Codex',    template: 'codex {prompt}',          interactive: 'codex',    resume: 'codex resume {sid}',    resumeLast: 'codex resume --last' },
+  agy:      { label: 'Antigravity CLI', template: 'agy -i {prompt}',         interactive: 'agy',      resume: 'agy --conversation {sid}', resumeLast: 'agy --continue' },
+  opencode: { label: 'opencode',        template: 'opencode run {prompt}',   interactive: 'opencode', resume: 'opencode -s {sid}',     resumeLast: 'opencode -c' },
 };
 
 const DEFAULT_SLASH_COMMANDS = [
@@ -1889,14 +1899,10 @@ function loadConfig() {
     c.slashCommands.push(...toAdd);
     dirty = true;
   }
-  // Merge-in default external agents (skip explicitly removed ones)
-  const removed = new Set(c._removedAgents);
-  for (const [id, def] of Object.entries(DEFAULT_EXTERNAL_AGENTS)) {
-    if (!c.externalAgents[id] && !removed.has(id)) {
-      c.externalAgents[id] = { ...def };
-      dirty = true;
-    }
-  }
+  // Merge-in default external agents (skip explicitly removed ones). Backfills
+  // newly-introduced fields (interactive/resume/...) onto agents the user already
+  // customised, without touching any field they set themselves.
+  if (mergeAgentDefaults(c, DEFAULT_EXTERNAL_AGENTS).dirty) dirty = true;
   if (dirty) {
     try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); } catch {}
   }
