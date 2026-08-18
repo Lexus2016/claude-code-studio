@@ -563,7 +563,15 @@ git commit -m "feat(terminal): session kind, agent and conversation id columns"
 
 **Interfaces:**
 - Consumes: `tmuxNameFor`, `resolveState`, `resolveAgentCommands`, `buildLaunchCommand` from Task 1.
-- Produces: `tmuxAvailable()`, `scriptAvailable()`, `sessionInfo(name) -> {exists, paneDead, attached, activityAgeSec, ageSec}`, `paneHash(name) -> string|null`, `ensureSession({name, workdir, launchCommand}) -> 'attach'|'respawn'|'cold'`, `attach({name, cols, rows, onData, onExit}) -> handle`, `resize(name, cols, rows)`, `detachClients(name)`, `killSession(name)`, `listTerminalSessions() -> string[]`, `saveScrollback(name, file)`.
+- Produces: `tmuxAvailable()`, `sessionInfo(name) -> {exists, paneDead, attached, activityAgeSec, ageSec}`, `paneHash(name) -> string|null`, `ensureSession({name, workdir, launchCommand}) -> 'attach'|'respawn'|'cold'`, `attach({name, cols, rows, onData, onExit}) -> handle{write,resize,close}`, `detachClients(name)`, `killSession(name)`, `listTerminalSessions() -> string[]`, `captureScreen(name) -> Buffer|null`, `decodeOutputPayload(str) -> Buffer`, `saveScrollback(name, file)`.
+
+> **IMPLEMENTED — transport changed during execution.** The `script`-based PTY shim
+> below does NOT work from Node (`script: tcgetattr/ioctl: Operation not supported on
+> socket`): Node's `stdio: 'pipe'` allocates socketpairs, not real pipes. The shipped
+> implementation uses **tmux control mode** (`tmux -C attach-session`) instead — see the
+> rewritten "PTY transport" section of the spec and the header comment in
+> `terminal-bridge.js`. Code blocks in this task are kept for the record but are
+> superseded by the committed module.
 
 - [ ] **Step 1: Write the failing integration test**
 
@@ -583,8 +591,8 @@ function check(label, actual, expected) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
-  if (!bridge.tmuxAvailable() || !bridge.scriptAvailable()) {
-    console.log('SKIP — tmux and/or script not available on this host');
+  if (!bridge.tmuxAvailable()) {
+    console.log('SKIP tmux-dependent checks — tmux not available on this host');
     process.exit(0);
   }
   const name = 'ccsterm-itest';
@@ -628,155 +636,19 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 Run: `node test/terminal-bridge.integration.test.js`
 Expected: FAIL — `Cannot find module '../terminal-bridge'`
 
-- [ ] **Step 3: Implement `terminal-bridge.js`**
+- [x] **Step 3: Implement `terminal-bridge.js`**
 
-```js
-// terminal-bridge.js — tmux + PTY side effects for terminal sessions.
-//
-// The PTY problem: tmux owns the agent's PTY, but a tmux CLIENT needs its own
-// terminal. node-pty would provide one, but it is a native module and this project
-// has no build step, so the system `script` binary is used as the shim instead.
-// Verified on macOS 2026-08-18; the flag syntax differs between BSD and util-linux.
-//
-// All decision logic lives in terminal-session.js — this module only executes.
-
-const { spawn, spawnSync } = require('node:child_process');
-const crypto = require('node:crypto');
-const fs = require('node:fs');
-const { TMUX_PREFIX, resolveState } = require('./terminal-session');
-
-function shq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
-
-function have(bin, args) {
-  try { const r = spawnSync(bin, args, { stdio: 'ignore' }); return !r.error && r.status === 0; }
-  catch { return false; }
-}
-let _tmux = null, _script = null;
-function tmuxAvailable() { if (_tmux === null) _tmux = have('tmux', ['-V']); return _tmux; }
-function scriptAvailable() {
-  if (_script === null) {
-    _script = process.platform === 'win32' ? false
-      : process.platform === 'darwin' ? have('script', ['-q', '/dev/null', 'true'])
-      : have('script', ['-qfc', 'true', '/dev/null']);
-  }
-  return _script;
-}
-
-function tmux(args, opts = {}) {
-  try { return spawnSync('tmux', args, { encoding: 'utf8', ...opts }); }
-  catch { return { status: 1, stdout: '', stderr: '' }; }
-}
-
-function hasSession(name) {
-  const r = tmux(['has-session', '-t', name], { stdio: 'ignore' });
-  return r.status === 0;
-}
-
-// One display-message call for every field the reaper needs.
-// NOTE: session_activity is deliberately NOT used — it does not move when the pane
-// produces output (measured), so it cannot tell a working agent from an idle one.
-// window_activity does move and is the correct idle signal.
-function sessionInfo(name) {
-  if (!hasSession(name)) return { exists: false, paneDead: false, attached: 0, activityAgeSec: 0, ageSec: 0 };
-  const fmt = '#{pane_dead}|#{session_attached}|#{window_activity}|#{session_created}';
-  const r = tmux(['display-message', '-p', '-t', name, fmt]);
-  const [dead, attached, activity, created] = String(r.stdout || '').trim().split('|');
-  const now = Math.floor(Date.now() / 1000);
-  return {
-    exists: true,
-    paneDead: dead === '1',
-    attached: parseInt(attached, 10) || 0,
-    activityAgeSec: Math.max(0, now - (parseInt(activity, 10) || now)),
-    ageSec: Math.max(0, now - (parseInt(created, 10) || now)),
-  };
-}
-
-function paneHash(name) {
-  const r = tmux(['capture-pane', '-p', '-t', name]);
-  if (r.status !== 0) return null;
-  return crypto.createHash('sha1').update(r.stdout || '').digest('hex');
-}
-
-function listTerminalSessions() {
-  const r = tmux(['list-sessions', '-F', '#{session_name}']);
-  if (r.status !== 0) return [];
-  return String(r.stdout || '').split('\n').map(s => s.trim()).filter(s => s.startsWith(TMUX_PREFIX));
-}
-
-// Create or revive the tmux session. Returns which path was taken.
-// remain-on-exit: an agent that exits leaves a DEAD pane instead of destroying the
-// session, so the scrollback survives and respawn-pane can revive it in place.
-// window-size manual: SIGWINCH cannot be delivered through `script`, so sizing is
-// driven explicitly by resize(); tmux's default (`latest`) would let any client
-// resize the window out from under the others.
-function ensureSession({ name, workdir, launchCommand }) {
-  const state = resolveState({ hasSession: hasSession(name), paneDead: sessionInfo(name).paneDead });
-  if (state === 'attach') return state;
-  if (state === 'respawn') {
-    tmux(['respawn-pane', '-k', '-t', name, launchCommand]);
-    return state;
-  }
-  const env = { ...process.env };
-  delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses the child
-  spawnSync('tmux', ['new-session', '-d', '-s', name, '-c', workdir, launchCommand], { env, stdio: 'ignore' });
-  tmux(['set-option', '-t', name, 'remain-on-exit', 'on']);
-  tmux(['set-option', '-t', name, 'window-size', 'manual']);
-  return state;
-}
-
-function resize(name, cols, rows) {
-  const c = Math.max(20, Math.min(500, parseInt(cols, 10) || 80));
-  const r = Math.max(5, Math.min(200, parseInt(rows, 10) || 24));
-  tmux(['resize-window', '-t', name, '-x', String(c), '-y', String(r)]);
-}
-
-// Attach a client. TERM must be set explicitly: a studio started by systemd/launchd/
-// Docker inherits no TERM, and tmux then refuses with
-// "open terminal failed: terminal does not support clear" (verified).
-function attach({ name, cols, rows, onData, onExit }) {
-  resize(name, cols, rows);
-  const args = process.platform === 'darwin'
-    ? ['-q', '/dev/null', 'tmux', 'attach-session', '-t', name]
-    : ['-qfc', `tmux attach-session -t ${shq(name)}`, '/dev/null'];
-  const env = { ...process.env, TERM: 'xterm-256color' };
-  delete env.CLAUDECODE;
-  const p = spawn('script', args, { env, stdio: ['pipe', 'pipe', 'pipe'] });
-  p.stdout.on('data', d => { try { onData(d); } catch {} });
-  p.stderr.on('data', d => { try { onData(d); } catch {} });
-  p.on('exit', () => { try { onExit(); } catch {} });
-  p.on('error', () => { try { onExit(); } catch {} });
-  return {
-    write(data) { try { p.stdin.write(data); } catch {} },
-    resize(c, r) { resize(name, c, r); },
-    close() { try { p.kill('SIGTERM'); } catch {} },
-  };
-}
-
-// Drop every client of a session without killing it. Used at startup: `script`
-// processes are children of the studio's Node process and SURVIVE a studio restart,
-// staying attached forever and pinning session_attached above zero — which would
-// stop the reaper from ever firing.
-function detachClients(name) { tmux(['detach-client', '-s', name]); }
-
-function saveScrollback(name, file) {
-  const r = tmux(['capture-pane', '-p', '-S', '-', '-t', name]);
-  if (r.status !== 0) return false;
-  try { fs.writeFileSync(file, r.stdout || '', { mode: 0o600 }); return true; } catch { return false; }
-}
-
-function killSession(name) { tmux(['kill-session', '-t', name], { stdio: 'ignore' }); }
-
-module.exports = {
-  tmuxAvailable, scriptAvailable, hasSession, sessionInfo, paneHash,
-  listTerminalSessions, ensureSession, resize, attach, detachClients,
-  saveScrollback, killSession,
-};
-```
+SUPERSEDED — the `script`-based implementation originally written here does not work
+from Node (see the note at the top of this task). The shipped module uses tmux control
+mode; read `terminal-bridge.js` in the repo root for the real code. Its header comment
+records why `script` and `pipe-pane -IO` were both rejected. The public contract is
+unchanged from what Task 5 consumes: `attach()` still returns `{write, resize, close}`
+and still calls `onData(Buffer)` / `onExit()`.
 
 - [ ] **Step 4: Run the integration test**
 
 Run: `node test/terminal-bridge.integration.test.js`
-Expected: `10 passed, 0 failed` on a host with tmux; `SKIP` and exit 0 without tmux.
+Expected: `25 passed, 0 failed` on a host with tmux; the six pure decoder checks still run and the tmux-dependent ones SKIP without tmux.
 
 Do NOT add this suite to `npm test` — it depends on tmux and takes ~8 s. Note it in the commit message as a manual suite.
 
@@ -824,14 +696,12 @@ app.get('/api/terminal/capability', (_, res) => {
   const cfg = loadConfig();  // NOT loadMergedConfig: it whitelists fields and drops terminal/externalAgents
   const enabled = cfg.terminal?.enabled === true;
   const tmuxOk = termBridge.tmuxAvailable();
-  const scriptOk = termBridge.scriptAvailable();
   const tunnelOn = tunnelManager?.getStatus?.()?.active === true;
   let reason = '';
   if (!enabled) reason = 'disabled in config (terminal.enabled)';
   else if (!tmuxOk) reason = 'tmux not found on this host';
-  else if (!scriptOk) reason = 'script (PTY shim) not found on this host';
   else if (tunnelOn) reason = 'a public tunnel is active — terminal access is blocked';
-  res.json({ available: enabled && tmuxOk && scriptOk && !tunnelOn, reason });
+  res.json({ available: enabled && tmuxOk && !tunnelOn, reason });
 });
 ```
 
@@ -868,7 +738,7 @@ wssTerm.on('connection', (ws, req) => {
   const cfg = loadConfig();  // NOT loadMergedConfig: it whitelists fields and drops terminal/externalAgents
   if (cfg.terminal?.enabled !== true) { send({ type: 'error', error: 'terminal sessions are disabled' }); return ws.close(); }
   if (tunnelManager?.getStatus?.()?.active === true) { send({ type: 'error', error: 'blocked while a public tunnel is active' }); return ws.close(); }
-  if (!termBridge.tmuxAvailable() || !termBridge.scriptAvailable()) { send({ type: 'error', error: 'tmux/script unavailable on this host' }); return ws.close(); }
+  if (!termBridge.tmuxAvailable()) { send({ type: 'error', error: 'tmux unavailable on this host' }); return ws.close(); }
 
   let sessionId = null;
   try { sessionId = new URL(req.url, 'http://x').searchParams.get('session'); } catch {}

@@ -89,8 +89,9 @@ A reaper built on it would kill agents mid-task.
 
 **Accepted signals:**
 
-- `#{session_attached}` — client count. Killing the `script` process drops it to 0 and
-  leaves the tmux session alive (verified), which is exactly "browser tab closed".
+- `#{session_attached}` — client count. Killing the control-mode client process drops
+  it to 0 and leaves the tmux session alive (verified), which is exactly "browser tab
+  closed".
 - `#{window_activity}` — does move with output (verified: 948 → 952 → 955 while
   `session_activity` stayed 948). Used as a cheap first filter only: Claude's TUI has a
   self-refreshing statusline clock, so a fresh `window_activity` does not prove work.
@@ -105,28 +106,71 @@ kill. Anything short-circuits to "keep".
 **Why the busy check is mandatory:** resume restores the conversation, but not a file
 the agent was halfway through writing. A wrong reap can corrupt work on disk.
 
-**Orphaned clients.** `script` processes are children of the studio's Node process. If
-the studio restarts, they survive, stay attached, and pin `session_attached` above zero
-forever — the reaper would never fire. The studio must `detach-client` on every terminal
-tmux session at startup.
+**Orphaned clients.** The `tmux -C` client processes are children of the studio's Node
+process. If the studio restarts, they survive, stay attached, and pin
+`session_attached` above zero forever — the reaper would never fire. The studio must
+`detach-client` on every terminal tmux session at startup.
 
 ## PTY transport — verified
 
-No `node-pty` (native module, rejected by the project's zero-build rule). tmux already
-owns the PTY for the agent; the tmux *client* gets its own PTY from the system `script`:
+No `node-pty` (native module, rejected by the project's zero-build rule).
 
-- macOS: `script -q /dev/null tmux attach-session -t NAME`
-- Linux: `script -qfc "tmux attach-session -t NAME" /dev/null`
+**Rejected: `script` as a PTY shim.** The obvious substitute — `script -q /dev/null
+tmux attach-session -t NAME` — cannot be spawned from Node:
 
-Three non-obvious requirements, all verified:
+```
+script: tcgetattr/ioctl: Operation not supported on socket   (exit 1)
+```
 
-1. **`TERM` must be set explicitly.** Without it: `open terminal failed: terminal does
-   not support clear`. A studio started by systemd/launchd/Docker has no `TERM`.
-2. **`window-size manual` + `resize-window`** for sizing — SIGWINCH cannot be delivered
-   through `script`. tmux's default is `window-size latest`, which lets any client
-   resize the window out from under the others.
-3. **`remain-on-exit on`** so an exited agent leaves a dead pane (scrollback preserved,
+Node's `stdio: 'pipe'` allocates socketpairs rather than real pipes, and BSD `script`
+calls `tcgetattr` on its stdio. Passing a mkfifo FIFO as stdin does not help. The
+command *does* work from a shell, which is how it was first — and wrongly — validated:
+the original experiment used shell pipes, not the environment the code actually runs in.
+
+**Rejected: `pipe-pane -IO` with FIFOs.** Verified working (raw bytes both directions,
+no escaping), but it carries no lifecycle events and no resize, so it needs a second
+control channel anyway, plus two FIFOs and two `cat` processes per session.
+
+**Chosen: tmux control mode** — `tmux -C attach-session -t NAME`, spawned with ordinary
+Node pipes. tmux owns the agent's PTY; the control client needs none. One channel
+carries output, input, resize and lifecycle events, and there is no platform branch.
+Verified from Node on tmux 3.7b:
+
+- output: `%output %0 tick\015\012` — bytes octal-escaped, decoded back losslessly
+  (round-trips ANSI escapes, a literal backslash, UTF-8 Cyrillic, and NUL)
+- input: `send-keys -t NAME -H <hex>` — carries control bytes; verified end-to-end by
+  driving `vim` through insert → **Escape** → normal-mode `dd`
+- resize: `resize-window -x W -y H` with `window-size manual`
+- bootstrap: `capture-pane -p -e`
+
+### Non-obvious requirements, all verified
+
+1. **Line assembly on bytes.** A notification can split across chunk boundaries and
+   several can arrive in one chunk. Accumulate a Buffer and cut on LF only; decode the
+   payload as latin1 (1 char = 1 byte) so multi-byte UTF-8 is never corrupted.
+2. **`%output` is not tokenised.** Split off exactly the prefix and the pane id — the
+   payload contains spaces.
+3. **Protocol chatter must never reach the browser.** `%begin`/`%end`/`%error` framing,
+   `%session-changed`, `%window-*` and command reply bodies are not terminal output.
+   `%output` can arrive *between* `%begin` and `%end`.
+4. **`window-size manual` and `refresh-client -C` conflict.** With manual sizing the
+   window ignores the client's size — measured: `refresh-client -C 100x30` left the
+   window at 80x24. Manual sizing is what we want (it stops a second browser tab from
+   resizing the window out from under the first — tmux's default policy is `latest`),
+   so resizing goes through `resize-window`.
+5. **`remain-on-exit on`** so an exited agent leaves a dead pane (scrollback preserved,
    `respawn-pane` revives it in place) instead of destroying the session silently.
+6. **Input chunking.** A paste becomes a `send-keys` command line ~3x its byte length;
+   chunk at 512 bytes so no command line runs past ~1.6 KB.
+
+### Known limitation: bootstrap is not full state restore
+
+Control mode replays nothing that happened before the attach, so a freshly attached
+browser is painted from `capture-pane -p -e`. That restores the visible text and
+colours, **not** the full terminal state — alternate-screen flag, cursor shape, saved
+cursor, keyboard modes. The agent's next redraw fixes those. `pipe-pane` has the same
+limitation (measured: attaching to an already-running `vim` never sees its
+`ESC[?1049h`), so this is a property of attaching late, not of the chosen transport.
 
 ## Security
 
@@ -149,7 +193,7 @@ OS-sniffed — the same pattern as the existing `tmuxAvailable` flag.
 | Server host | Support |
 |---|---|
 | macOS / Linux / Docker / WSL | full |
-| native Windows | unavailable — no tmux, no `script`, and Node has no ConPTY API without a native module |
+| native Windows | unavailable — no tmux (Node has no ConPTY API without a native module either) |
 
 Native Windows keeps the existing native-console path (`/api/sessions/:id/open-terminal`).
 
