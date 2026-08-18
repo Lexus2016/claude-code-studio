@@ -1,0 +1,80 @@
+// Pure-logic verification for terminal-session.js (no test framework in this project).
+// Run: node test/terminal-session.test.js
+const assert = require('assert');
+const {
+  tmuxNameFor, isTerminalTmuxName, resolveState,
+  resolveAgentCommands, supportsTerminal, buildLaunchCommand,
+  isReapCandidate, shouldReap,
+} = require('../terminal-session');
+
+let pass = 0, fail = 0;
+function check(label, actual, expected) {
+  try {
+    assert.deepStrictEqual(actual, expected);
+    pass++; console.log(`  ok   ${label}`);
+  } catch {
+    fail++; console.error(`  FAIL ${label} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+
+const CLAUDE = { label: 'Claude Code', interactive: 'claude', newIdFlag: '--session-id {sid}', resume: 'claude --resume {sid}', resumeLast: 'claude --continue' };
+const CODEX  = { label: 'OpenAI Codex', interactive: 'codex', resume: 'codex resume {sid}', resumeLast: 'codex resume --last' };
+const DELEGATE_ONLY = { label: 'Legacy', template: 'legacy {prompt}' };
+
+console.log('tmux naming:');
+check('prefixes with ccsterm-', tmuxNameFor('abc123'), 'ccsterm-abc123');
+check('sanitises unsafe chars', tmuxNameFor('a b/c;d'), 'ccsterm-a_b_c_d');
+check('recognises own names', isTerminalTmuxName('ccsterm-abc'), true);
+check('rejects subscription-engine names', isTerminalTmuxName('ccs-abc'), false);
+check('rejects non-strings', isTerminalTmuxName(null), false);
+
+console.log('restore state:');
+check('no tmux session -> cold', resolveState({ hasSession: false, paneDead: false }), 'cold');
+check('session with live pane -> attach', resolveState({ hasSession: true, paneDead: false }), 'attach');
+check('session with dead pane -> respawn', resolveState({ hasSession: true, paneDead: true }), 'respawn');
+
+console.log('agent commands:');
+check('reads all four fields', resolveAgentCommands(CLAUDE), { interactive: 'claude', newIdFlag: '--session-id {sid}', resume: 'claude --resume {sid}', resumeLast: 'claude --continue' });
+check('missing fields become null', resolveAgentCommands(DELEGATE_ONLY), { interactive: null, newIdFlag: null, resume: null, resumeLast: null });
+check('blank strings become null', resolveAgentCommands({ interactive: '   ' }), { interactive: null, newIdFlag: null, resume: null, resumeLast: null });
+check('delegation-only agent unsupported', supportsTerminal(DELEGATE_ONLY), false);
+check('interactive agent supported', supportsTerminal(CODEX), true);
+
+console.log('launch command:');
+check('first start, id-capable agent pins the id',
+  buildLaunchCommand({ commands: resolveAgentCommands(CLAUDE), convId: 'u-1', isRestore: false }),
+  'claude --session-id u-1');
+check('first start, agent without newIdFlag ignores the id',
+  buildLaunchCommand({ commands: resolveAgentCommands(CODEX), convId: 'u-1', isRestore: false }),
+  'codex');
+check('restore with known id uses resume',
+  buildLaunchCommand({ commands: resolveAgentCommands(CLAUDE), convId: 'u-1', isRestore: true }),
+  'claude --resume u-1');
+check('restore without id falls back to resumeLast',
+  buildLaunchCommand({ commands: resolveAgentCommands(CODEX), convId: null, isRestore: true }),
+  'codex resume --last');
+check('restore with no resume options starts clean',
+  buildLaunchCommand({ commands: resolveAgentCommands({ interactive: 'foo' }), convId: null, isRestore: true }),
+  'foo');
+check('unsupported agent yields null',
+  buildLaunchCommand({ commands: resolveAgentCommands(DELEGATE_ONLY), convId: null, isRestore: false }),
+  null);
+
+console.log('reaper:');
+const BASE = { attached: 0, idleSec: 3600, sessionAgeSec: 3600, paneHashA: 'x', paneHashB: 'x' };
+check('idle, unattached, quiet -> reap', shouldReap({ ...BASE }), true);
+check('someone attached -> keep', shouldReap({ ...BASE, attached: 1 }), false);
+check('too young -> keep', shouldReap({ ...BASE, sessionAgeSec: 30 }), false);
+check('recent window activity -> keep', shouldReap({ ...BASE, idleSec: 60 }), false);
+check('pane still changing -> keep', shouldReap({ ...BASE, paneHashB: 'y' }), false);
+check('busy check not performed -> keep', shouldReap({ ...BASE, paneHashB: null }), false);
+check('custom threshold respected', shouldReap({ ...BASE, idleSec: 300, idleThresholdSec: 120 }), true);
+
+console.log('reap candidacy (cheap checks only — no pane hashes):');
+check('idle and unattached is a candidate', isReapCandidate({ attached: 0, idleSec: 3600, sessionAgeSec: 3600 }), true);
+check('attached is not a candidate', isReapCandidate({ attached: 1, idleSec: 3600, sessionAgeSec: 3600 }), false);
+check('young session is not a candidate', isReapCandidate({ attached: 0, idleSec: 3600, sessionAgeSec: 10 }), false);
+check('recently active is not a candidate', isReapCandidate({ attached: 0, idleSec: 10, sessionAgeSec: 3600 }), false);
+
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);
