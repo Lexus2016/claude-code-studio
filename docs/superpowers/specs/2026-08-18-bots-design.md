@@ -157,8 +157,25 @@ overwrite an existing bot.
 shown in the form. A field that does nothing but looks like it does is worse than a
 missing one.
 
-Caps: `system_prompt` 8 KB, `description` 500 chars, roster 40 bots — a system prompt
-is sent on every turn, so it is a running cost, not a one-off.
+Caps, and deliberately two different behaviours:
+
+| field | cap | on excess |
+|---|---|---|
+| `system_prompt` | 8192 chars | **rejected with 400** |
+| `label` | 100 chars | truncated |
+| `description` | 500 chars | truncated |
+| `avatar` | 8 codepoints | truncated (codepoint-wise, never mid-surrogate) |
+| roster inside one bot's prompt | 40 other bots | truncated, with "and N more not listed here" |
+
+A system prompt is authored deliberately and is re-sent on every turn, so silently
+losing half of it would be a lasting, invisible cost — that one is refused outright. A
+label or description over the cap is a slip, and truncating it is not destructive to
+behaviour. The roster cap limits how many peers are listed inside one bot's prompt; it
+is **not** a limit on how many bots may exist.
+
+Non-`claude` `engine` values are rejected with 400 rather than accepted-and-ignored: a
+bot that silently ran on a different engine than the user picked would be worse than one
+that refuses to be created.
 
 `engine` ships in v1 even though only `claude` is honoured, so adding Codex later is not
 a migration.

@@ -27,10 +27,15 @@ const CYR = {
 function handleFromLabel(label) {
   const lower = String(label || '').toLowerCase();
   const latin = lower.replace(/[а-яёіїєґ]/g, ch => (CYR[ch] !== undefined ? CYR[ch] : ''));
-  const slug = latin.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
+  // Trim the separators AFTER slicing as well: slicing can land on a '-' and produce a
+  // trailing dash, which is not a legal handle — a derivable label would then yield null.
+  const slug = latin.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+    .slice(0, 32).replace(/-+$/, '');
   if (!slug) return null;
   // A single leading character is legal but a 1-char handle is not (HANDLE_RE needs 2+).
-  return isValidHandle(slug) ? slug : (isValidHandle(slug + '-bot') ? slug + '-bot' : null);
+  if (isValidHandle(slug)) return slug;
+  const padded = slug.slice(0, 28).replace(/-+$/, '') + '-bot';
+  return isValidHandle(padded) ? padded : null;
 }
 
 // Make a handle unique against those already taken: "analyst" -> "analyst-2".
@@ -56,9 +61,23 @@ function uniqueHandle(base, taken) {
 //   handles — registered handles in first-appearance order, deduplicated
 //   cleaned — the text with those mentions removed, for use as the actual prompt
 //             (a bot should read "analyse this", not "@analyst analyse this")
+// Byte ranges covered by ``` fenced code blocks. Text pasted as code must survive
+// verbatim: a handle inside it is content, not an instruction, and stripping it would
+// silently corrupt what the user pasted. (Inline `backticks` are already safe because
+// a backtick is not a lead character.)
+function fencedRanges(src) {
+  const ranges = [];
+  const re = /```[\s\S]*?(?:```|$)/g;
+  let m;
+  while ((m = re.exec(src)) !== null) ranges.push([m.index, m.index + m[0].length]);
+  return ranges;
+}
+
 function parseMentions(text, knownHandles) {
   const known = new Set((knownHandles || []).map(h => String(h).toLowerCase()));
   const src = String(text || '');
+  const fenced = fencedRanges(src);
+  const inFence = (i) => fenced.some(([a, b]) => i >= a && i < b);
   const handles = [];
   const seen = new Set();
   // Three boundary rules, each earning its place:
@@ -69,10 +88,14 @@ function parseMentions(text, knownHandles) {
   //           by a dot that starts another label, so "@bot1.dev" is a hostname and not
   //           a mention. A bare trailing dot IS allowed: "ask @analyst." ends a
   //           sentence and is the single most common way a mention appears.
-  const re = /(^|[\s(\[{'"])@([a-z0-9][a-z0-9_-]{0,30}[a-z0-9])(?![a-z0-9_-])(?!\.[a-z0-9])/gi;
-  let cleaned = src.replace(re, (whole, lead, name) => {
+  // The lead class also accepts a comma or semicolon, so "@a,@b" addresses both, and
+  // the Unicode bidi marks that RTL keyboards and clipboards insert automatically —
+  // without them a mention typed in Hebrew or Arabic context silently does not match.
+  const re = /(^|[\s(\[{'",;\u200e\u200f\u202a-\u202e])@([a-z0-9][a-z0-9_-]{0,30}[a-z0-9])(?![a-z0-9_-])(?!\.[a-z0-9])/gi;
+  let cleaned = src.replace(re, (whole, lead, name, offset) => {
     const h = name.toLowerCase();
     if (!known.has(h)) return whole;       // not a bot — leave it for the file path
+    if (inFence(offset)) return whole;     // inside a code block — content, not a call
     if (!seen.has(h)) { seen.add(h); handles.push(h); }
     return lead;
   });
@@ -101,7 +124,13 @@ function renderRoster(bots, selfHandle) {
   const others = all.slice(0, ROSTER_MAX);
   const omitted = all.length - others.length;
   if (!others.length) return '';
-  const clean = (v) => String(v || '').replace(/[\r\n]+/g, ' ').slice(0, 200);
+  // Strip newlines AND the fence markers themselves: a description containing a
+  // literal "ROSTER>>>" would otherwise appear to close the data block and let the
+  // rest read as instructions to whichever bot receives this roster.
+  const clean = (v) => String(v || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/<<<\s*ROSTER|ROSTER\s*>>>/gi, '[fence]')
+    .slice(0, 200);
   const lines = others.map(b => {
     const d = clean(b.description);
     return `- @${b.id} (${clean(b.label) || b.id})${d ? ' — ' + d : ''}`;

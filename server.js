@@ -507,6 +507,10 @@ db.exec(`
   );
 `);
 try { db.exec(`ALTER TABLE task_chains ADD COLUMN effort TEXT`); } catch {}      // claude --effort dial; chain-level default for new tasks
+// bots.deleted_at was added after the table shipped, so CREATE TABLE IF NOT EXISTS is a
+// no-op on an existing install and every /api/bots query would fail with
+// "no such column: deleted_at". Same pattern as every other schema change here.
+try { db.exec(`ALTER TABLE bots ADD COLUMN deleted_at TEXT`); } catch {}
 
 // Sanitize a value for better-sqlite3 bind parameters.
 // better-sqlite3 EXPANDS arrays: each element counts as a separate bind value.
@@ -6816,7 +6820,9 @@ function saveBot(req, res, mode) {
       body.systemPrompt === undefined ? (prev.system_prompt || '') : prompt,
       body.activeSkills === undefined ? (prev.active_skills || '[]') : jsonList(body.activeSkills),
       body.activeMcp === undefined ? (prev.active_mcp || '[]') : jsonList(body.activeMcp),
-      String(keep('avatar', prev.avatar || '')).substring(0, 8),
+      // Array.from, not substring: an emoji is several UTF-16 units and a family/ZWJ
+      // sequence is many, so slicing by unit can cut a surrogate pair in half.
+      Array.from(String(keep('avatar', prev.avatar || ''))).slice(0, 8).join(''),
     );
   } catch (e) {
     log.error('bot save failed', { handle, err: e.message });
