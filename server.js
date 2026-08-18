@@ -6426,6 +6426,34 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     // Send visible "Processing..." indicator (deleted when first content arrives or on finalize)
     await proxy.startThinking();
 
+    // ── Bot mentions from Telegram ──────────────────────────────────────────
+    // Resolved against every handle so a bot that exists in another project gets a
+    // useful answer instead of silence, same as the web path.
+    let tgBots = [], tgProjectBots = [], tgPrompt = text;
+    try {
+      const allBots = stmts.listBots.all();
+      if (allBots.length) {
+        const wd = session?.workdir || WORKDIR;
+        const proj = loadProjects().find(pr => pr.workdir === wd);
+        tgProjectBots = proj ? stmts.listProjectBots.all(proj.id) : [];
+        const available = new Set(tgProjectBots.map(b => b.id));
+        const parsed = botsLogic.parseMentions(text || '', allBots.map(b => b.id));
+        if (parsed.handles.length || parsed.unknown.length) {
+          tgPrompt = parsed.cleaned;
+          const byId = new Map(allBots.map(b => [b.id, b]));
+          tgBots = parsed.handles.filter(h => available.has(h)).map(h => byId.get(h));
+          const notes = [
+            ...parsed.handles.filter(h => !available.has(h))
+              .map(h => `ℹ️ @@${h} (${byId.get(h)?.label || h}) is not in this project.`),
+            ...parsed.unknown.map(h => `ℹ️ There is no bot @@${h}.`),
+          ];
+          for (const n of notes) {
+            try { await telegramBot.sendMessage(chatId, n, threadId ? { message_thread_id: threadId } : {}); } catch {}
+          }
+        }
+      }
+    } catch (e) { log.warn('telegram bot mention resolution failed', { err: e.message }); }
+
     const params = {
       prompt: text,
       userContent,
@@ -6468,6 +6496,13 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
         chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb);
       }
       if (r.cid) { try { stmts.updateClaudeId.run(r.cid, sessionId); } catch {} }
+    } else if (tgBots.length) {
+      // Mentions work from Telegram exactly as they do in the chat: same parser, same
+      // sequential dispatch, same per-bot session. The reply carries a header per bot
+      // so a phone screen still shows who said what.
+      proxy._botsById = Object.fromEntries(tgProjectBots.map(b => [b.id, b]));
+      await runBotTurns({ ...params, prompt: tgPrompt },
+        { bots: tgBots, prompt: tgPrompt, rosterBots: tgProjectBots });
     } else {
       await runCliSingle(params);
     }

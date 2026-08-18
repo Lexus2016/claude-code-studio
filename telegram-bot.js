@@ -3683,6 +3683,8 @@ class TelegramProxy {
     this._threadId = threadId || null;
     this._broadcastToSession = broadcastToSession || (() => {});
     this._buffer = '';
+    this._lastAgent = null;   // who is currently speaking, for the per-bot header
+    this._botsById = {};      // filled by the caller when a bot turn is dispatched
     this._progressMsgId = null;
     this._thinkingMsgId = null;
     this._updateTimer = null;
@@ -3758,6 +3760,16 @@ class TelegramProxy {
       this._broadcastToSession(this._sessionId, data);
 
       if (data.type === 'text') {
+        // Several bots can answer in one turn. Without a header their replies run
+        // together into one wall of text and the reader cannot tell who said what —
+        // the same problem the web chat had before each bot got its own bubble.
+        // Telegram has no bubbles, so the boundary is a line of text.
+        if (data.agent && data.agent !== this._lastAgent) {
+          const b = this._botsById?.[data.agent];
+          const name = b ? `${b.avatar || '🤖'} ${b.label}` : `🤖 @@${data.agent}`;
+          this._buffer += `${this._buffer ? '\n\n' : ''}${name}:\n`;
+          this._lastAgent = data.agent;
+        }
         this._buffer += (data.text || '');
         this._scheduleUpdate();
       } else if (data.type === 'tool_use' || data.type === 'tool') {
