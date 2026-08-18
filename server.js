@@ -4324,11 +4324,14 @@ app.get('/api/terminal/capability', (_, res) => {
   const enabled = cfg.terminal?.enabled === true;
   const tmuxOk = termBridge.tmuxAvailable();
   const tunnelOn = !!tunnelManager?.isRunning?.();
-  let reason = '';
-  if (!enabled) reason = 'disabled in config (terminal.enabled)';
-  else if (!tmuxOk) reason = 'tmux not found on this host';
-  else if (tunnelOn) reason = 'a public tunnel is active — terminal access is blocked';
-  res.json({ available: enabled && tmuxOk && !tunnelOn, reason });
+  // reasonKey lets the UI show a localized, actionable explanation; `reason` stays
+  // for logs and any older client. A bare "disabled in config (terminal.enabled)"
+  // told the user nothing about how to turn the feature on.
+  let reason = '', reasonKey = '';
+  if (!enabled) { reason = 'disabled in config (terminal.enabled)'; reasonKey = 'term.off.config'; }
+  else if (!tmuxOk) { reason = 'tmux not found on this host'; reasonKey = 'term.off.tmux'; }
+  else if (tunnelOn) { reason = 'a public tunnel is active — terminal access is blocked'; reasonKey = 'term.off.tunnel'; }
+  res.json({ available: enabled && tmuxOk && !tunnelOn, reason, reasonKey });
 });
 
 app.get('/api/health', (_, res) => {

@@ -4172,6 +4172,7 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    'term.off.config':'Термінальні агенти вимкнені. Увімкніть їх у Конфігу: terminal.enabled = true — це навмисно вимкнено, бо термінал у браузері виконує команди на цій машині.','term.off.tmux':'На цьому хості немає tmux. Встановіть його (macOS: brew install tmux, Linux: apt install tmux), і термінальні агенти зʼявляться.','term.off.tunnel':'Активний публічний тунель — доступ до термінала заблоковано, поки він увімкнений.',
     'newtab.title':'Що відкрити?','newtab.chat':'Чат','newtab.chat.desc':'Звичайна розмова. Ботів кличте через @@','newtab.term':'Термінальний агент','newtab.term.desc':'Живий термінал CLI-агента у вкладці. Оберіть, кого запустити:','term.tab':'термінал',
     'stream.gap':'Частину подій не показано — зʼєднання переривалось. Текст відповіді повний.',
     'agent.cap.delegate':'делегування','agent.cap.terminal':'термінал',
@@ -4416,6 +4417,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'оновлено {time} тому',
   },
   en: {
+    'term.off.config':'Terminal agents are off. Turn them on in Config: terminal.enabled = true — it ships off on purpose, because a browser terminal runs commands on this machine.','term.off.tmux':'tmux is not installed on this host. Install it (macOS: brew install tmux, Linux: apt install tmux) and terminal agents appear.','term.off.tunnel':'A public tunnel is active — terminal access is blocked while it is running.',
     'newtab.title':'What would you like to open?','newtab.chat':'Chat','newtab.chat.desc':'An ordinary conversation. Call bots with @@','newtab.term':'Terminal agent','newtab.term.desc':"A CLI agent's live terminal in a tab. Pick which one:",'term.tab':'terminal',
     'stream.gap':'Some live activity was not shown — the connection dropped. The answer itself is complete.',
     'agent.cap.delegate':'delegation','agent.cap.terminal':'terminal',
@@ -4660,6 +4662,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'updated {time} ago',
   },
   ru: {
+    'term.off.config':'Терминальные агенты выключены. Включите их в Конфиге: terminal.enabled = true — они выключены намеренно, потому что терминал в браузере выполняет команды на этой машине.','term.off.tmux':'На этом хосте нет tmux. Установите его (macOS: brew install tmux, Linux: apt install tmux), и терминальные агенты появятся.','term.off.tunnel':'Активен публичный туннель — доступ к терминалу заблокирован, пока он включён.',
     'newtab.title':'Что открыть?','newtab.chat':'Чат','newtab.chat.desc':'Обычный разговор. Ботов зовите через @@','newtab.term':'Терминальный агент','newtab.term.desc':'Живой терминал CLI-агента во вкладке. Выберите, кого запустить:','term.tab':'терминал',
     'stream.gap':'Часть событий не показана — соединение прерывалось. Текст ответа полный.',
     'agent.cap.delegate':'делегирование','agent.cap.terminal':'терминал',
@@ -4904,6 +4907,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'обновлено {time} назад',
   },
   fr: {
+    "term.off.config":"Les agents terminal sont désactivés. Activez-les dans la Config : terminal.enabled = true — c'est désactivé volontairement, car un terminal dans le navigateur exécute des commandes sur cette machine.","term.off.tmux":"tmux n'est pas installé sur cet hôte. Installez-le (macOS : brew install tmux, Linux : apt install tmux) et les agents terminal apparaîtront.","term.off.tunnel":"Un tunnel public est actif — l'accès au terminal est bloqué tant qu'il fonctionne.",
     "newtab.title":"Que voulez-vous ouvrir ?","newtab.chat":"Chat","newtab.chat.desc":"Une conversation ordinaire. Appelez les bots avec @@","newtab.term":"Agent terminal","newtab.term.desc":"Le terminal vivant d'un agent CLI dans un onglet. Choisissez :","term.tab":"terminal",
     "stream.gap":"Une partie de l'activité n'a pas été affichée — la connexion a été interrompue. La réponse elle-même est complète.",
     "agent.cap.delegate":"délégation","agent.cap.terminal":"terminal",
@@ -5049,6 +5053,7 @@ const TRANSLATIONS = {
     "dlg.toast.no_changes":"Aucun changement","dlg.last_update":"mis à jour il y a {time}",
   },
   he: {
+    "term.off.config":"סוכני הטרמינל כבויים. הפעילו אותם בהגדרות: terminal.enabled = true — הם כבויים בכוונה, מפני שטרמינל בדפדפן מריץ פקודות על המחשב הזה.","term.off.tmux":"tmux אינו מותקן על מארח זה. התקינו אותו (macOS: brew install tmux, Linux: apt install tmux) וסוכני הטרמינל יופיעו.","term.off.tunnel":"מנהרה ציבורית פעילה — הגישה לטרמינל חסומה כל עוד היא פועלת.",
     "newtab.title":"מה לפתוח?","newtab.chat":"צ׳אט","newtab.chat.desc":"שיחה רגילה. קראו לבוטים עם @@","newtab.term":"סוכן טרמינל","newtab.term.desc":"טרמינל חי של סוכן CLI בלשונית. בחרו את מי:","term.tab":"טרמינל",
     "stream.gap":"חלק מהפעילות לא הוצג — החיבור נותק. התשובה עצמה מלאה.",
     "agent.cap.delegate":"האצלה","agent.cap.terminal":"טרמינל",
@@ -15007,7 +15012,9 @@ async function loadTerminalCapability() {
     const r = await fetch('/api/terminal/capability');
     const j = await r.json();
     _terminalAvailable = !!j.available;
-    _termCapabilityReason = j.reason || '';
+    // Prefer the localized, actionable message; fall back to the server's raw
+    // English reason only if this build predates reasonKey.
+    _termCapabilityReason = j.reasonKey ? t(j.reasonKey) : (j.reason || '');
   } catch { _terminalAvailable = false; }
   return _terminalAvailable;
 }
