@@ -7,6 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c6cf6'/><text x='16' y='23' font-size='16' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="/vendor/xterm.css">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -3858,6 +3859,7 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    'term.open.title':'Відкрити термінал','term.kill':'Завершити','term.killConfirm':'Завершити цю термінальну сесію? Розмову можна буде відновити пізніше.','term.unavailable':'Термінальні сесії недоступні','term.state.attached':'підключено','term.state.started':'запущено','term.state.restored':'відновлено','term.state.restoredLast':'відновлено останню розмову агента','term.state.restoreFailed':'відновлювати не було чого — почато заново','term.state.exited':'агент завершився','term.state.error':'помилка',
     'agent.modal.newIdCommand.label':'Команда створення розмови','agent.modal.newIdCommand.hint':'Альтернатива прапорцю: команда, що створює розмову і друкує її id. Виконується один раз при створенні сесії.',
     'sec.termAgents':'Термінальні агенти','termAgent.add.new':'Додати термінального агента','termAgents.hint':'CLI-агенти, яких можна відкрити живим терміналом у сесії.','termAgent.modal.add.title':'Новий термінальний агент','agent.modal.interactive.label':'Інтерактивна команда','agent.modal.interactive.hint':'Запускає TUI агента для термінальної сесії. Порожньо — агент лише для делегування.','agent.modal.resume.label':'Команда відновлення','agent.modal.resume.hint':'{sid} — ідентифікатор розмови. Використовується для відновлення сесії після перезавантаження.','agent.modal.resumeLast.label':'Відновити останню (запасний варіант)','agent.modal.resumeLast.hint':'Використовується, коли ідентифікатор невідомий. Може відновити іншу розмову.','agent.modal.newIdFlag.label':'Прапорець id нової розмови','agent.modal.newIdFlag.hint':'Якщо CLI дозволяє задати id НОВОЇ розмови, відновлення стає точним. Порожньо — не підтримується.',
     'export.btn':'Експорт','export.title':'Експортувати розмову','notes.btn':'Нотатки','notes.title':'Нотатки сесії (приватні)','notes.ph':'Приватні нотатки сесії — не надсилаються Claude...','notes.save':'Зберегти','notes.saved':'✓ Збережено',
@@ -4094,6 +4096,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'оновлено {time} тому',
   },
   en: {
+    'term.open.title':'Open terminal','term.kill':'Kill','term.killConfirm':'Kill this terminal session? The conversation can be resumed later.','term.unavailable':'Terminal sessions are unavailable','term.state.attached':'attached','term.state.started':'started','term.state.restored':'restored','term.state.restoredLast':"restored the agent's last conversation",'term.state.restoreFailed':'nothing to resume — started fresh','term.state.exited':'agent exited','term.state.error':'error',
     'agent.modal.newIdCommand.label':'New-conversation command','agent.modal.newIdCommand.hint':'Alternative to the flag: a command that creates a conversation and prints its id. Run once when the session is created.',
     'sec.termAgents':'Terminal agents','termAgent.add.new':'Add terminal agent','termAgents.hint':'CLI agents you can open as a live terminal inside a session.','termAgent.modal.add.title':'New terminal agent','agent.modal.interactive.label':'Interactive command','agent.modal.interactive.hint':"Starts the agent's TUI for a terminal session. Leave empty for a delegation-only agent.",'agent.modal.resume.label':'Resume command','agent.modal.resume.hint':'{sid} — the conversation id. Used to restore the session after a reboot.','agent.modal.resumeLast.label':'Resume last (fallback)','agent.modal.resumeLast.hint':'Used when no conversation id is known. May restore a different conversation.','agent.modal.newIdFlag.label':'New-conversation id flag','agent.modal.newIdFlag.hint':'If the CLI can be told the id of a NEW conversation, restore becomes exact. Leave empty if unsupported.',
     'export.btn':'Export','export.title':'Export conversation','notes.btn':'Notes','notes.title':'Session notes (private)','notes.ph':'Private session notes — not sent to Claude...','notes.save':'Save','notes.saved':'✓ Saved',
@@ -4330,6 +4333,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'updated {time} ago',
   },
   ru: {
+    'term.open.title':'Открыть терминал','term.kill':'Завершить','term.killConfirm':'Завершить эту терминальную сессию? Разговор можно будет восстановить позже.','term.unavailable':'Терминальные сессии недоступны','term.state.attached':'подключено','term.state.started':'запущено','term.state.restored':'восстановлено','term.state.restoredLast':'восстановлен последний разговор агента','term.state.restoreFailed':'восстанавливать было нечего — начато заново','term.state.exited':'агент завершился','term.state.error':'ошибка',
     'agent.modal.newIdCommand.label':'Команда создания разговора','agent.modal.newIdCommand.hint':'Альтернатива флагу: команда, создающая разговор и печатающая его id. Выполняется один раз при создании сессии.',
     'sec.termAgents':'Терминальные агенты','termAgent.add.new':'Добавить терминального агента','termAgents.hint':'CLI-агенты, которых можно открыть живым терминалом в сессии.','termAgent.modal.add.title':'Новый терминальный агент','agent.modal.interactive.label':'Интерактивная команда','agent.modal.interactive.hint':'Запускает TUI агента для терминальной сессии. Пусто — агент только для делегирования.','agent.modal.resume.label':'Команда восстановления','agent.modal.resume.hint':'{sid} — идентификатор разговора. Используется для восстановления сессии после перезагрузки.','agent.modal.resumeLast.label':'Восстановить последний (запасной вариант)','agent.modal.resumeLast.hint':'Используется, когда идентификатор неизвестен. Может восстановить другой разговор.','agent.modal.newIdFlag.label':'Флаг id нового разговора','agent.modal.newIdFlag.hint':'Если CLI позволяет задать id НОВОГО разговора, восстановление становится точным. Пусто — не поддерживается.',
     'export.btn':'Экспорт','export.title':'Экспортировать разговор','notes.btn':'Заметки','notes.title':'Заметки сессии (приватные)','notes.ph':'Приватные заметки сессии — не отправляются Claude...','notes.save':'Сохранить','notes.saved':'✓ Сохранено',
@@ -4566,6 +4570,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'обновлено {time} назад',
   },
   fr: {
+    "term.open.title":"Ouvrir le terminal","term.kill":"Terminer","term.killConfirm":"Terminer cette session terminal ? La conversation pourra être reprise plus tard.","term.unavailable":"Sessions terminal indisponibles","term.state.attached":"connecté","term.state.started":"démarré","term.state.restored":"restauré","term.state.restoredLast":"dernière conversation de l'agent restaurée","term.state.restoreFailed":"rien à reprendre — nouveau départ","term.state.exited":"agent terminé","term.state.error":"erreur",
     "agent.modal.newIdCommand.label":"Commande de nouvelle conversation","agent.modal.newIdCommand.hint":"Alternative à l'indicateur : une commande qui crée une conversation et affiche son id. Exécutée une fois à la création de la session.",
     "sec.termAgents":"Agents terminal","termAgent.add.new":"Ajouter un agent terminal","termAgents.hint":"Agents CLI que vous pouvez ouvrir comme terminal vivant dans une session.","termAgent.modal.add.title":"Nouvel agent terminal","agent.modal.interactive.label":"Commande interactive","agent.modal.interactive.hint":"Lance le TUI de l'agent pour une session terminal. Vide — agent de délégation uniquement.","agent.modal.resume.label":"Commande de reprise","agent.modal.resume.hint":"{sid} — identifiant de la conversation. Sert à restaurer la session après un redémarrage.","agent.modal.resumeLast.label":"Reprendre la dernière (repli)","agent.modal.resumeLast.hint":"Utilisée quand aucun identifiant n'est connu. Peut restaurer une autre conversation.","agent.modal.newIdFlag.label":"Indicateur d'id de nouvelle conversation","agent.modal.newIdFlag.hint":"Si la CLI accepte l'id d'une NOUVELLE conversation, la restauration devient exacte. Vide si non pris en charge.",
     "export.btn":"Exporter","export.title":"Exporter la conversation","notes.btn":"Notes","notes.title":"Notes de session (privées)","notes.ph":"Notes de session privées — non envoyées à Claude...",
@@ -4703,6 +4708,7 @@ const TRANSLATIONS = {
     "dlg.toast.no_changes":"Aucun changement","dlg.last_update":"mis à jour il y a {time}",
   },
   he: {
+    "term.open.title":"פתח טרמינל","term.kill":"סיים","term.killConfirm":"לסיים את שיחת הטרמינל הזו? אפשר יהיה לשחזר אותה בהמשך.","term.unavailable":"שיחות טרמינל אינן זמינות","term.state.attached":"מחובר","term.state.started":"הופעל","term.state.restored":"שוחזר","term.state.restoredLast":"שוחזרה השיחה האחרונה של הסוכן","term.state.restoreFailed":"לא היה מה לשחזר — התחלה מחדש","term.state.exited":"הסוכן הסתיים","term.state.error":"שגיאה",
     "agent.modal.newIdCommand.label":"פקודת יצירת שיחה","agent.modal.newIdCommand.hint":"חלופה לדגל: פקודה שיוצרת שיחה ומדפיסה את המזהה שלה. מורצת פעם אחת ביצירת השיחה.",
     "sec.termAgents":"סוכני טרמינל","termAgent.add.new":"הוסף סוכן טרמינל","termAgents.hint":"סוכני CLI שניתן לפתוח כטרמינל חי בתוך שיחה.","termAgent.modal.add.title":"סוכן טרמינל חדש","agent.modal.interactive.label":"פקודה אינטראקטיבית","agent.modal.interactive.hint":"מפעילה את ה-TUI של הסוכן עבור שיחת טרמינל. ריק — סוכן להאצלה בלבד.","agent.modal.resume.label":"פקודת שחזור","agent.modal.resume.hint":"{sid} — מזהה השיחה. משמש לשחזור השיחה לאחר הפעלה מחדש.","agent.modal.resumeLast.label":"שחזר אחרונה (גיבוי)","agent.modal.resumeLast.hint":"משמש כאשר המזהה אינו ידוע. עשוי לשחזר שיחה אחרת.","agent.modal.newIdFlag.label":"דגל מזהה לשיחה חדשה","agent.modal.newIdFlag.hint":"אם ה-CLI מאפשר לקבוע מזהה לשיחה חדשה, השחזור נעשה מדויק. ריק אם אינו נתמך.",
     "export.btn":"ייצוא","export.title":"ייצוא שיחה","notes.btn":"הערות","notes.title":"הערות סשן (פרטי)","notes.ph":"הערות פרטיות לסשן — לא נשלחות ל-Claude...","notes.save":"שמירה",
@@ -9251,6 +9257,7 @@ async function checkVersion() {
   try {
     const local = await fetch('/api/version').then(r => r.json());
     applyTmuxCapability(local.tmuxAvailable !== false);
+    loadTerminalCapability();
     // Store the global default and resolve the current view's engine. An open
     // chat's explicit run_engine wins; a chat without one inherits this default.
     _globalDefaultEngine = local.defaultEngine === 'subscription' ? 'subscription' : 'api';
@@ -9777,6 +9784,13 @@ async function loadSess(id) {
     if (!r.ok) { closeTab(id); toast(t('toast.sess_not_found'), true); return; }
     const d = await r.json();
     if (id !== activeTabId) return; // tab was switched while parsing — discard stale load
+    // A terminal session has no chat history to render — it opens as a live
+    // terminal instead. Its kind is fixed at creation and never changes.
+    if (d.kind === 'terminal') {
+      openTerminalSession(d.id, d.terminal_agent || '');
+      return;
+    }
+    closeTerminalPane();
     // ── Save background-accumulated state BEFORE resetting the streaming proxy ──
     // BUG FIX: streaming.txt = '' writes through proxy to getTS(activeTabId).curTxt,
     // which destroys accumulated background text before line 6227 can read it.
@@ -11127,6 +11141,7 @@ function _renderAgentList(el, countEl, agents, subtitleField) {
   if (!el) return;
   el.innerHTML = '';
   if (countEl) countEl.textContent = agents.length;
+  const isTerminalList = subtitleField === 'interactive';
   for (const [id, cfg] of agents) {
     const icon = _agentIcons[id] || '🤖';
     const div = document.createElement('div');
@@ -11136,9 +11151,12 @@ function _renderAgentList(el, countEl, agents, subtitleField) {
         <div class="nm">${icon} ${escH(cfg.label || id)}</div>
         <div class="ds" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:monospace;font-size:11px">${escH(cfg[subtitleField] || '')}</div>
       </div>
+      ${isTerminalList ? `<button class="cfg agent-term-btn" data-agent-id="${escH(id)}" title="${t('term.open.title')}" style="font-size:12px">▮</button>` : ''}
       <button class="cfg agent-test-btn" data-agent-id="${escH(id)}" title="${t('agent.test.title')}" style="font-size:12px">▶</button>
       <button class="cfg" data-agent-id="${escH(id)}" title="${t('agent.edit.title')}">✏️</button>
       <button class="rm" data-agent-id="${escH(id)}" title="${t('agent.del.title')}">✕</button>`;
+    const termBtn = div.querySelector('.agent-term-btn');
+    if (termBtn) termBtn.addEventListener('click', e => { e.stopPropagation(); createTerminalSession(id, cfg.label || id); });
     div.querySelector('.agent-test-btn').addEventListener('click', e => { e.stopPropagation(); testAgent(id, e.currentTarget); });
     div.querySelector('.cfg:not(.agent-test-btn)').addEventListener('click', e => { e.stopPropagation(); openAgentForm(id); });
     div.querySelector('.rm').addEventListener('click', e => { e.stopPropagation(); deleteAgent(id); });
@@ -14144,6 +14162,128 @@ document.addEventListener('keydown', e => {
   function init(){ build(); check(); setInterval(function(){ if(bar && bar.style.display==='none') check(); }, 6*3600*1000); }
   if (document.body) init(); else window.addEventListener('DOMContentLoaded', init);
 })();
+</script>
+
+<div id="termPane" style="display:none;position:fixed;inset:0;background:#0b0b0f;z-index:60;flex-direction:column;">
+  <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.09);flex-shrink:0">
+    <span id="termDot" style="width:8px;height:8px;border-radius:50%;background:#8b949e;flex-shrink:0"></span>
+    <span id="termTitle" style="font-size:12px;opacity:.85;font-weight:600"></span>
+    <span id="termState" style="font-size:11px;opacity:.55"></span>
+    <span style="flex:1"></span>
+    <button id="termKillBtn" style="font-size:11px;padding:3px 9px;border-radius:5px;background:transparent;color:var(--txt);border:1px solid rgba(255,255,255,.16);cursor:pointer"></button>
+    <button id="termCloseBtn" style="font-size:14px;padding:2px 8px;border-radius:5px;background:transparent;color:var(--txt);border:1px solid rgba(255,255,255,.16);cursor:pointer" title="Close">✕</button>
+  </div>
+  <div id="termHost" style="flex:1;min-height:0;padding:4px 6px"></div>
+</div>
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/xterm-addon-fit.js"></script>
+<script>
+// ── Terminal sessions ────────────────────────────────────────────────────────
+// A terminal session is a different species from a chat session: it is driven by
+// the human through a raw byte stream, never by the chat engine. See
+// docs/superpowers/specs/2026-08-18-terminal-sessions-design.md
+let _terminalAvailable = false, _term = null, _termFit = null, _termWs = null, _termSessionId = null;
+
+async function loadTerminalCapability() {
+  try {
+    const r = await fetch('/api/terminal/capability');
+    const j = await r.json();
+    _terminalAvailable = !!j.available;
+    _termCapabilityReason = j.reason || '';
+  } catch { _terminalAvailable = false; }
+}
+let _termCapabilityReason = '';
+
+async function createTerminalSession(agentId, label) {
+  try {
+    const r = await fetch('/api/sessions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'terminal', terminalAgent: agentId, title: (label || agentId) + ' · terminal', workdir: curWorkdir || null }),
+    });
+    const s = await r.json();
+    if (s.error) { toast(s.error, true); return; }
+    await loadHist();
+    openTerminalSession(s.id, label || agentId);
+  } catch (e) { toast(e.message, true); }
+}
+
+function openTerminalSession(sessionId, label) {
+  if (!_terminalAvailable) { toast(_termCapabilityReason || t('term.unavailable'), true); return; }
+  if (typeof Terminal === 'undefined') { toast('xterm.js failed to load', true); return; }
+  closeTerminalPane();
+  _termSessionId = sessionId;
+  const pane = $i('termPane');
+  pane.style.display = 'flex';
+  $i('termTitle').textContent = label || '';
+  $i('termState').textContent = '';
+  $i('termKillBtn').textContent = t('term.kill');
+
+  _term = new Terminal({
+    fontSize: 13,
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+    theme: { background: '#0b0b0f', foreground: '#e6e6e6' },
+    cursorBlink: true, scrollback: 10000, allowProposedApi: true,
+  });
+  _termFit = new FitAddon.FitAddon();
+  _term.loadAddon(_termFit);
+  _term.open($i('termHost'));
+  _termFit.fit();
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  _termWs = new WebSocket(`${proto}//${location.host}/ws/terminal?session=${encodeURIComponent(sessionId)}`);
+  _termWs.binaryType = 'arraybuffer';
+
+  _termWs.onopen = () => sendTermResize();
+  _termWs.onmessage = (ev) => {
+    if (typeof ev.data !== 'string') { _term.write(new Uint8Array(ev.data)); return; }
+    let msg = null; try { msg = JSON.parse(ev.data); } catch { return; }
+    if (msg.type === 'ready') {
+      // A restore without an exact conversation id resumed "the agent's most recent
+      // conversation", which may not be this one — do not imply otherwise.
+      const key = msg.state === 'attach' ? 'term.state.attached'
+        : !msg.restored ? 'term.state.started'
+        : msg.restoredExact ? 'term.state.restored' : 'term.state.restoredLast';
+      $i('termState').textContent = t(key);
+      $i('termDot').style.background = '#3fb950';
+    } else if (msg.type === 'restore_failed') {
+      $i('termState').textContent = t('term.state.restoreFailed');
+    } else if (msg.type === 'exit') {
+      $i('termDot').style.background = '#8b949e';
+      $i('termState').textContent = t('term.state.exited');
+    } else if (msg.type === 'error') {
+      _term.write(`\r\n\x1b[31m${msg.error}\x1b[0m\r\n`);
+      $i('termDot').style.background = '#f85149';
+      $i('termState').textContent = t('term.state.error');
+    }
+  };
+  _termWs.onclose = () => { $i('termDot').style.background = '#8b949e'; };
+
+  _term.onData(d => { if (_termWs && _termWs.readyState === 1) _termWs.send(JSON.stringify({ type: 'input', data: d })); });
+  window.addEventListener('resize', sendTermResize);
+  $i('termKillBtn').onclick = () => {
+    if (!confirm(t('term.killConfirm'))) return;
+    if (_termWs && _termWs.readyState === 1) _termWs.send(JSON.stringify({ type: 'kill' }));
+    closeTerminalPane();
+  };
+  $i('termCloseBtn').onclick = () => closeTerminalPane();
+  setTimeout(() => { try { _term.focus(); } catch {} }, 50);
+}
+
+function sendTermResize() {
+  if (!_term || !_termFit) return;
+  try { _termFit.fit(); } catch { return; }
+  if (_termWs && _termWs.readyState === 1) _termWs.send(JSON.stringify({ type: 'resize', cols: _term.cols, rows: _term.rows }));
+}
+
+// Closing the pane detaches the client only — the agent keeps running server-side.
+function closeTerminalPane() {
+  window.removeEventListener('resize', sendTermResize);
+  try { if (_termWs) _termWs.close(); } catch {}
+  try { if (_term) _term.dispose(); } catch {}
+  _termWs = null; _term = null; _termFit = null; _termSessionId = null;
+  const pane = $i('termPane');
+  if (pane) pane.style.display = 'none';
+}
 </script>
 
 </body>
