@@ -1190,6 +1190,17 @@ async function startTask(task) {
       }
     } catch {}
     // Always inject internal task-manager MCP
+    // The pull channel too: with the tool absent the worker cannot check for messages
+    // even if it wants to.
+    taskMcpServers['_ccs_user_interrupt'] = {
+      command: NODE_CMD,
+      args: [path.join(__dirname, 'mcp-user-interrupt.js')],
+      env: {
+        INTERRUPT_SERVER_URL: `http://127.0.0.1:${PORT}`,
+        INTERRUPT_SESSION_ID: sessionId,
+        INTERRUPT_SECRET,
+      },
+    };
     taskMcpServers['_ccs_task_manager'] = {
       command: NODE_CMD,
       args: [path.join(__dirname, 'mcp-task-manager.js')],
@@ -1234,7 +1245,22 @@ async function startTask(task) {
         break; // one-shot: interactive runs to end_turn, no auto-continue
       }
 
-      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort, name: task.title, effort: task.effort || null });
+      // Interrupt delivery, same as a chat turn. A running task ACCEPTS clarifications
+      // — the interrupt handler explicitly checks activeTasks — but without these the
+      // message was stored, never handed to the worker, and cleaned up at the end.
+      const taskInterruptCmd = `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`;
+      const taskInterruptSettings = {
+        hooks: {
+          PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: taskInterruptCmd, timeout: 3 }] }],
+          Stop: [{ hooks: [{ type: 'command', command: taskInterruptCmd, timeout: 3 }] }],
+        },
+      };
+      const taskInterruptEnv = {
+        CCS_INTERRUPT_URL: `http://127.0.0.1:${PORT}`,
+        CCS_INTERRUPT_SESSION: sessionId,
+        CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
+      };
+      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort, name: task.title, effort: task.effort || null, extraEnv: taskInterruptEnv, extraSettings: taskInterruptSettings });
       // Save subprocess PID so startup recovery can kill orphans on restart
       if (stream.process?.pid) {
         db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
@@ -6176,7 +6202,16 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
   // Check if session is busy — queue as interrupt instead of dropping the message.
   // activeTasks covers both web and Telegram chat workers; activeChatSessions covers
   // the early phase of web processChat before activeTasks.set() is called.
-  if (activeTasks.has(sessionId) || activeChatSessions.has(sessionId)) {
+  // A remote (SSH) session cannot receive an interrupt at all: the hook script path
+  // is local and the callback URL is 127.0.0.1, neither of which resolves on the
+  // remote host, and ssh.send is never given the interrupt MCP server. Storing one
+  // would mean it is silently discarded at the end of the run. The web UI already
+  // refuses the interrupt path for remote projects; Telegram did not.
+  const _sess = stmts.getSession.get(sessionId);
+  const _isRemote = !!_sess?.remote_host
+    || !!loadProjects().find(pr => pr.workdir === _sess?.workdir && pr.isRemote);
+
+  if (!_isRemote && (activeTasks.has(sessionId) || activeChatSessions.has(sessionId))) {
     // Queue as interrupt (same mechanism as web UI mid-task clarifications)
     if (!pendingInterrupts.has(sessionId)) pendingInterrupts.set(sessionId, []);
     const queue = pendingInterrupts.get(sessionId);
@@ -8023,7 +8058,13 @@ wss.on('connection', (ws) => {
       // task. The SPA sends `interrupt` while it still believes the tab is
       // generating, and the server may already have finished, so this window is
       // reached in normal use, not only under load.
-      if (!ws._tabBusy[tabId] && !activeTasks.has(tabId) && !activeChatSessions.has(tabId)) {
+      // hasRunningTask is essential here, not belt-and-braces: a Kanban task worker is
+      // NOT registered in activeTasks (that map holds web and Telegram chat runs), so
+      // without this check a clarification sent to a running task would be dispatched
+      // as a fresh chat turn on the same session — two `claude --resume` processes on
+      // one session id, which is the write race the rest of this file works to avoid.
+      const _taskRunning = (() => { try { return !!stmts.hasRunningTask.get(tabId); } catch { return false; } })();
+      if (!ws._tabBusy[tabId] && !activeTasks.has(tabId) && !activeChatSessions.has(tabId) && !_taskRunning) {
         log.info('[interrupt] session is idle — handling as a normal message', { tabId });
         processChat({
           type: 'chat',
