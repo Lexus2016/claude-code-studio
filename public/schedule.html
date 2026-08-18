@@ -409,7 +409,8 @@ button{font-family:inherit;cursor:pointer}
 const lang = localStorage.getItem('lang') || 'uk';
 const TR = {
   uk: {
-    'page.title': 'Розклад — Claude Code Studio',
+
+    'form.exec.bot':'Бот','form.exec.bot.none':'без бота','form.exec.bot.tip':'Задача виконається промптом і моделлю цього бота',    'page.title': 'Розклад — Claude Code Studio',
     'nav.chat': 'Chat', 'nav.kanban': 'Kanban', 'nav.schedule': 'Schedule',
     'nav.aria': 'Навігація між розділами',
     'hdr.add': 'Задача', 'hdr.refresh': 'Оновити', 'hdr.connected': 'Підключено', 'hdr.disconnected': 'Відключено',
@@ -464,7 +465,8 @@ const TR = {
     'locale': 'uk',
   },
   en: {
-    'page.title': 'Schedule — Claude Code Studio',
+
+    'form.exec.bot':'Bot','form.exec.bot.none':'no bot','form.exec.bot.tip':'The task runs with this bot\'s prompt and model',    'page.title': 'Schedule — Claude Code Studio',
     'nav.chat': 'Chat', 'nav.kanban': 'Kanban', 'nav.schedule': 'Schedule',
     'nav.aria': 'Navigation',
     'hdr.add': 'Task', 'hdr.refresh': 'Refresh', 'hdr.connected': 'Connected', 'hdr.disconnected': 'Disconnected',
@@ -519,7 +521,8 @@ const TR = {
     'locale': 'en-GB',
   },
   ru: {
-    'page.title': 'Расписание — Claude Code Studio',
+
+    'form.exec.bot':'Бот','form.exec.bot.none':'без бота','form.exec.bot.tip':'Задача выполнится промптом и моделью этого бота',    'page.title': 'Расписание — Claude Code Studio',
     'nav.chat': 'Чат', 'nav.kanban': 'Kanban', 'nav.schedule': 'Расписание',
     'nav.aria': 'Навигация',
     'hdr.add': 'Задача', 'hdr.refresh': 'Обновить', 'hdr.connected': 'Подключено', 'hdr.disconnected': 'Отключено',
@@ -1221,6 +1224,18 @@ async function runNow(id) {
 }
 
 // ─── Modal / Form ─────────────────────────────────────────────────────────
+// Bots available in this project. Assigning one is what makes a recurring job
+// belong to a named specialist — its prompt and model, not an anonymous run.
+let schedBots = [];
+async function loadSchedBots() {
+  try {
+    const qs = curWorkdir ? ('?workdir=' + encodeURIComponent(curWorkdir)) : '';
+    const r = await apiFetch('/api/bots' + qs);
+    schedBots = await r.json();
+    if (!Array.isArray(schedBots)) schedBots = [];
+  } catch { schedBots = []; }
+}
+
 function buildForm(tk={}) {
   const sessOpts = `<option value="">${t('form.no_session')}</option>` +
     sessions.map(s => `<option value="${s.id}"${tk.session_id===s.id?' selected':''}>${escH((s.title||s.id).substring(0,50))}</option>`).join('');
@@ -1293,6 +1308,15 @@ function buildForm(tk={}) {
           <button type="button" class="sc-btn${tk.model==='opus'?' on':''}" data-v="opus" onclick="scOpt(this)">Opus</button>
           <button type="button" class="sc-btn${tk.model==='fable'?' on':''}" data-v="fable" onclick="scOpt(this)">Fable</button>
         </div>
+        <div class="sc-sep"></div>
+        <div class="sc-seg">
+          <span class="sc-lbl">${t('form.exec.bot')}</span>
+          <select id="fBot" class="sel" style="width:auto;min-width:120px" title="${t('form.exec.bot.tip')}">
+            <option value="">${t('form.exec.bot.none')}</option>
+            ${schedBots.map(b => `<option value="${escH(b.id)}"${tk.bot_id===b.id?' selected':''}>${escH((b.avatar||'🤖')+' '+b.label)}</option>`).join('')}
+            ${tk.bot_id && !schedBots.some(b => b.id===tk.bot_id) ? `<option value="${escH(tk.bot_id)}" selected>🚫 @@${escH(tk.bot_id)}</option>` : ''}
+          </select>
+        </div>
         <div class="sc-sep" style="display:none"></div>
         ${engineSegHtml(tk.run_engine)}
         <div class="sc-sep"></div>
@@ -1349,9 +1373,10 @@ function getScVal(group, fallback) {
   return btn ? btn.dataset.v : fallback;
 }
 
-function openAddModal() {
+async function openAddModal() {
   if (!curWorkdir) { toast(t('toast.no_project'), 'err'); return; }
   editingId = null;
+  await loadSchedBots();
   $i('modalTitle').textContent = t('modal.add');
   $i('modalBody').innerHTML = buildForm({ status: 'todo' });
   $i('modalFt').innerHTML = `
@@ -1367,6 +1392,7 @@ async function openEditModal(id) {
   const tk = tasks.find(t => t.id === id);
   if (!tk) return;
   editingId = id;
+  await loadSchedBots();
   $i('modalTitle').textContent = t('modal.edit');
   $i('modalBody').innerHTML = buildForm(tk);
   $i('modalFt').innerHTML = `
@@ -1407,6 +1433,7 @@ async function saveTask() {
     run_engine: getScVal('run_engine', _schedDefaultEngine === 'subscription' && _schedTmuxAvailable ? 'subscription' : 'api'),
     max_turns: parseInt($i('fMaxTurns')?.value) || 30,
     effort: ($i('fEffort')?.value || '').trim() || null,
+    bot_id: ($i('fBot')?.value || '').trim() || null,
     scheduled_at,
     recurrence,
     recurrence_end_at,
