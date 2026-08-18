@@ -510,7 +510,11 @@ app.post('/api/sessions', (req, res) => {
   const { title = i18nSession(), workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single', kind = 'chat', terminalAgent = null } = req.body || {};
   const id = genId();
   if (kind === 'terminal') {
-    const agents = loadMergedConfig().externalAgents || {};
+    // loadConfig(), NOT loadMergedConfig(): the merged view is a whitelist of
+    // mcpServers/skills/slashCommands/lang/defaultEngine/recentProjectsCount and
+    // does NOT carry externalAgents — same reason /api/external-agents reads
+    // loadConfig(). Using the merged view here silently 400s every request.
+    const agents = loadConfig().externalAgents || {};
     if (!terminalAgent || !supportsTerminal(agents[terminalAgent])) {
       return res.status(400).json({ error: 'terminalAgent must name an agent with an "interactive" command' });
     }
@@ -817,7 +821,7 @@ Next to the `/api/version` handler:
 // API in Node without a native module, so terminal sessions are simply unavailable
 // there and the UI disables the entry point.
 app.get('/api/terminal/capability', (_, res) => {
-  const cfg = loadMergedConfig();
+  const cfg = loadConfig();  // NOT loadMergedConfig: it whitelists fields and drops terminal/externalAgents
   const enabled = cfg.terminal?.enabled === true;
   const tmuxOk = termBridge.tmuxAvailable();
   const scriptOk = termBridge.scriptAvailable();
@@ -861,7 +865,7 @@ wssTerm.on('connection', (ws, req) => {
   ws.on('error', (e) => { try { log.warn('terminal ws error', { msg: e?.message }); } catch {} });
   const send = (obj) => { try { ws.send(JSON.stringify(obj)); } catch {} };
 
-  const cfg = loadMergedConfig();
+  const cfg = loadConfig();  // NOT loadMergedConfig: it whitelists fields and drops terminal/externalAgents
   if (cfg.terminal?.enabled !== true) { send({ type: 'error', error: 'terminal sessions are disabled' }); return ws.close(); }
   if (tunnelManager?.getStatus?.()?.active === true) { send({ type: 'error', error: 'blocked while a public tunnel is active' }); return ws.close(); }
   if (!termBridge.tmuxAvailable() || !termBridge.scriptAvailable()) { send({ type: 'error', error: 'tmux/script unavailable on this host' }); return ws.close(); }
@@ -871,7 +875,7 @@ wssTerm.on('connection', (ws, req) => {
   const session = sessionId ? stmts.getSession.get(sessionId) : null;
   if (!session || session.kind !== 'terminal') { send({ type: 'error', error: 'not a terminal session' }); return ws.close(); }
 
-  const agents = loadMergedConfig().externalAgents || {};
+  const agents = loadConfig().externalAgents || {};
   const commands = resolveAgentCommands(agents[session.terminal_agent]);
   if (!commands.interactive) { send({ type: 'error', error: `agent "${session.terminal_agent}" has no interactive command` }); return ws.close(); }
 
@@ -1049,7 +1053,7 @@ function startTerminalReaper({ intervalMs = 60000 } = {}) {
   if (!termBridge.tmuxAvailable()) return null;
   const tick = async () => {
     try {
-      const cfg = loadMergedConfig();
+      const cfg = loadConfig();  // NOT loadMergedConfig: it whitelists fields and drops terminal/externalAgents
       if (cfg.terminal?.enabled !== true) return;
       const idleThresholdSec = Math.max(60, (cfg.terminal?.idleTimeoutMin ?? 30) * 60);
       const maxLive = cfg.terminal?.maxLive ?? 3;

@@ -398,6 +398,13 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN notes TEXT DEFAULT ''`); } catch 
 // transcript_offset: catch-up cursor (byte offset into <cid>.jsonl). NULL = not yet
 // baselined; advanced to transcript EOF after every web turn + by /catch-up.
 try { db.exec(`ALTER TABLE sessions ADD COLUMN transcript_offset INTEGER`); } catch {}
+// Terminal sessions: kind is fixed at creation and never switched — a session is
+// either driven by the chat engine or by a human in a terminal, never both. That
+// removes the two-drivers contention (engine send-keys vs human typing) by
+// construction instead of policing it at runtime.
+try { db.exec(`ALTER TABLE sessions ADD COLUMN kind TEXT DEFAULT 'chat'`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN terminal_agent TEXT`); } catch {}   // external-agent id, e.g. 'claude'
+try { db.exec(`ALTER TABLE sessions ADD COLUMN agent_conv_id TEXT`); } catch {}    // the agent's own conversation id, for exact resume
 // Performance indexes — safe to re-run (IF NOT EXISTS)
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
@@ -511,6 +518,11 @@ function wrapStmt(stmt, label) {
 
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir) VALUES (?,?,?,?,?,?,?,?)`),
+  // Terminal sessions get their own INSERT: createSession is called from eight
+  // places and must not grow parameters. kind is literal here — a terminal session
+  // can never be created as anything else.
+  createTerminalSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir,kind,terminal_agent,agent_conv_id) VALUES (?,?,'[]','[]','auto','single',?,?,'terminal',?,?)`),
+  setAgentConvId: db.prepare(`UPDATE sessions SET agent_conv_id=? WHERE id=?`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: (() => {
     const _stmt = db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`);
@@ -4556,8 +4568,22 @@ app.get('/api/sessions', (req,res) => {
   res.json(workdir ? stmts.getSessionsByWorkdir.all(workdir) : stmts.getSessions.all());
 });
 app.post('/api/sessions', (req, res) => {
-  const { title = i18nSession(), workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single' } = req.body || {};
+  const { title = i18nSession(), workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single', kind = 'chat', terminalAgent = null } = req.body || {};
   const id = genId();
+  if (kind === 'terminal') {
+    // loadConfig(), not loadMergedConfig(): the merged view is a whitelist of
+    // mcpServers/skills/slashCommands/lang/defaultEngine and does NOT carry
+    // externalAgents — same reason /api/external-agents reads loadConfig().
+    const agents = loadConfig().externalAgents || {};
+    if (!terminalAgent || !supportsTerminal(agents[terminalAgent])) {
+      return res.status(400).json({ error: 'terminalAgent must name an agent with an "interactive" command' });
+    }
+    // Pin the conversation id up front when the agent supports it (claude --session-id),
+    // so a later restore resumes THIS conversation instead of "the most recent one".
+    const convId = resolveAgentCommands(agents[terminalAgent]).newIdFlag ? crypto.randomUUID() : null;
+    stmts.createTerminalSession.run(id, String(title).substring(0, 200), sqlVal(model), sqlVal(workdir) || null, terminalAgent, convId);
+    return res.json(stmts.getSession.get(id));
+  }
   stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', sqlVal(mode), sqlVal(agentMode), sqlVal(model), sqlVal(workdir) || null);
   res.json(stmts.getSession.get(id));
 });
