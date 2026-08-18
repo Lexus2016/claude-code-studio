@@ -4,9 +4,9 @@
 
 **Goal:** Let a studio session be a live terminal running an agent CLI (Claude Code, codex, agy, opencode) in the browser, restorable after a studio restart or host reboot, and reaped from memory when idle.
 
-**Architecture:** A session is typed at creation (`kind = 'chat' | 'terminal'`) and never switches, so no session ever has two drivers. Terminal sessions live in detached tmux sessions named `ccsterm-<id>`; the browser attaches through a `script`-wrapped `tmux attach-session` whose stdout/stdin are pumped over a dedicated WebSocket to xterm.js. All decision logic (which restore path, which launch command, whether to reap) lives in a pure module so it is unit-testable; every tmux/spawn side effect lives in a separate bridge module.
+**Architecture:** A session is typed at creation (`kind = 'chat' | 'terminal'`) and never switches, so no session ever has two drivers. Terminal sessions live in detached tmux sessions named `ccsterm-<id>`; the browser attaches through a tmux control-mode client (`tmux -C attach-session`) whose stream is pumped over a dedicated WebSocket to xterm.js. All decision logic (which restore path, which launch command, whether to reap) lives in a pure module so it is unit-testable; every tmux/spawn side effect lives in a separate bridge module.
 
-**Tech Stack:** Node 20, `ws`, tmux, system `script`, vendored xterm.js. No new npm dependencies, no build step.
+**Tech Stack:** Node 20, `ws`, tmux (control mode — no PTY shim, no native module), vendored xterm.js. No new npm dependencies, no build step.
 
 **Spec:** `docs/superpowers/specs/2026-08-18-terminal-sessions-design.md`
 
@@ -18,7 +18,7 @@
 - SQLite: WAL stays on; schema changes are `ALTER TABLE ... ADD COLUMN` only, in the existing block (grep `ALTER TABLE sessions ADD COLUMN transcript_offset`).
 - Tests are plain CommonJS + `node:assert`, in the style of `test/overload-detector.test.js`. New test files are appended to the `test` script in `package.json`.
 - tmux session names for this feature are always prefixed `ccsterm-`. The `subscription` engine owns `ccs-` and must not be touched.
-- `TERM=xterm-256color` must be set explicitly on every spawned `script` process.
+- Control-mode output is octal-escaped and must be decoded to a Buffer, never to a UTF-8 string.
 - Line numbers in this repo drift (`server.js` grew 76 lines during the design session). Locate every edit point by grep anchor, never by line number.
 - User-facing UI strings go through the existing i18n table in `public/index.html`; English is the source language for code, comments and commits.
 
@@ -356,14 +356,13 @@ Expected: all checks pass, exit code 0
 First add the module requires next to the existing top-level ones (grep `require('./multi-agent-result')`). `path`, `fs`, `os` and `crypto` are already required at the top of `server.js` — verified — so nothing else is needed:
 
 ```js
-const {
-  tmuxNameFor, resolveAgentCommands, supportsTerminal, buildLaunchCommand,
-  isReapCandidate, shouldReap, pickOverflow, mergeAgentDefaults,
-} = require('./terminal-session');
-const termBridge = require('./terminal-bridge');
+const { resolveAgentCommands, supportsTerminal, mergeAgentDefaults } = require('./terminal-session');
 ```
 
-`terminal-bridge.js` does not exist until Task 4. Add only the `terminal-session` require now and add the `termBridge` line in Task 4; requiring a missing module crashes the server at boot.
+Import only what the current task uses — Tasks 5 and 6 widen this line as they need
+`tmuxNameFor`, `buildLaunchCommand`, `isReapCandidate`, `shouldReap` and `pickOverflow`.
+`terminal-bridge.js` does not exist until Task 4, and requiring a missing module crashes
+the server at boot, so its `require` lands in Task 4.
 
 Then replace the `DEFAULT_EXTERNAL_AGENTS` object (grep `const DEFAULT_EXTERNAL_AGENTS = {`) with — commands verified against the installed CLIs on 2026-08-18:
 

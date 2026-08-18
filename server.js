@@ -38,10 +38,7 @@ const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
 const { isTransientOverload, shouldRetryOverload } = require('./rate-limit-utils');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
-const {
-  tmuxNameFor, resolveAgentCommands, supportsTerminal, buildLaunchCommand,
-  isReapCandidate, shouldReap, mergeAgentDefaults,
-} = require('./terminal-session');
+const { resolveAgentCommands, supportsTerminal, mergeAgentDefaults } = require('./terminal-session');
 const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
