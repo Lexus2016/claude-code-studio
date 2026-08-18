@@ -535,6 +535,11 @@ try { db.exec(`ALTER TABLE task_chains ADD COLUMN effort TEXT`); } catch {}     
 // no-op on an existing install and every /api/bots query would fail with
 // "no such column: deleted_at". Same pattern as every other schema change here.
 try { db.exec(`ALTER TABLE bots ADD COLUMN deleted_at TEXT`); } catch {}
+// A task can be assigned to a bot: it then runs with that bot's system prompt and
+// model, and its output is attributed to the bot. Combined with the scheduling
+// columns already here (scheduled_at / recurrence) this is what makes a recurring
+// job belong to a named specialist rather than to nobody.
+try { db.exec(`ALTER TABLE tasks ADD COLUMN bot_id TEXT`); } catch {}
 
 // Sanitize a value for better-sqlite3 bind parameters.
 // better-sqlite3 EXPANDS arrays: each element counts as a separate bind value.
@@ -663,8 +668,8 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
-  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at,effort,run_engine) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
-  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,effort=?,run_engine=?,updated_at=datetime('now') WHERE id=?`),
+  createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at,effort,run_engine,bot_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+  updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,effort=?,run_engine=?,bot_id=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
@@ -1157,6 +1162,16 @@ async function startTask(task) {
       try { const parsed = JSON.parse(task.context); contextStr = typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2); } catch {}
       parts.push(`---\nContext from parent task:\n${contextStr}`);
     }
+    // A bot-owned task runs AS that bot: its system prompt defines who is working,
+    // and the roster lets it hand work on. Falls back to an ordinary task run if the
+    // bot was deleted — the handle stays reserved, so history still reads correctly.
+    let taskBot = null;
+    if (task.bot_id) {
+      try {
+        taskBot = stmts.getBot.get(task.bot_id) || null;
+        if (!taskBot) log.warn('task bot not found — running without it', { taskId: task.id, botId: task.bot_id });
+      } catch {}
+    }
     // Task manager instruction: inform Claude about available task management tools
     parts.push(TASK_MANAGER_INSTRUCTION);
     const prompt = parts.join('\n\n') + TASK_VERIFICATION_SUFFIX;
@@ -1284,7 +1299,19 @@ async function startTask(task) {
         CCS_INTERRUPT_SESSION: sessionId,
         CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
       };
-      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid, model: session?.model || task.model || 'sonnet', maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort, name: task.title, effort: task.effort || null, extraEnv: taskInterruptEnv, extraSettings: taskInterruptSettings });
+      const taskBotSp = taskBot
+        ? botsLogic.buildBotSystemPrompt(taskBot, stmts.listBots.all()) + USER_INTERRUPT_INSTRUCTION
+        : undefined;
+      const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid,
+        // The bot's own model wins over the task's: picking a bot is picking who does
+        // the work, and its model is part of that choice.
+        model: taskBot?.model || session?.model || task.model || 'sonnet',
+        systemPrompt: taskBotSp,
+        // A bot-owned task follows the project's conventions but not the user's
+        // personal CLAUDE.md — same boundary as a bot answering in chat, or every
+        // reply opens with the user's own activation preamble.
+        ...(taskBot ? { settingSources: 'project,local' } : {}),
+        maxTurns: effectiveTaskMaxTurns, mcpServers: taskMcpServers, abortController: taskAbort, name: taskBot?.label || task.title, effort: task.effort || null, extraEnv: taskInterruptEnv, extraSettings: taskInterruptSettings });
       // Save subprocess PID so startup recovery can kill orphans on restart
       if (stream.process?.pid) {
         db.prepare(`UPDATE tasks SET worker_pid=? WHERE id=?`).run(stream.process.pid, task.id);
@@ -4588,9 +4615,10 @@ app.post('/api/tasks', (req, res) => {
   const { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
           model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
           depends_on=null, chain_id=null, source_session_id=null,
-          scheduled_at=null, recurrence=null, recurrence_end_at=null, effort=null, run_engine=null } = req.body;
+          scheduled_at=null, recurrence=null, recurrence_end_at=null, effort=null, run_engine=null,
+          bot_id=null } = req.body;
   const id = genId();
-  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null, sqlVal(run_engine)||null);
+  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null, sqlVal(run_engine)||null, sqlVal(bot_id)||null);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -4605,7 +4633,8 @@ app.put('/api/tasks/:id', (req, res) => {
           max_turns=task.max_turns||30, attachments=task.attachments,
           depends_on=task.depends_on, chain_id=task.chain_id, source_session_id=task.source_session_id,
           scheduled_at=task.scheduled_at, recurrence=task.recurrence, recurrence_end_at=task.recurrence_end_at,
-          effort=task.effort, run_engine=task.run_engine } = req.body;
+          effort=task.effort, run_engine=task.run_engine,
+          bot_id=task.bot_id } = req.body;
   // Stop running process when task is moved away from in_progress
   if (task.status === 'in_progress' && status !== 'in_progress') {
     const ctrl = runningTaskAborts.get(req.params.id);
@@ -4627,6 +4656,7 @@ app.put('/api/tasks/:id', (req, res) => {
     sqlVal(scheduled_at) || null, sqlVal(recurrence) || null, sqlVal(recurrence_end_at) || null,
     sqlVal(effort) || null,
     sqlVal(run_engine) || null,
+    sqlVal(bot_id) || null,
     req.params.id
   );
   const updated = stmts.getTask.get(req.params.id);
@@ -7021,8 +7051,16 @@ function startDelegationWatcher(delegationId, delegationDir) {
 // Without ?project= this is the whole library (the bot management screen). With it,
 // only the bots available in that project — which is what the @ palette offers.
 app.get('/api/bots', (req, res) => {
-  const projectId = req.query.project;
-  res.json(projectId ? stmts.listProjectBots.all(String(projectId)) : stmts.listBots.all());
+  // Either identifier works: the chat knows the project id, the Kanban board only
+  // knows the working directory. Making the caller resolve that mapping is how the
+  // board silently ended up showing an empty roster.
+  let projectId = req.query.project ? String(req.query.project) : null;
+  if (!projectId && req.query.workdir) {
+    const proj = loadProjects().find(pr => pr.workdir === String(req.query.workdir));
+    if (proj) projectId = proj.id;
+    else return res.json([]);   // a directory with no project has no roster
+  }
+  res.json(projectId ? stmts.listProjectBots.all(projectId) : stmts.listBots.all());
 });
 
 app.post('/api/projects/:projectId/bots/:botId', (req, res) => {
