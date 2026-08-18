@@ -522,7 +522,6 @@ const stmts = {
   // places and must not grow parameters. kind is literal here — a terminal session
   // can never be created as anything else.
   createTerminalSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir,kind,terminal_agent,agent_conv_id) VALUES (?,?,'[]','[]','auto','single',?,?,'terminal',?,?)`),
-  setAgentConvId: db.prepare(`UPDATE sessions SET agent_conv_id=? WHERE id=?`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: (() => {
     const _stmt = db.prepare(`UPDATE sessions SET claude_session_id=?,updated_at=datetime('now') WHERE id=?`);

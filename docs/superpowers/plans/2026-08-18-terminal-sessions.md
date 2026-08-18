@@ -421,7 +421,7 @@ git commit -m "feat(terminal): interactive + resume commands for external agents
 
 **Interfaces:**
 - Consumes: `supportsTerminal` from Task 1.
-- Produces: `sessions.kind` (`'chat'` default), `sessions.terminal_agent`, `sessions.agent_conv_id`; `POST /api/sessions` accepting `{kind, terminalAgent}`; prepared statement `stmts.setAgentConvId`.
+- Produces: `sessions.kind` (`'chat'` default), `sessions.terminal_agent`, `sessions.agent_conv_id`; `POST /api/sessions` accepting `{kind, terminalAgent}`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -500,7 +500,6 @@ Add a prepared statement next to `createSession` (do NOT change `createSession` 
 
 ```js
   createTerminalSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir,kind,terminal_agent,agent_conv_id) VALUES (?,?,'[]','[]','auto','single',?,?,'terminal',?,?)`),
-  setAgentConvId: db.prepare(`UPDATE sessions SET agent_conv_id=? WHERE id=?`),
 ```
 
 Then extend `POST /api/sessions`:
