@@ -3940,7 +3940,7 @@ const TRANSLATIONS = {
     'mcp.parse.no_servers':'Не вдалося знайти MCP сервери. Очікується {"mcpServers":{...}} або сумісний формат.',
     'mcp.parse.empty':'Список серверів порожній',
     'mcp.cfg.env_json_err':'Невірний формат ENV JSON',
-    'agent.planning':'🧠 Планування...','agent.fallback_single':'⚠️ Перехід до одиночного режиму','agent.done':'✅ Всі агенти завершили','agent.circular_deps':'⚠️ Кругова залежність між агентами',
+    'agent.planning':'🧠 Планування...','agent.fallback_single':'⚠️ Перехід до одиночного режиму','agent.done':'✅ Всі агенти завершили','agent.circular_deps':'⚠️ Кругова залежність між агентами','agent.stopped':'⏹ Зупинено',
     'msf.working':'Працює','msf.done':'Готово','msf.error':'Помилка','msf.waiting':'Очікування','msf.thinking':'Думаю','msf.tool':'Виконую','msf.generating':'Генерую',
     'ta.calls':'операцій','ta.activity':'Активність',
     'msf.team':'Команда агентів',
@@ -4174,7 +4174,7 @@ const TRANSLATIONS = {
     'mcp.parse.no_servers':'Could not find MCP servers. Expected {"mcpServers":{...}} or compatible format.',
     'mcp.parse.empty':'Server list is empty',
     'mcp.cfg.env_json_err':'Invalid ENV JSON format',
-    'agent.planning':'🧠 Planning...','agent.fallback_single':'⚠️ Falling back to single mode','agent.done':'✅ All agents done','agent.circular_deps':'⚠️ Circular dependency between agents',
+    'agent.planning':'🧠 Planning...','agent.fallback_single':'⚠️ Falling back to single mode','agent.done':'✅ All agents done','agent.circular_deps':'⚠️ Circular dependency between agents','agent.stopped':'⏹ Stopped',
     'msf.working':'Working','msf.done':'Done','msf.error':'Error','msf.waiting':'Waiting','msf.thinking':'Thinking','msf.tool':'Running','msf.generating':'Generating',
     'ta.calls':'calls','ta.activity':'Activity',
     'msf.team':'Agent Team',
@@ -4408,7 +4408,7 @@ const TRANSLATIONS = {
     'mcp.parse.no_servers':'Не удалось найти MCP серверы. Ожидается {"mcpServers":{...}} или совместимый формат.',
     'mcp.parse.empty':'Список серверов пуст',
     'mcp.cfg.env_json_err':'Неверный формат ENV JSON',
-    'agent.planning':'🧠 Планирование...','agent.fallback_single':'⚠️ Переход в одиночный режим','agent.done':'✅ Все агенты завершили','agent.circular_deps':'⚠️ Циклическая зависимость между агентами',
+    'agent.planning':'🧠 Планирование...','agent.fallback_single':'⚠️ Переход в одиночный режим','agent.done':'✅ Все агенты завершили','agent.circular_deps':'⚠️ Циклическая зависимость между агентами','agent.stopped':'⏹ Остановлено',
     'msf.working':'Работает','msf.done':'Готово','msf.error':'Ошибка','msf.waiting':'Ожидание','msf.thinking':'Думаю','msf.tool':'Выполняю','msf.generating':'Генерирую',
     'ta.calls':'операций','ta.activity':'Активность',
     'msf.team':'Команда агентов',
@@ -4589,7 +4589,7 @@ const TRANSLATIONS = {
     "dir.name.label":"Nom :","dir.git.init":"git init (si ce n'est pas déjà un dépôt)","confirm.stop.desc":"L'exécution de l'agent sera interrompue.","rl.type.five_hour":"5 heures",
     "rl.type.seven_day":"7 jours","proj.generating":"Génération en arrière-plan...","mcp.parse.no_servers":"Impossible de trouver des serveurs MCP. Format attendu : {\"mcpServers\":{...}} ou compatible.",
     "mcp.parse.empty":"La liste des serveurs est vide","mcp.cfg.env_json_err":"Format JSON ENV invalide","agent.planning":"🧠 Planification...","agent.fallback_single":"⚠️ Retour au mode simple",
-    "agent.done":"✅ Tous les agents ont terminé","agent.circular_deps":"⚠️ Dépendance circulaire entre agents","msf.working":"En cours","msf.done":"Terminé","msf.error":"Erreur",
+    "agent.done":"✅ Tous les agents ont terminé","agent.circular_deps":"⚠️ Dépendance circulaire entre agents","agent.stopped":"⏹ Arrêté","msf.working":"En cours","msf.done":"Terminé","msf.error":"Erreur",
     "msf.waiting":"En attente","msf.thinking":"Réflexion","msf.tool":"Exécution","msf.generating":"Génération","ta.calls":"appels","ta.activity":"Activité","msf.team":"Équipe d'agents",
     "hdr.toggle":"Réduire/développer l'en-tête","msg.show_more":"Afficher plus","msg.show_less":"Afficher moins","sec.cmds":"/ Commandes",
     "cmds.hint":"Commandes slash — raccourcis vers des prompts. Tapez / dans le chat.","cmd.name.ph":"/nom (ex. /check)","cmd.text.ph":"Texte complet du prompt...","cmd.add.btn":"Ajouter",
@@ -4710,7 +4710,7 @@ const TRANSLATIONS = {
     "mcp.import.found":"שרתים שנמצאו:","mcp.import.replace":"החלפת שרתים מותאמים אישית קיימים (אחרת — מיזוג)","mcp.import.preview.btn":"👁 תצוגה מקדימה","mcp.import.do":"ייבוא","dir.name.label":"שם:",
     "dir.git.init":"git init (אם עדיין לא ריפוזיטורי)","confirm.stop.desc":"ריצת ה-agent תופרע.","rl.type.five_hour":"5 שעות","rl.type.seven_day":"7 ימים","proj.generating":"יוצר ברקע...",
     "mcp.parse.no_servers":"לא נמצאו שרתי MCP. צפוי {\"mcpServers\":{...}} או פורמט תואם.","mcp.parse.empty":"רשימת השרתים ריקה","mcp.cfg.env_json_err":"פורמט ENV JSON לא תקין",
-    "agent.planning":"🧠 מתכנן...","agent.fallback_single":"⚠️ עובר למצב יחיד","agent.done":"✅ כל ה-agents סיימו","agent.circular_deps":"⚠️ תלות מעגלית בין ה-agents","msf.working":"עובד",
+    "agent.planning":"🧠 מתכנן...","agent.fallback_single":"⚠️ עובר למצב יחיד","agent.done":"✅ כל ה-agents סיימו","agent.circular_deps":"⚠️ תלות מעגלית בין ה-agents","agent.stopped":"⏹ הופסק","msf.working":"עובד",
     "msf.done":"הושלם","msf.error":"שגיאה","msf.waiting":"ממתין","msf.thinking":"חושב","msf.tool":"רץ","msf.generating":"יוצר","ta.calls":"קריאות","ta.activity":"פעילות","msf.team":"צוות Agents",
     "hdr.toggle":"כיווץ/הרחבה של הכותרת","msg.show_more":"הצגת עוד","msg.show_less":"הצגה מצומצמת","sec.cmds":"/ פקודות","cmds.hint":"פקודות סלאש — קיצורי דרך לפרומפטים. הקלידו / בצ'אט.",
     "cmd.name.ph":"/שם (לדוגמה /check)","cmd.text.ph":"טקסט הפרומפט המלא...","cmd.add.btn":"הוספה","cmd.save.btn":"שמירה","cmd.add.new":"＋ הוספת פקודה","cmd.insert.title":"הכנסה לצ'אט",
@@ -5618,6 +5618,9 @@ function handleWsMsg(d) {
         if (st.startsWith('🔄')) _atcUpdate(d.agent, 'working');
         else if (st.startsWith('✅')) _atcUpdate(d.agent, 'done');
         else if (st.startsWith('❌')) _atcUpdate(d.agent, 'error');
+        // ⚠️ = agent finished but did not complete (e.g. hit its turn limit).
+        // Reuses the 'error' card state: it is finished, just not successfully.
+        else if (st.startsWith('⚠️')) _atcUpdate(d.agent, 'error');
       }
       break;
     }

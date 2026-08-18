@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test test/render/*.test.mjs && node test/overload-detector.test.js",
+    "test": "node --test test/render/*.test.mjs && node test/overload-detector.test.js && node test/env-load-order.test.js && node test/multi-agent-result.test.js",
     "postinstall": "node scripts/install-hooks.js",
     "release": "node scripts/release.js",
     "electron:dev": "electron .",

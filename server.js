@@ -7,21 +7,12 @@ const os = require('os');
 const url = require('url');
 const { execSync, spawn: spawnProc } = require('child_process');
 const crypto = require('crypto');
-const multer = require('multer');
-const openDatabase = require('./db-adapter');
-const cookieParser = require('cookie-parser');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const auth = require('./auth');
-const ClaudeCLI = require('./claude-cli');
-const { isTransientOverload, shouldRetryOverload } = require('./rate-limit-utils');
-const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
-const ClaudeSSH = require('./claude-ssh');
-const { testSshConnection } = require('./claude-ssh');
-const TelegramBot = require('./telegram-bot');
-const TunnelManager = require('./tunnel-manager');
 
 // ─── Load .env file (no external dependency needed) ───────────────────────
+// MUST stay above every local require() below: claude-cli.js, claude-ssh.js and
+// claude-interactive.js capture CLAUDE_IDLE_TIMEOUT_MS / CLAUDE_HARD_CAP_MS into
+// module-scope consts at require time. Loading .env after them silently pinned the
+// hardcoded 10-min idle default no matter what .env said. Do not move this down.
 {
   const envPath = path.join(process.env.APP_DIR || __dirname, '.env');
   if (fs.existsSync(envPath)) {
@@ -37,6 +28,21 @@ const TunnelManager = require('./tunnel-manager');
     console.log('✅ .env loaded');
   }
 }
+
+const multer = require('multer');
+const openDatabase = require('./db-adapter');
+const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const auth = require('./auth');
+const ClaudeCLI = require('./claude-cli');
+const { isTransientOverload, shouldRetryOverload } = require('./rate-limit-utils');
+const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
+const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
+const ClaudeSSH = require('./claude-ssh');
+const { testSshConnection } = require('./claude-ssh');
+const TelegramBot = require('./telegram-bot');
+const TunnelManager = require('./tunnel-manager');
 
 // ─── Structured Logger ────────────────────────────────────────────────────────
 // Reads LOG_LEVEL + NODE_ENV from process.env (already populated from .env above).
@@ -814,7 +820,14 @@ function chainWithSummary(chain) {
 // Keeps running Claude subprocesses alive when the browser tab closes/reloads.
 // Key: localSessionId, Value: { proxy, abortController, cleanupTimer }
 const activeTasks = new Map();
-const TASK_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // abort orphaned tasks after 30 min
+// How long a task keeps running after its browser WebSocket detaches (tab closed,
+// laptop asleep, network drop) before it is aborted. This is NOT an idle timer — the
+// task may be working the whole time. Re-attaching clears it. 0 disables the abort
+// entirely, so a detached task runs to completion. Default 30 min.
+const TASK_DISCONNECT_TIMEOUT_MS = (() => {
+  const v = parseInt(process.env.TASK_DISCONNECT_TIMEOUT_MS ?? '', 10);
+  return Number.isFinite(v) && v >= 0 ? v : 30 * 60 * 1000;
+})();
 
 // ─── Session Watchers (real-time task worker → chat streaming) ────────────
 // When chat client opens a session, it subscribes via WS. Task worker broadcasts
@@ -3009,8 +3022,23 @@ async function runSshSingle(p) {
 }
 
 // --- Multi-Agent (CLI only) ---
+// Upper bound on turns per sub-agent. Matches the UI's own limit (public/index.html
+// #maxTurns has max="200"), so the number a user types is the number they get; this path
+// used to clamp to a hardcoded 50 with no notice. Still bounded on purpose — unbounded
+// turns invite tool loops, and each agent may additionally auto-continue up to
+// MAX_AUTO_CONTINUES times, so the worst case per agent is cap × (1 + MAX_AUTO_CONTINUES).
+const MULTI_AGENT_MAX_TURNS_CAP = parseInt(process.env.MULTI_AGENT_MAX_TURNS_CAP || '200', 10) || 200;
+
 async function runMultiAgent(p) {
   const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort } = p;
+  // Entry guard: the caller creates the AbortController before prompt classification and
+  // does not re-check it before dispatching here, so Stop during that phase lands us with
+  // an already-aborted signal. cli.send() only listens for a FUTURE abort
+  // (claude-cli.js:473-478), so the planner below would spawn a process nothing can kill.
+  if (abortController?.signal?.aborted) {
+    ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'Stopped', statusKey:'agent.stopped', ...(tabId ? { tabId } : {}) }));
+    return claudeSessionId || null;
+  }
   ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'🧠 Planning...', statusKey:'agent.planning', ...(tabId ? { tabId } : {}) }));
 
   const effectiveWorkdir = workdir || WORKDIR;
@@ -3067,6 +3095,13 @@ async function runMultiAgent(p) {
   let plan = null;
   try { const m = planText.match(/\{[\s\S]*\}/); if (m) plan = JSON.parse(m[0]); } catch {}
 
+  // Stop during planning leaves planText empty, which would otherwise look like a bad plan
+  // and fall through to runCliSingle — spawning yet another run from an aborted signal.
+  if (abortController?.signal?.aborted) {
+    ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'Stopped', statusKey:'agent.stopped', ...(tabId ? { tabId } : {}) }));
+    return currentSessionId || claudeSessionId || null;
+  }
+
   if (!plan?.agents?.length) {
     ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'⚠️ Falling back to single mode', statusKey:'agent.fallback_single', ...(tabId ? { tabId } : {}) }));
     // runCliSingle returns { cid, completed } — extract .cid to match
@@ -3089,6 +3124,10 @@ async function runMultiAgent(p) {
 
   // Run agents with session context
   while (remaining.length) {
+    // Stop/disconnect must not launch another wave. cli.send() only listens for a FUTURE
+    // abort (claude-cli.js:473-478), so a process spawned with an already-aborted signal
+    // would run on uncancellable to its idle timeout.
+    if (abortController?.signal?.aborted) break;
     const runnable = remaining.filter(a => (a.depends_on||[]).every(d => completed.has(d)));
     if (!runnable.length) { ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'Circular deps', statusKey:'agent.circular_deps', ...(tabId ? { tabId } : {}) })); break; }
 
@@ -3099,28 +3138,100 @@ async function runMultiAgent(p) {
       const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
       const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.`;
       const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'];
+      const agentTurnCap = Math.min(maxTurns||30, MULTI_AGENT_MAX_TURNS_CAP);
       let agentText = '';
+      let agentResult = null;   // CLI result frame — carries why the run stopped
+      let agentErrored = false; // .onError already reported a failure for this agent
+      let agentContinues = 0;
+      // Each sub-agent owns its session. Agents in a wave run CONCURRENTLY, so they must
+      // never resume — or overwrite — the orchestrator's id: two `claude --resume <same id>`
+      // processes interleave writes into one transcript, and the last .onSessionId to fire
+      // would decide which branch the summarizer (and the saved chat) continues from.
+      // --fork-session branches the plan context into a private transcript per agent.
+      let agentSessionId = currentSessionId;
+      let agentFork = !!currentSessionId; // fork once, off the plan; continues resume the branch
+      let agentOwnsSession = false;       // true once agentSessionId is THIS agent's own branch
+      let agentPromptNow = agentPrompt;
 
-      await new Promise(res => {
-        let _settled = false;
-        const _res = () => { if (!_settled) { _settled = true; res(); } };
-        // Agent resumes session to maintain context
-        cli.send({ prompt:agentPrompt, sessionId: currentSessionId, model, maxTurns:Math.min(maxTurns||30, 50), systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController, effort })
-          .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
-          .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,500),n,agent.id,null,null); } catch {} })
-          .onSessionId(sid => { currentSessionId = sid; })
-          .onError(err => { try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
-          .onDone(() => _res());
-      });
+      while (true) {
+        agentResult = null;
+        await new Promise(res => {
+          let _settled = false;
+          const _res = () => { if (!_settled) { _settled = true; res(); } };
+          cli.send({ prompt:agentPromptNow, sessionId: agentSessionId, model, maxTurns:agentTurnCap, systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController, forkSession: agentFork, effort })
+            .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
+            .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,500),n,agent.id,null,null); } catch {} })
+            .onResult(r => { agentResult = r; })
+            .onSessionId(sid => { agentSessionId = sid; agentOwnsSession = true; }) // LOCAL — never the orchestrator's
+            .onError(err => { agentErrored = true; try { ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`❌ ${err.substring(0,200)}`, ...(tabId ? { tabId } : {}) })); } catch {} _res(); })
+            .onDone(() => _res());
+        });
+        // Pick the branch id out of the result frame. .onSessionId cannot deliver it on a
+        // resume: claude-cli.js seeds _detectedSid with the id we resumed from
+        // (claude-cli.js:297) and only fires when that is empty (claude-cli.js:566), so a
+        // forked run never reports its new id. Same normalisation as claude-cli.js:568 —
+        // session_id may arrive nested in an object.
+        const _rid = agentResult?.session_id;
+        const _branchId = typeof _rid === 'string' ? _rid
+          : (_rid && typeof _rid === 'object' && typeof _rid.session_id === 'string') ? _rid.session_id
+          : null;
+        // Ownership means a branch that is genuinely NOT the shared plan session. Encoding
+        // that rather than assuming it: were a future CLI to echo the resume source here
+        // (or ignore --fork-session), claiming ownership would send the next continue to
+        // `--resume <plan>` unforked — the write race again. Failing the check instead
+        // stops the agent and reports it incomplete, which is the safe direction.
+        if (_branchId && _branchId !== currentSessionId) {
+          agentSessionId = _branchId; agentOwnsSession = true; agentFork = false;
+        }
+
+        if (abortController?.signal?.aborted) break;
+        // No branch id means agentSessionId is still the SHARED plan session. Resuming that
+        // concurrently is exactly the write race this design removes, so stop instead and
+        // let the agent be reported incomplete — never continue onto someone else's session.
+        if (!agentOwnsSession) break;
+        if (!shouldAutoContinue(agentResult, agentErrored, agentContinues, MAX_AUTO_CONTINUES)) break;
+
+        agentContinues++;
+        const cont = `\n\n⏳ **${agent.id}** auto-continuing (${agentContinues}/${MAX_AUTO_CONTINUES}) — hit the ${agentTurnCap}-turn limit, resuming...\n\n`;
+        agentText += cont;
+        { const _cb = (chatBuffers.get(sessionId) || '') + cont; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        try { ws.send(JSON.stringify({ type:'text', text:cont, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {}
+        ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`🔄 ${agent.role} (${agentContinues}/${MAX_AUTO_CONTINUES})`, ...(tabId ? { tabId } : {}) }));
+        agentPromptNow = 'Continue where you left off. Complete the remaining work.';
+      }
+
+      // A finished stream is not a finished job — the CLI reports why it stopped in
+      // result.subtype, and emits no result frame at all when it was killed mid-run.
+      // Reporting ✅ in either case hid truncated work from the user AND handed it to
+      // dependent agents (and the summarizer) as if it were complete.
+      const agentOk = isAgentSuccess(agentResult, agentErrored);
+      if (!agentOk) {
+        const why = agentStopReason(agentResult, agentErrored, agentTurnCap, agentContinues);
+        const notice = `\n\n⚠️ **${agent.id}** (${agent.role}) did not finish — ${why}. The output above is incomplete.\n\n`;
+        agentText += notice; // carried into results[] so dependents/summarizer see it too
+        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        try { ws.send(JSON.stringify({ type:'text', text:notice, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {}
+      }
 
       results[agent.id] = agentText;
       try { if (agentText) stmts.addMsg.run(sessionId,'assistant','text',agentText,null,agent.id,null,null); } catch {}
-      completed.add(agent.id);
-      ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`✅ ${agent.role}`, ...(tabId ? { tabId } : {}) }));
+      completed.add(agent.id); // always — dependents would otherwise stall as "circular deps"
+      if (agentOk) {
+        ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`✅ ${agent.role}`, ...(tabId ? { tabId } : {}) }));
+      } else if (!agentErrored) {
+        // .onError already emitted ❌ for its case; don't overwrite it with a second status
+        ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`⚠️ ${agent.role} — incomplete`, ...(tabId ? { tabId } : {}) }));
+      }
     }));
   }
 
-  // Summarizer agent: synthesizes results and provides final session_id for resume
+  // Summarizer agent: synthesizes results and provides final session_id for resume.
+  // Skipped when aborted — same reason as the wave guard above: an already-aborted signal
+  // never fires claude-cli's listener, so this would spawn an uncancellable extra run.
+  if (abortController?.signal?.aborted) {
+    ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'Stopped', statusKey:'agent.stopped', ...(tabId ? { tabId } : {}) }));
+    return currentSessionId;
+  }
   ws.send(JSON.stringify({ type:'agent_status', agent:'summarizer', status:'📝 Synthesizing results...', ...(tabId ? { tabId } : {}) }));
   const summaryPrompt = `You are a coordinator. Synthesize the results from all agents and provide a concise summary.
 
@@ -7793,21 +7904,27 @@ wss.on('connection', (ws) => {
     for (const [sid, task] of activeTasks) {
       if (task.proxy._ws === ws) {
         task.proxy.detach();
-        if (!task.cleanupTimer) {
+        if (TASK_DISCONNECT_TIMEOUT_MS > 0 && !task.cleanupTimer) {
           task.cleanupTimer = setTimeout(() => {
-            log.info('task idle timeout, aborting', { sessionId: sid });
+            log.info('task disconnect timeout, aborting', { sessionId: sid });
             try { task.abortController.abort(); } catch {}
             activeTasks.delete(sid);
-          }, TASK_IDLE_TIMEOUT_MS);
+          }, TASK_DISCONNECT_TIMEOUT_MS);
         }
       }
     }
     // Abort legacy (no-tab) session tasks only
     if (ws._abort) { ws._abort.abort(); ws._abort = null; }
     // WS-1: clean up per-tab state — abort CLI runs that are NOT tracked in activeTasks.
-    // Sessions in activeTasks have a 30-min idle timeout and can be reattached on reconnect.
-    for (const [tid, ac] of Object.entries(ws._tabAbort || {})) {
-      if (!activeTasks.has(tid)) { try { ac.abort(); } catch {} }
+    // Sessions in activeTasks have a disconnect timeout (TASK_DISCONNECT_TIMEOUT_MS,
+    // default 30 min, 0 = never) and can be reattached on reconnect. A run is only
+    // registered there after prompt classification, so this loop also covers the first
+    // seconds of a run — TASK_DISCONNECT_TIMEOUT_MS=0 must be honoured here too, or
+    // "never abort on disconnect" would silently not hold for a run that just started.
+    if (TASK_DISCONNECT_TIMEOUT_MS > 0) {
+      for (const [tid, ac] of Object.entries(ws._tabAbort || {})) {
+        if (!activeTasks.has(tid)) { try { ac.abort(); } catch {} }
+      }
     }
     // Clean up orphaned sessionQueues entries: if no other watcher and no active task,
     // the queue will never be processed — schedule delayed removal to prevent memory leak.
