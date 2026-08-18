@@ -44,6 +44,11 @@ const {
 } = require('./terminal-session');
 const termBridge = require('./terminal-bridge');
 const botsLogic = require('./bots');
+// A message that is nothing but a mention ("@@analyst") strips to an empty string —
+// that used to become the literal `-p ''` prompt, starting the bot's CLI with no
+// instruction at all. One line stands in for "you were addressed with nothing else
+// to go on".
+const BARE_MENTION_PROMPT = "You were addressed directly with no other text — greet them and ask what they need, or continue naturally if there is relevant prior context in this conversation.";
 const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
@@ -3380,8 +3385,14 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
       ok ? '' : agentStopReason(botResult, botErrored));
     if (ok) {
       previous.push({ handle: bot.id, text: botText });
-    } else if (bots.indexOf(bot) < bots.length - 1) {
-      const note = `\n\n⚠️ @${bot.id} did not finish (${agentStopReason(botResult, botErrored)}) — its output is not passed to the next bot.\n\n`;
+    } else {
+      // Always visible as `text` — not just when another bot follows. `agent_status`/
+      // `bot_state` reach the web UI's sidebar, but TelegramProxy.send() does not
+      // handle either type at all, so on Telegram those are silently dropped; `text`
+      // is the one event type every surface renders. A failure on the LAST bot used
+      // to emit nothing anywhere but the sidebar — Telegram just showed "✅ Done".
+      const note = `\n\n⚠️ @${bot.id} did not finish (${agentStopReason(botResult, botErrored)})`
+        + (bots.indexOf(bot) < bots.length - 1 ? ' — its output is not passed to the next bot.\n\n' : '.\n\n');
       try { ws.send(JSON.stringify({ type: 'text', text: note, agent: bot.id, ...(tabId ? { tabId } : {}) })); } catch {}
     }
   }
@@ -6269,16 +6280,16 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
   // Check if session is busy — queue as interrupt instead of dropping the message.
   // activeTasks covers both web and Telegram chat workers; activeChatSessions covers
   // the early phase of web processChat before activeTasks.set() is called.
-  // A remote (SSH) session cannot receive an interrupt at all: the hook script path
-  // is local and the callback URL is 127.0.0.1, neither of which resolves on the
-  // remote host, and ssh.send is never given the interrupt MCP server. Storing one
-  // would mean it is silently discarded at the end of the run. The web UI already
-  // refuses the interrupt path for remote projects; Telegram did not.
-  const _sess = stmts.getSession.get(sessionId);
-  const _isRemote = !!_sess?.remote_host
-    || !!loadProjects().find(pr => pr.workdir === _sess?.workdir && pr.isRemote);
-
-  if (!_isRemote && (activeTasks.has(sessionId) || activeChatSessions.has(sessionId))) {
+  // This check must fire for EVERY engine, remote included: skipping it for remote
+  // sessions used to let a second message dispatch a fully parallel run against the
+  // SAME sessionId — two overlapping `activeTasks.set()`/`chatBuffers.set()` calls
+  // stomping on each other, and two `claude --resume` processes racing to write the
+  // same claude_session_id. A remote (SSH) session still cannot receive an interrupt
+  // MID-run — the hook script's callback URL is 127.0.0.1, unreachable from the
+  // remote host — so a queued message there is not delivered until the run in
+  // progress finishes, at which point the `finally` block below runs it as the next
+  // message rather than discarding it.
+  if (activeTasks.has(sessionId) || activeChatSessions.has(sessionId)) {
     // Queue as interrupt (same mechanism as web UI mid-task clarifications)
     if (!pendingInterrupts.has(sessionId)) pendingInterrupts.set(sessionId, []);
     const queue = pendingInterrupts.get(sessionId);
@@ -6321,7 +6332,10 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
   // Load session from DB
   const session = stmts.getSession.get(sessionId);
   if (!session) {
-    await telegramBot.sendMessage(chatId, '❌ Session not found.');
+    // Explicit threadId, not the bot's mutable `_currentThreadId` — this runs after
+    // an await, by which point a concurrently-processed update from a DIFFERENT
+    // topic may already have overwritten that field, misdelivering this notice.
+    await telegramBot.sendMessage(chatId, '❌ Session not found.', threadId ? { message_thread_id: threadId } : {});
     return;
   }
 
@@ -6359,6 +6373,18 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     const model = session.model || 'sonnet';
     const mode = session.mode || 'auto';
     const workdir = session.workdir || WORKDIR;
+
+    // The web UI branches on agent_mode === 'multi' (routes to runMultiAgent, warns
+    // on the subscription engine); Telegram did neither — a session left in multi
+    // mode from the web UI just silently ran as a single agent here with no signal
+    // that the orchestrator/subtask plan it would normally get was skipped.
+    if (session.agent_mode === 'multi') {
+      try {
+        await telegramBot.sendMessage(chatId,
+          'ℹ️ This chat is set to multi-agent mode, which Telegram cannot run yet — answering as a single agent instead.',
+          threadId ? { message_thread_id: threadId } : {});
+      } catch {}
+    }
 
     // Parse active MCP and skills
     let mcpIds = [];
@@ -6439,7 +6465,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
         const available = new Set(tgProjectBots.map(b => b.id));
         const parsed = botsLogic.parseMentions(text || '', allBots.map(b => b.id));
         if (parsed.handles.length || parsed.unknown.length) {
-          tgPrompt = parsed.cleaned;
+          tgPrompt = parsed.cleaned || BARE_MENTION_PROMPT;
           const byId = new Map(allBots.map(b => [b.id, b]));
           tgBots = parsed.handles.filter(h => available.has(h)).map(h => byId.get(h));
           const notes = [
@@ -6454,9 +6480,23 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
       }
     } catch (e) { log.warn('telegram bot mention resolution failed', { err: e.message }); }
 
+    // A SEPARATE content-blocks build from `tgPrompt` (mention-stripped), not the
+    // `userContent` built above from raw `text` — that one is for DB/broadcast
+    // display, where showing the mention verbatim is correct. Dispatching it to the
+    // CLI as well used to duplicate the message: claude-cli.js only drops an
+    // attachment's trailing text block when it exactly equals the top-level
+    // `prompt`, and raw-with-mention never equals cleaned, so the mention text came
+    // back as a "prefix" ahead of the cleaned prompt.
+    const dispatchUserContent = buildUserContent(tgPrompt, attachments || []);
+
     const params = {
-      prompt: text,
-      userContent,
+      // Defaults to `text` unchanged when there was no mention; becomes the
+      // mention-stripped/bare-mention-fallback text otherwise. Using raw `text` here
+      // unconditionally used to leave a leftover "@@unknownbot" token in the prompt
+      // whenever every mentioned handle turned out unknown/unavailable and the run
+      // fell through to the plain single-agent path below instead of a bot.
+      prompt: tgPrompt,
+      userContent: dispatchUserContent,
       systemPrompt,
       mcpServers,
       model,
@@ -6472,6 +6512,18 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
 
     // Check if the active project is a remote SSH project
     const _activeProj = loadProjects().find(p => p.workdir === workdir && p.isRemote);
+    const _isSubscriptionEngine = (session.run_engine || 'api') === 'subscription';
+    if (tgBots.length && (_activeProj || _isSubscriptionEngine)) {
+      // Bots run through the headless `api` engine only (runBotTurns spawns its own
+      // ClaudeCLI per bot) — SSH and subscription/tmux sessions silently ran the
+      // mention as a normal single-agent turn with no bot involved and no word to
+      // the user about why. Say so explicitly instead.
+      try {
+        await telegramBot.sendMessage(chatId,
+          `ℹ️ Bots aren't available on this chat's engine (${_activeProj ? 'SSH' : 'subscription'}) — answering as the regular assistant instead. Switch this chat to the API engine to use @@mentions.`,
+          threadId ? { message_thread_id: threadId } : {});
+      } catch {}
+    }
     if (_activeProj) {
       await runSshSingle({
         ...params,
@@ -6481,11 +6533,23 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
         password:      decryptPassword(_activeProj.password) || '',
         port:          _activeProj.port || 22,
       });
-    } else if ((session.run_engine || 'api') === 'subscription') {
+    } else if (_isSubscriptionEngine) {
       // Respect the chat's billing engine choice from Telegram too — interactive
       // module collects output without touching SQLite, so persist it here
       // (mirrors the WS chat handler's subscription branch).
-      const r = await runInteractiveSingle(params);
+      const r = await runInteractiveSingle({
+        ...params,
+        // Matches the web WS handler's subscription branch (server.js ~7927):
+        // without a drain function, a clarification typed into a busy Telegram
+        // chat on this engine sat in pendingInterrupts and was NEVER delivered —
+        // this engine has no hook to pull it mid-run, only this explicit drain call.
+        drainInterrupts: () => {
+          const msgs = pendingInterrupts.get(sessionId) || [];
+          if (msgs.length) pendingInterrupts.delete(sessionId);
+          for (const m of msgs) { try { if (m.dbId) stmts.markInterruptDelivered.run(m.dbId); } catch {} }
+          return msgs;
+        },
+      });
       for (const ev of r.toolEvents) {
         try { stmts.addMsg.run(sessionId,'assistant','tool',(ev.input||'').substring(0,500),ev.name,null,null,null); } catch {}
       }
@@ -6499,10 +6563,10 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     } else if (tgBots.length) {
       // Mentions work from Telegram exactly as they do in the chat: same parser, same
       // sequential dispatch, same per-bot session. The reply carries a header per bot
-      // so a phone screen still shows who said what.
+      // so a phone screen still shows who said what. `params` already carries the
+      // mention-stripped prompt/content built above.
       proxy._botsById = Object.fromEntries(tgProjectBots.map(b => [b.id, b]));
-      await runBotTurns({ ...params, prompt: tgPrompt },
-        { bots: tgBots, prompt: tgPrompt, rosterBots: tgProjectBots });
+      await runBotTurns(params, { bots: tgBots, prompt: tgPrompt, rosterBots: tgProjectBots });
     } else {
       await runCliSingle(params);
     }
@@ -6533,6 +6597,26 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
       }
     }
     try { stmts.clearLastUserMsg.run(sessionId); } catch {}
+
+    // A message that arrived while this run was busy is queued in pendingInterrupts
+    // (see the busy check above). The local `api` engine's PreToolUse/Stop hook
+    // usually drains it mid-run via /api/internal/user-interrupt, which deletes the
+    // queue entry — so by the time we get here it is normally already empty. What's
+    // still here is exactly what could NOT be delivered mid-run (subscription/tmux
+    // without a drain call, SSH, or a race that finished before the hook polled).
+    // Run it now as the next message instead of leaving it to rot until cleanup.
+    const _queued = pendingInterrupts.get(sessionId);
+    if (_queued?.length) {
+      pendingInterrupts.delete(sessionId);
+      for (const m of _queued) { if (m.dbId) { try { stmts.markInterruptDelivered.run(m.dbId); } catch {} } }
+      const _followText = _queued.map(m => m.content).join('\n\n');
+      const _followAttachments = _queued.flatMap(m => m.attachments || []);
+      setImmediate(() => {
+        processTelegramChat({ sessionId, text: _followText, userId, chatId, threadId, attachments: _followAttachments })
+          .catch(e => log.error('[processTelegramChat] follow-up run failed', { sessionId, err: e.message }));
+      });
+      cleanupInterruptAttachments(_queued, INTERRUPT_FILE_TTL_MS);
+    }
   }
 }
 
@@ -6638,13 +6722,27 @@ function _attachTelegramListeners(bot) {
   });
 
   // Phase 2: Stop running task from Telegram
-  bot.on('stop_task', async ({ sessionId, chatId }) => {
+  bot.on('stop_task', async ({ sessionId, chatId, threadId }) => {
+    const opts = threadId ? { message_thread_id: threadId } : {};
     const task = activeTasks.get(sessionId);
     if (task && task.abortController) {
       task.abortController.abort();
-      await bot.sendMessage(chatId, '🛑 Task stopped.');
+      // Mirror the web /stop handler (server.js ~8268): drop anything queued as an
+      // interrupt for this session too — otherwise a stopped run still leaves
+      // clarifications and saved attachment files behind that would silently feed
+      // into whatever the NEXT run of this session happens to be.
+      const _stoppedInterrupts = pendingInterrupts.get(sessionId);
+      pendingInterrupts.delete(sessionId);
+      cleanupInterruptAttachments(_stoppedInterrupts);
+      await bot.sendMessage(chatId, '🛑 Task stopped.', opts);
+    } else if (stmts.hasRunningTask.get(sessionId)) {
+      // A Kanban/Schedule task worker runs this session without an activeTasks
+      // entry (that map covers web + Telegram chat workers only) — "No active
+      // task" would be a flat lie here, telling the user nothing is running when
+      // a task genuinely is, just not one Telegram's /stop can reach.
+      await bot.sendMessage(chatId, 'ℹ️ A Kanban/Schedule task is running on this session — stop it from the Kanban board, not /stop.', opts);
     } else {
-      await bot.sendMessage(chatId, 'No active task in this session.');
+      await bot.sendMessage(chatId, 'No active task in this session.', opts);
     }
   });
 }
@@ -7639,7 +7737,7 @@ wss.on('connection', (ws) => {
           const available = new Set(projectBots.map(b => b.id));
           const parsed = botsLogic.parseMentions(msg.text || '', allBots.map(b => b.id));
           if (parsed.handles.length || (parsed.unknown || []).length) {
-            botPrompt = parsed.cleaned;
+            botPrompt = parsed.cleaned || BARE_MENTION_PROMPT;
             const byId = new Map(allBots.map(b => [b.id, b]));
             mentionedBots = parsed.handles.filter(h => available.has(h)).map(h => byId.get(h));
             for (const h of parsed.handles.filter(x => !available.has(x))) {
@@ -7945,7 +8043,13 @@ wss.on('connection', (ws) => {
         // @mentions take precedence over the agent-mode setting: naming a bot is an
         // explicit instruction about who answers, and it would be wrong to hand the
         // turn to the planner instead.
-        newCid = await runBotTurns(params, { bots: mentionedBots, prompt: botPrompt, rosterBots: projectBots });
+        // params.userContent was built from the RAW message (mention still in it, if
+        // one was attached alongside a file) — claude-cli.js only drops an
+        // attachment's trailing text block when it exactly equals the prompt text, so
+        // passing the raw block next to the cleaned `botPrompt` would duplicate the
+        // message (same class of bug fixed for the Telegram bot path).
+        const botUserContent = buildUserContent(botPrompt, enrichedAttachments);
+        newCid = await runBotTurns({ ...params, userContent: botUserContent }, { bots: mentionedBots, prompt: botPrompt, rosterBots: projectBots });
       } else if (agentMode==='multi') {
         newCid = await runMultiAgent(params);
       } else {

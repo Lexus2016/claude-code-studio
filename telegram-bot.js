@@ -97,7 +97,11 @@ const SCREEN_TO_CALLBACK = {
 };
 
 // ─── Telegram message constants (used by TelegramProxy) ─────────────────────
-const TG_COLLAPSE_THRESHOLD = 800;
+// Only collapse what genuinely does not fit a single Telegram message. At the old
+// 800-char threshold, a normal answer routinely came back truncated to a preview —
+// worst for multi-bot turns, where the second bot's whole reply vanished behind the
+// "tap to expand" button because the combined text crossed 800 almost immediately.
+const TG_COLLAPSE_THRESHOLD = 3500;
 const TG_PREVIEW_LENGTH = 600;
 
 // ─── Bot Internationalization ───────────────────────────────────────────────
@@ -172,7 +176,11 @@ class TelegramBot extends EventEmitter {
     const dict = BOT_I18N[this.lang] || BOT_I18N.uk;
     let text = dict[key] || BOT_I18N.uk[key] || key;
     for (const [k, v] of Object.entries(params)) {
-      text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+      // A function replacer, not a string one: String.replace(regex, string) treats
+      // '$&', '$`', "$'" and '$$' in the REPLACEMENT as special patterns. A param
+      // value containing one (e.g. a real folder name like "a$`b") would otherwise
+      // splice in unrelated parts of the template instead of its own literal text.
+      text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), () => String(v));
     }
     return text;
   }
@@ -211,6 +219,12 @@ class TelegramBot extends EventEmitter {
         PRIMARY KEY (thread_id, chat_id)
       );
     `);
+    // Which session was last active IN THIS TOPIC. Before this column, active session
+    // was tracked only on the per-user ctx (one global field), so leaving a topic and
+    // coming back could restore whichever session in that workdir had most recently
+    // been touched ANYWHERE (including from the web UI) — not the one this topic
+    // itself was last showing.
+    try { this.db.exec("ALTER TABLE forum_topics ADD COLUMN session_id TEXT"); } catch(e) {}
   }
 
   _prepareStmts() {
@@ -226,11 +240,13 @@ class TelegramBot extends EventEmitter {
       // Forum mode
       setForumChatId:    this.db.prepare('UPDATE telegram_devices SET forum_chat_id = ? WHERE telegram_user_id = ?'),
       getForumDevice:    this.db.prepare('SELECT * FROM telegram_devices WHERE forum_chat_id = ? AND telegram_user_id = ?'),
+      getForumOwner:     this.db.prepare('SELECT * FROM telegram_devices WHERE forum_chat_id = ? AND telegram_user_id != ? LIMIT 1'),
       getForumDevices:   this.db.prepare('SELECT * FROM telegram_devices WHERE forum_chat_id IS NOT NULL AND notifications_enabled = 1'),
       addForumTopic:     this.db.prepare('INSERT OR REPLACE INTO forum_topics (thread_id, chat_id, type, workdir) VALUES (?, ?, ?, ?)'),
       getForumTopic:     this.db.prepare('SELECT * FROM forum_topics WHERE thread_id = ? AND chat_id = ?'),
       getForumTopics:    this.db.prepare('SELECT * FROM forum_topics WHERE chat_id = ?'),
       getForumTopicByWorkdir: this.db.prepare('SELECT * FROM forum_topics WHERE chat_id = ? AND type = ? AND workdir = ?'),
+      setForumTopicSession: this.db.prepare('UPDATE forum_topics SET session_id = ? WHERE chat_id = ? AND workdir = ? AND type = ?'),
       deleteForumTopic:  this.db.prepare('DELETE FROM forum_topics WHERE thread_id = ? AND chat_id = ?'),
       deleteForumTopicsByChatId: this.db.prepare('DELETE FROM forum_topics WHERE chat_id = ?'),
       // Forum sessions
@@ -339,8 +355,11 @@ class TelegramBot extends EventEmitter {
         }
       }
     } catch (err) {
-      // Network errors — retry after delay
-      if (!err.message?.includes('Invalid bot token')) {
+      // Network errors — retry after delay. A revoked/invalid token is fatal: Telegram
+      // answers getUpdates with "Unauthorized" (401), not the string this used to look
+      // for ("Invalid bot token" never appears in a live API error) — so a revoked
+      // token used to retry forever, every 5s, with no signal to the operator.
+      if (!/unauthorized|invalid bot token/i.test(err.message || '')) {
         this.log.warn(`[telegram] Poll error (retrying in 5s): ${err.message}`);
         if (this.running) {
           this._pollTimer = setTimeout(() => this._poll(), 5000);
@@ -360,7 +379,7 @@ class TelegramBot extends EventEmitter {
 
   // ─── Telegram API ──────────────────────────────────────────────────────────
 
-  async _callApi(method, params = {}) {
+  async _callApi(method, params = {}, _retried = false) {
     const url = `${TELEGRAM_API}${this.token}/${method}`;
 
     const body = {};
@@ -377,6 +396,17 @@ class TelegramBot extends EventEmitter {
 
     const data = await res.json();
     if (!data.ok) {
+      // Telegram signals rate limiting as error_code 429 with the wait time in
+      // parameters.retry_after (seconds) — the message text alone ("Too Many
+      // Requests: retry after N") was being thrown and never actually matched
+      // against '429' anywhere, so every 429 fell straight through as a normal
+      // error. Wait the exact time Telegram asks for and retry once.
+      if (data.error_code === 429 && !_retried) {
+        const waitMs = (Number(data.parameters?.retry_after) || 1) * 1000 + 250;
+        this.log?.warn?.(`[telegram] 429 rate limited on ${method}, waiting ${waitMs}ms`);
+        await new Promise(r => setTimeout(r, waitMs));
+        return this._callApi(method, params, true);
+      }
       throw new Error(data.description || `Telegram API error: ${method}`);
     }
     return data.result;
@@ -386,7 +416,7 @@ class TelegramBot extends EventEmitter {
     // Truncate long messages
     let safeText = text;
     if (safeText.length > MAX_MESSAGE_LENGTH) {
-      safeText = safeText.substring(0, MAX_MESSAGE_LENGTH) + '\n\n' + this._t('files_truncated_short');
+      safeText = this._safeCut(safeText, MAX_MESSAGE_LENGTH) + '\n\n' + this._t('files_truncated_short');
     }
 
     const params = {
@@ -422,7 +452,7 @@ class TelegramBot extends EventEmitter {
     const params = {
       chat_id: chatId,
       message_id: msgId,
-      text: text.length > MAX_MESSAGE_LENGTH ? text.substring(0, MAX_MESSAGE_LENGTH) + '\n\n' + this._t('files_truncated_short') : text,
+      text: text.length > MAX_MESSAGE_LENGTH ? this._safeCut(text, MAX_MESSAGE_LENGTH) + '\n\n' + this._t('files_truncated_short') : text,
       parse_mode: 'HTML',
     };
     if (keyboard) params.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
@@ -431,11 +461,19 @@ class TelegramBot extends EventEmitter {
       return await this._callApi('editMessageText', params);
     } catch (err) {
       if (err.message?.includes('message is not modified')) return null;
+      // A parse failure is a CONTENT problem, not a missing-message problem: keep
+      // editing the same screen (One Screen Message) rather than posting a new one.
+      // First retry without parse_mode, then with markup stripped so the user sees
+      // readable text instead of raw tags.
       if (err.message?.includes("can't parse")) {
         params.parse_mode = undefined;
-        try { return await this._callApi('editMessageText', params); } catch { /* fall through */ }
+        try { return await this._callApi('editMessageText', params); } catch { /* try stripped */ }
+        try {
+          return await this._callApi('editMessageText', { ...params, text: params.text.replace(/<[^>]+>/g, '') });
+        } catch { /* fall through to new message */ }
       }
-      // Any edit failure — fall back to sending a new message
+      // The message itself is gone or uneditable (deleted, too old) — only then is a
+      // new message the right answer.
       this.log.warn(`[telegram] editScreen fallback to new message: ${err.message}`);
       return this._showScreen(chatId, null, text, keyboard);
     }
@@ -637,11 +675,22 @@ class TelegramBot extends EventEmitter {
     const now = Date.now();
     const entry = this._rateLimit.get(userId);
     if (!entry || now > entry.resetAt) {
-      this._rateLimit.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+      this._rateLimit.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW, notified: false });
       return true;
     }
     entry.count++;
     return entry.count <= RATE_LIMIT_MAX;
+  }
+
+  // Tell the user their message was dropped — ONCE per rate-limit window, so the
+  // notice itself cannot become the flood. The forum path used to drop messages in
+  // complete silence, which reads exactly like the bot being broken.
+  async _notifyRateLimited(chatId, userId, threadId) {
+    const entry = this._rateLimit.get(userId);
+    if (entry?.notified) return;
+    if (entry) entry.notified = true;
+    const opts = threadId ? { message_thread_id: threadId } : {};
+    try { await this._sendMessage(chatId, this._t('rate_limit'), opts); } catch {}
   }
 
   _isBlocked(userId) {
@@ -711,12 +760,17 @@ class TelegramBot extends EventEmitter {
 
     // Set thread context for forum topics
     this._currentThreadId = msg.message_thread_id || null;
-    const isForum = msg.chat?.type === 'supergroup' && msg.is_topic_message;
+    // Telegram does NOT set `is_topic_message` for messages posted in the General
+    // topic — gating on it meant a message typed in General silently skipped Forum
+    // Mode entirely and fell through to private-chat-style handling with the wrong
+    // workdir. Whether this is Forum Mode depends only on which chat it's in: the
+    // user's paired forum supergroup, topic or General alike.
+    const isSupergroup = msg.chat?.type === 'supergroup';
 
     try {
       // Supergroup: handle /connect command early (before forum routing and auth)
       // Works both with and without @botname suffix, in topics and General
-      if (msg.chat?.type === 'supergroup' && msg.text) {
+      if (isSupergroup && msg.text) {
         const connectText = msg.text.trim().toLowerCase().replace(/@\w+$/, '');
         if (connectText === '/connect') {
           return await this._forum.handleConnect(msg);
@@ -724,20 +778,24 @@ class TelegramBot extends EventEmitter {
       }
 
       // Forum mode: route to forum handler if message is from this user's paired forum group
-      if (isForum && this._isAuthorized(userId)) {
+      if (isSupergroup && this._isAuthorized(userId)) {
         const device = this._stmts.getDevice.get(userId);
-        if (device?.forum_chat_id !== chatId) return; // Not this user's forum
-        if (!this._checkRateLimit(userId)) return;    // Rate-limit forum too
-        this._stmts.updateLastActive.run(userId);
-        this._restoreDeviceContext(userId);
-        const threadId = msg.message_thread_id || null;
-        return await this._forum.handleMessage(msg, threadId);
+        if (device?.forum_chat_id === chatId) {
+          if (!this._checkRateLimit(userId)) { await this._notifyRateLimited(chatId, userId, msg.message_thread_id || null); return; }
+          this._stmts.updateLastActive.run(userId);
+          this._restoreDeviceContext(userId);
+          const threadId = msg.message_thread_id || null;
+          return await this._forum.handleMessage(msg, threadId);
+        }
+        // Authorized user, but this supergroup isn't their paired forum — ignore,
+        // same as before (do not fall through to private-chat-style handling here).
+        return;
       }
 
       // Handle media messages (photos, documents, files)
       if (msg.photo || msg.document) {
         if (!this._isAuthorized(userId)) return;
-        if (!this._checkRateLimit(userId)) return;
+        if (!this._checkRateLimit(userId)) { await this._notifyRateLimited(chatId, userId, msg.message_thread_id || null); return; }
         this._stmts.updateLastActive.run(userId);
         this._restoreDeviceContext(userId);
         return this._handleMediaMessage(msg);
@@ -789,9 +847,11 @@ class TelegramBot extends EventEmitter {
         return this._sendMessage(chatId, newVal ? this._t('notif_on') : this._t('notif_off'));
       }
 
-      // Intercept: if there's a pending ask_user question, any text resolves it
+      // Intercept: if there's a pending ask_user question, any text resolves it —
+      // except a command, which must always route as a command. Without this guard,
+      // /stop typed while a question was pending was swallowed as its literal answer.
       const ctx = this._getContext(userId);
-      if (ctx.state === FSM_STATES.AWAITING_ASK_RESPONSE) {
+      if (ctx.state === FSM_STATES.AWAITING_ASK_RESPONSE && !text.startsWith('/')) {
         const requestId = ctx.stateData?.askRequestId;
         const origAskMsgId = ctx.stateData?.askMsgId;
         const origAskChatId = ctx.stateData?.askChatId;
@@ -1049,10 +1109,12 @@ class TelegramBot extends EventEmitter {
       }
 
       const sanitized = this._sanitize(lastMsg.content);
-      const converted = this._mdToHtml(sanitized);
 
-      // Split into multiple messages if too long — add action bar to last chunk
-      const chunks = this._chunkForTelegram(converted, MAX_MESSAGE_LENGTH - 100);
+      // Chunk the RAW Markdown, not the HTML it converts to: _chunkForTelegram's
+      // fence-awareness understands ``` markers, which only exist before conversion —
+      // splitting the HTML risked cutting a message mid-<pre>/<code>/<a href="...">,
+      // which Telegram then rejects outright.
+      const chunks = this._chunkForTelegram(sanitized, MAX_MESSAGE_LENGTH - 100).map(c => this._mdToHtml(c));
       const isForumTopic = !!this._currentThreadId;
       for (let i = 0; i < chunks.length; i++) {
         const prefix = chunks.length > 1 ? `📄 <i>(${i + 1}/${chunks.length})</i>\n\n` : '';
@@ -1145,15 +1207,7 @@ class TelegramBot extends EventEmitter {
       const sanitized = this._sanitize(content);
       const ext = pathMod.extname(filePath).slice(1) || 'txt';
       const name = pathMod.basename(filePath);
-
-      if (sanitized.length > MAX_MESSAGE_LENGTH - 200) {
-        const truncated = sanitized.substring(0, MAX_MESSAGE_LENGTH - 200);
-        await this._sendMessage(chatId,
-          `📄 <b>${this._escHtml(name)}</b>\n\n<pre><code class="language-${ext}">${this._escHtml(truncated)}</code></pre>\n\n${this._t('files_truncated', { len: content.length })}`, navButtons);
-      } else {
-        await this._sendMessage(chatId,
-          `📄 <b>${this._escHtml(name)}</b>\n\n<pre><code class="language-${ext}">${this._escHtml(sanitized)}</code></pre>`, navButtons);
-      }
+      await this._sendMessage(chatId, this._renderFileHtml(name, ext, sanitized, content.length), navButtons);
     } catch (err) {
       await this._sendMessage(chatId, `❌ ${this._escHtml(err.message)}`, navButtons);
     }
@@ -1469,30 +1523,35 @@ class TelegramBot extends EventEmitter {
     const attachments = ctx.pendingAttachments || [];
     ctx.pendingAttachments = []; // Clear after use
 
-    // Emit event for server.js to handle (send message to Claude)
+    // Emit event for server.js to handle (send message to Claude).
+    // threadId is passed explicitly: the whole run (thinking indicator, streaming,
+    // final answer) is addressed from it, and leaving it undefined made the reply
+    // fall back to whatever topic the bot happened to be processing at the time.
     this.emit('send_message', {
       sessionId: ctx.sessionId,
       text: msg.text,
       userId,
       chatId,
+      threadId: msg.message_thread_id || null,
       attachments,
       callback: async (result) => {
+        // Explicit thread on the error reply: this callback runs after the run has
+        // started, by which point the bot's mutable `_currentThreadId` may point at
+        // a different topic entirely.
+        const cbOpts = msg.message_thread_id ? { message_thread_id: msg.message_thread_id } : {};
         if (result.error) {
           await this._sendMessage(chatId, `❌ ${this._escHtml(result.error)}`, {
+            ...cbOpts,
             reply_markup: JSON.stringify({ inline_keyboard: [
               [{ text: '🔄 ' + this._t('btn_refresh'), callback_data: 'cm:compose' },
                { text: this._t('btn_back_menu'), callback_data: 'm:menu' }]
             ]})
           });
-        } else {
-          const attachNote = attachments.length > 0 ? ` (+ ${attachments.length} file${attachments.length > 1 ? 's' : ''})` : '';
-          await this._sendMessage(chatId, this._t('compose_sent', { note: attachNote }), {
-            reply_markup: JSON.stringify({ inline_keyboard: [[
-              { text: this._t('btn_back_menu'), callback_data: 'm:menu' },
-              { text: '💬 ' + this._t('btn_back_chats'), callback_data: 'c:list:0' },
-            ]] }),
-          });
         }
+        // No success confirmation: the run itself already posts a visible
+        // "🤔 Processing your request..." indicator (TelegramProxy.startThinking),
+        // so an extra "⏳ Sent" made every single message cost two notifications
+        // that say the same thing.
       },
     });
 
@@ -2230,11 +2289,11 @@ class TelegramBot extends EventEmitter {
       inline_keyboard: [[{ text: this._t('btn_full_msg'), callback_data: `d:full:${msg.id}` }]]
     } : undefined;
 
-    await this._sendMessage(chatId, formatted.slice(0, 4096), {
+    await this._sendMessage(chatId, this._safeCut(formatted, 4096), {
       parse_mode: 'HTML',
       reply_markup: msgKeyboard ? JSON.stringify(msgKeyboard) : undefined,
     }).catch(() => {
-      return this._sendMessage(chatId, formatted.replace(/<[^>]+>/g, '').slice(0, 4096), {
+      return this._sendMessage(chatId, this._safeCut(formatted.replace(/<[^>]+>/g, ''), 4096), {
         reply_markup: msgKeyboard ? JSON.stringify(msgKeyboard) : undefined,
       });
     });
@@ -2245,10 +2304,16 @@ class TelegramBot extends EventEmitter {
     if (!msg) return this._sendMessage(chatId, this._t('chat_not_found'));
 
     const icon = msg.role === 'user' ? '👤' : '🤖';
-    let content = this._sanitize(msg.content || '');
-    content = this._mdToHtml(content);
+    const sanitized = this._sanitize(msg.content || '');
+    const header = `${icon} <b>${this._escHtml(msg.role)}</b>\n\n`;
 
-    const chunks = this._chunkForTelegram(`${icon} <b>${this._escHtml(msg.role)}</b>\n\n${content}`, MAX_MESSAGE_LENGTH - 100);
+    // Chunk the RAW Markdown (fence-aware), convert each piece to HTML afterward —
+    // chunking the already-converted HTML risked splitting a message mid-<pre>/
+    // <code>/<a href="...">, which Telegram then rejects outright. The header is
+    // already-safe raw HTML, so only the first chunk gets it prepended. An empty
+    // body still yields the header-only chunk instead of vanishing entirely.
+    const bodyChunks = this._chunkForTelegram(sanitized, MAX_MESSAGE_LENGTH - 100 - header.length);
+    const chunks = (bodyChunks.length ? bodyChunks : ['']).map((c, i) => (i === 0 ? header : '') + this._mdToHtml(c));
     const isForumTopic = !!this._currentThreadId;
 
     for (let i = 0; i < chunks.length; i++) {
@@ -2486,31 +2551,39 @@ class TelegramBot extends EventEmitter {
         const sanitized = this._sanitize(content);
         const ext = pathMod.extname(targetDir).slice(1) || 'txt';
         const name = pathMod.basename(targetDir);
-        const display = sanitized.length > MAX_MESSAGE_LENGTH - 200
-          ? sanitized.substring(0, MAX_MESSAGE_LENGTH - 200) + '\n\n' + this._t('files_truncated_short')
-          : sanitized;
-        await this._sendMessage(chatId, `📄 <b>${this._escHtml(name)}</b>\n\n<pre><code class="language-${ext}">${this._escHtml(display)}</code></pre>`);
+        await this._sendMessage(chatId, this._renderFileHtml(name, ext, sanitized, content.length));
         return; // Keep the file browser screen as is
       }
 
       // Directory listing
-      const items = fs.readdirSync(targetDir, { withFileTypes: true })
+      const FILE_LIST_LIMIT = 20;
+      const allEntries = fs.readdirSync(targetDir, { withFileTypes: true })
         .filter(d => !d.name.startsWith('.'))
         .sort((a, b) => {
           if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
           return a.name.localeCompare(b.name);
-        })
-        .slice(0, 20);
+        });
+      const items = allEntries.slice(0, FILE_LIST_LIMIT);
+      const hiddenCount = allEntries.length - items.length;
 
       ctx.filePath = subPath;
       if (!ctx.filePathCache) ctx.filePathCache = new Map();
+      // The cache maps short callback tokens to long paths. It only ever grew, so a
+      // long browsing session leaked one entry per oversized path forever. Only the
+      // CURRENT screen's buttons can be tapped, so anything older is dead weight —
+      // drop it once it gets large rather than carrying it for the whole session.
+      if (ctx.filePathCache.size > 500) ctx.filePathCache.clear();
       let cacheCounter = ctx.filePathCache.size;
 
       const keyboard = items.map(d => {
         const icon = d.isDirectory() ? '📁' : '📄';
         const rel = pathMod.join(subPath, d.name);
         let cbData;
-        if (rel.length <= 61) { // 64 - "f:" prefix - margin
+        // Telegram's 64-byte callback_data limit is BYTES, not JS string length — a
+        // non-ASCII path (Cyrillic, emoji in a filename) can be well under 61 chars
+        // and still exceed 64 UTF-8 bytes, which Telegram then rejects outright
+        // (BUTTON_DATA_INVALID), silently breaking the whole file listing screen.
+        if (Buffer.byteLength(rel, 'utf8') <= 61) { // 64 - "f:" prefix - margin
           cbData = `f:${rel}`;
         } else {
           cacheCounter++;
@@ -2523,7 +2596,7 @@ class TelegramBot extends EventEmitter {
       // Parent directory button (if not at root)
       if (subPath !== '.' && subPath !== '') {
         const parent = pathMod.dirname(subPath);
-        const parentCb = parent.length <= 61 ? `f:${parent || '.'}` : (() => {
+        const parentCb = Buffer.byteLength(parent, 'utf8') <= 61 ? `f:${parent || '.'}` : (() => {
           cacheCounter++;
           ctx.filePathCache.set(cacheCounter, parent);
           return `f:c:${cacheCounter}`;
@@ -2536,8 +2609,11 @@ class TelegramBot extends EventEmitter {
 
       const relDisplay = subPath === '.' ? '/' : subPath;
       const dirHeader = this._buildContextHeader(ctx);
+      // Say when the listing was cut. Silently showing 20 of 200 entries reads as
+      // "this directory has 20 files", which is simply wrong information.
+      const moreLine = hiddenCount > 0 ? `\n<i>+${hiddenCount} more not shown</i>` : '';
       const text = items.length > 0
-        ? `${dirHeader}📂 <b>${this._escHtml(relDisplay)}</b>`
+        ? `${dirHeader}📂 <b>${this._escHtml(relDisplay)}</b>${moreLine}`
         : `${dirHeader}📂 <b>${this._escHtml(relDisplay)}</b>\n\n${this._t('files_empty_label')}`;
 
       if (editMsgId) {
@@ -2789,6 +2865,14 @@ class TelegramBot extends EventEmitter {
     if (!userId || !chatId) return;
 
     const ctx = this._getContext(userId);
+    // A forum-topic message (message_thread_id set — never true for a private chat)
+    // pending attachment belongs in the FORUM-scoped store, because that is what
+    // _handleForumProjectMessage reads before sending the next text message. Storing
+    // it on the direct-mode ctx instead — as this used to do unconditionally — meant
+    // it was never picked up in the topic, and silently attached itself to whatever
+    // the SAME user next typed in a private 1:1 chat with the bot instead.
+    const threadId = msg.message_thread_id || null;
+    const attachTarget = threadId != null ? this._forum._getForumContext(chatId, threadId, userId) : ctx;
 
     try {
       let fileId, fileName, mimeType;
@@ -2894,16 +2978,16 @@ class TelegramBot extends EventEmitter {
         });
       } else if (ctx.state === FSM_STATES.COMPOSING && ctx.sessionId) {
         // In compose mode, attach to pending
-        ctx.pendingAttachments = ctx.pendingAttachments || [];
-        ctx.pendingAttachments.push(attachment);
+        attachTarget.pendingAttachments = attachTarget.pendingAttachments || [];
+        attachTarget.pendingAttachments.push(attachment);
         await this._sendMessage(chatId,
           this._t('attach_pending', { name: this._escHtml(fileName), size: Math.round(buffer.length / 1024) }),
           { parse_mode: 'HTML' }
         );
       } else if (ctx.sessionId) {
         // Has active session, store as pending
-        ctx.pendingAttachments = ctx.pendingAttachments || [];
-        ctx.pendingAttachments.push(attachment);
+        attachTarget.pendingAttachments = attachTarget.pendingAttachments || [];
+        attachTarget.pendingAttachments.push(attachment);
         await this._sendMessage(chatId,
           this._t('attach_pending_ask', { name: this._escHtml(fileName) }),
           {
@@ -2931,8 +3015,8 @@ class TelegramBot extends EventEmitter {
           this._saveDeviceContext(userId);
         }
         // Store as pending attachment
-        ctx.pendingAttachments = ctx.pendingAttachments || [];
-        ctx.pendingAttachments.push(attachment);
+        attachTarget.pendingAttachments = attachTarget.pendingAttachments || [];
+        attachTarget.pendingAttachments.push(attachment);
         await this._sendMessage(chatId,
           this._t('attach_pending_ask', { name: this._escHtml(fileName) }),
           {
@@ -3135,8 +3219,21 @@ class TelegramBot extends EventEmitter {
     for (const device of devices) {
       try {
         if (device.forum_chat_id) {
-          // Forum Mode — send to Activity topic with project link
-          await this._forum.notifyAskUser(device.forum_chat_id, text, session, rows);
+          // Forum Mode — send to Activity topic with project link. Skip when the ask
+          // was ALREADY posted into a topic of this same forum: a second copy in the
+          // Activity topic means two live keyboards for one requestId, and whichever
+          // the user does not tap answers "no pending question" afterwards.
+          if (String(device.forum_chat_id) === String(sourceChatId) && sourceThreadId) continue;
+          const ok = await this._forum.notifyAskUser(device.forum_chat_id, text, session, rows);
+          // The forum send can fail (topic deleted, bot demoted). Falling through to
+          // the user's private chat keeps the question reachable — otherwise the run
+          // just waits for an answer that can never arrive.
+          if (ok === false && device.telegram_chat_id) {
+            await this._sendMessage(device.telegram_chat_id, text, {
+              parse_mode: 'HTML',
+              reply_markup: JSON.stringify({ inline_keyboard: rows }),
+            });
+          }
         } else {
           // Private chat — skip if the ask was already sent to this exact chat
           if (String(device.telegram_chat_id) === String(sourceChatId) && !sourceThreadId) continue;
@@ -3162,7 +3259,7 @@ class TelegramBot extends EventEmitter {
       return this._sendMessage(chatId, this._t('error_no_session'), navButtons);
     }
 
-    this.emit('stop_task', { sessionId: ctx.sessionId, chatId });
+    this.emit('stop_task', { sessionId: ctx.sessionId, chatId, threadId: this._currentThreadId });
     await this._sendMessage(chatId, this._t('stop_sent'), navButtons);
   }
 
@@ -3432,6 +3529,88 @@ class TelegramBot extends EventEmitter {
     return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // Cut a string to at most `limit` UTF-16 code units WITHOUT splitting a surrogate
+  // pair. JS strings index by code unit, so a plain .slice/.substring can land
+  // between the two halves of an astral character (emoji, many CJK extensions) and
+  // emit a lone surrogate — which renders as "�" right at the seam of every
+  // truncated message and chunk boundary.
+  _safeCut(text, limit) {
+    const s = String(text ?? '');
+    if (s.length <= limit) return s;
+    let end = limit;
+    const code = s.charCodeAt(end - 1);
+    if (code >= 0xD800 && code <= 0xDBFF) end--; // trailing high surrogate — drop it
+    return s.substring(0, end);
+  }
+
+  // Repair improperly nested / unclosed inline tags so Telegram's parser accepts the
+  // message. Markdown allows overlapping emphasis ("**bold _both** italic_"), which
+  // converts to overlapping HTML (<b>..<i>..</b>..</i>) — Telegram rejects that
+  // outright with "can't parse entities", and the send then retried with NO
+  // parse_mode, dumping raw tags on screen. Re-nesting keeps the formatting intent:
+  //   <b>a<i>b</b>c</i>  ->  <b>a<i>b</i></b><i>c</i>
+  _balanceTags(html) {
+    const s = String(html ?? '');
+    if (!s.includes('<')) return s;
+    const out = [];
+    const stack = [];               // [{ name, open }] innermost last
+    const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:\s[^<>]*)?)>/g;
+    let last = 0, m;
+    while ((m = tagRe.exec(s)) !== null) {
+      out.push(s.slice(last, m.index));
+      last = tagRe.lastIndex;
+      const [whole, closing, rawName] = m;
+      const name = rawName.toLowerCase();
+      if (!closing) {
+        stack.push({ name, open: whole });
+        out.push(whole);
+        continue;
+      }
+      const at = stack.map(x => x.name).lastIndexOf(name);
+      if (at === -1) continue;      // stray closer with no opener — drop it
+      // Close everything opened after it, close it, then reopen those.
+      const reopen = stack.splice(at + 1);
+      for (let i = reopen.length - 1; i >= 0; i--) out.push(`</${reopen[i].name}>`);
+      stack.pop();
+      out.push(`</${name}>`);
+      for (const t of reopen) { out.push(t.open); stack.push(t); }
+    }
+    out.push(s.slice(last));
+    for (let i = stack.length - 1; i >= 0; i--) out.push(`</${stack[i].name}>`);
+    return out.join('');
+  }
+
+  // Render a file as `📄 name` + a fenced <pre><code> block, truncating to fit
+  // Telegram's message limit. Shared by /cat and the file-browser's "open file".
+  // Two things a naive version gets wrong, both fixed here:
+  //  - the truncation budget must be computed on the ESCAPED length, not the raw
+  //    one — markup-heavy content ('<', '>', '&') expands 4-5x under HTML-escaping,
+  //    so a raw-length gate routinely passed while the actual payload still
+  //    exceeded the limit, causing a 400 and a fallback that showed literal tags;
+  //  - the extension feeds a CSS/Prism class name, so it is restricted to
+  //    [a-z0-9] rather than interpolated as-is from whatever the filename holds.
+  _renderFileHtml(name, ext, sanitized, rawLength) {
+    const safeExt = String(ext || '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'txt';
+    const header = `📄 <b>${this._escHtml(name)}</b>\n\n`;
+    const wrapperOverhead = `<pre><code class="language-${safeExt}"></code></pre>`.length;
+    const escapedFull = this._escHtml(sanitized);
+    const budget = MAX_MESSAGE_LENGTH - 200 - header.length - wrapperOverhead;
+
+    if (escapedFull.length <= budget) {
+      return `${header}<pre><code class="language-${safeExt}">${escapedFull}</code></pre>`;
+    }
+    // Binary-search the largest RAW prefix whose ESCAPED form still fits the
+    // budget — escaping is not 1:1, so truncating the escaped string directly
+    // risks cutting an entity like '&am' in half.
+    let lo = 0, hi = sanitized.length;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (this._escHtml(sanitized.substring(0, mid)).length <= budget) lo = mid; else hi = mid - 1;
+    }
+    const truncated = this._escHtml(sanitized.substring(0, lo));
+    return `${header}<pre><code class="language-${safeExt}">${truncated}</code></pre>\n\n${this._t('files_truncated', { len: rawLength })}`;
+  }
+
   /** Convert Markdown to Telegram HTML */
   _mdToHtml(text) {
     if (!text) return '';
@@ -3499,20 +3678,25 @@ class TelegramBot extends EventEmitter {
     text = text.replace(/~~(.+?)~~/gs, '<s>$1</s>');
 
     // 4. Restore inline code
+    // Function replacers, not string ones: agent-authored code content can itself
+    // contain '$&', '$$', etc., which String.replace(needle, stringReplacement)
+    // interprets as substitution patterns even for a plain-string needle — corrupting
+    // the very code block it was meant to restore verbatim.
     for (let i = 0; i < codes.length; i++) {
-      text = text.replace(`\x01C${i}\x01`, `<code>${codes[i]}</code>`);
+      text = text.replace(`\x01C${i}\x01`, () => `<code>${codes[i]}</code>`);
     }
 
     // 5. Restore links
     for (let i = 0; i < links.length; i++) {
       const [lt, lu] = links[i];
-      text = text.replace(`\x01L${i}\x01`, `<a href="${this._escHtml(lu)}">${this._escHtml(lt)}</a>`);
+      text = text.replace(`\x01L${i}\x01`, () => `<a href="${this._escHtml(lu)}">${this._escHtml(lt)}</a>`);
     }
 
     // 6. Restore header markers
     text = text.replace(/\x02B\x02/g, '<b>').replace(/\x02\/B\x02/g, '</b>');
 
-    return text;
+    // 7. Repair overlapping/unclosed emphasis before it reaches Telegram's parser
+    return this._balanceTags(text);
   }
 
   /** Convert Markdown tables to readable plain text */
@@ -3593,19 +3777,26 @@ class TelegramBot extends EventEmitter {
           pos += splitAt;
           while (pos < str.length && ' \t\n'.includes(str[pos])) pos++;
         } else {
-          // Code block too early — split at newline inside it
-          const nl = window.lastIndexOf('\n');
+          // Code block too early — split at newline inside it. The chunk gets a
+          // closing "\n```" appended, so the cut must leave room for it: appending
+          // after cutting at the full limit produced a chunk of limit+4, i.e. the
+          // function quietly broke its own contract (harmless only because callers
+          // happen to pass limit = MAX_MESSAGE_LENGTH - 100).
+          const FENCE_CLOSE = '\n```';
+          const fenceWindow = str.slice(pos, pos + limit - FENCE_CLOSE.length);
+          const nl = fenceWindow.lastIndexOf('\n');
           const langM = window.slice(lastOpen).match(/^```(\w*)/);
           const lang = langM ? langM[1] : '';
 
           if (nl > limit / 4) {
             let chunk = str.slice(pos, pos + nl).trimEnd();
-            if (!chunk.endsWith('```')) chunk += '\n```';
+            if (!chunk.endsWith('```')) chunk += FENCE_CLOSE;
             result.push(chunk);
             pos += nl + 1;
           } else {
-            result.push(str.slice(pos, pos + limit).trimEnd() + '\n```');
-            pos += limit;
+            const cut = limit - FENCE_CLOSE.length;
+            result.push(str.slice(pos, pos + cut).trimEnd() + FENCE_CLOSE);
+            pos += cut;
           }
           // Reopen fence for next chunk
           str = str.slice(0, pos) + '```' + lang + '\n' + str.slice(pos);
@@ -3625,7 +3816,11 @@ class TelegramBot extends EventEmitter {
 
   /** Find the best split point within a text window */
   _findSplit(text, limit) {
-    if (text.length <= limit) return text.length;
+    // Every caller passes text sliced to EXACTLY `limit` chars (a full window), so a
+    // `<=` guard here made this an unconditional hard cut — the paragraph/sentence/
+    // word-boundary search below never ran. `<` still short-circuits the case this
+    // guard exists for (a genuinely shorter remainder needing no split at all).
+    if (text.length < limit) return text.length;
     const window = text.slice(0, limit);
 
     // Priority 1: paragraph boundary (double newline) — at least 1/3 into window
@@ -3646,7 +3841,11 @@ class TelegramBot extends EventEmitter {
     idx = window.lastIndexOf(' ');
     if (idx > 0) return idx + 1;
 
-    return limit; // hard cut
+    // Hard cut — but never between the halves of a surrogate pair, which would emit
+    // a lone surrogate and render as "�" at the seam of the two chunks.
+    const code = window.charCodeAt(limit - 1);
+    if (code >= 0xD800 && code <= 0xDBFF) return limit - 1;
+    return limit;
   }
 
 
@@ -3721,11 +3920,30 @@ class TelegramProxy {
   }
 
   /** Helper: send message with auto-injected thread_id for forum topics */
-  _tgSend(text, options = {}) {
+  async _tgSend(text, options = {}) {
     if (this._threadId && !options.message_thread_id) {
       options.message_thread_id = this._threadId;
     }
-    return this._bot._sendMessage(this._chatId, text, options);
+    try {
+      return await this._bot._sendMessage(this._chatId, text, options);
+    } catch (err) {
+      // A forum topic can be deleted or closed while a run is still writing to it
+      // (Telegram: "message thread not found" / topic-closed errors). Every send
+      // used to retry into that SAME dead thread and fail again — the whole
+      // response vanished, with "🤔 Processing…" left on screen forever and no
+      // error shown, because the caller's OWN retry/fallback logic never got a
+      // chance to run. Fall back once to the chat's main stream instead, so the
+      // answer actually reaches the user.
+      if (options.message_thread_id && /thread not found|topic_closed/i.test(err.message || '')) {
+        this._bot._forum.forgetTopic(this._chatId, options.message_thread_id);
+        const { message_thread_id, ...rest } = options;
+        const note = rest.parse_mode === 'HTML'
+          ? '⚠️ <i>(original topic is gone — sent here instead)</i>\n\n'
+          : '⚠️ (original topic is gone — sent here instead)\n\n';
+        return await this._bot._sendMessage(this._chatId, note + text, rest);
+      }
+      throw err;
+    }
   }
 
   /** Send visible "Thinking..." indicator (both draft and legacy modes) */
@@ -3775,11 +3993,21 @@ class TelegramProxy {
       } else if (data.type === 'tool_use' || data.type === 'tool') {
         this._toolsUsed.push(data.tool || data.tool_name || 'tool');
       } else if (data.type === 'done') {
-        this._finalize(data);
+        // Not awaited (send() is synchronous), so attach a .catch — an unhandled
+        // rejection here used to vanish into process.on('unhandledRejection')
+        // (server.js) with nothing telling the user their answer never arrived.
+        this._finalize(data).catch(err => this._bot.log.error(`[telegram] _finalize failed: ${err.message}`));
       } else if (data.type === 'error') {
         this._lastError = data.error || 'Unknown error';
         if (!this._buffer.trim()) {
-          this._sendError(data);
+          this._sendError(data).catch(err => this._bot.log.error(`[telegram] _sendError failed: ${err.message}`));
+        } else {
+          // Partial output was already streamed when the run errored. Previously ANY
+          // buffered text suppressed _sendError entirely, and since nothing else marks
+          // `_finished`, the run stayed "in progress" forever: the partial answer was
+          // never sent, and the typing indicator kept spinning until the 30-minute
+          // safety timer. Deliver what was produced, flagged as partial, instead.
+          this._finalize(data, this._lastError).catch(err => this._bot.log.error(`[telegram] _finalize failed: ${err.message}`));
         }
       } else if (data.type === 'ask_user') {
         this._handleAskUser(data);
@@ -3863,6 +4091,7 @@ class TelegramProxy {
       if (ctx.stateData) {
         ctx.stateData.askMsgId = askMsg.message_id;
         ctx.stateData.askChatId = this._chatId;
+        ctx.stateData.askThreadId = this._threadId || null;
       }
     }
 
@@ -3937,7 +4166,7 @@ class TelegramProxy {
     // ── Draft streaming path (sendMessageDraft — no rate limit) ──────────
     if (this._usesDraftStreaming) {
       try {
-        const text = (preview || ' ').slice(0, 4096); // plain text only, no parse_mode
+        const text = this._bot._safeCut(preview || ' ', 4096); // plain text only, no parse_mode
         const params = {
           chat_id: this._chatId,
           draft_id: this._draftId,
@@ -3991,19 +4220,19 @@ class TelegramProxy {
         await this._bot._callApi('editMessageText', {
           chat_id: this._chatId,
           message_id: this._progressMsgId,
-          text: text.slice(0, 4096),
+          text: this._bot._safeCut(text, 4096),
           parse_mode: 'HTML',
           reply_markup: progressMarkup,
         }).catch(() => {
           return this._bot._callApi('editMessageText', {
             chat_id: this._chatId,
             message_id: this._progressMsgId,
-            text: text.replace(/<[^>]+>/g, '').slice(0, 4096),
+            text: this._bot._safeCut(text.replace(/<[^>]+>/g, ''), 4096),
             reply_markup: progressMarkup,
           });
         });
       } else {
-        const result = await this._tgSend( text.slice(0, 4096), { parse_mode: 'HTML', reply_markup: progressMarkup });
+        const result = await this._tgSend( this._bot._safeCut(text, 4096), { parse_mode: 'HTML', reply_markup: progressMarkup });
         if (result && result.message_id) {
           this._progressMsgId = result.message_id;
         }
@@ -4015,7 +4244,7 @@ class TelegramProxy {
     }
   }
 
-  async _finalize(data) {
+  async _finalize(data, errorMsg = null) {
     if (this._finished) return; // already finalized or errored
     this._finished = true;
     this._stopTyping();
@@ -4048,9 +4277,13 @@ class TelegramProxy {
 
     if (rawLen > 0) {
       if (!isLarge) {
-        // Short response — send in full
-        const html = this._bot._mdToHtml(this._buffer);
-        const chunks = this._bot._chunkForTelegram(html, MAX_MESSAGE_LENGTH - 100);
+        // Short response — send in full. Chunk the RAW Markdown (fence-aware), then
+        // convert each chunk to HTML — converting first and chunking the HTML risked
+        // splitting mid-<pre>/<code>/<a href="...">, which Telegram rejects outright;
+        // the fallback below then stripped ALL formatting instead of just fixing the
+        // one broken chunk, so a code-bearing answer routinely arrived as literal tags.
+        const chunks = this._bot._chunkForTelegram(this._buffer, MAX_MESSAGE_LENGTH - 100)
+          .map(c => this._bot._mdToHtml(c));
         for (const chunk of chunks) {
           await this._tgSend(chunk, { parse_mode: 'HTML' }).catch(() => {
             return this._tgSend(chunk.replace(/<[^>]+>/g, ''));
@@ -4058,7 +4291,7 @@ class TelegramProxy {
         }
       } else {
         // Large response — send preview only, full available via button
-        const previewRaw = this._buffer.substring(0, TG_PREVIEW_LENGTH);
+        const previewRaw = this._bot._safeCut(this._buffer, TG_PREVIEW_LENGTH);
         // Truncate at last newline to avoid broken lines/fences
         const lastNl = previewRaw.lastIndexOf('\n');
         const cleanPreview = lastNl > TG_PREVIEW_LENGTH / 2 ? previewRaw.substring(0, lastNl) : previewRaw;
@@ -4071,7 +4304,9 @@ class TelegramProxy {
       }
     }
 
-    // Send completion notification with buttons
+    // Send completion notification with buttons — an error note instead of the normal
+    // "Done" summary when this finalize was triggered by a mid-run error with output
+    // already buffered (see the `error` branch in send()).
     const duration = data.duration ? ` (${Math.round(data.duration / 1000)}s)` : '';
     const toolsSummary = this._toolsUsed.length ? `\n🔧 Tools: ${this._bot._escHtml([...new Set(this._toolsUsed)].join(', '))}` : '';
 
@@ -4108,8 +4343,11 @@ class TelegramProxy {
             { text: '🏠 Menu', callback_data: 'm:menu' },
           ],
         ];
+    const summary = errorMsg
+      ? `⚠️ <b>Partial response — stopped on error:</b> ${this._bot._escHtml(errorMsg)}${sessionLine}${toolsSummary}`
+      : `✅ <b>Done</b>${duration}${sessionLine}${toolsSummary}`;
     await this._tgSend(
-      `✅ <b>Done</b>${duration}${sessionLine}${toolsSummary}`,
+      summary,
       {
         parse_mode: 'HTML',
         reply_markup: JSON.stringify({ inline_keyboard: doneButtons })

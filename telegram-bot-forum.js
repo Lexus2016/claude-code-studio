@@ -61,6 +61,53 @@ class TelegramBotForum {
     return this._forumContext.get(key);
   }
 
+  // ─── Topic-scoped session tracking (fix: switching topics could restore the
+  // wrong chat — see _persistTopicSession) ──────────────────────────────────
+
+  /**
+   * Remember which session is active for this project's topic, so returning to
+   * it later restores exactly that conversation — not "whichever session for
+   * this workdir was most recently touched anywhere", which drifts as soon as
+   * the web UI or another topic updates a different chat in the same project.
+   */
+  _persistTopicSession(chatId, workdir, sessionId) {
+    if (!workdir) return;
+    try { this._api.stmts.setForumTopicSession.run(sessionId || null, chatId, workdir, 'project'); } catch {}
+  }
+
+  /** The session this project topic last showed, if any and still valid. */
+  _topicSession(chatId, workdir) {
+    try {
+      const topic = this._api.stmts.getForumTopicByWorkdir.get(chatId, 'project', workdir);
+      return topic?.session_id || null;
+    } catch { return null; }
+  }
+
+  // ─── callback_data workdir encoding ────────────────────────────────────────
+  // Telegram's callback_data cap is 64 BYTES, not characters — `fa:new:<workdir>`
+  // with an absolute path easily exceeds it, and Telegram then rejects the whole
+  // message (BUTTON_DATA_INVALID) rather than just the one button, so the entire
+  // task-completion notice silently failed to post to the Activity topic. Embed
+  // the raw workdir only when it is short enough to fit; otherwise substitute a
+  // short token and remember the mapping.
+
+  _encodeWorkdir(workdir) {
+    if (Buffer.byteLength(workdir, 'utf8') <= 50) return workdir;
+    if (!this._workdirTokens) this._workdirTokens = new Map();
+    if (!this._workdirByToken) this._workdirByToken = new Map();
+    let token = this._workdirTokens.get(workdir);
+    if (!token) {
+      token = 'w' + (this._workdirByToken.size + 1).toString(36);
+      this._workdirTokens.set(workdir, token);
+      this._workdirByToken.set(token, workdir);
+    }
+    return token;
+  }
+
+  _decodeWorkdir(value) {
+    return this._workdirByToken?.get(value) || value;
+  }
+
   // ─── Topic Cache ────────────────────────────────────────────────────────
 
   _loadTopicsFromDb() {
@@ -96,6 +143,18 @@ class TelegramBotForum {
       return info;
     }
     return null;
+  }
+
+  /**
+   * A topic was confirmed gone (Telegram rejected a send with "thread not found").
+   * `deleteForumTopic` existed as a prepared statement but was never actually
+   * called anywhere — every stale topic stayed in the DB and cache forever, so
+   * routing kept trying to send into it and kept hitting the same dead end.
+   */
+  forgetTopic(chatId, threadId) {
+    if (!threadId) return;
+    try { this._api.stmts.deleteForumTopic.run(threadId, chatId); } catch {}
+    this._forumTopics.delete(`${chatId}:${threadId}`);
   }
 
   /**
@@ -194,6 +253,15 @@ class TelegramBotForum {
     // Save forum_chat_id (or keep existing)
     const alreadyConnected = device?.forum_chat_id === chatId;
     if (!alreadyConnected) {
+      // One supergroup, one owner. Without this check a second paired user could
+      // /connect the same group and every task notification went out twice — once
+      // per owner — into the same topics.
+      const existingOwner = this._api.stmts.getForumOwner.get(chatId, userId);
+      if (existingOwner) {
+        return this._api.sendMessage(chatId, this._api.t('forum_already_owned', {
+          name: this._api.escHtml(existingOwner.display_name || existingOwner.username || 'another user'),
+        }));
+      }
       this._api.stmts.setForumChatId.run(chatId, userId);
     }
 
@@ -308,7 +376,7 @@ class TelegramBotForum {
         // Action buttons row — Continue session or start New session
         const actionRow = [
           { text: this._api.t('fm_btn_continue'), callback_data: `fa:continue:${sessionId}` },
-          { text: this._api.t('fm_btn_new'), callback_data: `fa:new:${session.workdir}` },
+          { text: this._api.t('fm_btn_new'), callback_data: `fa:new:${this._encodeWorkdir(session.workdir)}` },
         ];
 
         options.reply_markup = JSON.stringify({ inline_keyboard: [urlRow, actionRow] });
@@ -325,7 +393,9 @@ class TelegramBotForum {
   async notifyAskUser(forumChatId, text, session, answerRows) {
     const topics = this._api.stmts.getForumTopics.all(forumChatId);
     const activityTopic = topics.find(t => t.type === 'activity');
-    if (!activityTopic) return;
+    // Returns false — not undefined — so the caller can fall back to the private
+    // chat rather than leaving the question undeliverable.
+    if (!activityTopic) return false;
 
     // Clone rows and add "Go to chat" URL button if project topic exists
     const rows = answerRows.map(r => [...r]);
@@ -337,11 +407,17 @@ class TelegramBotForum {
       }
     }
 
-    await this._api.sendMessage(forumChatId, text, {
-      message_thread_id: activityTopic.thread_id,
-      parse_mode: 'HTML',
-      reply_markup: JSON.stringify({ inline_keyboard: rows }),
-    });
+    try {
+      await this._api.sendMessage(forumChatId, text, {
+        message_thread_id: activityTopic.thread_id,
+        parse_mode: 'HTML',
+        reply_markup: JSON.stringify({ inline_keyboard: rows }),
+      });
+      return true;
+    } catch (err) {
+      this._api.log.warn(`[forum] notifyAskUser failed: ${err.message}`);
+      return false;
+    }
   }
 
   // ─── Forum-Scoped Commands (FORUM-07) ──────────────────────────────────
@@ -489,9 +565,18 @@ class TelegramBotForum {
     if (ctx.sessionId) {
       const sess = this._api.db.prepare('SELECT workdir FROM sessions WHERE id = ?').get(ctx.sessionId);
       if (!sess || sess.workdir !== workdir) {
-        // Session from different project — restore last session for this project, or clear
-        const lastForProject = this._api.stmts.getSessionsByWorkdir.all(workdir);
-        ctx.sessionId = lastForProject.length ? lastForProject[0].id : null;
+        // Coming back from a different topic — restore what THIS topic itself last
+        // showed, not just whichever session for this workdir was most recently
+        // touched anywhere (a second topic on the same project, or the web UI,
+        // would otherwise silently swap in a different conversation).
+        const remembered = this._topicSession(chatId, workdir);
+        if (remembered) {
+          ctx.sessionId = remembered;
+        } else {
+          const lastForProject = this._api.stmts.getSessionsByWorkdir.all(workdir);
+          ctx.sessionId = lastForProject.length ? lastForProject[0].id : null;
+          this._persistTopicSession(chatId, workdir, ctx.sessionId);
+        }
         this._api.saveDeviceContext(userId);
       }
     }
@@ -511,11 +596,18 @@ class TelegramBotForum {
       const writeWords = ['write', 'написати', 'написать'];
       if (menuWords.includes(low))   return this._forumShowInfo(chatId, userId, workdir, threadId);
       if (statusWords.includes(low)) return this._api.cmdStatus(chatId, userId);
-      if (writeWords.some(w => low.startsWith(w))) return; // Ignore write button in forum
+      if (writeWords.includes(low)) return; // Ignore write button in forum
     }
 
-    // Intercept: if there's a pending ask_user question, text resolves it (same as private chat)
-    if (ctx.state === 'AWAITING_ASK_RESPONSE') {
+    // Intercept: if there's a pending ask_user question from THIS topic, text
+    // resolves it (same as private chat). Two guards that used to be missing:
+    //   - a command (leading '/') always routes as a command — /stop typed while a
+    //     question was pending used to be swallowed as the literal answer text;
+    //   - the question must have been asked in THIS (chatId, threadId) — otherwise
+    //     typing in an unrelated topic silently ate itself as the answer to a
+    //     question actually pending in a different topic.
+    if (ctx.state === 'AWAITING_ASK_RESPONSE' && !text.startsWith('/')
+        && ctx.stateData?.askChatId === chatId && (ctx.stateData?.askThreadId || null) === (threadId || null)) {
       const requestId = ctx.stateData?.askRequestId;
       const origAskMsgId = ctx.stateData?.askMsgId;
       const origAskChatId = ctx.stateData?.askChatId;
@@ -542,7 +634,7 @@ class TelegramBotForum {
 
       switch (cmd) {
         case '/new':
-          return this._forumNewSession(chatId, userId, workdir);
+          return this._forumNewSession(chatId, userId, workdir, false, threadId);
         case '/history':
           return this._forumShowHistory(chatId, userId, workdir);
         case '/session': {
@@ -585,18 +677,21 @@ class TelegramBotForum {
 
     // Ensure session exists for this project — show orientation on first interaction
     if (!ctx.sessionId) {
+      const remembered = this._topicSession(chatId, workdir);
       const existing = this._api.stmts.getSessionsByWorkdir.all(workdir);
-      if (existing.length > 0) {
+      const restored = existing.find(s => s.id === remembered) || existing[0];
+      if (restored) {
         // Restore last session + show orientation
-        ctx.sessionId = existing[0].id;
+        ctx.sessionId = restored.id;
         this._api.saveDeviceContext(userId);
-        const title = (existing[0].title || this._api.t('chat_untitled')).substring(0, 40);
+        this._persistTopicSession(chatId, workdir, restored.id);
+        const title = (restored.title || this._api.t('chat_untitled')).substring(0, 40);
         const buttons = [
           { text: this._api.t('fm_btn_history'), callback_data: 'fm:history' },
           { text: this._api.t('fm_btn_new'), callback_data: 'fm:new' },
         ];
         await this._api.sendMessage(chatId,
-          `📌 ${this._api.escHtml(title)} (${existing[0].msg_count || 0} msg)\n` +
+          `📌 ${this._api.escHtml(title)} (${restored.msg_count || 0} msg)\n` +
           (existing.length > 1 ? `📜 +${existing.length - 1} sessions\n` : ''),
           { reply_markup: JSON.stringify({ inline_keyboard: [buttons] }) }
         );
@@ -629,7 +724,11 @@ class TelegramBotForum {
   /**
    * Create a new session in a forum project topic.
    */
-  async _forumNewSession(chatId, userId, workdir, silent = false) {
+  // `threadId` is explicit on purpose: without it the confirmation fell back to the
+  // bot's mutable `_currentThreadId`, so starting a session from the Activity topic
+  // announced the new session IN the Activity topic — not in the project topic the
+  // session actually belongs to, where the user then has to type.
+  async _forumNewSession(chatId, userId, workdir, silent = false, threadId = null) {
     const ctx = this._api.getDirectContext(userId);
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
@@ -638,15 +737,17 @@ class TelegramBotForum {
     ctx.sessionId = id;
     ctx.projectWorkdir = workdir;
     this._api.saveDeviceContext(userId);
+    this._persistTopicSession(chatId, workdir, id);
 
     if (!silent) {
       const buttons = [
         { text: this._api.t('fm_btn_history'), callback_data: 'fm:history' },
       ];
-      await this._api.sendMessage(chatId, this._api.t('forum_session_started'), {
-        reply_markup: JSON.stringify({ inline_keyboard: [buttons] }),
-      });
+      const opts = { reply_markup: JSON.stringify({ inline_keyboard: [buttons] }) };
+      if (threadId) opts.message_thread_id = threadId;
+      await this._api.sendMessage(chatId, this._api.t('forum_session_started'), opts);
     }
+    return id;
   }
 
   /**
@@ -738,9 +839,25 @@ class TelegramBotForum {
    */
   async handleActionCallback(chatId, userId, data, threadId) {
     const action = data.slice(3);
-    if (!threadId) return;
+    // A callback with no thread means the button was tapped outside any topic
+    // (General) — say so instead of doing nothing, which reads as a broken button.
+    if (!threadId) {
+      return this._api.sendMessage(chatId, this._api.t('forum_unknown_topic'));
+    }
     const topicInfo = this.getTopicInfo(chatId, threadId);
-    if (!topicInfo?.workdir) return;
+    // 'help' is topic-type-aware and needs no workdir. Gating EVERY action on
+    // `topicInfo?.workdir` made fm:help dead in the Tasks and Activity topics
+    // (their workdir is null), so the help button there simply did nothing.
+    if (action === 'help') {
+      const helpTopicInfo = topicInfo;
+      const helpKey = helpTopicInfo?.type === 'tasks' ? 'forum_help_tasks'
+        : helpTopicInfo?.type === 'project' ? 'forum_help_project'
+        : 'forum_help_general';
+      return this._api.sendMessage(chatId, this._api.t(helpKey), { message_thread_id: threadId });
+    }
+    if (!topicInfo?.workdir) {
+      return this._api.sendMessage(chatId, this._api.t('forum_unknown_topic'), { message_thread_id: threadId });
+    }
 
     // Always sync user context to the topic we're acting in
     const ctx = this._api.getDirectContext(userId);
@@ -748,8 +865,15 @@ class TelegramBotForum {
     if (ctx.sessionId) {
       const sess = this._api.db.prepare('SELECT workdir FROM sessions WHERE id = ?').get(ctx.sessionId);
       if (!sess || sess.workdir !== topicInfo.workdir) {
-        const lastForProject = this._api.stmts.getSessionsByWorkdir.all(topicInfo.workdir);
-        ctx.sessionId = lastForProject.length ? lastForProject[0].id : null;
+        // Same fix as _handleForumProjectMessage: prefer what THIS topic last showed.
+        const remembered = this._topicSession(chatId, topicInfo.workdir);
+        if (remembered) {
+          ctx.sessionId = remembered;
+        } else {
+          const lastForProject = this._api.stmts.getSessionsByWorkdir.all(topicInfo.workdir);
+          ctx.sessionId = lastForProject.length ? lastForProject[0].id : null;
+          this._persistTopicSession(chatId, topicInfo.workdir, ctx.sessionId);
+        }
       }
     }
 
@@ -757,7 +881,7 @@ class TelegramBotForum {
       case 'history':
         return this._forumShowHistory(chatId, userId, topicInfo.workdir);
       case 'new':
-        return this._forumNewSession(chatId, userId, topicInfo.workdir);
+        return this._forumNewSession(chatId, userId, topicInfo.workdir, false, threadId);
       case 'compose': {
         // Prompt user to type their message
         await this._api.sendMessage(chatId, this._api.t('compose_prompt'), {
@@ -800,16 +924,8 @@ class TelegramBotForum {
         });
         return;
       }
-      case 'help': {
-        // Show context-appropriate help — determine topic type
-        const helpTopicInfo = this.getTopicInfo(chatId, threadId);
-        const helpKey = helpTopicInfo?.type === 'tasks' ? 'forum_help_tasks'
-          : helpTopicInfo?.type === 'project' ? 'forum_help_project'
-          : 'forum_help_general';
-        return this._api.sendMessage(chatId, this._api.t(helpKey), {
-          message_thread_id: threadId,
-        });
-      }
+      // NOTE: 'help' is handled before the workdir guard at the top of this method,
+      // because the Tasks/Activity topics have no workdir and would never reach here.
     }
   }
 
@@ -846,6 +962,7 @@ class TelegramBotForum {
         ctx.projectWorkdir = session.workdir;
         ctx.sessionId = session.id;
         this._api.saveDeviceContext(userId);
+        this._persistTopicSession(chatId, session.workdir, session.id);
 
         // Show last messages in the project topic
         const msgs = this._api.db.prepare(
@@ -900,6 +1017,7 @@ class TelegramBotForum {
         ctx.projectWorkdir = contSession.workdir;
         ctx.sessionId = contSession.id;
         this._api.saveDeviceContext(userId);
+        this._persistTopicSession(chatId, contSession.workdir, contSession.id);
 
         // Find project topic for navigation
         const contTopics = this._api.stmts.getForumTopics.all(chatId);
@@ -925,8 +1043,8 @@ class TelegramBotForum {
       }
 
       case 'new': {
-        // Create new session from Activity topic — param is workdir
-        const newWorkdir = param;
+        // Create new session from Activity topic — param is workdir (or an encoded token)
+        const newWorkdir = this._decodeWorkdir(param);
         if (!newWorkdir) return;
 
         const newTopics = this._api.stmts.getForumTopics.all(chatId);
@@ -939,7 +1057,8 @@ class TelegramBotForum {
           newProjectTopic = { thread_id: newThreadId, type: 'project', workdir: newWorkdir };
         }
 
-        await this._forumNewSession(chatId, userId, newWorkdir);
+        // Announce in the PROJECT topic — that is where the user will type next.
+        await this._forumNewSession(chatId, userId, newWorkdir, false, newProjectTopic.thread_id);
 
         // Link to project topic from activity
         const topicUrl = this._topicLink(chatId, newProjectTopic.thread_id);
@@ -983,6 +1102,7 @@ class TelegramBotForum {
     const ctx = this._api.getDirectContext(userId);
     ctx.sessionId = rows[idx].id;
     this._api.saveDeviceContext(userId);
+    this._persistTopicSession(chatId, workdir, rows[idx].id);
 
     const title = (rows[idx].title || this._api.t('chat_untitled')).substring(0, 50);
     const msgCount = rows[idx].msg_count || 0;
@@ -1157,7 +1277,15 @@ class TelegramBotForum {
     const text = (msg.text || '').trim();
 
     if (!text.startsWith('/')) {
-      // Plain text in tasks topic — create a task from it
+      // Plain text in tasks topic — create a task from it. A message with no text at
+      // all (sticker, photo, or a service message like "topic reopened") used to
+      // create a task with an EMPTY title, silently littering the board.
+      if (!text) {
+        if (msg.photo || msg.document || msg.sticker) {
+          return this._api.sendMessage(chatId, this._api.t('forum_no_text'), { message_thread_id: threadId });
+        }
+        return; // service message — nothing to do, and nothing worth saying
+      }
       const title = text.substring(0, 200);
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
       const workdir = ctx.projectWorkdir || null;

@@ -1053,6 +1053,63 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .at-popup-hdr input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-size: 12px; }
 .at-popup-list { overflow-y: auto; flex: 1; }
 
+.tab.tab-term .tab-title { font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 11.5px; }
+.tab.tab-term::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%; flex: none;
+  background: var(--accent2, #7c6aef); margin-right: 1px;
+}
+
+/* Terminal mode: the same column, a different surface. One class on .center swaps
+   the whole chat apparatus (composer, minimap, search, panels) for the terminal,
+   so nothing chat-shaped can be left dangling over it. */
+#termPane { display: none; flex: 1; min-height: 0; flex-direction: column; background: #0b0b0f; }
+.center.term-mode > #termPane { display: flex; }
+.center.term-mode > .msgs,
+.center.term-mode > .ia,
+.center.term-mode > #minimapRail,
+.center.term-mode > #scrollBtn,
+.center.term-mode > .chat-search-bar,
+.center.term-mode > .sess-bar,
+.center.term-mode > .notes-panel,
+.center.term-mode > .dlg-panel,
+.center.term-mode > #dlgDialogContainer { display: none !important; }
+.term-hdr {
+  display: flex; align-items: center; gap: 9px; padding: 8px 13px; flex-shrink: 0;
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,.09);
+}
+.term-hdr .term-title { font-size: 12px; font-weight: 650; opacity: .9; letter-spacing: -.01em; }
+.term-hdr .term-state { font-size: 11px; opacity: .55; }
+#termDot { width: 8px; height: 8px; border-radius: 50%; background: #8b949e; flex: none;
+           transition: background-color .25s cubic-bezier(.2,0,0,1); }
+#termHost { flex: 1; min-height: 0; padding: 6px 8px; }
+
+/* New-tab chooser: two ways to start work, side by side, each explaining itself.
+   A bare '+' that always meant 'chat' hid the terminal entirely — the owner had to
+   ask how to open one. */
+.nt-choices { display: flex; flex-direction: column; gap: 9px; }
+.nt-card {
+  display: flex; align-items: flex-start; gap: 11px; width: 100%;
+  padding: 12px 13px; border: none; border-radius: 11px; cursor: pointer;
+  background: var(--s2); color: var(--text); font-family: inherit; text-align: left;
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: box-shadow .15s, background-color .15s, scale .12s cubic-bezier(.2,0,0,1);
+}
+.nt-card:hover { background: var(--s3); box-shadow: inset 0 0 0 1px var(--accent); }
+.nt-card:active { scale: .98; }
+.nt-card .nt-ic { font-size: 20px; line-height: 1.15; flex: none; }
+.nt-card .nt-name { font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+.nt-card .nt-desc { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-top: 2px; }
+.nt-card[disabled] { opacity: .45; cursor: not-allowed; }
+.nt-sub { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.nt-sub button {
+  font-size: 11.5px; padding: 5px 11px; border: none; border-radius: 999px; cursor: pointer;
+  background: var(--s3); color: var(--text); font-family: inherit;
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: box-shadow .15s, scale .12s cubic-bezier(.2,0,0,1);
+}
+.nt-sub button:hover { box-shadow: inset 0 0 0 1px var(--accent2); }
+.nt-sub button:active { scale: .96; }
+
 /* Primary action inside a panel's empty state. It cannot borrow .bp: that class
    only supplies a background, while the border, radius and padding come from the
    `.fr button` selector — used outside a .fr row it inherits the browser's default
@@ -3129,6 +3186,16 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     <button class="search-close" onclick="closeChatSearch()" title="Close search (Esc)">✕</button>
   </div>
 
+  <div id="termPane">
+    <div class="term-hdr">
+      <span id="termDot"></span>
+      <span class="term-title" id="termTitle"></span>
+      <span class="term-state" id="termState"></span>
+      <span style="flex:1"></span>
+      <button id="termKillBtn" class="bg" style="font-size:11px;padding:4px 10px"></button>
+    </div>
+    <div id="termHost"></div>
+  </div>
   <div class="msgs" id="messages" role="log" aria-live="polite" aria-label="Chat messages">
     <div class="welcome">
       <div class="wi">CCS</div>
@@ -3632,6 +3699,18 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 </div>
 
 <!-- Agent Add/Edit Modal -->
+<div class="modal-overlay hidden" id="newTabModal" onclick="if(event.target===this)closeModalOverlay('newTabModal')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <span id="newTabTitle" data-i18n="newtab.title">Що відкрити?</span>
+      <button class="modal-close" onclick="closeModalOverlay('newTabModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="nt-choices" id="ntChoices"></div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="botModal">
   <div class="modal bot-modal" style="max-width:560px">
     <div class="modal-header">
@@ -4093,6 +4172,7 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    'newtab.title':'Що відкрити?','newtab.chat':'Чат','newtab.chat.desc':'Звичайна розмова. Ботів кличте через @@','newtab.term':'Термінальний агент','newtab.term.desc':'Живий термінал CLI-агента у вкладці. Оберіть, кого запустити:','term.tab':'термінал',
     'stream.gap':'Частину подій не показано — зʼєднання переривалось. Текст відповіді повний.',
     'agent.cap.delegate':'делегування','agent.cap.terminal':'термінал',
     'bots.empty.what':'Бот — це named учасник чату зі своїм промптом, моделлю і памʼяттю. Аналітик, редактор, рецензент — кожен знає своє.','bots.empty.how':'Створіть бота і покличте його в повідомленні:','bots.empty.cta':'Створити першого бота','bot.tpl.replace':'Замінити те, що вже написано в промпті?','bot.tpl.analyst.name':'Аналітик','bot.tpl.analyst.desc':'аналіз даних і висновки','bot.tpl.analyst.prompt':'Ти аналітик. Розбираєш дані й даєш висновки, на які можна спертися.\n\nПравила:\n- Спершу цифри, потім інтерпретація.\n- Кожен висновок має спиратися на конкретне джерело.\n- Якщо даних бракує — скажи прямо, чого саме бракує.\n- Без води: короткі абзаци, ключове винось у список.','bot.tpl.writer.name':'Редактор','bot.tpl.writer.desc':'тексти і звіти','bot.tpl.writer.prompt':'Ти редактор. Перетворюєш чернетки й дані на текст, який приємно читати.\n\nПравила:\n- Пиши для людини, не для галочки.\n- Структура: заголовок, суть у першому абзаці, деталі нижче.\n- Не вигадуй фактів. Якщо чогось нема у вихідних даних — постав питання.\n- Прибирай канцелярит і повтори.','bot.tpl.reviewer.name':'Рецензент','bot.tpl.reviewer.desc':'перевірка коду і рішень','bot.tpl.reviewer.prompt':'Ти рецензент. Шукаєш, де рішення ламається, а не де воно гарне.\n\nПравила:\n- Кожна знахідка: що саме зламається, за яких вхідних даних, з посиланням на файл і рядок.\n- Розділяй «це помилка» і «мені так не подобається».\n- Якщо не впевнений — кажи, що це припущення.\n- Наприкінці: найважливіше першим.','bot.tpl.explainer.name':'Пояснювач','bot.tpl.explainer.desc':'пояснює складне просто','bot.tpl.explainer.prompt':'Ти пояснюєш складні речі простими словами.\n\nПравила:\n- Спочатку одне речення суті, потім деталі.\n- Приклад важливіший за визначення.\n- Терміни розшифровуй при першій згадці.\n- Не спрощуй до неправди: якщо є важливий нюанс — назви його.',
@@ -4336,6 +4416,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'оновлено {time} тому',
   },
   en: {
+    'newtab.title':'What would you like to open?','newtab.chat':'Chat','newtab.chat.desc':'An ordinary conversation. Call bots with @@','newtab.term':'Terminal agent','newtab.term.desc':"A CLI agent's live terminal in a tab. Pick which one:",'term.tab':'terminal',
     'stream.gap':'Some live activity was not shown — the connection dropped. The answer itself is complete.',
     'agent.cap.delegate':'delegation','agent.cap.terminal':'terminal',
     'bots.empty.what':'A bot is a named chat participant with its own prompt, model and memory. An analyst, an editor, a reviewer — each one knows its job.','bots.empty.how':'Create a bot, then call it in a message:','bots.empty.cta':'Create your first bot','bot.tpl.replace':'Replace what is already written in the prompt?','bot.tpl.analyst.name':'Analyst','bot.tpl.analyst.desc':'data analysis and conclusions','bot.tpl.analyst.prompt':'You are an analyst. You work through data and give conclusions someone can rely on.\n\nRules:\n- Numbers first, interpretation second.\n- Every conclusion names the source it rests on.\n- If the data is not enough, say exactly what is missing.\n- No padding: short paragraphs, key points as a list.','bot.tpl.writer.name':'Editor','bot.tpl.writer.desc':'documents and reports','bot.tpl.writer.prompt':'You are an editor. You turn drafts and data into text people actually want to read.\n\nRules:\n- Write for a reader, not for the record.\n- Structure: title, the point in the first paragraph, detail below.\n- Invent nothing. If a fact is not in the source, ask for it.\n- Cut jargon and repetition.','bot.tpl.reviewer.name':'Reviewer','bot.tpl.reviewer.desc':'reviews code and decisions','bot.tpl.reviewer.prompt':'You are a reviewer. You look for where a solution breaks, not where it is nice.\n\nRules:\n- Each finding: what breaks, on which input, with the file and line.\n- Separate \'this is a bug\' from \'I would have done it differently\'.\n- If you are unsure, say it is a guess.\n- Most severe first.','bot.tpl.explainer.name':'Explainer','bot.tpl.explainer.desc':'makes hard things clear','bot.tpl.explainer.prompt':'You explain difficult things in plain language.\n\nRules:\n- One sentence of the point first, then the detail.\n- An example beats a definition.\n- Unpack a term the first time it appears.\n- Do not simplify into being wrong: if a caveat matters, name it.',
@@ -4579,6 +4660,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'updated {time} ago',
   },
   ru: {
+    'newtab.title':'Что открыть?','newtab.chat':'Чат','newtab.chat.desc':'Обычный разговор. Ботов зовите через @@','newtab.term':'Терминальный агент','newtab.term.desc':'Живой терминал CLI-агента во вкладке. Выберите, кого запустить:','term.tab':'терминал',
     'stream.gap':'Часть событий не показана — соединение прерывалось. Текст ответа полный.',
     'agent.cap.delegate':'делегирование','agent.cap.terminal':'терминал',
     'bots.empty.what':'Бот — это именованный участник чата со своим промптом, моделью и памятью. Аналитик, редактор, рецензент — каждый знает своё.','bots.empty.how':'Создайте бота и позовите его в сообщении:','bots.empty.cta':'Создать первого бота','bot.tpl.replace':'Заменить то, что уже написано в промпте?','bot.tpl.analyst.name':'Аналитик','bot.tpl.analyst.desc':'анализ данных и выводы','bot.tpl.analyst.prompt':'Ты аналитик. Разбираешь данные и даёшь выводы, на которые можно опереться.\n\nПравила:\n- Сначала цифры, потом интерпретация.\n- Каждый вывод опирается на конкретный источник.\n- Если данных не хватает — скажи, чего именно.\n- Без воды: короткие абзацы, ключевое списком.','bot.tpl.writer.name':'Редактор','bot.tpl.writer.desc':'тексты и отчёты','bot.tpl.writer.prompt':'Ты редактор. Превращаешь черновики и данные в текст, который приятно читать.\n\nПравила:\n- Пиши для человека.\n- Структура: заголовок, суть в первом абзаце, детали ниже.\n- Не выдумывай фактов. Чего нет в источнике — спроси.\n- Убирай канцелярит и повторы.','bot.tpl.reviewer.name':'Рецензент','bot.tpl.reviewer.desc':'проверка кода и решений','bot.tpl.reviewer.prompt':'Ты рецензент. Ищешь, где решение ломается.\n\nПравила:\n- Каждая находка: что ломается, при каких данных, файл и строка.\n- Разделяй «это ошибка» и «мне не нравится».\n- Не уверен — скажи, что это предположение.\n- Самое важное первым.','bot.tpl.explainer.name':'Объяснятель','bot.tpl.explainer.desc':'объясняет сложное просто','bot.tpl.explainer.prompt':'Ты объясняешь сложное простыми словами.\n\nПравила:\n- Сначала суть одним предложением, потом детали.\n- Пример важнее определения.\n- Термин расшифровывай при первом упоминании.\n- Не упрощай до неправды: важный нюанс называй.',
@@ -4822,6 +4904,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'обновлено {time} назад',
   },
   fr: {
+    "newtab.title":"Que voulez-vous ouvrir ?","newtab.chat":"Chat","newtab.chat.desc":"Une conversation ordinaire. Appelez les bots avec @@","newtab.term":"Agent terminal","newtab.term.desc":"Le terminal vivant d'un agent CLI dans un onglet. Choisissez :","term.tab":"terminal",
     "stream.gap":"Une partie de l'activité n'a pas été affichée — la connexion a été interrompue. La réponse elle-même est complète.",
     "agent.cap.delegate":"délégation","agent.cap.terminal":"terminal",
     "bots.empty.what":"Un bot est un participant nommé du chat, avec son propre prompt, son modèle et sa mémoire.","bots.empty.how":"Créez un bot puis appelez-le dans un message :","bots.empty.cta":"Créer votre premier bot","bot.tpl.replace":"Remplacer ce qui est déjà écrit dans le prompt ?",
@@ -4966,6 +5049,7 @@ const TRANSLATIONS = {
     "dlg.toast.no_changes":"Aucun changement","dlg.last_update":"mis à jour il y a {time}",
   },
   he: {
+    "newtab.title":"מה לפתוח?","newtab.chat":"צ׳אט","newtab.chat.desc":"שיחה רגילה. קראו לבוטים עם @@","newtab.term":"סוכן טרמינל","newtab.term.desc":"טרמינל חי של סוכן CLI בלשונית. בחרו את מי:","term.tab":"טרמינל",
     "stream.gap":"חלק מהפעילות לא הוצג — החיבור נותק. התשובה עצמה מלאה.",
     "agent.cap.delegate":"האצלה","agent.cap.terminal":"טרמינל",
     "bots.empty.what":"בוט הוא משתתף בעל שם בצ׳אט, עם הנחיה, מודל וזיכרון משלו.","bots.empty.how":"צרו בוט ואז קראו לו בהודעה:","bots.empty.cta":"צרו את הבוט הראשון","bot.tpl.replace":"להחליף את מה שכבר כתוב בהנחיה?",
@@ -7456,6 +7540,10 @@ function _chainProgressUpdate(taskId, status) {
 
 function rmW() { const w = msgsEl.querySelector('.welcome'); if (w) w.remove(); }
 function showW() {
+  // The welcome screen is a chat surface — reaching it always means we are no longer
+  // in terminal mode. Doing it here covers every entry point (new tab, closed last
+  // tab, project switch) rather than each of them remembering.
+  hideTerminalView();
   streaming.el = null;
   // Welcome/blank screen = no active chat → engine selector reflects the global default
   _curSessionRunEngine = null;
@@ -8496,7 +8584,9 @@ function renderTabs() {
   bar.appendChild(hdrBtn);
   for (const tab of openTabs) {
     const el = document.createElement('div');
-    el.className = 'tab' + (tab.id === activeTabId ? ' active' : '');
+    // A terminal tab reads differently from a chat tab at a glance: same bar, same
+    // behaviour, but a monospace title, so the two kinds never get confused.
+    el.className = 'tab' + (tab.id === activeTabId ? ' active' : '') + (tab.kind === 'terminal' ? ' tab-term' : '');
     el.dataset.tabId = tab.id;
     el.draggable = true;
     el.onclick = () => switchTab(tab.id);
@@ -8530,8 +8620,8 @@ function renderTabs() {
     bar.appendChild(el);
   }
   const nb = document.createElement('button');
-  nb.className = 'tab-new'; nb.title = t('tab.new'); nb.textContent = '+';
-  nb.onclick = newTab;
+  nb.className = 'tab-new'; nb.title = t('newtab.title'); nb.textContent = '+';
+  nb.onclick = openNewTabChooser;
   bar.appendChild(nb);
   // Font size slider
   const curFont = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15.5;
@@ -8812,6 +8902,17 @@ async function importSessionFile(input) {
 
 function switchTab(id) {
   if (activeTabId === id) return;
+  // A terminal tab shows a different surface in the same column. Handled before the
+  // chat-state bookkeeping below, none of which applies to it.
+  const target = openTabs.find(x => x.id === id);
+  if (target?.kind === 'terminal') {
+    if (activeTabId) saveComposerState(activeTabId);
+    activeTabId = id; currentSessionId = id;
+    renderTabs(); saveUIState();
+    showTerminalView(id, target.termLabel || target.title);
+    return;
+  }
+  hideTerminalView();
   // Save state for current tab before switching
   if (activeTabId) {
     const oldTS = getTS(activeTabId);
@@ -8853,6 +8954,9 @@ function switchTab(id) {
 }
 
 function closeTab(id) {
+  // Closing a terminal tab detaches this viewer only — the agent keeps running in its
+  // tmux session and the tab can be reopened from history.
+  if (_termSessionId === id) { detachTerminal(); hideTerminalView(); }
   if (isGen && activeTabId === id) { isGen = false; setSendStop(false); generatingTabId = null; streaming.el = null; }
   const idx = openTabs.findIndex(t => t.id === id);
   if (idx === -1) return;
@@ -8877,7 +8981,7 @@ function newTab() {
   if (!curProjectId) { _onProjectCreated = () => newTab(); openAddProject(); return; }
   // Save current tab's state before switching
   if (activeTabId) saveComposerState(activeTabId);
-  openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true });
+  openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true, kind: 'chat' });
   activeTabId = tempId;
   currentSessionId = null;
   inEl.value = '';
@@ -9018,6 +9122,13 @@ function toggleHeader() {
 
 function setFontSize(px) {
   document.documentElement.style.setProperty('--msg-font', px + 'px');
+  // One slider, one size, everywhere: the terminal reads its size off the same
+  // CSS variable at open time, so an already-open terminal must be told live too.
+  if (_term) {
+    _term.options.fontSize = px;
+    try { _termFit.fit(); } catch {}
+    sendTermResize();
+  }
   saveUIState();
 }
 
@@ -9722,7 +9833,7 @@ async function send() {
     // Auto-create a tab if project is active but no tab is open
     if (!activeTabId && curProjectId) {
       const tempId = 'new-' + Date.now();
-      openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true });
+      openTabs.push({ id: tempId, title: t('tab.new'), generating: false, done: false, isNew: true, kind: 'chat' });
       activeTabId = tempId;
       currentSessionId = null;
       renderTabs();
@@ -9773,7 +9884,40 @@ async function send() {
   }
 }
 
-function newSession() { newTab(); }
+function newSession() { openNewTabChooser(); }
+
+// The '+' asks what kind of tab to open instead of assuming a chat. Both surfaces
+// live in the same workspace, so this is the one place the choice belongs.
+async function openNewTabChooser() {
+  if (!curProjectId) { _onProjectCreated = () => openNewTabChooser(); openAddProject(); return; }
+  if (_terminalAvailable === null) await loadTerminalCapability();
+  await _loadExternalAgents().catch(() => {});
+  const termAgents = Object.entries(_externalAgents || {})
+    .filter(([, c]) => !!String(c?.interactive || '').trim());
+
+  const box = $i('ntChoices');
+  box.innerHTML = `
+    <button class="nt-card" onclick="closeModalOverlay('newTabModal');newTab()">
+      <span class="nt-ic">💬</span>
+      <span>
+        <span class="nt-name">${escH(t('newtab.chat'))}</span>
+        <div class="nt-desc">${escH(t('newtab.chat.desc'))}</div>
+      </span>
+    </button>
+    <div class="nt-card" ${_terminalAvailable ? '' : 'disabled'} style="cursor:default;flex-direction:column;align-items:stretch">
+      <div style="display:flex;align-items:flex-start;gap:11px">
+        <span class="nt-ic">&gt;_</span>
+        <span>
+          <span class="nt-name">${escH(t('newtab.term'))}</span>
+          <div class="nt-desc">${_terminalAvailable ? escH(t('newtab.term.desc')) : escH(_termCapabilityReason || t('term.unavailable'))}</div>
+        </span>
+      </div>
+      ${_terminalAvailable && termAgents.length ? `<div class="nt-sub">${
+        termAgents.map(([id, c]) => `<button onclick="closeModalOverlay('newTabModal');createTerminalSession('${escH(id)}','${escH((c.label || id).replace(/'/g, ''))}')">${escH((_agentIcons[id] || '🤖') + ' ' + (c.label || id))}</button>`).join('')
+      }</div>` : ''}
+    </div>`;
+  openModalOverlay('newTabModal', { labelId: 'newTabTitle', onEscape: () => closeModalOverlay('newTabModal') });
+}
 
 // ─── Queue edit / delete ──────────────────────────────────────────────────
 function editQueuedMsg(btn) {
@@ -10458,10 +10602,11 @@ async function loadSess(id) {
     // A terminal session has no chat history to render — it opens as a live
     // terminal instead. Its kind is fixed at creation and never changes.
     if (d.kind === 'terminal') {
-      openTerminalSession(d.id, d.terminal_agent || '');
+      // Opened from history: become a terminal tab rather than rendering a transcript.
+      openTerminalTab(d.id, d.terminal_agent || t('term.tab'), '>_');
       return;
     }
-    closeTerminalPane();
+    hideTerminalView();
     // ── Save background-accumulated state BEFORE resetting the streaming proxy ──
     // BUG FIX: streaming.txt = '' writes through proxy to getTS(activeTabId).curTxt,
     // which destroys accumulated background text before line 6227 can read it.
@@ -11822,12 +11967,9 @@ function renderAgents() {
         <div class="nm">${icon} ${escH(cfg.label || id)}</div>
         <div class="ds" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;font-size:11px">${caps}</div>
       </div>
-      ${canTerminal ? `<button class="cfg agent-term-btn" title="${t('term.open.title')}" style="font-size:11px;font-family:var(--font-mono);font-weight:700;letter-spacing:-.5px">&gt;_</button>` : ''}
       <button class="cfg agent-test-btn" title="${t('agent.test.title')}" style="font-size:12px">▶</button>
       <button class="cfg agent-edit-btn" title="${t('agent.edit.title')}">✏️</button>
       <button class="rm agent-del-btn" title="${t('agent.del.title')}">✕</button>`;
-    const tb = div.querySelector('.agent-term-btn');
-    if (tb) tb.addEventListener('click', e => { e.stopPropagation(); createTerminalSession(id, cfg.label || id); });
     div.querySelector('.agent-test-btn').addEventListener('click', e => { e.stopPropagation(); testAgent(id, e.currentTarget); });
     div.querySelector('.agent-edit-btn').addEventListener('click', e => { e.stopPropagation(); openAgentForm(id); });
     div.querySelector('.agent-del-btn').addEventListener('click', e => { e.stopPropagation(); deleteAgent(id); });
@@ -12563,7 +12705,7 @@ function switchProject(id) {
   } else {
     const saved = loadProjTabs(id);
     if (saved?.tabs?.length) {
-      openTabs = saved.tabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false }));
+      openTabs = saved.tabs.map(restoreTab);
       activeTabId = saved.activeTabId || openTabs[0]?.id || null;
     } else {
       openTabs = []; activeTabId = null;
@@ -13689,6 +13831,16 @@ setTimeout(tgLoadStatus, 500);
 
 // ─── Persist UI state across page refreshes ──────────────────────────────
 const LS_KEY = 'cc_ui_state';
+// One shape for a restored tab, used by every restore path — they drifted apart
+// before and a field added in one place was silently missing in the others.
+function restoreTab(t) {
+  return {
+    id: t.id, title: t.title, generating: false, done: false, isNew: !!t.isNew,
+    kind: t.kind === 'terminal' ? 'terminal' : 'chat',
+    termLabel: t.termLabel || null, termAvatar: t.termAvatar || null,
+  };
+}
+
 function saveUIState() {
   try {
     const c = id => $i(id)?.classList.contains('collapsed');
@@ -13704,6 +13856,11 @@ function saveUIState() {
         id: tab.id,
         title: tab.title,
         isNew: !!tab.isNew,
+        // A terminal tab must come back AS a terminal after a reload: without its
+        // kind it would restore as a chat and clicking it would load an empty log.
+        kind: tab.kind || 'chat',
+        termLabel: tab.termLabel || null,
+        termAvatar: tab.termAvatar || null,
         draft: ts.draft || '',
         attachments: cloneAttachmentsForState(ts.attachments),
         replyTo: ts.replyTo ? { ...ts.replyTo } : null,
@@ -13781,7 +13938,7 @@ function restoreUIState() {
     }
     // Restore current project's tabs
     if (s.openTabs?.length) {
-      openTabs = s.openTabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false, isNew: !!t.isNew }));
+      openTabs = s.openTabs.map(restoreTab);
       s.openTabs.forEach(restoreTabState);
       activeTabId = s.activeTabId || null;
     }
@@ -13790,7 +13947,7 @@ function restoreUIState() {
       for (const [pid, saved] of Object.entries(s.allProjTabs)) {
         if (pid === curProjectId) continue; // current project already restored above
         if (saved?.tabs?.length) {
-          projectTabs[pid] = saved.tabs.map(t => ({ id: t.id, title: t.title, generating: false, done: false, isNew: !!t.isNew }));
+          projectTabs[pid] = saved.tabs.map(restoreTab);
           saved.tabs.forEach(restoreTabState);
           projectActiveTab[pid] = saved.activeTabId || projectTabs[pid][0]?.id || null;
         }
@@ -14833,17 +14990,7 @@ document.addEventListener('keydown', e => {
 })();
 </script>
 
-<div id="termPane" style="display:none;position:fixed;inset:0;background:#0b0b0f;z-index:60;flex-direction:column;">
-  <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.09);flex-shrink:0">
-    <span id="termDot" style="width:8px;height:8px;border-radius:50%;background:#8b949e;flex-shrink:0"></span>
-    <span id="termTitle" style="font-size:12px;opacity:.85;font-weight:600"></span>
-    <span id="termState" style="font-size:11px;opacity:.55"></span>
-    <span style="flex:1"></span>
-    <button id="termKillBtn" style="font-size:11px;padding:3px 9px;border-radius:5px;background:transparent;color:var(--txt);border:1px solid rgba(255,255,255,.16);cursor:pointer"></button>
-    <button id="termCloseBtn" style="font-size:14px;padding:2px 8px;border-radius:5px;background:transparent;color:var(--txt);border:1px solid rgba(255,255,255,.16);cursor:pointer" title="Close">✕</button>
-  </div>
-  <div id="termHost" style="flex:1;min-height:0;padding:4px 6px"></div>
-</div>
+
 <script src="/vendor/xterm.js"></script>
 <script src="/vendor/xterm-addon-fit.js"></script>
 <script>
@@ -14851,7 +14998,9 @@ document.addEventListener('keydown', e => {
 // A terminal session is a different species from a chat session: it is driven by
 // the human through a raw byte stream, never by the chat engine. See
 // docs/superpowers/specs/2026-08-18-terminal-sessions-design.md
-let _terminalAvailable = false, _term = null, _termFit = null, _termWs = null, _termSessionId = null;
+// null = not yet asked. Restoring a terminal tab at boot can race the capability
+// probe, and a `false` default would silently refuse to reopen it.
+let _terminalAvailable = null, _term = null, _termFit = null, _termWs = null, _termSessionId = null;
 
 async function loadTerminalCapability() {
   try {
@@ -14860,6 +15009,7 @@ async function loadTerminalCapability() {
     _terminalAvailable = !!j.available;
     _termCapabilityReason = j.reason || '';
   } catch { _terminalAvailable = false; }
+  return _terminalAvailable;
 }
 let _termCapabilityReason = '';
 
@@ -14872,43 +15022,61 @@ async function createTerminalSession(agentId, label) {
     const s = await r.json();
     if (s.error) { toast(s.error, true); return; }
     await loadHist();
-    openTerminalSession(s.id, label || agentId);
+    openTerminalTab(s.id, label || agentId, '>_');
   } catch (e) { toast(e.message, true); }
 }
 
-function openTerminalSession(sessionId, label) {
+// A terminal is a TAB in the same workspace, not an overlay: the user keeps several
+// tabs open — some chat, some terminal — and switches between them. Everything about
+// a tab (order, drag, close, the bar itself) therefore works for it unchanged.
+async function openTerminalTab(sessionId, label, avatar) {
+  if (_terminalAvailable === null) await loadTerminalCapability();
   if (!_terminalAvailable) { toast(_termCapabilityReason || t('term.unavailable'), true); return; }
   if (typeof Terminal === 'undefined') { toast('xterm.js failed to load', true); return; }
-  closeTerminalPane();
-  _termSessionId = sessionId;
-  const pane = $i('termPane');
-  pane.style.display = 'flex';
+  if (!openTabs.some(x => x.id === sessionId)) {
+    openTabs.push({ id: sessionId, title: (avatar ? avatar + ' ' : '') + (label || 'terminal'),
+                    generating: false, done: false, kind: 'terminal', termLabel: label, termAvatar: avatar });
+  }
+  activeTabId = sessionId;
+  currentSessionId = sessionId;
+  renderTabs(); saveUIState();
+  showTerminalView(sessionId, label);
+}
+
+// Swap the chat surface for the terminal one. Both live in the same column, so the
+// header, tab bar, sidebars and layout stay exactly where they were.
+function showTerminalView(sessionId, label) {
+  document.querySelector('.center').classList.add('term-mode');
   $i('termTitle').textContent = label || '';
   $i('termState').textContent = '';
   $i('termKillBtn').textContent = t('term.kill');
 
+  // Already attached to this session — just show it again.
+  if (_termSessionId === sessionId && _term) { try { _term.focus(); sendTermResize(); } catch {} return; }
+  detachTerminal();
+  _termSessionId = sessionId;
+
+  const curFontPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15.5;
   _term = new Terminal({
-    fontSize: 13,
+    fontSize: curFontPx,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
     theme: { background: '#0b0b0f', foreground: '#e6e6e6' },
     cursorBlink: true, scrollback: 10000, allowProposedApi: true,
   });
   _termFit = new FitAddon.FitAddon();
   _term.loadAddon(_termFit);
+  $i('termHost').innerHTML = '';
   _term.open($i('termHost'));
-  _termFit.fit();
+  try { _termFit.fit(); } catch {}
 
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   _termWs = new WebSocket(`${proto}//${location.host}/ws/terminal?session=${encodeURIComponent(sessionId)}`);
   _termWs.binaryType = 'arraybuffer';
-
   _termWs.onopen = () => sendTermResize();
   _termWs.onmessage = (ev) => {
     if (typeof ev.data !== 'string') { _term.write(new Uint8Array(ev.data)); return; }
     let msg = null; try { msg = JSON.parse(ev.data); } catch { return; }
     if (msg.type === 'ready') {
-      // A restore without an exact conversation id resumed "the agent's most recent
-      // conversation", which may not be this one — do not imply otherwise.
       const key = msg.state === 'attach' ? 'term.state.attached'
         : !msg.restored ? 'term.state.started'
         : msg.restoredExact ? 'term.state.restored' : 'term.state.restoredLast';
@@ -14926,16 +15094,27 @@ function openTerminalSession(sessionId, label) {
     }
   };
   _termWs.onclose = () => { $i('termDot').style.background = '#8b949e'; };
-
   _term.onData(d => { if (_termWs && _termWs.readyState === 1) _termWs.send(JSON.stringify({ type: 'input', data: d })); });
   window.addEventListener('resize', sendTermResize);
   $i('termKillBtn').onclick = () => {
     if (!confirm(t('term.killConfirm'))) return;
     if (_termWs && _termWs.readyState === 1) _termWs.send(JSON.stringify({ type: 'kill' }));
-    closeTerminalPane();
+    closeTab(_termSessionId);
   };
-  $i('termCloseBtn').onclick = () => closeTerminalPane();
   setTimeout(() => { try { _term.focus(); } catch {} }, 50);
+}
+
+// Restore the chat surface when switching to a chat tab. Detaching the socket is
+// deliberate: the agent keeps running server-side, only this viewer goes away.
+function hideTerminalView() {
+  document.querySelector('.center').classList.remove('term-mode');
+}
+
+function detachTerminal() {
+  window.removeEventListener('resize', sendTermResize);
+  try { if (_termWs) _termWs.close(); } catch {}
+  try { if (_term) _term.dispose(); } catch {}
+  _termWs = null; _term = null; _termFit = null; _termSessionId = null;
 }
 
 function sendTermResize() {
@@ -14944,15 +15123,7 @@ function sendTermResize() {
   if (_termWs && _termWs.readyState === 1) _termWs.send(JSON.stringify({ type: 'resize', cols: _term.cols, rows: _term.rows }));
 }
 
-// Closing the pane detaches the client only — the agent keeps running server-side.
-function closeTerminalPane() {
-  window.removeEventListener('resize', sendTermResize);
-  try { if (_termWs) _termWs.close(); } catch {}
-  try { if (_term) _term.dispose(); } catch {}
-  _termWs = null; _term = null; _termFit = null; _termSessionId = null;
-  const pane = $i('termPane');
-  if (pane) pane.style.display = 'none';
-}
+function closeTerminalPane() { detachTerminal(); hideTerminalView(); }
 </script>
 
 </body>
