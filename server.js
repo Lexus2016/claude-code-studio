@@ -501,6 +501,20 @@ db.exec(`
   -- Which bots are available in which project. Identity stays global — the handle is
   -- the identity and messages.agent_id stores it — but AVAILABILITY is per project, so
   -- a crypto-research project does not offer a philosophy bot in its @ palette.
+  -- Queued chat messages. The in-memory queue dies with the process, so a message
+  -- waiting behind a running turn used to vanish on restart with no trace anywhere.
+  -- The row is written when the message is queued and deleted the moment it is
+  -- dequeued — BEFORE the run starts. A crash mid-run therefore loses that one
+  -- message rather than replaying it, which is the safer direction: re-running a
+  -- chat turn spends money and can edit files a second time.
+  CREATE TABLE IF NOT EXISTS queued_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    payload    TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_queued_session ON queued_messages(session_id);
+
   CREATE TABLE IF NOT EXISTS project_bots (
     project_id TEXT NOT NULL,
     bot_id     TEXT NOT NULL,
@@ -580,6 +594,10 @@ const stmts = {
   // places and must not grow parameters. kind is literal here — a terminal session
   // can never be created as anything else.
   markTerminalStarted: db.prepare(`UPDATE sessions SET terminal_started=1 WHERE id=?`),
+  addQueuedMsg: db.prepare(`INSERT INTO queued_messages (session_id,payload) VALUES (?,?)`),
+  delQueuedMsg: db.prepare(`DELETE FROM queued_messages WHERE id=?`),
+  delQueuedBySession: db.prepare(`DELETE FROM queued_messages WHERE session_id=?`),
+  allQueuedMsgs: db.prepare(`SELECT * FROM queued_messages ORDER BY id`),
   listBots: db.prepare(`SELECT * FROM bots WHERE deleted_at IS NULL ORDER BY label COLLATE NOCASE`),
   getBot: db.prepare(`SELECT * FROM bots WHERE id=? AND deleted_at IS NULL`),
   // Includes soft-deleted rows: used to reserve handles and to attribute old messages.
@@ -958,6 +976,12 @@ const TASK_MANAGER_SECRET = require('crypto').randomBytes(16).toString('hex');
 
 // ─── User Interrupt (Internal MCP) ──────────────────────────────────────
 const INTERRUPT_SECRET = require('crypto').randomBytes(16).toString('hex');
+// How long an interrupt's saved files stay on disk after the agent is told about
+// them. 60 s was too short: the agent is handed a path and may run several other
+// tools before reading it, and a long turn can easily outlast a minute — the Read
+// would then fail on a path that no longer exists. These live in the OS temp
+// directory, so an occasional leftover is swept up by the system anyway.
+const INTERRUPT_FILE_TTL_MS = parseInt(process.env.CCS_INTERRUPT_FILE_TTL_MS || '1800000', 10) || 1800000;
 const pendingInterrupts = new Map(); // sessionId → [{ id, content, attachments?, createdAt }]
 let _interruptIdCounter = 0;
 
@@ -1747,12 +1771,24 @@ class WsProxy {
       this._ws.send(data);
     } else if (this._buffer.length < 1000) {
       this._buffer.push(data);
+    } else {
+      // Past the cap the stream is dropped rather than grown without bound. Count it
+      // so the reattaching client can be told its view is incomplete instead of
+      // quietly missing tool cards.
+      this._dropped = (this._dropped || 0) + 1;
     }
   }
   attach(newWs) {
     this._ws = newWs;
     const buf = this._buffer.splice(0);
     for (const msg of buf) { try { newWs.send(msg); } catch {} }
+    // Tell the client its replay is incomplete instead of letting it believe an
+    // unbroken stream. The text itself is re-read from the database on done; what
+    // goes missing here is live activity, so say so rather than show a gap.
+    if (this._dropped) {
+      try { newWs.send(JSON.stringify({ type: 'stream_gap', dropped: this._dropped })); } catch {}
+      this._dropped = 0;
+    }
   }
   detach() { this._ws = null; }
 }
@@ -4100,7 +4136,7 @@ app.post('/api/internal/user-interrupt', express.json(), (req, res) => {
     }
 
     // Schedule temp file cleanup after delay (Claude needs time to read attached files)
-    cleanupInterruptAttachments(messages, 60_000);
+    cleanupInterruptAttachments(messages, INTERRUPT_FILE_TTL_MS);
   }
 
   return res.json({ messages });
@@ -5424,6 +5460,7 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
       // Unlink recurring tasks from session (preserve the schedule), delete the rest
       db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(id);
       stmts.deleteTasksBySession.run(id); stmts.deleteSession.run(id); sessionQueues.delete(id);
+      try { stmts.delQueuedBySession.run(id); } catch {}
     }
   });
   del();
@@ -7810,7 +7847,17 @@ wss.on('connection', (ws) => {
         if (agentMode === 'multi') {
           try { proxy.send(JSON.stringify({ type: 'text', text: 'ℹ️ Multi-agent mode uses the API engine — running in single-agent interactive mode instead.\n\n', tabId: effectiveTabId })); } catch {}
         }
-        const r = await runInteractiveSingle(params);
+        // The interactive engine has no hooks to inject, so it is handed a drain
+        // function and types clarifications into the live pane itself.
+        const r = await runInteractiveSingle({
+          ...params,
+          drainInterrupts: () => {
+            const msgs = pendingInterrupts.get(localSessionId) || [];
+            if (msgs.length) pendingInterrupts.delete(localSessionId);
+            for (const m of msgs) { try { if (m.dbId) stmts.markInterruptDelivered.run(m.dbId); } catch {} }
+            return msgs;
+          },
+        });
         for (const ev of r.toolEvents) {
           try { stmts.addMsg.run(localSessionId,'assistant','tool',(ev.input||'').substring(0,500),ev.name,null,null,null); } catch {}
         }
@@ -7910,6 +7957,9 @@ wss.on('connection', (ws) => {
         const tabQ = ws._tabQueue[effectiveTabId] || [];
         if (tabQ.length > 0) {
           const next = tabQ.shift();
+          // Delete before running: see the table comment — losing one message on a
+          // crash beats running the same turn twice.
+          if (next?._dbQueueId) { try { stmts.delQueuedMsg.run(next._dbQueueId); } catch {} }
           if (tabQ.length === 0) { delete ws._tabQueue[effectiveTabId]; sessionQueues.delete(effectiveTabId); }
           try { ws.send(queuePayload(effectiveTabId)); } catch {}
           processChat(next).catch(err => log.error('processChat tab-queue error', { message: err.message }));
@@ -8024,10 +8074,19 @@ wss.on('connection', (ws) => {
           }
           // Prevent unbounded queue growth
           if (ws._tabQueue[tabId].length >= 20) {
-            ws.send(JSON.stringify({ type: 'error', error: 'Queue full (max 20). Wait for current task to finish.', tabId }));
+            // Hand the text back: the composer cleared it before sending, so a bare
+            // error left the user with their message gone and no way to recover it.
+            ws.send(JSON.stringify({ type: 'error', error: 'Queue full (max 20). Wait for current task to finish.', tabId,
+              restoreText: msg.text || '', queueRejected: true }));
             return;
           }
           msg._queueId = ++ws._queueIdCounter;
+          // Persist before enqueuing, so a crash between the two cannot leave a
+          // message the user believes is waiting but which exists nowhere.
+          try {
+            const info = stmts.addQueuedMsg.run(tabId, JSON.stringify(msg));
+            msg._dbQueueId = Number(info.lastInsertRowid);
+          } catch (e) { log.warn('queue persist failed', { err: e.message }); }
           ws._tabQueue[tabId].push(msg);
           ws.send(queuePayload(tabId));
           return;
@@ -8082,7 +8141,8 @@ wss.on('connection', (ws) => {
       if (!pendingInterrupts.has(tabId)) pendingInterrupts.set(tabId, []);
       const queue = pendingInterrupts.get(tabId);
       if (queue.length >= 10) {
-        ws.send(JSON.stringify({ type: 'error', error: 'Interrupt queue full (max 10).', tabId }));
+        ws.send(JSON.stringify({ type: 'error', error: 'Interrupt queue full (max 10).', tabId,
+          restoreText: text || '', queueRejected: true }));
         return;
       }
       const interruptId = ++_interruptIdCounter;
@@ -8760,6 +8820,27 @@ function startTerminalReaper({ intervalMs = 60000 } = {}) {
   };
   return setInterval(tick, intervalMs);
 }
+
+// Restore queued chat messages left by a previous process. They never started —
+// dequeue deletes the row before the run begins — so re-queuing them cannot
+// duplicate work. They land in sessionQueues and the next WebSocket that owns the
+// session drains them, exactly as a live queue would.
+try {
+  const rows = stmts.allQueuedMsgs.all();
+  if (rows.length) {
+    let restored = 0;
+    for (const row of rows) {
+      let msg = null;
+      try { msg = JSON.parse(row.payload); } catch { }
+      if (!msg || !row.session_id) { try { stmts.delQueuedMsg.run(row.id); } catch {} ; continue; }
+      msg._dbQueueId = row.id;
+      if (!sessionQueues.has(row.session_id)) sessionQueues.set(row.session_id, []);
+      sessionQueues.get(row.session_id).push(msg);
+      restored++;
+    }
+    if (restored) log.info('restored queued messages from a previous run', { count: restored });
+  }
+} catch (e) { log.warn('queue restore failed', { err: e.message }); }
 
 // The `tmux -C` clients are children of this process and SURVIVE a studio restart,
 // staying attached and pinning session_attached above zero — which would stop the

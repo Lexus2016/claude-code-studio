@@ -4060,6 +4060,7 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    'stream.gap':'Частину подій не показано — зʼєднання переривалось. Текст відповіді повний.',
     'agent.cap.delegate':'делегування','agent.cap.terminal':'термінал',
     'bots.empty.what':'Бот — це named учасник чату зі своїм промптом, моделлю і памʼяттю. Аналітик, редактор, рецензент — кожен знає своє.','bots.empty.how':'Створіть бота і покличте його в повідомленні:','bots.empty.cta':'Створити першого бота','bot.tpl.replace':'Замінити те, що вже написано в промпті?','bot.tpl.analyst.name':'Аналітик','bot.tpl.analyst.desc':'аналіз даних і висновки','bot.tpl.analyst.prompt':'Ти аналітик. Розбираєш дані й даєш висновки, на які можна спертися.\n\nПравила:\n- Спершу цифри, потім інтерпретація.\n- Кожен висновок має спиратися на конкретне джерело.\n- Якщо даних бракує — скажи прямо, чого саме бракує.\n- Без води: короткі абзаци, ключове винось у список.','bot.tpl.writer.name':'Редактор','bot.tpl.writer.desc':'тексти і звіти','bot.tpl.writer.prompt':'Ти редактор. Перетворюєш чернетки й дані на текст, який приємно читати.\n\nПравила:\n- Пиши для людини, не для галочки.\n- Структура: заголовок, суть у першому абзаці, деталі нижче.\n- Не вигадуй фактів. Якщо чогось нема у вихідних даних — постав питання.\n- Прибирай канцелярит і повтори.','bot.tpl.reviewer.name':'Рецензент','bot.tpl.reviewer.desc':'перевірка коду і рішень','bot.tpl.reviewer.prompt':'Ти рецензент. Шукаєш, де рішення ламається, а не де воно гарне.\n\nПравила:\n- Кожна знахідка: що саме зламається, за яких вхідних даних, з посиланням на файл і рядок.\n- Розділяй «це помилка» і «мені так не подобається».\n- Якщо не впевнений — кажи, що це припущення.\n- Наприкінці: найважливіше першим.','bot.tpl.explainer.name':'Пояснювач','bot.tpl.explainer.desc':'пояснює складне просто','bot.tpl.explainer.prompt':'Ти пояснюєш складні речі простими словами.\n\nПравила:\n- Спочатку одне речення суті, потім деталі.\n- Приклад важливіший за визначення.\n- Терміни розшифровуй при першій згадці.\n- Не спрощуй до неправди: якщо є важливий нюанс — назви його.',
     'bot.state.queued':'у черзі','bot.state.running':'працює','bot.state.done':'готово','bot.state.failed':'помилка','bot.state.stopped':'зупинено','bot.state.skipped':'пропущено','bot.stop.all':'Зупинити',
@@ -4302,6 +4303,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'оновлено {time} тому',
   },
   en: {
+    'stream.gap':'Some live activity was not shown — the connection dropped. The answer itself is complete.',
     'agent.cap.delegate':'delegation','agent.cap.terminal':'terminal',
     'bots.empty.what':'A bot is a named chat participant with its own prompt, model and memory. An analyst, an editor, a reviewer — each one knows its job.','bots.empty.how':'Create a bot, then call it in a message:','bots.empty.cta':'Create your first bot','bot.tpl.replace':'Replace what is already written in the prompt?','bot.tpl.analyst.name':'Analyst','bot.tpl.analyst.desc':'data analysis and conclusions','bot.tpl.analyst.prompt':'You are an analyst. You work through data and give conclusions someone can rely on.\n\nRules:\n- Numbers first, interpretation second.\n- Every conclusion names the source it rests on.\n- If the data is not enough, say exactly what is missing.\n- No padding: short paragraphs, key points as a list.','bot.tpl.writer.name':'Editor','bot.tpl.writer.desc':'documents and reports','bot.tpl.writer.prompt':'You are an editor. You turn drafts and data into text people actually want to read.\n\nRules:\n- Write for a reader, not for the record.\n- Structure: title, the point in the first paragraph, detail below.\n- Invent nothing. If a fact is not in the source, ask for it.\n- Cut jargon and repetition.','bot.tpl.reviewer.name':'Reviewer','bot.tpl.reviewer.desc':'reviews code and decisions','bot.tpl.reviewer.prompt':'You are a reviewer. You look for where a solution breaks, not where it is nice.\n\nRules:\n- Each finding: what breaks, on which input, with the file and line.\n- Separate \'this is a bug\' from \'I would have done it differently\'.\n- If you are unsure, say it is a guess.\n- Most severe first.','bot.tpl.explainer.name':'Explainer','bot.tpl.explainer.desc':'makes hard things clear','bot.tpl.explainer.prompt':'You explain difficult things in plain language.\n\nRules:\n- One sentence of the point first, then the detail.\n- An example beats a definition.\n- Unpack a term the first time it appears.\n- Do not simplify into being wrong: if a caveat matters, name it.',
     'bot.state.queued':'queued','bot.state.running':'working','bot.state.done':'done','bot.state.failed':'failed','bot.state.stopped':'stopped','bot.state.skipped':'skipped','bot.stop.all':'Stop',
@@ -4544,6 +4546,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'updated {time} ago',
   },
   ru: {
+    'stream.gap':'Часть событий не показана — соединение прерывалось. Текст ответа полный.',
     'agent.cap.delegate':'делегирование','agent.cap.terminal':'терминал',
     'bots.empty.what':'Бот — это именованный участник чата со своим промптом, моделью и памятью. Аналитик, редактор, рецензент — каждый знает своё.','bots.empty.how':'Создайте бота и позовите его в сообщении:','bots.empty.cta':'Создать первого бота','bot.tpl.replace':'Заменить то, что уже написано в промпте?','bot.tpl.analyst.name':'Аналитик','bot.tpl.analyst.desc':'анализ данных и выводы','bot.tpl.analyst.prompt':'Ты аналитик. Разбираешь данные и даёшь выводы, на которые можно опереться.\n\nПравила:\n- Сначала цифры, потом интерпретация.\n- Каждый вывод опирается на конкретный источник.\n- Если данных не хватает — скажи, чего именно.\n- Без воды: короткие абзацы, ключевое списком.','bot.tpl.writer.name':'Редактор','bot.tpl.writer.desc':'тексты и отчёты','bot.tpl.writer.prompt':'Ты редактор. Превращаешь черновики и данные в текст, который приятно читать.\n\nПравила:\n- Пиши для человека.\n- Структура: заголовок, суть в первом абзаце, детали ниже.\n- Не выдумывай фактов. Чего нет в источнике — спроси.\n- Убирай канцелярит и повторы.','bot.tpl.reviewer.name':'Рецензент','bot.tpl.reviewer.desc':'проверка кода и решений','bot.tpl.reviewer.prompt':'Ты рецензент. Ищешь, где решение ломается.\n\nПравила:\n- Каждая находка: что ломается, при каких данных, файл и строка.\n- Разделяй «это ошибка» и «мне не нравится».\n- Не уверен — скажи, что это предположение.\n- Самое важное первым.','bot.tpl.explainer.name':'Объяснятель','bot.tpl.explainer.desc':'объясняет сложное просто','bot.tpl.explainer.prompt':'Ты объясняешь сложное простыми словами.\n\nПравила:\n- Сначала суть одним предложением, потом детали.\n- Пример важнее определения.\n- Термин расшифровывай при первом упоминании.\n- Не упрощай до неправды: важный нюанс называй.',
     'bot.state.queued':'в очереди','bot.state.running':'работает','bot.state.done':'готово','bot.state.failed':'ошибка','bot.state.stopped':'остановлен','bot.state.skipped':'пропущен','bot.stop.all':'Остановить',
@@ -4786,6 +4789,7 @@ const TRANSLATIONS = {
     'dlg.last_update':'обновлено {time} назад',
   },
   fr: {
+    "stream.gap":"Une partie de l'activité n'a pas été affichée — la connexion a été interrompue. La réponse elle-même est complète.",
     "agent.cap.delegate":"délégation","agent.cap.terminal":"terminal",
     "bots.empty.what":"Un bot est un participant nommé du chat, avec son propre prompt, son modèle et sa mémoire.","bots.empty.how":"Créez un bot puis appelez-le dans un message :","bots.empty.cta":"Créer votre premier bot","bot.tpl.replace":"Remplacer ce qui est déjà écrit dans le prompt ?",
     "bot.state.queued":"en attente","bot.state.running":"en cours","bot.state.done":"terminé","bot.state.failed":"échec","bot.state.stopped":"arrêté","bot.state.skipped":"ignoré","bot.stop.all":"Arrêter",
@@ -4929,6 +4933,7 @@ const TRANSLATIONS = {
     "dlg.toast.no_changes":"Aucun changement","dlg.last_update":"mis à jour il y a {time}",
   },
   he: {
+    "stream.gap":"חלק מהפעילות לא הוצג — החיבור נותק. התשובה עצמה מלאה.",
     "agent.cap.delegate":"האצלה","agent.cap.terminal":"טרמינל",
     "bots.empty.what":"בוט הוא משתתף בעל שם בצ׳אט, עם הנחיה, מודל וזיכרון משלו.","bots.empty.how":"צרו בוט ואז קראו לו בהודעה:","bots.empty.cta":"צרו את הבוט הראשון","bot.tpl.replace":"להחליף את מה שכבר כתוב בהנחיה?",
     "bot.state.queued":"בתור","bot.state.running":"עובד","bot.state.done":"הושלם","bot.state.failed":"נכשל","bot.state.stopped":"נעצר","bot.state.skipped":"דולג","bot.stop.all":"עצור",
@@ -6236,7 +6241,27 @@ function handleWsMsg(d) {
       }
       break;
 
+    case 'stream_gap':
+      // Honest about an incomplete replay: the buffer overflowed while this browser
+      // was away, so some live activity never arrived. The answer itself is re-read
+      // from the database, which is why this is a note and not an error.
+      if (isVisible) toast(t('stream.gap'), true, 5000);
+      break;
+
     case 'error':
+      // A rejected message is not a failed run: the composer cleared the text before
+      // sending, so hand it back rather than leaving the user to retype it. Only if
+      // they have not already started typing something else.
+      if (d.queueRejected && d.restoreText && isVisible) {
+        if (!inEl.value.trim()) {
+          inEl.value = d.restoreText;
+          inEl.dispatchEvent(new Event('input'));
+          inEl.focus();
+        }
+        // The optimistic 'queued' bubble is a lie once the server refused it.
+        const q = [...msgsEl.querySelectorAll('.msg-queued')].pop();
+        if (q) q.remove();
+      }
       getTS(tabId).agentStatus = ''; // task errored — clear saved status
       if (isVisible) {
         rmStatus();

@@ -172,7 +172,7 @@ function killInteractiveTmux(localSessionId) {
 // mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId; ignores the rest.
 // Returns { cid, completed, resultMeta, fullText, fullThinking, toolEvents }.
 async function runInteractiveSingle(params) {
-  const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent } = params;
+  const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent, drainInterrupts } = params;
   const start = Date.now();
   const wsSend = (obj) => {
     try { ws.send(JSON.stringify({ ...obj, ...(tabId ? { tabId } : {}) })); } catch {}
@@ -298,6 +298,34 @@ async function runInteractiveSingle(params) {
 
     while (true) {
       await sleep(1500);
+
+      // Mid-run clarifications. The hook mechanism the headless engine uses cannot
+      // apply here — there is no per-run --settings to inject, the CLI is already
+      // running interactively. The equivalent for a live TUI is to type the message
+      // into it, which is exactly what a person sitting at the terminal would do.
+      if (typeof drainInterrupts === 'function') {
+        let pending = [];
+        try { pending = drainInterrupts() || []; } catch {}
+        for (const m of pending) {
+          const parts = [];
+          if (m.content) parts.push(m.content);
+          for (const att of (Array.isArray(m.attachments) ? m.attachments : [])) {
+            if (att.path) parts.push(`[Attached ${att.mimeType && att.mimeType.startsWith('image/') ? 'image' : 'file'}: ${att.name || 'file'}]\nSaved at: ${att.path}\nRead it before continuing.`);
+          }
+          const body = parts.join('\n\n').trim();
+          if (!body) continue;
+          const note = `USER CLARIFICATION (sent while you were working):\n\n${body}`;
+          const tmpFile = path.join(os.tmpdir(), `ccs-int-${crypto.randomBytes(6).toString('hex')}.txt`);
+          const bufName = `ccsint-${crypto.randomBytes(4).toString('hex')}`;
+          try {
+            fs.writeFileSync(tmpFile, note);
+            spawnSync('tmux', ['load-buffer', '-b', bufName, tmpFile], { stdio: 'ignore' });
+            spawnSync('tmux', ['paste-buffer', '-dpr', '-t', name, '-b', bufName], { stdio: 'ignore' });
+            await sleep(250);
+            spawnSync('tmux', ['send-keys', '-t', name, 'Enter'], { stdio: 'ignore' });
+          } catch {} finally { try { fs.unlinkSync(tmpFile); } catch {} }
+        }
+      }
 
       if (abortController?.signal?.aborted) {
         // Interrupt the turn, keep the tmux session alive
