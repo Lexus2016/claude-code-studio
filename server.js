@@ -3300,7 +3300,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
 }
 
 async function runMultiAgent(p) {
-  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort } = p;
+  const { prompt, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort, userContent } = p;
   // Entry guard: the caller creates the AbortController before prompt classification and
   // does not re-check it before dispatching here, so Stop during that phase lands us with
   // an already-aborted signal. cli.send() only listens for a FUTURE abort
@@ -3406,8 +3406,26 @@ async function runMultiAgent(p) {
       ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`🔄 ${agent.role}`, ...(tabId ? { tabId } : {}) }));
       const depCtx = (agent.depends_on||[]).map(d => results[d] ? `\n[${d}]:${results[d].substring(0,2000)}` : '').join('');
       const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
-      const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.`;
-      const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write'];
+      // Same standing instruction a single-agent turn gets: without it a worker does
+      // not know user clarifications can arrive mid-run.
+      const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.` + USER_INTERRUPT_INSTRUCTION;
+      const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write',
+        'mcp___ccs_user_interrupt__check_user_messages'];
+      // Interrupt delivery, identical to runCliSingle. Workers had neither the hooks
+      // nor the tool, so a clarification sent while the team was working was silently
+      // discarded at the end of the turn.
+      const agentInterruptCmd = `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`;
+      const agentInterruptSettings = {
+        hooks: {
+          PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: agentInterruptCmd, timeout: 3 }] }],
+          Stop: [{ hooks: [{ type: 'command', command: agentInterruptCmd, timeout: 3 }] }],
+        },
+      };
+      const agentInterruptEnv = {
+        CCS_INTERRUPT_URL: `http://127.0.0.1:${PORT}`,
+        CCS_INTERRUPT_SESSION: sessionId,
+        CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
+      };
       const agentTurnCap = Math.min(maxTurns||30, MULTI_AGENT_MAX_TURNS_CAP);
       let agentText = '';
       let agentResult = null;   // CLI result frame — carries why the run stopped
@@ -3428,7 +3446,13 @@ async function runMultiAgent(p) {
         await new Promise(res => {
           let _settled = false;
           const _res = () => { if (!_settled) { _settled = true; res(); } };
-          cli.send({ prompt:agentPromptNow, sessionId: agentSessionId, model, maxTurns:agentTurnCap, systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController, forkSession: agentFork, effort })
+          cli.send({ prompt:agentPromptNow,
+            // Attachments go to the first wave only: later agents receive their
+            // dependencies' output as context, and re-sending the same image to every
+            // worker would pay for it once per agent.
+            contentBlocks: (agentContinues === 0 && !completed.size && Array.isArray(userContent)) ? userContent : null,
+            sessionId: agentSessionId, model, maxTurns:agentTurnCap, systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController, forkSession: agentFork, effort,
+            extraEnv: agentInterruptEnv, extraSettings: agentInterruptSettings })
             .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
             .onTool((n,i) => { if (n !== 'ask_user' && n !== 'notify_user' && n !== 'set_ui_state') { try { ws.send(JSON.stringify({ type:'tool', tool:n, input:(i||'').substring(0,600), agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} } try { stmts.addMsg.run(sessionId,'assistant','tool',(i||'').substring(0,500),n,agent.id,null,null); } catch {} })
             .onResult(r => { agentResult = r; })
@@ -7993,12 +8017,24 @@ wss.on('connection', (ws) => {
       const hasAttachments = Array.isArray(msg.attachments) && msg.attachments.length > 0;
       if (!tabId || (!text && !hasAttachments)) return;
 
-      // Soft guard: warn if no active task is found, but still store the interrupt.
-      // Race window: between session_started (client renames tab) and activeTasks.set()
-      // both _tabBusy and activeTasks can be momentarily empty for the new session ID.
-      // Storing the interrupt is harmless — it'll be consumed by MCP or cleaned up in finally.
-      if (!ws._tabBusy[tabId] && !activeTasks.has(tabId)) {
-        log.warn('[interrupt] no active task found (race window?)', { tabId });
+      // Nothing is running: this is not a clarification, it is a new message. Storing
+      // it anyway meant it survived in memory and was injected into the NEXT,
+      // unrelated run — the agent would suddenly react to a remark from a finished
+      // task. The SPA sends `interrupt` while it still believes the tab is
+      // generating, and the server may already have finished, so this window is
+      // reached in normal use, not only under load.
+      if (!ws._tabBusy[tabId] && !activeTasks.has(tabId) && !activeChatSessions.has(tabId)) {
+        log.info('[interrupt] session is idle — handling as a normal message', { tabId });
+        processChat({
+          type: 'chat',
+          text,
+          tabId,
+          sessionId: tabId,
+          attachments: Array.isArray(msg.attachments) ? msg.attachments : undefined,
+          model: msg.model,
+          workdir: msg.workdir,
+        }).catch(err => log.error('processChat error', { message: err.message }));
+        return;
       }
 
       // Store pending interrupt
