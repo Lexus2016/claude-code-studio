@@ -1081,34 +1081,98 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .term-hdr .term-state { font-size: 11px; opacity: .55; }
 #termDot { width: 8px; height: 8px; border-radius: 50%; background: #8b949e; flex: none;
            transition: background-color .25s cubic-bezier(.2,0,0,1); }
-#termHost { flex: 1; min-height: 0; padding: 6px 8px; }
+#termHost { flex: 1; min-height: 0; padding: 6px 8px; position: relative; }
+.term-instance { width: 100%; height: 100%; }
+
+/* Emoji picker for a bot's avatar. Typing an emoji by hand meant switching to the
+   system picker every time; this keeps the field (paste/type still works) and adds
+   a grid of the ones that actually suit a bot persona. */
+.emoji-field { display: flex; align-items: center; gap: 8px; position: relative; }
+/* Qualified with .bot-modal on purpose: `.bot-modal input { width: 100% }` has the
+   same specificity and comes later in the sheet, so an unqualified `.emoji-field
+   input` lost and the field stretched full width, pushing the Pick button out of
+   the dialog. */
+.bot-modal .emoji-field input {
+  width: 68px; flex: none; text-align: center;
+  font-size: 20px; line-height: 1; padding: 8px 6px;
+}
+.emoji-open {
+  font-family: inherit; font-size: 12.5px; font-weight: 550;
+  min-height: 40px; padding: 0 15px; border: none; border-radius: 11px; cursor: pointer;
+  background: var(--s3); color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: box-shadow .15s, background-color .15s, scale .12s cubic-bezier(.2,0,0,1);
+}
+.emoji-open:hover { background: var(--s2); box-shadow: inset 0 0 0 1px var(--accent2); }
+.emoji-open:active { scale: .96; }
+.emoji-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.emoji-pop {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 5;
+  width: min(340px, calc(100vw - 60px)); max-height: 260px; overflow-y: auto;
+  padding: 10px; border-radius: 14px;
+  background: var(--s1); box-shadow: inset 0 0 0 1px var(--border), var(--shadow-xl);
+  animation: modalPop .16s var(--ease-out); transform-origin: top left;
+}
+.emoji-pop.hidden { display: none; }
+.emoji-group { font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--muted); padding: 6px 4px 5px; }
+.emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 3px; }
+.emoji-grid button {
+  font-size: 19px; line-height: 1; height: 38px; padding: 0;
+  border: none; border-radius: 9px; cursor: pointer; background: none;
+  transition: background-color .12s, scale .12s cubic-bezier(.2,0,0,1);
+}
+.emoji-grid button:hover { background: var(--s3); }
+.emoji-grid button:active { scale: .92; }
+.emoji-grid button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Starter-prompt chips in the bot modal. Self-sufficient on purpose: these used
+   class="cfg", which is only ever defined as a descendant (.ci .cfg), so on their
+   own they rendered as default browser buttons — white pills on a dark modal. */
+.tpl-chip {
+  font-family: inherit; font-size: 12px; line-height: 1;
+  padding: 8px 13px; border: none; border-radius: 999px; cursor: pointer;
+  background: var(--s2); color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: box-shadow .15s, background-color .15s, scale .12s cubic-bezier(.2,0,0,1);
+}
+.tpl-chip { position: relative; }
+.tpl-chip::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 40px; transform: translateY(-50%); }
+.tpl-chip:hover { background: var(--s3); box-shadow: inset 0 0 0 1px var(--accent2); }
+.tpl-chip:active { scale: .96; }
+.tpl-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* New-tab chooser: two ways to start work, side by side, each explaining itself.
    A bare '+' that always meant 'chat' hid the terminal entirely — the owner had to
    ask how to open one. */
 .nt-choices { display: flex; flex-direction: column; gap: 9px; }
 .nt-card {
-  display: flex; align-items: flex-start; gap: 11px; width: 100%;
-  padding: 12px 13px; border: none; border-radius: 11px; cursor: pointer;
+  display: flex; align-items: flex-start; gap: 12px; width: 100%;
+  padding: 15px 16px; border: none; border-radius: 14px; cursor: pointer;
   background: var(--s2); color: var(--text); font-family: inherit; text-align: left;
   box-shadow: inset 0 0 0 1px var(--border);
   transition: box-shadow .15s, background-color .15s, scale .12s cubic-bezier(.2,0,0,1);
 }
 .nt-card:hover { background: var(--s3); box-shadow: inset 0 0 0 1px var(--accent); }
 .nt-card:active { scale: .98; }
-.nt-card .nt-ic { font-size: 20px; line-height: 1.15; flex: none; }
-.nt-card .nt-name { font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
-.nt-card .nt-desc { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-top: 2px; }
+.nt-card .nt-ic { font-size: 22px; line-height: 1.15; flex: none; }
+.nt-card .nt-name { font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; }
+.nt-card .nt-desc { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-top: 3px; text-wrap: pretty; }
 .nt-card[disabled] { opacity: .45; cursor: not-allowed; }
-.nt-sub { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.nt-sub { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+/* These are the primary pick targets of this dialog — they were 26px tall at
+   11.5px type, well under a comfortable 40px target and hard to hit at a glance. */
 .nt-sub button {
-  font-size: 11.5px; padding: 5px 11px; border: none; border-radius: 999px; cursor: pointer;
+  font-size: 13px; font-weight: 550; padding: 0 15px; min-height: 40px;
+  display: inline-flex; align-items: center; gap: 7px;
+  border: none; border-radius: 12px; cursor: pointer;
   background: var(--s3); color: var(--text); font-family: inherit;
   box-shadow: inset 0 0 0 1px var(--border);
-  transition: box-shadow .15s, scale .12s cubic-bezier(.2,0,0,1);
+  transition: box-shadow .15s, background-color .15s, scale .12s cubic-bezier(.2,0,0,1);
 }
-.nt-sub button:hover { box-shadow: inset 0 0 0 1px var(--accent2); }
+.nt-sub button:hover { background: var(--s2); box-shadow: inset 0 0 0 1px var(--accent2); }
 .nt-sub button:active { scale: .96; }
+.nt-sub button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Primary action inside a panel's empty state. It cannot borrow .bp: that class
    only supplies a background, while the border, radius and padding come from the
@@ -1629,8 +1693,20 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 }
 .modal-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
 .modal-hdr h2 { font-size: 15px; font-weight: 700; }
-.modal-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 20px; padding: 4px; transition: color .12s; line-height: 1; }
-.modal-close:hover { color: var(--text); }
+.modal-close {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0; flex: none;
+  /* A real 34px target with a pseudo-element extending the hit area to 40x40 —
+     the glyph alone was a ~28px tap target with a naked focus ring around it. */
+  width: 34px; height: 34px; border-radius: 9px;
+  display: inline-flex; align-items: center; justify-content: center;
+  position: relative;
+  transition: color .15s, background-color .15s, scale .12s cubic-bezier(.2,0,0,1);
+}
+.modal-close::after { content: ''; position: absolute; inset: -3px; }
+.modal-close:hover { color: var(--text); background: var(--s3); }
+.modal-close:active { scale: .96; }
+.modal-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .modal-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 14px; }
 .modal-tab { padding: 9px 16px; font-size: 13px; cursor: pointer; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; transition: background .15s, border-color .15s, color .15s, box-shadow .15s, transform .15s; font-weight: 500; }
 .modal-tab:hover { color: var(--text); }
@@ -3701,9 +3777,9 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <!-- Agent Add/Edit Modal -->
 <div class="modal-overlay hidden" id="newTabModal" onclick="if(event.target===this)closeModalOverlay('newTabModal')">
   <div class="modal" style="max-width:440px">
-    <div class="modal-header">
-      <span id="newTabTitle" data-i18n="newtab.title">Що відкрити?</span>
-      <button class="modal-close" onclick="closeModalOverlay('newTabModal')">✕</button>
+    <div class="modal-hdr">
+      <h2 id="newTabTitle" data-i18n="newtab.title">Що відкрити?</h2>
+      <button class="modal-close" onclick="closeModalOverlay('newTabModal')" data-i18n-title="btn.close" title="Закрити" aria-label="Close">✕</button>
     </div>
     <div class="modal-body">
       <div class="nt-choices" id="ntChoices"></div>
@@ -3713,24 +3789,31 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 
 <div class="modal-overlay hidden" id="botModal">
   <div class="modal bot-modal" style="max-width:560px">
-    <div class="modal-header">
-      <span id="botModalTitle" data-i18n="bot.modal.add.title">Новий бот</span>
-      <button class="modal-close" onclick="cancelBotForm()">✕</button>
+    <div class="modal-hdr">
+      <h2 id="botModalTitle" data-i18n="bot.modal.add.title">Новий бот</h2>
+      <button class="modal-close" onclick="cancelBotForm()" data-i18n-title="btn.close" title="Закрити" aria-label="Close">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="botId">
       <div class="cmd-field">
         <label for="botLabel" data-i18n="bot.modal.label.label">Ім'я</label>
-        <input id="botLabel" placeholder="Крипто-аналітик" autocomplete="off" oninput="_botHandlePreview()">
+        <input id="botLabel" data-i18n-ph="bot.modal.label.ph" placeholder="Крипто-аналітик" autocomplete="off" oninput="_botHandlePreview()">
         <div class="cmd-name-hint"><span data-i18n="bot.modal.handle.hint">Звертання у чаті:</span> <b id="botHandlePreview">@—</b></div>
       </div>
       <div class="cmd-field">
         <label for="botAvatar" data-i18n="bot.modal.avatar.label">Емодзі</label>
-        <input id="botAvatar" placeholder="📈" autocomplete="off" style="max-width:110px">
+        <div class="emoji-field">
+          <input id="botAvatar" placeholder="📈" autocomplete="off">
+          <button type="button" class="emoji-open" id="emojiOpenBtn" onclick="toggleEmojiPicker(event)"
+                  data-i18n-title="bot.modal.avatar.pick" title="Обрати емодзі" aria-haspopup="true" aria-expanded="false">
+            <span data-i18n="bot.modal.avatar.pick.btn">Обрати</span>
+          </button>
+          <div class="emoji-pop hidden" id="emojiPop" role="dialog" aria-label="Emoji"></div>
+        </div>
       </div>
       <div class="cmd-field">
         <label for="botDesc" data-i18n="bot.modal.desc.label">Призначення</label>
-        <input id="botDesc" placeholder="аналіз ринку криптовалют" autocomplete="off">
+        <input id="botDesc" data-i18n-ph="bot.modal.desc.ph" placeholder="аналіз ринку криптовалют" autocomplete="off">
         <div class="cmd-name-hint" data-i18n="bot.modal.desc.hint">Одним рядком. Це бачать інші боти, щоб знати, кому передати роботу.</div>
       </div>
       <div class="cmd-field">
@@ -3746,7 +3829,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="cmd-field">
         <label for="botPrompt" data-i18n="bot.modal.prompt.label">Системний промпт</label>
         <div id="botTemplates" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:2px"></div>
-        <textarea id="botPrompt" rows="7" placeholder="Ти аналітик крипторинку..."></textarea>
+        <textarea id="botPrompt" rows="7" data-i18n-ph="bot.modal.prompt.ph" placeholder="Ти аналітик крипторинку..."></textarea>
         <div class="cmd-name-hint" data-i18n="bot.modal.prompt.hint">Хто цей бот і як він працює. До 8000 символів.</div>
       </div>
     </div>
@@ -4147,6 +4230,12 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     e.preventDefault();
     e.stopImmediatePropagation();
+    // A popover open INSIDE the dialog owns Esc first — closing the whole modal
+    // would throw away everything typed into the form behind it. This handler is
+    // registered at load in the capture phase and stops propagation, so a later
+    // listener could never take precedence; the check belongs here.
+    const pop = $i('emojiPop');
+    if (pop && !pop.classList.contains('hidden')) { closeEmojiPicker(); return; }
     if (typeof top.onEscape === 'function') top.onEscape();
     return;
   }
@@ -4172,6 +4261,8 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    'bot.modal.avatar.pick':'Обрати емодзі','bot.modal.avatar.pick.btn':'Обрати','emoji.group.roles':'Ролі','emoji.group.work':'Робота','emoji.group.tools':'Інструменти','emoji.group.ideas':'Ідеї','emoji.group.nature':'Природа',
+    'btn.close':'Закрити','bot.modal.label.ph':'Крипто-аналітик','bot.modal.desc.ph':'аналіз ринку криптовалют','bot.modal.prompt.ph':'Ти аналітик крипторинку...',
     'term.off.config':'Термінальні агенти вимкнені. Увімкніть їх у Конфігу: terminal.enabled = true — це навмисно вимкнено, бо термінал у браузері виконує команди на цій машині.','term.off.tmux':'На цьому хості немає tmux. Встановіть його (macOS: brew install tmux, Linux: apt install tmux), і термінальні агенти зʼявляться.','term.off.tunnel':'Активний публічний тунель — доступ до термінала заблоковано, поки він увімкнений.',
     'newtab.title':'Що відкрити?','newtab.chat':'Чат','newtab.chat.desc':'Звичайна розмова. Ботів кличте через @@','newtab.term':'Термінальний агент','newtab.term.desc':'Живий термінал CLI-агента у вкладці. Оберіть, кого запустити:','term.tab':'термінал',
     'stream.gap':'Частину подій не показано — зʼєднання переривалось. Текст відповіді повний.',
@@ -4417,6 +4508,8 @@ const TRANSLATIONS = {
     'dlg.last_update':'оновлено {time} тому',
   },
   en: {
+    'bot.modal.avatar.pick':'Pick an emoji','bot.modal.avatar.pick.btn':'Pick','emoji.group.roles':'Roles','emoji.group.work':'Work','emoji.group.tools':'Tools','emoji.group.ideas':'Ideas','emoji.group.nature':'Nature',
+    'btn.close':'Close','bot.modal.label.ph':'Crypto Analyst','bot.modal.desc.ph':'crypto market analysis','bot.modal.prompt.ph':'You are a crypto market analyst...',
     'term.off.config':'Terminal agents are off. Turn them on in Config: terminal.enabled = true — it ships off on purpose, because a browser terminal runs commands on this machine.','term.off.tmux':'tmux is not installed on this host. Install it (macOS: brew install tmux, Linux: apt install tmux) and terminal agents appear.','term.off.tunnel':'A public tunnel is active — terminal access is blocked while it is running.',
     'newtab.title':'What would you like to open?','newtab.chat':'Chat','newtab.chat.desc':'An ordinary conversation. Call bots with @@','newtab.term':'Terminal agent','newtab.term.desc':"A CLI agent's live terminal in a tab. Pick which one:",'term.tab':'terminal',
     'stream.gap':'Some live activity was not shown — the connection dropped. The answer itself is complete.',
@@ -4662,6 +4755,8 @@ const TRANSLATIONS = {
     'dlg.last_update':'updated {time} ago',
   },
   ru: {
+    'bot.modal.avatar.pick':'Выбрать эмодзи','bot.modal.avatar.pick.btn':'Выбрать','emoji.group.roles':'Роли','emoji.group.work':'Работа','emoji.group.tools':'Инструменты','emoji.group.ideas':'Идеи','emoji.group.nature':'Природа',
+    'btn.close':'Закрыть','bot.modal.label.ph':'Крипто-аналитик','bot.modal.desc.ph':'анализ рынка криптовалют','bot.modal.prompt.ph':'Ты аналитик крипторынка...',
     'term.off.config':'Терминальные агенты выключены. Включите их в Конфиге: terminal.enabled = true — они выключены намеренно, потому что терминал в браузере выполняет команды на этой машине.','term.off.tmux':'На этом хосте нет tmux. Установите его (macOS: brew install tmux, Linux: apt install tmux), и терминальные агенты появятся.','term.off.tunnel':'Активен публичный туннель — доступ к терминалу заблокирован, пока он включён.',
     'newtab.title':'Что открыть?','newtab.chat':'Чат','newtab.chat.desc':'Обычный разговор. Ботов зовите через @@','newtab.term':'Терминальный агент','newtab.term.desc':'Живой терминал CLI-агента во вкладке. Выберите, кого запустить:','term.tab':'терминал',
     'stream.gap':'Часть событий не показана — соединение прерывалось. Текст ответа полный.',
@@ -4907,6 +5002,8 @@ const TRANSLATIONS = {
     'dlg.last_update':'обновлено {time} назад',
   },
   fr: {
+    "bot.modal.avatar.pick":"Choisir un émoji","bot.modal.avatar.pick.btn":"Choisir","emoji.group.roles":"Rôles","emoji.group.work":"Travail","emoji.group.tools":"Outils","emoji.group.ideas":"Idées","emoji.group.nature":"Nature",
+    "btn.close":"Fermer","bot.modal.label.ph":"Analyste crypto","bot.modal.desc.ph":"analyse du marché des cryptomonnaies","bot.modal.prompt.ph":"Tu es analyste du marché crypto...",
     "term.off.config":"Les agents terminal sont désactivés. Activez-les dans la Config : terminal.enabled = true — c'est désactivé volontairement, car un terminal dans le navigateur exécute des commandes sur cette machine.","term.off.tmux":"tmux n'est pas installé sur cet hôte. Installez-le (macOS : brew install tmux, Linux : apt install tmux) et les agents terminal apparaîtront.","term.off.tunnel":"Un tunnel public est actif — l'accès au terminal est bloqué tant qu'il fonctionne.",
     "newtab.title":"Que voulez-vous ouvrir ?","newtab.chat":"Chat","newtab.chat.desc":"Une conversation ordinaire. Appelez les bots avec @@","newtab.term":"Agent terminal","newtab.term.desc":"Le terminal vivant d'un agent CLI dans un onglet. Choisissez :","term.tab":"terminal",
     "stream.gap":"Une partie de l'activité n'a pas été affichée — la connexion a été interrompue. La réponse elle-même est complète.",
@@ -5053,6 +5150,8 @@ const TRANSLATIONS = {
     "dlg.toast.no_changes":"Aucun changement","dlg.last_update":"mis à jour il y a {time}",
   },
   he: {
+    "bot.modal.avatar.pick":"בחרו אמוג׳י","bot.modal.avatar.pick.btn":"בחירה","emoji.group.roles":"תפקידים","emoji.group.work":"עבודה","emoji.group.tools":"כלים","emoji.group.ideas":"רעיונות","emoji.group.nature":"טבע",
+    "btn.close":"סגור","bot.modal.label.ph":"אנליסט קריפטו","bot.modal.desc.ph":"ניתוח שוק הקריפטו","bot.modal.prompt.ph":"אתה אנליסט שוק הקריפטו...",
     "term.off.config":"סוכני הטרמינל כבויים. הפעילו אותם בהגדרות: terminal.enabled = true — הם כבויים בכוונה, מפני שטרמינל בדפדפן מריץ פקודות על המחשב הזה.","term.off.tmux":"tmux אינו מותקן על מארח זה. התקינו אותו (macOS: brew install tmux, Linux: apt install tmux) וסוכני הטרמינל יופיעו.","term.off.tunnel":"מנהרה ציבורית פעילה — הגישה לטרמינל חסומה כל עוד היא פועלת.",
     "newtab.title":"מה לפתוח?","newtab.chat":"צ׳אט","newtab.chat.desc":"שיחה רגילה. קראו לבוטים עם @@","newtab.term":"סוכן טרמינל","newtab.term.desc":"טרמינל חי של סוכן CLI בלשונית. בחרו את מי:","term.tab":"טרמינל",
     "stream.gap":"חלק מהפעילות לא הוצג — החיבור נותק. התשובה עצמה מלאה.",
@@ -7191,9 +7290,55 @@ const BOT_TEMPLATES = [
 function renderBotTemplates() {
   const box = $i('botTemplates'); if (!box) return;
   box.innerHTML = BOT_TEMPLATES.map((tpl, i) =>
-    `<button type="button" class="cfg" style="font-size:11px;padding:3px 9px;border-radius:999px"
-       onclick="applyBotTemplate(${i})">${tpl.avatar} ${escH(t('bot.tpl.' + tpl.key + '.name'))}</button>`
+    `<button type="button" class="tpl-chip" onclick="applyBotTemplate(${i})">${tpl.avatar} ${escH(t('bot.tpl.' + tpl.key + '.name'))}</button>`
   ).join('');
+}
+
+// ─── Emoji picker (bot avatar) ───────────────────────────────────────────────
+// A curated set rather than a full Unicode table: a bot avatar wants a role or a
+// tool, and 1500 emoji to scroll makes the choice slower, not richer. Typing or
+// pasting into the field still works for anything not listed here.
+const EMOJI_GROUPS = [
+  { key: 'roles',  list: ['🤖','🧠','👤','👥','🕵️','👨‍💻','👩‍💻','🧑‍🔬','🧑‍🏫','🧑‍⚖️','🧑‍🚀','🧙','🦸','🎓','💼','🩺'] },
+  { key: 'work',   list: ['📈','📉','📊','📋','📝','📄','📚','🔍','🔎','🗂','📌','✅','⚗️','🧪','🔬','🧭'] },
+  { key: 'tools',  list: ['🔧','🛠','⚙️','🔨','🧰','⌨️','🖥','💻','🗄','🔌','🧱','📦','🚀','🛰','🔒','🗝'] },
+  { key: 'ideas',  list: ['💡','✨','⭐','🔥','⚡','🌟','🎯','🧩','🎨','🎬','🎧','📣','💬','❓','❗','♻️'] },
+  { key: 'nature', list: ['🦊','🦉','🐝','🐬','🦅','🐺','🦁','🐢','🌱','🌳','🌊','🌙','☀️','🌈','❄️','🍀'] },
+];
+
+function _emojiPopEl() { return $i('emojiPop'); }
+
+function toggleEmojiPicker(ev) {
+  ev?.stopPropagation();
+  const pop = _emojiPopEl(); if (!pop) return;
+  if (!pop.classList.contains('hidden')) return closeEmojiPicker();
+  if (!pop.dataset.built) {
+    pop.innerHTML = EMOJI_GROUPS.map(g =>
+      `<div class="emoji-group">${escH(t('emoji.group.' + g.key))}</div>` +
+      `<div class="emoji-grid">${g.list.map(e =>
+        `<button type="button" onclick="pickEmoji('${e}')" title="${escH(e)}">${e}</button>`).join('')}</div>`
+    ).join('');
+    pop.dataset.built = '1';
+  }
+  pop.classList.remove('hidden');
+  $i('emojiOpenBtn')?.setAttribute('aria-expanded', 'true');
+  // Esc is handled by the modal keydown handler, which checks for this popover
+  // before closing the dialog — see the Escape branch there.
+  setTimeout(() => document.addEventListener('click', _emojiOutside), 0);
+}
+
+function closeEmojiPicker() {
+  _emojiPopEl()?.classList.add('hidden');
+  $i('emojiOpenBtn')?.setAttribute('aria-expanded', 'false');
+  document.removeEventListener('click', _emojiOutside);
+}
+
+function _emojiOutside(e) { if (!e.target.closest('.emoji-field')) closeEmojiPicker(); }
+
+function pickEmoji(e) {
+  const input = $i('botAvatar');
+  if (input) { input.value = e; input.dispatchEvent(new Event('input', { bubbles: true })); }
+  closeEmojiPicker();
 }
 
 function applyBotTemplate(i) {
@@ -8961,7 +9106,13 @@ function switchTab(id) {
 function closeTab(id) {
   // Closing a terminal tab detaches this viewer only — the agent keeps running in its
   // tmux session and the tab can be reopened from history.
-  if (_termSessionId === id) { detachTerminal(); hideTerminalView(); }
+  // Closing a terminal tab disposes only that terminal; any other terminal tabs
+  // stay connected. The agent itself keeps running in tmux server-side.
+  if (_terms.has(id)) {
+    const wasVisible = _termSessionId === id;
+    detachTerminal(id);
+    if (wasVisible) hideTerminalView();
+  }
   if (isGen && activeTabId === id) { isGen = false; setSendStop(false); generatingTabId = null; streaming.el = null; }
   const idx = openTabs.findIndex(t => t.id === id);
   if (idx === -1) return;
@@ -9129,10 +9280,9 @@ function setFontSize(px) {
   document.documentElement.style.setProperty('--msg-font', px + 'px');
   // One slider, one size, everywhere: the terminal reads its size off the same
   // CSS variable at open time, so an already-open terminal must be told live too.
-  if (_term) {
-    _term.options.fontSize = px;
-    try { _termFit.fit(); } catch {}
-    sendTermResize();
+  for (const [sid, e] of _terms) {
+    e.term.options.fontSize = px;
+    if (sid === _termSessionId) { try { e.fit.fit(); } catch {} sendTermResize(); }
   }
   saveUIState();
 }
@@ -9921,7 +10071,11 @@ async function openNewTabChooser() {
         termAgents.map(([id, c]) => `<button onclick="closeModalOverlay('newTabModal');createTerminalSession('${escH(id)}','${escH((c.label || id).replace(/'/g, ''))}')">${escH((_agentIcons[id] || '🤖') + ' ' + (c.label || id))}</button>`).join('')
       }</div>` : ''}
     </div>`;
-  openModalOverlay('newTabModal', { labelId: 'newTabTitle', onEscape: () => closeModalOverlay('newTabModal') });
+  // Focus the first CHOICE, not the ✕ — the close button is the last thing a
+  // keyboard user wants to land on, and focusing it drew a ring on the dismiss
+  // control the moment the dialog opened.
+  openModalOverlay('newTabModal', { labelId: 'newTabTitle', initialFocus: '.nt-card',
+                                    onEscape: () => closeModalOverlay('newTabModal') });
 }
 
 // ─── Queue edit / delete ──────────────────────────────────────────────────
@@ -14395,7 +14549,11 @@ async function _loadExternalAgents() {
   } catch { _externalAgents = {}; }
 }
 
-const _agentIcons = { codex: '🧠', agy: '🛸', gemini: '♊', opencode: '⚡', claude: '🟣', aider: '🔧', cursor: '▶' };
+// Icons for the agents shipped by default (server.js DEFAULT_EXTERNAL_AGENTS).
+// Gemini CLI was dropped — its entry here was left behind and mapped an icon to
+// an agent the product no longer offers.
+const _agentIcons = { claude: '🟣', codex: '🧠', grok: '🤖', agy: '🛸', opencode: '⚡',
+                      hermes: '📨', 'cursor-agent': '▶', kimi: '🌙', aider: '🔧' };
 
 function openDelegateModal() {
   _loadExternalAgents().then(() => {
@@ -15005,7 +15163,10 @@ document.addEventListener('keydown', e => {
 // docs/superpowers/specs/2026-08-18-terminal-sessions-design.md
 // null = not yet asked. Restoring a terminal tab at boot can race the capability
 // probe, and a `false` default would silently refuse to reopen it.
-let _terminalAvailable = null, _term = null, _termFit = null, _termWs = null, _termSessionId = null;
+let _terminalAvailable = null, _termSessionId = null;
+// sessionId -> { term, fit, ws, host, label, dot, state }. Every open terminal tab
+// keeps a live entry here so switching tabs never reconnects or repaints it.
+const _terms = new Map();
 
 async function loadTerminalCapability() {
   try {
@@ -15052,83 +15213,124 @@ async function openTerminalTab(sessionId, label, avatar) {
 
 // Swap the chat surface for the terminal one. Both live in the same column, so the
 // header, tab bar, sidebars and layout stay exactly where they were.
+//
+// Every open terminal tab keeps its OWN live xterm instance, WebSocket and host
+// element, held in `_terms` and simply shown/hidden on switch. The earlier design
+// kept a single `_term`/`_termWs` pair and tore it down whenever you moved to a
+// different terminal tab — so switching between, say, Claude / Grok / Hermes
+// reconnected and repainted each one every single time, losing scrollback and
+// making the tab bar feel like it was reloading the session. Nothing is destroyed
+// here except when the tab is actually closed.
 function showTerminalView(sessionId, label) {
   document.querySelector('.center').classList.add('term-mode');
-  $i('termTitle').textContent = label || '';
-  $i('termState').textContent = '';
   $i('termKillBtn').textContent = t('term.kill');
-
-  // Already attached to this session — just show it again.
-  if (_termSessionId === sessionId && _term) { try { _term.focus(); sendTermResize(); } catch {} return; }
-  detachTerminal();
   _termSessionId = sessionId;
 
+  let entry = _terms.get(sessionId);
+  if (!entry) entry = _createTerminal(sessionId);
+
+  // Show only this session's host; the others stay in the DOM, still attached to
+  // their sockets and still receiving output while hidden.
+  for (const [sid, e] of _terms) e.host.style.display = sid === sessionId ? 'block' : 'none';
+
+  entry.label = label || entry.label;
+  _paintTermStatus(sessionId);
+  // A hidden xterm cannot measure itself, so re-fit on the frame after it is shown.
+  requestAnimationFrame(() => { sendTermResize(); try { entry.term.focus(); } catch {} });
+}
+
+// Build (once) the live terminal for a session: its own host element, xterm and socket.
+function _createTerminal(sessionId) {
+  const host = document.createElement('div');
+  host.className = 'term-instance';
+  host.dataset.session = sessionId;
+  $i('termHost').appendChild(host);
+
   const curFontPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15.5;
-  _term = new Terminal({
+  const term = new Terminal({
     fontSize: curFontPx,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
     theme: { background: '#0b0b0f', foreground: '#e6e6e6' },
     cursorBlink: true, scrollback: 10000, allowProposedApi: true,
   });
-  _termFit = new FitAddon.FitAddon();
-  _term.loadAddon(_termFit);
-  $i('termHost').innerHTML = '';
-  _term.open($i('termHost'));
-  try { _termFit.fit(); } catch {}
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(host);
+
+  const entry = { term, fit, ws: null, host, label: '', dot: '#8b949e', state: '' };
+  _terms.set(sessionId, entry);
 
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  _termWs = new WebSocket(`${proto}//${location.host}/ws/terminal?session=${encodeURIComponent(sessionId)}`);
-  _termWs.binaryType = 'arraybuffer';
-  _termWs.onopen = () => sendTermResize();
-  _termWs.onmessage = (ev) => {
-    if (typeof ev.data !== 'string') { _term.write(new Uint8Array(ev.data)); return; }
+  const ws = new WebSocket(`${proto}//${location.host}/ws/terminal?session=${encodeURIComponent(sessionId)}`);
+  entry.ws = ws;
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => { if (_termSessionId === sessionId) sendTermResize(); };
+  ws.onmessage = (ev) => {
+    if (typeof ev.data !== 'string') { term.write(new Uint8Array(ev.data)); return; }
     let msg = null; try { msg = JSON.parse(ev.data); } catch { return; }
     if (msg.type === 'ready') {
       const key = msg.state === 'attach' ? 'term.state.attached'
         : !msg.restored ? 'term.state.started'
         : msg.restoredExact ? 'term.state.restored' : 'term.state.restoredLast';
-      $i('termState').textContent = t(key);
-      $i('termDot').style.background = '#3fb950';
+      entry.state = t(key); entry.dot = '#3fb950';
     } else if (msg.type === 'restore_failed') {
-      $i('termState').textContent = t('term.state.restoreFailed');
+      entry.state = t('term.state.restoreFailed');
     } else if (msg.type === 'exit') {
-      $i('termDot').style.background = '#8b949e';
-      $i('termState').textContent = t('term.state.exited');
+      entry.dot = '#8b949e'; entry.state = t('term.state.exited');
     } else if (msg.type === 'error') {
-      _term.write(`\r\n\x1b[31m${msg.error}\x1b[0m\r\n`);
-      $i('termDot').style.background = '#f85149';
-      $i('termState').textContent = t('term.state.error');
+      term.write(`\r\n\x1b[31m${msg.error}\x1b[0m\r\n`);
+      entry.dot = '#f85149'; entry.state = t('term.state.error');
     }
+    _paintTermStatus(sessionId);
   };
-  _termWs.onclose = () => { $i('termDot').style.background = '#8b949e'; };
-  _term.onData(d => { if (_termWs && _termWs.readyState === 1) _termWs.send(JSON.stringify({ type: 'input', data: d })); });
-  window.addEventListener('resize', sendTermResize);
+  ws.onclose = () => { entry.dot = '#8b949e'; _paintTermStatus(sessionId); };
+  term.onData(d => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'input', data: d })); });
+  return entry;
+}
+
+// The status bar is shared, so it always reflects the VISIBLE terminal — a
+// background tab going green or dying must not repaint the one you are looking at.
+function _paintTermStatus(sessionId) {
+  if (sessionId !== _termSessionId) return;
+  const e = _terms.get(sessionId); if (!e) return;
+  const tab = openTabs.find(x => x.id === sessionId);
+  $i('termTitle').textContent = e.label || tab?.termLabel || '';
+  $i('termState').textContent = e.state || '';
+  $i('termDot').style.background = e.dot;
   $i('termKillBtn').onclick = () => {
     if (!confirm(t('term.killConfirm'))) return;
-    if (_termWs && _termWs.readyState === 1) _termWs.send(JSON.stringify({ type: 'kill' }));
-    closeTab(_termSessionId);
+    if (e.ws && e.ws.readyState === 1) e.ws.send(JSON.stringify({ type: 'kill' }));
+    closeTab(sessionId);
   };
-  setTimeout(() => { try { _term.focus(); } catch {} }, 50);
 }
 
-// Restore the chat surface when switching to a chat tab. Detaching the socket is
-// deliberate: the agent keeps running server-side, only this viewer goes away.
+// Restore the chat surface when switching to a chat tab. The terminals stay alive
+// and connected behind it — only the surface changes.
 function hideTerminalView() {
   document.querySelector('.center').classList.remove('term-mode');
+  _termSessionId = null;
 }
 
-function detachTerminal() {
-  window.removeEventListener('resize', sendTermResize);
-  try { if (_termWs) _termWs.close(); } catch {}
-  try { if (_term) _term.dispose(); } catch {}
-  _termWs = null; _term = null; _termFit = null; _termSessionId = null;
+// Tear down ONE terminal — called when its tab is closed. The agent itself keeps
+// running in tmux server-side; this only disposes the local viewer.
+function detachTerminal(sessionId) {
+  const ids = sessionId ? [sessionId] : [..._terms.keys()];
+  for (const id of ids) {
+    const e = _terms.get(id); if (!e) continue;
+    try { if (e.ws) e.ws.close(); } catch {}
+    try { e.term.dispose(); } catch {}
+    try { e.host.remove(); } catch {}
+    _terms.delete(id);
+  }
+  if (!sessionId || sessionId === _termSessionId) _termSessionId = null;
 }
 
 function sendTermResize() {
-  if (!_term || !_termFit) return;
-  try { _termFit.fit(); } catch { return; }
-  if (_termWs && _termWs.readyState === 1) _termWs.send(JSON.stringify({ type: 'resize', cols: _term.cols, rows: _term.rows }));
+  const e = _terms.get(_termSessionId); if (!e) return;
+  try { e.fit.fit(); } catch { return; }
+  if (e.ws && e.ws.readyState === 1) e.ws.send(JSON.stringify({ type: 'resize', cols: e.term.cols, rows: e.term.rows }));
 }
+window.addEventListener('resize', sendTermResize);
 
 function closeTerminalPane() { detachTerminal(); hideTerminalView(); }
 </script>
