@@ -117,6 +117,19 @@ function shouldReap(opts) {
   return true;
 }
 
+
+// Which sessions to close when more are live than `maxLive`. Attached sessions are
+// never candidates — someone is looking at them. The rest are ordered most-idle
+// first, so the longest-untouched terminal goes first.
+function pickOverflow(sessions, maxLive) {
+  const list = Array.isArray(sessions) ? sessions : [];
+  const cap = Number.isFinite(maxLive) ? Math.max(0, maxLive) : 3;
+  const idle = list.filter(s => (s.attached || 0) === 0)
+    .sort((a, b) => (b.activityAgeSec || 0) - (a.activityAgeSec || 0));
+  const overflow = Math.max(0, list.length - cap);
+  return idle.slice(0, Math.min(overflow, idle.length)).map(s => s.name);
+}
+
 // Merge default agent definitions into a loaded config. Existing user fields win;
 // only genuinely missing keys are backfilled, so an upgrade adds the new terminal
 // fields (interactive/resume/...) to agents the user already customised without
@@ -144,5 +157,5 @@ function mergeAgentDefaults(config, defaults) {
 module.exports = {
   TMUX_PREFIX, tmuxNameFor, isTerminalTmuxName, resolveState,
   resolveAgentCommands, supportsTerminal, buildLaunchCommand, parseNewIdOutput,
-  isReapCandidate, shouldReap, mergeAgentDefaults,
+  isReapCandidate, shouldReap, pickOverflow, mergeAgentDefaults,
 };

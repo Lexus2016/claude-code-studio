@@ -86,7 +86,19 @@ check('attached is not a candidate', isReapCandidate({ attached: 1, idleSec: 360
 check('young session is not a candidate', isReapCandidate({ attached: 0, idleSec: 3600, sessionAgeSec: 10 }), false);
 check('recently active is not a candidate', isReapCandidate({ attached: 0, idleSec: 10, sessionAgeSec: 3600 }), false);
 
-const { mergeAgentDefaults } = require('../terminal-session');
+const { mergeAgentDefaults, pickOverflow } = require('../terminal-session');
+
+console.log('live-session cap:');
+const LIVE = [
+  { name: 'ccsterm-a', attached: 0, activityAgeSec: 100 },
+  { name: 'ccsterm-b', attached: 0, activityAgeSec: 900 },
+  { name: 'ccsterm-c', attached: 1, activityAgeSec: 5000 },
+  { name: 'ccsterm-d', attached: 0, activityAgeSec: 400 },
+];
+check('under the cap nothing is picked', pickOverflow(LIVE, 4), []);
+check('picks the most idle unattached first', pickOverflow(LIVE, 3), ['ccsterm-b']);
+check('never picks an attached session', pickOverflow(LIVE, 1), ['ccsterm-b', 'ccsterm-d', 'ccsterm-a']);
+check('a cap of zero still spares the attached one', pickOverflow(LIVE, 0), ['ccsterm-b', 'ccsterm-d', 'ccsterm-a']);
 
 console.log('config merge:');
 const DEFAULTS = {

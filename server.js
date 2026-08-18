@@ -40,7 +40,7 @@ const { isTransientOverload, shouldRetryOverload } = require('./rate-limit-utils
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
 const {
   resolveAgentCommands, supportsTerminal, mergeAgentDefaults, parseNewIdOutput,
-  tmuxNameFor, buildLaunchCommand,
+  tmuxNameFor, buildLaunchCommand, isReapCandidate, shouldReap, pickOverflow,
 } = require('./terminal-session');
 const termBridge = require('./terminal-bridge');
 const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
@@ -8239,6 +8239,71 @@ app.use((err, _req, res, next) => {
   res.status(status).json(body);
 });
 
+// ─── Terminal reaper ─────────────────────────────────────────────────────────
+// Agents are expensive and tmux is not — measured RSS: opencode ~1.8 GB, claude
+// ~1 GB, tmux server 3.7 MB. So the target is the agent process.
+//
+// Every check short-circuits to "keep", cheapest first:
+//   1. attached          — somebody is watching
+//   2. session age       — never reap something just created
+//   3. window_activity   — cheap idle filter. NOT session_activity: that one does
+//                          not move when the pane produces output (measured), so a
+//                          reaper built on it would kill working agents.
+//   4. pane hash x2      — the decisive busy check. A redrawing pane means the
+//                          agent is working, and killing it mid-edit can leave a
+//                          half-written file on disk. Resume restores the
+//                          conversation; it does not restore that file.
+function startTerminalReaper({ intervalMs = 60000 } = {}) {
+  if (!termBridge.tmuxAvailable()) return null;
+  const tick = async () => {
+    try {
+      const cfg = loadConfig();
+      if (cfg.terminal?.enabled !== true) return;
+      const idleThresholdSec = Math.max(60, (cfg.terminal?.idleTimeoutMin ?? 30) * 60);
+      const maxLive = cfg.terminal?.maxLive ?? 3;
+
+      const live = termBridge.listTerminalSessions()
+        .map(name => ({ name, ...termBridge.sessionInfo(name) }))
+        .filter(s => s.exists);
+      if (!live.length) return;
+
+      // Over-cap sessions are closed because of the cap, not because they are idle
+      // long enough — so they skip the idle threshold but still face the busy check.
+      const overflow = new Set(pickOverflow(live, maxLive));
+      const candidates = live.filter(s => overflow.has(s.name)
+        || isReapCandidate({ attached: s.attached, idleSec: s.activityAgeSec, sessionAgeSec: s.ageSec, idleThresholdSec }));
+      if (!candidates.length) return;
+
+      const first = new Map();
+      for (const s of candidates) first.set(s.name, termBridge.paneHash(s.name));
+      await new Promise(r => setTimeout(r, 3000));
+
+      for (const s of candidates) {
+        const info = termBridge.sessionInfo(s.name);
+        if (!info.exists || info.attached > 0) continue;   // someone connected meanwhile
+        const decided = shouldReap({
+          attached: info.attached,
+          idleSec: info.activityAgeSec,
+          sessionAgeSec: info.ageSec,
+          paneHashA: first.get(s.name),
+          paneHashB: termBridge.paneHash(s.name),
+          idleThresholdSec: overflow.has(s.name) ? 0 : idleThresholdSec,
+          minAgeSec: overflow.has(s.name) ? 0 : undefined,
+        });
+        if (!decided) continue;
+        const sid = s.name.slice('ccsterm-'.length);
+        // Keep the picture the user last saw: it is replayed on the next open.
+        termBridge.saveScrollback(s.name, path.join(os.tmpdir(), `ccsterm-sb-${sid}.txt`));
+        termBridge.killSession(s.name);
+        log.info('terminal session reaped', { name: s.name, idleSec: info.activityAgeSec, overCap: overflow.has(s.name) });
+      }
+    } catch (e) {
+      log.warn('terminal reaper failed', { msg: e?.message });
+    }
+  };
+  return setInterval(tick, intervalMs);
+}
+
 // The `tmux -C` clients are children of this process and SURVIVE a studio restart,
 // staying attached and pinning session_attached above zero — which would stop the
 // reaper from ever firing. Drop them before anything else can attach.
@@ -8247,6 +8312,7 @@ try {
     for (const name of termBridge.listTerminalSessions()) termBridge.detachClients(name);
   }
 } catch {}
+startTerminalReaper({ intervalMs: 60000 });
 
 server.listen(...(process.env.CCS_DESKTOP === '1' ? [PORT, '127.0.0.1'] : [PORT]), () => {
   log.info('server started', {
