@@ -4433,6 +4433,7 @@ const TRANSLATIONS = {
     'files.empty':'Порожньо','files.view':'Переглянути',
     'proj.empty':'Немає проектів. Додайте директорію для роботи з Claude Code.',
     'proj.search':'Пошук проекту...','search.empty':'Не знайдено',
+    'notif.bg_done':'✓ Діалог завершено','notif.bg_error':'✗ Помилка у фоновому діалозі','notif.bg_ask':'❓ Потрібна відповідь',
     'proj.recent':'Нещодавні','proj.all':'Усі проекти',
     'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban дошка','nav.schedule.tip':'Розклад завдань','nav.dashboard.tip':'Панель статистики','nav.aria':'Навігація між розділами','tip.lang':'Мова інтерфейсу',
     'mcp.import.btn':'Імпорт','mcp.import.title':'Імпортувати MCP з JSON файлу (Claude Desktop формат)',
@@ -4680,6 +4681,7 @@ const TRANSLATIONS = {
     'files.empty':'Empty','files.view':'Preview',
     'proj.empty':'No projects. Add a directory to work with Claude Code.',
     'proj.search':'Search project...','search.empty':'Not found',
+    'notif.bg_done':'✓ Chat finished','notif.bg_error':'✗ Error in background chat','notif.bg_ask':'❓ Waiting for your answer',
     'proj.recent':'Recent','proj.all':'All projects',
     'nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.schedule.tip':'Schedule','nav.dashboard.tip':'Statistics dashboard','nav.aria':'Navigation','tip.lang':'Interface language',
     'mcp.import.btn':'Import','mcp.import.title':'Import MCP from JSON file (Claude Desktop format)',
@@ -4927,6 +4929,7 @@ const TRANSLATIONS = {
     'files.empty':'Пусто','files.view':'Просмотр',
     'proj.empty':'Нет проектов. Добавьте директорию для работы с Claude Code.',
     'proj.search':'Поиск проекта...','search.empty':'Не найдено',
+    'notif.bg_done':'✓ Диалог завершён','notif.bg_error':'✗ Ошибка в фоновом диалоге','notif.bg_ask':'❓ Нужен ответ',
     'proj.recent':'Недавние','proj.all':'Все проекты',
     'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban доска','nav.schedule.tip':'Расписание','nav.dashboard.tip':'Панель статистики','nav.aria':'Навигация','tip.lang':'Язык интерфейса',
     'mcp.import.btn':'Импорт','mcp.import.title':'Импортировать MCP из JSON файла (формат Claude Desktop)',
@@ -5136,6 +5139,7 @@ const TRANSLATIONS = {
     "proj.all":"Tous les projets","nav.chat.tip":"Chat","nav.kanban.tip":"Tableau Kanban","nav.schedule.tip":"Planning","nav.dashboard.tip":"Tableau de bord statistiques","nav.aria":"Navigation",
     "tip.lang":"Langue de l'interface","mcp.import.btn":"Importer","mcp.import.title":"Importer MCP depuis un fichier JSON (format Claude Desktop)","mcp.export.btn":"Exporter",
     "mcp.export.title":"Exporter tous les MCP vers un fichier JSON","mcp.replace.title":"Remplacera l'existant","mcp.type.stdio":"stdio (commande)","mcp.type.sse":"SSE (flux URL)",
+    "notif.bg_done":"✓ Discussion terminée","notif.bg_error":"✗ Erreur dans une discussion en arrière-plan","notif.bg_ask":"❓ Réponse requise",
     "mcp.import.modal.title":"Importer des serveurs MCP","mcp.import.drop":"Glissez un fichier .json ou cliquez pour parcourir","mcp.import.or":"— ou collez le JSON manuellement —",
     "mcp.import.found":"Serveurs trouvés :","mcp.import.replace":"Remplacer les serveurs personnalisés existants (sinon — fusion)","mcp.import.preview.btn":"👁 Aperçu","mcp.import.do":"Importer",
     "dir.name.label":"Nom :","dir.git.init":"git init (si ce n'est pas déjà un dépôt)","confirm.stop.desc":"L'exécution de l'agent sera interrompue.","rl.type.five_hour":"5 heures",
@@ -5276,6 +5280,7 @@ const TRANSLATIONS = {
     "dir.git.init":"git init (אם עדיין לא ריפוזיטורי)","confirm.stop.desc":"ריצת ה-agent תופרע.","rl.type.five_hour":"5 שעות","rl.type.seven_day":"7 ימים","proj.generating":"יוצר ברקע...",
     "mcp.parse.no_servers":"לא נמצאו שרתי MCP. צפוי {\"mcpServers\":{...}} או פורמט תואם.","mcp.parse.empty":"רשימת השרתים ריקה","mcp.cfg.env_json_err":"פורמט ENV JSON לא תקין",
     "agent.planning":"🧠 מתכנן...","agent.fallback_single":"⚠️ עובר למצב יחיד","agent.done":"✅ כל ה-agents סיימו","agent.circular_deps":"⚠️ תלות מעגלית בין ה-agents","agent.stopped":"⏹ הופסק","msf.working":"עובד",
+    "notif.bg_done":"✓ השיחה הסתיימה","notif.bg_error":"✗ שגיאה בשיחת רקע","notif.bg_ask":"❓ נדרשת תשובה",
     "msf.done":"הושלם","msf.error":"שגיאה","msf.waiting":"ממתין","msf.thinking":"חושב","msf.tool":"רץ","msf.generating":"יוצר","ta.calls":"קריאות","ta.activity":"פעילות","msf.team":"צוות Agents",
     "hdr.toggle":"כיווץ/הרחבה של הכותרת","msg.show_more":"הצגת עוד","msg.show_less":"הצגה מצומצמת","sec.cmds":"/ פקודות","cmds.hint":"פקודות סלאש — קיצורי דרך לפרומפטים. הקלידו / בצ'אט.",
     "cmd.name.ph":"/שם (לדוגמה /check)","cmd.text.ph":"טקסט הפרומפט המלא...","cmd.add.btn":"הוספה","cmd.save.btn":"שמירה","cmd.add.new":"＋ הוספת פקודה","cmd.insert.title":"הכנסה לצ'אט",
@@ -5410,6 +5415,23 @@ function showNotification(data) {
       const pct = data.progress.total > 0 ? Math.min(100, Math.round((data.progress.current / data.progress.total) * 100)) : 0;
       const fill = existing.querySelector('.notif-progress-fill');
       const text = existing.querySelector('.notif-progress-text');
+// Background-tab alert: WS events for a chat the user isn't currently looking at
+// (done/error/ask_user/ask_tool) get no inline UI, so the single-slot toast() would
+// either be invisible or get clobbered by whatever the visible tab is doing. Route
+// those through the stacking notification rail instead, labeled with which
+// session/project they came from so they're self-explanatory out of context.
+function _bgNotify(tabId, found, level, title, detail) {
+  const projId = found?.projId || curProjectId;
+  showNotification({
+    level, title, detail: detail || '',
+    sessionTitle: found?.tab?.title || '',
+    projectName: projects.find(p => p.id === projId)?.name || '',
+    sessionId: tabId,
+    projectId: projId,
+    timestamp: Date.now(),
+  });
+}
+
       const titleEl = existing.querySelector('.notif-title');
       if (fill) fill.style.width = pct + '%';
       if (text) text.textContent = `${data.progress.current} / ${data.progress.total}`;
@@ -5479,6 +5501,18 @@ function escH(s) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+  // Click-to-jump: a notification about a background session is only useful if it
+  // can take you there. sessionId is opt-in (set by callers that have a concrete
+  // tab to jump to) so unrelated MCP notify_user cards stay non-interactive.
+  if (data.sessionId) {
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.notif-close')) return;
+      activityOpen(data.sessionId, data.projectId || '');
+      dismiss();
+    });
+  }
+
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
@@ -6477,6 +6511,10 @@ function handleWsMsg(d) {
         });
       }
       // For background tabs: clear saved streaming text (message is now persisted to DB)
+        // Background tab finished its turn — no inline UI will show this, so surface
+        // it via the notification rail. Skip per-subtask Kanban done events (d.taskId) —
+        // those are chain progress noise, not "your conversation is ready" moments.
+        if (!d.taskId) _bgNotify(tabId, found, 'milestone', t('notif.bg_done'));
       if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; } }
       if (found?.tab) { found.tab.generating = false; found.tab.done = true; }
       if (isCurrent) { renderTabs(); if ((tabId === activeTabId || tabId === generatingTabId) && !d.taskId) generatingTabId = null; }
@@ -6527,11 +6565,15 @@ function handleWsMsg(d) {
     case 'notification':
       // Update chain progress widget from chain task notifications
       if (d.chainTaskId && d.chainStatus) _chainProgressUpdate(d.chainTaskId, d.chainStatus);
-      // Only show notification if this tab is currently visible.
-      // Without the guard, notifications from background sessions would leak
-      // to whatever tab happens to be active (d.tabId missing → tabId = activeTabId).
-      if (isVisible) {
-        showNotification(d);
+      // Previously gated to isVisible only — a notify_user call from a background
+      // session silently vanished. showNotification() already supports labeling a
+      // card with sessionTitle/projectName, so instead of dropping background
+      // notifications, label them with where they came from and let them through.
+      if (!isVisible) {
+        d.sessionId = d.sessionId || tabId;
+        d.projectId = d.projectId || found?.projId || curProjectId;
+        if (!d.sessionTitle) d.sessionTitle = found?.tab?.title || '';
+        if (!d.projectName) d.projectName = projects.find(p => p.id === d.projectId)?.name || '';
       }
       break;
 
@@ -6553,6 +6595,7 @@ function handleWsMsg(d) {
           if (panel) { panel.classList.remove('has-update'); void panel.offsetWidth; panel.classList.add('has-update'); }
           _showNewDlgEntries();
         }
+      showNotification(d);
       }
       break;
 
@@ -6604,7 +6647,10 @@ function handleWsMsg(d) {
         toast(d.error, true, 5000);
       }
       // For background tabs: clear saved streaming text on error
-      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; } }
+      if (!isVisible) {
+        const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; }
+        _bgNotify(tabId, found, 'error', t('notif.bg_error'), d.error);
+      }
       if (found?.tab) { found.tab.generating = false; }
       if (isCurrent) { renderTabs(); if (tabId === activeTabId) generatingTabId = null; }
       else renderProjects();
@@ -6656,6 +6702,8 @@ function handleWsMsg(d) {
       if (_ric && /^[a-f0-9-]{36}$/.test(_ric)) {
         const _card = document.querySelector(`.ask-user-card[data-rid="${_ric}"]`);
         if (_card && !_card.classList.contains('ask-answered')) {
+        const _q = (Array.isArray(d.questions) && d.questions[0]?.question) || d.question || '';
+        _bgNotify(tabId, found, 'warning', t('notif.bg_ask'), _q);
           const _q = _card._askQuestions?.[0]?.question || '';
           const _preview = _q.length > 60 ? _q.slice(0, 57) + '...' : _q;
           _collapseAskCard(_card, _preview, 'timeout');
@@ -6667,6 +6715,7 @@ function handleWsMsg(d) {
             if (_idx !== -1) {
               _ts._pendingAskUser[_idx] = { ..._ts._pendingAskUser[_idx], _timedOut: true };
             }
+        _bgNotify(tabId, found, 'warning', t('notif.bg_ask'), d.question || '');
           }
         }
       }
