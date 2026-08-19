@@ -79,6 +79,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await sleep(1200);
   check('input reaches the pane', bridge.captureScreen(name).toString('utf8').includes('marker-in'), true);
 
+  // Multi-byte UTF-8 keystrokes/paste must reach the pane intact. send-keys -H only
+  // accepts single-byte ASCII per key (per `man tmux`), so hex-encoding every byte of
+  // a Cyrillic character and sending it as -H mangles it regardless of locale.
+  h.write('# привіт-юнікод\r');
+  await sleep(1200);
+  check('UTF-8 input reaches the pane intact', bridge.captureScreen(name).toString('utf8').includes('привіт-юнікод'), true);
+
   // Resize must actually change the window, without SIGWINCH.
   h.resize(100, 30);
   await sleep(600);
