@@ -309,6 +309,31 @@ async function checkUpdate() {
   return { platform: process.platform, currentVersion, version, available: !!(version && semverGt(version, currentVersion)) };
 }
 
+// Run one brew step with the app still OPEN, streaming its output to the update
+// bar. Resolves { ok } — a step is never allowed to reject and strand the UI.
+// `optional` marks a step whose failure is expected on older Homebrew (`trust`).
+function runBrewStep(brew, args, label, { optional = false, timeoutMs = 900000 } = {}) {
+  return new Promise((resolve) => {
+    sendUpdateLog(label);
+    const child = spawn(brew, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let last = '';
+    let timer = setTimeout(() => { try { child.kill('SIGTERM'); } catch (_) {} }, timeoutMs);
+    const onData = (buf) => {
+      // brew redraws download progress with \r; keep only the newest fragment so
+      // the one-line bar shows a live percentage instead of a growing wall.
+      const parts = String(buf).split(/[\r\n]+/).filter((x) => x.trim());
+      if (parts.length) { last = parts[parts.length - 1].trim(); sendUpdateLog(label + ' ' + last); }
+    };
+    child.stdout.on('data', onData);
+    child.stderr.on('data', onData);
+    child.on('error', () => { clearTimeout(timer); resolve({ ok: optional, err: 'spawn failed' }); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolve({ ok: optional || code === 0, code, last });
+    });
+  });
+}
+
 async function startUpdate() {
   if (process.platform === 'darwin') {
     const brew = findBrew();
@@ -316,26 +341,53 @@ async function startUpdate() {
     let managed = false;
     try { execFileSync(brew, ['list', '--cask', CASK_NAME], { stdio: 'ignore' }); managed = true; } catch (_) {}
     if (!managed) return { fallback: true, command: `brew install --cask ${CASK_NAME}`, reason: 'not-brew-managed' };
-    sendUpdateLog('Running: brew update && brew upgrade --cask ' + CASK_NAME + ' …');
-    // `brew update` FIRST: a stale local tap clone otherwise keeps brew pinned to the
-    // installed version, so `brew upgrade` is a no-op while the in-app check (which reads
-    // the GitHub release) keeps re-offering the same version — an endless update loop.
-    // Do NOT set HOMEBREW_NO_AUTO_UPDATE here: it suppresses exactly that tap refresh.
-    // brew quits the running app (cask `quit:`); the detached shell then relaunches it.
-    // Homebrew 6.0+ refuses to load a cask from a third-party tap until it is trusted, so
-    // `brew upgrade --cask` errors and the update silently no-ops — an endless loop, and
-    // interrupted attempts can leave a half-swapped ("damaged") app bundle. `brew trust`
-    // is idempotent and persists; on older Homebrew (no `trust` subcommand) it errors
-    // harmlessly and the `;`-chain continues.
-    // Relaunch the app whether the upgrade succeeds or fails (it must never just vanish);
-    // on failure show a notification instead of silently reopening the SAME version — that
-    // silent no-op is exactly what makes a failed update look like a broken button.
     const tap = `${GH_OWNER.toLowerCase()}/${GH_REPO}`;
-    const sh = `'${brew}' trust ${tap} 2>/dev/null; '${brew}' update; if '${brew}' upgrade --cask ${CASK_NAME}; then open -a "Claude Code Studio"; else osascript -e 'display notification "Update failed — run in Terminal: brew upgrade --cask ${CASK_NAME}" with title "Claude Code Studio"'; open -a "Claude Code Studio"; fi`;
+
+    // ── Phase A: everything that does NOT touch the app bundle ──────────────
+    // Runs with the window still open so the user watches real progress. This is
+    // the slow part — a tap refresh plus a ~150MB download — and it used to happen
+    // after the app had already vanished, which is why a working update was
+    // indistinguishable from a broken button.
+    //
+    // Homebrew 6.0+ refuses to load a cask from a third-party tap until it is
+    // trusted. On older Homebrew there is no `trust` subcommand, so the step is
+    // optional: its failure must not abort the update.
+    await runBrewStep(brew, ['trust', tap], 'Trusting tap…', { optional: true, timeoutMs: 60000 });
+    // `brew update` FIRST: a stale local tap clone otherwise keeps brew pinned to
+    // the installed version, so `brew upgrade` is a no-op while the in-app check
+    // (which reads the GitHub release) keeps re-offering the same version — an
+    // endless update loop. Do NOT set HOMEBREW_NO_AUTO_UPDATE: it suppresses
+    // exactly that tap refresh.
+    const upd = await runBrewStep(brew, ['update'], 'Refreshing Homebrew…', { timeoutMs: 300000 });
+    if (!upd.ok) return { error: 'brew update failed' + (upd.last ? ': ' + upd.last : '') };
+    // Download into brew's cache while we are still alive. `brew upgrade` below
+    // then finds it cached and only has to verify, swap and relaunch.
+    const fetched = await runBrewStep(brew, ['fetch', '--cask', CASK_NAME], 'Downloading update…');
+    if (!fetched.ok) return { error: 'download failed' + (fetched.last ? ': ' + fetched.last : '') };
+
+    // ── Phase B: the swap ──────────────────────────────────────────────────
+    // This one cannot keep the app open: the cask carries `uninstall quit:`, and
+    // brew must quit us to replace our own bundle. It therefore has to outlive
+    // this process — a detached shell in its own process group (verified: it
+    // survives app.quit(), see the comment on unref below).
+    // Relaunch whether the upgrade succeeds or fails — the app must never just
+    // vanish; on failure show a notification instead of silently reopening the
+    // SAME version, which is what makes a failed update look like a broken button.
+    // Output goes to a log file: without it a failed upgrade leaves no trace at
+    // all, and "it didn't update" cannot be diagnosed afterwards.
+    const logPath = path.join(app.getPath('userData'), 'update.log');
+    const q = (x) => String(x).replace(/'/g, `'\\''`);
+    const sh = `exec >> '${q(logPath)}' 2>&1; echo "=== $(date) upgrading ${CASK_NAME} ==="; `
+      + `if '${q(brew)}' upgrade --cask ${CASK_NAME}; then echo OK; open -a "Claude Code Studio"; `
+      + `else echo FAILED; osascript -e 'display notification "Update failed — see update.log, or run: brew upgrade --cask ${CASK_NAME}" with title "Claude Code Studio"'; open -a "Claude Code Studio"; fi`;
+    sendUpdateLog('Installing — the app will restart…');
     const child = spawn('/bin/sh', ['-c', sh], { detached: true, stdio: 'ignore' });
     child.unref();
-    setTimeout(() => { app.isQuiting = true; stopServer(); app.quit(); }, 1000);
-    return { started: true, via: 'brew' };
+    // detached + unref puts the shell in its own process group, so it keeps
+    // running once this process exits; stopServer() only kills the server child
+    // by pid and cannot reach it.
+    setTimeout(() => { app.isQuiting = true; stopServer(); app.quit(); }, 1500);
+    return { started: true, via: 'brew', log: logPath };
   }
   const { autoUpdater } = require('electron-updater');
   autoUpdater.on('download-progress', (p) => sendUpdateLog(`Downloading… ${Math.round(p.percent)}%`));

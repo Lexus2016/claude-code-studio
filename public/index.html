@@ -6042,6 +6042,26 @@ document.addEventListener('visibilitychange', () => {
   subscribeAllTabs();
 });
 
+// A turn normally streams into ONE bubble. Bots break that assumption: several
+// answer in the same turn, one after another, and merging them would leave the
+// reader unable to tell who said what. So when the speaker changes and either
+// side is a bot, the current bubble is finalised (text rendered, tool-live panel
+// marked done so it stops looking active) and the next one starts fresh.
+// Multi-agent roles (agent-1, agent-2) deliberately keep the single bubble —
+// they run CONCURRENTLY, so switching per chunk would shred the output.
+function _maybeFinalizeAgentSwitch(d) {
+  if (streaming.el && d.agent !== streaming.agent
+      && (_botsById[d.agent] || _botsById[streaming.agent] || _deletedBotIds.has(streaming.agent))) {
+    try {
+      streaming.el.querySelector('.msg').innerHTML = renderMd(streaming.txt);
+      _finalizeToolLive(streaming.el);
+      _msfStopTimer(streaming.el);
+      _msfRemove(streaming.el);
+    } catch {}
+    streaming.el = null; streaming.txt = '';
+  }
+}
+
 function handleWsMsg(d) {
   const tabId = d.tabId || activeTabId;
   // Look up tab across current project AND all background projects
@@ -6119,21 +6139,7 @@ function handleWsMsg(d) {
         break;
       }
       rmStatus();
-      // A turn normally streams into ONE bubble. Bots break that assumption: several
-      // answer in the same turn, one after another, and merging them would leave the
-      // reader unable to tell who said what. So when the speaker changes and either
-      // side is a bot, the current bubble is finalised and the next one starts fresh.
-      // Multi-agent roles (agent-1, agent-2) deliberately keep the single bubble —
-      // they run CONCURRENTLY, so switching per chunk would shred the output.
-      if (streaming.el && d.agent !== streaming.agent
-          && (_botsById[d.agent] || _botsById[streaming.agent] || _deletedBotIds.has(streaming.agent))) {
-        try {
-          streaming.el.querySelector('.msg').innerHTML = renderMd(streaming.txt);
-          _msfStopTimer(streaming.el);
-          _msfRemove(streaming.el);
-        } catch {}
-        streaming.el = null; streaming.txt = '';
-      }
+      _maybeFinalizeAgentSwitch(d);
       if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
       streaming.agent = d.agent || null;
       // Ensure paragraph break between text blocks separated by tool calls
@@ -6158,7 +6164,14 @@ function handleWsMsg(d) {
       getTS(tabId).agentStatus = ''; // tool arrived — classification status no longer relevant (clear even for background tabs)
       // Live tool activity panel — show what Claude Code is doing
       if (isVisible) {
+        // Bots can open their turn with a tool call before any text — without tracking
+        // the agent here too, the first text chunk saw an "unset → bot" mismatch and
+        // treated it as a speaker change, abandoning this bubble as an orphaned,
+        // permanently-pulsing "Активність" card once the real text bubble took over.
+        _maybeFinalizeAgentSwitch(d);
         if (!streaming.el) { rmW(); rmStatus(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
+        streaming.agent = d.agent || null;
+        if (d.agent) addAgentBadge(streaming.el, d.agent);
         streaming.toolLog.push({ tool: d.tool || 'tool', brief: _toolInputBrief(d.tool, d.input), input: d.input || '' });
         _renderToolLive(streaming.el, streaming.toolLog);
         _msfSetState(streaming.el, t('msf.tool') + ': ' + _toolLabel(d.tool || 'tool') + '…'); // "Виконую: <tool>…"
@@ -15225,30 +15238,63 @@ document.addEventListener('keydown', e => {
 (function(){
   var api = window.electronAPI && window.electronAPI.update;
   if (!api) return;
-  var bar, msgEl, logEl, btn;
+  var bar, msgEl, logEl, btn, spin, updating = false, startedAt = 0, tick = null;
   function el(tag, css, txt){ var e=document.createElement(tag); if(css)e.style.cssText=css; if(txt!=null)e.textContent=txt; return e; }
+  // brew hides its progress bar when stdout is not a TTY (measured: a real 150MB
+  // download emitted two lines and no percentage), so a byte-level bar would be a
+  // lie. Step name + spinner + elapsed time is what can honestly be shown.
+  function startSpinner(){
+    startedAt = Date.now();
+    if (!document.getElementById('ccs-upd-kf')) {
+      var st = document.createElement('style'); st.id = 'ccs-upd-kf';
+      st.textContent = '@keyframes ccsUpdSpin{to{transform:rotate(360deg)}}';
+      document.head.appendChild(st);
+    }
+    spin.style.display = 'inline-block';
+    tick = setInterval(function(){
+      var s = Math.round((Date.now() - startedAt) / 1000);
+      var t = s < 60 ? s + 's' : Math.floor(s/60) + 'm ' + (s%60) + 's';
+      msgEl.textContent = 'Updating… ' + t;
+    }, 1000);
+  }
+  function stopSpinner(){
+    if (tick) { clearInterval(tick); tick = null; }
+    if (spin) spin.style.display = 'none';
+  }
   function build(){
     bar = el('div','position:fixed;top:0;left:0;right:0;z-index:2147483600;display:none;align-items:center;gap:10px;padding:8px 14px;background:#1f6feb;color:#fff;font:13px/1.4 -apple-system,system-ui,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.35)');
     msgEl = el('span','font-weight:600','Update available');
     btn = el('button','background:#fff;color:#1f6feb;border:0;border-radius:6px;padding:5px 12px;font-weight:600;cursor:pointer','Update');
     logEl = el('span','opacity:.85;font-weight:400;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap','');
     var x = el('button','background:transparent;color:#fff;border:0;font-size:15px;cursor:pointer','✕');
-    bar.appendChild(msgEl); bar.appendChild(btn); bar.appendChild(logEl); bar.appendChild(x);
+    spin = el('span','display:none;width:13px;height:13px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:ccsUpdSpin .7s linear infinite;flex:none');
+    bar.appendChild(spin); bar.appendChild(msgEl); bar.appendChild(btn); bar.appendChild(logEl); bar.appendChild(x);
     document.body.appendChild(bar);
-    x.onclick = function(){ bar.style.display='none'; };
+    // Dismissable only while idle: once an update is running this bar is the only
+    // place progress is shown, and hiding it looks exactly like the app hanging.
+    x.onclick = function(){ if (!updating) bar.style.display='none'; };
     btn.onclick = onUpdate;
   }
   function onUpdate(){
-    btn.disabled = true; btn.textContent = 'Updating…';
+    updating = true;
+    btn.style.display = 'none';
+    startSpinner();
     api.onLog(function(line){ logEl.textContent = line; });
     Promise.resolve(api.start()).then(function(res){
       if (res && res.fallback){
-        btn.disabled=false; btn.textContent='Copy command';
+        updating = false; stopSpinner();
+        btn.style.display=''; btn.disabled=false; btn.textContent='Copy command';
         msgEl.textContent='Update via Terminal:'; logEl.textContent=res.command;
         btn.onclick=function(){ if(navigator.clipboard) navigator.clipboard.writeText(res.command); btn.textContent='Copied ✓'; };
       } else if (res && res.error){
-        btn.disabled=false; btn.textContent='Retry'; logEl.textContent='Error: '+res.error;
+        // The refresh/download phase now fails with the app still open, so the user
+        // can actually read this and retry — it no longer dies with the window.
+        updating = false; stopSpinner();
+        btn.style.display=''; btn.disabled=false; btn.textContent='Retry';
+        msgEl.textContent='Update failed'; logEl.textContent=res.error;
       }
+      // res.started: the swap is running in a detached shell and this window is
+      // about to be closed by it. Leave the bar as-is.
     });
   }
   function check(){
