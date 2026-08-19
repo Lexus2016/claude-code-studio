@@ -131,7 +131,11 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 
 /* ─── Activity panel ─── */
 .act-list { display: flex; flex-direction: column; }
-.act-sub { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); padding: 7px 6px 2px; }
+.act-sub { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); padding: 7px 6px 2px; display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; }
+.act-sub:hover { color: var(--text); }
+.act-sub-arrow { font-size: 8px; transition: transform .15s; display: inline-block; flex-shrink: 0; }
+.act-sub.collapsed .act-sub-arrow { transform: rotate(-90deg); }
+.act-sub-body.collapsed { display: none; }
 .act-group-label { font-size: 10px; color: var(--accent2); opacity: .8; padding: 4px 6px 1px; font-weight: 600; }
 .act-item { display: flex; align-items: center; gap: 7px; padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text); transition: background .12s; }
 .act-item:hover { background: var(--s3, #1f2637); }
@@ -10537,6 +10541,7 @@ function _actSchedWhen(unixSec) {
   let lang; try { lang = localStorage.getItem('lang') || 'en'; } catch { lang = 'en'; }
   return new Date(unixSec*1000).toLocaleDateString(lang,{day:'numeric',month:'short'});
 }
+let _actSubCollapsed = (() => { try { return JSON.parse(localStorage.getItem('actSubCollapsed') || '{}'); } catch { return {}; } })();
 
 function toggleActivityGroup() {
   _activityGroupByProject = !_activityGroupByProject;
@@ -10577,6 +10582,12 @@ function _actItemHtml(it, kind) {
   const onclick = clickable ? `onclick="activityOpen('${it.session_id}','${it.project_id||''}')"` : '';
   const staticCls = clickable ? '' : ' act-static';
   if (kind === 'live') {
+function toggleActSub(kind) {
+  _actSubCollapsed[kind] = !_actSubCollapsed[kind];
+  try { localStorage.setItem('actSubCollapsed', JSON.stringify(_actSubCollapsed)); } catch {}
+  renderActivity(_lastActivity);
+}
+
     const dot = it.status === 'recovering' ? 'recovering' : 'run';
     const meta = it.status === 'recovering'
       ? `<span class="act-meta">↻ ${escH(t('act.recovering'))}</span>`
@@ -10600,16 +10611,19 @@ function renderActivity(data) {
 
   const section = (label, items, kind) => {
     if (!items.length) return '';
-    let s = `<div class="act-sub">${label} · ${items.length}</div>`;
+    const isCollapsed = !!_actSubCollapsed[kind];
+    let body = '';
     if (_activityGroupByProject) {
       const groups = new Map();
       for (const it of items) { const k = it.project_name || '—'; (groups.get(k) || groups.set(k, []).get(k)).push(it); }
       for (const [pname, arr] of groups) {
-        s += `<div class="act-group-label">${escH(pname)}</div>` + arr.map(it => _actItemHtml(it, kind)).join('');
+        body += `<div class="act-group-label">${escH(pname)}</div>` + arr.map(it => _actItemHtml(it, kind)).join('');
       }
-      return s;
+    } else {
+      body = items.map(it => _actItemHtml(it, kind)).join('');
     }
-    return s + items.map(it => _actItemHtml(it, kind)).join('');
+    const hdr = `<div class="act-sub${isCollapsed ? ' collapsed' : ''}" role="button" tabindex="0" aria-expanded="${!isCollapsed}" onclick="toggleActSub('${kind}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleActSub('${kind}')}"><span class="act-sub-arrow">▾</span>${label} · ${items.length}</div>`;
+    return hdr + `<div class="act-sub-body${isCollapsed ? ' collapsed' : ''}">${body}</div>`;
   };
 
   let html = section('🟢 ' + escH(t('act.live')), live, 'live') + section('⏰ ' + escH(t('act.scheduled')), scheduled, 'scheduled') + section('🕘 ' + escH(t('act.recent')), recent, 'recent');

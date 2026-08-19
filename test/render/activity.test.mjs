@@ -44,6 +44,7 @@ const data = {
 
 // ── Flat mode ──
 globalThis._activityGroupByProject = false;
+globalThis._actSubCollapsed = {};
 renderActivity(data);
 let html = els['activityList'].innerHTML;
 assert.match(html, /🟢 Активні · 2/, 'live subheader + count');
