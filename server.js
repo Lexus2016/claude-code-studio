@@ -540,6 +540,12 @@ try { db.exec(`ALTER TABLE task_chains ADD COLUMN effort TEXT`); } catch {}     
 // no-op on an existing install and every /api/bots query would fail with
 // "no such column: deleted_at". Same pattern as every other schema change here.
 try { db.exec(`ALTER TABLE bots ADD COLUMN deleted_at TEXT`); } catch {}
+// A role like "programmer" is wanted in every project, and per-project linking is
+// pure friction for it. is_global=1 makes a bot appear in EVERY project's roster
+// without a project_bots row; is_global=0 keeps the opt-in membership model for
+// bots that only make sense somewhere specific. Default 0 — existing bots keep the
+// availability they already have.
+try { db.exec(`ALTER TABLE bots ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0`); } catch {}
 // A task can be assigned to a bot: it then runs with that bot's system prompt and
 // model, and its output is attributed to the bot. Combined with the scheduling
 // columns already here (scheduled_at / recurrence) this is what makes a recurring
@@ -614,11 +620,18 @@ const stmts = {
   getBotAny: db.prepare(`SELECT * FROM bots WHERE id=?`),
   // Every handle ever used, including soft-deleted ones — a handle is reserved forever.
   allBotHandles: db.prepare(`SELECT id FROM bots`),
-  listProjectBots: db.prepare(`SELECT b.* FROM bots b JOIN project_bots pb ON pb.bot_id=b.id
-    WHERE pb.project_id=? AND b.deleted_at IS NULL ORDER BY b.label COLLATE NOCASE`),
+  // LEFT JOIN, not JOIN: a global bot has no project_bots row and must still appear.
+  listProjectBots: db.prepare(`SELECT b.* FROM bots b
+    LEFT JOIN project_bots pb ON pb.bot_id=b.id AND pb.project_id=?
+    WHERE b.deleted_at IS NULL AND (b.is_global=1 OR pb.bot_id IS NOT NULL)
+    ORDER BY b.label COLLATE NOCASE`),
   addBotToProject: db.prepare(`INSERT INTO project_bots (project_id,bot_id) VALUES (?,?)
     ON CONFLICT(project_id,bot_id) DO NOTHING`),
   removeBotFromProject: db.prepare(`DELETE FROM project_bots WHERE project_id=? AND bot_id=?`),
+  // Every membership at once. Projects live in a JSON file, not in SQLite, so the
+  // project NAME cannot be joined in — the caller pairs these rows with loadProjects().
+  allProjectBots: db.prepare(`SELECT project_id, bot_id FROM project_bots`),
+  projectsOfBot: db.prepare(`SELECT project_id FROM project_bots WHERE bot_id=?`),
   softDeleteBot: db.prepare(`UPDATE bots SET deleted_at=datetime('now') WHERE id=?`),
   getBotSession: db.prepare(`SELECT claude_session_id FROM bot_sessions WHERE chat_session_id=? AND bot_id=?`),
   setBotSession: db.prepare(`INSERT INTO bot_sessions (chat_session_id,bot_id,claude_session_id) VALUES (?,?,?)
@@ -627,13 +640,13 @@ const stmts = {
   // node:sqlite (Node >= 22.5), whose named-parameter binding differs from
   // better-sqlite3's and rejects `@name` objects with "column index out of range".
   // `excluded.` lets the upsert reuse the same nine values without repeating them.
-  upsertBot: db.prepare(`INSERT INTO bots (id,label,description,engine,model,system_prompt,active_skills,active_mcp,avatar)
-    VALUES (?,?,?,?,?,?,?,?,?)
+  upsertBot: db.prepare(`INSERT INTO bots (id,label,description,engine,model,system_prompt,active_skills,active_mcp,avatar,is_global)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(id) DO UPDATE SET
       label=excluded.label, description=excluded.description, engine=excluded.engine,
       model=excluded.model, system_prompt=excluded.system_prompt,
       active_skills=excluded.active_skills, active_mcp=excluded.active_mcp,
-      avatar=excluded.avatar, updated_at=datetime('now')`),
+      avatar=excluded.avatar, is_global=excluded.is_global, updated_at=datetime('now')`),
   createTerminalSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir,kind,terminal_agent,agent_conv_id) VALUES (?,?,'[]','[]','auto','single',?,?,'terminal',?,?)`),
   updateTitle: db.prepare(`UPDATE sessions SET title=?,updated_at=datetime('now') WHERE id=?`),
   updateClaudeId: (() => {
@@ -7196,8 +7209,26 @@ app.get('/api/bots', (req, res) => {
     if (proj) projectId = proj.id;
     else return res.json([]);   // a directory with no project has no roster
   }
-  res.json(projectId ? stmts.listProjectBots.all(projectId) : stmts.listBots.all());
+  const rows = projectId ? stmts.listProjectBots.all(projectId) : stmts.listBots.all();
+  res.json(withProjects(rows));
 });
+
+// A bot row carries the projects it is available in. The UI needs this to say
+// "also in Alpha, Beta" before an edit and to warn that a delete is global —
+// without it every bot list would cost one extra request per bot.
+function withProjects(rows) {
+  if (!rows.length) return rows;
+  const names = new Map(loadProjects().map(p => [String(p.id), p.name]));
+  const byBot = new Map();
+  for (const r of stmts.allProjectBots.all()) {
+    if (!byBot.has(r.bot_id)) byBot.set(r.bot_id, []);
+    // A membership whose project was deleted from projects.json is skipped rather
+    // than shown as an unnamed id — the row is harmless, it just has nothing to name.
+    const name = names.get(String(r.project_id));
+    if (name !== undefined) byBot.get(r.bot_id).push({ id: String(r.project_id), name });
+  }
+  return rows.map(b => ({ ...b, projects: byBot.get(b.id) || [] }));
+}
 
 app.post('/api/projects/:projectId/bots/:botId', (req, res) => {
   if (!stmts.getBot.get(req.params.botId)) return res.status(404).json({ error: 'bot not found' });
@@ -7276,6 +7307,7 @@ function saveBot(req, res, mode) {
       // Array.from, not substring: an emoji is several UTF-16 units and a family/ZWJ
       // sequence is many, so slicing by unit can cut a surrogate pair in half.
       Array.from(String(keep('avatar', prev.avatar || ''))).slice(0, 8).join(''),
+      (body.isGlobal === undefined ? (prev.is_global ? 1 : 0) : (body.isGlobal ? 1 : 0)),
     );
   } catch (e) {
     log.error('bot save failed', { handle, err: e.message });
@@ -7283,10 +7315,10 @@ function saveBot(req, res, mode) {
   }
   // A bot created while a project is open belongs to that project immediately —
   // otherwise every creation would be followed by a separate "add it here" step.
-  if (mode === 'create' && body.projectId) {
+  if (mode === 'create' && body.projectId && !body.isGlobal) {
     try { stmts.addBotToProject.run(String(body.projectId), handle); } catch {}
   }
-  res.json(stmts.getBot.get(handle));
+  res.json(withProjects([stmts.getBot.get(handle)])[0]);
 }
 
 app.post('/api/bots', express.json(), (req, res) => saveBot(req, res, 'create'));
