@@ -27,6 +27,17 @@ const crypto = require('node:crypto');
 
 const { findClaudeBin } = require('./claude-cli');
 
+// tmux negotiates UTF-8 support for the server from LANG/LC_ALL at the FIRST
+// `new-session` call's env — neither the Docker image (node:20-bookworm, no ENV
+// LANG) nor a macOS GUI launch sets a UTF-8 locale, so without this the tmux
+// server falls back to non-UTF-8 mode and mangles every multi-byte character
+// sent through load-buffer/paste-buffer (e.g. each Cyrillic letter becomes
+// "–" plus a stray glyph). Same bug and same fix as terminal-bridge.js.
+const UTF8_LOCALE = process.platform === 'darwin' ? 'en_US.UTF-8' : 'C.UTF-8';
+function utf8Env() {
+  return { ...process.env, LANG: UTF8_LOCALE, LC_ALL: UTF8_LOCALE };
+}
+
 // Idle (inactivity) watchdog — the turn is abandoned after this long with no new
 // transcript bytes. A turn that keeps writing output (the normal long-content case)
 // resets the clock and is never cut off; a turn that shows the spinner but writes
@@ -221,7 +232,9 @@ async function runInteractiveSingle(params) {
       if (sp) innerCmd += ` --append-system-prompt ${shq(sp)}`;
       if (mcpPath) innerCmd += ` --mcp-config ${shq(mcpPath)}`;
 
-      const child = spawn('tmux', ['new-session', '-d', '-s', name, '-x', '220', '-y', '50', '-c', workdir || process.cwd(), innerCmd], { stdio: 'ignore' });
+      const env = utf8Env();
+      delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses the child
+      const child = spawn('tmux', ['new-session', '-d', '-s', name, '-x', '220', '-y', '50', '-c', workdir || process.cwd(), innerCmd], { env, stdio: 'ignore' });
       await new Promise((resolve) => {
         child.on('exit', resolve);
         child.on('error', resolve);

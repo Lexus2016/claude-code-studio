@@ -4058,9 +4058,9 @@ let ws = null, isGen = false, currentSessionId = null, generatingTabId = null;
 let replyTo = null; // { id, role, content }
 let openTabs = [], activeTabId = null;
 let interruptSendMode = 'interrupt'; // 'interrupt' = clarify current task, 'queue' = new task in queue
-const tabState = {}; // per-tab: { curEl, curTxt, currentSessionId, generating, draft, agentStatus, _toolCounts, _toolLog }
+const tabState = {}; // per-tab: { curEl, curTxt, currentSessionId, generating, draft, agentStatus, _toolCounts, _toolLog, turnBots, turnStates }
 function getTS(id) {
-  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', _thinkingTxt: '', currentSessionId: null, generating: false, draft: '', attachments: [], replyTo: null, agentStatus: '', _toolCounts: {}, _toolLog: [] };
+  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', _thinkingTxt: '', currentSessionId: null, generating: false, draft: '', attachments: [], replyTo: null, agentStatus: '', _toolCounts: {}, _toolLog: [], turnBots: [], turnStates: {} };
   return tabState[id];
 }
 
@@ -6278,13 +6278,20 @@ function handleWsMsg(d) {
       break;
 
     case 'bots_turn': {
-      _turnBots = d.bots || [];
-      _turnStates = {};
-      renderBotsStrip();
+      // Persisted per-tab (mirrors agentStatus) so a background tab's turn never leaks
+      // into the strip above a DIFFERENT tab's composer — only render when visible.
+      const ts = getTS(tabId);
+      ts.turnBots = d.bots || [];
+      ts.turnStates = {};
+      if (isVisible) { _turnBots = ts.turnBots; _turnStates = ts.turnStates; renderBotsStrip(); }
       break;
     }
     case 'bot_state': {
-      if (d.bot) { _turnStates[d.bot] = d.state; renderBotsStrip(); }
+      if (d.bot) {
+        const ts = getTS(tabId);
+        ts.turnStates[d.bot] = d.state;
+        if (isVisible) { _turnStates[d.bot] = d.state; renderBotsStrip(); }
+      }
       break;
     }
     case 'agent_status': {
@@ -7372,6 +7379,16 @@ function renderBotsStrip() {
 function stopBotsTurn() { try { stopGen(); } catch {} }
 
 function clearBotsStrip() { _turnBots = []; _turnStates = {}; renderBotsStrip(); }
+
+// Called whenever a tab becomes the active one (switchTab/switchProject/closeTab/newTab)
+// so the strip reflects THIS tab's own bots-turn state instead of whatever was left
+// showing from whichever tab last received a bots_turn/bot_state WS event.
+function restoreBotsStrip(tabId) {
+  const ts = tabId ? getTS(tabId) : null;
+  _turnBots = ts?.turnBots || [];
+  _turnStates = ts?.turnStates || {};
+  renderBotsStrip();
+}
 
 // ─── Bots ────────────────────────────────────────────────────────────────────
 // A bot is a named chat participant the user @mentions. Its handle is its
@@ -9320,6 +9337,7 @@ function switchTab(id) {
     loadSess(id);            // async — will set currentSessionId and refresh sessBar when done
   }
   restoreComposerState(id);
+  restoreBotsStrip(id);
   // Update stop button state and isGen for new tab
   const newTab = openTabs.find(t => t.id === id);
   if (newTab?.generating) {
@@ -9359,6 +9377,7 @@ function closeTab(id) {
       activeTabId = null; currentSessionId = null;
       msgsEl.innerHTML = ''; showW(); renderProjects();
     }
+    restoreBotsStrip(activeTabId);
   }
   renderTabs(); saveUIState(); updateSessBar();
 }
@@ -9375,6 +9394,7 @@ function newTab() {
   inEl.style.height = 'auto';
   _clearAttachments();
   clearReply();
+  clearBotsStrip();
   // Reset skills and mode settings for new tab — new chat = clean slate
   activeSkills = new Set();
   curAgent = 'single';
@@ -13160,6 +13180,7 @@ function switchProject(id) {
   // Restore input draft, attachments & reply-to for the target tab (restoreComposerState
   // handles the no-active-tab case itself, including the placeholder-height recompute).
   restoreComposerState(activeTabId);
+  restoreBotsStrip(activeTabId);
 
   renderProjects(); saveUIState(); loadHist(); loadFiles(''); updateSessBar();
   loadBots(); // roster is per-project: without this the sidebar keeps the old project's bots

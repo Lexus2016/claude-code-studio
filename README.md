@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.1.2** — **Terminals stay put when you switch tabs.** Each terminal tab now keeps its own live session, so moving between them no longer reconnects or repaints anything and scrollback survives. Also fixes the two new dialogs: a proper header and a real close button, larger pick targets, template chips that no longer render as white pills, an emoji picker for bot avatars, and English placeholders that were stuck in Ukrainian.
+> **v7.2.1** — **Two multi-tab bugs fixed.** Interactive terminal sessions with Cyrillic/UTF-8 output no longer show mojibake after a session respawn. The multi-bot "who's typing" strip above the composer no longer leaks between unrelated tabs or projects — switching tabs now correctly restores each tab's own state.
 
 ---
 
