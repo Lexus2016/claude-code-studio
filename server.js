@@ -5849,6 +5849,13 @@ app.put('/api/commands/:id', (req, res) => {
 app.delete('/api/commands/:id', (req, res) => {
   const c = loadConfig();
   if (!c.slashCommands) c.slashCommands = [];
+// Raw skill text for client-side actions that need it outside the chat system prompt
+// (e.g. pasting a skill into a terminal tab) — reuses the same cached read as buildSystemPrompt.
+app.get('/api/skills/:id/content', (req, res) => {
+  const s = loadConfig().skills[req.params.id];
+  if (!s) return res.status(404).json({ error: 'skill not found' });
+  res.json({ content: getSkillContent(resolveSkillFile(s.file)) });
+});
   c.slashCommands = c.slashCommands.filter(cmd => cmd.id !== req.params.id);
   saveConfig(c);
   res.json({ ok: true });
@@ -7659,7 +7666,7 @@ server.on('upgrade', (req, socket, head) => {
 // ─── Terminal sessions WebSocket ─────────────────────────────────────────────
 // Protocol:
 //   server → client: binary frames = raw terminal bytes; JSON text = control
-//   client → server: {type:'input',data} | {type:'resize',cols,rows} | {type:'kill'}
+//   client → server: {type:'input',data} | {type:'paste',data} | {type:'resize',cols,rows} | {type:'kill'}
 wssTerm.on('connection', (ws, req) => {
   ws.on('error', (e) => { try { log.warn('terminal ws error', { msg: e?.message }); } catch {} });
   const send = (obj) => { try { ws.send(JSON.stringify(obj)); } catch {} };
@@ -7791,6 +7798,7 @@ wss.on('connection', (ws) => {
       type: 'queue_update',
       tabId,
       pending: queue.length,
+    else if (msg.type === 'paste') handle.paste(msg.data);
       items: queue.map(m => ({ id: m._queueId, queueId: m.queueId || null, text: m.text || '', attachments: m.attachments || [] })),
     });
   }

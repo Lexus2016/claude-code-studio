@@ -22,7 +22,22 @@
 const { spawn, spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { TMUX_PREFIX, resolveState } = require('./terminal-session');
+
+// tmux negotiates UTF-8 support for the control-mode client (and for the server on
+// first `new-session`) from LANG/LC_ALL at process start via setlocale(). Neither the
+// Docker image (node:20-bookworm, no ENV LANG) nor a macOS GUI launch (Electron from
+// Finder/Dock does not source .zshrc) sets a UTF-8 locale, so tmux falls back to
+// non-UTF-8 mode and mangles every multi-byte character it sends/receives — e.g. each
+// Cyrillic letter (UTF-8 lead byte 0xD0/0xD1) turns into "–"/"—" plus a stray glyph.
+// C.UTF-8 is glibc-builtin (no locale-gen needed) on Debian/Linux; macOS has no
+// C.UTF-8 but ships en_US.UTF-8 out of the box.
+const UTF8_LOCALE = process.platform === 'darwin' ? 'en_US.UTF-8' : 'C.UTF-8';
+function utf8Env() {
+  return { ...process.env, LANG: UTF8_LOCALE, LC_ALL: UTF8_LOCALE };
+}
 
 function have(bin, args) {
   try { const r = spawnSync(bin, args, { stdio: 'ignore' }); return !r.error && r.status === 0; }
@@ -105,7 +120,7 @@ function ensureSession({ name, workdir, launchCommand }) {
     if (r.status !== 0) throw new Error(`tmux respawn-pane failed: ${String(r.stderr || '').trim() || 'unknown error'}`);
     return state;
   }
-  const env = { ...process.env };
+  const env = utf8Env();
   delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses the child
   // tmux does NOT fail on a missing -c directory: it silently falls back to $HOME
   // (measured — exit 0, pane_current_path=~). The agent would then run against the
@@ -169,7 +184,7 @@ function captureScreen(name) {
 // streamed live.
 function attach({ name, cols, rows, onData, onExit }) {
   assertName(name);
-  const env = { ...process.env };
+  const env = utf8Env();
   delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses children
   const p = spawn('tmux', ['-C', 'attach-session', '-t', name], { env, stdio: ['pipe', 'pipe', 'pipe'] });
 
@@ -231,6 +246,25 @@ function attach({ name, cols, rows, onData, onExit }) {
     }
   };
 
+  // Land text in the pane WITHOUT submitting it — a "paste a skill/command" action,
+  // not "run" it. write() above sends keystrokes one at a time via send-keys, so any
+  // \n in the text would be read as an Enter and submit mid-paste. Going through a
+  // tmux buffer + `paste-buffer -p` instead wraps the text in bracketed-paste markers
+  // (ESC[200~ ... ESC[201~), which every readline-based program — including Claude
+  // Code's own TUI, per claude-interactive.js's prompt-injection path — treats as one
+  // block of literal text and leaves sitting in the line for the user to edit/submit.
+  const paste = (text) => {
+    const tmpFile = path.join(os.tmpdir(), `ccsterm-paste-${crypto.randomBytes(8).toString('hex')}.txt`);
+    const bufName = `ccspaste_${crypto.randomBytes(4).toString('hex')}`;
+    try {
+      fs.writeFileSync(tmpFile, String(text), { encoding: 'utf8', mode: 0o600 });
+      tmux(['load-buffer', '-b', bufName, tmpFile]);
+      tmux(['paste-buffer', '-dpr', '-t', name, '-b', bufName]);
+    } finally {
+      try { fs.unlinkSync(tmpFile); } catch {}
+    }
+  };
+
   const doResize = (c, r) => {
     const cc = Math.max(20, Math.min(500, parseInt(c, 10) || 80));
     const rr = Math.max(5, Math.min(200, parseInt(r, 10) || 24));
@@ -254,6 +288,7 @@ function attach({ name, cols, rows, onData, onExit }) {
 
   return {
     write,
+    paste,
     resize: doResize,
     close() { try { p.kill('SIGTERM'); } catch {} },
   };
