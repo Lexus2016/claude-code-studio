@@ -40,7 +40,7 @@ const { isTransientOverload, shouldRetryOverload } = require('./rate-limit-utils
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
 const {
   resolveAgentCommands, supportsTerminal, mergeAgentDefaults, parseNewIdOutput,
-  tmuxNameFor, buildLaunchCommand, isReapCandidate, shouldReap, pickOverflow,
+  tmuxNameFor, buildLaunchCommand, isReapCandidate, shouldReap, pickOverflow, TMUX_PREFIX,
 } = require('./terminal-session');
 const termBridge = require('./terminal-bridge');
 const botsLogic = require('./bots');
@@ -4672,6 +4672,38 @@ app.get('/api/activity', (req, res) => {
       if (sid) liveIds.add(sid);
     }
 
+    // 2.5) Terminal (external-agent PTY) sessions currently busy. A raw terminal has
+    //      no discrete "turn" to signal completion of, so tmux's own window_activity
+    //      timestamp is the liveness proxy — same signal the terminal reaper already
+    //      relies on (see its comment: session_activity does NOT move on pane output,
+    //      measured; window_activity does, and is "the correct idle signal"). Recent
+    //      activity (<= a few seconds ago) means the agent is actively writing to the
+    //      pane right now, not that the user is mid-keystroke — human typing is far
+    //      burstier than this window catches on a 12s client poll cadence.
+    const TERM_BUSY_THRESHOLD_SEC = 5;
+    if (termBridge.tmuxAvailable()) {
+      try {
+        for (const name of termBridge.listTerminalSessions()) {
+          const info = termBridge.sessionInfo(name);
+          if (!info.exists || info.paneDead || info.activityAgeSec > TERM_BUSY_THRESHOLD_SEC) continue;
+          const sid = name.slice(TMUX_PREFIX.length);
+          if (liveIds.has(sid)) continue;
+          const s = sessMeta.get(sid);
+          if (!s) continue; // tmux session outlived its DB row — reaper will clean it up
+          live.push({
+            kind: 'terminal',
+            session_id: sid,
+            title: s.title || 'Terminal',
+            source: 'terminal',
+            started_at: null,
+            status: 'running',
+            ...resolveProj(s.workdir || null),
+          });
+          liveIds.add(sid);
+        }
+      } catch (e) { log.warn('/api/activity terminal scan failed', { err: e.message }); }
+    }
+
     // 3) Scheduled (upcoming) todo tasks.
     const sched = db.prepare(`SELECT id,title,session_id,workdir,scheduled_at,recurrence FROM tasks WHERE status='todo' AND scheduled_at IS NOT NULL ORDER BY scheduled_at ASC LIMIT 50`).all();
     const scheduled = sched.map(tsk => ({
@@ -4694,7 +4726,7 @@ app.get('/api/activity', (req, res) => {
         updated_at: s.updated_at,
         ...resolveProj(s.workdir),
       });
-      if (recent.length >= 20) break;
+      if (recent.length >= 10) break;
     }
 
     res.json({ live, scheduled, recent });
@@ -5817,6 +5849,13 @@ app.post('/api/skills/upload', upload.single('file'), (req,res) => {
   const c=loadConfig(); c.skills[id]={label:req.body.label||`📄 ${name}`,description:req.body.description||'Custom',file:destFile,custom:true}; saveConfig(c); res.json({ok:true,id});
 });
 app.delete('/api/skills/:id', (req,res) => { const c=loadConfig(); const s=c.skills[req.params.id]; if(s?.custom){try{fs.unlinkSync(path.join(APP_DIR,s.file))}catch{} delete c.skills[req.params.id]; saveConfig(c)} res.json({ok:true}); });
+// Raw skill text for client-side actions that need it outside the chat system prompt
+// (e.g. pasting a skill into a terminal tab) — reuses the same cached read as buildSystemPrompt.
+app.get('/api/skills/:id/content', (req, res) => {
+  const s = loadConfig().skills[req.params.id];
+  if (!s) return res.status(404).json({ error: 'skill not found' });
+  res.json({ content: getSkillContent(resolveSkillFile(s.file)) });
+});
 
 // ============================================
 // SLASH COMMANDS CRUD
@@ -5849,13 +5888,6 @@ app.put('/api/commands/:id', (req, res) => {
 app.delete('/api/commands/:id', (req, res) => {
   const c = loadConfig();
   if (!c.slashCommands) c.slashCommands = [];
-// Raw skill text for client-side actions that need it outside the chat system prompt
-// (e.g. pasting a skill into a terminal tab) — reuses the same cached read as buildSystemPrompt.
-app.get('/api/skills/:id/content', (req, res) => {
-  const s = loadConfig().skills[req.params.id];
-  if (!s) return res.status(404).json({ error: 'skill not found' });
-  res.json({ content: getSkillContent(resolveSkillFile(s.file)) });
-});
   c.slashCommands = c.slashCommands.filter(cmd => cmd.id !== req.params.id);
   saveConfig(c);
   res.json({ ok: true });
@@ -7766,6 +7798,7 @@ wssTerm.on('connection', (ws, req) => {
     let msg = null;
     try { msg = JSON.parse(raw.toString('utf8')); } catch { return; }
     if (msg.type === 'input') handle.write(msg.data);
+    else if (msg.type === 'paste') handle.paste(msg.data);
     else if (msg.type === 'resize') handle.resize(msg.cols, msg.rows);
     else if (msg.type === 'kill') {
       termBridge.killSession(name);
@@ -7798,7 +7831,6 @@ wss.on('connection', (ws) => {
       type: 'queue_update',
       tabId,
       pending: queue.length,
-    else if (msg.type === 'paste') handle.paste(msg.data);
       items: queue.map(m => ({ id: m._queueId, queueId: m.queueId || null, text: m.text || '', attachments: m.attachments || [] })),
     });
   }
