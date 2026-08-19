@@ -1142,37 +1142,59 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .tpl-chip:active { scale: .96; }
 .tpl-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* New-tab chooser: two ways to start work, side by side, each explaining itself.
+/* New-tab chooser: two ways to start work, each speaking its own visual dialect.
    A bare '+' that always meant 'chat' hid the terminal entirely — the owner had to
-   ask how to open one. */
-.nt-choices { display: flex; flex-direction: column; gap: 9px; }
-.nt-card {
-  display: flex; align-items: flex-start; gap: 12px; width: 100%;
-  padding: 15px 16px; border: none; border-radius: 14px; cursor: pointer;
-  background: var(--s2); color: var(--text); font-family: inherit; text-align: left;
-  box-shadow: inset 0 0 0 1px var(--border);
-  transition: box-shadow .15s, background-color .15s, scale .12s cubic-bezier(.2,0,0,1);
+   ask how to open one. Chat is the warm, rounded, conversational surface; the
+   terminal panel borrows a window titlebar and monospace type so it reads as the
+   raw-CLI surface it is — the two should never be mistaken for each other. */
+.nt-choices { display: flex; flex-direction: column; gap: 16px; }
+
+.nt-chat {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  padding: 18px 20px; border: none; border-radius: 16px; cursor: pointer;
+  background: linear-gradient(155deg, rgba(124,106,239,.15), rgba(124,106,239,.03) 65%), var(--s2);
+  color: var(--text); font-family: inherit; text-align: left;
+  box-shadow: inset 0 0 0 1px rgba(124,106,239,.35);
+  transition: box-shadow .15s, transform .15s var(--ease-out), background-color .15s;
 }
-.nt-card:hover { background: var(--s3); box-shadow: inset 0 0 0 1px var(--accent); }
-.nt-card:active { scale: .98; }
-.nt-card .nt-ic { font-size: 22px; line-height: 1.15; flex: none; }
-.nt-card .nt-name { font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; }
-.nt-card .nt-desc { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-top: 3px; text-wrap: pretty; }
-.nt-card[disabled] { opacity: .45; cursor: not-allowed; }
-.nt-sub { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-/* These are the primary pick targets of this dialog — they were 26px tall at
-   11.5px type, well under a comfortable 40px target and hard to hit at a glance. */
-.nt-sub button {
-  font-size: 13px; font-weight: 550; padding: 0 15px; min-height: 40px;
-  display: inline-flex; align-items: center; gap: 7px;
-  border: none; border-radius: 12px; cursor: pointer;
-  background: var(--s3); color: var(--text); font-family: inherit;
-  box-shadow: inset 0 0 0 1px var(--border);
-  transition: box-shadow .15s, background-color .15s, scale .12s cubic-bezier(.2,0,0,1);
+.nt-chat:hover { box-shadow: inset 0 0 0 1.5px var(--accent), 0 10px 28px rgba(124,106,239,.2); transform: translateY(-1px); }
+.nt-chat:active { scale: .99; transform: none; }
+.nt-chat:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nt-chat-ic {
+  flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  font-size: 20px; border-radius: 50% 50% 50% 6px;
+  background: linear-gradient(155deg, var(--accent), var(--accent2)); box-shadow: 0 4px 14px rgba(124,106,239,.35);
 }
-.nt-sub button:hover { background: var(--s2); box-shadow: inset 0 0 0 1px var(--accent2); }
-.nt-sub button:active { scale: .96; }
-.nt-sub button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nt-chat-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.nt-chat-name { font-size: 15.5px; font-weight: 700; letter-spacing: -.01em; }
+.nt-chat-desc { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-top: 3px; text-wrap: pretty; }
+.nt-chat-go { flex: none; font-size: 17px; color: var(--accent2); opacity: .55; transition: transform .15s var(--ease-out), opacity .15s; }
+.nt-chat:hover .nt-chat-go { opacity: 1; transform: translateX(3px); }
+
+.nt-or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.nt-or::before, .nt-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.nt-term { border-radius: 16px; overflow: hidden; background: #0b0f16; box-shadow: inset 0 0 0 1px var(--border); }
+.nt-term.is-disabled { opacity: .5; }
+.nt-term-bar { display: flex; align-items: center; gap: 11px; padding: 10px 14px; background: var(--s2); border-bottom: 1px solid var(--border); }
+.nt-term-dots { display: flex; gap: 5px; flex: none; }
+.nt-term-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--border); font-style: normal; }
+.nt-term-title { font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; color: var(--green); letter-spacing: -.01em; }
+.nt-term-desc { padding: 13px 14px 2px; font-size: 12.5px; color: var(--muted); line-height: 1.5; text-wrap: pretty; }
+/* Uniform launcher tiles instead of a wrapping pill list — the old flex-wrap
+   let button width track label length, so "Cursor Agent" and "Kimi" landed at
+   wildly different sizes and the row never aligned into a grid. */
+.nt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; padding: 12px 14px 14px; }
+.nt-grid button {
+  display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 13px;
+  border: none; border-radius: 10px; cursor: pointer;
+  background: var(--s2); color: var(--text); font-family: var(--font-mono); font-size: 12.5px; font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: box-shadow .15s, background-color .15s, color .15s, scale .12s cubic-bezier(.2,0,0,1);
+}
+.nt-grid button:hover { background: var(--s3); box-shadow: inset 0 0 0 1px var(--green); color: var(--green); }
+.nt-grid button:active { scale: .96; }
+.nt-grid button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
 /* Primary action inside a panel's empty state. It cannot borrow .bp: that class
    only supplies a background, while the border, radius and padding come from the
@@ -1738,6 +1760,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
    this the select and textarea fall back to browser chrome, which reads as
    foreign next to everything else in the portal. */
 .bot-modal .modal-body { display: flex; flex-direction: column; gap: 14px; }
+.nt-modal .modal-body { padding: 20px; }
 .bot-modal .cmd-field { gap: 6px; }
 .bot-modal input,
 .bot-modal select,
@@ -3799,7 +3822,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 
 <!-- Agent Add/Edit Modal -->
 <div class="modal-overlay hidden" id="newTabModal" onclick="if(event.target===this)closeModalOverlay('newTabModal')">
-  <div class="modal" style="max-width:440px">
+  <div class="modal nt-modal" style="max-width:640px">
     <div class="modal-hdr">
       <h2 id="newTabTitle" data-i18n="newtab.title">Що відкрити?</h2>
       <button class="modal-close" onclick="closeModalOverlay('newTabModal')" data-i18n-title="btn.close" title="Закрити" aria-label="Close">✕</button>
@@ -4299,7 +4322,7 @@ const TRANSLATIONS = {
     'bot.modal.avatar.pick':'Обрати емодзі','bot.modal.avatar.pick.btn':'Обрати','emoji.group.roles':'Ролі','emoji.group.work':'Робота','emoji.group.tools':'Інструменти','emoji.group.ideas':'Ідеї','emoji.group.nature':'Природа',
     'btn.close':'Закрити','bot.modal.label.ph':'Крипто-аналітик','bot.modal.desc.ph':'аналіз ринку криптовалют','bot.modal.prompt.ph':'Ти аналітик крипторинку...',
     'term.off.config':'Термінальні агенти вимкнені. Увімкніть їх у Конфігу: terminal.enabled = true — це навмисно вимкнено, бо термінал у браузері виконує команди на цій машині.','term.off.tmux':'На цьому хості немає tmux. Встановіть його (macOS: brew install tmux, Linux: apt install tmux), і термінальні агенти зʼявляться.','term.off.tunnel':'Активний публічний тунель — доступ до термінала заблоковано, поки він увімкнений.',
-    'newtab.title':'Що відкрити?','newtab.chat':'Чат','newtab.chat.desc':'Звичайна розмова. Ботів кличте через @@','newtab.term':'Термінальний агент','newtab.term.desc':'Живий термінал CLI-агента у вкладці. Оберіть, кого запустити:','term.tab':'термінал',
+    'newtab.title':'Що відкрити?','newtab.chat':'Чат','newtab.chat.desc':'Звичайна розмова. Ботів кличте через @@','newtab.term':'Термінальний агент','newtab.term.desc':'Живий термінал CLI-агента у вкладці. Оберіть, кого запустити:','newtab.or':'або','term.tab':'термінал',
     'stream.gap':'Частину подій не показано — зʼєднання переривалось. Текст відповіді повний.',
     'agent.cap.delegate':'делегування','agent.cap.terminal':'термінал',
     'bots.empty.what':'Бот — це named учасник чату зі своїм промптом, моделлю і памʼяттю. Аналітик, редактор, рецензент — кожен знає своє.','bots.empty.how':'Створіть бота і покличте його в повідомленні:','bots.empty.cta':'Створити першого бота','bot.tpl.replace':'Замінити те, що вже написано в промпті?','bot.tpl.analyst.name':'Аналітик','bot.tpl.analyst.desc':'аналіз даних і висновки','bot.tpl.analyst.prompt':'Ти аналітик. Розбираєш дані й даєш висновки, на які можна спертися.\n\nПравила:\n- Спершу цифри, потім інтерпретація.\n- Кожен висновок має спиратися на конкретне джерело.\n- Якщо даних бракує — скажи прямо, чого саме бракує.\n- Без води: короткі абзаци, ключове винось у список.','bot.tpl.writer.name':'Редактор','bot.tpl.writer.desc':'тексти і звіти','bot.tpl.writer.prompt':'Ти редактор. Перетворюєш чернетки й дані на текст, який приємно читати.\n\nПравила:\n- Пиши для людини, не для галочки.\n- Структура: заголовок, суть у першому абзаці, деталі нижче.\n- Не вигадуй фактів. Якщо чогось нема у вихідних даних — постав питання.\n- Прибирай канцелярит і повтори.','bot.tpl.reviewer.name':'Рецензент','bot.tpl.reviewer.desc':'перевірка коду і рішень','bot.tpl.reviewer.prompt':'Ти рецензент. Шукаєш, де рішення ламається, а не де воно гарне.\n\nПравила:\n- Кожна знахідка: що саме зламається, за яких вхідних даних, з посиланням на файл і рядок.\n- Розділяй «це помилка» і «мені так не подобається».\n- Якщо не впевнений — кажи, що це припущення.\n- Наприкінці: найважливіше першим.','bot.tpl.explainer.name':'Пояснювач','bot.tpl.explainer.desc':'пояснює складне просто','bot.tpl.explainer.prompt':'Ти пояснюєш складні речі простими словами.\n\nПравила:\n- Спочатку одне речення суті, потім деталі.\n- Приклад важливіший за визначення.\n- Терміни розшифровуй при першій згадці.\n- Не спрощуй до неправди: якщо є важливий нюанс — назви його.',
@@ -4546,7 +4569,7 @@ const TRANSLATIONS = {
     'bot.modal.avatar.pick':'Pick an emoji','bot.modal.avatar.pick.btn':'Pick','emoji.group.roles':'Roles','emoji.group.work':'Work','emoji.group.tools':'Tools','emoji.group.ideas':'Ideas','emoji.group.nature':'Nature',
     'btn.close':'Close','bot.modal.label.ph':'Crypto Analyst','bot.modal.desc.ph':'crypto market analysis','bot.modal.prompt.ph':'You are a crypto market analyst...',
     'term.off.config':'Terminal agents are off. Turn them on in Config: terminal.enabled = true — it ships off on purpose, because a browser terminal runs commands on this machine.','term.off.tmux':'tmux is not installed on this host. Install it (macOS: brew install tmux, Linux: apt install tmux) and terminal agents appear.','term.off.tunnel':'A public tunnel is active — terminal access is blocked while it is running.',
-    'newtab.title':'What would you like to open?','newtab.chat':'Chat','newtab.chat.desc':'An ordinary conversation. Call bots with @@','newtab.term':'Terminal agent','newtab.term.desc':"A CLI agent's live terminal in a tab. Pick which one:",'term.tab':'terminal',
+    'newtab.title':'What would you like to open?','newtab.chat':'Chat','newtab.chat.desc':'An ordinary conversation. Call bots with @@','newtab.term':'Terminal agent','newtab.term.desc':"A CLI agent's live terminal in a tab. Pick which one:",'newtab.or':'or','term.tab':'terminal',
     'stream.gap':'Some live activity was not shown — the connection dropped. The answer itself is complete.',
     'agent.cap.delegate':'delegation','agent.cap.terminal':'terminal',
     'bots.empty.what':'A bot is a named chat participant with its own prompt, model and memory. An analyst, an editor, a reviewer — each one knows its job.','bots.empty.how':'Create a bot, then call it in a message:','bots.empty.cta':'Create your first bot','bot.tpl.replace':'Replace what is already written in the prompt?','bot.tpl.analyst.name':'Analyst','bot.tpl.analyst.desc':'data analysis and conclusions','bot.tpl.analyst.prompt':'You are an analyst. You work through data and give conclusions someone can rely on.\n\nRules:\n- Numbers first, interpretation second.\n- Every conclusion names the source it rests on.\n- If the data is not enough, say exactly what is missing.\n- No padding: short paragraphs, key points as a list.','bot.tpl.writer.name':'Editor','bot.tpl.writer.desc':'documents and reports','bot.tpl.writer.prompt':'You are an editor. You turn drafts and data into text people actually want to read.\n\nRules:\n- Write for a reader, not for the record.\n- Structure: title, the point in the first paragraph, detail below.\n- Invent nothing. If a fact is not in the source, ask for it.\n- Cut jargon and repetition.','bot.tpl.reviewer.name':'Reviewer','bot.tpl.reviewer.desc':'reviews code and decisions','bot.tpl.reviewer.prompt':'You are a reviewer. You look for where a solution breaks, not where it is nice.\n\nRules:\n- Each finding: what breaks, on which input, with the file and line.\n- Separate \'this is a bug\' from \'I would have done it differently\'.\n- If you are unsure, say it is a guess.\n- Most severe first.','bot.tpl.explainer.name':'Explainer','bot.tpl.explainer.desc':'makes hard things clear','bot.tpl.explainer.prompt':'You explain difficult things in plain language.\n\nRules:\n- One sentence of the point first, then the detail.\n- An example beats a definition.\n- Unpack a term the first time it appears.\n- Do not simplify into being wrong: if a caveat matters, name it.',
@@ -4793,7 +4816,7 @@ const TRANSLATIONS = {
     'bot.modal.avatar.pick':'Выбрать эмодзи','bot.modal.avatar.pick.btn':'Выбрать','emoji.group.roles':'Роли','emoji.group.work':'Работа','emoji.group.tools':'Инструменты','emoji.group.ideas':'Идеи','emoji.group.nature':'Природа',
     'btn.close':'Закрыть','bot.modal.label.ph':'Крипто-аналитик','bot.modal.desc.ph':'анализ рынка криптовалют','bot.modal.prompt.ph':'Ты аналитик крипторынка...',
     'term.off.config':'Терминальные агенты выключены. Включите их в Конфиге: terminal.enabled = true — они выключены намеренно, потому что терминал в браузере выполняет команды на этой машине.','term.off.tmux':'На этом хосте нет tmux. Установите его (macOS: brew install tmux, Linux: apt install tmux), и терминальные агенты появятся.','term.off.tunnel':'Активен публичный туннель — доступ к терминалу заблокирован, пока он включён.',
-    'newtab.title':'Что открыть?','newtab.chat':'Чат','newtab.chat.desc':'Обычный разговор. Ботов зовите через @@','newtab.term':'Терминальный агент','newtab.term.desc':'Живой терминал CLI-агента во вкладке. Выберите, кого запустить:','term.tab':'терминал',
+    'newtab.title':'Что открыть?','newtab.chat':'Чат','newtab.chat.desc':'Обычный разговор. Ботов зовите через @@','newtab.term':'Терминальный агент','newtab.term.desc':'Живой терминал CLI-агента во вкладке. Выберите, кого запустить:','newtab.or':'или','term.tab':'терминал',
     'stream.gap':'Часть событий не показана — соединение прерывалось. Текст ответа полный.',
     'agent.cap.delegate':'делегирование','agent.cap.terminal':'терминал',
     'bots.empty.what':'Бот — это именованный участник чата со своим промптом, моделью и памятью. Аналитик, редактор, рецензент — каждый знает своё.','bots.empty.how':'Создайте бота и позовите его в сообщении:','bots.empty.cta':'Создать первого бота','bot.tpl.replace':'Заменить то, что уже написано в промпте?','bot.tpl.analyst.name':'Аналитик','bot.tpl.analyst.desc':'анализ данных и выводы','bot.tpl.analyst.prompt':'Ты аналитик. Разбираешь данные и даёшь выводы, на которые можно опереться.\n\nПравила:\n- Сначала цифры, потом интерпретация.\n- Каждый вывод опирается на конкретный источник.\n- Если данных не хватает — скажи, чего именно.\n- Без воды: короткие абзацы, ключевое списком.','bot.tpl.writer.name':'Редактор','bot.tpl.writer.desc':'тексты и отчёты','bot.tpl.writer.prompt':'Ты редактор. Превращаешь черновики и данные в текст, который приятно читать.\n\nПравила:\n- Пиши для человека.\n- Структура: заголовок, суть в первом абзаце, детали ниже.\n- Не выдумывай фактов. Чего нет в источнике — спроси.\n- Убирай канцелярит и повторы.','bot.tpl.reviewer.name':'Рецензент','bot.tpl.reviewer.desc':'проверка кода и решений','bot.tpl.reviewer.prompt':'Ты рецензент. Ищешь, где решение ломается.\n\nПравила:\n- Каждая находка: что ломается, при каких данных, файл и строка.\n- Разделяй «это ошибка» и «мне не нравится».\n- Не уверен — скажи, что это предположение.\n- Самое важное первым.','bot.tpl.explainer.name':'Объяснятель','bot.tpl.explainer.desc':'объясняет сложное просто','bot.tpl.explainer.prompt':'Ты объясняешь сложное простыми словами.\n\nПравила:\n- Сначала суть одним предложением, потом детали.\n- Пример важнее определения.\n- Термин расшифровывай при первом упоминании.\n- Не упрощай до неправды: важный нюанс называй.',
@@ -10169,29 +10192,29 @@ async function openNewTabChooser() {
 
   const box = $i('ntChoices');
   box.innerHTML = `
-    <button class="nt-card" onclick="closeModalOverlay('newTabModal');newTab()">
-      <span class="nt-ic">💬</span>
-      <span>
-        <span class="nt-name">${escH(t('newtab.chat'))}</span>
-        <div class="nt-desc">${escH(t('newtab.chat.desc'))}</div>
+    <button class="nt-chat" onclick="closeModalOverlay('newTabModal');newTab()">
+      <span class="nt-chat-ic">💬</span>
+      <span class="nt-chat-body">
+        <span class="nt-chat-name">${escH(t('newtab.chat'))}</span>
+        <span class="nt-chat-desc">${escH(t('newtab.chat.desc'))}</span>
       </span>
+      <span class="nt-chat-go" aria-hidden="true">→</span>
     </button>
-    <div class="nt-card" ${_terminalAvailable ? '' : 'disabled'} style="cursor:default;flex-direction:column;align-items:stretch">
-      <div style="display:flex;align-items:flex-start;gap:11px">
-        <span class="nt-ic">&gt;_</span>
-        <span>
-          <span class="nt-name">${escH(t('newtab.term'))}</span>
-          <div class="nt-desc">${_terminalAvailable ? escH(t('newtab.term.desc')) : escH(_termCapabilityReason || t('term.unavailable'))}</div>
-        </span>
+    <div class="nt-or"><span>${escH(t('newtab.or'))}</span></div>
+    <div class="nt-term${_terminalAvailable ? '' : ' is-disabled'}">
+      <div class="nt-term-bar">
+        <span class="nt-term-dots"><i></i><i></i><i></i></span>
+        <span class="nt-term-title">&gt;_ ${escH(t('newtab.term'))}</span>
       </div>
-      ${_terminalAvailable && termAgents.length ? `<div class="nt-sub">${
+      <div class="nt-term-desc">${_terminalAvailable ? escH(t('newtab.term.desc')) : escH(_termCapabilityReason || t('term.unavailable'))}</div>
+      ${_terminalAvailable && termAgents.length ? `<div class="nt-grid">${
         termAgents.map(([id, c]) => `<button onclick="closeModalOverlay('newTabModal');createTerminalSession('${escH(id)}','${escH((c.label || id).replace(/'/g, ''))}')">${escH((_agentIcons[id] || '🤖') + ' ' + (c.label || id))}</button>`).join('')
       }</div>` : ''}
     </div>`;
   // Focus the first CHOICE, not the ✕ — the close button is the last thing a
   // keyboard user wants to land on, and focusing it drew a ring on the dismiss
   // control the moment the dialog opened.
-  openModalOverlay('newTabModal', { labelId: 'newTabTitle', initialFocus: '.nt-card',
+  openModalOverlay('newTabModal', { labelId: 'newTabTitle', initialFocus: '.nt-chat',
                                     onEscape: () => closeModalOverlay('newTabModal') });
 }
 
