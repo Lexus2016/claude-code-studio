@@ -1377,10 +1377,21 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 /* ─── Collapsible header ─── */
 .hdr-collapse-zone { overflow: visible; transition: max-height .3s var(--ease-out), opacity .2s; max-height: 200px; opacity: 1; }
 .hdr-collapse-zone.collapsed { overflow: hidden; max-height: 0; opacity: 0; pointer-events: none; }
-.hdr-toggle { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex-shrink: 0; background: var(--s2); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; color: var(--muted); transition: background .15s, border-color .15s, color .15s, box-shadow .15s, transform .15s; margin: 3px 4px 3px 6px; }
+/* Now the last control in .tabs-bar (placed after the font slider) — left/right
+   margins swapped from the original "first in bar" layout. */
+.hdr-toggle { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex-shrink: 0; background: var(--s2); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; color: var(--muted); transition: background .15s, border-color .15s, color .15s, box-shadow .15s, transform .15s; margin: 3px 6px 3px 4px; }
 .hdr-toggle:hover { color: var(--accent2); border-color: var(--accent); background: var(--s3); }
 .hdr-toggle svg { width: 11px; height: 11px; transition: transform .25s var(--ease-out); }
 .hdr-toggle.collapsed svg { transform: rotate(180deg); }
+
+/* Project switcher re-homed into .tabs-bar while the header zone is collapsed
+   (see renderTabs()) — sized to fit the 34px-tall bar next to the tabs. */
+.tabs-bar .proj-dd-wrap { flex-shrink: 0; margin: 3px 2px 3px 6px; }
+.tabs-bar .proj-dd-btn { padding: 4px 10px; font-size: 12px; max-width: 180px; }
+/* .tabs-bar has overflow-x:auto (→ overflow-y:auto too), which would clip the
+   absolutely-positioned menu — so it's portaled to <body> as position:fixed
+   while open in this context (see toggleProjDropdown()). */
+.proj-dd-menu.proj-dd-menu-portal { position: fixed; margin-top: 0; z-index: 2000; }
 
 /* ─── Font size slider ─── */
 .font-slider-wrap { display: flex; align-items: center; gap: 5px; margin-left: auto; padding: 0 8px; flex-shrink: 0; }
@@ -4092,7 +4103,12 @@ function saveComposerState(tabId) {
 function restoreComposerState(tabId) {
   if (!tabId) {
     inEl.value = '';
+    // Recompute height from scrollHeight even for an empty value: the placeholder hint
+    // is long and wraps to 2 lines at normal composer widths, so 'auto' alone collapses
+    // the box back to its native 1-row height and clips the wrapped hint text.
+    // (Bug: switching to a tab-less state left the 2nd placeholder line cut off.)
     inEl.style.height = 'auto';
+    inEl.style.height = Math.min(inEl.scrollHeight, 130) + 'px';
     _clearAttachments(false);
     clearReply();
     return;
@@ -4417,6 +4433,7 @@ const TRANSLATIONS = {
     'welcome.prompt.1':'Поясни цей код крок за кроком','welcome.prompt.2':'Знайди та виправ помилки','welcome.prompt.3':'Напиши unit-тести','welcome.prompt.4':'Спроектуй архітектуру',
     'welcome.import':'Імпортувати сесію з JSON',
     'toast.task_resumed':'Задачу відновлено','toast.task_lost':'З\'єднання втрачено, вивід недоступний','toast.task_retry':'retry',
+    'notif.bg_done':'✓ Діалог завершено','notif.bg_error':'✗ Помилка у фоновому діалозі','notif.bg_ask':'❓ Потрібна відповідь',
     'ask.submit':'Надіслати відповідь','ask.skip':'Пропустити','ask.answered':'Відповідь','ask.skipped':'Пропущено','ask.auto':'Авто','ask.timer':'Залишилось','ask.other':'Інше...','ask.prev':'← Назад','ask.next':'Далі →',
     'session.copy_id':'Скопіювати ID сесії Claude','session.open_claude':'Відкрити в Claude Code',
     'stream.interrupted':'Відповідь була перервана',
@@ -4437,7 +4454,6 @@ const TRANSLATIONS = {
     'files.empty':'Порожньо','files.view':'Переглянути',
     'proj.empty':'Немає проектів. Додайте директорію для роботи з Claude Code.',
     'proj.search':'Пошук проекту...','search.empty':'Не знайдено',
-    'notif.bg_done':'✓ Діалог завершено','notif.bg_error':'✗ Помилка у фоновому діалозі','notif.bg_ask':'❓ Потрібна відповідь',
     'proj.recent':'Нещодавні','proj.all':'Усі проекти',
     'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban дошка','nav.schedule.tip':'Розклад завдань','nav.dashboard.tip':'Панель статистики','nav.aria':'Навігація між розділами','tip.lang':'Мова інтерфейсу',
     'mcp.import.btn':'Імпорт','mcp.import.title':'Імпортувати MCP з JSON файлу (Claude Desktop формат)',
@@ -4665,6 +4681,7 @@ const TRANSLATIONS = {
     'welcome.prompt.1':'Explain this code step by step','welcome.prompt.2':'Find and fix bugs','welcome.prompt.3':'Write unit tests','welcome.prompt.4':'Design the architecture',
     'welcome.import':'Import session from JSON',
     'toast.task_resumed':'Task resumed','toast.task_lost':'Connection lost, output unavailable','toast.task_retry':'retry',
+    'notif.bg_done':'✓ Chat finished','notif.bg_error':'✗ Error in background chat','notif.bg_ask':'❓ Waiting for your answer',
     'ask.submit':'Send Answer','ask.skip':'Skip','ask.answered':'Answer','ask.skipped':'Skipped','ask.auto':'Auto','ask.timer':'Remaining','ask.other':'Other...','ask.prev':'← Back','ask.next':'Next →',
     'session.copy_id':'Copy Claude session ID','session.open_claude':'Open in Claude Code',
     'stream.interrupted':'Response was interrupted',
@@ -4685,7 +4702,6 @@ const TRANSLATIONS = {
     'files.empty':'Empty','files.view':'Preview',
     'proj.empty':'No projects. Add a directory to work with Claude Code.',
     'proj.search':'Search project...','search.empty':'Not found',
-    'notif.bg_done':'✓ Chat finished','notif.bg_error':'✗ Error in background chat','notif.bg_ask':'❓ Waiting for your answer',
     'proj.recent':'Recent','proj.all':'All projects',
     'nav.chat.tip':'Chat','nav.kanban.tip':'Kanban board','nav.schedule.tip':'Schedule','nav.dashboard.tip':'Statistics dashboard','nav.aria':'Navigation','tip.lang':'Interface language',
     'mcp.import.btn':'Import','mcp.import.title':'Import MCP from JSON file (Claude Desktop format)',
@@ -4913,6 +4929,7 @@ const TRANSLATIONS = {
     'welcome.prompt.1':'Объясни этот код шаг за шагом','welcome.prompt.2':'Найди и исправь ошибки','welcome.prompt.3':'Напиши unit-тесты','welcome.prompt.4':'Спроектируй архитектуру',
     'welcome.import':'Импортировать сессию из JSON',
     'toast.task_resumed':'Задача возобновлена','toast.task_lost':'Соединение потеряно, вывод недоступен','toast.task_retry':'retry',
+    'notif.bg_done':'✓ Диалог завершён','notif.bg_error':'✗ Ошибка в фоновом диалоге','notif.bg_ask':'❓ Нужен ответ',
     'ask.submit':'Отправить ответ','ask.skip':'Пропустить','ask.answered':'Ответ','ask.skipped':'Пропущено','ask.auto':'Авто','ask.timer':'Осталось','ask.other':'Другое...','ask.prev':'← Назад','ask.next':'Далее →',
     'session.copy_id':'Скопировать ID сессии Claude','session.open_claude':'Открыть в Claude Code',
     'stream.interrupted':'Ответ был прерван',
@@ -4933,7 +4950,6 @@ const TRANSLATIONS = {
     'files.empty':'Пусто','files.view':'Просмотр',
     'proj.empty':'Нет проектов. Добавьте директорию для работы с Claude Code.',
     'proj.search':'Поиск проекта...','search.empty':'Не найдено',
-    'notif.bg_done':'✓ Диалог завершён','notif.bg_error':'✗ Ошибка в фоновом диалоге','notif.bg_ask':'❓ Нужен ответ',
     'proj.recent':'Недавние','proj.all':'Все проекты',
     'nav.chat.tip':'Чат','nav.kanban.tip':'Kanban доска','nav.schedule.tip':'Расписание','nav.dashboard.tip':'Панель статистики','nav.aria':'Навигация','tip.lang':'Язык интерфейса',
     'mcp.import.btn':'Импорт','mcp.import.title':'Импортировать MCP из JSON файла (формат Claude Desktop)',
@@ -5070,7 +5086,7 @@ const TRANSLATIONS = {
     "bot.modal.avatar.pick":"Choisir un émoji","bot.modal.avatar.pick.btn":"Choisir","emoji.group.roles":"Rôles","emoji.group.work":"Travail","emoji.group.tools":"Outils","emoji.group.ideas":"Idées","emoji.group.nature":"Nature",
     "btn.close":"Fermer","bot.modal.label.ph":"Analyste crypto","bot.modal.desc.ph":"analyse du marché des cryptomonnaies","bot.modal.prompt.ph":"Tu es analyste du marché crypto...",
     "term.off.config":"Les agents terminal sont désactivés. Activez-les dans la Config : terminal.enabled = true — c'est désactivé volontairement, car un terminal dans le navigateur exécute des commandes sur cette machine.","term.off.tmux":"tmux n'est pas installé sur cet hôte. Installez-le (macOS : brew install tmux, Linux : apt install tmux) et les agents terminal apparaîtront.","term.off.tunnel":"Un tunnel public est actif — l'accès au terminal est bloqué tant qu'il fonctionne.",
-    "newtab.title":"Que voulez-vous ouvrir ?","newtab.chat":"Chat","newtab.chat.desc":"Une conversation ordinaire. Appelez les bots avec @@","newtab.term":"Agent terminal","newtab.term.desc":"Le terminal vivant d'un agent CLI dans un onglet. Choisissez :","term.tab":"terminal",
+    "newtab.title":"Que voulez-vous ouvrir ?","newtab.chat":"Chat","newtab.chat.desc":"Une conversation ordinaire. Appelez les bots avec @@","newtab.term":"Agent terminal","newtab.term.desc":"Le terminal vivant d'un agent CLI dans un onglet. Choisissez :","newtab.or":"ou","term.tab":"terminal",
     "stream.gap":"Une partie de l'activité n'a pas été affichée — la connexion a été interrompue. La réponse elle-même est complète.",
     "agent.cap.delegate":"délégation","agent.cap.terminal":"terminal",
     "bots.empty.what":"Un bot est un participant nommé du chat, avec son propre prompt, son modèle et sa mémoire.","bots.empty.how":"Créez un bot puis appelez-le dans un message :","bots.empty.cta":"Créer votre premier bot","bot.tpl.replace":"Remplacer ce qui est déjà écrit dans le prompt ?","bot.tpl.analyst.name":"Analyste","bot.tpl.analyst.desc":"analyse de données et conclusions","bot.tpl.analyst.prompt":"Tu es analyste. Tu examines les données et donnes des conclusions sur lesquelles on peut s'appuyer.\n\nRègles :\n- Les chiffres d'abord, l'interprétation ensuite.\n- Chaque conclusion nomme la source sur laquelle elle repose.\n- Si les données sont insuffisantes, dis précisément ce qui manque.\n- Pas de remplissage : paragraphes courts, points clés en liste.","bot.tpl.writer.name":"Rédacteur","bot.tpl.writer.desc":"textes et rapports","bot.tpl.writer.prompt":"Tu es rédacteur. Tu transformes brouillons et données en un texte qu'on a envie de lire.\n\nRègles :\n- Écris pour un lecteur, pas pour la forme.\n- Structure : titre, l'essentiel dans le premier paragraphe, les détails ensuite.\n- N'invente rien. Si un fait ne figure pas dans la source, demande-le.\n- Supprime le jargon et les répétitions.","bot.tpl.reviewer.name":"Relecteur","bot.tpl.reviewer.desc":"revue du code et des décisions","bot.tpl.reviewer.prompt":"Tu es relecteur. Tu cherches où la solution casse, pas où elle est élégante.\n\nRègles :\n- Chaque constat : ce qui casse, avec quelles entrées, fichier et ligne à l'appui.\n- Distingue « c'est un bug » de « je l'aurais fait autrement ».\n- Si tu n'es pas sûr, dis que c'est une hypothèse.\n- Le plus grave en premier.","bot.tpl.explainer.name":"Vulgarisateur","bot.tpl.explainer.desc":"rend le complexe clair","bot.tpl.explainer.prompt":"Tu expliques les choses difficiles en langage simple.\n\nRègles :\n- Une phrase pour l'essentiel, puis le détail.\n- Un exemple vaut mieux qu'une définition.\n- Explique un terme dès sa première apparition.\n- Ne simplifie pas jusqu'à l'erreur : si une nuance compte, nomme-la.",
@@ -5123,6 +5139,7 @@ const TRANSLATIONS = {
     "dir.filter.ph":"Filtrer les dossiers...","toast.read_err":"Échec de la lecture : ","toast.err_prefix":"Erreur : ","dir.proj_name":"Nom du projet (auto si vide)",
     "welcome.prompt.1":"Expliquez ce code étape par étape","welcome.prompt.2":"Trouvez et corrigez des bugs","welcome.prompt.3":"Écrivez des tests unitaires","welcome.prompt.4":"Concevez l'architecture",
     "welcome.import":"Importer une session depuis un JSON","toast.task_resumed":"Tâche reprise","toast.task_lost":"Connexion perdue, sortie indisponible","toast.task_retry":"réessayer",
+    "notif.bg_done":"✓ Discussion terminée","notif.bg_error":"✗ Erreur dans une discussion en arrière-plan","notif.bg_ask":"❓ Réponse requise",
     "ask.submit":"Envoyer la réponse","ask.skip":"Passer","ask.answered":"Réponse","ask.skipped":"Passé","ask.auto":"Auto","ask.timer":"Restant","ask.other":"Autre...","ask.prev":"← Retour",
     "ask.next":"Suivant →","session.copy_id":"Copier l'ID de session Claude","session.open_claude":"Ouvrir dans Claude Code","stream.interrupted":"La réponse a été interrompue",
     "rl.title.warn":"Limite proche","rl.title.crit":"Limite critique !","rl.key.type":"Type","rl.key.used":"Utilisé","rl.key.left":"Restant","rl.key.reset":"Réinitialisation","rl.key.via":"Dans",
@@ -5143,7 +5160,6 @@ const TRANSLATIONS = {
     "proj.all":"Tous les projets","nav.chat.tip":"Chat","nav.kanban.tip":"Tableau Kanban","nav.schedule.tip":"Planning","nav.dashboard.tip":"Tableau de bord statistiques","nav.aria":"Navigation",
     "tip.lang":"Langue de l'interface","mcp.import.btn":"Importer","mcp.import.title":"Importer MCP depuis un fichier JSON (format Claude Desktop)","mcp.export.btn":"Exporter",
     "mcp.export.title":"Exporter tous les MCP vers un fichier JSON","mcp.replace.title":"Remplacera l'existant","mcp.type.stdio":"stdio (commande)","mcp.type.sse":"SSE (flux URL)",
-    "notif.bg_done":"✓ Discussion terminée","notif.bg_error":"✗ Erreur dans une discussion en arrière-plan","notif.bg_ask":"❓ Réponse requise",
     "mcp.import.modal.title":"Importer des serveurs MCP","mcp.import.drop":"Glissez un fichier .json ou cliquez pour parcourir","mcp.import.or":"— ou collez le JSON manuellement —",
     "mcp.import.found":"Serveurs trouvés :","mcp.import.replace":"Remplacer les serveurs personnalisés existants (sinon — fusion)","mcp.import.preview.btn":"👁 Aperçu","mcp.import.do":"Importer",
     "dir.name.label":"Nom :","dir.git.init":"git init (si ce n'est pas déjà un dépôt)","confirm.stop.desc":"L'exécution de l'agent sera interrompue.","rl.type.five_hour":"5 heures",
@@ -5219,7 +5235,7 @@ const TRANSLATIONS = {
     "bot.modal.avatar.pick":"בחרו אמוג׳י","bot.modal.avatar.pick.btn":"בחירה","emoji.group.roles":"תפקידים","emoji.group.work":"עבודה","emoji.group.tools":"כלים","emoji.group.ideas":"רעיונות","emoji.group.nature":"טבע",
     "btn.close":"סגור","bot.modal.label.ph":"אנליסט קריפטו","bot.modal.desc.ph":"ניתוח שוק הקריפטו","bot.modal.prompt.ph":"אתה אנליסט שוק הקריפטו...",
     "term.off.config":"סוכני הטרמינל כבויים. הפעילו אותם בהגדרות: terminal.enabled = true — הם כבויים בכוונה, מפני שטרמינל בדפדפן מריץ פקודות על המחשב הזה.","term.off.tmux":"tmux אינו מותקן על מארח זה. התקינו אותו (macOS: brew install tmux, Linux: apt install tmux) וסוכני הטרמינל יופיעו.","term.off.tunnel":"מנהרה ציבורית פעילה — הגישה לטרמינל חסומה כל עוד היא פועלת.",
-    "newtab.title":"מה לפתוח?","newtab.chat":"צ׳אט","newtab.chat.desc":"שיחה רגילה. קראו לבוטים עם @@","newtab.term":"סוכן טרמינל","newtab.term.desc":"טרמינל חי של סוכן CLI בלשונית. בחרו את מי:","term.tab":"טרמינל",
+    "newtab.title":"מה לפתוח?","newtab.chat":"צ׳אט","newtab.chat.desc":"שיחה רגילה. קראו לבוטים עם @@","newtab.term":"סוכן טרמינל","newtab.term.desc":"טרמינל חי של סוכן CLI בלשונית. בחרו את מי:","newtab.or":"או","term.tab":"טרמינל",
     "stream.gap":"חלק מהפעילות לא הוצג — החיבור נותק. התשובה עצמה מלאה.",
     "agent.cap.delegate":"האצלה","agent.cap.terminal":"טרמינל",
     "bots.empty.what":"בוט הוא משתתף בעל שם בצ׳אט, עם הנחיה, מודל וזיכרון משלו.","bots.empty.how":"צרו בוט ואז קראו לו בהודעה:","bots.empty.cta":"צרו את הבוט הראשון","bot.tpl.replace":"להחליף את מה שכבר כתוב בהנחיה?","bot.tpl.analyst.name":"אנליסט","bot.tpl.analyst.desc":"ניתוח נתונים ומסקנות","bot.tpl.analyst.prompt":"אתה אנליסט. אתה מנתח נתונים ונותן מסקנות שאפשר להישען עליהן.\n\nכללים:\n- קודם המספרים, אחר כך הפרשנות.\n- כל מסקנה מציינת את המקור שעליו היא נשענת.\n- אם הנתונים אינם מספיקים, אמור בדיוק מה חסר.\n- בלי מילוי מיותר: פסקאות קצרות, עיקרי הדברים ברשימה.","bot.tpl.writer.name":"עורך","bot.tpl.writer.desc":"טקסטים ודוחות","bot.tpl.writer.prompt":"אתה עורך. אתה הופך טיוטות ונתונים לטקסט שנעים לקרוא.\n\nכללים:\n- כתוב עבור קורא, לא לפרוטוקול.\n- מבנה: כותרת, העיקר בפסקה הראשונה, הפרטים מתחת.\n- אל תמציא עובדות. מה שאינו במקור — בקש.\n- הסר ז׳רגון וחזרות.","bot.tpl.reviewer.name":"סוקר","bot.tpl.reviewer.desc":"סקירת קוד והחלטות","bot.tpl.reviewer.prompt":"אתה סוקר. אתה מחפש היכן הפתרון נשבר, לא היכן הוא יפה.\n\nכללים:\n- כל ממצא: מה נשבר, באילו קלטים, עם קובץ ושורה.\n- הפרד בין ״זה באג״ ל״הייתי עושה אחרת״.\n- אם אינך בטוח, אמור שזו השערה.\n- החמור ביותר ראשון.","bot.tpl.explainer.name":"מסביר","bot.tpl.explainer.desc":"הופך מסובך לברור","bot.tpl.explainer.prompt":"אתה מסביר דברים מורכבים בשפה פשוטה.\n\nכללים:\n- משפט אחד של העיקר, ואז הפירוט.\n- דוגמה עדיפה על הגדרה.\n- פרש מונח בהופעתו הראשונה.\n- אל תפשט עד כדי טעות: אם יש סייג חשוב, ציין אותו.",
@@ -5264,6 +5280,7 @@ const TRANSLATIONS = {
     "dir.path.go":"מעבר","dir.filter.ph":"סינון תיקיות...","toast.read_err":"קריאה נכשלה: ","toast.err_prefix":"שגיאה: ","dir.proj_name":"שם הפרויקט (אוטומטי אם ריק)",
     "welcome.prompt.1":"הסבירו את הקוד הזה שלב אחר שלב","welcome.prompt.2":"מצאו ותקנו באגים","welcome.prompt.3":"כתבו unit tests","welcome.prompt.4":"תכננו את הארכיטקטורה",
     "welcome.import":"ייבוא סשן מ-JSON","toast.task_resumed":"המשימה חודשה","toast.task_lost":"החיבור אבד, הפלט לא זמין","toast.task_retry":"ניסיון חוזר","ask.submit":"שליחת תשובה","ask.skip":"דילוג",
+    "notif.bg_done":"✓ השיחה הסתיימה","notif.bg_error":"✗ שגיאה בשיחת רקע","notif.bg_ask":"❓ נדרשת תשובה",
     "ask.answered":"תשובה","ask.skipped":"דולג","ask.auto":"אוטומטי","ask.timer":"נותר","ask.other":"אחר...","ask.prev":"← חזרה","ask.next":"הבא →","session.copy_id":"העתקת מזהה סשן Claude",
     "session.open_claude":"פתיחה ב-Claude Code","stream.interrupted":"התשובה הופרעה","rl.title.warn":"המגבלה מתקרבת","rl.title.crit":"המגבלה קריטית!","rl.key.type":"סוג","rl.key.used":"נוצל",
     "rl.key.left":"נותר","rl.key.reset":"מתאפס","rl.key.via":"ב","rl.reset.done":"כבר התאפס","rl.time.h":"ש'","rl.time.m":"ד'","rl.time.s":"שנ'","rl.toast.80":"⚠️ מגבלת {type}: 80% נוצלו",
@@ -5284,7 +5301,6 @@ const TRANSLATIONS = {
     "dir.git.init":"git init (אם עדיין לא ריפוזיטורי)","confirm.stop.desc":"ריצת ה-agent תופרע.","rl.type.five_hour":"5 שעות","rl.type.seven_day":"7 ימים","proj.generating":"יוצר ברקע...",
     "mcp.parse.no_servers":"לא נמצאו שרתי MCP. צפוי {\"mcpServers\":{...}} או פורמט תואם.","mcp.parse.empty":"רשימת השרתים ריקה","mcp.cfg.env_json_err":"פורמט ENV JSON לא תקין",
     "agent.planning":"🧠 מתכנן...","agent.fallback_single":"⚠️ עובר למצב יחיד","agent.done":"✅ כל ה-agents סיימו","agent.circular_deps":"⚠️ תלות מעגלית בין ה-agents","agent.stopped":"⏹ הופסק","msf.working":"עובד",
-    "notif.bg_done":"✓ השיחה הסתיימה","notif.bg_error":"✗ שגיאה בשיחת רקע","notif.bg_ask":"❓ נדרשת תשובה",
     "msf.done":"הושלם","msf.error":"שגיאה","msf.waiting":"ממתין","msf.thinking":"חושב","msf.tool":"רץ","msf.generating":"יוצר","ta.calls":"קריאות","ta.activity":"פעילות","msf.team":"צוות Agents",
     "hdr.toggle":"כיווץ/הרחבה של הכותרת","msg.show_more":"הצגת עוד","msg.show_less":"הצגה מצומצמת","sec.cmds":"/ פקודות","cmds.hint":"פקודות סלאש — קיצורי דרך לפרומפטים. הקלידו / בצ'אט.",
     "cmd.name.ph":"/שם (לדוגמה /check)","cmd.text.ph":"טקסט הפרומפט המלא...","cmd.add.btn":"הוספה","cmd.save.btn":"שמירה","cmd.add.new":"＋ הוספת פקודה","cmd.insert.title":"הכנסה לצ'אט",
@@ -5399,6 +5415,23 @@ function toast(msg, isErr = false, dur = 3000) {
   toastTimer = setTimeout(() => el.className = '', dur);
 }
 
+// Background-tab alert: WS events for a chat the user isn't currently looking at
+// (done/error/ask_user/ask_tool) get no inline UI, so the single-slot toast() would
+// either be invisible or get clobbered by whatever the visible tab is doing. Route
+// those through the stacking notification rail instead, labeled with which
+// session/project they came from so they're self-explanatory out of context.
+function _bgNotify(tabId, found, level, title, detail) {
+  const projId = found?.projId || curProjectId;
+  showNotification({
+    level, title, detail: detail || '',
+    sessionTitle: found?.tab?.title || '',
+    projectName: projects.find(p => p.id === projId)?.name || '',
+    sessionId: tabId,
+    projectId: projId,
+    timestamp: Date.now(),
+  });
+}
+
 // ─── Notifications (non-blocking, from notify_user MCP) ──────────────────
 const NOTIF_MAX_VISIBLE = 5;
 const NOTIF_ICONS = { info: 'ℹ️', warning: '⚠️', error: '❌', milestone: '✅', progress: '📊' };
@@ -5419,23 +5452,6 @@ function showNotification(data) {
       const pct = data.progress.total > 0 ? Math.min(100, Math.round((data.progress.current / data.progress.total) * 100)) : 0;
       const fill = existing.querySelector('.notif-progress-fill');
       const text = existing.querySelector('.notif-progress-text');
-// Background-tab alert: WS events for a chat the user isn't currently looking at
-// (done/error/ask_user/ask_tool) get no inline UI, so the single-slot toast() would
-// either be invisible or get clobbered by whatever the visible tab is doing. Route
-// those through the stacking notification rail instead, labeled with which
-// session/project they came from so they're self-explanatory out of context.
-function _bgNotify(tabId, found, level, title, detail) {
-  const projId = found?.projId || curProjectId;
-  showNotification({
-    level, title, detail: detail || '',
-    sessionTitle: found?.tab?.title || '',
-    projectName: projects.find(p => p.id === projId)?.name || '',
-    sessionId: tabId,
-    projectId: projId,
-    timestamp: Date.now(),
-  });
-}
-
       const titleEl = existing.querySelector('.notif-title');
       if (fill) fill.style.width = pct + '%';
       if (text) text.textContent = `${data.progress.current} / ${data.progress.total}`;
@@ -5485,6 +5501,18 @@ function _bgNotify(tabId, found, level, title, detail) {
   };
   card.querySelector('.notif-close').addEventListener('click', dismiss);
 
+  // Click-to-jump: a notification about a background session is only useful if it
+  // can take you there. sessionId is opt-in (set by callers that have a concrete
+  // tab to jump to) so unrelated MCP notify_user cards stay non-interactive.
+  if (data.sessionId) {
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.notif-close')) return;
+      activityOpen(data.sessionId, data.projectId || '');
+      dismiss();
+    });
+  }
+
   // Auto-dismiss (unless dur === 0 = manual dismiss only)
   if (dur > 0) setTimeout(dismiss, dur);
 
@@ -5505,18 +5533,6 @@ function escH(s) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-  // Click-to-jump: a notification about a background session is only useful if it
-  // can take you there. sessionId is opt-in (set by callers that have a concrete
-  // tab to jump to) so unrelated MCP notify_user cards stay non-interactive.
-  if (data.sessionId) {
-    card.style.cursor = 'pointer';
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.notif-close')) return;
-      activityOpen(data.sessionId, data.projectId || '');
-      dismiss();
-    });
-  }
-
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
@@ -6101,6 +6117,12 @@ document.addEventListener('visibilitychange', () => {
   // Socket alive — replay any buffered stream we may have missed while throttled.
   if (currentSessionId) ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: currentSessionId }));
   subscribeAllTabs();
+  // Same recovery for the visible terminal tab, if any — its own WebSocket is
+  // independent of the chat socket above and dies the same way while backgrounded.
+  if (_termSessionId) {
+    const te = _terms.get(_termSessionId);
+    if (te && (!te.ws || te.ws.readyState >= 2)) _connectTerminalWs(_termSessionId);
+  }
 });
 
 // A turn normally streams into ONE bubble. Bots break that assumption: several
@@ -6155,12 +6177,6 @@ function handleWsMsg(d) {
       break;
 
     case 'task_retrying': {
-  // Same recovery for the visible terminal tab, if any — its own WebSocket is
-  // independent of the chat socket above and dies the same way while backgrounded.
-  if (_termSessionId) {
-    const te = _terms.get(_termSessionId);
-    if (te && (!te.ws || te.ws.readyState >= 2)) _connectTerminalWs(_termSessionId);
-  }
       if (d.taskId) _chainProgressUpdate(d.taskId, 'retry');
       if (isVisible) {
         const rc = d.retryCount || 1;
@@ -6495,6 +6511,10 @@ function handleWsMsg(d) {
             setStatus(t('status.connected'), 'ok');
           }
         }
+        // Background tab finished its turn — no inline UI will show this, so surface
+        // it via the notification rail. Skip per-subtask Kanban done events (d.taskId) —
+        // those are chain progress noise, not "your conversation is ready" moments.
+        if (!d.taskId) _bgNotify(tabId, found, 'milestone', t('notif.bg_done'));
       }
       // Reconcile interrupt badges: mark delivered/expired based on server-reported count.
       // This guarantees correct state even if the real-time interrupt_delivered WS event was lost.
@@ -6515,10 +6535,6 @@ function handleWsMsg(d) {
         });
       }
       // For background tabs: clear saved streaming text (message is now persisted to DB)
-        // Background tab finished its turn — no inline UI will show this, so surface
-        // it via the notification rail. Skip per-subtask Kanban done events (d.taskId) —
-        // those are chain progress noise, not "your conversation is ready" moments.
-        if (!d.taskId) _bgNotify(tabId, found, 'milestone', t('notif.bg_done'));
       if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; } }
       if (found?.tab) { found.tab.generating = false; found.tab.done = true; }
       if (isCurrent) { renderTabs(); if ((tabId === activeTabId || tabId === generatingTabId) && !d.taskId) generatingTabId = null; }
@@ -6579,6 +6595,7 @@ function handleWsMsg(d) {
         if (!d.sessionTitle) d.sessionTitle = found?.tab?.title || '';
         if (!d.projectName) d.projectName = projects.find(p => p.id === d.projectId)?.name || '';
       }
+      showNotification(d);
       break;
 
     case 'chain_dispatched':
@@ -6599,7 +6616,6 @@ function handleWsMsg(d) {
           if (panel) { panel.classList.remove('has-update'); void panel.offsetWidth; panel.classList.add('has-update'); }
           _showNewDlgEntries();
         }
-      showNotification(d);
       }
       break;
 
@@ -6686,6 +6702,8 @@ function handleWsMsg(d) {
         const ts = getTS(tabId);
         if (!ts._pendingAskUser) ts._pendingAskUser = [];
         ts._pendingAskUser.push(d);
+        const _q = (Array.isArray(d.questions) && d.questions[0]?.question) || d.question || '';
+        _bgNotify(tabId, found, 'warning', t('notif.bg_ask'), _q);
       }
       break;
 
@@ -6697,6 +6715,7 @@ function handleWsMsg(d) {
         const ts = getTS(tabId);
         if (!ts._pendingAskTool) ts._pendingAskTool = [];
         ts._pendingAskTool.push(d);
+        _bgNotify(tabId, found, 'warning', t('notif.bg_ask'), d.question || '');
       }
       break;
 
@@ -6706,8 +6725,6 @@ function handleWsMsg(d) {
       if (_ric && /^[a-f0-9-]{36}$/.test(_ric)) {
         const _card = document.querySelector(`.ask-user-card[data-rid="${_ric}"]`);
         if (_card && !_card.classList.contains('ask-answered')) {
-        const _q = (Array.isArray(d.questions) && d.questions[0]?.question) || d.question || '';
-        _bgNotify(tabId, found, 'warning', t('notif.bg_ask'), _q);
           const _q = _card._askQuestions?.[0]?.question || '';
           const _preview = _q.length > 60 ? _q.slice(0, 57) + '...' : _q;
           _collapseAskCard(_card, _preview, 'timeout');
@@ -6719,7 +6736,6 @@ function handleWsMsg(d) {
             if (_idx !== -1) {
               _ts._pendingAskUser[_idx] = { ..._ts._pendingAskUser[_idx], _timedOut: true };
             }
-        _bgNotify(tabId, found, 'warning', t('notif.bg_ask'), d.question || '');
           }
         }
       }
@@ -8922,15 +8938,15 @@ Continue from here:`;
 // ─── Tabs ─────────────────────────────────────────────────────────────────
 function renderTabs() {
   const bar = $i('tabsBar'); if (!bar) return;
+  // Shared project-switcher node (normally lives in .hdr-meta) — grab the live
+  // reference before wiping the bar so it survives the rebuild below no matter
+  // which container currently holds it.
+  const ddWrap = $i('projDdWrap');
+  const hdrCollapsed = !!$i('hdrZone')?.classList.contains('collapsed');
   bar.innerHTML = '';
-  // Header collapse toggle
-  const hdrBtn = document.createElement('button');
-  hdrBtn.className = 'hdr-toggle' + ($i('hdrZone')?.classList.contains('collapsed') ? ' collapsed' : '');
-  hdrBtn.id = 'hdrToggleBtn';
-  hdrBtn.title = t('hdr.toggle');
-  hdrBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg>';
-  hdrBtn.onclick = toggleHeader;
-  bar.appendChild(hdrBtn);
+  // While the header (and its own project switcher) is collapsed, surface the
+  // switcher at the front of the tabs bar so projects stay reachable.
+  if (ddWrap && hdrCollapsed) bar.appendChild(ddWrap);
   for (const tab of openTabs) {
     const el = document.createElement('div');
     // A terminal tab reads differently from a chat tab at a glance: same bar, same
@@ -8979,6 +8995,22 @@ function renderTabs() {
   fsWrap.innerHTML = '<span class="fs-icon">A</span><input type="range" class="font-slider" id="fontSlider" min="12" max="22" step="0.5" value="' + curFont + '"><span class="fs-icon lg">A</span>';
   bar.appendChild(fsWrap);
   fsWrap.querySelector('.font-slider').addEventListener('input', function() { setFontSize(parseFloat(this.value)); });
+  // Header collapse toggle — placed last, to the right of the font slider
+  const hdrBtn = document.createElement('button');
+  hdrBtn.className = 'hdr-toggle' + (hdrCollapsed ? ' collapsed' : '');
+  hdrBtn.id = 'hdrToggleBtn';
+  hdrBtn.title = t('hdr.toggle');
+  hdrBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg>';
+  hdrBtn.onclick = toggleHeader;
+  bar.appendChild(hdrBtn);
+  // Header expanded again: return the project switcher to its normal spot in .hdr-meta.
+  if (ddWrap && !hdrCollapsed) {
+    const hdrMeta = document.querySelector('.hdr-meta');
+    if (hdrMeta && ddWrap.parentElement !== hdrMeta) {
+      const verBadge = $i('versionBadge');
+      hdrMeta.insertBefore(ddWrap, verBadge || null);
+    }
+  }
   updateHistSpinners();
   // Sync mobile header title
   if (typeof updateMobTitle === 'function') updateMobTitle();
@@ -9470,8 +9502,9 @@ function toggleHeader() {
   const zone = $i('hdrZone');
   if (!zone) return;
   zone.classList.toggle('collapsed');
-  const btn = $i('hdrToggleBtn');
-  if (btn) btn.classList.toggle('collapsed', zone.classList.contains('collapsed'));
+  // renderTabs() rebuilds #hdrToggleBtn with the right 'collapsed' class and
+  // re-homes the project switcher (into the tabs bar or back to .hdr-meta).
+  renderTabs();
   saveUIState();
 }
 
@@ -10508,6 +10541,7 @@ function _initHistDrag(el, container) {
 // Global (all-projects) view of live runs + scheduled + recent sessions.
 // Pushed via WS 'activity_dirty' (server-debounced) + a visible-only reconciliation poll.
 let _activityGroupByProject = (() => { try { return localStorage.getItem('actGroup') !== 'flat'; } catch { return true; } })();
+let _actSubCollapsed = (() => { try { return JSON.parse(localStorage.getItem('actSubCollapsed') || '{}'); } catch { return {}; } })();
 let _activityFetching = false, _activityRefreshQueued = false, _activityPollTimer = null;
 let _lastActivity = { live: [], scheduled: [], recent: [] };
 let _lastActivityRaw = '';
@@ -10541,11 +10575,16 @@ function _actSchedWhen(unixSec) {
   let lang; try { lang = localStorage.getItem('lang') || 'en'; } catch { lang = 'en'; }
   return new Date(unixSec*1000).toLocaleDateString(lang,{day:'numeric',month:'short'});
 }
-let _actSubCollapsed = (() => { try { return JSON.parse(localStorage.getItem('actSubCollapsed') || '{}'); } catch { return {}; } })();
 
 function toggleActivityGroup() {
   _activityGroupByProject = !_activityGroupByProject;
   try { localStorage.setItem('actGroup', _activityGroupByProject ? 'group' : 'flat'); } catch {}
+  renderActivity(_lastActivity);
+}
+
+function toggleActSub(kind) {
+  _actSubCollapsed[kind] = !_actSubCollapsed[kind];
+  try { localStorage.setItem('actSubCollapsed', JSON.stringify(_actSubCollapsed)); } catch {}
   renderActivity(_lastActivity);
 }
 
@@ -10582,12 +10621,6 @@ function _actItemHtml(it, kind) {
   const onclick = clickable ? `onclick="activityOpen('${it.session_id}','${it.project_id||''}')"` : '';
   const staticCls = clickable ? '' : ' act-static';
   if (kind === 'live') {
-function toggleActSub(kind) {
-  _actSubCollapsed[kind] = !_actSubCollapsed[kind];
-  try { localStorage.setItem('actSubCollapsed', JSON.stringify(_actSubCollapsed)); } catch {}
-  renderActivity(_lastActivity);
-}
-
     const dot = it.status === 'recovering' ? 'recovering' : 'run';
     const meta = it.status === 'recovering'
       ? `<span class="act-meta">↻ ${escH(t('act.recovering'))}</span>`
@@ -12214,7 +12247,9 @@ function renderCommands() {
         <div class="ds" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(cmd.text)}</div>
       </div>
       <button class="cfg" onclick="event.stopPropagation();editCommand('${escH(cmd.id)}')" title="${t('cmd.edit.title')}">✏️</button>
+      <button class="cfg term-paste-btn" title="${t('term.paste.title')}">›_</button>
       <button class="rm" onclick="event.stopPropagation();rCommand('${escH(cmd.id)}')" title="${t('cmd.del.title')}">✕</button>`;
+    div.querySelector('.term-paste-btn').addEventListener('click', (e) => { e.stopPropagation(); pasteToTerminal(cmd.text); });
     div.addEventListener('click', () => {
       inEl.value = cmd.text;
       inEl.focus();
@@ -12310,9 +12345,7 @@ document.addEventListener('keydown', e => {
     saveCommand();
   }
 });
-      <button class="cfg term-paste-btn" title="${t('term.paste.title')}">›_</button>
 
-    div.querySelector('.term-paste-btn').addEventListener('click', (e) => { e.stopPropagation(); pasteToTerminal(cmd.text); });
 // ─── External Agents sidebar ─────────────────────────────────────────────────
 let _editingAgentId = null;
 
@@ -12949,21 +12982,38 @@ function renderProjects() {
 let _projDdOpen = false;
 
 function toggleProjDropdown() {
-  _projDdOpen = !_projDdOpen;
+  if (_projDdOpen) { closeProjDropdown(); return; }
+  _projDdOpen = true;
   const btn = $i('projDdBtn');
   const menu = $i('projDdMenu');
-  btn?.classList.toggle('open', _projDdOpen);
-  menu?.classList.toggle('open', _projDdOpen);
-  if (_projDdOpen) {
-    $i('projDdSearch')?.focus();
-    renderProjDropdownList();
+  const wrap = $i('projDdWrap');
+  btn?.classList.add('open');
+  menu?.classList.add('open');
+  // .tabs-bar scrolls horizontally (overflow-x:auto → overflow-y:auto too), which
+  // clips an absolutely-positioned menu. When the switcher lives there (header
+  // collapsed), portal the menu to <body> as position:fixed, anchored to the button.
+  if (wrap && menu && wrap.closest('#tabsBar')) {
+    const r = btn.getBoundingClientRect();
+    document.body.appendChild(menu);
+    menu.classList.add('proj-dd-menu-portal');
+    menu.style.top = (r.bottom + 8) + 'px';
+    menu.style.left = r.left + 'px';
   }
+  $i('projDdSearch')?.focus();
+  renderProjDropdownList();
 }
 
 function closeProjDropdown() {
   _projDdOpen = false;
   $i('projDdBtn')?.classList.remove('open');
-  $i('projDdMenu')?.classList.remove('open');
+  const menu = $i('projDdMenu');
+  menu?.classList.remove('open');
+  if (menu?.classList.contains('proj-dd-menu-portal')) {
+    const wrap = $i('projDdWrap');
+    menu.classList.remove('proj-dd-menu-portal');
+    menu.style.top = ''; menu.style.left = '';
+    if (wrap) wrap.appendChild(menu);
+  }
 }
 
 function _projDdItemHTML(p) {
@@ -13022,9 +13072,10 @@ function selectProjFromDropdown(id) {
   }
 }
 
-// Close dropdown on click outside
+// Close dropdown on click outside (menu may be portaled to <body>, detached
+// from .proj-dd-wrap — so a click inside it must not count as "outside")
 document.addEventListener('click', e => {
-  if (_projDdOpen && !e.target.closest('.proj-dd-wrap')) {
+  if (_projDdOpen && !e.target.closest('.proj-dd-wrap') && !e.target.closest('#projDdMenu')) {
     closeProjDropdown();
   }
 });
@@ -13106,15 +13157,9 @@ function switchProject(id) {
     isGen = false; generatingTabId = null; setSendStop(false);
   }
 
-  // Restore input draft, attachments & reply-to for the target tab (or clear if no tab)
-  if (activeTabId) {
-    restoreComposerState(activeTabId);
-  } else {
-    inEl.value = '';
-    inEl.style.height = 'auto';
-    _clearAttachments(false);
-    clearReply();
-  }
+  // Restore input draft, attachments & reply-to for the target tab (restoreComposerState
+  // handles the no-active-tab case itself, including the placeholder-height recompute).
+  restoreComposerState(activeTabId);
 
   renderProjects(); saveUIState(); loadHist(); loadFiles(''); updateSessBar();
   loadBots(); // roster is per-project: without this the sidebar keeps the old project's bots
@@ -15414,6 +15459,10 @@ document.addEventListener('keydown', e => {
 // null = not yet asked. Restoring a terminal tab at boot can race the capability
 // probe, and a `false` default would silently refuse to reopen it.
 let _terminalAvailable = null, _termSessionId = null;
+// Last terminal tab actually shown, kept even after switching to a chat tab
+// (unlike _termSessionId, which is cleared) — lets the "paste to terminal"
+// action target it when the user is currently looking at a chat tab.
+let _lastTerminalSessionId = null;
 // sessionId -> { term, fit, ws, host, label, dot, state }. Every open terminal tab
 // keeps a live entry here so switching tabs never reconnects or repaints it.
 const _terms = new Map();
@@ -15475,9 +15524,14 @@ function showTerminalView(sessionId, label) {
   document.querySelector('.center').classList.add('term-mode');
   $i('termKillBtn').textContent = t('term.kill');
   _termSessionId = sessionId;
+  _lastTerminalSessionId = sessionId;
 
   let entry = _terms.get(sessionId);
   if (!entry) entry = _createTerminal(sessionId);
+  // The socket can die while this tab was hidden (server restart, idle proxy
+  // timeout, tmux control client dying) — xterm just sits on its last frame with
+  // nothing telling it to reconnect. Catch it here, on the way back in.
+  else if (!entry.ws || entry.ws.readyState >= 2) _connectTerminalWs(sessionId);
 
   // Show only this session's host; the others stay in the DOM, still attached to
   // their sockets and still receiving output while hidden.
@@ -15510,6 +15564,24 @@ function _createTerminal(sessionId) {
   const entry = { term, fit, ws: null, host, label: '', dot: '#8b949e', state: '' };
   _terms.set(sessionId, entry);
 
+  // Bound to `entry.ws`, not a captured socket — so a later reconnect (fresh
+  // WebSocket swapped into entry.ws) keeps routing keystrokes without re-wiring.
+  term.onData(d => { if (entry.ws && entry.ws.readyState === 1) entry.ws.send(JSON.stringify({ type: 'input', data: d })); });
+  _connectTerminalWs(sessionId);
+  return entry;
+}
+
+// (Re)open the WebSocket for an existing terminal entry. Used for the initial
+// connect and to recover after the socket drops — server restart, idle proxy
+// timeout, or the tmux control-mode client dying server-side. xterm and its
+// scrollback are left untouched; only the socket is replaced, and the server
+// re-paints the current tmux pane on attach (see terminal-bridge.js captureScreen),
+// so the view catches back up to what actually happened while disconnected.
+function _connectTerminalWs(sessionId) {
+  const entry = _terms.get(sessionId); if (!entry) return;
+  const term = entry.term;
+  entry.dot = '#d29922'; entry.state = t('term.state.reconnecting'); _paintTermStatus(sessionId);
+
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const ws = new WebSocket(`${proto}//${location.host}/ws/terminal?session=${encodeURIComponent(sessionId)}`);
   entry.ws = ws;
@@ -15522,10 +15594,6 @@ function _createTerminal(sessionId) {
       const key = msg.state === 'attach' ? 'term.state.attached'
         : !msg.restored ? 'term.state.started'
         : msg.restoredExact ? 'term.state.restored' : 'term.state.restoredLast';
-// Last terminal tab actually shown, kept even after switching to a chat tab
-// (unlike _termSessionId, which is cleared) — lets the "paste to terminal"
-// action target it when the user is currently looking at a chat tab.
-let _lastTerminalSessionId = null;
       entry.state = t(key); entry.dot = '#3fb950';
     } else if (msg.type === 'restore_failed') {
       entry.state = t('term.state.restoreFailed');
@@ -15576,43 +15644,6 @@ function detachTerminal(sessionId) {
     _terms.delete(id);
   }
   if (!sessionId || sessionId === _termSessionId) _termSessionId = null;
-}
-
-function sendTermResize() {
-  const e = _terms.get(_termSessionId); if (!e) return;
-  try { e.fit.fit(); } catch { return; }
-  if (e.ws && e.ws.readyState === 1) e.ws.send(JSON.stringify({ type: 'resize', cols: e.term.cols, rows: e.term.rows }));
-}
-window.addEventListener('resize', sendTermResize);
-
-function closeTerminalPane() { detachTerminal(); hideTerminalView(); }
-  _lastTerminalSessionId = sessionId;
-</script>
-
-</body>
-  // The socket can die while this tab was hidden (server restart, idle proxy
-  // timeout, tmux control client dying) — xterm just sits on its last frame with
-  // nothing telling it to reconnect. Catch it here, on the way back in.
-  else if (!entry.ws || entry.ws.readyState >= 2) _connectTerminalWs(sessionId);
-</html>
-  // Bound to `entry.ws`, not a captured socket — so a later reconnect (fresh
-  // WebSocket swapped into entry.ws) keeps routing keystrokes without re-wiring.
-  term.onData(d => { if (entry.ws && entry.ws.readyState === 1) entry.ws.send(JSON.stringify({ type: 'input', data: d })); });
-  _connectTerminalWs(sessionId);
-  return entry;
-}
-
-// (Re)open the WebSocket for an existing terminal entry. Used for the initial
-// connect and to recover after the socket drops — server restart, idle proxy
-// timeout, or the tmux control-mode client dying server-side. xterm and its
-// scrollback are left untouched; only the socket is replaced, and the server
-// re-paints the current tmux pane on attach (see terminal-bridge.js captureScreen),
-// so the view catches back up to what actually happened while disconnected.
-function _connectTerminalWs(sessionId) {
-  const entry = _terms.get(sessionId); if (!entry) return;
-  const term = entry.term;
-  entry.dot = '#d29922'; entry.state = t('term.state.reconnecting'); _paintTermStatus(sessionId);
-
   if (!sessionId || sessionId === _lastTerminalSessionId) _lastTerminalSessionId = null;
 }
 
@@ -15646,3 +15677,17 @@ async function pasteSkillToTerminal(id) {
     if (d.error) { toast(d.error, true); return; }
     pasteToTerminal(d.content);
   } catch (e) { toast(e.message, true); }
+}
+
+function sendTermResize() {
+  const e = _terms.get(_termSessionId); if (!e) return;
+  try { e.fit.fit(); } catch { return; }
+  if (e.ws && e.ws.readyState === 1) e.ws.send(JSON.stringify({ type: 'resize', cols: e.term.cols, rows: e.term.rows }));
+}
+window.addEventListener('resize', sendTermResize);
+
+function closeTerminalPane() { detachTerminal(); hideTerminalView(); }
+</script>
+
+</body>
+</html>
