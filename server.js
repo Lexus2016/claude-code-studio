@@ -122,6 +122,51 @@ const ALLOWED_BROWSE_ROOTS = [
   path.resolve(APP_DIR),
   path.resolve(__dirname),
 ];
+
+// Guard for every endpoint that accepts a filesystem path from the client. It lives
+// next to the list it enforces because that list sat here unused: declaring the roots
+// without a single caller made the control look present while nothing checked it.
+function isPathAllowed(target) {
+  if (!target || typeof target !== 'string') return false;
+  let resolved;
+  try { resolved = path.resolve(target); } catch { return false; }
+  // Registered LOCAL project workdirs count as allowed even when they sit outside the
+  // default roots — the user already chose them, and refusing them would break every
+  // project that predates this check. Remote workdirs are paths on another machine.
+  let roots = ALLOWED_BROWSE_ROOTS;
+  try {
+    roots = roots.concat(loadProjects().filter(p => !p.isRemote && p.workdir).map(p => p.workdir));
+  } catch { /* projects.json unreadable — fall back to the static roots */ }
+  const t = _realish(resolved);
+  return roots.some(root => {
+    let r;
+    try { r = _realish(path.resolve(root)); } catch { return false; }
+    const rel = path.relative(r, t);
+    // '' = the root itself; anything climbing out of it starts with '..'.
+    return rel === '' || (rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel));
+  });
+}
+
+// Resolve symlinks before comparing. Lexical containment alone is not enough: a
+// symlink sitting inside an allowed root (say ~/link -> /etc) is lexically inside
+// it while every read and write lands on the target. Paths that do not exist yet
+// are normal here — /api/project/init creates them — so resolve the deepest
+// existing ancestor and re-attach the rest, which is where a symlink could hide.
+// realpath also canonicalises case on case-insensitive volumes, so no separate
+// case-folding heuristic is needed (and none that would misfire on a
+// case-sensitive APFS or ZFS volume).
+function _realish(target) {
+  let cur = path.resolve(target);
+  const tail = [];
+  for (;;) {
+    try { return path.join(fs.realpathSync(cur), ...tail.reverse()); } catch {}
+    const parent = path.dirname(cur);
+    if (parent === cur) return path.resolve(target);   // reached the volume root
+    tail.push(path.basename(cur));
+    cur = parent;
+  }
+}
+
 const SKILLS_DIR = path.join(APP_DIR, 'skills');
 const DB_PATH = path.join(APP_DIR, 'data', 'chats.db');
 const PROJECTS_FILE = path.join(APP_DIR, 'data', 'projects.json');
@@ -2660,6 +2705,26 @@ function decryptPassword(stored) {
     return d.update(buf.subarray(32)).toString('utf8') + d.final('utf8');
   } catch { return ''; }
 }
+
+// A remote project keeps its own copy of the host's SSH password. Projects created
+// before encryption landed stored it as plaintext, and decryptPassword's
+// backward-compat branch reads plaintext happily — so those rows were never upgraded
+// and sat readable on disk indefinitely. Rewrite them once, at boot.
+(function migratePlaintextProjectPasswords() {
+  try {
+    const projects = loadProjects();
+    let n = 0;
+    for (const pr of projects) {
+      if (pr.password && !String(pr.password).startsWith('enc:')) {
+        pr.password = encryptPassword(String(pr.password));
+        n++;
+      }
+    }
+    if (n) { saveProjects(projects); log.info('encrypted plaintext project passwords', { count: n }); }
+  } catch (e) {
+    log.warn('project password migration skipped', { err: e.message });
+  }
+})();
 
 // testSshConnection is now exported from claude-ssh.js (uses ssh2 library, supports password auth)
 
@@ -5890,6 +5955,7 @@ const GLOBAL_CLAUDE_MD = path.join(os.homedir(), '.claude', 'CLAUDE.md');
 const LOCAL_CLAUDE_MD  = path.join(WORKDIR, 'CLAUDE.md');
 
 app.get('/api/claude-md', (req,res) => {
+  if (req.query.dir && !isPathAllowed(req.query.dir)) return res.status(403).json({ error: 'path not allowed' });
   const localDir = req.query.dir ? path.resolve(req.query.dir) : null;
   const localMd  = localDir ? path.join(localDir, 'CLAUDE.md') : LOCAL_CLAUDE_MD;
   const result = { global: '', local: '', globalPath: GLOBAL_CLAUDE_MD, localPath: localMd };
@@ -5902,6 +5968,7 @@ app.post('/api/claude-md', (req,res) => {
   const { type, content, dir } = req.body;
   if (!['global','local'].includes(type))
     return res.status(400).json({ error: 'type must be "global" or "local"' });
+  if (type === 'local' && dir && !isPathAllowed(dir)) return res.status(403).json({ error: 'path not allowed' });
   const localMd = dir ? path.join(path.resolve(dir), 'CLAUDE.md') : LOCAL_CLAUDE_MD;
   const target  = type === 'global' ? GLOBAL_CLAUDE_MD : localMd;
   try {
@@ -6075,7 +6142,10 @@ app.get('/api/project-files/read', (req, res) => {
 });
 
 // Projects CRUD
-app.get('/api/projects', (_,res) => res.json(loadProjects()));
+// The stored SSH password is used only server-side (claude-ssh.js). The UI edits
+// credentials through /api/remote-hosts, which masks them as '***' — so this list
+// has no reason to carry the secret at all, encrypted or not.
+app.get('/api/projects', (_,res) => res.json(loadProjects().map(({ password, ...rest }) => rest)));
 
 app.post('/api/projects', (req,res) => {
   const { name, workdir, gitInit, isRemote=false, remoteHostId='', remoteWorkdir='', sshKeyPath='', port=22 } = req.body;
@@ -6096,6 +6166,10 @@ app.post('/api/projects', (req,res) => {
       return res.json({ ok:true, id, actions });
     }
     // Local project (existing behavior)
+    // Checked here too, and not only in /api/project/init: a registered workdir
+    // becomes an allowed root for isPathAllowed, so an unchecked create would let
+    // one request widen the allowlist to anywhere and disable every other check.
+    if (!isPathAllowed(workdir)) return res.status(403).json({ error: 'path not allowed' });
     if (!fs.existsSync(workdir)) fs.mkdirSync(workdir, { recursive:true });
     if (gitInit && !fs.existsSync(path.join(workdir,'.git'))) {
       try { execSync('git init', { cwd:workdir, stdio:'pipe' }); actions.push('git init'); }
@@ -6193,7 +6267,7 @@ app.post('/api/remote-hosts/:id/test', async (req,res) => {
   } catch(e) { res.status(400).json({ error: e.message||'Connection failed' }); }
 });
 
-// Directory browser — list directories at given path (no restriction to WORKDIR)
+// Directory browser — lists directories under an allowed root (see isPathAllowed)
 app.get('/api/browse-dirs', (req, res) => {
   // Windows: show drive list when explicitly requested OR when no path given (initial open)
   if (process.platform === 'win32' && (!req.query.path || req.query.path === '__drives__')) {
@@ -6205,6 +6279,7 @@ app.get('/api/browse-dirs', (req, res) => {
     return res.json({ path: '__drives__', parent: null, items: drives });
   }
   const dir = path.resolve(req.query.path || os.homedir());
+  if (!isPathAllowed(dir)) return res.status(403).json({ error: 'path not allowed' });
   try {
     if (!fs.statSync(dir).isDirectory()) return res.status(400).json({ error: 'Not a directory' });
     const raw = fs.readdirSync(dir, { withFileTypes: true });
@@ -6227,6 +6302,7 @@ app.get('/api/browse-dirs', (req, res) => {
 app.post('/api/project/init', (req, res) => {
   const { workdir, gitInit } = req.body;
   if (!workdir) return res.status(400).json({ error: 'workdir required' });
+  if (!isPathAllowed(workdir)) return res.status(403).json({ error: 'path not allowed' });
   try {
     if (!fs.existsSync(workdir)) fs.mkdirSync(workdir, { recursive: true });
     const actions = [];
