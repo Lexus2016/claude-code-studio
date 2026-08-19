@@ -1239,10 +1239,15 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .bot-hd .bh-model::before { content: '· '; }
 
 /* Starter-prompt buttons: a press should feel like a press. */
-.bot-global-row { display:flex; align-items:flex-start; gap:8px; cursor:pointer; }
-.bot-global-row input { margin-top:3px; flex-shrink:0; }
-.bot-global-row b { display:block; font-weight:500; }
-.bot-global-row .cmd-name-hint { display:block; margin-top:2px; }
+/* A checkbox row is a control, not a section caption, so it opts out of the
+   uppercase + letter-spacing treatment .cmd-field label applies. */
+.bot-modal .cmd-field label.bot-global-row { display:flex; align-items:flex-start; gap:9px; cursor:pointer;
+  text-transform:none; letter-spacing:normal; font-weight:400; font-size:12px; }
+.bot-global-row input[type=checkbox] { width:14px; height:14px; flex:none; margin:1px 0 0;
+  accent-color:var(--accent); cursor:pointer; }
+.bot-global-row > span { min-width:0; }
+.bot-global-row b { display:block; font-size:12px; font-weight:600; color:var(--text); }
+.bot-global-row .cmd-name-hint { display:block; margin-top:3px; }
 .bot-danger { background:transparent; border:1px solid var(--err,#f85149); color:var(--err,#f85149); border-radius:5px; padding:6px 11px; font-size:12px; cursor:pointer; }
 .bot-danger:hover { background:rgba(248,81,73,.12); }
 .bot-global-badge { flex-shrink:0; font-size:11px; opacity:.65; padding:0 4px; cursor:default; }
@@ -1760,6 +1765,17 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .bot-modal textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--abg); }
 .bot-modal input::placeholder,
 .bot-modal textarea::placeholder { color: var(--muted); opacity: .65; }
+/* The block above styles TEXT fields — width:100%, padding, border, radius. A
+   checkbox must opt out of all of it, or it stretches across the whole row and
+   squeezes its own label into a one-character column. Written as a narrow reset
+   rather than by adding :not([type=checkbox]) above: that would raise the base
+   rule's specificity to (0,2,1) and silently outrank every narrower override that
+   relies on it being the least specific one — .bot-modal .emoji-field input among
+   them, which is how the emoji field lost its 68px width and pushed its button
+   outside the modal. */
+.bot-modal input[type=checkbox] {
+  width: auto; padding: 0; border: none; background: none; border-radius: 0;
+}
 .bot-modal .cmd-name-hint { font-size: 11px; color: var(--muted); line-height: 1.45; }
 .bot-modal .cmd-name-hint b { color: var(--accent2); font-family: var(--font-mono); }
 .cmd-field { display: flex; flex-direction: column; gap: 8px; }
