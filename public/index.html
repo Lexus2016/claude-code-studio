@@ -15580,6 +15580,7 @@ function _createTerminal(sessionId) {
 function _connectTerminalWs(sessionId) {
   const entry = _terms.get(sessionId); if (!entry) return;
   const term = entry.term;
+  entry.exited = false;
   entry.dot = '#d29922'; entry.state = t('term.state.reconnecting'); _paintTermStatus(sessionId);
 
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -15599,13 +15600,28 @@ function _connectTerminalWs(sessionId) {
       entry.state = t('term.state.restoreFailed');
     } else if (msg.type === 'exit') {
       entry.dot = '#8b949e'; entry.state = t('term.state.exited');
+      entry.exited = true;
     } else if (msg.type === 'error') {
       term.write(`\r\n\x1b[31m${msg.error}\x1b[0m\r\n`);
       entry.dot = '#f85149'; entry.state = t('term.state.error');
     }
     _paintTermStatus(sessionId);
   };
-  ws.onclose = () => { entry.dot = '#8b949e'; entry.state = t('term.state.disconnected'); _paintTermStatus(sessionId); };
+  ws.onclose = () => {
+    entry.dot = '#8b949e'; entry.state = t('term.state.disconnected'); _paintTermStatus(sessionId);
+    // Auto-retry an unexpected drop (network blip, server restart, idle proxy
+    // timeout) even while this terminal tab stays in the foreground the whole
+    // time — showTerminalView()/visibilitychange only catch a drop that happens
+    // while the tab is hidden or backgrounded, not one that happens while the
+    // user is actively looking at it. Skip retrying after a clean agent exit
+    // (already reported via the 'exit' message above) or once this socket has
+    // been superseded by a newer one (stale close event from the old attempt).
+    if (!entry.exited && _terms.get(sessionId) === entry && entry.ws === ws) {
+      setTimeout(() => {
+        if (!entry.exited && _terms.get(sessionId) === entry && entry.ws === ws) _connectTerminalWs(sessionId);
+      }, 2000);
+    }
+  };
   return ws;
 }
 
