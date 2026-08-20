@@ -4615,10 +4615,17 @@ app.get('/api/tasks', (req, res) => {
   res.json(result);
 });
 app.get('/api/tasks/etag', (req, res) => { res.json(stmts.getTasksEtag.get()); });
-// Returns session IDs that currently have in_progress tasks — used by client to show spinners on all tabs
+// Returns session IDs that are running right now — used by the client to restore
+// spinners on EVERY tab after a reload, including tabs that are not the active one.
+// The union must match isChatRunning (activeChatSessions || activeTasks) plus the DB:
+// a plain web chat never writes a `tasks` row, so a DB-only query reported [] while a
+// chat was mid-turn and background tabs silently lost their busy dot on reload.
 app.get('/api/tasks/running-sessions', (req, res) => {
-  const rows = db.prepare(`SELECT DISTINCT session_id FROM tasks WHERE status='in_progress' AND session_id IS NOT NULL`).all();
-  res.json(rows.map(r => r.session_id));
+  const ids = new Set();
+  for (const r of db.prepare(`SELECT DISTINCT session_id FROM tasks WHERE status='in_progress' AND session_id IS NOT NULL`).all()) ids.add(r.session_id);
+  for (const id of activeChatSessions) ids.add(id);
+  for (const id of activeTasks.keys()) ids.add(id);
+  res.json([...ids]);
 });
 // ─── Activity panel aggregate (live + scheduled + recent, across ALL projects) ──
 // live      = in-memory activeTasks (web/telegram chats) UNION db tasks.status='in_progress'
