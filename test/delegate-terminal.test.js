@@ -1,8 +1,15 @@
 'use strict';
 // Delegate → "open a terminal" argument construction (issue #22).
 // Pure-function tests: nothing is spawned, so the Windows paths are covered on any host.
+//
+// The Windows escaping is asserted as PROPERTIES against the cmd/argv parser model
+// in test/cmd-model.js, never as a literal expected string. A literal-equality test
+// is exactly what let the `\"` bug ship: `\` is not an escape character for cmd, so
+// `\"` closed the quoted region and the `|` in the real sync prompt ("| answer") was
+// parsed as a pipe — while the test asserting that broken string stayed green.
 const assert = require('assert');
 const { shellEscape, buildTerminalCommand, winTerminalArgs } = require('../delegate-terminal');
+const { cmdScan, runBatchLine } = require('./cmd-model');
 
 let failed = 0;
 function check(name, fn) {
@@ -32,20 +39,91 @@ check('full argv shape', () => {
   );
 });
 
-console.log('shellEscape (win32)');
+// The prompt server.js builds for sync-mode delegation. It contains `"| answer"`,
+// i.e. both a quote and a pipe — the combination the old escaping broke on.
+const SYNC_PROMPT = 'Read .crosswork/ab12/CONTEXT.md for full context of the delegated task, then start working. '
+  + 'Follow the protocol described in that file for communicating through .crosswork/ab12/DIALOG.md. '
+  + 'IMPORTANT: When you have a final answer for the user, write it to DIALOG.md using the tag "| answer" '
+  + 'after your agent name, like: ## [timestamp] your-name | answer.';
 
-check('double quotes are escaped for the argv parser, not prefixed with ^', () => {
-  const out = shellEscape('use the tag "| answer" after your name', 'win32');
-  assert.strictEqual(out, '"use the tag \\"| answer\\" after your name"');
-  assert.ok(!out.includes('^'), 'a ^ inside double quotes is literal and corrupts the prompt');
+const ADVERSARIAL = [
+  ['real sync prompt',   SYNC_PROMPT],
+  ['percent expansion',  'compare %PATH% with %USERPROFILE% and report'],
+  ['&& del injection',   'x && del /q C:\\Windows\\System32 && echo pwned'],
+  ['unbalanced quote',   'he said "hi and never closed it'],
+  ['trailing backslash', 'look in C:\\projects\\build\\'],
+  ['newlines',           'first line\nsecond line\r\nthird line'],
+  ['non-ASCII',          'Привіт! Опиши «модуль» — детально, ще й 100% точно'],
+  ['every metachar',     'a & b | c < d > e ( f ) g ^ h % i " j \\ k'],
+];
+
+// A raw newline cannot be represented on a cmd command line at all (`^` + newline is
+// a line continuation), so win32 folds newlines to spaces — that is the only lossy step.
+const winExpected = (s) => s.replace(/\r\n|\r|\n/g, ' ');
+
+console.log('shellEscape (win32) — property: no cmd metacharacter is ever active');
+
+for (const [name, prompt] of ADVERSARIAL) {
+  check(`${name}: & | < > ( ) ^ all stay inside a quoted region`, () => {
+    const out = shellEscape(prompt, 'win32');
+    const scan = cmdScan(out);
+    assert.deepStrictEqual(scan.active, [],
+      `these characters act as cmd operators instead of text: ${JSON.stringify(scan.active)}\n    escaped: ${out}`);
+    assert.strictEqual(scan.unbalancedQuote, false,
+      'the quoted region is left open — everything after it is parsed as bare shell text');
+    assert.strictEqual(scan.continued, false, 'trailing ^ would swallow the next .bat line');
+    assert.ok(!/[\r\n]/.test(out), 'a raw newline ends the .bat line');
+  });
+}
+
+console.log('buildTerminalCommand (win32) — property: the full .bat line round-trips');
+
+for (const [name, prompt] of ADVERSARIAL) {
+  check(`${name}: cmd splits on the intended && only, and argv survives`, () => {
+    const line = buildTerminalCommand({ template: 'claude -p {prompt}' }, 'C:\\proj dir', prompt, 'win32');
+    const run = runBatchLine(line, { PATH: 'C:\\WINDOWS', USERPROFILE: 'C:\\Users\\a' });
+    assert.strictEqual(run.commands.length, 2,
+      `expected exactly \`cd …\` + \`claude …\`, got ${run.commands.length}: ${JSON.stringify(run.commands)}`);
+    assert.ok(run.commands[0].startsWith('cd '), `first command is not the cd: ${run.commands[0]}`);
+
+    const argv = run.argvOf(1);
+    assert.deepStrictEqual(argv.slice(0, 2), ['claude', '-p'], `argv head mangled: ${JSON.stringify(argv)}`);
+    assert.strictEqual(argv.length, 3, `prompt was split into extra arguments: ${JSON.stringify(argv)}`);
+    assert.strictEqual(argv[2], winExpected(prompt), 'prompt did not survive the argv parser');
+  });
+}
+
+console.log('buildTerminalCommand (win32) — property: survives an npm .cmd shim re-parse');
+
+for (const [name, prompt] of ADVERSARIAL) {
+  // `claude`, `codex` and `opencode` are .cmd shims on Windows: they re-insert the raw
+  // argument text via %*, so cmd phase 2 runs a second time over it (CVE-2024-1874).
+  check(`${name}: %* re-insertion does not re-activate anything`, () => {
+    const line = buildTerminalCommand({ template: 'claude -p {prompt}' }, 'C:\\proj dir', prompt, 'win32');
+    const run = runBatchLine(line, {});
+    const shim = run.shimOf(1);
+    assert.deepStrictEqual(shim.scan.active, [],
+      `the shim's second parse activates ${JSON.stringify(shim.scan.active)}`);
+    assert.strictEqual(shim.argv[3], winExpected(prompt), 'prompt did not survive the shim');
+  });
+}
+
+console.log('shellEscape (win32) — batch layer');
+
+check('percent is doubled — batch phase 1 eats a single %', () => {
+  const out = shellEscape('100% done', 'win32');
+  const { batchPercent } = require('./cmd-model');
+  assert.ok(batchPercent(out, {}).includes('100% done'), `phase 1 mangled it: ${batchPercent(out, {})}`);
 });
 
-check('percent is doubled for the batch parser', () => {
-  assert.strictEqual(shellEscape('100% done', 'win32'), '"100%% done"');
+check('a defined %VAR% is NOT expanded by the batch parser', () => {
+  const out = shellEscape('token %SECRET% here', 'win32');
+  const { batchPercent } = require('./cmd-model');
+  assert.ok(batchPercent(out, { SECRET: 'hunter2' }).includes('%SECRET%'), 'the variable leaked into the prompt');
 });
 
-check('& | < > are left alone — literal inside double quotes', () => {
-  assert.strictEqual(shellEscape('a & b | c < d > e', 'win32'), '"a & b | c < d > e"');
+check('a plain workdir is quoted and otherwise untouched', () => {
+  assert.strictEqual(shellEscape('C:\\Users\\a\\proj', 'win32'), '"C:\\Users\\a\\proj"');
 });
 
 console.log('shellEscape (unix)');
@@ -58,12 +136,11 @@ check('unix escaping is untouched by the win32 rules', () => {
   assert.strictEqual(shellEscape('100% "quoted" & piped', 'linux'), `'100% "quoted" & piped'`);
 });
 
-console.log('buildTerminalCommand');
-
-check('cd + template with the prompt substituted (win32)', () => {
-  const cmd = buildTerminalCommand({ template: 'claude {prompt}' }, 'C:\\proj', 'do "x"', 'win32');
-  assert.strictEqual(cmd, 'cd "C:\\proj" && claude "do \\"x\\""');
+check('unix keeps newlines verbatim (single quotes carry them)', () => {
+  assert.strictEqual(shellEscape('a\nb', 'linux'), "'a\nb'");
 });
+
+console.log('buildTerminalCommand');
 
 check('cd + template with the prompt substituted (unix)', () => {
   const cmd = buildTerminalCommand({ template: 'claude {prompt}' }, '/proj', "do 'x'", 'darwin');

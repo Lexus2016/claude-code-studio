@@ -5947,8 +5947,16 @@ app.post('/api/sessions/:id/open-terminal', (req, res) => {
   try {
     if (platform === 'win32') {
       fullCmd = `cd /d "${workdir}" && set CLAUDECODE= && claude --resume ${safeSid}`;
-      // Empty title "" required: without it cmd.exe treats first quoted arg as window title
-      execSync(`start "" cmd /k "${fullCmd.replace(/"/g, '\\"')}"`, { shell: true });
+      // Empty title "" required: without it cmd.exe treats first quoted arg as window title.
+      // The quotes around the workdir are passed through UNESCAPED on purpose: `\` is not
+      // an escape character for cmd, it only counts quotes. `\"` made the inner `cmd /k`
+      // hand `cd` the literal path `\C:\proj\` (invalid) → cd failed → `&&` short-circuited
+      // and the window opened without claude. Left as-is the quotes stay balanced: the
+      // `&&` sits inside a quoted region for the OUTER cmd (so it is not split there) and
+      // outside one for the inner `cmd /k` (so it chains, as intended). workdir is already
+      // rejected above if it contains & | ; < > % ^ ` or a newline, and Windows forbids `"`
+      // in a path, so there is nothing left for the replace to escape.
+      execSync(`start "" cmd /k "${fullCmd}"`, { shell: true });
       ok = true;
     } else if (platform === 'darwin') {
       const safeWorkdir = workdir.replace(/'/g, "'\\''");
