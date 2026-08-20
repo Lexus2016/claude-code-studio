@@ -71,7 +71,7 @@ npm run dist:mac         # build installers — or dist:win / dist:linux
 
 **Prerequisites:** [Node.js 18+](https://nodejs.org) + [Claude Code CLI](https://docs.anthropic.com/en/claude-code) installed and logged in (Claude Pro or Max subscription)
 
-> **Node.js 22.5+** — zero native compilation. Uses built-in `node:sqlite`, no C++ toolchain needed. Older Node.js versions fall back to `better-sqlite3` (requires build tools).
+> **Node.js 22.13+** — zero native compilation. Uses built-in `node:sqlite`, no C++ toolchain needed. Older Node.js versions fall back to `better-sqlite3` (requires build tools).
 
 ```bash
 npx github:Lexus2016/claude-code-studio
@@ -182,7 +182,7 @@ Hit **Translate** inside the thinking modal to render the chain of thought in yo
 
 **`N` key — new chat session** — press **`N`** from anywhere outside a text field to instantly open a fresh chat. The same action as clicking the **＋ Chat** button — without reaching for the mouse. Combined with `G`, `T`, `I`, and `?`, the Studio now has a complete keyboard-first workflow: navigate history, focus input, compose, send, and start fresh — all without a single click.
 
-**Message font size** — press **`=`** to increase and **`-`** to decrease the chat message font size on the fly. Hit **`0`** to snap back to the default 15px. Nine steps from 11px to 22px — find your comfort zone in under a second. The preference is saved to `localStorage` and restored instantly on every page load, so you only set it once.
+**Message font size** — press **`=`** to increase and **`-`** to decrease the chat message font size on the fly. Hit **`0`** to snap back to the default 15px. Ten steps from 11px to 22px — find your comfort zone in under a second. The preference is saved to `localStorage` and restored instantly on every page load, so you only set it once.
 
 **Draft auto-save** — every keystroke in the message input is silently persisted to `localStorage`. Refresh the page, close the tab by accident, lose power — your unsent draft comes back exactly as you left it. Drafts are cleared automatically the moment you hit send, so there's no stale recovery noise. Zero setup, zero UI — it just works.
 
@@ -243,6 +243,7 @@ Open a new tab, choose **Terminal agent**, pick who to launch. A real terminal a
 - **Idle sessions are reaped** — terminals nobody is watching are shut down after a timeout so they don't sit in RAM; the next time you open one, it comes back.
 - **The font slider works here too** — one control resizes chat and terminal alike; the terminal reflows its columns live.
 - **Capability-checked, not OS-guessed** — the server probes for `tmux` at boot and disables the button when it isn't there. Works on macOS, Linux, Docker, and Windows via WSL/Git-Bash.
+- **Off by default** — terminal sessions stay disabled until you set `terminal.enabled: true` in `config.json`, and they are refused while a public tunnel is active (a browser terminal behind a public URL is a public shell).
 
 A session is typed **chat** *or* **terminal** at creation and never switches — so two drivers can never fight over one conversation.
 
@@ -290,7 +291,7 @@ Tasks inherit the project directory. Context is passed explicitly — children k
 
 ### 📱 Telegram Bot — Control from Your Phone
 
-Pair in 30 seconds (6-digit code from Settings). Your phone becomes a full remote control:
+Pair in 30 seconds (6-character code from Settings). Your phone becomes a full remote control:
 
 - **Queue & monitor:** `/projects`, `/chats`, `/tasks`, `/chat`, `/new`
 - **See results:** `/last`, `/full` — plus push notifications when tasks finish or fail
@@ -325,7 +326,7 @@ Forum Mode is now powered by a **dedicated standalone module** (`telegram-bot-fo
 
 ### ⇗ Cross-Agent Delegation
 
-Send tasks to external AI CLIs — OpenAI Codex, Antigravity CLI, opencode, Aider — directly from the chat interface. Two modes:
+Send tasks to external AI CLIs — OpenAI Codex, Grok CLI, Antigravity CLI, opencode, Hermes, Kimi — directly from the chat interface. Two modes:
 
 | | Handoff | Sync |
 |---|---|---|
@@ -336,7 +337,7 @@ Send tasks to external AI CLIs — OpenAI Codex, Antigravity CLI, opencode, Aide
 
 How it works: click **Delegate** in the session bar, pick an agent and mode, describe the task. Studio generates a `CONTEXT.md` with conversation history and opens a terminal with the external agent. In Sync mode, both agents communicate through a shared `DIALOG.md` — responses appear directly in the main chat with real-time notifications.
 
-**Agents sidebar** — managing external agents is now effortless. A dedicated **Agents** section in the sidebar lets you add, edit, and delete agents without touching `config.json`. Codex, Antigravity CLI, and opencode come **pre-configured out of the box** — seeded automatically on first run. Hit the **Test** button next to any agent to verify connectivity before delegating. Agent IDs auto-generate from the label (with Cyrillic transliteration), and the full UI is localized in EN/UA/RU/FR/HE. Works on **Windows** too — delegation now routes through `cmd.exe` with proper shell escaping. Delegations survive server restarts via persistent state files.
+**Agents sidebar** — managing external agents is now effortless. A dedicated **Agents** section in the sidebar lets you add, edit, and delete agents without touching `config.json`. Seven agents — Claude Code, Codex, Grok, Antigravity CLI, opencode, Hermes and Kimi — come **pre-configured out of the box**, seeded automatically on first run. Hit the **Test** button next to any agent to verify connectivity before delegating. Agent IDs auto-generate from the label (with Cyrillic transliteration), and the full UI is localized in EN/UA/RU/FR/HE. Works on **Windows** too — delegation now routes through `cmd.exe` with proper shell escaping. Delegations survive server restarts via persistent state files.
 
 ### 🎛 Chat Modes
 
@@ -344,7 +345,7 @@ How it works: click **Delegate** in the session bar, pick an agent and mode, des
 
 ### 🧠 Skills & Auto-Skills
 
-28 built-in specialist personas (frontend, security, devops, kubernetes, debugging, code-review...). **Auto mode (⚡)** classifies each message and activates 1–4 relevant skills automatically:
+30 built-in specialist personas (frontend, security, devops, kubernetes, debugging, code-review...). **Auto mode (⚡)** classifies each message and activates 1–4 relevant skills automatically:
 
 - "Fix this React bug" → `frontend` + `debugging-master`
 - "Set up K8s deployment" → `devops` + `kubernetes` + `docker`
@@ -360,6 +361,8 @@ Type `/` — pick a saved prompt. 10 built-in:
 | Syntax & bugs | Full code review | Find & fix bug | Explain with examples |
 | **`/refactor`** | **`/test`** | **`/docs`** | **`/optimize`** |
 | Clean up code | Write tests | Write docs | Find bottlenecks |
+| **`/compact`** | **`/init`** | | |
+| Recap the session | Generate CLAUDE.md | | |
 
 Add your own, edit them, delete them. As many as you want.
 
@@ -372,7 +375,7 @@ Add your own, edit them, delete them. As many as you want.
 | **Opus** | **1M tokens** | Most capable — complex architecture, hard bugs |
 | **Fable** | **1M tokens** | Most creative & reasoning-intensive — complex planning, deep analysis |
 
-Sonnet and Opus run with a **1 million token context window** — entire large codebases, long conversation histories, and massive file sets fit in a single session without hitting limits.
+Sonnet, Opus and Fable run with a **1 million token context window** — entire large codebases, long conversation histories, and massive file sets fit in a single session without hitting limits.
 
 Turn budget: 1–200 (default 50). Auto-continues up to 3x — so 50 turns effectively means up to 200 steps.
 
@@ -447,7 +450,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, terminal catch-up (import a `claude --resume` conversation into the web chat), extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse + Stop hooks + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom, `I` focus input, character counter, `T` scroll-to-top, `N` new session, font size adjust (`=`/`-`/`0`), draft auto-save |
 | **Bots** | Named AI specialists with own prompt/model/memory, several per chat via `@@handle`, sequential turns with context hand-off, `@@` autocomplete palette, built-in templates (Analyst / Editor / Reviewer / Explainer), per-project availability with a global library, teammate roster, evidence clause, per-bot chat bubbles with name + avatar + colour, assignable to Kanban cards and Scheduler tasks, works from Telegram with per-bot headers |
 | **Terminal agents** | Any CLI agent live in a workspace tab (Claude Code, Codex, Grok, opencode, Antigravity, Kimi, Cursor Agent, shell), full TUI over tmux control mode, several tabs side by side with chat, survives browser/server restart, exact conversation restore by id, idle reaping with revive on reopen, shared font-size control, capability-checked (tmux) on macOS/Linux/Docker/WSL |
-| **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, global default (★ set-as-default for new chats/tasks), per-item override, available in Chat + Kanban + Scheduler, tmux-aware (auto-disabled without tmux), Opus / Sonnet / Haiku model selector |
+| **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, global default (★ set-as-default for new chats/tasks), per-item override, available in Chat + Kanban + Scheduler, tmux-aware (auto-disabled without tmux), Opus / Sonnet / Haiku / Fable model selector |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, engine + model + effort per task/chain |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, engine + model + effort per task, watchdog auto-recovery |
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
@@ -455,7 +458,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | **Delegation** | Cross-agent handoff/sync (Codex, Antigravity, opencode), CONTEXT.md + DIALOG.md protocol, fs.watch + polling, persistent across restarts, Windows support, sidebar agents manager, auto-seeded defaults, test button |
 | **Agents** | Single, Multi (2–5 in-chat, schema-validated planning), Dispatch (Kanban), auto-retry, cascade cancellation, effort propagation |
 | **Modes** | Auto, Plan (read-only + Execute Plan), Task, auto mode switching |
-| **Skills** | 28 built-in, auto-classification, plugin discovery, custom `.md` files |
+| **Skills** | 30 built-in, auto-classification, plugin discovery, custom `.md` files |
 | **Commands** | 10 built-in slash commands, custom commands |
 | **Remote** | SSH servers, SFTP upload, `#` quick-attach, cloudflared/ngrok tunnels |
 | **Mobile** | Native-feel UI, bottom sheet, scroll-snap Kanban, iOS-safe, touch-optimized |

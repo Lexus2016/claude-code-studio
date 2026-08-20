@@ -2,7 +2,8 @@
 
 **Companion to:** `docs/adversarial-audit-2026-07-18.md`
 **Date:** 2026-07-18
-**Codebase state:** v5.70.1 (identical to the version the auditor examined — no fixes landed since; findings are current, not stale).
+**Codebase state at the time of the audit:** v5.70.1 (identical to the version the auditor examined — nothing had landed in between).
+**Staleness note:** this is a historical snapshot, not a live checklist. The codebase has moved on (v7.2.x); re-verify any item against current code before acting on it — some, such as the `test` script, are already done.
 **Verification method:** every CRITICAL, every HIGH, and every material MEDIUM re-checked against live code by 6 independent read-only passes (security, integration/MCP, dependencies/packaging, backend correctness, frontend, docs). Empirical claims reproduced: `npm audit`, `npm pack --dry-run`, `asar list`, red-test run, on-disk `stat`, git archaeology, runtime `TypeError`.
 **Plan validated by:** Consilium blind-spot panel — 3 independent non-Claude advisors (codex/OpenAI, agy/Gemini, grok/xAI), each reviewing the plan without seeing the others.
 
@@ -77,7 +78,7 @@ Integration: process-group kill on Unix; `0700`/cleanup temp files; route SSH er
 ### ⚙️ Wave 4 — systemic (prevents the next audit)
 - **Shared agent-run driver — start early.** Consilium consensus: any second touch to `runCliSingle`/`runSshSingle`/taskWorker should already go through one wrapper applying env-allowlist, no-secrets-in-prompt, usage hooks, session isolation. This is the real fix behind C4/H2/H3. **[C]**
 - Versioned migration runner (`PRAGMA user_version`) replacing `try{ALTER}catch{}`.
-- CI: add `test` script, fix the red `integration.test.mjs` (`<h1 dir="auto">`), run on push/PR.
+- ~~CI: add `test` script~~ (done — `npm test` runs the `test/` suite), fix the red `integration.test.mjs` (`<h1 dir="auto">`), run on push/PR.
 - Dockerfile `npm ci --omit=dev` + `COPY package-lock.json`; extend `.dockerignore`.
 - Frontend: shared `apiFetch` with `401→/login`; delete `test-ask-tool.html` + `public/.omc/`; key the chat draft per session; rAF-throttle streaming (line **5573**).
 - Docs: `.planning/STATE.md` (desktop → shipped), CLAUDE.md model/arch sections, `.env.example` timeout, README claims; build the **change-password UI** (`/api/auth/change-password` is a real gap, not dead code).
@@ -94,7 +95,7 @@ Integration: process-group kill on Unix; `0700`/cleanup temp files; route SSH er
 - **Authenticated user == full RCE by design.** No in-app fix changes this; it is the product's purpose. Mitigation is deployment posture (reverse-proxy SSO, network isolation), captured in the Wave 0 operator note. (grok, codex)
 
 ## 5. Execution note
-Code changes (Waves 1–4) run through the project's GSD workflow (`/gsd:execute-phase` for a wave, `/gsd:quick` for a one-off), per the project CLAUDE.md. This document + the audit are the planning inputs. Wave 0 is the owner's operational action and blocks everything downstream.
+Code changes (Waves 1–4) run through the maintainer's GSD workflow (`/gsd-execute-phase` for a wave, `/gsd-quick` for a one-off) where GSD is installed; GSD is not required to contribute. This document + the audit are the planning inputs. Wave 0 is the owner's operational action and blocks everything downstream.
 
 ## 6. Execution log
 **Landed (committed locally, not pushed — publishing frozen):**

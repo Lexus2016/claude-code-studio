@@ -1,10 +1,10 @@
-# Claude Code Studio — Telegram Bot UX Redesign
+# Claude Code Studio
 
 ## What This Is
 
-The Claude Code Studio Telegram bot is a remote control interface for the web-based Claude Code Studio (Express.js + WebSocket UI). It lets users send messages to Claude, browse sessions/chats, manage tasks, monitor system status, and control remote access — all from a Telegram private chat or Forum Mode supergroup.
+Claude Code Studio is a lightweight web UI for Claude Code: an Express.js + WebSocket server with a vanilla-JS single-file frontend, no build step. It also ships a Telegram bot as a remote control interface and an Electron shell for desktop.
 
-The current bot (telegram-bot.js, ~4693 lines) works functionally but has severe UX and navigation problems that make it frustrating to use daily. This milestone is a full redesign of the user-facing navigation, interaction model, and code architecture.
+The Telegram bot (telegram-bot.js) drives Claude, browses sessions/chats, manages tasks, monitors system status and controls remote access from a Telegram private chat or Forum Mode supergroup. Milestone v1.0 was a full redesign of its navigation, interaction model and code architecture — complete (see Validated below).
 
 ## Core Value
 

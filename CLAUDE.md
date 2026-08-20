@@ -178,127 +178,15 @@ sqlite3 data/chats.db "SELECT role, type, substr(content,1,80) FROM messages WHE
 # - Check token cookie is httpOnly
 ```
 
-<!-- GSD:project-start source:PROJECT.md -->
-## Project
+---
 
-**Claude Code Studio — Telegram Bot UX Redesign**
+## Planning Artifacts
 
-The Claude Code Studio Telegram bot is a remote control interface for the web-based Claude Code Studio (Express.js + WebSocket UI). It lets users send messages to Claude, browse sessions/chats, manage tasks, monitor system status, and control remote access — all from a Telegram private chat or Forum Mode supergroup.
+Milestone plans, requirements and research live in `.planning/` (tracked in git):
 
-The current bot (telegram-bot.js, ~4693 lines) works functionally but has severe UX and navigation problems that make it frustrating to use daily. This milestone is a full redesign of the user-facing navigation, interaction model, and code architecture.
+- `.planning/PROJECT.md` — scope, core value, constraints, key decisions
+- `.planning/ROADMAP.md`, `.planning/STATE.md` — phases and current status
+- `.planning/research/*.md` — background research behind past decisions
 
-**Core Value:** A user should be able to send a message to Claude in **2 taps or fewer** — from any state, without knowing any slash commands.
-
-### Constraints
-
-- **Tech stack**: Node.js 20, native fetch, no new npm dependencies — zero build step philosophy
-- **Compatibility**: Existing paired devices must continue working after redesign (no re-pairing)
-- **Data**: SQLite schema can add columns via ALTER TABLE, no DROP TABLE without migration
-- **Single file**: public/index.html stays single file — same philosophy for telegram-bot.js is relaxed (can split into modules)
-- **Backwards compat**: Forum Mode supergroups already set up must continue working
-<!-- GSD:project-end -->
-
-<!-- GSD:stack-start source:research/STACK.md -->
-## Technology Stack
-
-## Recommended Navigation Architecture
-### Primary Rule: Inline Keyboards for Navigation, Reply Keyboard for Permanent Context
-| Layer | Type | Purpose | Behavior |
-|-------|------|---------|---------|
-| Bottom bar | Reply keyboard (persistent) | Always-visible context + quick actions | Replaces device keyboard; stays visible |
-| Screen content | Inline keyboard | Navigation, selections, settings | Attached to a specific message; editable in place |
-### The "One Screen Message" Pattern
-- Claude responses (these are content, not navigation)
-- System alerts/notifications (real-time events from the server)
-- Error messages that should persist in chat history
-- Initial screen bootstrap (when no `screenMsgId` exists yet)
-- Every navigation action (project list, chat list, settings, back)
-- Status updates triggered by button press
-- Pagination (prev/next page)
-### Getting to First Message in 2 Taps
-## Telegram API Features to Use
-### 1. Reply Keyboard with `persistent: true` and `resize_keyboard: true`
-### 2. Inline Keyboards with `editMessageText` / `editMessageReplyMarkup`
-### 3. `sendMessageDraft` (Bot API 9.3 / 9.5)
-### 4. `setMyCommands` with Scope
-### 5. `answerCallbackQuery` (mandatory after every callback)
-### 6. `KeyboardButton` with `style` field (Bot API 9.4+)
-### 7. Deep Linking (`?start=param`)
-## Telegram API Features to Avoid
-### 1. Slash Commands for Navigation (`/project 2`, `/chat 5`, `/session old`)
-### 2. Multiple Simultaneous `screenMsgId` values
-### 3. Reply Keyboard for Multi-Level Navigation
-### 4. Encoding Navigation State into `callback_data` Strings
-### 5. `sendMessage` for Status Updates / Progress Polling
-### 6. Telegram Mini Apps / Web Apps for Navigation
-## State Machine Approach
-### Recommended: Explicit Named States per User
-- A `handler` function called when free-form text arrives
-- A `screen` function that (re-)renders the current UI
-- A `back` state to return to when the user taps Back
-### Back Button Implementation
-### State Persistence
-- The bot serves a single authenticated user (or a small set of paired devices)
-- The SQLite database is local; process restarts are infrequent
-- Node.js long-polling process stays up continuously
-### Fixing the `pendingInput` Interception Problem
-### `pendingAskRequestId` Conflict
-## Confidence Levels
-| Recommendation | Confidence | Basis |
-|----------------|------------|-------|
-| Inline keyboard for navigation + reply keyboard for persistent bar | HIGH | Official Telegram docs, Bot API 2.0 introduction |
-| Edit-in-place for all navigation (single `screenMsgId`) | HIGH | Official docs, documented pattern |
-| `sendMessageDraft` for Claude response streaming | HIGH | Bot API 9.5 changelog (March 2026), universally available |
-| `answerCallbackQuery` on every callback | HIGH | Official docs, documented requirement |
-| Explicit named state machine replacing flag soup | HIGH | Established FSM pattern, directly addresses documented bugs |
-| `navStack` array for back navigation | HIGH | Community consensus, no Telegram API dependencies |
-| `callback_data` max 64 bytes — store state server-side | HIGH | Documented API limit |
-| `setMyCommands` with minimal command set (3-5 cmds) | HIGH | Official docs |
-| `KeyboardButton style` field for visual hierarchy | MEDIUM | Bot API 9.4 changelog, not yet production-validated here |
-| Avoid Mini Apps for navigation screens | MEDIUM | Project constraints + UX judgment |
-| `sendMessageDraft` draft_id reuse pattern | MEDIUM | Changelog + community issues, not yet implemented in this project |
-## Sources
-- [Telegram Bot Features — Official](https://core.telegram.org/bots/features)
-- [Telegram Bot API Reference](https://core.telegram.org/bots/api)
-- [Bot API Changelog (sendMessageDraft, button styles)](https://core.telegram.org/bots/api-changelog)
-- [Introducing Bot API 2.0 (inline keyboards)](https://core.telegram.org/bots/2-0-intro)
-- [Telegram Buttons Documentation](https://core.telegram.org/api/bots/buttons)
-- [sendMessageDraft streaming — openclaw community issues](https://github.com/openclaw/openclaw/issues/31061)
-- [Back button in ConversationHandler — python-telegram-bot discussion](https://github.com/python-telegram-bot/python-telegram-bot/discussions/2949)
-- [callback_data 64-byte limit and workarounds](https://seroperson.me/2025/02/05/enhanced-telegram-callback-data/)
-- [FSM Telegram Bot in Node.js](https://levelup.gitconnected.com/creating-a-conversational-telegram-bot-in-node-js-with-a-finite-state-machine-and-async-await-ca44f03874f9)
-- [Bitders — Keyboard Types Guide](https://bitders.com/blog/telegram-bot-keyboard-types-a-complete-guide-to-commands-inline-keyboards-and-reply-keyboards)
-- [grammY Keyboards Plugin (reference for patterns)](https://grammy.dev/plugins/keyboard)
-<!-- GSD:stack-end -->
-
-<!-- GSD:conventions-start source:CONVENTIONS.md -->
-## Conventions
-
-Conventions not yet established. Will populate as patterns emerge during development.
-<!-- GSD:conventions-end -->
-
-<!-- GSD:architecture-start source:ARCHITECTURE.md -->
-## Architecture
-
-Architecture not yet mapped. Follow existing patterns found in the codebase.
-<!-- GSD:architecture-end -->
-
-<!-- GSD:workflow-start source:GSD defaults -->
-## GSD Workflow Enforcement
-
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
-
-Use these entry points:
-- `/gsd:quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd:debug` for investigation and bug fixing
-- `/gsd:execute-phase` for planned phase work
-
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
-<!-- GSD:workflow-end -->
-
-<!-- GSD:profile-start -->
-## Developer Profile
-
-> Profile not yet configured. Run `/gsd:profile-user` to generate your developer profile.
-> This section is managed by `generate-claude-profile` -- do not edit manually.
-<!-- GSD:profile-end -->
+These are internal planning documents, not build requirements. You do not need to
+read them to build, run, test or contribute to this project.
