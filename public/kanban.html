@@ -1024,11 +1024,16 @@ function toLocalDateStr(ts){
   const d=new Date(ts*1000), pad=n=>String(n).padStart(2,'0');
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
+// Legacy tokens the server still accepts (server.js RECUR_ALIASES). Without this
+// map the edit form reads them as "once" and the next save silently wipes the
+// recurrence off the task.
+const RECUR_ALIASES={hourly:'every:1:hour',daily:'every:1:day',weekly:'every:1:week',monthly:'every:1:month'};
 function parseRecurForForm(r){
   if(!r)return{unit:'',n:1};
+  const tok=RECUR_ALIASES[r]||r;
   let m;
-  if((m=/^every:(\d+):(hour|day|week|month)$/.exec(r)))return{unit:m[2],n:parseInt(m[1],10)};
-  if((m=/^times:(\d+):month$/.exec(r)))return{unit:'times-month',n:parseInt(m[1],10)};
+  if((m=/^every:(\d+):(hour|day|week|month)$/.exec(tok)))return{unit:m[2],n:parseInt(m[1],10)};
+  if((m=/^times:(\d+):month$/.exec(tok)))return{unit:'times-month',n:parseInt(m[1],10)};
   return{unit:'',n:1};
 }
 function buildRecurToken(){
@@ -1046,6 +1051,60 @@ function onKbRecurChange(){
   const endEl=$i('kbEndDateWrap'); if(endEl)endEl.style.display=unit?'':'none';
   const dt=$i('fScheduledAt');
   if(unit&&dt&&!dt.value)dt.value=toLocalDatetimeStr(Math.floor(Date.now()/1000));
+  kbSyncStatusToSchedule();
+}
+
+// The scheduler only ever looks at status='todo'. A task with a date sitting in
+// `backlog` would wait forever, so promote it as soon as a date exists — in the
+// open form, so the user sees the status select change before saving.
+function kbSyncStatusToSchedule(){
+  const st=$i('fStatus');
+  if(st&&st.value==='backlog'&&($i('fScheduledAt')?.value||''))st.value='todo';
+}
+function onKbSchedChange(){ kbSyncStatusToSchedule(); }
+
+// The scheduler only ever selects status='todo' (getTodoTasks in server.js), so a
+// dated task left in `backlog` waits forever. Safety net behind the form-level flip.
+function kbEffectiveStatus(status,scheduled_at){
+  return (scheduled_at&&(!status||status==='backlog'))?'todo':(status||'backlog');
+}
+// Recurrence without an anchor date is meaningless: the scheduler would fire the
+// task at once (scheduled_at IS NULL) and then reschedule off `now`.
+function kbEffectiveRecurrence(token,scheduled_at){ return scheduled_at?(token||null):null; }
+
+// The picker only appears on "All projects", where `sessions` and `kbBots` hold
+// every project's rows. Narrow both to the chosen project so a task cannot be
+// wired to a session or a bot from a different one.
+async function onKbProjectChange(){
+  const val=$i('fProject')?.value||'';
+  const proj=projects.find(pr=>(pr.workdir||pr.id)===val)||null;
+  const sessEl=$i('fSession');
+  if(sessEl){
+    const keep=sessEl.value;
+    const list=val?sessions.filter(x=>x.workdir===(proj?.workdir||val)):sessions;
+    sessEl.innerHTML=`<option value="">${escH(t('modal.new_session'))}</option>`+
+      list.map(x=>`<option value="${x.id}"${keep===x.id?' selected':''}>${escH((x.title||x.id).substring(0,60))}</option>`).join('');
+    // The previously picked session may belong to another project — dropping it
+    // silently is the point, but the new-session panel has to follow.
+    if(keep&&!list.some(x=>x.id===keep)){sessEl.value='';}
+    onFSessionChange();
+  }
+  // Bots are per-project on the server; the global roster is not filterable client-side.
+  const prevBot=$i('fBot')?.value||'';
+  const prevWorkdir=curWorkdir;
+  try{
+    const qs=proj?('?project='+encodeURIComponent(proj.id)):(val?('?workdir='+encodeURIComponent(val)):'');
+    const r=await apiFetch('/api/bots'+qs);
+    const rows=await r.json();
+    kbBots=Array.isArray(rows)?rows:[];
+  }catch{kbBots=[];}
+  if(prevWorkdir!==curWorkdir)return;   // board switched mid-flight; drop the result
+  const botEl=$i('fBot');
+  if(botEl){
+    botEl.innerHTML=`<option value="">${t('tb.bot.none')}</option>`+
+      kbBots.map(b=>`<option value="${escH(b.id)}"${prevBot===b.id?' selected':''}>${escH((b.avatar||'🤖')+' '+b.label)}</option>`).join('');
+    if(prevBot&&!kbBots.some(b=>b.id===prevBot))botEl.value='';
+  }
 }
 
 function makeCard(tk){
@@ -1658,7 +1717,7 @@ function buildForm(tk={}){
   // creating from the global view used to be refused outright (issue #25).
   const projPickerHtml=(!curWorkdir&&!tk.workdir)?`
     <div><label class="lbl">${t('modal.project')}</label>
-      <select id="fProject" class="sel">
+      <select id="fProject" class="sel" onchange="onKbProjectChange()">
         <option value="">${escH(t('modal.project.ph'))}</option>
         ${projects.map(pr=>`<option value="${escH(pr.workdir||pr.id)}">${escH(pr.name||pr.workdir)}</option>`).join('')}
       </select>
@@ -1670,7 +1729,7 @@ function buildForm(tk={}){
     <div class="grid2">
       <div>
         <label class="lbl">${t('modal.sched')}</label>
-        <input id="fScheduledAt" type="datetime-local" class="inp" value="${schedVal}" data-orig="${schedVal}" data-orig-ts="${tk.scheduled_at||''}">
+        <input id="fScheduledAt" type="datetime-local" class="inp" onchange="onKbSchedChange()" value="${schedVal}" data-orig="${schedVal}" data-orig-ts="${tk.scheduled_at||''}">
         <div class="sched-hint">${t('modal.sched.hint')}</div>
       </div>
       <div>
@@ -1915,7 +1974,7 @@ async function saveTask(){
   const scheduled_at=(schedEl&&schedRaw&&schedRaw===schedEl.dataset.orig&&schedEl.dataset.origTs)
     ? Number(schedEl.dataset.origTs)
     : (schedRaw?Math.floor(new Date(schedRaw).getTime()/1000):null);
-  const recurrence=buildRecurToken();
+  const recurrence=kbEffectiveRecurrence(buildRecurToken(),scheduled_at);
   const endRaw=$i('fEndDate')?.value||'';
   // End of the chosen day, not its midnight — otherwise the last run is cut off.
   const recurrence_end_at=(recurrence&&endRaw)?Math.floor(new Date(endRaw+'T23:59:59').getTime()/1000):null;
@@ -1923,7 +1982,7 @@ async function saveTask(){
     title,
     description:$i('fDesc')?($i('fDesc').value||''):(existingTask?.description||''),
     notes:$i('fNotes')?($i('fNotes').value||''):(existingTask?.notes||''),
-    status:$i('fStatus')?.value||'backlog',
+    status:kbEffectiveStatus($i('fStatus')?.value,scheduled_at),
     session_id,
     workdir:taskWorkdir,
     scheduled_at,
