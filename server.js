@@ -271,6 +271,55 @@ function killByPid(pid) {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 });
 
+// ─── One-time permission hardening for secret-bearing files ──────────────────
+// Writers now create these 0600 (atomicWriteJSON here, atomicWrite in auth.js,
+// hosts.key via writeFileSync { mode }). That is not retroactive: a file created by
+// an earlier version keeps its 0644 forever, and a world-readable sessions-auth.json
+// hands any local reader a live bearer token — an authentication bypass, not a
+// hygiene nit. So fix what is already on disk, once, at boot.
+//
+// Deliberately runs BEFORE openDatabase(DB_PATH): SQLite copies the main database
+// file's mode onto -wal / -shm when it creates them, so tightening chats.db first
+// makes every future sidecar 0600 too, without touching the directory mode.
+// (Verified: sidecars deleted, chats.db chmod 0600, reopened → wal=600 shm=600.)
+function hardenSecretFilePermissions() {
+  const dataDir = path.dirname(DB_PATH);
+  const targets = [
+    CONFIG_PATH,                                // MCP server definitions: Authorization: Bearer <api key>
+    path.join(dataDir, 'auth.json'),            // bcrypt hash of the login password
+    path.join(dataDir, 'sessions-auth.json'),   // live 32-byte session tokens
+    path.join(dataDir, 'hosts.key'),            // AES-256 key that encrypts stored SSH passwords
+    path.join(dataDir, 'remote-hosts.json'),    // SSH hosts + encrypted passwords
+    path.join(dataDir, 'projects.json'),        // project workdirs + encrypted per-project SSH passwords
+    DB_PATH,                                    // full chat history
+    DB_PATH + '-wal',                           // same content, left behind by an unclean shutdown
+    DB_PATH + '-shm',
+  ];
+  // A brand-new install has no chats.db yet, so there is nothing to chmod here — and
+  // openDatabase() would create it 0644 (umask 022), which -wal/-shm would then inherit
+  // and keep until the *next* boot. Pre-create it as an empty 0600 file instead: SQLite
+  // initialises a zero-length file as an empty database, so this sets nothing but the mode.
+  try {
+    if (!fs.existsSync(DB_PATH)) fs.writeFileSync(DB_PATH, '', { mode: 0o600 });
+  } catch (e) { log.warn('could not pre-create the database file', { err: e.code || e.message }); }
+
+  const fixed = [];
+  for (const file of targets) {
+    try {
+      const before = fs.statSync(file).mode & 0o777;
+      if (!(before & 0o077)) continue;                    // owner-only already — idempotent no-op
+      fs.chmodSync(file, 0o600);
+      if (fs.statSync(file).mode & 0o077) continue;       // chmod is a no-op here (Windows, CIFS/Docker mount) — nothing to report
+      fixed.push(`${path.basename(file)} ${before.toString(8)}→600`);
+    } catch (e) {
+      // ENOENT is the normal case: the file has not been created yet.
+      if (e.code !== 'ENOENT') log.warn('permission hardening skipped', { file: path.basename(file), err: e.code || e.message });
+    }
+  }
+  if (fixed.length) log.info('tightened file permissions to 0600', { files: fixed });
+}
+hardenSecretFilePermissions();
+
 // ============================================
 // MODELS
 // ============================================
@@ -2186,7 +2235,10 @@ function loadConfig() {
   // tunnel.
   if (!c.terminal) { c.terminal = { enabled: false, idleTimeoutMin: 30, maxLive: 3 }; dirty = true; }
   if (dirty) {
-    try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); } catch {}
+    // atomicWriteJSON, not a bare writeFileSync: this is the writer that CREATES
+    // config.json on a fresh install, and config.json holds MCP `Authorization:
+    // Bearer <api key>` headers — it must land at 0600 like every other write path.
+    try { atomicWriteJSON(CONFIG_PATH, c); } catch {}
   }
   return c;
 }
@@ -2382,10 +2434,18 @@ function addAutoDiscoveredSkills(config) {
   return merged;
 }
 
-/** Write to temp file then atomic rename — prevents partial reads on concurrent access. */
+/** Write to temp file then atomic rename — prevents partial reads on concurrent access.
+ *  0600 because everything routed through here can carry secrets: config.json holds MCP
+ *  `Authorization: Bearer <api key>` headers, remote-hosts.json / projects.json hold SSH
+ *  user+port and encrypted passwords. Mirrors atomicWrite() in auth.js.
+ *  The explicit chmod is not belt-and-braces: the { mode } option is applied only when
+ *  the file is CREATED, so a .tmp left behind by an older version (or a crash) keeps its
+ *  old 0644 — and rename() carries the tmp inode's mode onto the target. Verified both
+ *  behaviours on darwin/APFS before writing this. */
 function atomicWriteJSON(filePath, data) {
   const tmp = filePath + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
+  try { fs.chmodSync(tmp, 0o600); } catch {} // filesystem without POSIX modes — write still succeeds
   fs.renameSync(tmp, filePath);
 }
 
