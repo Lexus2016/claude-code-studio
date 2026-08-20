@@ -142,6 +142,9 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .kb-progress-fill{ height:100%; background:var(--green); border-radius:2px; transition:width .3s; }
 .kb-progress-pct{ font-size:11px; font-weight:600; color:var(--green); min-width:32px; }
 .refresh-ts{ font-size:11px; color:var(--muted); margin-left:auto; }
+/* Project badge — only rendered on the "All projects" board */
+.badge-proj{ background:rgba(88,166,255,.13); color:var(--blue); border:1px solid rgba(88,166,255,.28); max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sched-hint{ font-size:11px; color:var(--muted); margin-top:4px; }
 @keyframes spin{ to{ transform:rotate(360deg); } }
 .spinning{ display:inline-block; width:12px; height:12px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; }
 
@@ -459,6 +462,11 @@ const TR = {
     'col.done':'Виконано','col.cancelled':'Скасовано','col.empty':'Немає завдань',
     'modal.add':'Нове завдання','modal.edit':'Редагувати завдання',
     'modal.name':'Назва *','modal.status':'Статус','modal.session':"Пов'язана сесія",
+    'modal.project':'Проект *','modal.project.ph':'— оберіть проект —',
+    'modal.sched':'Запустити о','modal.sched.hint':'Порожньо — виконати як звичайну задачу','modal.sched.clear':'Прибрати розклад',
+    'modal.recur':'Повторення','modal.recur.once':'Один раз','modal.recur.end':'Завершити повторення',
+    'recur.unit.hour':'щогодини','recur.unit.day':'щодня','recur.unit.week':'щотижня','recur.unit.month':'щомісяця','recur.unit.timesMonth':'разів на місяць',
+    'toast.pick_project':'Оберіть проект для завдання',
     'modal.no_session':'— без сесії —','modal.new_session':'➕ Нова сесія',
     'modal.desc':'Опис','modal.notes':'Нотатки',
     'modal.attach':'Вкладення','modal.attach_hint':'Клікніть, перетягніть або вставте (Ctrl+V)','modal.attach_max':'Максимум 10 файлів на завдання',
@@ -496,6 +504,11 @@ const TR = {
     'col.done':'Done','col.cancelled':'Cancelled','col.empty':'No tasks',
     'modal.add':'New task','modal.edit':'Edit task',
     'modal.name':'Title *','modal.status':'Status','modal.session':'Linked session',
+    'modal.project':'Project *','modal.project.ph':'— pick a project —',
+    'modal.sched':'Run at','modal.sched.hint':'Leave empty to run as a normal task','modal.sched.clear':'Clear schedule',
+    'modal.recur':'Repeat','modal.recur.once':'Once','modal.recur.end':'End recurrence',
+    'recur.unit.hour':'hourly','recur.unit.day':'daily','recur.unit.week':'weekly','recur.unit.month':'monthly','recur.unit.timesMonth':'times a month',
+    'toast.pick_project':'Pick a project for the task',
     'modal.no_session':'— no session —','modal.new_session':'➕ New Session',
     'modal.desc':'Description','modal.notes':'Notes',
     'modal.attach':'Attachments','modal.attach_hint':'Click, drag or paste (Ctrl+V)','modal.attach_max':'Maximum 10 files per task',
@@ -533,6 +546,11 @@ const TR = {
     'col.done':'Выполнено','col.cancelled':'Отменено','col.empty':'Нет задач',
     'modal.add':'Новая задача','modal.edit':'Редактировать задачу',
     'modal.name':'Название *','modal.status':'Статус','modal.session':'Связанная сессия',
+    'modal.project':'Проект *','modal.project.ph':'— выберите проект —',
+    'modal.sched':'Запустить в','modal.sched.hint':'Пусто — выполнить как обычную задачу','modal.sched.clear':'Убрать расписание',
+    'modal.recur':'Повторение','modal.recur.once':'Один раз','modal.recur.end':'Завершить повторение',
+    'recur.unit.hour':'ежечасно','recur.unit.day':'ежедневно','recur.unit.week':'еженедельно','recur.unit.month':'ежемесячно','recur.unit.timesMonth':'раз в месяц',
+    'toast.pick_project':'Выберите проект для задачи',
     'modal.no_session':'— без сессии —','modal.new_session':'➕ Новая сессия',
     'modal.desc':'Описание','modal.notes':'Заметки',
     'modal.create':'Создать','modal.save':'Сохранить','modal.cancel':'Отмена',
@@ -717,8 +735,10 @@ async function loadProjects(){
 }
 
 function onProjChange(doRefresh=true){
+  // Task creation works from the global view (the form asks which project); task GROUPS
+  // still need one, since a chain shares a single workdir across its tasks.
   const addBtn=$i('addBtn');
-  if(addBtn){addBtn.disabled=!curWorkdir;addBtn.title=curWorkdir?'':t('toast.no_project');}
+  if(addBtn){addBtn.disabled=false;addBtn.title='';}
   const addGroupBtn=$i('addGroupBtn');
   if(addGroupBtn){addGroupBtn.disabled=!curWorkdir;addGroupBtn.title=curWorkdir?'':t('toast.no_project');}
   updateProjDropdownBtn();
@@ -985,6 +1005,49 @@ function makeColumn(col,colTasks,colChains=[]){
   el.appendChild(addBtn);
   return el;
 }
+// Project display name for a workdir. Falls back to the last path segment so a task
+// whose project was removed from the list still shows something recognisable.
+function projName(workdir){
+  const p=projects.find(x=>x.workdir===workdir||x.id===workdir);
+  if(p&&p.name)return p.name;
+  const parts=String(workdir||'').split(/[\\/]/).filter(Boolean);
+  return parts.length?parts[parts.length-1]:workdir;
+}
+
+// <input type="datetime-local"> speaks local wall-clock time; scheduled_at is a unix
+// second. Same conversion the Schedule view uses, kept identical on purpose.
+function toLocalDatetimeStr(ts){
+  const d=new Date(ts*1000), pad=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function toLocalDateStr(ts){
+  const d=new Date(ts*1000), pad=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function parseRecurForForm(r){
+  if(!r)return{unit:'',n:1};
+  let m;
+  if((m=/^every:(\d+):(hour|day|week|month)$/.exec(r)))return{unit:m[2],n:parseInt(m[1],10)};
+  if((m=/^times:(\d+):month$/.exec(r)))return{unit:'times-month',n:parseInt(m[1],10)};
+  return{unit:'',n:1};
+}
+function buildRecurToken(){
+  const unit=$i('fRecurUnit')?.value||'';
+  if(!unit)return null;
+  let n=parseInt($i('fRecurN')?.value,10);
+  if(!n||n<1)n=1;
+  return unit==='times-month'?`times:${n}:month`:`every:${n}:${unit}`;
+}
+// Recurrence needs a first occurrence to count from, and an end date only makes sense
+// once something repeats — so the two inputs follow the unit select.
+function onKbRecurChange(){
+  const unit=$i('fRecurUnit')?.value||'';
+  const nEl=$i('fRecurN'); if(nEl)nEl.style.display=unit?'':'none';
+  const endEl=$i('kbEndDateWrap'); if(endEl)endEl.style.display=unit?'':'none';
+  const dt=$i('fScheduledAt');
+  if(unit&&dt&&!dt.value)dt.value=toLocalDatetimeStr(Math.floor(Date.now()/1000));
+}
+
 function makeCard(tk){
   const el=document.createElement('div');el.className='card';el.dataset.id=tk.id;el.draggable=true;
   let sessBadge='';
@@ -996,11 +1059,14 @@ function makeCard(tk){
   const modelBadge=tk.sess_model?`<span class="badge badge-muted">${escH(tk.sess_model)}</span>`:'';
   const retryBadge=tk.retry_count>0?`<span class="badge badge-muted" title="${tk.retry_count} ${t('card.retry_tooltip')}">${escH(t('card.retry'))} ×${tk.retry_count}</span>`:'';
   const schedBadge=(tk.scheduled_at&&(tk.status==='todo'||tk.status==='backlog'))?`<span class="badge badge-sched" title="${escH(t('card.sched_tip'))} ${escH(fmtScheduledAt(tk.scheduled_at))}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 12"/></svg>${escH(fmtScheduledAt(tk.scheduled_at))}</span>`:'';
+  // Only while the board shows every project: inside one project the badge would repeat
+  // the same name on every card and say nothing.
+  const projBadge=(!curWorkdir&&tk.workdir)?`<span class="badge badge-proj" title="${escH(tk.workdir)}">${escH(projName(tk.workdir))}</span>`:'';
   el.innerHTML=`
     <div class="card-title">${escH(tk.title)}</div>
     ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
     <div class="card-foot">
-      ${schedBadge}${sessBadge}${modelBadge}${retryBadge}
+      ${projBadge}${schedBadge}${sessBadge}${modelBadge}${retryBadge}
       <span class="card-time">${relTime(tk.updated_at)}</span>
       <span class="card-actions">
         <button class="cbtn" title="${t('modal.edit')}" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
@@ -1519,7 +1585,8 @@ async function saveChainTaskEdit(){
 
 // ─── Modal: Add ────────────────────────────────────────────────────────────
 async function openAddModal(defaultStatus='backlog'){
-  if(!curWorkdir){toast(t('toast.no_project'),true);return;}
+  // No project selected is fine now — the form shows a project picker instead of
+  // sending the user back to the dropdown first (issue #25).
   modalMode='add';editingId=null;pendingAttachments=[];
   await loadKbBots();
   $i('modalTitle').textContent=t('modal.add');
@@ -1587,11 +1654,51 @@ function buildForm(tk={}){
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 12"/></svg>
       <span>${escH(t('modal.sched_wait'))} <strong>${escH(fmtScheduledAt(tk.scheduled_at))}</strong></span>
     </div>`:'';
+  // Shown only when the board is on "All projects" and the task has no project yet:
+  // creating from the global view used to be refused outright (issue #25).
+  const projPickerHtml=(!curWorkdir&&!tk.workdir)?`
+    <div><label class="lbl">${t('modal.project')}</label>
+      <select id="fProject" class="sel">
+        <option value="">${escH(t('modal.project.ph'))}</option>
+        ${projects.map(pr=>`<option value="${escH(pr.workdir||pr.id)}">${escH(pr.name||pr.workdir)}</option>`).join('')}
+      </select>
+    </div>`:'';
+  const rec=parseRecurForForm(tk.recurrence);
+  const schedVal=tk.scheduled_at?toLocalDatetimeStr(tk.scheduled_at):'';
+  const endVal=tk.recurrence_end_at?toLocalDateStr(tk.recurrence_end_at):'';
+  const schedFormHtml=`
+    <div class="grid2">
+      <div>
+        <label class="lbl">${t('modal.sched')}</label>
+        <input id="fScheduledAt" type="datetime-local" class="inp" value="${schedVal}" data-orig="${schedVal}" data-orig-ts="${tk.scheduled_at||''}">
+        <div class="sched-hint">${t('modal.sched.hint')}</div>
+      </div>
+      <div>
+        <label class="lbl">${t('modal.recur')}</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input id="fRecurN" type="number" min="1" max="365" value="${rec.n}" class="inp" style="width:62px;${rec.unit?'':'display:none'}">
+          <select id="fRecurUnit" class="sel" onchange="onKbRecurChange()" style="flex:1">
+            <option value=""${!rec.unit?' selected':''}>${t('modal.recur.once')}</option>
+            <option value="hour"${rec.unit==='hour'?' selected':''}>${t('recur.unit.hour')}</option>
+            <option value="day"${rec.unit==='day'?' selected':''}>${t('recur.unit.day')}</option>
+            <option value="week"${rec.unit==='week'?' selected':''}>${t('recur.unit.week')}</option>
+            <option value="month"${rec.unit==='month'?' selected':''}>${t('recur.unit.month')}</option>
+            <option value="times-month"${rec.unit==='times-month'?' selected':''}>${t('recur.unit.timesMonth')}</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div id="kbEndDateWrap" style="display:${rec.unit?'block':'none'}">
+      <label class="lbl">${t('modal.recur.end')}</label>
+      <input id="fEndDate" type="date" class="inp" value="${endVal}">
+    </div>`;
   return `
     ${schedInfoHtml}
+    ${projPickerHtml}
     <div><label class="lbl">${t('modal.name')}</label>
       <input id="fTitle" class="inp" placeholder="${t('modal.name')}" value="${escH(tk.title||'')}" maxlength="200">
     </div>
+    ${schedFormHtml}
     <div class="grid2">
       <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel">${statusOpts}</select></div>
       <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel" onchange="onFSessionChange()">${sessOpts}</select></div>
@@ -1795,13 +1902,33 @@ async function saveTask(){
   let session_id=$i('fSession')?.value||null;
   const cfg=getSessCfg();
   const existingTask=editingId?tasks.find(t=>t.id===editingId):null;
+  // curWorkdir when a project is selected; otherwise whatever the picker (global view)
+  // or the task itself already carries.
+  const taskWorkdir=curWorkdir||($i('fProject')?.value||'')||existingTask?.workdir||null;
+  if(!taskWorkdir){toast(t('toast.pick_project'),true);$i('fProject')?.focus();return;}
+  // An empty datetime clears the schedule — PUT falls back to the stored value only when
+  // the field is absent, so null has to be sent explicitly.
+  const schedEl=$i('fScheduledAt');
+  const schedRaw=schedEl?.value||'';
+  // datetime-local is minute-precision: re-deriving an untouched field would silently
+  // shave the stored seconds off on every unrelated edit. Untouched -> keep the epoch.
+  const scheduled_at=(schedEl&&schedRaw&&schedRaw===schedEl.dataset.orig&&schedEl.dataset.origTs)
+    ? Number(schedEl.dataset.origTs)
+    : (schedRaw?Math.floor(new Date(schedRaw).getTime()/1000):null);
+  const recurrence=buildRecurToken();
+  const endRaw=$i('fEndDate')?.value||'';
+  // End of the chosen day, not its midnight — otherwise the last run is cut off.
+  const recurrence_end_at=(recurrence&&endRaw)?Math.floor(new Date(endRaw+'T23:59:59').getTime()/1000):null;
   const body={
     title,
     description:$i('fDesc')?($i('fDesc').value||''):(existingTask?.description||''),
     notes:$i('fNotes')?($i('fNotes').value||''):(existingTask?.notes||''),
     status:$i('fStatus')?.value||'backlog',
     session_id,
-    workdir:curWorkdir||null,
+    workdir:taskWorkdir,
+    scheduled_at,
+    recurrence,
+    recurrence_end_at,
     model:cfg.model,
     mode:cfg.mode,
     agent_mode:cfg.agent,
@@ -1815,7 +1942,7 @@ async function saveTask(){
     if(modalMode==='add'){
       if(!session_id){
         const sessR=await apiFetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({title,workdir:curWorkdir||null,model:cfg.model,engine:cfg.engine,mode:cfg.mode,agentMode:cfg.agent,maxTurns:cfg.maxTurns})});
+          body:JSON.stringify({title,workdir:taskWorkdir,model:cfg.model,engine:cfg.engine,mode:cfg.mode,agentMode:cfg.agent,maxTurns:cfg.maxTurns})});
         const sess=await sessR.json();
         session_id=sess.id;
         body.session_id=session_id;
