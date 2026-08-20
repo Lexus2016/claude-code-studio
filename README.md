@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.2.1** — **Two multi-tab bugs fixed.** Interactive terminal sessions with Cyrillic/UTF-8 output no longer show mojibake after a session respawn. The multi-bot "who's typing" strip above the composer no longer leaks between unrelated tabs or projects — switching tabs now correctly restores each tab's own state.
+> **v7.2.2** — **Claude’s questions no longer vanish from the chat.** When the CLI reached for its built-in question tool, the message was written to history but never sent to the browser, so the chat showed a silent gap where a question should be. It now renders as a normal tool row with the question text and its answer options. The row is informational — a headless run has stdin closed, so there is nothing to click.
 
 ---
 
