@@ -372,7 +372,7 @@ class ClaudeSSH {
         const b = blocks[i], streamed = h._deltaBlocks.has(i);
         if (b.type === 'text'     && b.text     && h.onText     && !streamed) { h._hasEmittedText = true; h.onText(b.text); }
         else if (b.type === 'thinking' && b.thinking && h.onThinking && !streamed) h.onThinking(b.thinking);
-        else if (b.type === 'tool_use' && h.onTool) h.onTool(b.name, typeof b.input === 'string' ? b.input : JSON.stringify(b.input, null, 2));
+        else if (b.type === 'tool_use' && h.onTool) h.onTool(b.name, typeof b.input === 'string' ? b.input : JSON.stringify(b.input));
       }
     }
 

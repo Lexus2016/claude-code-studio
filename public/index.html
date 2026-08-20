@@ -8053,6 +8053,17 @@ function _toolInputBrief(toolName, inputStr) {
     if (inp.url) return inp.url.length > 100 ? inp.url.substring(0, 100) + '…' : inp.url;
     if (inp.description) return inp.description.length > 100 ? inp.description.substring(0, 100) + '…' : inp.description;
     if (inp.prompt) return inp.prompt.length > 80 ? inp.prompt.substring(0, 80) + '…' : inp.prompt;
+    // Question tools (AskUserQuestion): the payload is `{questions:[{question, options:[…]}]}`.
+    // Every probe above expects a top-level string, and the generic loop below skips
+    // arrays — without this branch the row renders as a bare "Ask" with no question.
+    if (Array.isArray(inp.questions) && inp.questions.length) {
+      const q = inp.questions[0] || {};
+      let s = String(q.question || '');
+      const opts = Array.isArray(q.options) ? q.options.map(o => (o && o.label) || o).filter(Boolean) : [];
+      if (opts.length) s += '  → ' + opts.join(' / ');
+      if (inp.questions.length > 1) s += '  +' + (inp.questions.length - 1);
+      return s.length > 160 ? s.substring(0, 160) + '…' : s;
+    }
     // Generic: first non-empty short string value
     for (const v of Object.values(inp)) {
       if (typeof v === 'string' && v.length > 0 && v.length < 200) {

@@ -2832,10 +2832,17 @@ async function runCliSingle(p) {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
           return;
         }
-        if (name === 'AskUserQuestion') {
-          try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
-          return;
-        }
+        // AskUserQuestion (the CLI's own question tool) deliberately falls through to the
+        // generic tool block; 9b9d8b9 used to drop it here, so the user saw a silent gap
+        // where a question should be. Two things that commit got wrong, recorded so nobody
+        // reinstates the branch: the bogus "ask card" it was killing came from the `Task*`
+        // family (`'task'.includes('ask')` is true in the old substring filter), not from
+        // AskUserQuestion; and bypass did NOT auto-resolve this tool on CLI 2.1.59.
+        // On 2.1.228 the tool is gated out of headless runs entirely (isEnabled() is false
+        // when non-interactive without --permission-prompt-tool), so this line is insurance
+        // for older and future builds rather than a live path. Visible-but-unanswerable is
+        // the honest behaviour — `claude -p` has stdin closed, so an answerable card would
+        // be a lie. Do not add one back unless the CLI gains a way to receive the answer.
         ws.send(JSON.stringify({ type:'tool', tool:name, input:(inp||'').substring(0,600), ...(tabId ? { tabId } : {}) }));
         try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
       })
