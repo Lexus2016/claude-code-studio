@@ -37,6 +37,7 @@ const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
 const { isTransientOverload, shouldRetryOverload } = require('./rate-limit-utils');
+const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs } = require('./delegate-terminal');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
 const {
   resolveAgentCommands, supportsTerminal, mergeAgentDefaults, parseNewIdOutput,
@@ -7235,21 +7236,8 @@ function readDialog(delegationDir) {
   try { return fs.readFileSync(dialogPath, 'utf-8'); } catch { return ''; }
 }
 
-function shellEscape(s) {
-  if (os.platform() === 'win32') {
-    // Windows cmd.exe: wrap in double quotes, escape special chars with ^
-    const escaped = String(s).replace(/["%^&|<>!]/g, '^$&');
-    return '"' + escaped + '"';
-  }
-  // Unix: single-quote wrapping, replace ' with '\'' (end quote, escaped quote, start quote)
-  return "'" + String(s).replace(/'/g, "'\\''") + "'";
-}
-
 function buildTerminalCommand(agentConfig, workdir, prompt) {
-  const template = agentConfig.template || '';
-  const cmd = template.replace('{prompt}', shellEscape(prompt));
-  // Not every agent CLI accepts a --cwd flag, so always cd into the workdir first
-  return `cd ${shellEscape(workdir)} && ${cmd}`;
+  return buildDelegateCommand(agentConfig, workdir, prompt, os.platform());
 }
 
 function openTerminal(shellCommand) {
@@ -7275,7 +7263,10 @@ function openTerminal(shellCommand) {
     const tmpBat = path.join(os.tmpdir(), `ccs-delegate-${Date.now()}.bat`);
     fs.writeFileSync(tmpBat, `@echo off\n${shellCommand}\n`);
     try {
-      spawnProc('cmd.exe', ['/c', 'start', 'Delegate', 'cmd.exe', '/k', tmpBat], { detached: true, stdio: 'ignore' }).unref();
+      // winTerminalArgs quotes the window title (bare `start Delegate ...` made Windows
+      // look for a program called "Delegate" — issue #22); windowsVerbatimArguments keeps
+      // Node from re-quoting those already-quoted arguments.
+      spawnProc('cmd.exe', winTerminalArgs(tmpBat), { detached: true, stdio: 'ignore', windowsVerbatimArguments: true }).unref();
       setTimeout(() => { try { fs.unlinkSync(tmpBat); } catch {} }, 10000);
       return { ok: true };
     } catch (err) {
