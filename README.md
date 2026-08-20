@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.2.2** — **Claude’s questions no longer vanish from the chat.** When the CLI reached for its built-in question tool, the message was written to history but never sent to the browser, so the chat showed a silent gap where a question should be. It now renders as a normal tool row with the question text and its answer options. The row is informational — a headless run has stdin closed, so there is nothing to click.
+> **v7.2.3** — **The in-app update on macOS no longer loops.** The app checked the GitHub release, which is published the moment a tag lands, while the Homebrew cask it actually installs from is bumped ~8 minutes later — so in that window it offered a version brew could not install yet, quit, and came back on the old one. It now reads the cask, and an upgrade that changes nothing is reported as a failure with a notification instead of a silent restart.
 
 ---
 

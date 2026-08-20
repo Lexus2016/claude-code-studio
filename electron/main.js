@@ -264,21 +264,38 @@ function semverGt(a, b) {
   return false;
 }
 
-function fetchLatestRelease() {
+// `version "7.2.2"` — the only quoted value on the cask's version line.
+function parseCaskVersion(rb) {
+  const m = /^\s*version\s+"([^"]+)"/m.exec(String(rb || ''));
+  return m ? m[1] : null;
+}
+
+// The macOS install path is the Homebrew cask, NOT the GitHub release. The release
+// is published the instant the tag lands; the cask is only bumped ~8 minutes later,
+// once the mac build has uploaded its dmg. Reading the release here meant that for
+// those 8 minutes the app offered a version brew could not yet install: `brew
+// upgrade --cask` found nothing to do, exited 0, and the app quit, relaunched at the
+// SAME version and offered the update again — the "restarts but never updates" loop
+// in update.log on 2026-08-20 (four attempts, 15:50–15:53, cask landed 15:55).
+// The cask is the honest source: it says yes exactly when an upgrade is installable.
+function fetchTapCaskVersion() {
   return new Promise((resolve, reject) => {
     const req = https.get({
-      host: 'api.github.com',
-      path: `/repos/${GH_OWNER}/${GH_REPO}/releases/latest`,
-      headers: { 'User-Agent': 'claude-code-studio', Accept: 'application/vnd.github+json' },
+      host: 'raw.githubusercontent.com',
+      path: `/${GH_OWNER}/homebrew-${GH_REPO}/main/Casks/${CASK_NAME}.rb`,
+      headers: { 'User-Agent': 'claude-code-studio' },
       timeout: 8000,
     }, (res) => {
-      if (res.statusCode !== 200) { res.resume(); return reject(new Error('GitHub HTTP ' + res.statusCode)); }
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error('cask HTTP ' + res.statusCode)); }
       let buf = '';
       res.on('data', (d) => (buf += d));
-      res.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
+      res.on('end', () => {
+        const v = parseCaskVersion(buf);
+        if (v) resolve(v); else reject(new Error('no version field in cask'));
+      });
     });
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('GitHub request timeout')); });
+    req.on('timeout', () => { req.destroy(); reject(new Error('cask request timeout')); });
   });
 }
 
@@ -297,8 +314,7 @@ function sendUpdateLog(line) {
 async function checkUpdate() {
   const currentVersion = app.getVersion();
   if (process.platform === 'darwin') {
-    const rel = await fetchLatestRelease();
-    const version = String(rel.tag_name || '').replace(/^v/, '');
+    const version = await fetchTapCaskVersion();
     return { platform: 'darwin', currentVersion, version, available: !!(version && semverGt(version, currentVersion)) };
   }
   const { autoUpdater } = require('electron-updater');
@@ -332,6 +348,26 @@ function runBrewStep(brew, args, label, { optional = false, timeoutMs = 900000 }
       resolve({ ok: optional || code === 0, code, last });
     });
   });
+}
+
+// Build the detached upgrade shell. Success is decided by the version brew reports
+// AFTERWARDS, never by its exit code: `brew upgrade --cask` also exits 0 when it has
+// nothing to do ("Not upgrading …, the latest version is already installed"). The old
+// `if brew upgrade; then echo OK` therefore called a no-op a success — no notification,
+// app reopened at the SAME version, and the one branch written to explain a failed
+// update never ran. Compare versions instead; that is true regardless of brew's wording
+// or exit code. Relaunch unconditionally — the app must never just vanish.
+function buildUpgradeShell({ brew, logPath, fromVersion, appName = 'Claude Code Studio' }) {
+  const q = (x) => String(x).replace(/'/g, `'\\''`);
+  const note = `Update failed — see update.log, or run: brew upgrade --cask ${CASK_NAME}`;
+  return `exec >> '${q(logPath)}' 2>&1; `
+    + `echo "=== $(date) upgrading ${CASK_NAME} from ${q(fromVersion)} ==="; `
+    + `'${q(brew)}' upgrade --cask ${CASK_NAME}; `
+    + `new=$('${q(brew)}' list --cask --versions ${CASK_NAME} 2>/dev/null | awk '{print $NF}'); `
+    + `if [ -n "$new" ] && [ "$new" != '${q(fromVersion)}' ]; then echo "OK ${q(fromVersion)} -> $new"; `
+    + `else echo "FAILED still ${q(fromVersion)}"; `
+    + `osascript -e 'display notification "${q(note)}" with title "${q(appName)}"'; fi; `
+    + `open -a '${q(appName)}'`;
 }
 
 async function startUpdate() {
@@ -376,10 +412,7 @@ async function startUpdate() {
     // Output goes to a log file: without it a failed upgrade leaves no trace at
     // all, and "it didn't update" cannot be diagnosed afterwards.
     const logPath = path.join(app.getPath('userData'), 'update.log');
-    const q = (x) => String(x).replace(/'/g, `'\\''`);
-    const sh = `exec >> '${q(logPath)}' 2>&1; echo "=== $(date) upgrading ${CASK_NAME} ==="; `
-      + `if '${q(brew)}' upgrade --cask ${CASK_NAME}; then echo OK; open -a "Claude Code Studio"; `
-      + `else echo FAILED; osascript -e 'display notification "Update failed — see update.log, or run: brew upgrade --cask ${CASK_NAME}" with title "Claude Code Studio"'; open -a "Claude Code Studio"; fi`;
+    const sh = buildUpgradeShell({ brew, logPath, fromVersion: app.getVersion() });
     sendUpdateLog('Installing — the app will restart…');
     const child = spawn('/bin/sh', ['-c', sh], { detached: true, stdio: 'ignore' });
     child.unref();
