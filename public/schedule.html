@@ -406,7 +406,10 @@ button{font-family:inherit;cursor:pointer}
 
 <script>
 // ─── i18n ─────────────────────────────────────────────────────────────────
-const lang = localStorage.getItem('lang') || 'en';
+// `let`, not `const`: this page is reachable directly (/kanban, /schedule) in a
+// browser that has never opened the chat UI, so localStorage may hold nothing while
+// the server has a language set. adoptServerLang() below closes that gap.
+let lang = localStorage.getItem('lang') || 'en';
 document.documentElement.lang = lang;
 document.documentElement.dir = (lang === 'he') ? 'rtl' : 'ltr';
 const TR = {
@@ -917,6 +920,7 @@ async function loadProjects() {
     const r = await apiFetch('/api/projects');
     projects = await r.json();
     try { const rc = await apiFetch('/api/config'); config = await rc.json(); } catch {}
+    adoptServerLang(config && config.lang);
     try {
       const ver = await fetch('/api/version').then(r => r.json());
       _schedTmuxAvailable = ver.tmuxAvailable !== false;
@@ -1667,6 +1671,16 @@ function startAutoRefresh() {
 // Declarative i18n — same attribute contract as index.html: the markup carries the
 // key, this pass fills in text/attributes for the active language. Every user-facing
 // literal in the markup must be annotated; test/i18n-completeness.test.js enforces it.
+// /api/config already carries `lang`; this page used to read it and throw it away.
+function adoptServerLang(srvLang) {
+  if (!srvLang || srvLang === lang || !TR[srvLang]) return;
+  lang = srvLang;
+  localStorage.setItem('lang', lang);
+  document.documentElement.lang = lang;
+  document.documentElement.dir = (lang === 'he') ? 'rtl' : 'ltr';
+  applyI18nAttrs();
+}
+
 function applyI18nAttrs(root) {
   const r = root || document;
   r.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });

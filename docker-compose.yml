@@ -21,6 +21,11 @@ services:
       # published port above maps to nothing. The container boundary is the wall here.
       - HOST=0.0.0.0
       - WORKDIR=/app/workspace
+      # /app is an image layer — anything written there is lost when the container
+      # is recreated. config.json (every MCP server, skill and terminal setting the
+      # config UI writes) and .env therefore live on the data volume instead.
+      - CCS_CONFIG_PATH=/app/data/config.json
+      - CCS_ENV_PATH=/app/data/.env
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - NODE_ENV=production
       - SESSION_SECRET=${SESSION_SECRET:-}

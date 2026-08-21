@@ -8,26 +8,30 @@
 // ── The precedence this file encodes is NOT invented ──────────────────────────
 // It is what server.js actually does, read off these lines:
 //
+// Citations name a SYMBOL, never a line. An earlier revision of this file cited
+// line numbers and every one of them was wrong within a few commits — a citation
+// that rots silently is worse than none, because it is still believed.
+//
 //  env-backed settings
-//    server.js:16-29   the .env loader — `if (k && !(k in process.env))`.
-//                      A variable already present in the real process
-//                      environment is NEVER overwritten by .env. So:
-//                          process env  >  .env file  >  hardcoded default
-//    server.js:95      `process.env.PORT || 3000`      — '' falls through
-//    server.js:64      `process.env.LOG_LEVEL || 'info'`
-//                      → an empty value behaves as unset, hence EMPTY_IS_UNSET.
+//    server.js  the .env loader at the top of the file — `if (k && !(k in process.env))`.
+//               A variable already present in the real process environment is NEVER
+//               overwritten by .env. So:
+//                   process env  >  .env file  >  hardcoded default
+//    server.js:PORT       `process.env.PORT || 3000`      — '' falls through
+//    server.js:_logLevel  `process.env.LOG_LEVEL || 'info'`
+//               → an empty value behaves as unset, hence EMPTY_IS_UNSET.
 //
 //  config.json-backed settings — TWO different chains, and they disagree:
-//    server.js:2564-2577  loadMergedConfig(): `l.lang || g.lang || 'en'`
+//    server.js:loadMergedConfig  `l.lang || g.lang || 'en'`
 //                          → local config.json > ~/.claude/config.json > default
-//    server.js:2308-2347  loadConfig(): reads CONFIG_PATH only
+//    server.js:loadConfig        reads CONFIG_PATH only
 //                          → local config.json > default. The global file is
 //                            never consulted, so a value set there is IGNORED.
 //                      `terminal.*`, `externalAgents` and `slashCommands` live
-//                      on this second chain (server.js:2332, 2564-2577).
+//                      on this second chain.
 //
 //  workdir
-//    server.js:2971, 3529, 6359, 7243 … `session.workdir || WORKDIR`
+//    server.js — `session.workdir || WORKDIR`, at every CLI spawn site
 //                      → the workdir of the project registered in
 //                        data/projects.json wins over WORKDIR for that session.
 //
@@ -49,7 +53,7 @@ const SECTIONS = ['engine', 'agents', 'workspace', 'mcp', 'server', 'security', 
 // later with an obviously-secret name is masked even if the flag is forgotten.
 const SECRET_NAME_RE = /(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|CREDENTIAL|PRIVATE_?KEY)/i;
 
-/** Repo convention (server.js:6919, 6987): a set secret is '***', an unset one ''. */
+/** Repo convention (server.js, /api/remote-hosts): a set secret is '***', an unset one ''. */
 function maskSecret(value) {
   return (value === undefined || value === null || value === '') ? '' : '***';
 }
@@ -65,13 +69,18 @@ function isSecretKey(key, def) {
  *           'collection' — a keyed collection in config.json (counted, not edited here)
  *  merge:   'merged'     — loadMergedConfig(): local overrides global
  *           'local'      — loadConfig(): local only, global silently ignored
+ *  falsyFallsThrough — loadMergedConfig() resolves this key with `||`, not `??`,
+ *           so an empty string in a config file does NOT reach the runtime.
+ *           Without the flag the UI would report `""` as effective while the
+ *           server is quietly running on the next source down.
  *  readOnly — the form refuses to write it (the raw-file tabs still can)
  *  restart  — takes effect only after a server restart
  */
 const SETTINGS = [
   // ── AI models & engine ────────────────────────────────────────────────────
   { key: 'defaultEngine', section: 'engine', backing: 'config', merge: 'merged', path: 'defaultEngine',
-    type: 'enum', choices: ['api', 'subscription'], def: 'api', src: 'server.js:2574' },
+    type: 'enum', choices: ['api', 'subscription'], def: 'api', falsyFallsThrough: true,
+    src: 'server.js:loadMergedConfig' },
   { key: 'ANTHROPIC_BASE_URL', section: 'engine', backing: 'env', type: 'string', def: '', restart: true,
     src: '.env.example / claude-cli.js env passthrough' },
   { key: 'ANTHROPIC_API_KEY', section: 'engine', backing: 'env', type: 'string', def: '', secret: true,
@@ -83,70 +92,93 @@ const SETTINGS = [
 
   // ── Agents & run limits ───────────────────────────────────────────────────
   { key: 'CLAUDE_IDLE_TIMEOUT_MS', section: 'agents', backing: 'env', type: 'number', def: 600000,
-    aliases: ['CLAUDE_TIMEOUT_MS'], restart: true, src: 'claude-cli.js:70' },
+    aliases: ['CLAUDE_TIMEOUT_MS'], restart: true, src: 'claude-cli.js:IDLE_TIMEOUT_MS' },
   { key: 'CLAUDE_HARD_CAP_MS', section: 'agents', backing: 'env', type: 'number', def: 0, restart: true,
-    src: 'claude-cli.js:73' },
+    src: 'claude-cli.js:HARD_CAP_MS' },
   { key: 'CLAUDE_PROMPT_GRACE_MS', section: 'agents', backing: 'env', type: 'number', def: 300000, restart: true,
-    src: 'claude-interactive.js:66' },
+    src: 'claude-interactive.js:AWAIT_GRACE_MS' },
+  { key: 'CLAUDE_STARTUP_PROMPT_WAIT_MS', section: 'agents', backing: 'env', type: 'number', def: 90000,
+    restart: true, src: 'claude-interactive.js:SPAWN_PROMPT_WAIT_MS' },
   { key: 'TASK_DISCONNECT_TIMEOUT_MS', section: 'agents', backing: 'env', type: 'number', def: 1800000,
-    restart: true, src: 'server.js:1090' },
+    restart: true, src: 'server.js:TASK_DISCONNECT_TIMEOUT_MS' },
   { key: 'MAX_TASK_WORKERS', section: 'agents', backing: 'env', type: 'number', def: 5, restart: true,
-    src: 'server.js:1279' },
+    src: 'server.js:MAX_TASK_WORKERS' },
   { key: 'MULTI_AGENT_MAX_TURNS_CAP', section: 'agents', backing: 'env', type: 'number', def: 200, restart: true,
-    src: 'server.js:3513' },
+    src: 'server.js:MULTI_AGENT_MAX_TURNS_CAP' },
 
   // ── Workspace ─────────────────────────────────────────────────────────────
   { key: 'WORKDIR', section: 'workspace', backing: 'env', type: 'path', def: '', restart: true,
-    projectOverride: true, src: 'server.js:105' },
+    projectOverride: true, src: 'server.js:WORKDIR' },
   { key: 'APP_DIR', section: 'workspace', backing: 'env', type: 'path', def: '', readOnly: true, restart: true,
-    src: 'server.js:104' },
+    src: 'server.js:APP_DIR' },
   { key: 'recentProjectsCount', section: 'workspace', backing: 'config', merge: 'merged',
-    path: 'recentProjectsCount', type: 'number', def: 5, src: 'server.js:2575' },
+    path: 'recentProjectsCount', type: 'number', def: 5, src: 'server.js:loadMergedConfig' },
 
   // ── MCP, skills, commands (collections) ───────────────────────────────────
   { key: 'mcpServers', section: 'mcp', backing: 'collection', merge: 'merged', path: 'mcpServers',
-    readOnly: true, src: 'server.js:2572' },
+    readOnly: true, src: 'server.js:loadMergedConfig' },
   { key: 'skills', section: 'mcp', backing: 'collection', merge: 'merged', path: 'skills',
-    readOnly: true, src: 'server.js:2573' },
+    readOnly: true, src: 'server.js:loadMergedConfig' },
   { key: 'slashCommands', section: 'mcp', backing: 'collection', merge: 'local', path: 'slashCommands',
-    readOnly: true, src: 'server.js:2574' },
+    readOnly: true, src: 'server.js:loadMergedConfig' },
   { key: 'externalAgents', section: 'mcp', backing: 'collection', merge: 'local', path: 'externalAgents',
-    readOnly: true, src: 'server.js:2313' },
+    readOnly: true, src: 'server.js:loadConfig' },
 
   // ── Server / network ──────────────────────────────────────────────────────
-  { key: 'PORT', section: 'server', backing: 'env', type: 'number', def: 3000, restart: true, src: 'server.js:95' },
+  { key: 'PORT', section: 'server', backing: 'env', type: 'number', def: 3000, restart: true, src: 'server.js:PORT' },
   { key: 'HOST', section: 'server', backing: 'env', type: 'string', def: '127.0.0.1', restart: true,
-    src: 'server.js:100' },
+    src: 'server.js:HOST' },
   { key: 'TRUST_PROXY', section: 'server', backing: 'env', type: 'bool', def: false, restart: true,
-    src: 'server.js:117' },
+    src: 'server.js:TRUST_PROXY_ENV' },
+  // Desktop builds pin HOST to loopback regardless of what HOST says, so it has to
+  // be visible here — otherwise the page reports an effective HOST the server ignores.
+  { key: 'CCS_DESKTOP', section: 'server', backing: 'env', type: 'bool', def: false, readOnly: true,
+    restart: true, overrides: ['HOST'], src: 'server.js:HOST' },
+  { key: 'CCS_ALLOWED_ORIGINS', section: 'server', backing: 'env', type: 'string', def: '', restart: true,
+    src: 'server.js:ALLOWED_ORIGINS' },
 
   // ── Security ──────────────────────────────────────────────────────────────
   { key: 'SESSION_SECRET', section: 'security', backing: 'env', type: 'string', def: '', secret: true,
-    readOnly: true, restart: true, src: 'auth.js:98' },
+    readOnly: true, restart: true, src: 'auth.js:setupUser' },
   { key: 'terminal.enabled', section: 'security', backing: 'config', merge: 'local', path: 'terminal.enabled',
-    type: 'bool', def: false, src: 'server.js:2332' },
+    type: 'bool', def: false, src: 'server.js:loadConfig' },
   { key: 'terminal.idleTimeoutMin', section: 'security', backing: 'config', merge: 'local',
-    path: 'terminal.idleTimeoutMin', type: 'number', def: 30, src: 'server.js:10040' },
+    path: 'terminal.idleTimeoutMin', type: 'number', def: 30, src: 'server.js:startTerminalReaper' },
   { key: 'terminal.maxLive', section: 'security', backing: 'config', merge: 'local', path: 'terminal.maxLive',
-    type: 'number', def: 3, src: 'server.js:10041' },
+    type: 'number', def: 3, src: 'server.js:startTerminalReaper' },
   { key: 'CCS_SSH_HOST_KEY_POLICY', section: 'security', backing: 'env', type: 'string', def: '', restart: true,
-    src: 'claude-ssh.js:100' },
+    src: 'claude-ssh.js:makeHostVerifier' },
+  { key: 'tunnel', section: 'security', backing: 'config', merge: 'local', path: 'tunnel',
+    readOnly: true, src: 'server.js:TunnelManager' },
 
   // ── Data retention ────────────────────────────────────────────────────────
   { key: 'SESSION_TTL_DAYS', section: 'data', backing: 'env', type: 'number', def: 30, restart: true,
-    src: 'server.js:358' },
+    src: 'server.js:SESSION_TTL_DAYS' },
   { key: 'CLEANUP_INTERVAL_HOURS', section: 'data', backing: 'env', type: 'number', def: 24, restart: true,
-    src: 'server.js:359' },
+    src: 'server.js:CLEANUP_INTERVAL_HOURS' },
+  { key: 'CCS_INTERRUPT_FILE_TTL_MS', section: 'data', backing: 'env', type: 'number', def: 1800000,
+    restart: true, src: 'server.js:INTERRUPT_FILE_TTL_MS' },
+  // Remote (SSH) import and exec caps. Two modules read CCS_REMOTE_EXEC_TIMEOUT_MS
+  // with the SAME default — listed once, cited at both.
+  { key: 'CCS_REMOTE_IMPORT_MAX_BYTES', section: 'data', backing: 'env', type: 'number', def: 33554432,
+    restart: true, src: 'server.js:REMOTE_IMPORT_MAX_BYTES' },
+  { key: 'CCS_REMOTE_IMPORT_MAX_TOTAL', section: 'data', backing: 'env', type: 'number', def: 134217728,
+    restart: true, src: 'server.js:REMOTE_IMPORT_MAX_TOTAL' },
+  { key: 'CCS_REMOTE_EXEC_TIMEOUT_MS', section: 'data', backing: 'env', type: 'number', def: 30000,
+    restart: true, src: 'server.js:REMOTE_EXEC_TIMEOUT_MS + claude-ssh.js:REMOTE_EXEC_TIMEOUT_MS' },
+  { key: 'CCS_REMOTE_EXEC_MAX_BYTES', section: 'data', backing: 'env', type: 'number', def: 67108864,
+    restart: true, src: 'claude-ssh.js:REMOTE_EXEC_MAX_BYTES' },
 
   // ── Interface ─────────────────────────────────────────────────────────────
   { key: 'lang', section: 'ui', backing: 'config', merge: 'merged', path: 'lang', type: 'enum',
-    choices: ['uk', 'en', 'ru', 'fr', 'he'], def: 'en', src: 'server.js:2574' },
+    choices: ['uk', 'en', 'ru', 'fr', 'he'], def: 'en', falsyFallsThrough: true,
+    src: 'server.js:loadMergedConfig' },
 
   // ── Advanced ──────────────────────────────────────────────────────────────
   { key: 'LOG_LEVEL', section: 'advanced', backing: 'env', type: 'enum',
-    choices: ['error', 'warn', 'info', 'debug'], def: 'info', restart: true, src: 'server.js:64' },
+    choices: ['error', 'warn', 'info', 'debug'], def: 'info', restart: true, src: 'server.js:_logLevel' },
   { key: 'NODE_ENV', section: 'advanced', backing: 'env', type: 'string', def: 'development', restart: true,
-    src: 'server.js:65' },
+    src: 'server.js:_isProd' },
 ];
 
 const BY_KEY = new Map(SETTINGS.map(s => [s.key, s]));
@@ -190,10 +222,15 @@ function candidatesFor(def, sources) {
       if (!envIsUnset(dv)) out.push({ source: 'dotenv', value: dv, via: name });
     }
   } else if (def.backing === 'config' || def.backing === 'collection') {
+    // `||` in loadMergedConfig() means a falsy value is skipped, not honoured.
+    // Show it struck through — the same treatment a merge:'local' global gets —
+    // rather than reporting a value the server never uses.
+    const dead = (v) => def.falsyFallsThrough && !v;
     const lv = getPath(s.localConfig, def.path);
-    if (lv !== undefined) out.push({ source: 'config-local', value: lv });
+    if (lv !== undefined) out.push({ source: 'config-local', value: lv, ...(dead(lv) ? { ignored: true } : {}) });
     const gv = getPath(s.globalConfig, def.path);
-    if (gv !== undefined) {
+    if (gv !== undefined && dead(gv)) out.push({ source: 'config-global', value: gv, ignored: true });
+    else if (gv !== undefined) {
       // merge:'local' means loadConfig() never opens ~/.claude/config.json, so a
       // value living there does nothing. Show it, struck through, instead of
       // pretending the file is not there.
@@ -281,7 +318,7 @@ function resolveAll(sources) {
 }
 
 /** Parse a .env file body into { key: value } using the exact rules of the
- *  loader in server.js:16-29 (first occurrence wins, `#` comments, quote strip). */
+ *  loader at the top of server.js (first occurrence wins, `#` comments, quote strip). */
 function parseDotenv(text) {
   const out = {};
   for (const line of String(text || '').split(/\r?\n/)) {

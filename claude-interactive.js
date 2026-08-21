@@ -295,10 +295,20 @@ function killInteractiveTmux(localSessionId) {
 // mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId; ignores the rest.
 // Returns { cid, completed, resultMeta, fullText, fullThinking, toolEvents }.
 async function runInteractiveSingle(params) {
-  const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent, drainInterrupts } = params;
+  const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent, drainInterrupts, fanout } = params;
   const start = Date.now();
   const wsSend = (obj) => {
     try { ws.send(JSON.stringify({ ...obj, ...(tabId ? { tabId } : {}) })); } catch {}
+  };
+  // input_needed / input_resolved are the only frames a SECOND window watching the
+  // same chat must also receive: they are the difference between "the turn is running"
+  // and "the turn is blocked waiting for a human", and a window that never sees them
+  // shows a spinner until the timeout. The rest of the stream reaches other windows
+  // through history replay, so it stays on wsSend alone. `fanout` is optional — the
+  // task-runner path already sends through a broadcasting proxy.
+  const wsSendAll = (obj) => {
+    wsSend(obj);
+    if (typeof fanout === 'function') { try { fanout({ ...obj, ...(tabId ? { tabId } : {}) }); } catch {} }
   };
 
   let fullText = '', fullThinking = '';
@@ -311,6 +321,11 @@ async function runInteractiveSingle(params) {
 
   const name = tmuxName(sessionId);
   let cid = claudeSessionId || null;
+  // Declared OUTSIDE the try so the finally below can clear the banner. Every early
+  // return inside — abort, idle timeout, hard cap, grace expiry, dead-end, throw —
+  // used to leave the browser showing "waiting for your answer" over a dead turn,
+  // because the client clears it only on input_resolved or on the next send.
+  let awaitAnnounced = false;       // 'input_needed' already sent for the prompt now on screen
 
   try {
     // ── Resolve per-session config (system prompt, MCP, model) ─────────────
@@ -334,7 +349,9 @@ async function runInteractiveSingle(params) {
       killInteractiveTmux(sessionId);
     }
 
+    let spawned = false;
     if (!tmuxHasSession(name)) {
+      spawned = true;
       const resuming = !!cid;
       if (!cid) cid = crypto.randomUUID();
       const idFlag = resuming ? `--resume ${shq(cid)}` : `--session-id ${shq(cid)}`;
@@ -376,15 +393,27 @@ async function runInteractiveSingle(params) {
       // the browser and give a human a bounded window to clear it in the live pane
       // (GitHub #20). On timeout we fall through and paste anyway — the pre-#20
       // behaviour — so a false positive costs a delay, never a lost message.
-      if (SPAWN_PROMPT_WAIT_MS > 0 && paneAwaitingInput(capturePane(name))) {
-        wsSend({ type: 'input_needed', sessionId, engine: 'subscription', phase: 'startup', prompt: promptExcerpt(capturePane(name)) });
-        const until = Date.now() + SPAWN_PROMPT_WAIT_MS;
-        while (Date.now() < until) {
-          await sleep(POLL_MS);
-          if (abortController?.signal?.aborted) break;
-          if (!paneAwaitingInput(capturePane(name))) { wsSend({ type: 'input_resolved', sessionId }); break; }
-        }
+    }
+
+    // A pane can be sitting on a blocking widget for either reason: a fresh TUI that
+    // settled on the trust-this-folder / skip-permissions screen, or a REUSED pane
+    // whose previous turn ended (idle timeout, grace expiry, a closed browser tab)
+    // while its dialog was still up. Both fail the same way — the paste-buffer below
+    // answers the widget with whatever option the caret sits on, which can be a
+    // permission grant. So the check runs before EVERY paste, not only after a spawn.
+    // On timeout we fall through and paste anyway (the pre-#20 behaviour): a false
+    // positive costs a delay, never a lost message.
+    if (SPAWN_PROMPT_WAIT_MS > 0 && paneAwaitingInput(capturePane(name))) {
+      awaitAnnounced = true;
+      wsSendAll({ type: 'input_needed', sessionId, engine: 'subscription', phase: spawned ? 'startup' : 'resume', prompt: promptExcerpt(capturePane(name)) });
+      const until = Date.now() + SPAWN_PROMPT_WAIT_MS;
+      while (Date.now() < until) {
+        await sleep(POLL_MS);
+        if (abortController?.signal?.aborted) break;
+        if (!paneAwaitingInput(capturePane(name))) break;
       }
+      awaitAnnounced = false;
+      wsSendAll({ type: 'input_resolved', sessionId });
     }
 
     // ── Record transcript offset BEFORE sending ────────────────────────────
@@ -438,7 +467,6 @@ async function runInteractiveSingle(params) {
     let prevPaneCap = null;           // previous pane capture — for spinner-animation detection in paneBusy()
     let lastActivityAt = start;       // idle watchdog cursor — bumped on transcript progress (new bytes)
     let awaitPolls = 0;               // consecutive polls showing a blocking prompt
-    let awaitAnnounced = false;       // 'input_needed' already sent for the prompt now on screen
 
     while (true) {
       await sleep(POLL_MS);
@@ -572,10 +600,10 @@ async function runInteractiveSingle(params) {
       awaitPolls = awaiting ? awaitPolls + 1 : 0;
       if (awaiting && !awaitAnnounced && awaitPolls >= AWAIT_CONFIRM_POLLS) {
         awaitAnnounced = true;
-        wsSend({ type: 'input_needed', sessionId, engine: 'subscription', prompt: promptExcerpt(pane) });
+        wsSendAll({ type: 'input_needed', sessionId, engine: 'subscription', prompt: promptExcerpt(pane) });
       } else if (awaitAnnounced && !awaiting) {
         awaitAnnounced = false;
-        wsSend({ type: 'input_resolved', sessionId });
+        wsSendAll({ type: 'input_resolved', sessionId });
       }
 
       // COMPLETE on the transcript turn-end signal, but ONLY once the spinner has
@@ -619,6 +647,9 @@ async function runInteractiveSingle(params) {
   } catch (e) {
     wsSend({ type: 'error', error: 'interactive engine error: ' + (e?.message || String(e)) });
     return { cid, completed: false, resultMeta: { durationMs: Date.now() - start }, fullText, fullThinking, toolEvents };
+  } finally {
+    // The turn is over whichever way it ended; the banner must not outlive it.
+    if (awaitAnnounced) { awaitAnnounced = false; wsSendAll({ type: 'input_resolved', sessionId }); }
   }
 }
 

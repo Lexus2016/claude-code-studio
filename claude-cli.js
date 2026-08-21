@@ -78,6 +78,17 @@ const HARD_CAP_MS = parseInt(process.env.CLAUDE_HARD_CAP_MS || '0', 10) || 0;
 const MAX_LINE_BUFFER = 10 * 1024 * 1024; // 10 MB
 
 // CLI uses short aliases — claude binary resolves them internally
+// Server-process secrets that have no business inside a `claude` subprocess: the
+// child gets Bash and a prompt that attacker-controlled file content can influence,
+// so anything here would be one `echo $VAR` away from exfiltration.
+const SERVER_ONLY_ENV = [
+  'SESSION_SECRET',
+  'TELEGRAM_BOT_TOKEN',
+  'ASK_USER_SECRET',
+  'CCS_INTERNAL_SECRET',
+  'CCS_SSH_PASSWORD',
+];
+
 const MODEL_MAP = {
   // 'opus':   'claude-opus-4-6',
   // 'sonnet': 'claude-sonnet-4-6',
@@ -272,6 +283,10 @@ class ClaudeCLI {
     // Unset CLAUDECODE to allow nested invocation from dev environment.
     const env = { ...process.env, ...(extraEnv || {}) };
     delete env.CLAUDECODE;
+    // The child runs with Bash on a prompt an untrusted document can steer, so it must
+    // not inherit this server's own credentials — none of them are its to use. Deleted
+    // AFTER the extraEnv spread so a caller cannot re-introduce one by accident.
+    for (const k of SERVER_ONLY_ENV) delete env[k];
     // When ANTHROPIC_BASE_URL is set the user is routing through a proxy (e.g. LiteLLM)
     // and needs ANTHROPIC_API_KEY for auth.  Only strip the key when talking directly to
     // Anthropic so the CLI subprocess falls back to Max subscription (otherwise the CLI

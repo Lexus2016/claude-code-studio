@@ -20,7 +20,10 @@ const _ENV_AT_BOOT = { ...process.env };
 // module-scope consts at require time. Loading .env after them silently pinned the
 // hardcoded 10-min idle default no matter what .env said. Do not move this down.
 {
-  const envPath = path.join(process.env.APP_DIR || __dirname, '.env');
+  // CCS_ENV_PATH exists for Docker: /app is an image layer, so a .env written by
+  // the config editor is gone the next time the container is recreated. Point it at
+  // a volume and the file survives. Everywhere else the default is what you want.
+  const envPath = process.env.CCS_ENV_PATH || path.join(process.env.APP_DIR || __dirname, '.env');
   if (fs.existsSync(envPath)) {
     for (const line of fs.readFileSync(envPath, 'utf-8').split(/\r?\n/)) {
       const t = line.trim();
@@ -37,6 +40,9 @@ const _ENV_AT_BOOT = { ...process.env };
 
 const multer = require('multer');
 const cfgResolve = require('./config-resolve');
+// Wave scheduling for multi-agent mode. Extracted so it can be tested without
+// spawning `claude` — see agent-dag.js and test/agent-dag.test.js.
+const { pickRunnable, buildDepContext } = require('./agent-dag');
 const openDatabase = require('./db-adapter');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
@@ -93,11 +99,14 @@ const log = (() => {
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ noServer: true });
+// maxPayload: `ws` defaults to 100 MB per frame. Nothing this protocol carries comes
+// close — the biggest legitimate frame is a chat message with inline base64 images,
+// and express.json() caps the HTTP equivalent at 5 MB.
+const wss = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 * 1024 });
 // Terminal sessions get their own endpoint: a different protocol (raw PTY bytes),
 // a different lifecycle, and a hard capability/security gate the chat socket has no
 // reason to carry.
-const wssTerm = new WebSocketServer({ noServer: true });
+const wssTerm = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 * 1024 });
 
 const PORT = process.env.PORT || 3000;
 // Bind address. Loopback by default: this UI drives `claude
@@ -110,7 +119,10 @@ const HOST_IS_LOOPBACK = auth.isLoopbackAddress(HOST);
 // data persists in the user's directory, not inside the npm cache.
 const APP_DIR = process.env.APP_DIR || __dirname;
 const WORKDIR = process.env.WORKDIR || path.join(APP_DIR, 'workspace');
-const CONFIG_PATH = path.join(APP_DIR, 'config.json');
+// Same reason as CCS_ENV_PATH above: in Docker /app is not persisted, and every
+// MCP server, skill and terminal setting the UI writes lives in this file.
+const CONFIG_PATH = process.env.CCS_CONFIG_PATH || path.join(APP_DIR, 'config.json');
+const DOTENV_PATH = process.env.CCS_ENV_PATH   || path.join(APP_DIR, '.env');
 
 // Dual-mode child interpreter: web=node; desktop(Electron)=Electron-as-Node via CCS_NODE_CMD (set by electron/main.js). A packaged app has no standalone node.
 const NODE_CMD = process.env.CCS_NODE_CMD || 'node';
@@ -132,6 +144,10 @@ applyProxyTrust();
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10,
+  // Count only what a brute-forcer generates. Without this a user signing in on a
+  // phone, a laptop and a tablet spends 3 of the 10 and can lock themselves out of
+  // their own box for 15 minutes.
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts, please try again later' },
@@ -291,8 +307,15 @@ function killByPid(pid) {
   } catch {} // Process may already be dead (ESRCH)
 }
 
-[WORKDIR, SKILLS_DIR, path.dirname(DB_PATH), UPLOADS_DIR].forEach(d => {
+[WORKDIR, SKILLS_DIR].forEach(d => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+});
+// data/ holds chats.db, auth.json, hosts.key — all written 0600. The DIRECTORY was
+// still 0755, and multer creates upload files with the plain process umask inside it,
+// so a user's attachments were world-readable on a shared host.
+[path.dirname(DB_PATH), UPLOADS_DIR].forEach(d => {
+  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true, mode: 0o700 });
+  try { fs.chmodSync(d, 0o700); } catch {}
 });
 
 // ─── One-time permission hardening for secret-bearing files ──────────────────
@@ -317,6 +340,8 @@ function hardenSecretFilePermissions() {
     path.join(dataDir, 'ssh-known-hosts.json'), // pinned SSH host-key fingerprints — public data,
                                                 // but an attacker who can rewrite it defeats the pin
     path.join(dataDir, 'projects.json'),        // project workdirs + encrypted per-project SSH passwords
+    DOTENV_PATH,                                // SESSION_SECRET, ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN —
+                                                // and the config editor writes it, so it is ours to protect
     DB_PATH,                                    // full chat history
     DB_PATH + '-wal',                           // same content, left behind by an unclean shutdown
     DB_PATH + '-shm',
@@ -1184,6 +1209,16 @@ const liveSessionIds = () => {
 const pendingAskUser = new Map();
 const ASK_USER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const ASK_USER_SECRET = require('crypto').randomBytes(16).toString('hex');
+// `!==` on a secret leaks its prefix through comparison time. The window is small
+// here (loopback, 128-bit secret, per-process) but the fix costs three lines.
+function timingSafeStrEq(a, b) {
+  const ab = Buffer.from(String(a || ''), 'utf8'), bb = Buffer.from(String(b || ''), 'utf8');
+  // Different lengths cannot be compared in constant time — hash both to a fixed
+  // width first so the length itself does not become the side channel.
+  const ah = crypto.createHash('sha256').update(ab).digest();
+  const bh = crypto.createHash('sha256').update(bb).digest();
+  return crypto.timingSafeEqual(ah, bh);
+}
 
 
 // ─── Notify User (Internal MCP) ──────────────────────────────────────────
@@ -1225,7 +1260,13 @@ function saveInterruptAttachments(rawAttachments, sessionId, interruptId, { enri
   if (!Array.isArray(rawAttachments) || rawAttachments.length === 0) return [];
   const saved = [];
   const tmpDir = path.join(os.tmpdir(), `claude-int-${sessionId}-${interruptId}`);
-  try { fs.mkdirSync(tmpDir, { recursive: true }); } catch {}
+  // Lazily: an ssh-type attachment writes no file at all, so creating the directory
+  // up front leaked one empty dir per SSH-only interrupt, permanently.
+  let tmpDirReady = false;
+  const ensureTmpDir = () => {
+    if (!tmpDirReady) { try { fs.mkdirSync(tmpDir, { recursive: true }); } catch {} tmpDirReady = true; }
+    return tmpDir;
+  };
   for (const att of rawAttachments) {
     const normalized = normalizeStoredAttachment(att);
     if (!normalized) continue;
@@ -1254,6 +1295,7 @@ function saveInterruptAttachments(rawAttachments, sessionId, interruptId, { enri
       continue;
     }
     if (normalized.base64) {
+      ensureTmpDir();
       let safeName = (normalized.name || `att-${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
       // Avoid name collisions within the same interrupt
       if (fs.existsSync(path.join(tmpDir, safeName))) {
@@ -3986,13 +4028,13 @@ async function runMultiAgent(p) {
     // abort (claude-cli.js:473-478), so a process spawned with an already-aborted signal
     // would run on uncancellable to its idle timeout.
     if (abortController?.signal?.aborted) break;
-    const runnable = remaining.filter(a => (a.depends_on||[]).every(d => completed.has(d)));
+    const runnable = pickRunnable(remaining, completed);
     if (!runnable.length) { ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'Circular deps', statusKey:'agent.circular_deps', ...(tabId ? { tabId } : {}) })); break; }
 
     await Promise.all(runnable.map(async agent => {
       remaining.splice(remaining.indexOf(agent), 1);
       ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`🔄 ${agent.role}`, ...(tabId ? { tabId } : {}) }));
-      const depCtx = (agent.depends_on||[]).map(d => results[d] ? `\n[${d}]:${results[d].substring(0,2000)}` : '').join('');
+      const depCtx = buildDepContext(agent, results);
       const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
       // Same standing instruction a single-agent turn gets: without it a worker does
       // not know user clarifications can arrive mid-run.
@@ -4146,10 +4188,56 @@ Provide a clear summary of what was accomplished. Be concise.`;
 // ============================================
 // EXPRESS
 // ============================================
-// CSP disabled: SPA uses inline scripts/styles; all other helmet headers applied
+// A full CSP is out of reach: the SPA is one file of inline scripts and styles, and
+// 'unsafe-inline' + 'unsafe-eval' would make the header decorative. frame-ancestors
+// is the one directive that costs nothing here and is worth having on its own — it
+// stops a page from framing this UI and driving it by click. (X-Frame-Options, which
+// helmet sets, is the older half-measure; both are sent.)
 app.use(helmet({ contentSecurityPolicy: false }));
+app.use((_req, res, next) => {
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+  next();
+});
 app.use(express.json({ limit:'5mb' }));
 app.use(cookieParser());
+
+// ─── Cross-origin guard ───────────────────────────────────────────────────────
+// A WebSocket handshake is NOT subject to the same-origin policy: any page on the
+// internet can open ws://127.0.0.1:<port>/ against this server. In desktop mode
+// that is fatal — validateWsToken() returns true unconditionally (auth.js:224) and
+// electron/main.js persists the port, so the URL is guessable and the socket runs
+// `claude --dangerously-skip-permissions`. Multipart POSTs have the same hole:
+// browsers send them cross-origin with no preflight to block them.
+//
+// Origin's host is compared against the request's OWN Host header, not against a
+// list built from PORT — that is what keeps it correct behind a reverse proxy or a
+// cloudflared tunnel, where Host is the public name. A proxy that rewrites Host
+// upstream needs the public origin listed in CCS_ALLOWED_ORIGINS.
+//
+// No Origin header at all = a non-browser client (CLI, Telegram bot, MCP child,
+// curl). Those never carried an ambient credential, so CSRF does not apply to them.
+const ALLOWED_ORIGINS = String(process.env.CCS_ALLOWED_ORIGINS || '')
+  .split(',').map(o => o.trim().replace(/\/+$/, '')).filter(Boolean);
+function isCrossOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin.replace(/\/+$/, ''))) return false;
+  // 'null' is what a sandboxed iframe, a data: URL or a file:// page sends. It can
+  // never equal a Host, but spell it out so nobody "simplifies" the check later.
+  if (origin === 'null') return true;
+  let host;
+  try { host = new URL(origin).host; } catch { return true; }
+  return host !== req.headers.host;
+}
+
+// GET/HEAD stay open: without CORS response headers the browser cannot read what
+// comes back, and every state change on this server lives behind a non-safe method.
+app.use((req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  if (!isCrossOrigin(req)) return next();
+  log.warn('cross-origin request refused', { method: req.method, path: req.path, origin: req.headers.origin });
+  return res.status(403).json({ error: 'cross-origin request refused' });
+});
 
 // ─── HTTP Request Logging ─────────────────────────────────────────────────────
 // Logs method, path, status, and duration for every request.
@@ -4170,7 +4258,7 @@ app.use((req, res, next) => {
 // not with a user session token. The Bearer secret is a 32-char hex generated per process.
 app.post('/api/internal/ask-user', express.json(), (req, res) => {
   const authHeader = req.headers.authorization || '';
-  if (authHeader !== `Bearer ${ASK_USER_SECRET}`) {
+  if (!timingSafeStrEq(authHeader, `Bearer ${ASK_USER_SECRET}`)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -4757,7 +4845,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── Language ─────────────────────────────────────────────────────────────────
 app.get('/api/lang', (req, res) => {
-  const c = loadConfig();
+  // Merged, not local: the settings catalog documents `lang` as merge:'merged' and
+  // the resolver reports it that way, so a value living only in the global
+  // ~/.claude/config.json has to reach the browser too. `defaultEngine` at
+  // /api/default-engine already reads it merged; this endpoint did not.
+  const c = loadMergedConfig();
   res.json({ lang: c.lang || 'en' });
 });
 
@@ -4969,9 +5061,20 @@ app.get('/api/auth/status', (req,res) => {
   const ad = auth.loadAuth();
   // A remote first-run visitor has to prove console access; tell the page so it
   // can render the field instead of failing the POST with a bare 403.
-  const setupCodeRequired = !setupDone && !auth.isLoopbackAddress(req.ip);
+  const setupCodeRequired = !setupDone && !setupCallerIsLocal(req);
   res.json({ setupDone, loggedIn, displayName:loggedIn?ad?.displayName:null, setupCodeRequired });
 });
+
+// `req.ip` follows X-Forwarded-For whenever TRUST_PROXY is on, and equals the
+// socket address when it is off — behind a reverse proxy with TRUST_PROXY unset
+// that address is the proxy's own 127.0.0.1, so every internet visitor looks like
+// the console owner and can claim a fresh install. Read the socket directly and
+// treat the mere PRESENCE of a forwarding header as proof a hop happened, whatever
+// TRUST_PROXY says: a real console visit has neither.
+function setupCallerIsLocal(req) {
+  if (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.headers.forwarded) return false;
+  return auth.isLoopbackAddress(req.socket?.remoteAddress);
+}
 
 app.post('/api/auth/setup', authLimiter, async (req,res) => {
   try {
@@ -4979,7 +5082,7 @@ app.post('/api/auth/setup', authLimiter, async (req,res) => {
     // Claiming the account is the whole security boundary of a fresh install:
     // it hands out a shell. From loopback the caller is the owner. From the
     // network they must echo a code that only ever appeared on the console.
-    if (!auth.isSetupDone() && !auth.isLoopbackAddress(req.ip)) {
+    if (!auth.isSetupDone() && !setupCallerIsLocal(req)) {
       const given = setupCode || req.headers['x-setup-code'];
       if (!auth.checkSetupCode(given)) {
         log.warn('remote setup attempt rejected', { ip: req.ip, hadCode: !!given });
@@ -5278,7 +5381,10 @@ function resolveProjectFilter(req, idx) {
   if (!raw) return { ok: true, workdir: null };
   const p = idx.list.find(x => x.id === raw);
   if (!p) return { ok: false };
-  return { ok: true, workdir: p.workdir };
+  // `?? null`, not the bare value: a project row registered without a workdir hands
+  // `undefined` to a prepared statement, and better-sqlite3 rejects that as an
+  // unbindable parameter — a 500 where the honest answer is "no rows for it".
+  return { ok: true, workdir: p.workdir ?? null };
 }
 
 // LIKE treats % and _ as wildcards. A user searching for "50%" means the character,
@@ -5402,6 +5508,11 @@ app.post('/api/tasks', (req, res) => {
           depends_on=null, chain_id=null, source_session_id=null,
           scheduled_at=null, recurrence=null, recurrence_end_at=null, effort=null, run_engine=null,
           bot_id=null } = req.body;
+  // The tasks table has a FOREIGN KEY on session_id; a stale id from a client that
+  // kept a deleted session around used to surface as a 500 with a SQLite stack trace.
+  if (session_id && !stmts.getSession.get(String(session_id))) {
+    return res.status(400).json({ error: 'unknown session_id' });
+  }
   const id = genId();
   stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null, sqlVal(run_engine)||null, sqlVal(bot_id)||null);
   const task = stmts.getTask.get(id);
@@ -5644,7 +5755,8 @@ app.post('/api/tasks/dispatch', (req, res) => {
     run_engine = null,
   } = req.body;
 
-  if (!planTasks?.length) return res.status(400).json({ error: 'No tasks provided' });
+  // `.length` is truthy on a string too, which is how "abc" used to reach .map().
+  if (!Array.isArray(planTasks) || !planTasks.length) return res.status(400).json({ error: 'No tasks provided' });
   if (planTasks.length > 10) return res.status(400).json({ error: 'Max 10 tasks per dispatch' });
 
   // Circular dependency detection (DFS)
@@ -5738,6 +5850,9 @@ app.get('/api/sessions', (req,res) => {
 });
 app.post('/api/sessions', (req, res) => {
   const { title = i18nSession(), workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single', kind = 'chat', terminalAgent = null } = req.body || {};
+  // This value ends up as the cwd of `claude --dangerously-skip-permissions`. Same
+  // rule as every other endpoint that takes a path from the client.
+  if (workdir && !isPathAllowed(workdir)) return res.status(400).json({ error: 'workdir is outside the allowed roots' });
   const id = genId();
   if (kind === 'terminal') {
     // loadConfig(), not loadMergedConfig(): the merged view is a whitelist of
@@ -6111,6 +6226,12 @@ function parseRemoteListOutput(stdout, nonce) {
       if (kind === 'BASE')  { base = arg; continue; }
       if (kind === 'FILE')  {
         const sp2 = arg.indexOf(' ');
+        // A well-formed header is `FILE <size> <path>`. Without the space there is
+        // no path at all, and slicing on -1 would invent one: arg.slice(0, -1) as
+        // the size and arg.slice(0) as the path, i.e. the size digits shown to the
+        // user as a filename. Drop the row instead, and drop any open one with it
+        // so the lines that follow are not appended to the previous file's body.
+        if (sp2 === -1) { cur = null; buf = []; continue; }
         cur = { size: parseInt(arg.slice(0, sp2), 10) || 0, path: arg.slice(sp2 + 1), raw: '' };
         buf = []; continue;
       }
@@ -6259,7 +6380,9 @@ app.post('/api/sessions/cli-import-remote', async (req, res) => {
     if (out.status === 'NOFILE')      { failed.set(sid, 'not found on remote'); continue; }
     if (out.status !== 'OK' || r.truncated) { failed.set(sid, 'unreadable remote transcript'); continue; }
 
-    total += out.raw.length;
+    // .length counts UTF-16 code units, so a non-ASCII transcript under-reported its
+    // size by up to 3x and the 128 MB total cap let far more through.
+    total += Buffer.byteLength(out.raw, 'utf8');
     if (total > REMOTE_IMPORT_MAX_TOTAL) return res.status(413).json({ code: 'too_large', error: `Import exceeds ${REMOTE_IMPORT_MAX_TOTAL} bytes` });
     rawMap.set(sid, out.raw);
   }
@@ -6357,8 +6480,14 @@ app.get('/api/sessions/:id/export', (req, res) => {
 // ─── Import session from JSON export ──────────────────────────────────────
 app.post('/api/sessions/import', (req, res) => {
   const { session, messages } = req.body || {};
-  if (!session || typeof session !== 'object' || !Array.isArray(messages)) {
+  if (!session || typeof session !== 'object' || Array.isArray(session) || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Invalid import body: session object and messages array required' });
+  }
+  // A null entry reached `m.role` inside the transaction, and this handler's own catch
+  // put the resulting V8 message in the response body — the one place in the app that
+  // leaked one. Reject the shape up front instead.
+  if (!messages.every(m => m && typeof m === 'object' && !Array.isArray(m))) {
+    return res.status(400).json({ error: 'Invalid import body: every message must be an object' });
   }
   const newId = genId();
   const tx = db.transaction(() => {
@@ -6547,8 +6676,10 @@ app.delete('/api/sessions/:id', (req,res) => {
   res.json({ok:true});
 });
 app.post('/api/sessions/bulk-delete', (req,res) => {
-  const { ids } = req.body;
-  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'no ids' });
+  // Array.isArray alone is not enough: better-sqlite3 treats a plain object bound as a
+  // parameter as a NAMED-parameter set and throws "Unknown named parameter" — a 500.
+  const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).filter(x => typeof x === 'string' && x);
+  if (ids.length === 0) return res.status(400).json({ error: 'no ids' });
   // Abort running subprocesses before deleting
   for (const id of ids) {
     const active = activeTasks.get(id);
@@ -6808,13 +6939,31 @@ app.get('/api/mcp/export', (req, res) => {
   res.json({ mcpServers });
 });
 
-const upload = multer({ dest: path.join(os.tmpdir(), 'skills-upload') });
+// Skills are Markdown. Without limits multer streams an arbitrary body to /tmp and
+// only then hands it over — a single request can fill the disk.
+const upload = multer({
+  dest: path.join(os.tmpdir(), 'skills-upload'),
+  limits: { fileSize: 2 * 1024 * 1024, files: 1, fields: 10 },
+});
 app.post('/api/skills/upload', upload.single('file'), (req,res) => {
   if(!req.file) return res.status(400).json({error:'No file'});
-  const name=req.body.name||path.parse(req.file.originalname).name;
-  const id=name.toLowerCase().replace(/[^a-z0-9]+/g,'-');
-  const destFile=`skills/${id}.md`; fs.mkdirSync(SKILLS_DIR,{recursive:true}); fs.copyFileSync(req.file.path, path.join(APP_DIR,destFile)); fs.unlinkSync(req.file.path);
-  const c=loadConfig(); c.skills[id]={label:req.body.label||`📄 ${name}`,description:req.body.description||'Custom',file:destFile,custom:true}; saveConfig(c); res.json({ok:true,id});
+  // `-F name=a -F name=b` makes req.body.name an ARRAY. The unlink also has to be in a
+  // finally: anything thrown after this point left multer's temp file in /tmp forever.
+  try {
+    const name = qstr(req.body.name) || path.parse(req.file.originalname).name;
+    const id = name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+    if (!id) return res.status(400).json({ error: 'invalid skill name' });
+    const destFile=`skills/${id}.md`; fs.mkdirSync(SKILLS_DIR,{recursive:true});
+    fs.copyFileSync(req.file.path, path.join(APP_DIR,destFile));
+    const c=loadConfig();
+    c.skills[id]={label:qstr(req.body.label)||`📄 ${name}`,description:qstr(req.body.description)||'Custom',file:destFile,custom:true};
+    saveConfig(c); res.json({ok:true,id});
+  } catch (e) {
+    log.warn('skill upload failed', { msg: e?.message });
+    res.status(500).json({ error: 'internal_error' });
+  } finally {
+    try { fs.unlinkSync(req.file.path); } catch {}
+  }
 });
 app.delete('/api/skills/:id', (req,res) => { const c=loadConfig(); const s=c.skills[req.params.id]; if(s?.custom){try{fs.unlinkSync(path.join(APP_DIR,s.file))}catch{} delete c.skills[req.params.id]; saveConfig(c)} res.json({ok:true}); });
 // Raw skill text for client-side actions that need it outside the chat system prompt
@@ -6830,7 +6979,10 @@ app.get('/api/skills/:id/content', (req, res) => {
 // ============================================
 app.post('/api/commands', (req, res) => {
   const { name, text } = req.body;
-  if (!name || !text) return res.status(400).json({ error: 'name and text required' });
+  // Truthiness is not a type check — `[]` is truthy and `1` reaches .startsWith().
+  if (typeof name !== 'string' || typeof text !== 'string' || !name || !text) {
+    return res.status(400).json({ error: 'name and text required' });
+  }
   const c = loadConfig();
   if (!c.slashCommands) c.slashCommands = [];
   const id = Date.now().toString();
@@ -6842,7 +6994,10 @@ app.post('/api/commands', (req, res) => {
 
 app.put('/api/commands/:id', (req, res) => {
   const { name, text } = req.body;
-  if (!name || !text) return res.status(400).json({ error: 'name and text required' });
+  // Truthiness is not a type check — `[]` is truthy and `1` reaches .startsWith().
+  if (typeof name !== 'string' || typeof text !== 'string' || !name || !text) {
+    return res.status(400).json({ error: 'name and text required' });
+  }
   const c = loadConfig();
   if (!c.slashCommands) c.slashCommands = [];
   const cmd = c.slashCommands.find(cmd => cmd.id === req.params.id);
@@ -6925,6 +7080,9 @@ app.post('/api/upload', fileUpload.single('file'), (req, res) => {
 app.use((err, _req, res, next) => {
   if (err?.status === 415) return res.status(415).json({ error: err.message });
   if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: `File too large (max ${UPLOAD_MAX_SIZE / 1024 / 1024} MB)` });
+  // Malformed multipart, an unexpected field name, too many files: all client errors.
+  // Untouched they fell through to the generic handler as 500s.
+  if (err instanceof multer.MulterError) return res.status(400).json({ error: err.code });
   next(err);
 });
 
@@ -6934,12 +7092,12 @@ app.get('/api/config-files', (_,res) => {
   try{files['config.json']=fs.readFileSync(CONFIG_PATH,'utf-8')}catch{files['config.json']='{}'}
   try{files['CLAUDE.md']=fs.readFileSync(path.join(WORKDIR,'CLAUDE.md'),'utf-8')}catch{files['CLAUDE.md']=''}
   try{files['.claude/settings.json']=fs.readFileSync(path.join(os.homedir(),'.claude','settings.json'),'utf-8')}catch{files['.claude/settings.json']='{}'}
-  try{files['.env']=fs.readFileSync(path.join(APP_DIR,'.env'),'utf-8')}catch{files['.env']=''}
+  try{files['.env']=fs.readFileSync(DOTENV_PATH,'utf-8')}catch{files['.env']=''}
   res.json(files);
 });
 app.put('/api/config-files', (req,res) => {
   const{filename,content}=req.body;
-  const allowed={'config.json':CONFIG_PATH,'CLAUDE.md':path.join(WORKDIR,'CLAUDE.md'),'.claude/settings.json':path.join(os.homedir(),'.claude','settings.json'),'.env':path.join(APP_DIR,'.env')};
+  const allowed={'config.json':CONFIG_PATH,'CLAUDE.md':path.join(WORKDIR,'CLAUDE.md'),'.claude/settings.json':path.join(os.homedir(),'.claude','settings.json'),'.env':DOTENV_PATH};
   const target=allowed[filename]; if(!target) return res.status(400).json({error:'Unknown'});
   try{
     const dir=path.dirname(target); if(!fs.existsSync(dir)) fs.mkdirSync(dir,{recursive:true});
@@ -6951,6 +7109,9 @@ app.put('/api/config-files', (req,res) => {
       saveConfig(parsed);
     } else {
       const tmp=target+'.tmp'; fs.writeFileSync(tmp,content,'utf-8'); fs.renameSync(tmp,target);
+      // .env holds SESSION_SECRET / API keys. Without this the editor silently undoes
+      // hardenSecretFilePermissions() — the rename lands a fresh 0644 inode every save.
+      if (filename === '.env') { try { fs.chmodSync(target, 0o600); } catch {} }
     }
     res.json({ok:true});
   }
@@ -6962,8 +7123,6 @@ app.put('/api/config-files', (req,res) => {
 // setting the server actually reads. Behind auth like every other /api route
 // (app.use(auth.authMiddleware) above). Secret values are masked inside
 // config-resolve.resolveSetting() — they never reach this function.
-const DOTENV_PATH = path.join(APP_DIR, '.env');
-
 function collectConfigSources(workdirParam) {
   let project = null;
   if (workdirParam && isPathAllowed(workdirParam)) {
@@ -7028,6 +7187,7 @@ app.put('/api/config/setting', (req, res) => {
       fs.writeFileSync(tmp, next, { mode: 0o600 });
       try { fs.chmodSync(tmp, 0o600); } catch {}
       fs.renameSync(tmp, DOTENV_PATH);
+      try { fs.chmodSync(DOTENV_PATH, 0o600); } catch {}
     } else {
       return res.status(400).json({ error: 'read_only' });
     }
@@ -7064,6 +7224,7 @@ app.delete('/api/config/setting', (req, res) => {
       fs.writeFileSync(tmp, cfgResolve.unsetDotenvValue(body, def.key), { mode: 0o600 });
       try { fs.chmodSync(tmp, 0o600); } catch {}
       fs.renameSync(tmp, DOTENV_PATH);
+      try { fs.chmodSync(DOTENV_PATH, 0o600); } catch {}
     } else {
       return res.status(400).json({ error: 'read_only' });
     }
@@ -7080,8 +7241,9 @@ const GLOBAL_CLAUDE_MD = path.join(os.homedir(), '.claude', 'CLAUDE.md');
 const LOCAL_CLAUDE_MD  = path.join(WORKDIR, 'CLAUDE.md');
 
 app.get('/api/claude-md', (req,res) => {
-  if (req.query.dir && !isPathAllowed(req.query.dir)) return res.status(403).json({ error: 'path not allowed' });
-  const localDir = req.query.dir ? path.resolve(req.query.dir) : null;
+  const qDir = qstr(req.query.dir);
+  if (qDir && !isPathAllowed(qDir)) return res.status(403).json({ error: 'path not allowed' });
+  const localDir = qDir ? path.resolve(qDir) : null;
   const localMd  = localDir ? path.join(localDir, 'CLAUDE.md') : LOCAL_CLAUDE_MD;
   const result = { global: '', local: '', globalPath: GLOBAL_CLAUDE_MD, localPath: localMd };
   try { result.global = fs.readFileSync(GLOBAL_CLAUDE_MD, 'utf-8'); } catch {}
@@ -7110,24 +7272,44 @@ app.post('/api/claude-md', (req,res) => {
 // Resolve the effective workspace for /api/files and /api/files/download.
 // Priority: ?workdir= query param (must match a registered project) → global WORKDIR.
 // Returns null if workdir is unknown, or { workdir, isRemote } object.
+// Express's qs parser turns ?path=a&path=b into an ARRAY and ?path[a]=1 into an
+// OBJECT. Both then reach path.resolve(), which throws TypeError before any of the
+// traversal checks below run — a 500 on every file endpoint from a bare query string.
+// Anything that is not a string is not a path.
+function qstr(v) { return typeof v === 'string' ? v : ''; }
+
 function resolveFilesWorkdir(reqWorkdir) {
   if (reqWorkdir) {
     const projects = loadProjects();
     const match = projects.find(p => path.resolve(p.workdir) === path.resolve(reqWorkdir));
-    if (match) return { workdir: path.resolve(match.workdir), isRemote: !!match.isRemote };
+    // _realish, not path.resolve: the containment check below compares against this
+    // value, and comparing a resolved-but-not-realpathed root against a realpathed
+    // target would deny every project that itself lives behind a symlink (/tmp on macOS).
+    if (match) return { workdir: match.isRemote ? path.resolve(match.workdir) : _realish(match.workdir), isRemote: !!match.isRemote };
     return null; // not a registered project — deny
   }
-  return { workdir: path.resolve(WORKDIR), isRemote: false };
+  return { workdir: _realish(WORKDIR), isRemote: false };
+}
+
+// Containment for the /api/files family. Lexical startsWith() is not enough on its
+// own: a symlink sitting inside the workdir (node_modules/x -> /etc, or one committed
+// to a repo the user cloned) passes it while the read lands outside. Resolve first,
+// compare second — the same rule isPathAllowed() already applies everywhere else.
+// Returns null when the path escapes; the caller answers 403.
+function resolveInsideWorkdir(workdirReal, rel) {
+  const fp = _realish(path.resolve(workdirReal, rel));
+  if (fp !== workdirReal && !fp.startsWith(workdirReal + path.sep)) return null;
+  return fp;
 }
 
 app.get('/api/files', (req,res) => {
-  const dir=req.query.path||'';
-  const resolved = resolveFilesWorkdir(req.query.workdir);
+  const dir=qstr(req.query.path);
+  const resolved = resolveFilesWorkdir(qstr(req.query.workdir));
   if (!resolved) return res.status(403).json({error:'Workdir not in registered projects'});
   if (resolved.isRemote) return res.json({type:'remote'}); // remote FS can't be browsed locally
   const workdirReal = resolved.workdir;
-  const fp=path.resolve(workdirReal,dir);
-  if(fp!==workdirReal && !fp.startsWith(workdirReal+path.sep)) return res.status(403).json({error:'Denied'});
+  const fp=resolveInsideWorkdir(workdirReal,dir);
+  if(!fp) return res.status(403).json({error:'Denied'});
   try{
     const stat=fs.statSync(fp);
     if(stat.isDirectory()){
@@ -7148,13 +7330,13 @@ app.get('/api/files', (req,res) => {
 });
 
 app.get('/api/files/download', (req,res) => {
-  const fp_rel = req.query.path || '';
-  const resolved = resolveFilesWorkdir(req.query.workdir);
+  const fp_rel = qstr(req.query.path);
+  const resolved = resolveFilesWorkdir(qstr(req.query.workdir));
   if (!resolved) return res.status(403).json({error:'Workdir not in registered projects'});
   if (resolved.isRemote) return res.status(400).json({error:'File download not available for remote projects'});
   const workdirReal = resolved.workdir;
-  const fp = path.resolve(workdirReal, fp_rel);
-  if (fp !== workdirReal && !fp.startsWith(workdirReal + path.sep)) return res.status(403).json({error:'Denied'});
+  const fp = resolveInsideWorkdir(workdirReal, fp_rel);
+  if (!fp) return res.status(403).json({error:'Denied'});
   try {
     const stat = fs.statSync(fp);
     if (stat.isDirectory()) return res.status(400).json({error:'Cannot download a directory'});
@@ -7166,13 +7348,13 @@ app.get('/api/files/download', (req,res) => {
 });
 
 app.get('/api/files/raw', (req, res) => {
-  const fp_rel = req.query.path || '';
-  const resolved = resolveFilesWorkdir(req.query.workdir);
+  const fp_rel = qstr(req.query.path);
+  const resolved = resolveFilesWorkdir(qstr(req.query.workdir));
   if (!resolved) return res.status(403).json({error:'Workdir not in registered projects'});
   if (resolved.isRemote) return res.status(400).json({error:'Raw file access not available for remote projects'});
   const workdirReal = resolved.workdir;
-  const fp = path.resolve(workdirReal, fp_rel);
-  if (fp !== workdirReal && !fp.startsWith(workdirReal + path.sep)) return res.status(403).json({error:'Denied'});
+  const fp = resolveInsideWorkdir(workdirReal, fp_rel);
+  if (!fp) return res.status(403).json({error:'Denied'});
   try {
     const stat = fs.statSync(fp);
     if (stat.isDirectory()) return res.status(400).json({error:'Cannot serve directory'});
@@ -7228,11 +7410,14 @@ function searchProjectFiles(rootDir, query, maxResults = 80) {
 }
 
 app.get('/api/project-files', (req, res) => {
-  const { dir, q } = req.query;
+  const dir = qstr(req.query.dir), q = qstr(req.query.q);
   if (!dir) return res.status(400).json({ error: 'dir required' });
   const absDir = path.resolve(dir);
-  // Security: dir must be one of the registered project workdirs
-  const projects = loadProjects();
+  // Security: dir must be one of the registered LOCAL project workdirs. A remote
+  // project's workdir names a path on another machine — honouring it here would let
+  // a project registered as remote:/etc read the LOCAL /etc. isPathAllowed() already
+  // filters the same way (see its !p.isRemote), these two endpoints did not.
+  const projects = loadProjects().filter(p => !p.isRemote);
   const allowed = projects.some(p => {
     const pd = path.resolve(p.workdir);
     return absDir === pd || absDir.startsWith(pd + path.sep);
@@ -7244,7 +7429,7 @@ app.get('/api/project-files', (req, res) => {
 });
 
 app.get('/api/project-files/read', (req, res) => {
-  const { path: filePath, dir } = req.query;
+  const filePath = qstr(req.query.path), dir = qstr(req.query.dir);
   if (!filePath || !dir) return res.status(400).json({ error: 'path and dir required' });
   const absFile = path.resolve(filePath);
   const absDir  = path.resolve(dir);
@@ -7252,7 +7437,8 @@ app.get('/api/project-files/read', (req, res) => {
   if (!absFile.startsWith(absDir + path.sep) && absFile !== absDir) {
     return res.status(403).json({ error: 'Path outside project dir' });
   }
-  const projects = loadProjects();
+  // Local projects only — see the note on /api/project-files above.
+  const projects = loadProjects().filter(p => !p.isRemote);
   const allowed = projects.some(p => {
     const pd = path.resolve(p.workdir);
     return absDir === pd || absDir.startsWith(pd + path.sep);
@@ -7395,7 +7581,7 @@ app.post('/api/remote-hosts/:id/test', async (req,res) => {
 // Directory browser — lists directories under an allowed root (see isPathAllowed)
 app.get('/api/browse-dirs', (req, res) => {
   // Windows: show drive list when explicitly requested OR when no path given (initial open)
-  if (process.platform === 'win32' && (!req.query.path || req.query.path === '__drives__')) {
+  if (process.platform === 'win32' && (!qstr(req.query.path) || req.query.path === '__drives__')) {
     const drives = [];
     for (let i = 65; i <= 90; i++) { // A–Z
       const drive = String.fromCharCode(i) + ':\\';
@@ -7403,7 +7589,7 @@ app.get('/api/browse-dirs', (req, res) => {
     }
     return res.json({ path: '__drives__', parent: null, items: drives });
   }
-  const dir = path.resolve(req.query.path || os.homedir());
+  const dir = path.resolve(qstr(req.query.path) || os.homedir());
   if (!isPathAllowed(dir)) return res.status(403).json({ error: 'path not allowed' });
   try {
     if (!fs.statSync(dir).isDirectory()) return res.status(400).json({ error: 'Not a directory' });
@@ -7454,6 +7640,13 @@ function initTunnelManager() {
     // The tunnel now fronts us: X-Forwarded-For is real, req.ip must follow it.
     _tunnelIsProxying = true;
     applyProxyTrust();
+    // A published tunnel plus a browser terminal is a public shell. wssTerm refuses
+    // NEW connections while the tunnel runs — but sockets opened a second earlier
+    // stayed live and became reachable from the internet the moment the URL existed.
+    wssTerm.clients.forEach(ws => {
+      try { ws.send(JSON.stringify({ type: 'error', error: 'blocked while a public tunnel is active' })); } catch {}
+      try { ws.close(); } catch {}
+    });
     // Notify all WebSocket clients
     wss.clients.forEach(ws => {
       try { ws.send(JSON.stringify({ type: 'tunnel_url', url })); } catch {}
@@ -8317,8 +8510,11 @@ function openTerminal(shellCommand) {
   if (platform === 'darwin') {
     // macOS — open Terminal.app via osascript
     // Write command to a temp script file to avoid shell/AppleScript escaping issues
-    const tmpScript = path.join(os.tmpdir(), `ccs-delegate-${Date.now()}.sh`);
-    fs.writeFileSync(tmpScript, `#!/bin/bash\n${shellCommand}\n`, { mode: 0o755 });
+    // Date.now() is guessable and 0755 in a shared /tmp let any local user read the
+    // command (it can carry a host, a path, a project name) — and on a system without
+    // the sticky bit, replace the file between write and execute.
+    const tmpScript = path.join(os.tmpdir(), `ccs-delegate-${crypto.randomBytes(9).toString('hex')}.sh`);
+    fs.writeFileSync(tmpScript, `#!/bin/bash\n${shellCommand}\n`, { mode: 0o700 });
     // do script BEFORE activate so a cold launch reuses Terminal's auto-opened window
     // instead of leaving an empty default window plus the command window (two windows).
     const script = `tell application "Terminal"\n  do script "${tmpScript}"\n  activate\nend tell`;
@@ -8332,8 +8528,8 @@ function openTerminal(shellCommand) {
     }
   } else if (platform === 'win32') {
     // Windows — write a .bat script and open it in a new cmd window
-    const tmpBat = path.join(os.tmpdir(), `ccs-delegate-${Date.now()}.bat`);
-    fs.writeFileSync(tmpBat, `@echo off\n${shellCommand}\n`);
+    const tmpBat = path.join(os.tmpdir(), `ccs-delegate-${crypto.randomBytes(9).toString('hex')}.bat`);
+    fs.writeFileSync(tmpBat, `@echo off\n${shellCommand}\n`, { mode: 0o600 });
     try {
       // winTerminalArgs quotes the window title (bare `start Delegate ...` made Windows
       // look for a program called "Delegate" — issue #22); windowsVerbatimArguments keeps
@@ -8841,6 +9037,13 @@ app.delete('/api/delegate/:id', (req, res) => {
 // WEBSOCKET
 // ============================================
 server.on('upgrade', (req, socket, head) => {
+  // BEFORE the token check, because validateWsToken() short-circuits to true in
+  // desktop mode — the origin is the only thing standing between a random web page
+  // and a chat socket there. See isCrossOrigin() above.
+  if (isCrossOrigin(req)) {
+    log.warn('ws upgrade refused: cross-origin', { origin: req.headers.origin, host: req.headers.host, url: req.url });
+    socket.write('HTTP/1.1 403 Forbidden\r\n\r\n'); socket.destroy(); return;
+  }
   const cookies = {};
   (req.headers.cookie||'').split(';').forEach(c => { const[k,v]=c.trim().split('='); if(k&&v) cookies[k]=v; });
   const bearerToken = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null;
@@ -8866,10 +9069,12 @@ wssTerm.on('connection', (ws, req) => {
   const send = (obj) => { try { ws.send(JSON.stringify(obj)); } catch {} };
   const fail = (error) => { send({ type: 'error', error }); try { ws.close(); } catch {} };
 
-  const cfg = loadConfig();
-  if (cfg.terminal?.enabled !== true) return fail('terminal sessions are disabled');
-  // A published tunnel plus a browser terminal is a public shell. Refuse regardless
-  // of the enable flag.
+  // The tunnel and tmux gates are global. `terminal.enabled` is NOT — it governs
+  // "the browser may spawn a shell", and it is seeded false (loadConfig, ~line 2415).
+  // Checking it here closed the only route to answer a blocked subscription turn
+  // (view=engine, GitHub #20) on every default install: the card offered "Open pane"
+  // and the pane refused with a message about terminals. view=engine spawns nothing —
+  // it attaches to a pane the engine itself created — so it is gated below instead.
   if (tunnelManager?.isRunning?.()) return fail('blocked while a public tunnel is active');
   if (!termBridge.tmuxAvailable()) return fail('tmux unavailable on this host');
 
@@ -8966,6 +9171,8 @@ wssTerm.on('connection', (ws, req) => {
     return;
   }
 
+  // ── Ordinary terminal sessions: this socket DOES spawn a shell ──────────────
+  if (loadConfig().terminal?.enabled !== true) return fail('terminal sessions are disabled');
   if (!session || session.kind !== 'terminal') return fail('not a terminal session');
 
   const agents = loadConfig().externalAgents || {};
@@ -9161,6 +9368,12 @@ wss.on('connection', (ws) => {
         }
       } catch (e) { log.warn('bot mention resolution failed', { err: e.message }); }
 
+      // Same guard as POST /api/sessions — the chat socket can set a workdir too.
+      if (msg.workdir && !isPathAllowed(msg.workdir)) {
+        log.warn('chat refused: workdir outside allowed roots', { sessionId: localSessionId, workdir: msg.workdir });
+        try { ws.send(JSON.stringify({ type: 'error', error: 'workdir is outside the allowed roots' })); } catch {}
+        return;
+      }
       // Validate workdir: if the session belongs to a different project, don't reuse it.
       if (existSess && msg.workdir && existSess.workdir && existSess.workdir !== msg.workdir) {
         log.warn('workdir mismatch — refusing to reuse session from different project', { sessionId: localSessionId, sessionWorkdir: existSess.workdir, msgWorkdir: msg.workdir });
@@ -9425,6 +9638,11 @@ wss.on('connection', (ws) => {
         // function and types clarifications into the live pane itself.
         const r = await runInteractiveSingle({
           ...params,
+          // A second window open on the same chat has its own socket in
+          // sessionWatchers and would otherwise sit on a spinner while the engine
+          // waits for someone to answer a permission prompt. Only the blocked/unblocked
+          // frames are fanned out; `ws` is excluded because it is served above.
+          fanout: (obj) => { try { broadcastToSessionExcept(localSessionId, ws, obj); } catch {} },
           drainInterrupts: () => {
             const msgs = pendingInterrupts.get(localSessionId) || [];
             if (msgs.length) pendingInterrupts.delete(localSessionId);
@@ -9619,7 +9837,11 @@ wss.on('connection', (ws) => {
   }
 
   ws.on('message', async (raw) => {
+    // JSON.parse('null') SUCCEEDS, and `msg.type` on the next line then threw inside an
+    // async listener — an unhandledRejection per frame, spammable at line rate by any
+    // authenticated client. Same for '123', '"str"' and '[1,2]'.
     let msg; try{msg=JSON.parse(raw)}catch{return}
+    if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return;
 
     if (msg.type==='start_session') {
       legacySessionId = msg.sessionId || genId();
@@ -10283,7 +10505,7 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    log.info('ws disconnected', { clients: wss.clients.size - 1 });
+    log.info('ws disconnected', { clients: wss.clients.size });
     ws._queue = [];
     // Clean up session watchers
     for (const [sid, set] of sessionWatchers) { set.delete(ws); if (!set.size) sessionWatchers.delete(sid); }
@@ -10366,7 +10588,9 @@ restoreDelegations();
 app.use((err, _req, res, next) => {
   if (res.headersSent) return next(err);
   const status = err?.status || err?.statusCode || 500;
-  const body = err?.type === 'entity.parse.failed' ? { error: 'invalid_json' } : { error: 'internal_error' };
+  const body = err?.type === 'entity.parse.failed' ? { error: 'invalid_json' }
+             : err?.type === 'entity.too.large' ? { error: 'payload_too_large' }
+             : { error: 'internal_error' };
   try { log.warn('request error', { status, msg: err?.message }); } catch {}
   res.status(status).json(body);
 });

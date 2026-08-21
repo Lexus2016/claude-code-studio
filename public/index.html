@@ -4583,6 +4583,15 @@ const TRANSLATIONS = {
     'cfg.h.CCS_SSH_HOST_KEY_POLICY':'Значення accept-any вимикає перевірку ключа SSH-хоста. Небезпечно поза довіреною мережею.',
     'cfg.h.SESSION_TTL_DAYS':'Чати, старші за цей строк, видаляються при старті; повідомлення перед тим архівуються.',
     'cfg.h.CLEANUP_INTERVAL_HOURS':'Як часто очищення повторюється після запуску.',
+    'cfg.h.CLAUDE_STARTUP_PROMPT_WAIT_MS':'Скільки чекати на відповідь у діалозі підписки під час старту сесії, перш ніж надіслати запит.',
+    'cfg.h.CCS_DESKTOP':'Режим десктопного застосунку: авторизацію вимкнено, HOST примусово 127.0.0.1 — значення HOST ігнорується.',
+    'cfg.h.CCS_ALLOWED_ORIGINS':'Додаткові origin через кому, яким дозволено запити та WebSocket. Потрібно, лише якщо проксі переписує Host.',
+    'cfg.h.tunnel':'Налаштування публічного тунелю (cloudflared). Поки тунель активний, термінал у браузері заблоковано.',
+    'cfg.h.CCS_INTERRUPT_FILE_TTL_MS':'Скільки жити тимчасовим файлам вкладень, доданих під час перебивання відповіді.',
+    'cfg.h.CCS_REMOTE_IMPORT_MAX_BYTES':'Ліміт розміру одного файлу сесії під час імпорту з віддаленого хоста.',
+    'cfg.h.CCS_REMOTE_IMPORT_MAX_TOTAL':'Сумарний ліміт на весь імпорт із віддаленого хоста.',
+    'cfg.h.CCS_REMOTE_EXEC_TIMEOUT_MS':'Таймаут однієї команди, виконаної на віддаленому хості через SSH.',
+    'cfg.h.CCS_REMOTE_EXEC_MAX_BYTES':'Ліміт обсягу виводу, який приймається від віддаленої команди.',
     'cfg.h.lang':'Мова інтерфейсу.',
     'cfg.h.LOG_LEVEL':'Докладність журналу сервера.',
     'cfg.h.NODE_ENV':'Значення production перемикає журнал на JSON із розділенням рядками.',
@@ -4953,6 +4962,15 @@ const TRANSLATIONS = {
     'cfg.h.CCS_SSH_HOST_KEY_POLICY':'Set to accept-any to skip SSH host-key verification. Unsafe outside a trusted network.',
     'cfg.h.SESSION_TTL_DAYS':'Chats older than this are deleted at startup; their messages are archived first.',
     'cfg.h.CLEANUP_INTERVAL_HOURS':'How often the cleanup repeats after startup.',
+    'cfg.h.CLAUDE_STARTUP_PROMPT_WAIT_MS':'How long to wait on a subscription-engine prompt at session start before sending the request.',
+    'cfg.h.CCS_DESKTOP':'Desktop-app mode: the auth wall is off and HOST is pinned to 127.0.0.1 — the HOST setting is ignored.',
+    'cfg.h.CCS_ALLOWED_ORIGINS':'Comma-separated extra origins allowed to make requests and open WebSockets. Only needed when a proxy rewrites Host.',
+    'cfg.h.tunnel':'Public tunnel (cloudflared) settings. While a tunnel is up the browser terminal is blocked.',
+    'cfg.h.CCS_INTERRUPT_FILE_TTL_MS':'How long temp files for attachments added during an interrupt are kept.',
+    'cfg.h.CCS_REMOTE_IMPORT_MAX_BYTES':'Size cap for a single session file imported from a remote host.',
+    'cfg.h.CCS_REMOTE_IMPORT_MAX_TOTAL':'Total size cap across one remote import.',
+    'cfg.h.CCS_REMOTE_EXEC_TIMEOUT_MS':'Timeout for a single command run on a remote host over SSH.',
+    'cfg.h.CCS_REMOTE_EXEC_MAX_BYTES':'Cap on the output accepted from a remote command.',
     'cfg.h.lang':'Interface language.',
     'cfg.h.LOG_LEVEL':'Server log verbosity.',
     'cfg.h.NODE_ENV':'production switches the log output to newline-delimited JSON.',
@@ -5323,6 +5341,15 @@ const TRANSLATIONS = {
     'cfg.h.CCS_SSH_HOST_KEY_POLICY':'Значение accept-any отключает проверку ключа SSH-хоста. Небезопасно вне доверенной сети.',
     'cfg.h.SESSION_TTL_DAYS':'Чаты старше этого срока удаляются при старте; сообщения перед этим архивируются.',
     'cfg.h.CLEANUP_INTERVAL_HOURS':'Как часто очистка повторяется после запуска.',
+    'cfg.h.CLAUDE_STARTUP_PROMPT_WAIT_MS':'Сколько ждать ответа в диалоге подписки при старте сессии, прежде чем отправить запрос.',
+    'cfg.h.CCS_DESKTOP':'Режим десктопного приложения: авторизация выключена, HOST принудительно 127.0.0.1 — значение HOST игнорируется.',
+    'cfg.h.CCS_ALLOWED_ORIGINS':'Дополнительные origin через запятую, которым разрешены запросы и WebSocket. Нужно, только если прокси переписывает Host.',
+    'cfg.h.tunnel':'Настройки публичного туннеля (cloudflared). Пока туннель активен, терминал в браузере заблокирован.',
+    'cfg.h.CCS_INTERRUPT_FILE_TTL_MS':'Сколько хранятся временные файлы вложений, добавленных во время прерывания ответа.',
+    'cfg.h.CCS_REMOTE_IMPORT_MAX_BYTES':'Лимит размера одного файла сессии при импорте с удалённого хоста.',
+    'cfg.h.CCS_REMOTE_IMPORT_MAX_TOTAL':'Суммарный лимит на весь импорт с удалённого хоста.',
+    'cfg.h.CCS_REMOTE_EXEC_TIMEOUT_MS':'Таймаут одной команды, выполняемой на удалённом хосте по SSH.',
+    'cfg.h.CCS_REMOTE_EXEC_MAX_BYTES':'Лимит объёма вывода, принимаемого от удалённой команды.',
     'cfg.h.lang':'Язык интерфейса.',
     'cfg.h.LOG_LEVEL':'Подробность журнала сервера.',
     'cfg.h.NODE_ENV':'Значение production переключает журнал на JSON с разделением строками.',
@@ -5693,6 +5720,15 @@ const TRANSLATIONS = {
     'cfg.h.CCS_SSH_HOST_KEY_POLICY':'La valeur accept-any désactive la vérification de la clé d’hôte SSH. Dangereux hors d’un réseau de confiance.',
     'cfg.h.SESSION_TTL_DAYS':'Les chats plus anciens sont supprimés au démarrage ; leurs messages sont archivés avant.',
     'cfg.h.CLEANUP_INTERVAL_HOURS':'Fréquence de répétition du nettoyage après le démarrage.',
+    'cfg.h.CLAUDE_STARTUP_PROMPT_WAIT_MS':'Durée d’attente d’une invite du moteur abonnement au démarrage de la session avant l’envoi de la requête.',
+    'cfg.h.CCS_DESKTOP':'Mode application de bureau : l’authentification est désactivée et HOST est fixé à 127.0.0.1 — le réglage HOST est ignoré.',
+    'cfg.h.CCS_ALLOWED_ORIGINS':'Origines supplémentaires, séparées par des virgules, autorisées pour les requêtes et les WebSockets. Utile seulement si un proxy réécrit Host.',
+    'cfg.h.tunnel':'Paramètres du tunnel public (cloudflared). Tant qu’un tunnel est actif, le terminal du navigateur est bloqué.',
+    'cfg.h.CCS_INTERRUPT_FILE_TTL_MS':'Durée de conservation des fichiers temporaires des pièces jointes ajoutées pendant une interruption.',
+    'cfg.h.CCS_REMOTE_IMPORT_MAX_BYTES':'Taille maximale d’un fichier de session importé depuis un hôte distant.',
+    'cfg.h.CCS_REMOTE_IMPORT_MAX_TOTAL':'Taille totale maximale pour un import distant.',
+    'cfg.h.CCS_REMOTE_EXEC_TIMEOUT_MS':'Délai d’expiration d’une commande exécutée sur un hôte distant via SSH.',
+    'cfg.h.CCS_REMOTE_EXEC_MAX_BYTES':'Limite de sortie acceptée depuis une commande distante.',
     'cfg.h.lang':'Langue de l’interface.',
     'cfg.h.LOG_LEVEL':'Niveau de détail du journal du serveur.',
     'cfg.h.NODE_ENV':'production bascule le journal en JSON délimité par des sauts de ligne.',
@@ -5964,6 +6000,15 @@ const TRANSLATIONS = {
     'cfg.h.CCS_SSH_HOST_KEY_POLICY':'הערך accept-any מבטל את אימות מפתח מארח ה-SSH. מסוכן מחוץ לרשת מהימנה.',
     'cfg.h.SESSION_TTL_DAYS':'צ׳אטים ישנים מכך נמחקים בעלייה; ההודעות שלהם מאורכבות לפני כן.',
     'cfg.h.CLEANUP_INTERVAL_HOURS':'כל כמה זמן הניקוי חוזר אחרי ההפעלה.',
+    'cfg.h.CLAUDE_STARTUP_PROMPT_WAIT_MS':'כמה זמן להמתין לשאלה של מנוע המנוי בתחילת הסשן לפני שליחת הבקשה.',
+    'cfg.h.CCS_DESKTOP':'מצב יישום שולחני: חומת ההזדהות כבויה ו-HOST מקובע ל-127.0.0.1 — ההגדרה HOST מתעלמים ממנה.',
+    'cfg.h.CCS_ALLOWED_ORIGINS':'מקורות נוספים מופרדים בפסיקים שמותר להם לשלוח בקשות ולפתוח WebSocket. נחוץ רק כאשר פרוקסי משכתב את Host.',
+    'cfg.h.tunnel':'הגדרות מנהרה ציבורית (cloudflared). כל עוד מנהרה פעילה, הטרמינל בדפדפן חסום.',
+    'cfg.h.CCS_INTERRUPT_FILE_TTL_MS':'כמה זמן נשמרים קבצים זמניים של קבצים מצורפים שנוספו במהלך הפסקה.',
+    'cfg.h.CCS_REMOTE_IMPORT_MAX_BYTES':'מגבלת גודל לקובץ סשן יחיד שמיובא ממארח מרוחק.',
+    'cfg.h.CCS_REMOTE_IMPORT_MAX_TOTAL':'מגבלת גודל כוללת לייבוא מרוחק אחד.',
+    'cfg.h.CCS_REMOTE_EXEC_TIMEOUT_MS':'פסק זמן לפקודה בודדת שמורצת על מארח מרוחק דרך SSH.',
+    'cfg.h.CCS_REMOTE_EXEC_MAX_BYTES':'מגבלה על הפלט המתקבל מפקודה מרוחקת.',
     'cfg.h.lang':'שפת הממשק.',
     'cfg.h.LOG_LEVEL':'רמת הפירוט של יומן השרת.',
     'cfg.h.NODE_ENV':'הערך production מעביר את היומן ל-JSON מופרד בשורות.',
@@ -6161,10 +6206,14 @@ function rerenderI18nDynamic() {
   }
 }
 
-function setLang(lang) {
+// `persist` exists because the boot call reads a possibly-empty localStorage: a
+// colleague opening the studio in a fresh browser would PUT lang:'en' and wipe the
+// language the owner set in Settings, for everyone including the Telegram bot.
+// Only a deliberate user choice writes to the server.
+function setLang(lang, persist = true) {
   const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
   localStorage.setItem('lang', lang);
-  fetch('/api/lang', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang }) }).catch(() => {});
+  if (persist) fetch('/api/lang', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang }) }).catch(() => {});
   const sel = $i('langSel'); if (sel) sel.value = lang;
   document.documentElement.lang = lang;
   document.documentElement.dir = (lang === 'he') ? 'rtl' : 'ltr';
@@ -6314,6 +6363,11 @@ function showNotification(data) {
     setTimeout(() => oldest.remove(), 300);
   }
 }
+
+// The UI ships five languages; every date/time call site used to map only three
+// and silently fell back to uk-UA or en-US for the other two. One helper, one map.
+const UI_LOCALES = { uk: 'uk-UA', en: 'en-US', ru: 'ru-RU', fr: 'fr-FR', he: 'he-IL' };
+function uiLocale() { return UI_LOCALES[localStorage.getItem('lang')] || UI_LOCALES.en; }
 
 // ─── Markdown renderer ───────────────────────────────────────────────────
 function escH(s) {
@@ -7917,7 +7971,7 @@ function _rlRenderBadge(info, pct, isCrit) {
   // Reset date
   if (info.resetsAt) {
     const resetsAt = new Date(info.resetsAt * 1000);
-    $i('rl-tt-reset').textContent = resetsAt.toLocaleString('uk-UA', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    $i('rl-tt-reset').textContent = resetsAt.toLocaleString(uiLocale(), { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
   } else {
     $i('rl-tt-reset').textContent = '—';
   }
@@ -11722,7 +11776,7 @@ async function loadHist() {
       d.setAttribute('role', 'button');
       d.setAttribute('tabindex', '0');
       if (!histSelectMode) d.setAttribute('draggable', 'true');
-      const dt = new Date(s.updated_at).toLocaleDateString(localStorage.getItem('lang') || 'uk', { day: 'numeric', month: 'short' });
+      const dt = new Date(s.updated_at).toLocaleDateString(uiLocale(), { day: 'numeric', month: 'short' });
       d.innerHTML = `<span class="drag-handle" onclick="event.stopPropagation()" title="${t('hist.drag')}">⠿</span><input type="checkbox" class="hist-chk" ${isSel ? 'checked' : ''} onclick="event.stopPropagation();toggleSessCheck('${s.id}',this)"><span class="ht" data-tip="${escH(s.title)}">${escH(s.title)}</span><span class="hd">${dt}</span>${s.claude_session_id ? `<button class="fork-sess" onclick="event.stopPropagation();forkSess('${s.id}')" data-tip="${t('sess.fork')}">↗</button>` : `<button class="fork-sess fork-na" onclick="event.stopPropagation()" data-tip="${t('sess.fork.na')}">↗</button>`}<button class="del" onclick="event.stopPropagation();delSess('${s.id}')" data-tip="${t('sess.delete.tip')}">✕</button>`;
       if (histSelectMode) {
         d.onclick = (e) => { const chk = d.querySelector('.hist-chk'); chk.checked = !chk.checked; toggleSessCheck(s.id, chk); };
@@ -11750,9 +11804,9 @@ function formatMsgTime(isoStr) {
   const d = new Date(isoStr);
   const now = new Date();
   const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  const time = d.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+  const time = d.toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit' });
   if (isToday) return time;
-  const date = d.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
+  const date = d.toLocaleDateString(uiLocale(), { day: '2-digit', month: '2-digit' });
   return `${date} ${time}`;
 }
 
@@ -13904,7 +13958,7 @@ async function _cfgWrite(key, init, doneMsg, endpoint) {
     // not the value we sent — a reset sends none.
     if (key === 'lang') {
       const lg = String((d.setting && d.setting.effective) || 'en');
-      localStorage.setItem('lang', lg); setLang(lg);
+      localStorage.setItem('lang', lg); setLang(lg, false);
     } else loadCfg();
   } catch (e) { toast(e.message, true); }
 }
@@ -15005,9 +15059,7 @@ function renderCliSessionList() {
     row.style.cssText = 'display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:5px;cursor:pointer;transition:background .1s;' + (s.alreadyImported ? 'opacity:.5' : '');
     row.onmouseenter = () => { if (!s.alreadyImported) row.style.background = 'var(--s2)'; };
     row.onmouseleave = () => { row.style.background = ''; };
-    const lang = localStorage.getItem('lang') || 'en';
-    const locale = lang === 'uk' ? 'uk-UA' : lang === 'ru' ? 'ru-RU' : 'en-US';
-    const date = s.timestamp ? new Date(s.timestamp).toLocaleDateString(locale, { day:'2-digit', month:'short', year:'numeric' }) : '—';
+    const date = s.timestamp ? new Date(s.timestamp).toLocaleDateString(uiLocale(), { day:'2-digit', month:'short', year:'numeric' }) : '—';
     row.innerHTML = `
       <input type="checkbox" data-id="${escH(s.sessionId)}" ${s.alreadyImported ? `disabled title="${t('cli.import.already')}"` : ''} onchange="cliImportUpdateCount()" style="margin-top:3px;flex-shrink:0">
       <div style="flex:1;min-width:0">
@@ -16434,14 +16486,12 @@ async function _restoreDelegationState() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────
-setLang(localStorage.getItem('lang') || 'en');
+setLang(localStorage.getItem('lang') || 'en', false);
 _i18nDynReady = true; // dynamic renderers are safe to call only after boot
-// Sync lang from server on load
+// Sync lang from server on load — the server is the source of truth here, so this
+// must not echo the value back at it either.
 fetch('/api/lang').then(r => r.json()).then(d => {
-  if (d.lang && d.lang !== localStorage.getItem('lang')) {
-    localStorage.setItem('lang', d.lang);
-    setLang(d.lang);
-  }
+  if (d.lang && d.lang !== localStorage.getItem('lang')) setLang(d.lang, false);
 }).catch(() => {});
 restoreUIState();
 _rlRestore(); // Restore rate limit badge from localStorage if still active

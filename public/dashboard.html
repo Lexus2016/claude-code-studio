@@ -566,7 +566,9 @@ function renderTimeline(sessions){
       </div>`;
   });
 }
-function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Includes the single quote: this output lands in single-quoted attributes elsewhere
+// in the file, where &quot; alone is not enough.
+function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // --- Init ---
 loadData();

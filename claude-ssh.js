@@ -621,7 +621,11 @@ function runRemoteCommandOverSsh(opts = {}) {
     }
 
     const conn = new Client();
-    let out = Buffer.alloc(0), errOut = '', bytes = 0, truncated = false, done = false;
+    // An array of chunks, joined once. Concatenating per chunk is O(n^2) memcpy on the
+    // MAIN thread: the 32 MB cap that cli-import-remote passes here arrives as ~500
+    // chunks, averaging 16 MB copied each — ~8 GB, during which every WebSocket chat
+    // stream in the process is stalled.
+    const chunks = []; let errOut = '', bytes = 0, truncated = false, done = false;
     const timer = setTimeout(() => {
       const e = new Error(`Remote command timed out after ${timeoutMs}ms`);
       e.ccsCode = 'timeout';
@@ -640,7 +644,7 @@ function runRemoteCommandOverSsh(opts = {}) {
         if (err) { const e = new Error('Remote exec failed'); e.ccsCode = 'exec_failed'; return finish(e); }
         stream.on('close', (code) => finish(null, {
           code: code == null ? 0 : code,
-          stdout: out.toString('utf8'),
+          stdout: Buffer.concat(chunks).toString('utf8'),
           stderr: errOut,
           truncated,
         }));
@@ -649,11 +653,13 @@ function runRemoteCommandOverSsh(opts = {}) {
           bytes += chunk.length;
           if (bytes > maxBytes) {
             truncated = true;
-            out = Buffer.concat([out, chunk]).subarray(0, maxBytes);
+            chunks.push(chunk);
+            const full = Buffer.concat(chunks).subarray(0, maxBytes);
+            chunks.length = 0; chunks.push(full);
             try { stream.close(); } catch {}
             return;
           }
-          out = Buffer.concat([out, chunk]);
+          chunks.push(chunk);
         });
         stream.stderr.on('data', (chunk) => { if (errOut.length < 8192) errOut += chunk.toString('utf8'); });
       });
