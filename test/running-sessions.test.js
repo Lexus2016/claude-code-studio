@@ -7,9 +7,10 @@
 // The endpoint must union the DB with the in-memory live set (liveSessionIds(), i.e.
 // activeChatSessions + activeTasks) — the same union isChatRunning reads.
 //
-// Run: node test/running-sessions.test.js
+// Run: node test/running-sessions.test.js   (TEST_PORT=<n> to move off the default port)
 const assert = require('assert');
 const fs = require('fs');
+const net = require('net');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -22,7 +23,9 @@ function check(label, actual, expected) {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const PORT = 3995;
+// Overridable: a hardcoded port makes the test assert against whatever else happens to
+// be listening. The preflight below refuses to run at all when the port is taken.
+const PORT = Number(process.env.TEST_PORT || 3995);
 const BASE = `http://127.0.0.1:${PORT}`;
 const APP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-runsess-'));
 const HOME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-runsess-home-'));
@@ -78,8 +81,14 @@ async function cleanupGracefully() {
   cleanup();
 }
 
-startServer();
+function die(msg) {
+  console.error(msg);
+  if (srvLog) console.error(srvLog.slice(-2000));
+  cleanup();
+  process.exit(1);
+}
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 async function api(method, url, body) {
   const res = await fetch(BASE + url, {
     method,
@@ -88,14 +97,60 @@ async function api(method, url, body) {
   });
   return { status: res.status, json: await res.json().catch(() => null) };
 }
+async function waitFor(predicate, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return true;
+    await sleep(150);
+  }
+  return false;
+}
+
+// Preflight: resolves with null when the port is free, or with the error code otherwise.
+function probePort(port) {
+  return new Promise(resolve => {
+    const probe = net.createServer();
+    probe.once('error', err => resolve(err.code || String(err)));
+    probe.once('listening', () => probe.close(() => resolve(null)));
+    probe.listen(port, '127.0.0.1');
+  });
+}
 
 (async () => {
+  // ── Preflight ──────────────────────────────────────────────────────────────
+  // Without this the test's own server dies with EADDRINUSE (server.listen has no
+  // 'error' handler) and every assertion below runs against the foreign instance —
+  // creating sessions, and possibly billed turns, in a database this test did not
+  // create. /api/health is public, so the readiness loop alone cannot tell them apart.
+  const busy = await probePort(PORT);
+  if (busy) {
+    console.error(`\nFAIL running-sessions: port ${PORT} is already in use (${busy}).`);
+    console.error(`  This test starts its OWN server on that port and asserts against it.`);
+    console.error(`  Refusing to run: a foreign instance would make every assertion meaningless`);
+    console.error(`  and would be handed sessions in a database this test did not create.`);
+    console.error(`  Free port ${PORT}, or re-run with: TEST_PORT=<free port> node test/running-sessions.test.js`);
+    removeTempDirs();
+    process.exit(1);
+  }
+
+  startServer();
+
   let up = false;
   for (let i = 0; i < 80; i++) {
+    if (srvExited) break;
     try { const r = await fetch(BASE + '/api/health'); if (r.ok) { up = true; break; } } catch {}
     await sleep(250);
   }
-  if (!up) { console.error('server did not start\n' + srvLog.slice(-2000)); cleanup(); process.exit(1); }
+  if (srvExited) die(`server exited before it became ready — port ${PORT} collision or startup crash`);
+  if (!up) die('server did not start');
+
+  // Identity check: the instance answering on BASE must be the child we spawned. The
+  // banner is written from the listen() callback, so its absence means someone else
+  // owns the port.
+  const portBanner = new RegExp(`"port":\\s*"?${PORT}"?`);
+  const ours = await waitFor(async () => srvLog.includes('server started') && portBanner.test(srvLog), 5000);
+  if (!ours) die(`something on port ${PORT} answers /api/health but our server never logged "server started" — refusing to assert against a foreign instance`);
+  if (!fs.existsSync(path.join(APP_DIR, 'data', 'chats.db'))) die('our server never created its own chats.db in the temp APP_DIR');
 
   console.log('running-sessions:');
   const created = await api('POST', '/api/sessions', { title: 'runsess', workdir: APP_DIR });
