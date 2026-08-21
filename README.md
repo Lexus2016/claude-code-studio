@@ -11,6 +11,17 @@
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
 > **v7.3.0** — **Settings you can finally see.** A Settings form now lists every setting next to the place its value actually comes from — a shell variable, `.env`, the local `config.json`, the global one, a per-project override or the built-in default — flags the ones that are being overridden or silently ignored, masks every secret before it leaves the server, and resets any setting back to its default in one click. Also in this release: import Claude CLI sessions from a **remote SSH host**, answer a **blocked permission or plan prompt** straight from the browser instead of dropping to a terminal, a **global workspace** that searches tasks and files across every project at once, and the last untranslated UI surfaces translated in all five languages. Security: an SSH password or key never reaches the model, the transcript or the database.
+>
+> **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
+> `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)
+> so the config UI's changes survive a container rebuild — previously they lived in
+> the image layer and were discarded. On first start the server copies a legacy file
+> across automatically and leaves the original in place. The one case it cannot
+> rescue is a container whose `config.json` only ever existed in that discarded
+> writable layer: copy it out **before** upgrading —
+> `docker cp claude-code-studio:/app/config.json ./config.json`, then after
+> `docker compose up -d` put it back with
+> `docker cp ./config.json claude-code-studio:/app/data/config.json && docker compose restart`.
 
 ---
 

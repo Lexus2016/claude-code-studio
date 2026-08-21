@@ -24,11 +24,14 @@ const _ENV_AT_BOOT = { ...process.env };
 // So: if the target does not exist yet and the legacy file does, copy it across
 // once. Runs before the .env loader below, because the loader reads the target.
 //
-// It cannot rescue the one case where the legacy file is not reachable at all:
-// upgrading a container whose config.json only ever lived in the discarded
-// writable layer. That is a release note, not a code path — but a bind-mounted
-// or volume-mounted legacy file, which is how most such installs are set up,
-// is migrated here without the user doing anything.
+// What it cannot rescue is a legacy file that is not reachable any more: the
+// compose file mounts no volume over /app/config.json, so a container recreated
+// onto the new image has only the empty placeholder the Dockerfile touches, and
+// the edited copy went with the old writable layer. That case is a release note
+// (docker cp it out first), not a code path. What IS rescued here without the
+// user doing anything: a bind-mounted legacy file, a non-Docker install that
+// starts pointing the variables somewhere else, and any container whose
+// /app/config.json is still live at the moment of the upgrade.
 {
   const legacyDir = process.env.APP_DIR || __dirname;
   for (const [envVar, name] of [['CCS_ENV_PATH', '.env'], ['CCS_CONFIG_PATH', 'config.json']]) {
