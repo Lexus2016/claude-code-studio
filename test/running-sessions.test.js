@@ -4,7 +4,8 @@
 // Regression guard: a plain web chat never writes a `tasks` row, so a DB-only query
 // returned [] while a chat was mid-turn. subscribeAllTabs() feeds this endpoint into
 // tab.generating, so background tabs silently lost their busy dot after a reload.
-// The endpoint must union the DB with activeChatSessions + activeTasks.
+// The endpoint must union the DB with the in-memory live set (liveSessionIds(), i.e.
+// activeChatSessions + activeTasks) — the same union isChatRunning reads.
 //
 // Run: node test/running-sessions.test.js
 const assert = require('assert');
@@ -97,8 +98,14 @@ async function api(method, url, body) {
 
   const running = await api('GET', '/api/tasks/running-sessions');
   check('in-flight plain chat IS reported by running-sessions', (running.json || []).includes(sid), true);
-  check('running-sessions returns no duplicate ids',
-    (running.json || []).length, new Set(running.json || []).size);
+  // The DB is a fresh temp file with exactly one session and no task rows, so the
+  // endpoint's whole output is knowable. Asserting the exact set also covers dedup —
+  // unlike the old `length === new Set(...).size`, which a Set-building handler could
+  // never fail. Every reported id must additionally resolve to a real session: the
+  // client joins this list against its tabs, and a non-session string joins to nothing.
+  check('running-sessions reports exactly the in-flight session', (running.json || []).slice().sort(), [sid]);
+  const resolved = await Promise.all((running.json || []).map(id => api('GET', `/api/sessions/${id}`)));
+  check('every reported id resolves to a real session', resolved.map(r => r.status), [200]);
 
   try { ws.close(); } catch {}
   console.log(`\n${pass} passed, ${fail} failed`);
