@@ -1,8 +1,8 @@
 // Integration test for the bots HTTP API. Starts a real server against a THROWAWAY
 // data directory, so it never touches the developer's chats.db.
 //
-// Not part of `npm test`: it boots a server and takes a few seconds.
-// Run: node test/bots-api.test.js
+// Part of `npm test`, but it boots a server, so it takes a few seconds.
+// Run standalone: node test/bots-api.test.js
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
