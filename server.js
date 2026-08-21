@@ -307,6 +307,8 @@ function hardenSecretFilePermissions() {
     path.join(dataDir, 'sessions-auth.json'),   // live 32-byte session tokens
     path.join(dataDir, 'hosts.key'),            // AES-256 key that encrypts stored SSH passwords
     path.join(dataDir, 'remote-hosts.json'),    // SSH hosts + encrypted passwords
+    path.join(dataDir, 'ssh-known-hosts.json'), // pinned SSH host-key fingerprints — public data,
+                                                // but an attacker who can rewrite it defeats the pin
     path.join(dataDir, 'projects.json'),        // project workdirs + encrypted per-project SSH passwords
     DB_PATH,                                    // full chat history
     DB_PATH + '-wal',                           // same content, left behind by an unclean shutdown
@@ -5608,6 +5610,115 @@ function extractThinkingFromJsonl(claudeSessionId, workdir) {
 }
 
 
+// ─── Shared transcript handling (used by BOTH local and SSH-remote import) ────
+// The only thing that differs between a local and a remote import is where the
+// transcript bytes come from. Everything below — parsing, titling, the SQLite
+// writes — is therefore written once and called from both endpoints.
+
+// Row shown in the import picker. Same shape for local and remote listings.
+function summarizeCliTranscript(raw, sessionId) {
+  const lines = String(raw).trim().split('\n').filter(Boolean);
+  let timestamp = '', title = '', titleFound = false, userCount = 0, assistantCount = 0;
+  for (const line of lines) {
+    let d; try { d = JSON.parse(line); } catch { continue; }
+    if (!timestamp && d.timestamp) timestamp = d.timestamp;
+    if (d.type === 'user') {
+      userCount++;
+      if (!titleFound) {
+        const mc = d.message?.content;
+        if (typeof mc === 'string' && mc.trim()) { title = mc.substring(0, 100); titleFound = true; }
+        else if (Array.isArray(mc)) {
+          const tb = mc.find(b => b.type === 'text' && b.text);
+          if (tb) { title = tb.text.substring(0, 100); titleFound = true; }
+        }
+      }
+    } else if (d.type === 'assistant') assistantCount++;
+  }
+  if (!title) title = sessionId.substring(0, 8) + '…';
+  return { sessionId, title, timestamp, messageCount: userCount + assistantCount };
+}
+
+// Turn raw .jsonl text into the message rows this app stores.
+function parseCliTranscript(raw, fallbackCwd) {
+  const lines = String(raw).trim().split('\n').filter(Boolean);
+  let title = '', titleFound = false, sessionTs = null, cwd = fallbackCwd;
+  const msgs = [];
+  for (const line of lines) {
+    let d; try { d = JSON.parse(line); } catch { continue; }
+    if (!sessionTs && d.timestamp) sessionTs = d.timestamp;
+    if (d.cwd && !cwd) cwd = d.cwd;
+
+    if (d.type === 'user') {
+      const mc = d.message?.content;
+      const ts = d.timestamp || sessionTs;
+      if (Array.isArray(mc)) {
+        const nonTool = mc.filter(b => b.type !== 'tool_result');
+        if (nonTool.length === 0) continue; // skip pure tool_result entries
+        const text = nonTool.filter(b => b.type === 'text').map(b => b.text).join('\n');
+        if (text.trim()) {
+          if (!titleFound) { title = text.substring(0, 100); titleFound = true; }
+          msgs.push({ role: 'user', type: 'text', content: text, tool_name: null, ts });
+        }
+      } else if (typeof mc === 'string' && mc.trim()) {
+        if (!titleFound) { title = mc.substring(0, 100); titleFound = true; }
+        msgs.push({ role: 'user', type: 'text', content: mc, tool_name: null, ts });
+      }
+    } else if (d.type === 'assistant') {
+      const mc = d.message?.content;
+      const ts = d.timestamp || sessionTs;
+      if (!Array.isArray(mc)) continue;
+      for (const block of mc) {
+        if (block.type === 'thinking' && block.thinking)
+          msgs.push({ role: 'assistant', type: 'thinking', content: block.thinking, tool_name: null, ts });
+        else if (block.type === 'text' && block.text)
+          msgs.push({ role: 'assistant', type: 'text', content: block.text, tool_name: null, ts });
+        else if (block.type === 'tool_use' && block.name)
+          msgs.push({ role: 'assistant', type: 'tool', content: JSON.stringify(block.input || {}), tool_name: block.name, ts });
+      }
+    }
+  }
+  return { title, sessionTs, cwd, msgs };
+}
+
+// The one persistence path. `loadRaw(sessionId)` returns the transcript text, null to
+// skip it, or throws to record an error against that single session — so the local
+// endpoint hands it an fs read and the remote endpoint hands it an already-fetched
+// buffer, and the rows they produce are byte-identical by construction.
+function importCliTranscripts({ sessionIds, loadRaw, targetWorkdir }) {
+  const imported = [], skipped = [], errors = [];
+  const updateClaudeId   = db.prepare(`UPDATE sessions SET claude_session_id=? WHERE id=?`);
+  const updateTimestamps = db.prepare(`UPDATE sessions SET created_at=?, updated_at=? WHERE id=?`);
+  const insertMsg = db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,created_at) VALUES (?,?,?,?,?,?,?)`);
+
+  const tx = db.transaction(() => {
+    for (const sessionId of sessionIds) {
+      if (!/^[a-f0-9-]{8,}$/i.test(sessionId)) { errors.push({ sessionId, error: 'invalid id' }); continue; }
+      const existing = db.prepare(`SELECT id FROM sessions WHERE claude_session_id=?`).get(sessionId);
+      if (existing) { skipped.push(sessionId); continue; }
+
+      let raw;
+      try { raw = loadRaw(sessionId); }
+      catch (e) { errors.push({ sessionId, error: e.message }); continue; }
+      if (raw == null) { skipped.push(sessionId); continue; }
+
+      try {
+        const parsed = parseCliTranscript(raw, targetWorkdir);
+        if (parsed.msgs.length === 0) { skipped.push(sessionId); continue; }
+        const title = parsed.title || ('CLI: ' + sessionId.substring(0, 8));
+
+        const newId = genId();
+        stmts.createSession.run(newId, title.substring(0, 200), '[]', '[]', 'auto', 'single', 'sonnet', parsed.cwd || null);
+        updateClaudeId.run(sessionId, newId);
+        if (parsed.sessionTs) updateTimestamps.run(parsed.sessionTs, parsed.sessionTs, newId);
+        for (const m of parsed.msgs) insertMsg.run(newId, m.role, m.type, m.content, m.tool_name, null, m.ts || parsed.sessionTs);
+        imported.push({ sessionId, newId, title, messageCount: parsed.msgs.length });
+      } catch (e) { errors.push({ sessionId, error: e.message }); }
+    }
+  });
+  tx();
+  return { imported, skipped, errors };
+}
+
 app.get('/api/sessions/cli-list', (req, res) => {
   const workdir = String(req.query.workdir || WORKDIR || '');
   const homeDir = os.homedir();
@@ -5632,25 +5743,8 @@ app.get('/api/sessions/cli-list', (req, res) => {
     if (!/^[a-f0-9-]{8,}$/i.test(sessionId)) continue;
     const filePath = path.join(projectPath, fname);
     try {
-      const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').filter(Boolean);
-      let timestamp = '', title = '', titleFound = false, userCount = 0, assistantCount = 0;
-      for (const line of lines) {
-        let d; try { d = JSON.parse(line); } catch { continue; }
-        if (!timestamp && d.timestamp) timestamp = d.timestamp;
-        if (d.type === 'user') {
-          userCount++;
-          if (!titleFound) {
-            const mc = d.message?.content;
-            if (typeof mc === 'string' && mc.trim()) { title = mc.substring(0, 100); titleFound = true; }
-            else if (Array.isArray(mc)) {
-              const tb = mc.find(b => b.type === 'text' && b.text);
-              if (tb) { title = tb.text.substring(0, 100); titleFound = true; }
-            }
-          }
-        } else if (d.type === 'assistant') assistantCount++;
-      }
-      if (!title) title = sessionId.substring(0, 8) + '…';
-      sessions.push({ sessionId, title, timestamp, messageCount: userCount + assistantCount, alreadyImported: importedIds.has(sessionId) });
+      const summary = summarizeCliTranscript(fs.readFileSync(filePath, 'utf8'), sessionId);
+      sessions.push({ ...summary, alreadyImported: importedIds.has(sessionId) });
     } catch { /* skip unreadable */ }
   }
   sessions.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
@@ -5666,74 +5760,281 @@ app.post('/api/sessions/cli-import', (req, res) => {
   const projectPath = path.resolve(path.join(safeBase, cwdToCliProjectName(targetWorkdir)));
   if (!projectPath.startsWith(safeBase)) return res.status(400).json({ error: 'invalid workdir' });
 
-  const imported = [], skipped = [], errors = [];
-  const updateClaudeId = db.prepare(`UPDATE sessions SET claude_session_id=? WHERE id=?`);
-  const updateTimestamps = db.prepare(`UPDATE sessions SET created_at=?, updated_at=? WHERE id=?`);
-  const insertMsg = db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,created_at) VALUES (?,?,?,?,?,?,?)`);
+  // Local byte source. The traversal guard stays here, next to the fs read it protects.
+  const loadRaw = (sessionId) => {
+    const filePath = path.resolve(path.join(projectPath, sessionId + '.jsonl'));
+    if (!filePath.startsWith(projectPath)) throw new Error('path traversal');
+    return fs.readFileSync(filePath, 'utf8');
+  };
 
-  const tx = db.transaction(() => {
-    for (const sessionId of sessionIds) {
-      if (!/^[a-f0-9-]{8,}$/i.test(sessionId)) { errors.push({ sessionId, error: 'invalid id' }); continue; }
-      const existing = db.prepare(`SELECT id FROM sessions WHERE claude_session_id=?`).get(sessionId);
-      if (existing) { skipped.push(sessionId); continue; }
-
-      const filePath = path.resolve(path.join(projectPath, sessionId + '.jsonl'));
-      if (!filePath.startsWith(projectPath)) { errors.push({ sessionId, error: 'path traversal' }); continue; }
-      try {
-        const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').filter(Boolean);
-        let title = '', titleFound = false, sessionTs = null, cwd = targetWorkdir;
-        const msgs = [];
-
-        for (const line of lines) {
-          let d; try { d = JSON.parse(line); } catch { continue; }
-          if (!sessionTs && d.timestamp) sessionTs = d.timestamp;
-          if (d.cwd && !cwd) cwd = d.cwd;
-
-          if (d.type === 'user') {
-            const mc = d.message?.content;
-            const ts = d.timestamp || sessionTs;
-            if (Array.isArray(mc)) {
-              const nonTool = mc.filter(b => b.type !== 'tool_result');
-              if (nonTool.length === 0) continue; // skip pure tool_result entries
-              const text = nonTool.filter(b => b.type === 'text').map(b => b.text).join('\n');
-              if (text.trim()) {
-                if (!titleFound) { title = text.substring(0, 100); titleFound = true; }
-                msgs.push({ role: 'user', type: 'text', content: text, tool_name: null, ts });
-              }
-            } else if (typeof mc === 'string' && mc.trim()) {
-              if (!titleFound) { title = mc.substring(0, 100); titleFound = true; }
-              msgs.push({ role: 'user', type: 'text', content: mc, tool_name: null, ts });
-            }
-          } else if (d.type === 'assistant') {
-            const mc = d.message?.content;
-            const ts = d.timestamp || sessionTs;
-            if (!Array.isArray(mc)) continue;
-            for (const block of mc) {
-              if (block.type === 'thinking' && block.thinking)
-                msgs.push({ role: 'assistant', type: 'thinking', content: block.thinking, tool_name: null, ts });
-              else if (block.type === 'text' && block.text)
-                msgs.push({ role: 'assistant', type: 'text', content: block.text, tool_name: null, ts });
-              else if (block.type === 'tool_use' && block.name)
-                msgs.push({ role: 'assistant', type: 'tool', content: JSON.stringify(block.input || {}), tool_name: block.name, ts });
-            }
-          }
-        }
-
-        if (msgs.length === 0) { skipped.push(sessionId); continue; }
-        if (!title) title = 'CLI: ' + sessionId.substring(0, 8);
-
-        const newId = genId();
-        stmts.createSession.run(newId, title.substring(0, 200), '[]', '[]', 'auto', 'single', 'sonnet', cwd || null);
-        updateClaudeId.run(sessionId, newId);
-        if (sessionTs) updateTimestamps.run(sessionTs, sessionTs, newId);
-        for (const m of msgs) insertMsg.run(newId, m.role, m.type, m.content, m.tool_name, null, m.ts || sessionTs);
-        imported.push({ sessionId, newId, title, messageCount: msgs.length });
-      } catch (e) { errors.push({ sessionId, error: e.message }); }
-    }
-  });
-
-  try { tx(); res.json({ imported, skipped, errors }); }
+  try { res.json(importCliTranscripts({ sessionIds, loadRaw, targetWorkdir })); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Remote (SSH) CLI Session Import — issue #23 ──────────────────────────────
+// Same picker, same rows, same SQLite writes as the local import; only the byte
+// source changes. Everything the remote shell sees is built with shellEscape(),
+// and no credential is ever put on a command line, in a log line or in a response.
+//
+// Required locally (not at the top of the file) so this block stays additive.
+const { runRemoteCommand: sshRunRemote, shellEscape: sshEsc } = require('./claude-ssh');
+
+const REMOTE_CLI_BASE_REL = '.claude/projects';
+// Ceiling on ONE transcript fetched for import. Checked on the remote (before any
+// bytes move) and again by the transport's own maxBytes.
+const REMOTE_IMPORT_MAX_BYTES = parseInt(process.env.CCS_REMOTE_IMPORT_MAX_BYTES || '', 10) || 32 * 1024 * 1024;
+// Ceiling on one whole import request.
+const REMOTE_IMPORT_MAX_TOTAL = parseInt(process.env.CCS_REMOTE_IMPORT_MAX_TOTAL || '', 10) || 128 * 1024 * 1024;
+const REMOTE_IMPORT_MAX_FILES = 200;
+// Listing only needs the head of each transcript (title + first timestamp live in the
+// first lines), so "show me what's there" never drags gigabytes across the link.
+// 64 * 4096 — must match the `dd` invocation in remoteListScript().
+const REMOTE_LIST_HEAD_BYTES  = 64 * 4096;
+const REMOTE_LIST_MAX_FILES   = 300;
+const REMOTE_EXEC_TIMEOUT_MS  = parseInt(process.env.CCS_REMOTE_EXEC_TIMEOUT_MS || '', 10) || 30000;
+
+// Resolve a Claude-CLI project slug (and optional file) to a path RELATIVE to the
+// remote home, refusing anything that escapes ~/.claude/projects.
+//
+// This is the remote counterpart of the path.resolve()+startsWith() guard the local
+// endpoints use. It resolves with POSIX semantics on purpose: the remote is Linux or
+// macOS even when this server runs on Windows, where path.resolve() would mangle "/".
+// Returns null when the input escapes the base — callers MUST treat null as a refusal.
+function remoteCliRelPath(slug, file) {
+  const s = String(slug == null ? '' : slug);
+  const f = file == null ? null : String(file);
+  if (s.includes('\0') || (f && f.includes('\0'))) return null;
+  const base = '/__ccs__/' + REMOTE_CLI_BASE_REL;
+  const abs = f ? path.posix.resolve(base, s, f) : path.posix.resolve(base, s);
+  if (abs !== base && !abs.startsWith(base + '/')) return null;
+  return abs.slice('/__ccs__/'.length);
+}
+
+// POSIX sh only — this has to run on Linux, macOS and BusyBox alike:
+//   * `wc -c < f` instead of `stat -c%s` (GNU) or `stat -f%z` (BSD)
+//   * `dd`        instead of `head -c`   (not in POSIX head)
+//   * shell globs instead of `find -printf` / `-maxdepth` (GNU-only spellings)
+//   * `${HOME}`   instead of `readlink -f ~` (no -f on BSD readlink)
+// `nonce` frames the output so transcript content can never be mistaken for a
+// control line; it is random per request, so a transcript cannot forge one.
+function remoteListScript(nonce, relDir) {
+  const N = sshEsc(nonce);
+  const dirs = relDir === null ? '"$b"/*/' : `"$h"/${sshEsc(relDir)}`;
+  return [
+    'h=${HOME}',
+    'b="$h"/.claude/projects',
+    `if [ ! -d "$h"/.claude ]; then printf '%s NOCLAUDE\\n' ${N}; exit 0; fi`,
+    `if [ ! -d "$b" ]; then printf '%s NOBASE\\n' ${N}; exit 0; fi`,
+    `printf '%s BASE %s\\n' ${N} "$b"`,
+    'n=0',
+    `for d in ${dirs}; do`,
+    '  [ -d "$d" ] || continue',
+    '  case "$d" in "$b"/*) ;; *) continue ;; esac',
+    '  for f in "$d"/*.jsonl; do',
+    '    [ -f "$f" ] || continue',
+    `    n=$((n+1)); if [ "$n" -gt ${REMOTE_LIST_MAX_FILES} ]; then break 2; fi`,
+    '    sz=`wc -c < "$f" | tr -d " "`',
+    `    printf '%s FILE %s %s\\n' ${N} "$sz" "$f"`,
+    '    dd if="$f" bs=4096 count=64 2>/dev/null',
+    `    printf '\\n%s ENDFILE\\n' ${N}`,
+    '  done',
+    'done',
+    `printf '%s DONE %s\\n' ${N} "$n"`,
+  ].join('\n');
+}
+
+// Fetch ONE transcript. The size check runs on the remote so an oversize file never
+// crosses the link at all, and the base-prefix `case` is a second traversal guard
+// evaluated where the path is finally expanded.
+function remoteFetchScript(nonce, relFile, maxBytes) {
+  const N = sshEsc(nonce);
+  return [
+    'h=${HOME}',
+    'b="$h"/.claude/projects',
+    `f="$h"/${sshEsc(relFile)}`,
+    `case "$f" in "$b"/*) ;; *) printf '%s ESCAPE\\n' ${N}; exit 0 ;; esac`,
+    `if [ ! -f "$f" ]; then printf '%s NOFILE\\n' ${N}; exit 0; fi`,
+    'sz=`wc -c < "$f" | tr -d " "`',
+    `if [ "$sz" -gt ${maxBytes} ]; then printf '%s TOOBIG %s\\n' ${N} "$sz"; exit 0; fi`,
+    `printf '%s OK %s\\n' ${N} "$sz"`,
+    'cat "$f"',
+  ].join('\n');
+}
+
+function parseRemoteListOutput(stdout, nonce) {
+  const marker = nonce + ' ';
+  let base = null, status = null, count = 0, cur = null, buf = [];
+  const files = [];
+  for (const line of String(stdout).split('\n')) {
+    if (line.startsWith(marker)) {
+      const rest = line.slice(marker.length);
+      const sp = rest.indexOf(' ');
+      const kind = sp === -1 ? rest : rest.slice(0, sp);
+      const arg  = sp === -1 ? ''   : rest.slice(sp + 1);
+      if (kind === 'NOCLAUDE' || kind === 'NOBASE') { status = kind; break; }
+      if (kind === 'BASE')  { base = arg; continue; }
+      if (kind === 'FILE')  {
+        const sp2 = arg.indexOf(' ');
+        cur = { size: parseInt(arg.slice(0, sp2), 10) || 0, path: arg.slice(sp2 + 1), raw: '' };
+        buf = []; continue;
+      }
+      if (kind === 'ENDFILE') { if (cur) { cur.raw = buf.join('\n'); files.push(cur); } cur = null; buf = []; continue; }
+      if (kind === 'DONE')  { status = 'DONE'; count = parseInt(arg, 10) || 0; continue; }
+    }
+    if (cur) buf.push(line);
+  }
+  return { base, status, files, count };
+}
+
+function parseRemoteFetchOutput(stdout, nonce) {
+  const marker = nonce + ' ';
+  const s = String(stdout);
+  const nl = s.indexOf('\n');
+  const head = nl === -1 ? s : s.slice(0, nl);
+  if (!head.startsWith(marker)) return { status: 'BAD', size: 0, raw: '' };
+  const parts = head.slice(marker.length).trim().split(' ');
+  return { status: parts[0], size: parseInt(parts[1] || '0', 10) || 0, raw: nl === -1 ? '' : s.slice(nl + 1) };
+}
+
+// Look a saved host up and build the exec options. Returns null when the id is unknown.
+// The decrypted password lives only inside the returned object and is never logged.
+function remoteHostExecOpts(hostId) {
+  const rh = loadRemoteHosts().find(h => h.id === hostId);
+  if (!rh) return null;
+  return {
+    label: rh.label || rh.host,
+    exec: {
+      host: rh.host, port: rh.port || 22,
+      sshKeyPath: rh.sshKeyPath || '',
+      password: decryptPassword(rh.password) || '',
+      timeoutMs: REMOTE_EXEC_TIMEOUT_MS,
+    },
+  };
+}
+
+// Distinct, translatable failure codes. The UI maps `code` to a localized sentence;
+// `error` is an English fallback that names a host but never a credential.
+function remoteExecFailure(res, e) {
+  const code = e && e.ccsCode ? e.ccsCode : 'exec_failed';
+  const status = code === 'auth_failed' ? 401 : 502;
+  return res.status(status).json({ code, error: (e && e.message) || 'Remote command failed' });
+}
+
+// GET /api/sessions/cli-list-remote?hostId=…[&workdir=…|&project=…]
+// Without workdir/project it AUTO-DISCOVERS every ~/.claude/projects/<slug> on the
+// remote — the reporter's "automatically locate the session directories".
+// Rows are the same shape the local /api/sessions/cli-list returns (plus `project`).
+app.get('/api/sessions/cli-list-remote', async (req, res) => {
+  const host = remoteHostExecOpts(String(req.query.hostId || ''));
+  if (!host) return res.status(404).json({ code: 'host_not_found', error: 'Remote host not found' });
+
+  let relDir = null; // null → auto-discover
+  const projectSlug = String(req.query.project || '').trim();
+  const workdir     = String(req.query.workdir || '').trim();
+  if (projectSlug || workdir) {
+    relDir = remoteCliRelPath(projectSlug || cwdToCliProjectName(workdir));
+    if (!relDir) return res.status(400).json({ code: 'invalid_path', error: 'invalid project path' });
+  }
+
+  const nonce = 'CCS' + crypto.randomBytes(9).toString('hex');
+  let r;
+  try { r = await sshRunRemote({ ...host.exec, command: remoteListScript(nonce, relDir) }); }
+  catch (e) { return remoteExecFailure(res, e); }
+
+  const out = parseRemoteListOutput(r.stdout, nonce);
+  if (out.status === 'NOCLAUDE') return res.json({ sessions: [], projectPath: '~/.claude', remote: true, code: 'no_claude_dir' });
+  if (out.status === 'NOBASE')   return res.json({ sessions: [], projectPath: '~/.claude/projects', remote: true, code: 'no_projects_dir' });
+  if (!out.base) return res.status(502).json({ code: 'bad_output', error: 'Unexpected reply from the remote shell' });
+
+  const importedIds = new Set(
+    db.prepare(`SELECT claude_session_id FROM sessions WHERE claude_session_id IS NOT NULL`).all()
+      .map(x => x.claude_session_id)
+  );
+
+  const sessions = [];
+  for (const f of out.files) {
+    const sessionId = path.posix.basename(f.path).replace(/\.jsonl$/, '');
+    if (!/^[a-f0-9-]{8,}$/i.test(sessionId)) continue;
+    sessions.push({
+      ...summarizeCliTranscript(f.raw, sessionId),
+      alreadyImported: importedIds.has(sessionId),
+      project: path.posix.basename(path.posix.dirname(f.path)),
+      truncated: f.size > REMOTE_LIST_HEAD_BYTES,
+    });
+  }
+  sessions.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+
+  res.json({
+    sessions,
+    projectPath: relDir ? out.base + '/' + path.posix.basename(relDir) : out.base,
+    remote: true,
+    host: host.label,
+    listTruncated: out.count >= REMOTE_LIST_MAX_FILES,
+    code: sessions.length ? 'ok' : 'empty',
+  });
+});
+
+// POST /api/sessions/cli-import-remote
+// { hostId, sessionIds:[…], projects?:{ [sessionId]: slug }, project?, workdir? }
+// Fetches each selected transcript over SSH, then hands the bytes to the SAME
+// importCliTranscripts() the local import uses.
+app.post('/api/sessions/cli-import-remote', async (req, res) => {
+  const { hostId, sessionIds, projects, project, workdir } = req.body || {};
+  if (!Array.isArray(sessionIds) || sessionIds.length === 0) return res.status(400).json({ code: 'no_sessions', error: 'no sessionIds' });
+  if (sessionIds.length > REMOTE_IMPORT_MAX_FILES) return res.status(400).json({ code: 'too_many', error: `Too many sessions (max ${REMOTE_IMPORT_MAX_FILES})` });
+
+  const host = remoteHostExecOpts(String(hostId || ''));
+  if (!host) return res.status(404).json({ code: 'host_not_found', error: 'Remote host not found' });
+
+  const targetWorkdir = String(workdir || '');
+  const defaultSlug = String(project || '').trim() || (targetWorkdir ? cwdToCliProjectName(targetWorkdir) : '');
+  const slugFor = (sid) => (projects && typeof projects === 'object' && projects[sid]) || defaultSlug;
+
+  const existingIds = new Set(
+    db.prepare(`SELECT claude_session_id FROM sessions WHERE claude_session_id IS NOT NULL`).all()
+      .map(x => x.claude_session_id)
+  );
+
+  const rawMap = new Map();   // sessionId → transcript text
+  const failed = new Map();   // sessionId → per-session error message
+  let total = 0;
+
+  for (const sid of sessionIds) {
+    if (typeof sid !== 'string' || !/^[a-f0-9-]{8,}$/i.test(sid)) continue; // reported as 'invalid id'
+    if (existingIds.has(sid)) continue;                                     // reported as skipped
+
+    const rel = remoteCliRelPath(slugFor(sid), sid + '.jsonl');
+    if (!rel) { failed.set(sid, 'path traversal'); continue; }
+
+    const nonce = 'CCS' + crypto.randomBytes(9).toString('hex');
+    let r;
+    try {
+      r = await sshRunRemote({
+        ...host.exec,
+        command: remoteFetchScript(nonce, rel, REMOTE_IMPORT_MAX_BYTES),
+        // Transport-level backstop in case the remote `wc -c` check is bypassed.
+        maxBytes: REMOTE_IMPORT_MAX_BYTES + 4096,
+      });
+    } catch (e) { return remoteExecFailure(res, e); } // connection-level: abort the whole request
+
+    const out = parseRemoteFetchOutput(r.stdout, nonce);
+    if (out.status === 'TOOBIG')      { failed.set(sid, `transcript too large (${out.size} bytes, max ${REMOTE_IMPORT_MAX_BYTES})`); continue; }
+    if (out.status === 'ESCAPE')      { failed.set(sid, 'path traversal'); continue; }
+    if (out.status === 'NOFILE')      { failed.set(sid, 'not found on remote'); continue; }
+    if (out.status !== 'OK' || r.truncated) { failed.set(sid, 'unreadable remote transcript'); continue; }
+
+    total += out.raw.length;
+    if (total > REMOTE_IMPORT_MAX_TOTAL) return res.status(413).json({ code: 'too_large', error: `Import exceeds ${REMOTE_IMPORT_MAX_TOTAL} bytes` });
+    rawMap.set(sid, out.raw);
+  }
+
+  const loadRaw = (sid) => {
+    if (failed.has(sid)) throw new Error(failed.get(sid));
+    return rawMap.has(sid) ? rawMap.get(sid) : null;
+  };
+
+  try { res.json({ ...importCliTranscripts({ sessionIds, loadRaw, targetWorkdir }), remote: true, host: host.label }); }
+  catch (e) { res.status(500).json({ code: 'import_failed', error: e.message }); }
 });
 
 // Enrich existing sessions with thinking blocks from JSONL files.

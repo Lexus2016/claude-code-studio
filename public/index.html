@@ -3748,6 +3748,13 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       </h2>
       <button class="modal-close" onclick="closeCliImport()">✕</button>
     </div>
+    <div style="padding:10px 16px 0;display:flex;align-items:center;gap:8px;flex-shrink:0">
+      <span style="font-size:12px;color:var(--muted);white-space:nowrap" data-i18n="cli.import.source">Source:</span>
+      <select id="cliImportSource" onchange="cliImportSourceChanged()" style="flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-size:12px;outline:none">
+        <option value="" data-i18n="cli.import.source_local">This machine</option>
+      </select>
+      <button class="cfg" onclick="openAddHostModal()" data-i18n-title="ssh.add" title="Додати SSH хост" style="flex-shrink:0">＋</button>
+    </div>
     <div style="padding:10px 16px 6px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0">
       <span style="font-size:12px;color:var(--muted);white-space:nowrap" data-i18n="cli.import.project">Project:</span>
       <input id="cliImportWorkdir" style="flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-size:12px;font-family:monospace;outline:none" placeholder="/path/to/project" oninput="cliImportWorkdirChanged()">
@@ -4574,6 +4581,7 @@ const TRANSLATIONS = {
     'tg.bot.started':'✅ Telegram-бот запущено: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Стиснути чат і відкрити нову сесію','compact.loading':'Стиснення…','compact.success':'✅ Чат стиснено — відкриваю нову сесію','compact.err':'Помилка стиснення',
     'cli.import.tip':'Імпорт сесій Claude CLI','cli.import.title':'Імпорт сесій Claude CLI',
+    'cli.import.source':'Джерело:', 'cli.import.source_local':'Ця машина', 'cli.import.no_hosts':'Немає збережених SSH-хостів — додайте його в розділі віддалених хостів', 'cli.import.remote_hint':'Залиште проект порожнім, щоб просканувати всі проекти Claude CLI на хості', 'cli.import.remote_ph':'шлях до проекту на віддаленому хості (необовʼязково)', 'cli.import.list_truncated':'показано перші {n}', 'cli.import.err.host_not_found':'Збережений SSH-хост не знайдено — можливо, його видалили', 'cli.import.err.unreachable':'Не вдається дістатися до хоста — перевірте адресу, порт і мережу', 'cli.import.err.auth_failed':'Помилка автентифікації — перевірте користувача, ключ або пароль', 'cli.import.err.timeout':'Віддалений хост не відповів вчасно', 'cli.import.err.no_claude_dir':'На віддаленому хості немає ~/.claude — Claude CLI там ніколи не запускався', 'cli.import.err.no_projects_dir':'На віддаленому хості немає ~/.claude/projects — імпортувати нічого', 'cli.import.err.invalid_path':'Некоректний шлях до проекту', 'cli.import.err.bad_output':'Неочікувана відповідь віддаленої оболонки', 'cli.import.err.exec_failed':'Віддалена команда завершилася помилкою', 'cli.import.err.host_key_changed':'Ключ віддаленого хоста змінився — зʼєднання відхилено', 'cli.import.err.too_large':'Вибрані сесії перевищують ліміт передавання', 'cli.import.err.too_many':'Вибрано забагато сесій одночасно', 'cli.import.err.import_failed':'Імпорт не вдався', 'cli.import.err.no_sessions':'Не вибрано жодної сесії',
     'cli.import.project':'Проект:','cli.import.load':'Завантажити',
     'cli.import.hint':'Вкажіть проект і натисніть «Завантажити»',
     'cli.import.do':'Імпортувати вибрані','cli.import.sel_all':'Вибрати всі',
@@ -4822,6 +4830,7 @@ const TRANSLATIONS = {
     'tg.bot.started':'✅ Telegram bot started: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Compact chat and start new session','compact.loading':'Compacting…','compact.success':'✅ Chat compacted — opening new session','compact.err':'Compact failed',
     'cli.import.tip':'Import Claude CLI sessions','cli.import.title':'Import Claude CLI Sessions',
+    'cli.import.source':'Source:', 'cli.import.source_local':'This machine', 'cli.import.no_hosts':'No saved SSH hosts — add one under Remote hosts', 'cli.import.remote_hint':'Leave the project empty to scan every Claude CLI project on the host', 'cli.import.remote_ph':'project path on the remote host (optional)', 'cli.import.list_truncated':'showing the first {n}', 'cli.import.err.host_not_found':'Saved SSH host not found — it may have been deleted', 'cli.import.err.unreachable':'Cannot reach the host — check the address, the port and the network', 'cli.import.err.auth_failed':'Authentication failed — check the user, the key or the password', 'cli.import.err.timeout':'The remote host did not answer in time', 'cli.import.err.no_claude_dir':'No ~/.claude on the remote host — Claude CLI has never run there', 'cli.import.err.no_projects_dir':'No ~/.claude/projects on the remote host — nothing to import', 'cli.import.err.invalid_path':'Invalid project path', 'cli.import.err.bad_output':'Unexpected reply from the remote shell', 'cli.import.err.exec_failed':'The remote command failed', 'cli.import.err.host_key_changed':'The remote host key changed — refusing to connect', 'cli.import.err.too_large':'The selected sessions exceed the transfer limit', 'cli.import.err.too_many':'Too many sessions selected at once', 'cli.import.err.import_failed':'Import failed', 'cli.import.err.no_sessions':'No sessions selected',
     'cli.import.project':'Project:','cli.import.load':'Load',
     'cli.import.hint':'Enter project path and click «Load»',
     'cli.import.do':'Import selected','cli.import.sel_all':'Select all',
@@ -5070,6 +5079,7 @@ const TRANSLATIONS = {
     'tg.bot.started':'✅ Telegram-бот запущен: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Сжать чат и открыть новую сессию','compact.loading':'Сжатие…','compact.success':'✅ Чат сжат — открываю новую сессию','compact.err':'Ошибка сжатия',
     'cli.import.tip':'Импорт сессий Claude CLI','cli.import.title':'Импорт сессий Claude CLI',
+    'cli.import.source':'Источник:', 'cli.import.source_local':'Эта машина', 'cli.import.no_hosts':'Нет сохранённых SSH-хостов — добавьте его в разделе удалённых хостов', 'cli.import.remote_hint':'Оставьте проект пустым, чтобы просканировать все проекты Claude CLI на хосте', 'cli.import.remote_ph':'путь к проекту на удалённом хосте (необязательно)', 'cli.import.list_truncated':'показаны первые {n}', 'cli.import.err.host_not_found':'Сохранённый SSH-хост не найден — возможно, он удалён', 'cli.import.err.unreachable':'Не удаётся связаться с хостом — проверьте адрес, порт и сеть', 'cli.import.err.auth_failed':'Ошибка аутентификации — проверьте пользователя, ключ или пароль', 'cli.import.err.timeout':'Удалённый хост не ответил вовремя', 'cli.import.err.no_claude_dir':'На удалённом хосте нет ~/.claude — Claude CLI там никогда не запускался', 'cli.import.err.no_projects_dir':'На удалённом хосте нет ~/.claude/projects — импортировать нечего', 'cli.import.err.invalid_path':'Некорректный путь к проекту', 'cli.import.err.bad_output':'Неожиданный ответ удалённой оболочки', 'cli.import.err.exec_failed':'Удалённая команда завершилась ошибкой', 'cli.import.err.host_key_changed':'Ключ удалённого хоста изменился — соединение отклонено', 'cli.import.err.too_large':'Выбранные сессии превышают лимит передачи', 'cli.import.err.too_many':'Выбрано слишком много сессий сразу', 'cli.import.err.import_failed':'Импорт не удался', 'cli.import.err.no_sessions':'Не выбрано ни одной сессии',
     'cli.import.project':'Проект:','cli.import.load':'Загрузить',
     'cli.import.hint':'Укажите проект и нажмите «Загрузить»',
     'cli.import.do':'Импортировать выбранные','cli.import.sel_all':'Выбрать все',
@@ -5228,6 +5238,7 @@ const TRANSLATIONS = {
     "tg.device.connected":"📱 Telegram : {name} connecté","tg.bot.started":"✅ Bot Telegram démarré : @{bot}","compact.btn":"Compacter et nouveau",
     "compact.title":"Compacter le chat et démarrer une nouvelle session","compact.loading":"Compactage…","compact.success":"✅ Chat compacté — ouverture d'une nouvelle session",
     "compact.err":"Échec du compactage","cli.import.tip":"Importer des sessions Claude CLI","cli.import.title":"Importer des sessions Claude CLI","cli.import.project":"Projet :",
+    'cli.import.source':'Source :', 'cli.import.source_local':'Cette machine', 'cli.import.no_hosts':'Aucun hôte SSH enregistré — ajoutez-en un dans la section des hôtes distants', 'cli.import.remote_hint':'Laissez le projet vide pour analyser tous les projets Claude CLI de l’hôte', 'cli.import.remote_ph':'chemin du projet sur l’hôte distant (facultatif)', 'cli.import.list_truncated':'les {n} premières affichées', 'cli.import.err.host_not_found':'Hôte SSH enregistré introuvable — il a peut-être été supprimé', 'cli.import.err.unreachable':'Impossible de joindre l’hôte — vérifiez l’adresse, le port et le réseau', 'cli.import.err.auth_failed':'Échec de l’authentification — vérifiez l’utilisateur, la clé ou le mot de passe', 'cli.import.err.timeout':'L’hôte distant n’a pas répondu à temps', 'cli.import.err.no_claude_dir':'Aucun ~/.claude sur l’hôte distant — Claude CLI n’y a jamais été lancé', 'cli.import.err.no_projects_dir':'Aucun ~/.claude/projects sur l’hôte distant — rien à importer', 'cli.import.err.invalid_path':'Chemin de projet invalide', 'cli.import.err.bad_output':'Réponse inattendue du shell distant', 'cli.import.err.exec_failed':'La commande distante a échoué', 'cli.import.err.host_key_changed':'La clé de l’hôte distant a changé — connexion refusée', 'cli.import.err.too_large':'Les sessions sélectionnées dépassent la limite de transfert', 'cli.import.err.too_many':'Trop de sessions sélectionnées à la fois', 'cli.import.err.import_failed':'Échec de l’importation', 'cli.import.err.no_sessions':'Aucune session sélectionnée',
     "cli.import.load":"Charger","cli.import.hint":"Saisissez le chemin du projet et cliquez sur «Charger»","cli.import.do":"Importer la sélection","cli.import.sel_all":"Tout sélectionner",
     "cli.import.loading":"Chargement…","cli.import.found_n":"Trouvé : {n} sessions dans","cli.import.no_sessions":"Aucune session trouvée","cli.import.msgs":"msgs","cli.import.already":"Déjà importé",
     "cli.import.already_done":"✓ importé","cli.import.doing":"Importation…","cli.import.doing_n":"Importation de {n} sessions…","cli.import.result":"Importées : {n}",
@@ -5352,6 +5363,7 @@ const TRANSLATIONS = {
     "files.remote_unavail":"🌐 פרויקט מרוחק —<br>דפדפן הקבצים לא זמין","hist.drag":"גררו לסידור מחדש","tg.device.connected":"📱 Telegram: {name} התחבר","tg.bot.started":"✅ בוט ה-Telegram הופעל: @{bot}",
     "compact.btn":"כיווץ וחדש","compact.title":"כיווץ הצ'אט ופתיחת סשן חדש","compact.loading":"מכווץ…","compact.success":"✅ הצ'אט כווץ — פותח סשן חדש","compact.err":"הכיווץ נכשל",
     "cli.import.tip":"ייבוא סשנים של Claude CLI","cli.import.title":"ייבוא סשנים של Claude CLI","cli.import.project":"פרויקט:","cli.import.load":"טעינה",
+    'cli.import.source':'מקור:', 'cli.import.source_local':'המחשב הזה', 'cli.import.no_hosts':'אין מארחי SSH שמורים — הוסיפו אחד במקטע המארחים המרוחקים', 'cli.import.remote_hint':'השאירו את הפרויקט ריק כדי לסרוק את כל פרויקטי Claude CLI במארח', 'cli.import.remote_ph':'נתיב הפרויקט במארח המרוחק (רשות)', 'cli.import.list_truncated':'מוצגים {n} הראשונים', 'cli.import.err.host_not_found':'המארח השמור לא נמצא — ייתכן שנמחק', 'cli.import.err.unreachable':'לא ניתן להגיע למארח — בדקו את הכתובת, הפורט והרשת', 'cli.import.err.auth_failed':'האימות נכשל — בדקו את המשתמש, המפתח או הסיסמה', 'cli.import.err.timeout':'המארח המרוחק לא הגיב בזמן', 'cli.import.err.no_claude_dir':'אין ~/.claude במארח המרוחק — Claude CLI מעולם לא רץ שם', 'cli.import.err.no_projects_dir':'אין ~/.claude/projects במארח המרוחק — אין מה לייבא', 'cli.import.err.invalid_path':'נתיב פרויקט לא תקין', 'cli.import.err.bad_output':'תשובה בלתי צפויה מהמעטפת המרוחקת', 'cli.import.err.exec_failed':'הפקודה המרוחקת נכשלה', 'cli.import.err.host_key_changed':'מפתח המארח המרוחק השתנה — ההתחברות נדחתה', 'cli.import.err.too_large':'הסשנים שנבחרו חורגים ממגבלת ההעברה', 'cli.import.err.too_many':'נבחרו יותר מדי סשנים בבת אחת', 'cli.import.err.import_failed':'הייבוא נכשל', 'cli.import.err.no_sessions':'לא נבחר אף סשן',
     "cli.import.hint":"הזינו נתיב לפרויקט ולחצו «טעינה»","cli.import.do":"ייבוא הנבחרים","cli.import.sel_all":"בחירת הכול","cli.import.loading":"טוען…","cli.import.found_n":"נמצאו: {n} סשנים ב",
     "cli.import.no_sessions":"לא נמצאו סשנים","cli.import.msgs":"הודעות","cli.import.already":"כבר יובא","cli.import.already_done":"✓ יובא","cli.import.doing":"מייבא…",
     "cli.import.doing_n":"מייבא {n} סשנים…","cli.import.result":"יובאו: {n}","cli.import.skipped":" דולגו: {n}","cli.import.errors":" שגיאות: {n}","thinking.title":"שרשרת מחשבה","thinking.copy":"העתקה",
@@ -13776,7 +13788,45 @@ function openCliImport() {
   $i('cliImportSelAll').indeterminate = false;
   $i('cliImportSelCount').textContent = '';
   openModalOverlay('cliImportModal');
-  if (workdir) loadCliSessions();
+  // Saved SSH hosts ARE the remote-connection memory (issue #23) — /api/remote-hosts,
+  // not a second store. Auto-load only for the local source; a remote listing costs an
+  // SSH round trip and should stay an explicit click.
+  loadCliImportHosts().then(() => { if (!cliImportHostId() && $i('cliImportWorkdir').value.trim()) loadCliSessions(); });
+}
+
+// ─── CLI Import: remote (SSH) source ─────────────────────────────────────────
+let _cliImportHosts = [];
+const cliImportHostId = () => ($i('cliImportSource') && $i('cliImportSource').value) || '';
+
+async function loadCliImportHosts() {
+  const sel = $i('cliImportSource');
+  const prev = sel.value;
+  try { const r = await fetch('/api/remote-hosts'); _cliImportHosts = r.ok ? await r.json() : []; }
+  catch { _cliImportHosts = []; }
+  sel.innerHTML = `<option value="">${escH(t('cli.import.source_local'))}</option>` +
+    _cliImportHosts.map(h => `<option value="${escH(h.id)}">${escH(h.label || h.host)} — ${escH(h.host)}</option>`).join('');
+  if (!_cliImportHosts.length) sel.insertAdjacentHTML('beforeend', `<option value="" disabled>${escH(t('cli.import.no_hosts'))}</option>`);
+  sel.value = _cliImportHosts.some(h => h.id === prev) ? prev : '';
+  cliImportSourceChanged();
+}
+
+function cliImportSourceChanged() {
+  const remote = !!cliImportHostId();
+  $i('cliImportWorkdir').placeholder = remote ? t('cli.import.remote_ph') : '/path/to/project';
+  cliImportWorkdirChanged();
+  if (remote) {
+    const st = $i('cliImportStatus');
+    st.style.display = '';
+    st.textContent = t('cli.import.remote_hint');
+  }
+}
+
+// Server codes → one translated, actionable sentence. Falls back to the server's own
+// English text, which by contract never contains a credential.
+function cliImportErrText(data) {
+  const code = data && data.code;
+  if (code) { const key = 'cli.import.err.' + code, msg = t(key); if (msg !== key) return msg; }
+  return (data && data.error) || t('status.error');
 }
 
 function closeCliImport() { closeModalOverlay('cliImportModal'); }
@@ -13793,20 +13843,28 @@ function cliImportWorkdirChanged() {
 
 async function loadCliSessions() {
   const workdir = $i('cliImportWorkdir').value.trim();
-  if (!workdir) return;
+  const hostId = cliImportHostId();
+  // Remote with an empty project = auto-discover every project on that host.
+  if (!hostId && !workdir) return;
   const statusEl = $i('cliImportStatus');
   const listEl = $i('cliImportList');
   statusEl.style.display = '';
   statusEl.textContent = t('cli.import.loading');
   listEl.innerHTML = '';
+  const url = hostId
+    ? `/api/sessions/cli-list-remote?hostId=${encodeURIComponent(hostId)}` + (workdir ? `&workdir=${encodeURIComponent(workdir)}` : '')
+    : `/api/sessions/cli-list?workdir=${encodeURIComponent(workdir)}`;
   try {
-    const res = await fetch(`/api/sessions/cli-list?workdir=${encodeURIComponent(workdir)}`);
+    const res = await fetch(url);
     const data = await res.json();
-    if (!res.ok) { statusEl.textContent = '⚠ ' + (data.error || t('status.error')); return; }
+    if (!res.ok) { statusEl.textContent = '⚠ ' + cliImportErrText(data); return; }
     _cliSessions = data.sessions || [];
-    statusEl.textContent = t('cli.import.found_n').replace('{n}', _cliSessions.length) + ' ' + data.projectPath;
+    statusEl.textContent = t('cli.import.found_n').replace('{n}', _cliSessions.length) + ' ' + (data.projectPath || '');
+    if (data.listTruncated) statusEl.textContent += ' · ' + t('cli.import.list_truncated').replace('{n}', _cliSessions.length);
     if (_cliSessions.length === 0) {
-      listEl.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:12px">${t('cli.import.no_sessions')}</div>`;
+      // A remote can be empty for several different reasons — say which one.
+      const why = (data.code && data.code !== 'ok' && data.code !== 'empty') ? cliImportErrText(data) : t('cli.import.no_sessions');
+      listEl.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:12px">${escH(why)}</div>`;
       return;
     }
     renderCliSessionList();
@@ -13830,7 +13888,8 @@ function renderCliSessionList() {
         <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(s.title)}</div>
         <div style="font-size:11px;color:var(--muted);display:flex;gap:8px;margin-top:2px">
           <span>${date}</span>
-          <span>${s.messageCount} ${t('cli.import.msgs')}</span>
+          <span>${s.truncated ? '≥' : ''}${s.messageCount} ${t('cli.import.msgs')}</span>
+          ${s.project ? `<span style="font-family:monospace;opacity:.75">${escH(s.project)}</span>` : ''}
           ${s.alreadyImported ? `<span style="color:var(--green)">${t('cli.import.already_done')}</span>` : ''}
         </div>
       </div>`;
@@ -13869,9 +13928,18 @@ async function doCliImport() {
   statusEl.style.display = '';
   statusEl.textContent = t('cli.import.doing_n').replace('{n}', sessionIds.length);
   try {
-    const res = await fetch('/api/sessions/cli-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionIds, workdir }) });
+    const hostId = cliImportHostId();
+    const body = { sessionIds, workdir };
+    if (hostId) {
+      body.hostId = hostId;
+      // The remote listing can span several projects, so each id carries its own slug.
+      body.projects = {};
+      for (const s of _cliSessions) if (s.project && sessionIds.includes(s.sessionId)) body.projects[s.sessionId] = s.project;
+    }
+    const res = await fetch(hostId ? '/api/sessions/cli-import-remote' : '/api/sessions/cli-import',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
-    if (!res.ok) { statusEl.textContent = '⚠ ' + (data.error || t('status.error')); btn.disabled = false; btn.textContent = t('cli.import.do'); return; }
+    if (!res.ok) { statusEl.textContent = '⚠ ' + cliImportErrText(data); btn.disabled = false; btn.textContent = t('cli.import.do'); return; }
     const ok = data.imported?.length || 0;
     const sk = data.skipped?.length || 0;
     const er = data.errors?.length || 0;
@@ -13986,6 +14054,12 @@ async function saveNewSshHost() {
   if (!d.ok) { toast(d.error || t('ssh.err'), true); return; }
   await loadRemoteHosts();
   closeSshHostModal();
+  // The CLI-import picker reads the same list. If it is open behind this modal, refresh
+  // it and select the host that was just added, so "add host → import" is one flow.
+  if (!$i('cliImportModal').classList.contains('hidden')) {
+    await loadCliImportHosts();
+    if (!isEdit && d.id) { $i('cliImportSource').value = d.id; cliImportSourceChanged(); }
+  }
   toast((isEdit ? t('ssh.updated') : t('ssh.saved')).replace('{name}', label));
   // If project dialog is open and on remote tab, update the select
   if (curProjType === 'remote') renderRemoteHostSelect();
