@@ -79,6 +79,16 @@ npx github:Lexus2016/claude-code-studio
 
 Open `http://localhost:3000`, set a password, start chatting.
 
+> **It listens on localhost only.** This UI drives `claude --dangerously-skip-permissions`
+> with Bash rooted at `$HOME`, so reaching the port is nearly the whole battle. To open it to
+> your phone or another machine, set `HOST=0.0.0.0` — the console then warns you on every
+> start. Docker already does this; the container boundary is the wall there.
+>
+> On a fresh install the very first password can be set from `localhost` with no ceremony.
+> From any other address you also have to supply the one-time setup code the server prints
+> to its console (`docker compose logs claude-chat` under Docker) — otherwise whoever finds
+> the port first owns the shell.
+
 <details>
 <summary><b>Other install methods</b></summary>
 

@@ -168,6 +168,38 @@ async function changePassword(oldPassword, newPassword) {
   return createToken();
 }
 
+// ─── First-run setup gate ─────────────────────────────────────────────────
+// While no account exists, POST /api/auth/setup is necessarily unauthenticated —
+// and whoever reaches it first owns an instance that runs `claude
+// --dangerously-skip-permissions` with Bash in $HOME. From loopback that is the
+// owner by definition. From anywhere else we additionally require a code that is
+// only ever printed to the server console, so reaching the port is not enough.
+let _setupCode = null;
+
+function isLoopbackAddress(addr) {
+  if (!addr) return false;
+  const a = String(addr).replace(/^::ffff:/, '');
+  return a === '::1' || a === 'localhost' || /^127\./.test(a);
+}
+
+// Generated lazily and only while setup is pending, so a finished install keeps
+// no live code around.
+function getSetupCode() {
+  if (isSetupDone()) return null;
+  if (!_setupCode) _setupCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+  return _setupCode;
+}
+
+function checkSetupCode(given) {
+  const want = getSetupCode();
+  if (!want || !given) return false;
+  const a = Buffer.from(String(given).trim().toUpperCase(), 'utf8');
+  const b = Buffer.from(want, 'utf8');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function clearSetupCode() { _setupCode = null; }
+
 const PUBLIC_PATHS = [
   '/api/auth/setup', '/api/auth/login', '/api/auth/status', '/api/health',
   '/login', '/setup',
@@ -191,4 +223,4 @@ function authMiddleware(req, res, next) {
 
 function validateWsToken(token) { if (process.env.CCS_DESKTOP === '1') return true; return validateToken(token); }
 
-module.exports = { isSetupDone, setupUser, login, validateToken, revokeToken, revokeAll, changePassword, authMiddleware, validateWsToken, loadAuth };
+module.exports = { isSetupDone, setupUser, login, validateToken, revokeToken, revokeAll, changePassword, authMiddleware, validateWsToken, loadAuth, isLoopbackAddress, getSetupCode, checkSetupCode, clearSetupCode };

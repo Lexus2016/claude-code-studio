@@ -93,6 +93,12 @@ const wss = new WebSocketServer({ noServer: true });
 const wssTerm = new WebSocketServer({ noServer: true });
 
 const PORT = process.env.PORT || 3000;
+// Bind address. Loopback by default: this UI drives `claude
+// --dangerously-skip-permissions` with Bash rooted at $HOME, so putting it on a
+// network interface is an explicit decision, not something you get by omission.
+// Containers must opt in — docker-compose.yml sets HOST=0.0.0.0.
+const HOST = process.env.CCS_DESKTOP === '1' ? '127.0.0.1' : (process.env.HOST || '127.0.0.1');
+const HOST_IS_LOOPBACK = auth.isLoopbackAddress(HOST);
 // When launched via npx/global install, cli.js sets APP_DIR to cwd so user
 // data persists in the user's directory, not inside the npm cache.
 const APP_DIR = process.env.APP_DIR || __dirname;
@@ -4828,13 +4834,27 @@ app.get('/api/auth/status', (req,res) => {
   const token = req.cookies?.token || req.headers['x-auth-token'];
   const loggedIn = setupDone && auth.validateToken(token);
   const ad = auth.loadAuth();
-  res.json({ setupDone, loggedIn, displayName:loggedIn?ad?.displayName:null });
+  // A remote first-run visitor has to prove console access; tell the page so it
+  // can render the field instead of failing the POST with a bare 403.
+  const setupCodeRequired = !setupDone && !auth.isLoopbackAddress(req.ip);
+  res.json({ setupDone, loggedIn, displayName:loggedIn?ad?.displayName:null, setupCodeRequired });
 });
 
 app.post('/api/auth/setup', authLimiter, async (req,res) => {
   try {
-    const { password, displayName } = req.body;
+    const { password, displayName, setupCode } = req.body;
+    // Claiming the account is the whole security boundary of a fresh install:
+    // it hands out a shell. From loopback the caller is the owner. From the
+    // network they must echo a code that only ever appeared on the console.
+    if (!auth.isSetupDone() && !auth.isLoopbackAddress(req.ip)) {
+      const given = setupCode || req.headers['x-setup-code'];
+      if (!auth.checkSetupCode(given)) {
+        log.warn('remote setup attempt rejected', { ip: req.ip, hadCode: !!given });
+        return res.status(403).json({ error: 'setup_code_required' });
+      }
+    }
     const token = await auth.setupUser(password, displayName);
+    auth.clearSetupCode();
     res.cookie('token', token, { httpOnly:true, sameSite:'lax', secure:SECURE_COOKIES, maxAge:30*24*60*60*1000 });
     res.json({ ok:true, displayName:displayName||'Admin' });
   } catch(e) { res.status(400).json({ error:e.message }); }
@@ -9642,8 +9662,21 @@ try {
 } catch {}
 startTerminalReaper({ intervalMs: 60000 });
 
-server.listen(...(process.env.CCS_DESKTOP === '1' ? [PORT, '127.0.0.1'] : [PORT]), () => {
+server.listen(PORT, HOST, () => {
+  if (!HOST_IS_LOOPBACK) {
+    console.warn(`\n\u26a0\ufe0f  Listening on ${HOST}:${PORT} — reachable from the network.`);
+    console.warn('   Everyone who can reach this port is one password away from a shell on this machine.');
+  }
+  // Printed for a LAN bind and also behind a reverse proxy on loopback — in both
+  // cases a first-run request can arrive with a non-loopback req.ip and be asked
+  // for the code, so the code has to exist somewhere the owner can read it.
+  if (!auth.isSetupDone() && (!HOST_IS_LOOPBACK || TRUST_PROXY_ENV)) {
+    console.warn(`\n\ud83d\udd11 Setup is not done yet. From this machine open http://localhost:${PORT}/setup`);
+    console.warn(`   From any other device you also need this one-time code: ${auth.getSetupCode()}`);
+    console.warn('   It is printed here only, and stops working once the account exists.\n');
+  }
   log.info('server started', {
+    host:      HOST,
     port:      PORT,
     url:       `http://localhost:${PORT}`,
     workdir:   WORKDIR,

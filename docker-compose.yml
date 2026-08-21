@@ -17,6 +17,9 @@ services:
       - claude-home:/home/node/.claude
     environment:
       - PORT=3000
+      # Inside the container the app must listen on all interfaces, otherwise the
+      # published port above maps to nothing. The container boundary is the wall here.
+      - HOST=0.0.0.0
       - WORKDIR=/app/workspace
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - NODE_ENV=production
