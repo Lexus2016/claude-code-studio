@@ -302,34 +302,34 @@ button{font-family:inherit;cursor:pointer}
 <div class="hdr">
   <div class="hdr-l">
     <div class="logo">CCS</div>
-    <nav class="nav-sw" aria-label="Навігація між розділами">
-      <a class="nav-sw-btn" href="/" data-tip="Чат">
+    <nav class="nav-sw" aria-label="Navigation" data-i18n-aria="nav.aria">
+      <a class="nav-sw-btn" href="/" data-tip="Chat" data-i18n-tip="nav.chat">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        Chat
+        <span class="nav-lbl" data-i18n="nav.chat">Chat</span>
       </a>
-      <a class="nav-sw-btn" href="/kanban" data-tip="Kanban дошка">
+      <a class="nav-sw-btn" href="/kanban" data-tip="Kanban" data-i18n-tip="nav.kanban">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
-        Kanban
+        <span class="nav-lbl" data-i18n="nav.kanban">Kanban</span>
       </a>
-      <a class="nav-sw-btn active" href="/schedule" data-tip="Розклад завдань">
+      <a class="nav-sw-btn active" href="/schedule" data-tip="Schedule" data-i18n-tip="nav.schedule">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        Schedule
+        <span class="nav-lbl" data-i18n="nav.schedule">Schedule</span>
       </a>
-      <a class="nav-sw-btn" href="/dashboard" data-tip="Dashboard">
+      <a class="nav-sw-btn" href="/dashboard" data-tip="Dashboard" data-i18n-tip="nav.dashboard">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
-        Dashboard
+        <span class="nav-lbl" data-i18n="nav.dashboard">Dashboard</span>
       </a>
     </nav>
     <div class="hdr-meta">
       <div class="proj-dd-wrap" id="projDdWrap">
         <button class="proj-dd-btn" id="projDdBtn" onclick="toggleProjDd()">
           <span class="proj-dd-icon">📁</span>
-          <span class="proj-dd-name" id="projDdName">Всі проекти</span>
+          <span class="proj-dd-name" id="projDdName" data-i18n="proj.all">All projects</span>
           <span class="proj-dd-arrow">▼</span>
         </button>
         <div class="proj-dd-menu" id="projDdMenu">
           <div class="proj-dd-search">
-            <input type="text" id="projDdSearch" placeholder="Пошук проекту..." oninput="filterProj(this.value)">
+            <input type="text" id="projDdSearch" placeholder="Search…" data-i18n-ph="proj.search" oninput="filterProj(this.value)">
           </div>
           <div class="proj-dd-list" id="projDdList"></div>
         </div>
@@ -338,8 +338,8 @@ button{font-family:inherit;cursor:pointer}
   </div>
   <div class="hdr-btns">
     <span class="refresh-ts" id="refreshTs" style="margin-right:4px"></span>
-    <button class="hb" onclick="refresh()" id="refreshBtn" title="Оновити">&#8635;</button>
-    <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel">Задача</span></button>
+    <button class="hb" onclick="refresh()" id="refreshBtn" title="Refresh" data-i18n-title="hdr.refresh">&#8635;</button>
+    <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel" data-i18n="hdr.add">Task</span></button>
     <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
     </a>
@@ -351,27 +351,27 @@ button{font-family:inherit;cursor:pointer}
   <div class="stat-chip stat-chip-overdue" id="chipOverdue">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     <span class="stat-chip-num" id="cntOverdue">0</span>
-    <span id="lblStatOverdue">прострочено</span>
+    <span id="lblStatOverdue" data-i18n="stat.overdue">overdue</span>
   </div>
   <div class="stats-spacer"></div>
   <div class="stat-chip stat-chip-today" id="chipToday">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     <span class="stat-chip-num" id="cntToday">0</span>
-    <span id="lblStatToday">сьогодні</span>
+    <span id="lblStatToday" data-i18n="stat.today">today</span>
   </div>
   <div class="stats-spacer"></div>
   <div class="stat-chip stat-chip-upcoming" id="chipUpcoming">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     <span class="stat-chip-num" id="cntUpcoming">0</span>
-    <span id="lblStatUpcoming">заплановано</span>
+    <span id="lblStatUpcoming" data-i18n="stat.upcoming">upcoming</span>
   </div>
   <div class="stats-spacer"></div>
   <div class="stat-chip stat-chip-recurring" id="chipRecurring">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
     <span class="stat-chip-num" id="cntRecurring">0</span>
-    <span id="lblStatRecurring">повторюваних</span>
+    <span id="lblStatRecurring" data-i18n="stat.recurring">recurring</span>
   </div>
-  <span class="status-dot ok" id="schStatusEl">Connected</span>
+  <span class="status-dot ok" id="schStatusEl" data-i18n="hdr.connected">Connected</span>
 </div>
 
 <!-- Agenda -->
@@ -393,7 +393,7 @@ button{font-family:inherit;cursor:pointer}
       <div class="modal-hd-icon">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       </div>
-      <span class="modal-hd-title" id="modalTitle">Нове завдання з розкладом</span>
+      <span class="modal-hd-title" id="modalTitle" data-i18n="modal.add">New scheduled task</span>
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
     <div class="modal-body" id="modalBody"></div>
@@ -406,7 +406,9 @@ button{font-family:inherit;cursor:pointer}
 
 <script>
 // ─── i18n ─────────────────────────────────────────────────────────────────
-const lang = localStorage.getItem('lang') || 'uk';
+const lang = localStorage.getItem('lang') || 'en';
+document.documentElement.lang = lang;
+document.documentElement.dir = (lang === 'he') ? 'rtl' : 'ltr';
 const TR = {
   uk: {
 
@@ -462,6 +464,14 @@ const TR = {
     'form.exec.model': 'Модель', 'form.exec.turns': 'Кроки', 'form.exec.effort': 'Зусилля', 'form.exec.engine': 'Рушій',
     'group.badge': 'група', 'group.progress': '{done}/{total}',
     'group.run_now': 'Запустити групу',
+    // ── issue #26: keys for text that used to be hardcoded in markup / inline JS ──
+    'nav.dashboard': 'Дашборд', 'hdr.project': 'Проєкт',
+    'mode.auto': 'Авто', 'mode.plan': 'План', 'mode.task': 'Задача',
+    'agent.single': 'Одиночний', 'agent.multi': 'Мульти',
+    'effort.auto': 'Авто', 'effort.low': 'Низьке', 'effort.med': 'Середнє',
+    'effort.high': 'Високе', 'effort.xhigh': 'Дуже високе', 'effort.max': 'Максимум',
+    'engine.api': 'API', 'engine.sub': 'Підписка',
+    'tmux.required': 'На сервері потрібен tmux',
     'locale': 'uk',
   },
   en: {
@@ -518,6 +528,14 @@ const TR = {
     'form.exec.model': 'Model', 'form.exec.turns': 'Steps', 'form.exec.effort': 'Effort', 'form.exec.engine': 'Engine',
     'group.badge': 'group', 'group.progress': '{done}/{total}',
     'group.run_now': 'Run group',
+    // ── issue #26: keys for text that used to be hardcoded in markup / inline JS ──
+    'nav.dashboard': 'Dashboard', 'hdr.project': 'Project',
+    'mode.auto': 'Auto', 'mode.plan': 'Plan', 'mode.task': 'Task',
+    'agent.single': 'Single', 'agent.multi': 'Multi',
+    'effort.auto': 'Auto', 'effort.low': 'Low', 'effort.med': 'Medium',
+    'effort.high': 'High', 'effort.xhigh': 'XHigh', 'effort.max': 'Max',
+    'engine.api': 'API', 'engine.sub': 'Subscription',
+    'tmux.required': 'tmux is required on the server',
     'locale': 'en-GB',
   },
   ru: {
@@ -574,10 +592,146 @@ const TR = {
     'form.exec.model': 'Модель', 'form.exec.turns': 'Шаги', 'form.exec.effort': 'Усилие', 'form.exec.engine': 'Движок',
     'group.badge': 'группа', 'group.progress': '{done}/{total}',
     'group.run_now': 'Запустить группу',
+    // ── issue #26: keys for text that used to be hardcoded in markup / inline JS ──
+    'nav.dashboard': 'Дашборд', 'hdr.project': 'Проект',
+    'mode.auto': 'Авто', 'mode.plan': 'План', 'mode.task': 'Задача',
+    'agent.single': 'Одиночный', 'agent.multi': 'Мульти',
+    'effort.auto': 'Авто', 'effort.low': 'Низкое', 'effort.med': 'Среднее',
+    'effort.high': 'Высокое', 'effort.xhigh': 'Очень высокое', 'effort.max': 'Максимум',
+    'engine.api': 'API', 'engine.sub': 'Подписка',
+    'tmux.required': 'На сервере нужен tmux',
     'locale': 'ru-RU',
   },
+  fr: {
+    'form.exec.bot':'Bot','form.exec.bot.none':'sans bot','form.exec.bot.tip':'La tâche s\'exécute avec le prompt et le modèle de ce bot',
+    'page.title': 'Planification — Claude Code Studio',
+    'nav.chat': 'Chat', 'nav.kanban': 'Kanban', 'nav.schedule': 'Planification',
+    'nav.aria': 'Navigation',
+    'hdr.add': 'Tâche', 'hdr.refresh': 'Actualiser', 'hdr.connected': 'Connecté', 'hdr.disconnected': 'Déconnecté',
+    'proj.all': 'Tous les projets', 'proj.recent': 'Récents', 'proj.search': 'Rechercher…', 'proj.noname': 'Sans nom',
+    'stat.overdue': 'en retard', 'stat.today': "aujourd'hui",
+    'stat.upcoming': 'à venir', 'stat.recurring': 'récurrentes',
+    'recur.hourly': 'Toutes les heures', 'recur.daily': 'Quotidien',
+    'recur.weekly': 'Hebdomadaire', 'recur.monthly': 'Mensuel',
+    'recur.every.hour': 'Toutes les {n} h', 'recur.every.day': 'Tous les {n} j',
+    'recur.every.week': 'Toutes les {n} sem.', 'recur.every.month': 'Tous les {n} mois',
+    'recur.times.month': '{n}×/mois',
+    'recur.unit.hour': 'heures', 'recur.unit.day': 'jours', 'recur.unit.week': 'semaines',
+    'recur.unit.month': 'mois', 'recur.unit.timesMonth': 'fois par mois',
+    'time.in': 'dans ', 'time.min': 'min', 'time.hr': 'h', 'time.day': 'j',
+    'sec.overdue': 'En retard', 'sec.overdue.rel': 'En retard',
+    'sec.today.rel': "Aujourd'hui", 'sec.tomorrow.rel': 'Demain',
+    'sec.this_week': 'Cette semaine', 'sec.this_week.rel': 'Jours à venir',
+    'sec.later': 'Plus tard', 'sec.later.rel': 'Plans futurs',
+    'sec.recur': 'Récurrentes', 'sec.recur.rel': 'Sans date fixe',
+    'status.backlog': 'Backlog', 'status.todo': 'À faire',
+    'status.in_progress': 'En cours', 'status.done': 'Terminé', 'status.cancelled': 'Annulé',
+    'card.running': 'En cours', 'card.run_now': 'Lancer',
+    'card.run_now.title': 'Lancer maintenant', 'card.edit.title': 'Modifier',
+    'empty.title': 'Aucune tâche planifiée',
+    'empty.sub': 'Planifiez votre première tâche — Claude l\'exécutera automatiquement à l\'heure indiquée.',
+    'empty.cta': 'Planifier une tâche',
+    'modal.add': 'Nouvelle tâche planifiée', 'modal.edit': 'Modifier la tâche',
+    'form.title': 'Nom *', 'form.title.ph': 'Que doit faire Claude ?',
+    'form.date': 'Date et heure d\'exécution', 'form.date.hint': 'Laissez vide pour une tâche sans date',
+    'form.recur': 'Récurrence', 'form.recur.hint': 'Claude s\'exécutera automatiquement',
+    'form.recur.once': '— une seule fois —',
+    'form.recur.end': 'Fin de la récurrence',
+    'form.recur.end.hint': 'Facultatif — sans valeur, la répétition est illimitée',
+    'form.desc': 'Description', 'form.desc.ph': 'Description détaillée de la tâche pour Claude…',
+    'form.session': 'Session liée', 'form.session.hint': 'Claude reprendra cette session',
+    'form.no_session': '— aucune session —',
+    'form.model': 'Modèle',
+    'form.model.sonnet': 'Sonnet (par défaut)', 'form.model.haiku': 'Haiku (plus rapide)', 'form.model.opus': 'Opus (le plus puissant)', 'form.model.fable': 'Fable',
+    'btn.cancel': 'Annuler', 'btn.create': 'Créer', 'btn.save': 'Enregistrer', 'btn.delete': 'Supprimer',
+    'toast.queued': 'Tâche mise en file', 'toast.scheduled': 'Tâche planifiée',
+    'toast.saved': 'Enregistré', 'toast.deleted': 'Tâche supprimée',
+    'toast.err.title': 'Saisissez le titre de la tâche',
+    'toast.no_project': 'Choisissez d\'abord un projet',
+    'toast.err.load': 'Erreur de chargement : ', 'toast.err': 'Erreur : ',
+    'confirm.delete': 'Supprimer la tâche ? Cette action est irréversible.',
+    'tasks.count': '{n} tâches', 'tasks.count.1': '{n} tâche', 'tasks.count.few': '{n} tâches',
+    'form.exec': 'Options d\'exécution',
+    'form.exec.mode': 'Mode', 'form.exec.agent': 'Agent',
+    'form.exec.model': 'Modèle', 'form.exec.turns': 'Étapes', 'form.exec.effort': 'Effort', 'form.exec.engine': 'Moteur',
+    'group.badge': 'groupe', 'group.progress': '{done}/{total}',
+    'group.run_now': 'Lancer le groupe',
+    // ── issue #26: keys for text that used to be hardcoded in markup / inline JS ──
+    'nav.dashboard': 'Tableau de bord', 'hdr.project': 'Projet',
+    'mode.auto': 'Auto', 'mode.plan': 'Plan', 'mode.task': 'Tâche',
+    'agent.single': 'Simple', 'agent.multi': 'Multi',
+    'effort.auto': 'Auto', 'effort.low': 'Faible', 'effort.med': 'Moyen',
+    'effort.high': 'Élevé', 'effort.xhigh': 'Très élevé', 'effort.max': 'Maximum',
+    'engine.api': 'API', 'engine.sub': 'Abonnement',
+    'tmux.required': 'tmux est requis sur le serveur',
+    'locale': 'fr-FR',
+  },
+  he: {
+    'form.exec.bot':'בוט','form.exec.bot.none':'ללא בוט','form.exec.bot.tip':'המשימה תרוץ עם הפרומפט והמודל של הבוט הזה',
+    'page.title': 'תזמון — Claude Code Studio',
+    'nav.chat': "צ'אט", 'nav.kanban': 'קנבן', 'nav.schedule': 'תזמון',
+    'nav.aria': 'ניווט',
+    'hdr.add': 'משימה', 'hdr.refresh': 'רענון', 'hdr.connected': 'מחובר', 'hdr.disconnected': 'מנותק',
+    'proj.all': 'כל הפרויקטים', 'proj.recent': 'אחרונים', 'proj.search': 'חיפוש…', 'proj.noname': 'ללא שם',
+    'stat.overdue': 'באיחור', 'stat.today': 'היום',
+    'stat.upcoming': 'קרובות', 'stat.recurring': 'חוזרות',
+    'recur.hourly': 'כל שעה', 'recur.daily': 'יומי',
+    'recur.weekly': 'שבועי', 'recur.monthly': 'חודשי',
+    'recur.every.hour': 'כל {n} שעות', 'recur.every.day': 'כל {n} ימים',
+    'recur.every.week': 'כל {n} שבועות', 'recur.every.month': 'כל {n} חודשים',
+    'recur.times.month': '{n}×/חודש',
+    'recur.unit.hour': 'שעות', 'recur.unit.day': 'ימים', 'recur.unit.week': 'שבועות',
+    'recur.unit.month': 'חודשים', 'recur.unit.timesMonth': 'פעמים בחודש',
+    'time.in': 'בעוד ', 'time.min': 'ד', 'time.hr': 'ש', 'time.day': 'י',
+    'sec.overdue': 'באיחור', 'sec.overdue.rel': 'באיחור',
+    'sec.today.rel': 'היום', 'sec.tomorrow.rel': 'מחר',
+    'sec.this_week': 'השבוע', 'sec.this_week.rel': 'בימים הקרובים',
+    'sec.later': 'מאוחר יותר', 'sec.later.rel': 'תוכניות עתידיות',
+    'sec.recur': 'חוזרות', 'sec.recur.rel': 'ללא תאריך קבוע',
+    'status.backlog': 'מאגר', 'status.todo': 'לביצוע',
+    'status.in_progress': 'רץ', 'status.done': 'הושלם', 'status.cancelled': 'בוטל',
+    'card.running': 'רץ', 'card.run_now': 'הרץ',
+    'card.run_now.title': 'הרץ עכשיו', 'card.edit.title': 'עריכה',
+    'empty.title': 'אין משימות מתוזמנות',
+    'empty.sub': 'תזמנו את המשימה הראשונה — Claude יריץ אותה אוטומטית בזמן שנקבע.',
+    'empty.cta': 'תזמון משימה',
+    'modal.add': 'משימה מתוזמנת חדשה', 'modal.edit': 'עריכת משימה',
+    'form.title': 'שם *', 'form.title.ph': 'מה על Claude לעשות?',
+    'form.date': 'תאריך ושעת הרצה', 'form.date.hint': 'השאירו ריק למשימה ללא תאריך',
+    'form.recur': 'חזרתיות', 'form.recur.hint': 'Claude ירוץ אוטומטית',
+    'form.recur.once': '— פעם אחת —',
+    'form.recur.end': 'סיום החזרתיות',
+    'form.recur.end.hint': 'לא חובה — ללא ערך, החזרה נמשכת ללא הגבלה',
+    'form.desc': 'תיאור', 'form.desc.ph': 'תיאור מפורט של המשימה עבור Claude…',
+    'form.session': 'סשן מקושר', 'form.session.hint': 'Claude ימשיך את הסשן הזה',
+    'form.no_session': '— ללא סשן —',
+    'form.model': 'מודל',
+    'form.model.sonnet': 'Sonnet (ברירת מחדל)', 'form.model.haiku': 'Haiku (מהיר יותר)', 'form.model.opus': 'Opus (החזק ביותר)', 'form.model.fable': 'Fable',
+    'btn.cancel': 'ביטול', 'btn.create': 'יצירה', 'btn.save': 'שמירה', 'btn.delete': 'מחיקה',
+    'toast.queued': 'המשימה נכנסה לתור', 'toast.scheduled': 'המשימה תוזמנה',
+    'toast.saved': 'נשמר', 'toast.deleted': 'המשימה נמחקה',
+    'toast.err.title': 'הזינו שם למשימה',
+    'toast.no_project': 'בחרו קודם פרויקט',
+    'toast.err.load': 'שגיאת טעינה: ', 'toast.err': 'שגיאה: ',
+    'confirm.delete': 'למחוק את המשימה? הפעולה אינה הפיכה.',
+    'tasks.count': '{n} משימות', 'tasks.count.1': '{n} משימה', 'tasks.count.few': '{n} משימות',
+    'form.exec': 'אפשרויות הרצה',
+    'form.exec.mode': 'מצב', 'form.exec.agent': 'סוכן',
+    'form.exec.model': 'מודל', 'form.exec.turns': 'צעדים', 'form.exec.effort': 'מאמץ', 'form.exec.engine': 'מנוע',
+    'group.badge': 'קבוצה', 'group.progress': '{done}/{total}',
+    'group.run_now': 'הרצת הקבוצה',
+    // ── issue #26: keys for text that used to be hardcoded in markup / inline JS ──
+    'nav.dashboard': 'לוח מחוונים', 'hdr.project': 'פרויקט',
+    'mode.auto': 'אוטומטי', 'mode.plan': 'תכנון', 'mode.task': 'משימה',
+    'agent.single': 'יחיד', 'agent.multi': 'מרובה',
+    'effort.auto': 'אוטומטי', 'effort.low': 'נמוך', 'effort.med': 'בינוני',
+    'effort.high': 'גבוה', 'effort.xhigh': 'גבוה מאוד', 'effort.max': 'מקסימלי',
+    'engine.api': 'API', 'engine.sub': 'מנוי',
+    'tmux.required': 'נדרש tmux בשרת',
+    'locale': 'he-IL',
+  },
 };
-function t(k) { return (TR[lang]||TR.uk)[k] || k; }
+function t(k) { return (TR[lang]||TR.en)[k] || k; }
 function taskCount(n) {
   const key = n === 1 ? 'tasks.count.1' : (n > 1 && n < 5) ? 'tasks.count.few' : 'tasks.count';
   return t(key).replace('{n}', n);
@@ -1290,15 +1444,15 @@ function buildForm(tk={}) {
       <div class="sc-row">
         <div class="sc-seg" data-group="mode">
           <span class="sc-lbl">${t('form.exec.mode')}</span>
-          <button type="button" class="sc-btn${(tk.mode||'auto')==='auto'?' on':''}" data-v="auto" onclick="scOpt(this)">Auto</button>
-          <button type="button" class="sc-btn${tk.mode==='planning'?' on':''}" data-v="planning" onclick="scOpt(this)">Plan</button>
-          <button type="button" class="sc-btn${tk.mode==='task'?' on':''}" data-v="task" onclick="scOpt(this)">Task</button>
+          <button type="button" class="sc-btn${(tk.mode||'auto')==='auto'?' on':''}" data-v="auto" onclick="scOpt(this)">${escH(t('mode.auto'))}</button>
+          <button type="button" class="sc-btn${tk.mode==='planning'?' on':''}" data-v="planning" onclick="scOpt(this)">${escH(t('mode.plan'))}</button>
+          <button type="button" class="sc-btn${tk.mode==='task'?' on':''}" data-v="task" onclick="scOpt(this)">${escH(t('mode.task'))}</button>
         </div>
         <div class="sc-sep"></div>
         <div class="sc-seg" data-group="agent_mode">
           <span class="sc-lbl">${t('form.exec.agent')}</span>
-          <button type="button" class="sc-btn${(tk.agent_mode||'single')==='single'?' on':''}" data-v="single" onclick="scOpt(this)">Single</button>
-          <button type="button" class="sc-btn${tk.agent_mode==='multi'?' on':''}" data-v="multi" onclick="scOpt(this)">Multi</button>
+          <button type="button" class="sc-btn${(tk.agent_mode||'single')==='single'?' on':''}" data-v="single" onclick="scOpt(this)">${escH(t('agent.single'))}</button>
+          <button type="button" class="sc-btn${tk.agent_mode==='multi'?' on':''}" data-v="multi" onclick="scOpt(this)">${escH(t('agent.multi'))}</button>
         </div>
         <div class="sc-sep"></div>
         <div class="sc-seg" data-group="model">
@@ -1328,12 +1482,12 @@ function buildForm(tk={}) {
         <div class="sc-seg">
           <span class="sc-lbl">${t('form.exec.effort')}</span>
           <select class="sc-turns" id="fEffort" style="width:auto">
-            <option value=""${!tk.effort?' selected':''}>Auto</option>
-            <option value="low"${tk.effort==='low'?' selected':''}>Low</option>
-            <option value="medium"${tk.effort==='medium'?' selected':''}>Medium</option>
-            <option value="high"${tk.effort==='high'?' selected':''}>High</option>
-            <option value="xhigh"${tk.effort==='xhigh'?' selected':''}>XHigh</option>
-            <option value="max"${tk.effort==='max'?' selected':''}>Max</option>
+            <option value=""${!tk.effort?' selected':''}>${escH(t('effort.auto'))}</option>
+            <option value="low"${tk.effort==='low'?' selected':''}>${escH(t('effort.low'))}</option>
+            <option value="medium"${tk.effort==='medium'?' selected':''}>${escH(t('effort.med'))}</option>
+            <option value="high"${tk.effort==='high'?' selected':''}>${escH(t('effort.high'))}</option>
+            <option value="xhigh"${tk.effort==='xhigh'?' selected':''}>${escH(t('effort.xhigh'))}</option>
+            <option value="max"${tk.effort==='max'?' selected':''}>${escH(t('effort.max'))}</option>
           </select>
         </div>
       </div>
@@ -1359,12 +1513,12 @@ function engineSegHtml(val) {
   const raw = val || _schedDefaultEngine;
   const eng = (raw === 'subscription' && _schedTmuxAvailable) ? 'subscription' : 'api';
   const subDisabled = !_schedTmuxAvailable;
-  const subAttrs = subDisabled ? ` disabled style="opacity:0.4;cursor:not-allowed" title="Потрібен tmux на сервері"` : '';
+  const subAttrs = subDisabled ? ` disabled style="opacity:0.4;cursor:not-allowed" title="${escH(t('tmux.required'))}"` : '';
   // Engine switcher hidden (Subscription paused; API/claude -p only). Un-hide to restore.
   return `<div class="sc-seg" data-group="run_engine" style="display:none">
     <span class="sc-lbl">${t('form.exec.engine')}</span>
-    <button type="button" class="sc-btn${eng==='api'?' on':''}" data-v="api" onclick="scOpt(this)">API</button>
-    <button type="button" class="sc-btn${eng==='subscription'&&!subDisabled?' on':''}" data-v="subscription" onclick="scOpt(this)"${subAttrs}>Subscription</button>
+    <button type="button" class="sc-btn${eng==='api'?' on':''}" data-v="api" onclick="scOpt(this)">${escH(t('engine.api'))}</button>
+    <button type="button" class="sc-btn${eng==='subscription'&&!subDisabled?' on':''}" data-v="subscription" onclick="scOpt(this)"${subAttrs}>${escH(t('engine.sub'))}</button>
   </div>`;
 }
 
@@ -1506,20 +1660,21 @@ function startAutoRefresh() {
 }
 
 // ─── i18n: static HTML ────────────────────────────────────────────────────
+// Declarative i18n — same attribute contract as index.html: the markup carries the
+// key, this pass fills in text/attributes for the active language. Every user-facing
+// literal in the markup must be annotated; test/i18n-completeness.test.js enforces it.
+function applyI18nAttrs(root) {
+  const r = root || document;
+  r.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+  for (const [attr, target] of [['data-i18n-ph', 'placeholder'], ['data-i18n-title', 'title'],
+                                ['data-i18n-aria', 'aria-label'], ['data-i18n-tip', 'data-tip']]) {
+    r.querySelectorAll('[' + attr + ']').forEach(el => { el.setAttribute(target, t(el.getAttribute(attr))); });
+  }
+}
+
 function applyStaticI18n() {
   document.title = t('page.title');
-  document.querySelector('.nav-sw')?.setAttribute('aria-label', t('nav.aria'));
-  document.querySelector('a.nav-sw-btn[href="/"]')?.childNodes.forEach(n => { if (n.nodeType===3 && n.textContent.trim()) n.textContent = ' ' + t('nav.chat'); });
-  document.querySelector('a.nav-sw-btn[href="/kanban"]')?.childNodes.forEach(n => { if (n.nodeType===3 && n.textContent.trim()) n.textContent = ' ' + t('nav.kanban'); });
-  document.querySelector('a.nav-sw-btn[href="/schedule"]')?.childNodes.forEach(n => { if (n.nodeType===3 && n.textContent.trim()) n.textContent = ' ' + t('nav.schedule'); });
-  document.querySelector('.hb[onclick="refresh()"]')?.setAttribute('title', t('hdr.refresh'));
-  const addLbl = $i('addBtnLabel'); if (addLbl) addLbl.textContent = t('hdr.add');
-  const lo = $i('lblStatOverdue'); if (lo) lo.textContent = ' ' + t('stat.overdue');
-  const lt = $i('lblStatToday'); if (lt) lt.textContent = ' ' + t('stat.today');
-  const lu = $i('lblStatUpcoming'); if (lu) lu.textContent = ' ' + t('stat.upcoming');
-  const lr = $i('lblStatRecurring'); if (lr) lr.textContent = ' ' + t('stat.recurring');
-  const ps = $i('projDdSearch'); if (ps) ps.placeholder = t('proj.search');
-  const se = $i('schStatusEl'); if (se) se.textContent = t('hdr.connected');
+  applyI18nAttrs();
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────

@@ -1,11 +1,18 @@
 // i18n completeness audit — run before a release.
 //
-// Two sources of translated strings must stay in sync across every language:
-//   1. telegram-bot-i18n.js — the bot's dictionaries
-//   2. public/index.html    — the SPA's inline I18N object
+// Sources of translated strings that must stay in sync across every language:
+//   1. telegram-bot-i18n.js  — the bot's dictionaries
+//   2. public/index.html     — the SPA's inline TRANSLATIONS object
+//   3. public/kanban.html    — the board's inline TR object
+//   4. public/schedule.html  — the scheduler's inline TR object
 // and every key the UI actually asks for (`t('key')`, `data-i18n`,
-// `data-i18n-title`, `data-i18n-ph`) must exist in ALL of them, or that language
-// silently renders the raw key.
+// `data-i18n-title`, `data-i18n-ph`, `data-i18n-aria`, `data-i18n-tip`,
+// `data-i18n-html`) must exist in ALL of them, or that language silently renders
+// the raw key.
+//
+// Section 6 closes the other half of the loop: a string that was never routed
+// through `t()` at all cannot be caught by a parity check, so it scans the
+// markup for user-facing text and attributes carrying no translation key.
 //
 // Run: node test/i18n-completeness.test.js
 const assert = require('assert');
@@ -72,10 +79,11 @@ for (const l of webLangs) {
 console.log('\nkeys referenced by the UI resolve in every language:');
 {
   const referenced = new Set();
-  // t('key') / t("key") — the runtime lookup
-  for (const m of html.matchAll(/\bt\(\s*['"]([a-zA-Z0-9_.\-]+)['"]/g)) referenced.add(m[1]);
-  // data-i18n="key", data-i18n-title="key", data-i18n-ph="key" — markup lookups
-  for (const m of html.matchAll(/data-i18n(?:-title|-ph)?="([a-zA-Z0-9_.\-]+)"/g)) referenced.add(m[1]);
+  // t('key') / t("key") — the runtime lookup. TT() is the update banner's
+  // late-bound wrapper around the same dictionary.
+  for (const m of html.matchAll(/\b(?:t|TT)\(\s*['"]([a-zA-Z0-9_.\-]+)['"]/g)) referenced.add(m[1]);
+  // data-i18n[-title|-ph|-aria|-tip|-html]="key" — markup lookups
+  for (const m of html.matchAll(/data-i18n(?:-title|-ph|-aria|-tip|-html)?="([a-zA-Z0-9_.\-]+)"/g)) referenced.add(m[1]);
   // A trailing dot means the key is built at runtime, e.g. t('bot.state.' + st).
   // The concrete members of such a family are covered by the parity check above.
   for (const k of [...referenced]) if (k.endsWith('.')) referenced.delete(k);
@@ -103,6 +111,179 @@ console.log('\nplaceholder parity against the base language:');
     const mismatched = Object.keys(I18N.uk)
       .filter(k => I18N[l][k] !== undefined && phOf(I18N.uk[k]) !== phOf(I18N[l][k]));
     check(`web ${l}: placeholders match uk`, mismatched, []);
+  }
+}
+
+// ── 5. Secondary page dictionaries (kanban / schedule) ──────────────────────
+// Both pages ship their own inline `TR` object and their own `t()`. They used to
+// carry uk/en/ru only and fall back to uk, so a French or Hebrew user got a
+// Ukrainian board — the concrete complaint in issue #26.
+console.log('\nsecondary page dictionaries (kanban / schedule):');
+const PAGE_DICTS = {};
+for (const file of ['kanban.html', 'schedule.html']) {
+  const src = fs.readFileSync(path.join(ROOT, 'public', file), 'utf8');
+  const start = src.indexOf('const TR = {');
+  assert.ok(start !== -1, `could not locate the TR object in public/${file}`);
+  let d = 0, j = src.indexOf('{', start), stop = -1;
+  for (; j < src.length; j++) {
+    if (src[j] === '{') d++;
+    else if (src[j] === '}') { d--; if (d === 0) { stop = j; break; } }
+  }
+  assert.ok(stop !== -1, `unbalanced braces in the TR object of public/${file}`);
+  const TR = new Function('return ' + src.slice(src.indexOf('{', start), stop + 1))();
+  PAGE_DICTS[file] = { src, TR };
+
+  const langs = Object.keys(TR);
+  check(`${file}: every expected language is present`, langs.slice().sort(), ['en', 'fr', 'he', 'ru', 'uk']);
+
+  const keys = l => new Set(Object.keys(TR[l]));
+  const base = keys('en');
+  for (const l of langs) {
+    check(`${file} ${l}: covers every key defined in the base language (${base.size})`,
+      [...base].filter(k => !keys(l).has(k)), []);
+    check(`${file} ${l}: defines no key the base language lacks`,
+      [...keys(l)].filter(k => !base.has(k)), []);
+    check(`${file} ${l}: no empty values`,
+      [...keys(l)].filter(k => !String(TR[l][k] ?? '').trim()), []);
+  }
+
+  // The page must not fall back to a language the user did not pick.
+  check(`${file}: t() falls back to English, not to a locale-specific dictionary`,
+    /TR\[lang\]\s*\|\|\s*TR\.en/.test(src), true);
+  check(`${file}: sets document direction (Hebrew is RTL)`,
+    /document\.documentElement\.dir\s*=/.test(src), true);
+
+  const referenced = new Set();
+  for (const m of src.matchAll(/\bt\(\s*['"]([a-zA-Z0-9_.\-]+)['"]/g)) referenced.add(m[1]);
+  for (const m of src.matchAll(/data-i18n(?:-title|-ph|-aria|-tip|-html)?="([a-zA-Z0-9_.\-]+)"/g)) referenced.add(m[1]);
+  for (const k of [...referenced]) if (k.endsWith('.')) referenced.delete(k);
+  for (const l of langs) {
+    check(`${file} ${l}: every referenced key is defined (${referenced.size} referenced)`,
+      [...referenced].filter(k => !keys(l).has(k)).sort(), []);
+  }
+
+  const phOf = v => (String(v).match(/\{[a-z_]+\}/gi) || []).sort().join(',');
+  for (const l of langs.filter(x => x !== 'en')) {
+    check(`${file} ${l}: placeholders match en`,
+      [...base].filter(k => TR[l][k] !== undefined && phOf(TR.en[k]) !== phOf(TR[l][k])), []);
+  }
+}
+
+// ── 6. No hardcoded user-facing strings ─────────────────────────────────────
+// Sections 1-5 only prove that the keys we DO use resolve everywhere. A string
+// that was never routed through `t()` is invisible to them, and that is exactly
+// what issue #26 reported: filter labels, tooltips and toasts frozen in one
+// language. This section fails when user-visible text carries no translation key.
+console.log('\nno hardcoded user-facing strings:');
+{
+  // Text nodes must carry data-i18n / data-i18n-html; these four visible
+  // attributes must carry their data-i18n-* twin.
+  const I18N_ATTRS = [
+    ['title', 'data-i18n-title'],
+    ['placeholder', 'data-i18n-ph'],
+    ['aria-label', 'data-i18n-aria'],
+    ['data-tip', 'data-i18n-tip'],
+  ];
+  // Tags that hold vector graphics or code, never prose.
+  const SKIP_TAGS = new Set(['script', 'style', 'svg', 'path', 'rect', 'line', 'circle',
+    'polyline', 'polygon', 'g', 'defs', 'use', 'ellipse']);
+
+  // Exempt literals. Each entry states why it is NOT UI copy; nothing goes in
+  // here just to silence the check.
+  const ALLOWED = new Set([
+    'Claude Code Studio',                    // product name — a brand is not translated
+    'Claude Code Studio — AI Chat & Agents', // <title>, product name
+    'Kanban — Claude Code Studio',           // <title>, product name
+    'Schedule — Claude Code Studio',         // <title>, product name
+    'CCS',                                   // the logo mark, product initials
+    'GitHub',                                // company name
+    'Claude Desktop',                        // Anthropic product name
+    '⚡ Claude Code',                         // Anthropic product name
+    '⚡ Max',                                 // Claude Max plan name
+    'Max ⚠',                                 // Claude Max plan name + status glyph
+    'ngrok',                                 // third-party tunnel service name
+    'cloudflared',                           // Cloudflare tunnel binary name
+    'npx',                                   // command name typed verbatim into a shell
+    'codex',                                 // external agent CLI binary name
+    'Haiku', 'Sonnet', 'Opus', 'Fable',      // model names, shown as-is in the picker
+    'haiku', 'sonnet', 'opus', 'fable',      // the exact aliases passed to the claude CLI
+    'API',                                   // protocol acronym, identical in all five languages
+    'URL',                                   // standards acronym
+    'JSON',                                  // data-format name
+    '⚙ MCP',                                 // Model Context Protocol acronym
+    'Markdown (.md)',                        // format name + file extension
+    'stdio', 'http',                         // MCP transport identifiers, matched literally by the server
+    'claude_desktop_config.json',            // literal filename the user has to open
+    '{"mcpServers":{...}}',                  // JSON snippet shown as sample config
+    '/check', '/review',                     // literal slash-command names
+    'EN', 'UK', 'RU', 'FR', 'HE',            // ISO language codes in the language picker
+    'Ctrl', 'Shift', 'Enter', 'Esc',         // keyboard key caps, printed on the hardware
+    // Sample values inside placeholders — they illustrate a format, they are not prose.
+    'my-server',                             // example MCP server id
+    'My Server',                             // example MCP server display name
+    'ngrok authtoken...',                    // example ngrok token
+    '123456:ABC-DEF...',                     // example Telegram bot token format
+    'https://api.example.com/mcp',           // example MCP endpoint
+    '/home/user/myproject',                  // example project path
+    '/path/to/project',                      // example project path
+    '~/.ssh/id_rsa',                         // example SSH key path
+    'deploy@eu.myserver.com',                                   // example SSH user@host
+    '-y&#10;@modelcontextprotocol/server-filesystem&#10;/path/to/dir', // example argv, one arg per line
+    'codex resume {sid}',                    // example external-agent resume command
+    'codex resume --last',                   // example external-agent resume command
+    '--session-id {sid}',                    // example CLI flag
+    'cursor-agent create-chat',              // example external-agent spawn command
+  ]);
+
+  // Blank out scripts, styles and comments while preserving line numbers, so what
+  // is left is markup only. (Strings built inside template literals are out of
+  // scope here — sections 3 and 5 cover those through their t() references.)
+  const blank = m => '\n'.repeat((m.match(/\n/g) || []).length);
+  const stripCode = src => src
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, blank)
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, blank)
+    .replace(/<!--[\s\S]*?-->/g, blank);
+
+  const hasWords = s => /[\p{L}]{2}/u.test(s);
+
+  function scanMarkup(file, src) {
+    const markup = stripCode(src);
+    const hits = [];
+    const tagRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>([^<]*)/g;
+    let m;
+    while ((m = tagRe.exec(markup)) !== null) {
+      const tag = m[1].toLowerCase(), attrs = m[2];
+      if (SKIP_TAGS.has(tag)) continue;
+      const line = () => markup.slice(0, m.index).split('\n').length;
+      const text = m[3].replace(/&#?\w+;/g, ' ').trim();
+      if (text && hasWords(text) && !ALLOWED.has(text) && !/data-i18n(=|-html=)/.test(attrs))
+        hits.push(`${file}:${line()} <${tag}> text "${text}"`);
+      for (const [attr, marker] of I18N_ATTRS) {
+        const am = attrs.match(new RegExp(`\\b${attr}="([^"]*)"`));
+        if (am && hasWords(am[1]) && !ALLOWED.has(am[1]) && !attrs.includes(marker + '='))
+          hits.push(`${file}:${line()} <${tag}> @${attr} "${am[1]}"`);
+      }
+    }
+    return hits;
+  }
+
+  // Literals handed straight to the user by toast()/alert()/confirm().
+  const CALL_RE = /\b(?:toast|alert|confirm)\(\s*(['"])((?:\\.|(?!\1)[^\\])*)\1/g;
+  function scanCalls(file, src) {
+    const hits = [];
+    for (const m of src.matchAll(CALL_RE)) {
+      const txt = m[2];
+      if (!hasWords(txt) || ALLOWED.has(txt)) continue;
+      hits.push(`${file}:${src.slice(0, m.index).split('\n').length} ${txt}`);
+    }
+    return hits;
+  }
+
+  for (const file of ['index.html', 'kanban.html', 'schedule.html']) {
+    const src = PAGE_DICTS[file] ? PAGE_DICTS[file].src
+      : fs.readFileSync(path.join(ROOT, 'public', file), 'utf8');
+    check(`${file}: no untranslated text or attribute in the markup`, scanMarkup(file, src), []);
+    check(`${file}: no untranslated toast/alert/confirm literal`, scanCalls(file, src), []);
   }
 }
 
