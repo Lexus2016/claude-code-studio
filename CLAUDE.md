@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. `npm test` chains 32 test files under `test/`: 10 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 22 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, usage-limit detection, the filesystem path guard plus the tunnel-blocks-terminal rule, WS session re-subscription and the SSH remote CLI-session import. It runs serially and aborts on the first failing file. No CI is wired up yet.
+No linting and no build step configured. `npm test` chains 33 test files under `test/`: 10 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 23 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, usage-limit detection, the filesystem path guard plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import and the live engine pane / interactive-prompt watchdog. It runs serially and aborts on the first failing file. No CI is wired up yet.
 
 ## Architecture
 
@@ -103,9 +103,21 @@ This is intentional — do not introduce build tools.
 - `api` (default) — headless `claude -p` via `runCliSingle` in server.js
 - `subscription` — persistent interactive tmux session (one per chat) via `claude-interactive.js`, billed on the Claude Max subscription (UI button "Subscription"). MCP servers passed via `--mcp-config` at spawn; systemPrompt via `--append-system-prompt` at spawn; config changes (skills/mode/MCP/model) auto-respawn the tmux session with `--resume` — verified to keep writing to the same transcript jsonl. Image attachments saved to temp files, paths appended to the prompt. maxTurns is not applicable. Choice persisted per session in `sessions.run_engine` (the `engine` column belongs to telegram-bot.js — do not reuse it).
 
+**Interactive prompts (#20).** A subscription turn can stop on a blocking select
+widget (permission question, plan approval, AskUserQuestion). `paneAwaitingInput()`
+in `claude-interactive.js` recognises it structurally — ≥2 numbered option lines in
+the last 24 pane rows AND a caret (`❯➤►▶›»>`) on one of them — checked only when the
+spinner is stopped and no new transcript bytes arrived, confirmed over 2 polls (~3s).
+The engine then emits `input_needed` / `input_resolved` on the chat socket (new
+message types; the `chat`/`text`/`tool_use`/`done`/`error` shapes are untouched) and
+widens its quiet-exit budget by `CLAUDE_PROMPT_GRACE_MS` (default 5 min) so the
+watchdog stops declaring a blocked turn "done". The answer is typed through
+`/ws/terminal?session=<id>&view=engine`, which ATTACHES a viewer to the engine's own
+`ccs-<id>` pane — it never creates one, and ignores `resize`/`kill`.
+
 **Why tmux (and not node-pty):** the engine needs a PTY that survives the Node process and is readable/writable from outside it. `tmux` delivers that as a plain binary — zero new npm deps, zero build step, matching the project philosophy. `node-pty` (the cross-platform alternative) is a native module requiring compilation — rejected for that reason.
 
-**Dedicated tmux socket — do not move terminals back to the default one.** `terminal-bridge.js` runs every tmux command through `-L ccstudio` (`TMUX_SOCKET`). Reason, from a real failure: an agent working in this repo ran `tmux kill-server` before a test run and destroyed every live studio terminal mid-work. `kill-server` is server-wide (per socket) — the `ccsterm-` name prefix protects nothing. On its own socket, no tmux command typed in a shell can reach studio sessions. Note that `claude-interactive.js` (`ccs-` prefix, subscription engine) is still on the default socket and carries the same exposure.
+**Dedicated tmux socket — do not move terminals back to the default one.** `terminal-bridge.js` runs every tmux command through `-L ccstudio` (`TMUX_SOCKET`). Reason, from a real failure: an agent working in this repo ran `tmux kill-server` before a test run and destroyed every live studio terminal mid-work. `kill-server` is server-wide (per socket) — the `ccsterm-` name prefix protects nothing. On its own socket, no tmux command typed in a shell can reach studio sessions. `claude-interactive.js` (`ccs-` prefix, subscription engine) imports the same `TMUX_SOCKET` and routes every invocation through its own `tmuxArgs()` — both modules share one tmux server, which is what lets a browser viewer attach to an engine pane at all. Sessions left on the default socket by older builds are reported by `listOrphanedDefaultSocketSessions()` at boot and never killed automatically.
 
 **Platform support — capability-checked, not OS-sniffed.** `/api/version` returns `tmuxAvailable` (server runs `tmux -V` once at boot); the UI disables the "Subscription" button when false. Works on macOS / Linux / Docker (tmux in Dockerfile) / Windows-via-WSL or Git-Bash. Native Windows without tmux → button disabled, user stays on `api`. There is intentionally no Windows special-casing — the capability flag covers every case.
 
@@ -159,7 +171,7 @@ These short aliases are exactly what `claude-cli.js` (`MODEL_MAP`) passes to the
 
 ## How to Verify Changes
 
-`npm test` runs 32 test files under `test/` (10 `test/render/*.test.mjs` + 22 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 33 test files under `test/` (10 `test/render/*.test.mjs` + 23 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server

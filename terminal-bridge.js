@@ -231,7 +231,7 @@ function captureScreen(name) {
 // snapshot. Replaying it would double-print and can corrupt a TUI's screen, so the
 // buffer is DISCARDED, not flushed. Anything arriving after the snapshot returns is
 // streamed live.
-function attach({ name, cols, rows, onData, onExit }) {
+function attach({ name, cols, rows, onData, onExit, resizeOnAttach = true }) {
   assertName(name);
   const env = utf8Env();
   delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses children
@@ -323,7 +323,13 @@ function attach({ name, cols, rows, onData, onExit }) {
     tmux(['resize-window', '-t', name, '-x', String(cc), '-y', String(rr)]);
   };
 
-  doResize(cols, rows);
+  // resizeOnAttach:false is for a pane this module did NOT create — the subscription
+  // engine's `ccs-<id>` session (claude-interactive.js), spawned at a fixed 220x50 and
+  // driven by a poller that reads the pane. Reflowing a running Claude TUI to the
+  // browser's geometry just because someone opened a viewer would repaint the whole
+  // screen mid-turn; the caller sets `window-size manual` first and sizes ITS xterm to
+  // the pane instead of the other way round.
+  if (resizeOnAttach) doResize(cols, rows);
   // Subscribe to the pane's liveness — see the %subscription-changed branch above.
   try { p.stdin.write('refresh-client -B "deadwatch:%*:#{pane_dead}"\n'); } catch {}
   // Bootstrap once the client is registered: give tmux a moment to attach, then
@@ -348,6 +354,23 @@ function attach({ name, cols, rows, onData, onExit }) {
   };
 }
 
+// Freeze a session's geometry so an attaching client cannot resize it. tmux's default
+// `window-size latest` policy hands the window to whichever client acted last, so a
+// control-mode attach alone (no resize command at all) is enough to reflow a running
+// TUI. Set this BEFORE attach() on any pane this module does not own.
+function setWindowSizeManual(name) {
+  assertName(name);
+  tmux(['set-option', '-t', name, 'window-size', 'manual']);
+}
+
+// The pane's current geometry, so a viewer can size itself to the pane.
+// Falls back to 80x24 when the session is gone or tmux answers with junk.
+function paneSize(name) {
+  const r = tmux(['display-message', '-p', '-t', name, '#{window_width}|#{window_height}']);
+  const [c, rr] = String(r.stdout || '').trim().split('|');
+  return { cols: parseInt(c, 10) || 80, rows: parseInt(rr, 10) || 24 };
+}
+
 // Drop every client of a session without killing it. Used at startup: `script`
 // processes are children of the studio's Node process and SURVIVE a studio restart,
 // staying attached forever and pinning session_attached above zero — which would
@@ -365,5 +388,6 @@ function killSession(name) { tmux(['kill-session', '-t', name], { stdio: 'ignore
 module.exports = {
   TMUX_SOCKET, tmuxAvailable, hasSession, sessionInfo, paneHash,
   listTerminalSessions, ensureSession, attach, detachClients,
+  setWindowSizeManual, paneSize,
   captureScreen, decodeOutputPayload, saveScrollback, killSession,
 };

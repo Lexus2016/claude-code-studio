@@ -1088,6 +1088,31 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
            transition: background-color .25s cubic-bezier(.2,0,0,1); }
 #termHost { flex: 1; min-height: 0; padding: 6px 8px; position: relative; }
 .term-instance { width: 100%; height: 100%; }
+/* An engine pane keeps the geometry the subscription engine spawned it with (220x50)
+   — resizing it would reflow a live Claude TUI mid-turn — so the viewer scrolls to
+   whatever does not fit after the font has been scaled down. */
+.term-instance.term-fixed { overflow: auto; }
+
+/* "Claude is waiting for your answer" banner (GitHub #20). Amber, not red: nothing
+   is broken — the turn is alive and paused on a question. Sits in the message flow
+   so it scrolls with the conversation it belongs to. */
+.needinput-card { margin: 10px 0; padding: 10px 12px; border: 1px solid rgba(245,158,11,.45);
+  border-left-width: 3px; border-radius: 8px; background: rgba(245,158,11,.07); }
+.needinput-card .ni-title { font-weight: 600; font-size: 13px; color: var(--warn,#f59e0b); }
+.needinput-card .ni-body { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.needinput-card pre.ni-pane { margin: 8px 0 0; padding: 8px; max-height: 220px; overflow: auto;
+  background: var(--s3,#1f2637); border: 1px solid var(--border); border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+  white-space: pre; color: var(--fg,#e6edf3); }
+.needinput-card .ni-btns { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
+.needinput-card button { font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+  border: 1px solid rgba(124,106,239,.35); background: transparent; color: var(--accent2); }
+.needinput-card button.ni-dismiss { border-color: var(--border); color: var(--muted); }
+/* The session-bar entry point pulses while a prompt is pending, so the banner is not
+   the only way to notice — it is easy to scroll past. */
+@keyframes ni-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(245,158,11,.55); } 50% { box-shadow: 0 0 0 4px rgba(245,158,11,0); } }
+#sessBarPaneBtn.ni-wanted { border-color: rgba(245,158,11,.75); color: var(--warn,#f59e0b);
+  animation: ni-pulse 1.8s ease-in-out infinite; }
 
 /* Emoji picker for a bot's avatar. Typing an emoji by hand meant switching to the
    system picker every time; this keeps the field (paste/type still works) and adds
@@ -3281,6 +3306,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     <span id="sessBarRetry" style="display:none;font-size:11px;color:var(--warn,#f59e0b);opacity:.85;flex-shrink:0;"></span>
     <span id="sessBarClaudeId" style="display:none;font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="" onclick="copySessId()"></span>
     <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openInClaude()">⚡ Claude Code</a>
+    <button id="sessBarPaneBtn" style="display:none;font-size:11px;color:var(--accent2);background:transparent;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openEnginePane()">▣ <span data-i18n="term.pane.btn">Live pane</span></button>
     <button id="sessBarCatchupBtn" style="display:none;font-size:11px;color:var(--accent2);background:transparent;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="catchUpFromTerminal()" title="Дочитати у чат повідомлення, набрані напряму в терміналі (claude --resume)">⤵ Дочитати</button>
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
     <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
@@ -4360,6 +4386,8 @@ const TRANSLATIONS = {
     'bot.modal.avatar.pick':'Обрати емодзі','bot.modal.avatar.pick.btn':'Обрати','emoji.group.roles':'Ролі','emoji.group.work':'Робота','emoji.group.tools':'Інструменти','emoji.group.ideas':'Ідеї','emoji.group.nature':'Природа',
     'btn.close':'Закрити','bot.modal.label.ph':'Крипто-аналітик','bot.modal.desc.ph':'аналіз ринку криптовалют','bot.modal.prompt.ph':'Ти аналітик крипторинку...',
     'term.off.config':'Термінальні агенти вимкнені. Увімкніть їх у Конфігу: terminal.enabled = true — це навмисно вимкнено, бо термінал у браузері виконує команди на цій машині.','term.off.tmux':'На цьому хості немає tmux. Встановіть його (macOS: brew install tmux, Linux: apt install tmux), і термінальні агенти зʼявляться.','term.off.tunnel':'Активний публічний тунель — доступ до термінала заблоковано, поки він увімкнений.',
+    'term.pane.btn':'Жива панель','term.pane.tab':'Жива панель','term.pane.title':'Відкрити живу панель Claude TUI цього чату — можна відповісти на інтерактивний запит просто в терміналі, не перериваючи хід.','term.pane.apihint':'Лише для рушія Subscription: рушій API запускає claude -p із закритим stdin, тож жодного PTY, до якого можна під’єднатися, не існує.','term.pane.none':'Для цього чату немає живої панелі. Вона зʼявляється, коли чат працює на рушії Subscription і вже виконав принаймні один хід.','term.state.enginePane':'жива панель рушія','term.state.noPane':'панелі немає',
+    'term.needinput.title':'Claude чекає на вашу відповідь','term.needinput.body':'Хід зупинився на інтерактивному запиті. Відповідайте просто в живій панелі — після цього хід продовжиться сам.','term.needinput.startup':'Сесія стартувала одразу в діалозі. Закрийте його в живій панелі, інакше ваше повідомлення потрапить у діалог, а не в поле вводу.','term.needinput.open':'Відповісти в живій панелі','term.needinput.dismiss':'Сховати','term.needinput.notif':'Потрібна ваша відповідь',
     'newtab.title':'Що відкрити?','newtab.chat':'Чат','newtab.chat.desc':'Звичайна розмова. Ботів кличте через @@','newtab.term':'Термінальний агент','newtab.term.desc':'Живий термінал CLI-агента у вкладці. Оберіть, кого запустити:','newtab.or':'або','term.tab':'термінал',
     'stream.gap':'Частину подій не показано — зʼєднання переривалось. Текст відповіді повний.',
     'agent.cap.delegate':'делегування','agent.cap.terminal':'термінал',
@@ -4609,6 +4637,8 @@ const TRANSLATIONS = {
     'bot.modal.avatar.pick':'Pick an emoji','bot.modal.avatar.pick.btn':'Pick','emoji.group.roles':'Roles','emoji.group.work':'Work','emoji.group.tools':'Tools','emoji.group.ideas':'Ideas','emoji.group.nature':'Nature',
     'btn.close':'Close','bot.modal.label.ph':'Crypto Analyst','bot.modal.desc.ph':'crypto market analysis','bot.modal.prompt.ph':'You are a crypto market analyst...',
     'term.off.config':'Terminal agents are off. Turn them on in Config: terminal.enabled = true — it ships off on purpose, because a browser terminal runs commands on this machine.','term.off.tmux':'tmux is not installed on this host. Install it (macOS: brew install tmux, Linux: apt install tmux) and terminal agents appear.','term.off.tunnel':'A public tunnel is active — terminal access is blocked while it is running.',
+    'term.pane.btn':'Live pane','term.pane.tab':'Live pane','term.pane.title':'Open this chat’s live Claude TUI — answer an interactive prompt right in the terminal, without killing the turn.','term.pane.apihint':'Subscription engine only: the API engine runs claude -p with stdin closed, so there is no PTY to attach to.','term.pane.none':'No live pane for this chat. One exists once the chat runs on the Subscription engine and has taken at least one turn.','term.state.enginePane':'engine pane','term.state.noPane':'no pane',
+    'term.needinput.title':'Claude is waiting for your answer','term.needinput.body':'The turn is paused on an interactive prompt. Answer it in the live pane and the turn carries on from there.','term.needinput.startup':'The session started straight into a dialog. Clear it in the live pane, or your message gets typed into the dialog instead of the prompt box.','term.needinput.open':'Answer in the live pane','term.needinput.dismiss':'Dismiss','term.needinput.notif':'Your answer is needed',
     'newtab.title':'What would you like to open?','newtab.chat':'Chat','newtab.chat.desc':'An ordinary conversation. Call bots with @@','newtab.term':'Terminal agent','newtab.term.desc':"A CLI agent's live terminal in a tab. Pick which one:",'newtab.or':'or','term.tab':'terminal',
     'stream.gap':'Some live activity was not shown — the connection dropped. The answer itself is complete.',
     'agent.cap.delegate':'delegation','agent.cap.terminal':'terminal',
@@ -4858,6 +4888,8 @@ const TRANSLATIONS = {
     'bot.modal.avatar.pick':'Выбрать эмодзи','bot.modal.avatar.pick.btn':'Выбрать','emoji.group.roles':'Роли','emoji.group.work':'Работа','emoji.group.tools':'Инструменты','emoji.group.ideas':'Идеи','emoji.group.nature':'Природа',
     'btn.close':'Закрыть','bot.modal.label.ph':'Крипто-аналитик','bot.modal.desc.ph':'анализ рынка криптовалют','bot.modal.prompt.ph':'Ты аналитик крипторынка...',
     'term.off.config':'Терминальные агенты выключены. Включите их в Конфиге: terminal.enabled = true — они выключены намеренно, потому что терминал в браузере выполняет команды на этой машине.','term.off.tmux':'На этом хосте нет tmux. Установите его (macOS: brew install tmux, Linux: apt install tmux), и терминальные агенты появятся.','term.off.tunnel':'Активен публичный туннель — доступ к терминалу заблокирован, пока он включён.',
+    'term.pane.btn':'Живая панель','term.pane.tab':'Живая панель','term.pane.title':'Открыть живой Claude TUI этого чата — ответить на интерактивный запрос прямо в терминале, не прерывая ход.','term.pane.apihint':'Только для движка Subscription: движок API запускает claude -p с закрытым stdin, поэтому подключаться не к чему — PTY нет.','term.pane.none':'Для этого чата нет живой панели. Она появляется, когда чат работает на движке Subscription и уже выполнил хотя бы один ход.','term.state.enginePane':'панель движка','term.state.noPane':'панели нет',
+    'term.needinput.title':'Claude ждёт вашего ответа','term.needinput.body':'Ход остановился на интерактивном запросе. Ответьте прямо в живой панели — после этого ход продолжится сам.','term.needinput.startup':'Сессия стартовала сразу в диалоге. Закройте его в живой панели, иначе ваше сообщение уйдёт в диалог, а не в поле ввода.','term.needinput.open':'Ответить в живой панели','term.needinput.dismiss':'Скрыть','term.needinput.notif':'Нужен ваш ответ',
     'newtab.title':'Что открыть?','newtab.chat':'Чат','newtab.chat.desc':'Обычный разговор. Ботов зовите через @@','newtab.term':'Терминальный агент','newtab.term.desc':'Живой терминал CLI-агента во вкладке. Выберите, кого запустить:','newtab.or':'или','term.tab':'терминал',
     'stream.gap':'Часть событий не показана — соединение прерывалось. Текст ответа полный.',
     'agent.cap.delegate':'делегирование','agent.cap.terminal':'терминал',
@@ -5107,6 +5139,8 @@ const TRANSLATIONS = {
     "bot.modal.avatar.pick":"Choisir un émoji","bot.modal.avatar.pick.btn":"Choisir","emoji.group.roles":"Rôles","emoji.group.work":"Travail","emoji.group.tools":"Outils","emoji.group.ideas":"Idées","emoji.group.nature":"Nature",
     "btn.close":"Fermer","bot.modal.label.ph":"Analyste crypto","bot.modal.desc.ph":"analyse du marché des cryptomonnaies","bot.modal.prompt.ph":"Tu es analyste du marché crypto...",
     "term.off.config":"Les agents terminal sont désactivés. Activez-les dans la Config : terminal.enabled = true — c'est désactivé volontairement, car un terminal dans le navigateur exécute des commandes sur cette machine.","term.off.tmux":"tmux n'est pas installé sur cet hôte. Installez-le (macOS : brew install tmux, Linux : apt install tmux) et les agents terminal apparaîtront.","term.off.tunnel":"Un tunnel public est actif — l'accès au terminal est bloqué tant qu'il fonctionne.",
+    "term.pane.btn":"Vue live","term.pane.tab":"Vue live","term.pane.title":"Ouvrir le TUI Claude en direct de ce chat — répondez à une invite interactive dans le terminal, sans interrompre le tour.","term.pane.apihint":"Moteur Subscription uniquement : le moteur API lance claude -p avec stdin fermé, il n’existe donc aucun PTY auquel se rattacher.","term.pane.none":"Aucune vue live pour ce chat. Elle apparaît dès que le chat tourne sur le moteur Subscription et a effectué au moins un tour.","term.state.enginePane":"vue du moteur","term.state.noPane":"aucune vue",
+    "term.needinput.title":"Claude attend votre réponse","term.needinput.body":"Le tour est en pause sur une invite interactive. Répondez-y dans la vue live et il reprend aussitôt.","term.needinput.startup":"La session a démarré directement sur une boîte de dialogue. Fermez-la dans la vue live, sinon votre message sera saisi dans le dialogue au lieu du champ de saisie.","term.needinput.open":"Répondre dans la vue live","term.needinput.dismiss":"Masquer","term.needinput.notif":"Votre réponse est attendue",
     "newtab.title":"Que voulez-vous ouvrir ?","newtab.chat":"Chat","newtab.chat.desc":"Une conversation ordinaire. Appelez les bots avec @@","newtab.term":"Agent terminal","newtab.term.desc":"Le terminal vivant d'un agent CLI dans un onglet. Choisissez :","newtab.or":"ou","term.tab":"terminal",
     "stream.gap":"Une partie de l'activité n'a pas été affichée — la connexion a été interrompue. La réponse elle-même est complète.",
     "agent.cap.delegate":"délégation","agent.cap.terminal":"terminal",
@@ -5257,6 +5291,8 @@ const TRANSLATIONS = {
     "bot.modal.avatar.pick":"בחרו אמוג׳י","bot.modal.avatar.pick.btn":"בחירה","emoji.group.roles":"תפקידים","emoji.group.work":"עבודה","emoji.group.tools":"כלים","emoji.group.ideas":"רעיונות","emoji.group.nature":"טבע",
     "btn.close":"סגור","bot.modal.label.ph":"אנליסט קריפטו","bot.modal.desc.ph":"ניתוח שוק הקריפטו","bot.modal.prompt.ph":"אתה אנליסט שוק הקריפטו...",
     "term.off.config":"סוכני הטרמינל כבויים. הפעילו אותם בהגדרות: terminal.enabled = true — הם כבויים בכוונה, מפני שטרמינל בדפדפן מריץ פקודות על המחשב הזה.","term.off.tmux":"tmux אינו מותקן על מארח זה. התקינו אותו (macOS: brew install tmux, Linux: apt install tmux) וסוכני הטרמינל יופיעו.","term.off.tunnel":"מנהרה ציבורית פעילה — הגישה לטרמינל חסומה כל עוד היא פועלת.",
+    "term.pane.btn":"חלונית חיה","term.pane.tab":"חלונית חיה","term.pane.title":"פתיחת ה‑TUI החי של Claude בצ׳אט הזה — אפשר לענות על שאלה אינטראקטיבית ישירות בטרמינל, בלי לעצור את התור.","term.pane.apihint":"רק במנוע Subscription: מנוע ה‑API מריץ claude ‎-p‎ כאשר stdin סגור, ולכן אין PTY להתחבר אליו.","term.pane.none":"אין חלונית חיה לצ׳אט הזה. היא נוצרת כשהצ׳אט רץ על מנוע Subscription ולאחר שביצע לפחות תור אחד.","term.state.enginePane":"חלונית המנוע","term.state.noPane":"אין חלונית",
+    "term.needinput.title":"Claude ממתין לתשובה שלכם","term.needinput.body":"התור עצר על שאלה אינטראקטיבית. ענו עליה בחלונית החיה והתור ימשיך משם.","term.needinput.startup":"הסשן עלה ישר לתוך תיבת דו־שיח. סגרו אותה בחלונית החיה, אחרת ההודעה שלכם תיכתב לתוך הדו־שיח במקום לשדה הקלט.","term.needinput.open":"לענות בחלונית החיה","term.needinput.dismiss":"הסתרה","term.needinput.notif":"נדרשת תשובה שלכם",
     "newtab.title":"מה לפתוח?","newtab.chat":"צ׳אט","newtab.chat.desc":"שיחה רגילה. קראו לבוטים עם @@","newtab.term":"סוכן טרמינל","newtab.term.desc":"טרמינל חי של סוכן CLI בלשונית. בחרו את מי:","newtab.or":"או","term.tab":"טרמינל",
     "stream.gap":"חלק מהפעילות לא הוצג — החיבור נותק. התשובה עצמה מלאה.",
     "agent.cap.delegate":"האצלה","agent.cap.terminal":"טרמינל",
@@ -6740,6 +6776,27 @@ function handleWsMsg(d) {
         setStatus(t('rl.wait.resuming'), 'ok');
       }
       break;
+
+    // ─── The engine is blocked on an interactive prompt (GitHub #20) ────────
+    // claude-interactive.js saw a select widget on the TUI pane with the spinner
+    // stopped. Nothing is broken and the turn is still alive — it just needs a
+    // human. Surface it with a one-click route into the live pane, where the
+    // question can be answered in the terminal that is asking it.
+    case 'input_needed': {
+      const ts = getTS(tabId);
+      ts._inputNeeded = d;
+      if (isVisible) renderInputNeededCard(d);
+      else _bgNotify(tabId, found, 'warning', t('term.needinput.notif'), String(d.prompt || '').split('\n').slice(-2).join(' ').slice(0, 140));
+      _paintPaneWanted();
+      break;
+    }
+    case 'input_resolved': {
+      const ts = getTS(tabId);
+      ts._inputNeeded = null;
+      if (isVisible) clearInputNeededCard();
+      _paintPaneWanted();
+      break;
+    }
 
     case 'ask_user':
       if (isVisible) {
@@ -9211,6 +9268,21 @@ async function updateSessBar(opts = {}) {
     if (notesBtn) notesBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
     const maxBadge = $i('sessBarMaxBadge');
     if (maxBadge) maxBadge.style.display = (sess.run_engine === 'subscription') ? '' : 'none';
+    // "Live pane" (GitHub #20): watch the real Claude TUI this chat is running in.
+    // Discoverable on every chat, actionable only on the subscription engine — the
+    // api engine spawns headless `claude -p` with stdin closed, so there is no PTY
+    // to attach to at all. Same disabled-with-a-reason shape as the Subscription
+    // engine button when tmux is missing.
+    const paneBtn = $i('sessBarPaneBtn');
+    if (paneBtn) {
+      const onSub = sess.run_engine === 'subscription';
+      paneBtn.style.display = currentSessionId ? '' : 'none';
+      paneBtn.disabled = !onSub;
+      paneBtn.style.opacity = onSub ? '' : '.45';
+      paneBtn.style.cursor = onSub ? 'pointer' : 'not-allowed';
+      paneBtn.title = onSub ? t('term.pane.title') : t('term.pane.apihint');
+      _paintPaneWanted();
+    }
     const msgCountEl = $i('sessBarMsgCount');
     if (msgCountEl) {
       const n = _allMsgs.filter(m => m.role === 'user' || (m.role === 'assistant' && m.type !== 'thinking')).length;
@@ -9425,6 +9497,9 @@ function closeTab(id) {
       const next = openTabs[Math.min(idx, openTabs.length - 1)];
       activeTabId = next.id;
       if (next.isNew) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); renderProjects(); }
+      // A terminal (or engine-pane) tab shows its own surface — route it there
+      // directly instead of through loadSess, which renders a chat transcript.
+      else if (next.kind === 'terminal') { currentSessionId = next.id; showTerminalView(next.id, next.termLabel || next.title); }
       else { currentSessionId = null; loadSess(next.id); }
     } else {
       activeTabId = null; currentSessionId = null;
@@ -10315,6 +10390,9 @@ async function send() {
 
   const currentReply = replyTo;
   clearReply();
+  // A new turn makes any pending "waiting for your answer" banner stale (GitHub #20):
+  // whatever the previous turn was blocked on is no longer what this tab is doing.
+  { const _ts = getTS(activeTabId); if (_ts._inputNeeded) { _ts._inputNeeded = null; clearInputNeededCard(); _paintPaneWanted(); } }
 
   // Auto-skill: server-side LLM classification (no client-side keyword matching)
   const useAutoSkill = autoSkillsMode && txt && txt.trim().length > 3;
@@ -11078,6 +11156,11 @@ function loadMoreMsgs() {
 }
 
 async function loadSess(id) {
+  // An engine-pane tab is a VIEW of a chat session, not a session of its own: its id
+  // is synthetic ("engine:<chatSessionId>") because the chat tab already occupies the
+  // real one, and /api/sessions would 404 on it. Every path that reopens the active
+  // tab (page reload, project switch, closing the neighbouring tab) lands here.
+  if (isEnginePaneId(id)) { openTerminalTab(id, t('term.pane.tab'), '▣'); return; }
   try {
     const r = await fetch(`/api/sessions/${id}`);
     if (id !== activeTabId) return; // tab was switched while fetching — discard stale load
@@ -11318,6 +11401,11 @@ async function loadSess(id) {
       for (const askData of _askTs._pendingAskTool) renderAskToolCard(askData);
       _askTs._pendingAskTool = [];
     }
+    // A pending "waiting for your answer" banner (GitHub #20) has to survive the
+    // switch too — msgsEl was cleared above, so re-render it from the tab's state.
+    // Kept (not consumed) because the prompt is still open until the engine says
+    // otherwise; the tab may be left and re-entered several times meanwhile.
+    if (_askTs?._inputNeeded) renderInputNeededCard(_askTs._inputNeeded);
 
     userScrolled = false;
 
@@ -15709,6 +15797,89 @@ async function createTerminalSession(agentId, label) {
   } catch (e) { toast(e.message, true); }
 }
 
+// ─── Live engine pane (GitHub #20) ──────────────────────────────────────────
+// A chat running on the `subscription` engine lives inside a REAL interactive
+// Claude TUI, kept alive in a detached tmux session by claude-interactive.js.
+// This opens a viewer on that exact pane, reusing the terminal-tab machinery —
+// so a turn blocked on an interactive prompt can be answered where it is asking,
+// without killing the turn and without a second `claude --resume` (which is what
+// the ⚡ Claude Code button does) writing the same transcript.
+//
+// The tab id has to be synthetic: the chat tab already occupies the session id,
+// and openTabs is keyed by id.
+const ENGINE_PANE_PREFIX = 'engine:';
+function isEnginePaneId(id) { return typeof id === 'string' && id.startsWith(ENGINE_PANE_PREFIX); }
+function enginePaneIdFor(sid) { return ENGINE_PANE_PREFIX + sid; }
+function chatIdOfEnginePane(id) { return String(id).slice(ENGINE_PANE_PREFIX.length); }
+
+// Where a terminal tab's socket points. A plain terminal tab IS its session; an
+// engine-pane tab points at a CHAT session and asks the server for the engine view.
+function _termWsTarget(tabId) {
+  return isEnginePaneId(tabId)
+    ? { session: chatIdOfEnginePane(tabId), view: 'engine' }
+    : { session: tabId, view: null };
+}
+
+async function openEnginePane(sessionId) {
+  const sid = sessionId || currentSessionId;
+  if (!sid) return;
+  openTerminalTab(enginePaneIdFor(sid), t('term.pane.tab'), '▣');
+}
+
+// ─── "Claude is waiting for your answer" banner (GitHub #20) ────────────────
+// Rendered from the engine's `input_needed` frame. One card at a time per tab:
+// the engine announces a prompt once and withdraws it once, and a second card
+// would just be the same question twice.
+function renderInputNeededCard(d) {
+  if (!msgsEl) return;
+  clearInputNeededCard();
+  const sid = d.sessionId || currentSessionId;
+  const card = document.createElement('div');
+  card.className = 'needinput-card';
+  const bodyKey = d.phase === 'startup' ? 'term.needinput.startup' : 'term.needinput.body';
+  card.innerHTML =
+    `<div class="ni-title">⏸ ${escH(t('term.needinput.title'))}</div>` +
+    `<div class="ni-body">${escH(t(bodyKey))}</div>` +
+    (d.prompt ? `<pre class="ni-pane">${escH(d.prompt)}</pre>` : '') +
+    `<div class="ni-btns"><button class="ni-open">▣ ${escH(t('term.needinput.open'))}</button>` +
+    `<button class="ni-dismiss">${escH(t('term.needinput.dismiss'))}</button></div>`;
+  card.querySelector('.ni-open').onclick = () => openEnginePane(sid);
+  // Dismiss hides the card only. The prompt itself is still open in the TUI, so the
+  // tab keeps its state and the pulsing session-bar button stays — otherwise a
+  // misclick would hide the only remaining sign that the turn is waiting.
+  card.querySelector('.ni-dismiss').onclick = () => card.remove();
+  msgsEl.appendChild(card);
+  scrollBottom();
+}
+
+function clearInputNeededCard() {
+  for (const el of document.querySelectorAll('.needinput-card')) el.remove();
+}
+
+// The session bar's ▣ button pulses while the active tab has a pending prompt —
+// the banner scrolls away with the conversation, this does not.
+function _paintPaneWanted() {
+  const btn = $i('sessBarPaneBtn');
+  if (!btn) return;
+  const wanted = !!(activeTabId && tabState[activeTabId] && tabState[activeTabId]._inputNeeded);
+  btn.classList.toggle('ni-wanted', wanted);
+}
+
+// The pane keeps the engine's geometry (220x50), so the browser has to meet it
+// halfway: shrink the font until that many columns fit the host, never above the
+// chat font size. Whatever still does not fit scrolls (.term-fixed).
+function _fitEnginePaneFont(entry) {
+  try {
+    const cols = entry.term.cols || 220;
+    const avail = entry.host.clientWidth || 0;
+    if (!avail) return;
+    const base = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15.5;
+    // xterm's monospace advance width is ~0.6em; 2px of padding slack per side.
+    const target = Math.max(5, Math.min(base, Math.floor(((avail - 6) / cols / 0.6) * 10) / 10));
+    if (Math.abs((entry.term.options.fontSize || 0) - target) > 0.15) entry.term.options.fontSize = target;
+  } catch {}
+}
+
 // A terminal is a TAB in the same workspace, not an overlay: the user keeps several
 // tabs open — some chat, some terminal — and switches between them. Everything about
 // a tab (order, drag, close, the bar itself) therefore works for it unchanged.
@@ -15762,7 +15933,7 @@ function showTerminalView(sessionId, label) {
 // Build (once) the live terminal for a session: its own host element, xterm and socket.
 function _createTerminal(sessionId) {
   const host = document.createElement('div');
-  host.className = 'term-instance';
+  host.className = 'term-instance' + (isEnginePaneId(sessionId) ? ' term-fixed' : '');
   host.dataset.session = sessionId;
   $i('termHost').appendChild(host);
 
@@ -15804,14 +15975,30 @@ function _connectTerminalWs(sessionId) {
   // this geometry instead of a hardcoded 80x24 that it then has to correct once our
   // resize message lands. That correction reflowed a running TUI twice on every
   // re-attach, which is what made a reconnect look like it scrambled the agent's work.
-  const ws = new WebSocket(`${proto}//${location.host}/ws/terminal?session=${encodeURIComponent(sessionId)}&cols=${term.cols || 80}&rows=${term.rows || 24}`);
+  const _tgt = _termWsTarget(sessionId);
+  const ws = new WebSocket(`${proto}//${location.host}/ws/terminal?session=${encodeURIComponent(_tgt.session)}&cols=${term.cols || 80}&rows=${term.rows || 24}`
+    + (_tgt.view ? `&view=${encodeURIComponent(_tgt.view)}` : ''));
   entry.ws = ws;
   ws.binaryType = 'arraybuffer';
   ws.onopen = () => { entry._reconnectDelay = 1000; if (_termSessionId === sessionId) sendTermResize(); };
   ws.onmessage = (ev) => {
     if (typeof ev.data !== 'string') { term.write(new Uint8Array(ev.data)); return; }
     let msg = null; try { msg = JSON.parse(ev.data); } catch { return; }
-    if (msg.type === 'ready') {
+    if (msg.type === 'ready' && msg.view === 'engine') {
+      entry.state = t('term.state.enginePane'); entry.dot = '#a78bfa';
+      // Size the xterm TO the pane, never the pane to the xterm: the engine owns
+      // this window and a reflow would repaint a running turn (the server pins it
+      // with `window-size manual` before attaching).
+      try { term.resize(msg.cols || term.cols, msg.rows || term.rows); } catch {}
+      _fitEnginePaneFont(entry);
+    } else if (msg.type === 'no_pane') {
+      // Distinguishable from an error: nothing is broken, there is simply no live
+      // TUI for this chat — an api-engine chat, or one that has never run a turn.
+      // Latch `exited` so the reconnect loop does not hammer a pane that does not exist.
+      entry.exited = true;
+      entry.dot = '#8b949e'; entry.state = t('term.state.noPane');
+      term.write(`\r\n\x1b[33m${t('term.pane.none')}\x1b[0m\r\n`);
+    } else if (msg.type === 'ready') {
       const key = msg.state === 'attach' ? 'term.state.attached'
         : !msg.restored ? 'term.state.started'
         : msg.restoredExact ? 'term.state.restored' : 'term.state.restoredLast';
@@ -15860,6 +16047,9 @@ function _paintTermStatus(sessionId) {
   $i('termTitle').textContent = e.label || tab?.termLabel || '';
   $i('termState').textContent = e.state || '';
   $i('termDot').style.background = e.dot;
+  // The engine owns this pane and the conversation attached to it — a viewer must
+  // never be able to kill it. (The server ignores a 'kill' on this path too.)
+  $i('termKillBtn').style.display = isEnginePaneId(sessionId) ? 'none' : '';
   $i('termKillBtn').onclick = () => {
     if (!confirm(t('term.killConfirm'))) return;
     if (e.ws && e.ws.readyState === 1) e.ws.send(JSON.stringify({ type: 'kill' }));
@@ -15923,6 +16113,9 @@ async function pasteSkillToTerminal(id) {
 
 function sendTermResize() {
   const e = _terms.get(_termSessionId); if (!e) return;
+  // An engine pane is a viewer: its tmux window belongs to the subscription engine
+  // and stays at the geometry the engine spawned it with. Adapt the font instead.
+  if (isEnginePaneId(_termSessionId)) { _fitEnginePaneFont(e); return; }
   try { e.fit.fit(); } catch { return; }
   if (e.ws && e.ws.readyState === 1) e.ws.send(JSON.stringify({ type: 'resize', cols: e.term.cols, rows: e.term.rows }));
 }
