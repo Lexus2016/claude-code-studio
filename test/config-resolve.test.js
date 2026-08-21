@@ -161,6 +161,14 @@ console.log('\ncoerceValue() refuses what must not be written from a form:');
   check('an enum rejects an unlisted one', R.coerceValue(S('lang'), 'de').error, 'invalid_choice');
   // A newline would append an extra variable to .env.
   check('a newline is refused in a .env value', R.coerceValue(S('HOST'), 'a\nB=1').error, 'newline_not_allowed');
+
+  // formWritable() is the gate DELETE shares with PUT — a value-less reset must
+  // refuse exactly what a write refuses, for the same reason.
+  check('formWritable refuses a secret', R.formWritable(S('SESSION_SECRET')).error, 'secret_not_editable');
+  check('formWritable refuses a collection', R.formWritable(S('skills')).error, 'read_only');
+  check('formWritable refuses a read-only key', R.formWritable(S('APP_DIR')).error, 'read_only');
+  check('formWritable refuses an unknown key', R.formWritable(null).error, 'unknown_setting');
+  check('formWritable allows an ordinary setting', R.formWritable(S('PORT')), { ok: true });
 }
 
 // ── 5. .env rewriting keeps the loader's first-occurrence rule ──────────────
@@ -186,6 +194,48 @@ console.log('\nsetDotenvValue() edits in place (the loader takes the FIRST match
   check('parseDotenv keeps the first occurrence', R.parseDotenv('A=1\nA=2\n').A, '1');
   check('parseDotenv skips comments', R.parseDotenv('#A=1\nB=2\n'), { B: '2' });
   check('parseDotenv strips surrounding quotes', R.parseDotenv('A="x y"\n').A, 'x y');
+}
+
+// ── 5b. Resetting a setting removes it, rather than writing the default in ──
+// An explicit value would keep winning after the built-in default changes, and
+// would keep the row reading as "configured" in the very view meant to explain it.
+console.log('\nreset removes the key from the file the form owns:');
+{
+  const src = '# comment\nPORT=3000\n# PORT=9999\nHOST=127.0.0.1\n';
+  const out = R.unsetDotenvValue(src, 'PORT');
+  check('the active line is gone', /^\s*PORT\s*=/m.test(out), false);
+  check('the commented line survives', out.includes('# PORT=9999'), true);
+  check('other keys are untouched', out.includes('HOST=127.0.0.1'), true);
+  check('every active occurrence is removed',
+    R.unsetDotenvValue('PORT=1\nPORT=2\nHOST=x\n', 'PORT'), 'HOST=x\n');
+  check('removing an absent key is a no-op', R.unsetDotenvValue('HOST=x\n', 'PORT'), 'HOST=x\n');
+
+  const conf = { terminal: { maxLive: 9 }, lang: 'fr' };
+  check('deletePath removes the leaf', R.deletePath(conf, 'terminal.maxLive'), true);
+  // An orphaned `"terminal": {}` reads as a section that is still configured.
+  check('and prunes the parent it emptied', 'terminal' in conf, false);
+  check('siblings survive', conf.lang, 'fr');
+  check('a parent that still has keys is kept', (() => {
+    const c = { terminal: { maxLive: 9, enabled: true } };
+    R.deletePath(c, 'terminal.maxLive');
+    return c.terminal;
+  })(), { enabled: true });
+  check('deleting an absent path reports false', R.deletePath({}, 'terminal.maxLive'), false);
+
+  // The button is offered only where there IS something to delete.
+  check('a value living in .env is resettable',
+    resolve('PORT', { dotenv: { PORT: '3999' } }).resettable, true);
+  check('a value only the shell exports is NOT resettable',
+    resolve('PORT', { processEnv: { PORT: '4100' } }).resettable, false);
+  check('an untouched setting is not resettable', resolve('PORT', {}).resettable, false);
+  check('a local config.json value is resettable',
+    resolve('defaultEngine', { localConfig: { defaultEngine: 'subscription' } }).resettable, true);
+  check('a value that only the global file defines is not ours to reset',
+    resolve('lang', { globalConfig: { lang: 'fr' } }).resettable, false);
+  check('a secret is never resettable',
+    resolve('ANTHROPIC_API_KEY', { dotenv: { ANTHROPIC_API_KEY: 'x' } }).resettable, false);
+  check('a collection is never resettable',
+    resolve('mcpServers', { localConfig: { mcpServers: { a: {} } } }).resettable, false);
 }
 
 // ── 6. The catalog itself stays coherent ───────────────────────────────────
@@ -217,7 +267,8 @@ console.log('\ncatalog integrity:');
   }
   for (const lang of ['uk', 'en', 'ru', 'fr', 'he']) {
     check(`${lang}: a label exists for every section and source`,
-      [...R.SECTIONS.map(s => 'cfg.sec.' + s), ...R.SOURCES.map(s => 'cfg.src.' + s.replace(/-/g, '_'))]
+      [...R.SECTIONS.map(s => 'cfg.sec.' + s), ...R.SOURCES.map(s => 'cfg.src.' + s.replace(/-/g, '_')),
+       'cfg.reset', 'cfg.reset.title', 'cfg.reset.done']
         .filter(k => I18N[lang][k] === undefined), []);
   }
 }
@@ -338,6 +389,42 @@ console.log('\nlive server: /api/config/resolved + /api/config/setting');
       method: 'PUT', headers: auth, body: JSON.stringify({ key: 'rm -rf', value: '1' }),
     });
     check('an unknown key is refused', unknown.status, 400);
+
+    // Reset: the key leaves the file, so the built-in default takes over again.
+    check('the written value is reported as resettable',
+      JSON.parse((await get('/api/config/resolved', { headers: auth })).body)
+        .settings.find(s => s.key === 'terminal.maxLive').resettable, true);
+    const del = await get('/api/config/setting?key=terminal.maxLive', { method: 'DELETE', headers: auth });
+    check('the reset is accepted', JSON.parse(del.body).ok, true);
+    check('the resolver falls back to the built-in default',
+      JSON.parse(del.body).setting.effectiveSource, 'default');
+    // The key itself does not necessarily vanish: loadConfig() re-seeds a missing
+    // `terminal` block with its defaults on the next read (server.js — `if
+    // (!c.terminal)`). What must be true is that the value the user set is gone
+    // and the built-in default is what applies again.
+    const confAfter = JSON.parse(fs.readFileSync(path.join(tmp, 'config.json'), 'utf8'));
+    check('the value the user set is gone from config.json',
+      (confAfter.terminal || {}).maxLive === 4, false);
+    check('a sibling key in config.json survived the reset', confAfter.defaultEngine, 'subscription');
+
+    // A key that loadConfig() does NOT re-seed disappears from the file outright.
+    const delEngine = await get('/api/config/setting?key=defaultEngine', { method: 'DELETE', headers: auth });
+    check('resetting an unseeded key is accepted', JSON.parse(delEngine.body).ok, true);
+    check('and it is gone from config.json',
+      'defaultEngine' in JSON.parse(fs.readFileSync(path.join(tmp, 'config.json'), 'utf8')), false);
+    check('the resolver reports the built-in default for it',
+      JSON.parse(delEngine.body).setting.effective, 'api');
+
+    const delEnv = await get('/api/config/setting?key=SESSION_TTL_DAYS', { method: 'DELETE', headers: auth });
+    check('the .env reset is accepted', JSON.parse(delEnv.body).ok, true);
+    const envAfter = fs.readFileSync(path.join(tmp, '.env'), 'utf8');
+    check('.env lost the key', /^\s*SESSION_TTL_DAYS\s*=/m.test(envAfter), false);
+    check('.env kept the secret line the reset never touched', envAfter.includes(RAW_SECRET), true);
+
+    const delSecret = await get('/api/config/setting?key=ANTHROPIC_API_KEY', { method: 'DELETE', headers: auth });
+    check('resetting a secret is refused', delSecret.status, 400);
+    check('and the secret is still in .env',
+      fs.readFileSync(path.join(tmp, '.env'), 'utf8').includes(RAW_SECRET), true);
   } catch (e) {
     failedToBoot = e;
   } finally {

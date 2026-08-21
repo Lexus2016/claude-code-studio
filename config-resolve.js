@@ -251,6 +251,11 @@ function resolveSetting(def, sources) {
     modified: winner.source !== 'default',
     overriddenBy,
     shadowedDotenv,
+    // A "reset to default" only makes sense when there is something in a file we
+    // own to remove. If PORT is exported by the shell, deleting the .env line
+    // changes nothing — offering the button there would be a lie.
+    resettable: !def.readOnly && !secret && !isCollection && cands.some(c =>
+      c.source === (def.backing === 'env' ? 'dotenv' : 'config-local')),
     ignoredSources: cands.filter(c => c.ignored).map(c => c.source),
   };
 
@@ -306,14 +311,52 @@ function setDotenvValue(text, key, value) {
   return body + sep + `${key}=${value}\n`;
 }
 
+/** Remove every ACTIVE `KEY=` line from a .env body. Commented `# KEY=` lines are
+ *  documentation and stay — deleting them would silently erase the hint that the
+ *  variable exists at all. */
+function unsetDotenvValue(text, key) {
+  const re = new RegExp('^\\s*' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*=');
+  const kept = String(text || '').split('\n').filter(l => !re.test(l));
+  return kept.join('\n');
+}
+
+/** Delete a dotted path, then drop the parent objects it leaves empty — an
+ *  orphaned `"terminal": {}` in config.json reads as a setting that is still
+ *  configured. */
+function deletePath(obj, dotted) {
+  const parts = String(dotted).split('.');
+  const chain = [obj];
+  let cur = obj;
+  for (const part of parts.slice(0, -1)) {
+    if (!cur || typeof cur !== 'object' || !(part in cur)) return false;
+    cur = cur[part];
+    chain.push(cur);
+  }
+  if (!cur || typeof cur !== 'object') return false;
+  const leaf = parts[parts.length - 1];
+  if (!(leaf in cur)) return false;
+  delete cur[leaf];
+  for (let i = chain.length - 1; i > 0; i--) {
+    if (Object.keys(chain[i]).length) break;
+    delete chain[i - 1][parts[i - 1]];
+  }
+  return true;
+}
+
 /** Validate + normalise a value the browser sent for `key`.
  *  Returns { ok, value } or { ok:false, error }. */
-function coerceValue(def, raw) {
+function formWritable(def) {
   if (!def) return { ok: false, error: 'unknown_setting' };
   // Secret first: it is the more specific reason (every secret is also readOnly),
   // and it is what the UI must tell the user.
   if (isSecretKey(def.key, def)) return { ok: false, error: 'secret_not_editable' };
   if (def.readOnly || def.backing === 'collection') return { ok: false, error: 'read_only' };
+  return { ok: true };
+}
+
+function coerceValue(def, raw) {
+  const w = formWritable(def);
+  if (!w.ok) return w;
   switch (def.type) {
     case 'bool': {
       if (typeof raw === 'boolean') return { ok: true, value: raw };
@@ -347,6 +390,6 @@ module.exports = {
   SOURCES, SECTIONS, SETTINGS,
   getSetting, getPath, maskSecret, isSecretKey,
   candidatesFor, resolveSetting, resolveAll,
-  parseDotenv, setDotenvValue, coerceValue,
+  parseDotenv, setDotenvValue, unsetDotenvValue, deletePath, coerceValue, formWritable,
   SECRET_NAME_RE,
 };

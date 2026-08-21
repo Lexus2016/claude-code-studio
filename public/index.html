@@ -1926,6 +1926,8 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .cfg-badge.b-overridden { color: #ffb020; border-color: rgba(255,176,32,.45); }
 .cfg-badge.b-restart { color: var(--muted); }
 .cfg-badge.b-ignored { color: #ff6b6b; border-color: rgba(255,107,107,.45); }
+.cfg-reset { font-size: 10px; padding: 1px 7px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; font-family: inherit; }
+.cfg-reset:hover { color: var(--accent2); border-color: var(--accent); }
 .cfg-val { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
 .cfg-val input[type=text], .cfg-val input[type=number], .cfg-val select { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: 7px; font-family: var(--font-mono); font-size: 12.5px; outline: none; }
 .cfg-val input:focus, .cfg-val select:focus { border-color: var(--accent); }
@@ -4549,6 +4551,9 @@ const TRANSLATIONS = {
     'cfg.unset':'не задано',
     'cfg.expand_all':'Розгорнути все',
     'cfg.collapse_all':'Згорнути все',
+    'cfg.reset':'↺ типове',
+    'cfg.reset.title':'Прибрати значення з файлу, щоб знову діяло вбудоване',
+    'cfg.reset.done':'Скинуто до вбудованого значення',
     'cfg.saved_restart':'Збережено — перезапустіть сервер, щоб застосувати',
     'cfg.h.defaultEngine':'Рушій, попередньо вибраний для нових чатів і задач: API (без інтерфейсу) або Subscription (Claude Max).',
     'cfg.h.ANTHROPIC_BASE_URL':'Направляє запити Claude CLI через проксі чи шлюз замість прямого звернення до Anthropic.',
@@ -4916,6 +4921,9 @@ const TRANSLATIONS = {
     'cfg.unset':'not set',
     'cfg.expand_all':'Expand all',
     'cfg.collapse_all':'Collapse all',
+    'cfg.reset':'↺ default',
+    'cfg.reset.title':'Remove the value from the file so the built-in default applies again',
+    'cfg.reset.done':'Reset to the built-in default',
     'cfg.saved_restart':'Saved — restart the server to apply',
     'cfg.h.defaultEngine':'Engine preselected for new chats and tasks: API (headless) or Subscription (Claude Max).',
     'cfg.h.ANTHROPIC_BASE_URL':'Route Claude CLI requests through a proxy or gateway instead of Anthropic directly.',
@@ -5283,6 +5291,9 @@ const TRANSLATIONS = {
     'cfg.unset':'не задано',
     'cfg.expand_all':'Развернуть всё',
     'cfg.collapse_all':'Свернуть всё',
+    'cfg.reset':'↺ по умолчанию',
+    'cfg.reset.title':'Убрать значение из файла, чтобы снова действовало встроенное',
+    'cfg.reset.done':'Сброшено до встроенного значения',
     'cfg.saved_restart':'Сохранено — перезапустите сервер, чтобы применить',
     'cfg.h.defaultEngine':'Движок, предварительно выбранный для новых чатов и задач: API (без интерфейса) или Subscription (Claude Max).',
     'cfg.h.ANTHROPIC_BASE_URL':'Направляет запросы Claude CLI через прокси или шлюз вместо прямого обращения к Anthropic.',
@@ -5650,6 +5661,9 @@ const TRANSLATIONS = {
     'cfg.unset':'non défini',
     'cfg.expand_all':'Tout déplier',
     'cfg.collapse_all':'Tout replier',
+    'cfg.reset':'↺ défaut',
+    'cfg.reset.title':'Retirer la valeur du fichier pour que la valeur par défaut s’applique de nouveau',
+    'cfg.reset.done':'Réinitialisé à la valeur par défaut',
     'cfg.saved_restart':'Enregistré — redémarrez le serveur pour appliquer',
     'cfg.h.defaultEngine':'Moteur présélectionné pour les nouveaux chats et tâches : API (sans interface) ou Subscription (Claude Max).',
     'cfg.h.ANTHROPIC_BASE_URL':'Fait passer les requêtes du CLI Claude par un proxy ou une passerelle au lieu d’Anthropic directement.',
@@ -5918,6 +5932,9 @@ const TRANSLATIONS = {
     'cfg.unset':'לא מוגדר',
     'cfg.expand_all':'פתיחת הכול',
     'cfg.collapse_all':'סגירת הכול',
+    'cfg.reset':'↺ ברירת מחדל',
+    'cfg.reset.title':'הסרת הערך מהקובץ כדי שברירת המחדל תחול שוב',
+    'cfg.reset.done':'אופס לברירת המחדל',
     'cfg.saved_restart':'נשמר — הפעילו מחדש את השרת כדי להחיל',
     'cfg.h.defaultEngine':'המנוע שנבחר מראש עבור צ׳אטים ומשימות חדשים: API (ללא ממשק) או Subscription‏ (Claude Max).',
     'cfg.h.ANTHROPIC_BASE_URL':'מנתב את בקשות ה-CLI של Claude דרך פרוקסי או שער במקום ישירות ל-Anthropic.',
@@ -13793,6 +13810,10 @@ function cfgRowHtml(s, q) {
   if (s.ignoredSources.length) badges.push(`<span class="cfg-badge b-ignored">${escH(t('cfg.badge.ignored'))}</span>`);
   if (s.readOnly)      badges.push(`<span class="cfg-badge">${escH(t('cfg.badge.readonly'))}</span>`);
   if (s.restart)       badges.push(`<span class="cfg-badge b-restart">${escH(t('cfg.badge.restart'))}</span>`);
+  // Offered only where there is something in a file we own to delete — the
+  // server decides that (config-resolve.js: resettable), not the markup.
+  if (s.resettable)    badges.push(`<button class="cfg-reset" title="${escH(t('cfg.reset.title'))}"
+      onclick="cfgResetSetting('${escArg(s.key)}')">${escH(t('cfg.reset'))}</button>`);
 
   const srcs = s.sources.map(e => {
     const win = !e.ignored && e.source === s.effectiveSource;
@@ -13867,12 +13888,9 @@ function cfgToggleAllSections() {
   renderCfgForm();
 }
 
-async function cfgSetSetting(key, value) {
+async function _cfgWrite(key, init, doneMsg, endpoint) {
   try {
-    const r = await fetch('/api/config/setting', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, value }),
-    });
+    const r = await fetch(endpoint || '/api/config/setting', init);
     const d = await r.json();
     if (!d.ok) { toast(t('toast.err_prefix') + (d.error || '?'), true); return; }
     // Re-resolve rather than patch locally: one write can change which source
@@ -13881,10 +13899,29 @@ async function cfgSetSetting(key, value) {
     const rr = await fetch(url);
     if (rr.ok) cfgResolved = await rr.json();
     renderCfgForm();
-    toast(d.restart ? t('cfg.saved_restart') : t('cfg.saved'));
-    if (key === 'lang') { localStorage.setItem('lang', String(value)); setLang(String(value)); }
-    else loadCfg();
+    toast(d.restart ? t('cfg.saved_restart') : doneMsg);
+    // The effective language after a reset is whatever the resolver now reports,
+    // not the value we sent — a reset sends none.
+    if (key === 'lang') {
+      const lg = String((d.setting && d.setting.effective) || 'en');
+      localStorage.setItem('lang', lg); setLang(lg);
+    } else loadCfg();
   } catch (e) { toast(e.message, true); }
+}
+
+function cfgSetSetting(key, value) {
+  return _cfgWrite(key, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, value }),
+  }, t('cfg.saved'));
+}
+
+/** Remove the setting from the file the form owns, so the built-in default takes
+ *  over again. Writing the default in as an explicit value would keep the row
+ *  reading as "configured" and would keep winning after the default changes. */
+function cfgResetSetting(key) {
+  return _cfgWrite(key, { method: 'DELETE' }, t('cfg.reset.done'),
+    '/api/config/setting?key=' + encodeURIComponent(key));
 }
 
 
