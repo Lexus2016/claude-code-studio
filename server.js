@@ -7407,6 +7407,15 @@ app.get('/api/files/raw', (req, res) => {
     };
     const mime = mimeMap[ext] || 'application/octet-stream';
     res.setHeader('Content-Type', mime);
+    // An .svg served inline is a document, not a picture: navigate to this URL and any
+    // <script> inside it runs in THIS origin, with the session cookie. helmet's CSP is
+    // off (the SPA is one file of inline scripts) and the global header carries
+    // frame-ancestors alone, so nothing else stops it. `sandbox` puts the response in an
+    // opaque origin — it still renders through <img>, the script no longer runs on direct
+    // navigation. Scoped to SVG on purpose: nothing else in mimeMap can execute, and a
+    // blanket sandbox would also land on the PDF this same endpoint feeds to an iframe.
+    // frame-ancestors is repeated because setHeader REPLACES the global header set above.
+    if (ext === '.svg') res.setHeader('Content-Security-Policy', "sandbox; frame-ancestors 'none'");
     res.setHeader('Content-Length', stat.size);
     res.setHeader('Content-Disposition', 'inline');
     fs.createReadStream(fp).pipe(res);
@@ -7452,14 +7461,16 @@ function searchProjectFiles(rootDir, query, maxResults = 80) {
 app.get('/api/project-files', (req, res) => {
   const dir = qstr(req.query.dir), q = qstr(req.query.q);
   if (!dir) return res.status(400).json({ error: 'dir required' });
-  const absDir = path.resolve(dir);
+  const absDir = _realish(path.resolve(dir));
   // Security: dir must be one of the registered LOCAL project workdirs. A remote
   // project's workdir names a path on another machine — honouring it here would let
   // a project registered as remote:/etc read the LOCAL /etc. isPathAllowed() already
   // filters the same way (see its !p.isRemote), these two endpoints did not.
+  // _realish on both sides: without it a symlink inside the project passes the
+  // containment check lexically and searchProjectFiles() then walks wherever it points.
   const projects = loadProjects().filter(p => !p.isRemote);
   const allowed = projects.some(p => {
-    const pd = path.resolve(p.workdir);
+    const pd = _realish(p.workdir);
     return absDir === pd || absDir.startsWith(pd + path.sep);
   });
   if (!allowed) return res.status(403).json({ error: 'Dir not in any registered project' });
@@ -7471,16 +7482,19 @@ app.get('/api/project-files', (req, res) => {
 app.get('/api/project-files/read', (req, res) => {
   const filePath = qstr(req.query.path), dir = qstr(req.query.dir);
   if (!filePath || !dir) return res.status(400).json({ error: 'path and dir required' });
-  const absFile = path.resolve(filePath);
-  const absDir  = path.resolve(dir);
-  // Security: file must be inside the project dir
+  const absFile = _realish(path.resolve(filePath));
+  const absDir  = _realish(path.resolve(dir));
+  // Security: file must be inside the project dir. Both sides go through _realish
+  // first — a lexical startsWith() lets a symlink sitting in the project (node_modules
+  // /x -> /etc, or one committed to a cloned repo) pass while the read lands outside.
+  // This is the rule resolveInsideWorkdir() already applies to the /api/files family.
   if (!absFile.startsWith(absDir + path.sep) && absFile !== absDir) {
     return res.status(403).json({ error: 'Path outside project dir' });
   }
   // Local projects only — see the note on /api/project-files above.
   const projects = loadProjects().filter(p => !p.isRemote);
   const allowed = projects.some(p => {
-    const pd = path.resolve(p.workdir);
+    const pd = _realish(p.workdir);
     return absDir === pd || absDir.startsWith(pd + path.sep);
   });
   if (!allowed) return res.status(403).json({ error: 'Dir not in any registered project' });

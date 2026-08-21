@@ -242,6 +242,57 @@ function termWs(token, sessionId = 'nonexistent') {
     check('and a real file inside the workdir still reads',
       [okFile.status, okFile.json?.content], [200, 'hello']);
 
+    // ── /api/files/raw: an inline SVG is a document, not a picture ────────────
+    // Navigating to a stored .svg executes its <script> in THIS origin with the
+    // session cookie. helmet's CSP is off (the SPA is one file of inline scripts),
+    // so the route has to carry `sandbox` itself. Scoped to SVG — the PDF branch of
+    // this same endpoint feeds an iframe viewer and must stay unsandboxed.
+    console.log('\n— an inline SVG cannot script the app origin —');
+    async function rawHeaders(rel) {
+      const r = await fetch(`${BASE}/api/files/raw?path=${encodeURIComponent(rel)}`,
+        { headers: { 'x-auth-token': TOKEN } });
+      await r.arrayBuffer();                       // drain, else the socket lingers
+      return [r.status, r.headers.get('content-security-policy')];
+    }
+    fs.writeFileSync(path.join(inside, 'x.svg'),
+      '<svg xmlns="http://www.w3.org/2000/svg"><script>1</script></svg>');
+    fs.writeFileSync(path.join(inside, 'x.png'), Buffer.from('89504e470d0a1a0a', 'hex'));
+    check('/api/files/raw sandboxes an inline SVG',
+      await rawHeaders('inside/x.svg'), [200, "sandbox; frame-ancestors 'none'"]);
+    check('and leaves a plain image unsandboxed',
+      await rawHeaders('inside/x.png'), [200, "frame-ancestors 'none'"]);
+
+    // ── /api/project-files: the same symlink rule, on the @-mention endpoints ──
+    // These two took `dir` and `path` from the query and compared them with plain
+    // path.resolve + startsWith. The /api/files family above resolves symlinks first;
+    // these did not, so the very link /api/files refuses read straight through here.
+    // Both require `dir` to belong to a registered LOCAL project, hence the fixture.
+    console.log('\n— the @-mention file search resolves symlinks too —');
+    const OUTSIDE = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-pathguard-outside-'));
+    process.on('exit', () => { try { fs.rmSync(OUTSIDE, { recursive: true, force: true }); } catch {} });
+    fs.writeFileSync(path.join(OUTSIDE, 'canary.txt'), 'CANARY');
+    const canaryLink = path.join(inside, 'canary-link.txt');
+    fs.symlinkSync(path.join(OUTSIDE, 'canary.txt'), canaryLink);
+    // Not decoration: if the host cannot symlink, the assertion below would pass
+    // against a path that simply does not exist.
+    check('the escaping symlink fixture points out of the project',
+      fs.readFileSync(canaryLink, 'utf-8'), 'CANARY');
+
+    const proj = await api('POST', '/api/projects', { name: 'pathguard', workdir: APP_DIR });
+    check('a local project is registered for the search endpoints', proj.status, 200);
+
+    const pfRead = await api('GET', `/api/project-files/read?dir=${encodeURIComponent(APP_DIR)}`
+      + `&path=${encodeURIComponent(canaryLink)}`);
+    check('/api/project-files/read refuses a symlink pointing out of the project',
+      [pfRead.status, pfRead.json?.content], [403, undefined]);
+    check('/api/project-files refuses a dir that is itself a symlink out',
+      (await api('GET', `/api/project-files?dir=${encodeURIComponent(escape)}&q=`)).status, 403);
+    // Positive control — a blanket 403 would pass both lines above.
+    const pfOk = await api('GET', `/api/project-files/read?dir=${encodeURIComponent(APP_DIR)}`
+      + `&path=${encodeURIComponent(path.join(inside, 'ok.txt'))}`);
+    check('and a real file inside the project still reads',
+      [pfOk.status, pfOk.json?.content], [200, 'hello']);
+
     // ── session workdir: the cwd of `claude --dangerously-skip-permissions` ────
     console.log('\n— a session cannot be pointed at an arbitrary directory —');
     const badSess = await api('POST', '/api/sessions', { title: 'x', workdir: '/etc' });
