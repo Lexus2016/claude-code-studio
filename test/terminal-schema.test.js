@@ -33,6 +33,11 @@ check('agent_conv_id added', cols.includes('agent_conv_id'), true);
 migrate(); // second run must not throw and must not duplicate
 const cols2 = db.prepare(`SELECT * FROM pragma_table_info('sessions')`).all().map(r => r.name);
 check('migration is idempotent', cols2.length, cols.length);
+// Positive control for the line above: an empty migrate() would satisfy it too.
+// SQLite must actually reject the repeat, which is what the try/catch swallows.
+let repeatRejected = false;
+try { db.exec(MIGRATIONS[0]); } catch { repeatRejected = true; }
+check('and the repeat was refused by SQLite, not skipped', repeatRejected, true);
 
 db.prepare(`INSERT INTO sessions (id,title) VALUES (?,?)`).run('s1', 'legacy row');
 check('existing rows default to chat', db.prepare(`SELECT kind FROM sessions WHERE id=?`).get('s1').kind, 'chat');

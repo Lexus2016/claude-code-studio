@@ -157,6 +157,11 @@ for (const file of ['kanban.html', 'schedule.html']) {
   for (const m of src.matchAll(/\bt\(\s*['"]([a-zA-Z0-9_.\-]+)['"]/g)) referenced.add(m[1]);
   for (const m of src.matchAll(/data-i18n(?:-title|-ph|-aria|-tip|-html)?="([a-zA-Z0-9_.\-]+)"/g)) referenced.add(m[1]);
   for (const k of [...referenced]) if (k.endsWith('.')) referenced.delete(k);
+  // Without this, a broken extraction regex leaves `referenced` empty and every
+  // check below passes while proving nothing. The count is printed in the labels
+  // but a printed number is not an assertion.
+  check(`${file}: the key extraction found a non-trivial number of references`,
+    referenced.size > 20, true);
   for (const l of langs) {
     check(`${file} ${l}: every referenced key is defined (${referenced.size} referenced)`,
       [...referenced].filter(k => !keys(l).has(k)).sort(), []);
@@ -277,6 +282,36 @@ console.log('\nno hardcoded user-facing strings:');
       hits.push(`${file}:${src.slice(0, m.index).split('\n').length} ${txt}`);
     }
     return hits;
+  }
+
+  // ── Self-test the scanners ───────────────────────────────────────────────
+  // Six assertions below say "the scanner found nothing". That is also what a
+  // scanner whose regex stopped matching reports. So first prove each one still
+  // sees a violation it is supposed to see, and still ignores what it should.
+  {
+    const FIX = [
+      '<div>Save now</div>',                               // bare text
+      '<button title="Delete this">x</button>',            // untranslated attribute
+      '<span data-i18n="btn.ok">Save now</span>',          // marked — must be ignored
+      '<script>const s = "Save now";</script>',            // inside script — must be ignored
+      '<!-- Save now -->',                                 // comment — must be ignored
+      '<div>~/.ssh/id_rsa</div>',                          // on the ALLOWED list
+    ].join('\n');
+    const hits = scanMarkup('fixture', FIX);
+    check('scanMarkup catches bare text in markup',
+      hits.some(h => /<div> text "Save now"/.test(h)), true);
+    check('scanMarkup catches an untranslated attribute',
+      hits.some(h => /@title "Delete this"/.test(h)), true);
+    check('scanMarkup ignores marked, scripted, commented and allow-listed text',
+      hits.length, 2);
+
+    const CALLS = "toast('Saved'); alert(t('x.y')); confirm(\"Are you sure\"); log('Saved');";
+    const chits = scanCalls('fixture', CALLS);
+    check('scanCalls catches a literal handed to toast()',
+      chits.some(h => /Saved$/.test(h)), true);
+    check('scanCalls catches a literal handed to confirm()',
+      chits.some(h => /Are you sure$/.test(h)), true);
+    check('scanCalls ignores t() calls and non-user-facing calls', chits.length, 2);
   }
 
   for (const file of ['index.html', 'kanban.html', 'schedule.html']) {

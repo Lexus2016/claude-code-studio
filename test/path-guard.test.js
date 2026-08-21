@@ -32,6 +32,10 @@ function check(label, actual, expected) {
 const PORT = Number(process.env.TEST_PORT || 3996);
 const BASE = `http://127.0.0.1:${PORT}`;
 const APP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-pathguard-'));
+// Every early process.exit() below (port already in use, server never came up,
+// no auth cookie) jumps past the rmSync at the bottom of the file and leaves a
+// directory behind in /tmp on each run. An exit hook covers all of them.
+process.on('exit', () => { for (const _d of [APP_DIR]) { try { fs.rmSync(_d, { recursive: true, force: true }); } catch {} } });
 const BIN_DIR = path.join(APP_DIR, 'fakebin');
 fs.mkdirSync(path.join(APP_DIR, 'data'), { recursive: true });
 fs.mkdirSync(BIN_DIR, { recursive: true });
@@ -166,11 +170,16 @@ function termWs(token, sessionId = 'nonexistent') {
     // A symlink sitting INSIDE an allowed root is lexically inside it while every
     // read lands on the target. This is the case plain string containment misses.
     const escape = path.join(APP_DIR, 'escape');
-    try { fs.symlinkSync('/etc', escape); } catch {}
+    fs.symlinkSync('/etc', escape);
     const nested = path.join(APP_DIR, 'nested');
     fs.mkdirSync(nested, { recursive: true });
     const deepEscape = path.join(nested, 'out');
-    try { fs.symlinkSync('/etc', deepEscape); } catch {}
+    fs.symlinkSync('/etc', deepEscape);
+    // Not decoration: created inside a bare catch, a host that cannot symlink would
+    // make every assertion below pass against a path that does not exist.
+    check('the escaping symlink fixtures exist and point outside',
+      [fs.realpathSync(escape), fs.realpathSync(deepEscape)],
+      [fs.realpathSync('/etc'), fs.realpathSync('/etc')]);
 
     const refused = [
       ['/etc', 'an absolute path outside every root'],
@@ -205,6 +214,43 @@ function termWs(token, sessionId = 'nonexistent') {
     }
     check('claude-md allows a dir inside WORKDIR',
       (await api('GET', `/api/claude-md?dir=${encodeURIComponent(APP_DIR)}`)).status, 200);
+
+    // ── /api/files: the same symlink rule, on the endpoint that reads content ──
+    // This family compared workdir + path lexically and never resolved symlinks, so
+    // a link committed to a cloned repo turned the file browser into a reader for
+    // anything the server process could open.
+    console.log('\n— the file browser resolves symlinks before deciding —');
+    for (const [q, label] of [
+      ['escape', 'a symlinked directory'],
+      ['escape/passwd', 'a file behind a symlinked directory'],
+      ['nested/out/passwd', 'a file behind a symlink one level deep'],
+      ['../../../../etc', 'a relative climb'],
+    ]) {
+      check(`/api/files refuses ${label}`,
+        (await api('GET', `/api/files?path=${encodeURIComponent(q)}`)).status, 403);
+      check(`/api/files/raw refuses ${label}`,
+        (await api('GET', `/api/files/raw?path=${encodeURIComponent(q)}`)).status, 403);
+      check(`/api/files/download refuses ${label}`,
+        (await api('GET', `/api/files/download?path=${encodeURIComponent(q)}`)).status, 403);
+    }
+    // Positive control: a guard that answered 403 to everything would pass the loop.
+    fs.writeFileSync(path.join(inside, 'ok.txt'), 'hello');
+    const okDir = await api('GET', '/api/files?path=inside');
+    check('and a real directory inside the workdir still lists',
+      [okDir.status, okDir.json?.type], [200, 'dir']);
+    const okFile = await api('GET', '/api/files?path=inside%2Fok.txt');
+    check('and a real file inside the workdir still reads',
+      [okFile.status, okFile.json?.content], [200, 'hello']);
+
+    // ── session workdir: the cwd of `claude --dangerously-skip-permissions` ────
+    console.log('\n— a session cannot be pointed at an arbitrary directory —');
+    const badSess = await api('POST', '/api/sessions', { title: 'x', workdir: '/etc' });
+    check('POST /api/sessions refuses a workdir outside every root',
+      [badSess.status, badSess.json?.error], [400, 'workdir is outside the allowed roots']);
+    check('POST /api/sessions refuses a workdir behind a symlink',
+      (await api('POST', '/api/sessions', { title: 'x', workdir: escape })).status, 400);
+    const goodSess = await api('POST', '/api/sessions', { title: 'x', workdir: inside });
+    check('and a workdir inside an allowed root is accepted', goodSess.status, 200);
 
     // ── /ws/terminal auth, and the pre-tunnel control ────────────────────────
     console.log('\n— terminal socket: auth and the pre-tunnel baseline —');

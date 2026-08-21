@@ -40,6 +40,10 @@ function check(label, actual, expected) {
 const PORT = Number(process.env.TEST_PORT || 3997);
 const BASE = `http://127.0.0.1:${PORT}`;
 const APP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-global-'));
+// Every early process.exit() below (port already in use, server never came up,
+// no auth cookie) jumps past the rmSync at the bottom of the file and leaves a
+// directory behind in /tmp on each run. An exit hook covers all of them.
+process.on('exit', () => { for (const _d of [APP_DIR]) { try { fs.rmSync(_d, { recursive: true, force: true }); } catch {} } });
 fs.mkdirSync(path.join(APP_DIR, 'data'), { recursive: true });
 
 // Generated per run so no credential literal ever lands in the repo.
@@ -268,6 +272,31 @@ const titles = rows => (rows || []).map(r => r.title).sort();
       (await search('q=alpha&limit=0')).results.length >= 1, true);
     check('a negative limit is clamped up, not passed to SQLite',
       (await search('q=alpha&limit=-5')).results.length >= 1, true);
+
+    // The clamp assertions above are all `>= 1` / `<= 100` against a fixture set of
+    // eight rows — every one of them passes whether or not the clamp exists. Seed
+    // past the ceiling so the numbers become exact. Own token, so nothing above is
+    // disturbed; created last, after every count assertion has already been made.
+    console.log('\n— search: the page-size clamp, with more rows than the ceiling —');
+    for (let i = 0; i < 130; i++) await mk({ title: `zclamp row ${i}`, workdir: wdA, status: 'backlog' });
+    check('the default page size is 40 when limit is omitted',
+      (await search('q=zclamp')).results.length, 40);
+    check('a limit under the ceiling is honoured exactly',
+      (await search('q=zclamp&limit=77')).results.length, 77);
+    check('an absurd limit is cut to the 100 ceiling, not honoured',
+      (await search('q=zclamp&limit=999999')).results.length, 100);
+    check('and the caller is told the ceiling truncated the list',
+      (await search('q=zclamp&limit=999999')).truncated, true);
+    check('a zero limit falls through to the 40 default',
+      (await search('q=zclamp&limit=0')).results.length, 40);
+    // A negative limit does NOT fall through to the default: -5 is truthy, so the
+    // `|| 40` never fires and Math.max(1, -5) floors it at one row. Harmless — the
+    // point of the clamp is that SQLite never sees the negative — but it is the real
+    // behaviour, and pinning it here means a future refactor has to choose it on purpose.
+    check('a negative one floors at a single row instead',
+      (await search('q=zclamp&limit=-5')).results.length, 1);
+    check('and so does a non-numeric one',
+      (await search('q=zclamp&limit=abc')).results.length, 40);
   } finally {
     stop();
   }

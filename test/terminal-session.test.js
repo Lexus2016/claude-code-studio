@@ -99,6 +99,12 @@ check('under the cap nothing is picked', pickOverflow(LIVE, 4), []);
 check('picks the most idle unattached first', pickOverflow(LIVE, 3), ['ccsterm-b']);
 check('never picks an attached session', pickOverflow(LIVE, 1), ['ccsterm-b', 'ccsterm-d', 'ccsterm-a']);
 check('a cap of zero still spares the attached one', pickOverflow(LIVE, 0), ['ccsterm-b', 'ccsterm-d', 'ccsterm-a']);
+// The two lines above are identical because the attached session floors the result
+// at 1 — so neither of them actually pins the cap. This pair does: with two spare
+// unattached sessions, cap 2 and cap 1 must differ.
+const LIVE2 = LIVE.concat([{ name: 'ccsterm-e', attached: 0, activityAgeSec: 50 }]);
+check('cap 2 evicts down to the cap', pickOverflow(LIVE2, 2), ['ccsterm-b', 'ccsterm-d', 'ccsterm-a']);
+check('cap 3 evicts one fewer', pickOverflow(LIVE2, 3), ['ccsterm-b', 'ccsterm-d']);
 
 console.log('config merge:');
 const DEFAULTS = {

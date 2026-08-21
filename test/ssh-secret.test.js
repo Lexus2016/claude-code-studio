@@ -41,6 +41,10 @@ const PORT = Number(process.env.TEST_PORT || 3998);
 const BASE = `http://127.0.0.1:${PORT}`;
 const APP_DIR  = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-sshsec-'));
 const HOME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-sshsec-home-'));
+// Every early process.exit() below (port already in use, server never came up,
+// no auth cookie) jumps past the rmSync at the bottom of the file and leaves a
+// directory behind in /tmp on each run. An exit hook covers all of them.
+process.on('exit', () => { for (const _d of [APP_DIR, HOME_DIR]) { try { fs.rmSync(_d, { recursive: true, force: true }); } catch {} } });
 const DUMP_DIR = path.join(APP_DIR, 'dump');
 fs.mkdirSync(path.join(APP_DIR, 'data'), { recursive: true });
 fs.mkdirSync(DUMP_DIR, { recursive: true });
@@ -238,7 +242,41 @@ function openWs() {
     check('positive control: it names the host', att?.host, '198.51.100.7');
     check('positive control: it reports the auth method', att?.authMethod, 'password');
     check('the MCP payload carries no credential', payload.includes(SSH_PW), false);
-    check('and it has no password field at all', Object.prototype.hasOwnProperty.call(att || {}, 'password'), false);
+    // No `att || {}` fallback: with one, a payload that carried no attachment at all
+    // would satisfy this line while proving nothing. `att` is asserted non-null above.
+    check('and it has no password field at all', Object.prototype.hasOwnProperty.call(att, 'password'), false);
+    // Absence of the plaintext is not the same as absence of the field: an encrypted
+    // or base64 copy would pass the includes() check above and still be a leak.
+    //
+    // `sshKeyPath` is on the allow-list and nothing else is. It is a PATH to a key
+    // file, never the key itself — server.js says so at the point it builds this
+    // object, and mcp-user-interrupt.js prints it to the model as `SSH Key: <path>`
+    // on purpose, so the model can name the host's key without ever holding it.
+    // Matching on the name alone flagged it as a leak; matching on a name AND a
+    // non-empty value is what actually distinguishes material from metadata.
+    const CRED_SHAPED = /pass|secret|key|credential|token/i;
+    const ALLOWED_PATH_FIELDS = ['sshKeyPath'];
+    check('nor any other credential-shaped field',
+      Object.entries(att)
+        .filter(([k, v]) => CRED_SHAPED.test(k) && !ALLOWED_PATH_FIELDS.includes(k) && v !== '' && v != null)
+        .map(([k]) => k), []);
+    // This host authenticates by password, so the allow-listed field must be empty
+    // here — which is the only reason the line above can be trusted at all. If a
+    // future change starts populating it from a password-only host, this fails.
+    check('and the allow-listed path field is empty for a password host', att.sshKeyPath, '');
+    // The allow-list is scoped to a path. Key MATERIAL in any field, under any name,
+    // is still a leak — and a PEM body would sail past the SSH_PW includes() check.
+    check('no key material anywhere in the payload', /BEGIN [A-Z ]*PRIVATE KEY/.test(payload), false);
+    // Positive control: the filter above still catches a populated credential field.
+    // Without this, narrowing the match could have disarmed the assertion entirely.
+    check('positive control: a populated password field would still be caught',
+      Object.entries({ ...att, password: 'x' })
+        .filter(([k, v]) => CRED_SHAPED.test(k) && !ALLOWED_PATH_FIELDS.includes(k) && v !== '' && v != null)
+        .map(([k]) => k), ['password']);
+    check('positive control: so would an encrypted copy under another name',
+      Object.entries({ ...att, credentialBlob: 'AES:zzz' })
+        .filter(([k, v]) => CRED_SHAPED.test(k) && !ALLOWED_PATH_FIELDS.includes(k) && v !== '' && v != null)
+        .map(([k]) => k), ['credentialBlob']);
 
     try { fs.unlinkSync(path.join(DUMP_DIR, 'hold')); } catch {}
     await waitFor(() => ws._frames.some(f => f.type === 'done'), { timeoutMs: 15000 });

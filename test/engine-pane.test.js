@@ -84,6 +84,10 @@ function dropEnginePane(name) { rawTmux('kill-session', '-t', name); CREATED.del
 const PORT = Number(process.env.TEST_PORT || 3996);
 const BASE = `http://127.0.0.1:${PORT}`;
 const APP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-enginepane-'));
+// Every early process.exit() below (port already in use, server never came up,
+// no auth cookie) jumps past the rmSync at the bottom of the file and leaves a
+// directory behind in /tmp on each run. An exit hook covers all of them.
+process.on('exit', () => { for (const _d of [APP_DIR]) { try { fs.rmSync(_d, { recursive: true, force: true }); } catch {} } });
 fs.mkdirSync(path.join(APP_DIR, 'data'), { recursive: true });
 // Terminal sessions ship OFF (a browser terminal is remote code execution by design).
 // The live pane rides the same switch, so the test has to turn it on the way a user

@@ -24,14 +24,26 @@ const ROOT = path.join(__dirname, '..');
 const server = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf-8');
 const lines = server.split(/\r?\n/);
 
-const envLoadLine = lines.findIndex(l => l.includes("const envPath = path.join(process.env.APP_DIR"));
+// Anchored on the binding, not on its full right-hand side: the previous matcher
+// spelled out `path.join(process.env.APP_DIR` and stopped matching the moment the
+// CCS_ENV_PATH override was added in front of it — at which point findIndex returned
+// -1 and the ordering assertion below passed VACUOUSLY (-1 is less than anything).
+const envLoadLine = lines.findIndex(l => /^const envPath = /.test(l.trim()));
 // First require() of a local module — those are the ones that capture env at load time.
 const firstLocalRequire = lines.findIndex(l => /^const .*= require\('\.\//.test(l.trim()));
 
 console.log('server.js — .env must be parsed before any local require():');
 check('.env loader found', envLoadLine >= 0, true);
 check('local require found', firstLocalRequire >= 0, true);
-check('.env loader runs first', envLoadLine < firstLocalRequire, true);
+// Both indexes are asserted found above, so this can no longer pass on a -1.
+check('.env loader runs first', envLoadLine >= 0 && firstLocalRequire >= 0 && envLoadLine < firstLocalRequire, true);
+// Positive control: the comparison is real, not a constant. Reversing the operands
+// on the same two indexes must give the opposite answer.
+check('positive control: the ordering check is not vacuous', firstLocalRequire < envLoadLine, false);
+// The loader must still resolve APP_DIR itself — CCS_ENV_PATH is an override, not a
+// replacement, and a build that dropped the default would break every non-Docker install.
+check('the loader still falls back to APP_DIR',
+  /process\.env\.CCS_ENV_PATH \|\| path\.join\(process\.env\.APP_DIR \|\| __dirname, '\.env'\)/.test(server), true);
 
 // The loader depends on `path` and `fs` — both must already be bound above it.
 const pathReq = lines.findIndex(l => l.trim() === "const path = require('path');");

@@ -46,6 +46,10 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const DISCONNECT_MS = 2000;   // the whole point: seconds, not the 30-minute default
 const APP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-nocatchup-'));
 const HOME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-nocatchup-home-'));
+// Every early process.exit() below (port already in use, server never came up,
+// no auth cookie) jumps past the rmSync at the bottom of the file and leaves a
+// directory behind in /tmp on each run. An exit hook covers all of them.
+process.on('exit', () => { for (const _d of [APP_DIR, HOME_DIR]) { try { fs.rmSync(_d, { recursive: true, force: true }); } catch {} } });
 fs.mkdirSync(path.join(APP_DIR, 'data'), { recursive: true });
 
 // A fake `claude` that streams stream-json in two halves: EARLY before the client
@@ -272,6 +276,15 @@ async function reconnectMidTurn(sid, subscribeMsg) {
     bg._frames.filter(d => d.type === 'task_resumed' || d.type === 'task_interrupted').length, 0);
   check('the turn ended on its own, not by the disconnect abort',
     /task disconnect timeout, aborting/.test(srvLog), false);
+  // Positive control for the line above. An absence assertion is worthless if the
+  // string it looks for can never appear — a renamed or reworded log message would
+  // make it pass forever. Pin the needle to the source that emits it.
+  check('positive control: that log line is what server.js actually emits on the abort path',
+    /log\.info\('task disconnect timeout, aborting'/.test(
+      fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf-8')), true);
+  // …and that the log the regex is tested against is a real, non-empty capture, not
+  // an empty string that would make every /…/.test() below answer false.
+  check('positive control: the captured server log is non-empty', srvLog.length > 0, true);
   try { bg.close(); } catch {}
 
   // ── Positive control: the same reconnect WITHOUT noCatchUp DOES replay ─────

@@ -24,6 +24,10 @@ const PORT = Number(process.env.TEST_PORT || 3991);
 const PORT2 = PORT + 1;
 const BASE = `http://127.0.0.1:${PORT}`;
 const APP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-setupgate-'));
+// Every early process.exit() below (port already in use, server never came up,
+// no auth cookie) jumps past the rmSync at the bottom of the file and leaves a
+// directory behind in /tmp on each run. An exit hook covers all of them.
+process.on('exit', () => { for (const _d of [APP_DIR]) { try { fs.rmSync(_d, { recursive: true, force: true }); } catch {} } });
 fs.mkdirSync(path.join(APP_DIR, 'data'), { recursive: true });
 
 // TRUST_PROXY=true makes X-Forwarded-For authoritative for req.ip, which is how
@@ -164,11 +168,21 @@ function canConnect(host, port, timeoutMs = 1500) {
       await new Promise(r => setTimeout(r, 250));
     }
     check('reachable on loopback with no HOST set', up2, true);
-    // The flip side of making `trust proxy` runtime-settable: it must still start
-    // OFF. If it did not, any direct caller could forge X-Forwarded-For and both
-    // walk past this gate and pick their own rate-limit bucket.
+    // The gate reads the SOCKET, not req.ip, and treats the mere presence of a
+    // forwarding header as proof a hop happened — whatever TRUST_PROXY says.
+    //
+    // Why that direction: behind a reverse proxy with TRUST_PROXY unset (the default,
+    // and a very common misconfiguration) req.ip is the proxy's own 127.0.0.1, so
+    // EVERY internet visitor looked like the console owner and could claim a fresh
+    // install. Erring the other way costs a local user who forges the header one
+    // glance at the console; erring this way hands out a shell.
     const spoof = await fetch(`http://127.0.0.1:${PORT2}/api/auth/status`, { headers: { 'x-forwarded-for': '203.0.113.5' } }).then(r => r.json());
-    check('X-Forwarded-For is ignored when TRUST_PROXY is unset', spoof.setupCodeRequired, false);
+    check('a forwarded request is treated as remote even with TRUST_PROXY unset', spoof.setupCodeRequired, true);
+    // Positive control: without the header the very same socket is still the console.
+    // Without this pair, the assertion above would also pass if the gate had simply
+    // started demanding a code from everyone.
+    const direct = await fetch(`http://127.0.0.1:${PORT2}/api/auth/status`).then(r => r.json());
+    check('and the same loopback socket without the header is not', direct.setupCodeRequired, false);
     if (lanIp) {
       check(`not reachable on ${lanIp} with no HOST set`, await canConnect(lanIp, PORT2), false);
     } else {

@@ -44,6 +44,10 @@ const APP_DIR2    = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-remimp-app2-')); 
 const HOME_DIR    = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-remimp-home-'));   // the studio's own $HOME
 const REMOTE_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-remimp-rem-'));    // the fake remote's $HOME
 const BARE_HOME   = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-remimp-bare-'));   // a remote with no ~/.claude
+// Every early process.exit() below (port already in use, server never came up,
+// no auth cookie) jumps past the rmSync at the bottom of the file and leaves a
+// directory behind in /tmp on each run. An exit hook covers all of them.
+process.on('exit', () => { for (const _d of [APP_DIR, APP_DIR2, HOME_DIR, REMOTE_HOME, BARE_HOME]) { try { fs.rmSync(_d, { recursive: true, force: true }); } catch {} } });
 fs.mkdirSync(path.join(APP_DIR, 'data'), { recursive: true });
 
 // The workdir both sides pretend the CLI ran in — its slug is the project directory name.
@@ -359,8 +363,17 @@ async function addHost(label, host, opts = {}) {
   const localRow  = (local.json && local.json.sessions || []).find(s => s.sessionId === LOCAL_ID);
   const remoteRow = auto.json.sessions.find(s => s.sessionId === REMOTE_ID);
   if (!localRow) die('the local cli-list did not see the fixture transcript — the test setup is wrong');
-  check('remote row has the same keys as a local row',
-    Object.keys(localRow).sort().every(k => k in remoteRow), true);
+  // Every field the picker renders for a local row must exist on a remote row, or
+  // the shared template renders blanks for half the list.
+  check('remote row carries every key a local row has',
+    Object.keys(localRow).filter(k => !(k in remoteRow)), []);
+  // The other direction is an ALLOW-LIST, not equality. Two keys are legitimately
+  // remote-only: `project` (the remote listing scans every project, so each row has
+  // to say which one it came from — the local listing is already scoped to one
+  // workdir) and `truncated` (a remote transcript is read over SSH under a byte cap).
+  // Anything else appearing here is drift, and that is what this catches.
+  check('and adds nothing beyond the two documented remote-only fields',
+    Object.keys(remoteRow).filter(k => !(k in localRow)).sort(), ['project', 'truncated']);
   check('remote row: title matches the local row for the same transcript', remoteRow.title, localRow.title);
   check('remote row: timestamp matches', remoteRow.timestamp, localRow.timestamp);
   check('remote row: messageCount matches', remoteRow.messageCount, localRow.messageCount);

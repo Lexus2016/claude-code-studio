@@ -99,6 +99,58 @@ console.log('\nconfig.json-backed settings — local overrides global, on the me
   check('a dotted config path resolves', nested.effective, 9);
 }
 
+// ── 2b. `||` vs `??` — the UI must report the value the server actually runs on ─
+// loadMergedConfig() resolves lang and defaultEngine with `||` and
+// recentProjectsCount with `??`. That difference is invisible until a config file
+// carries a falsy value: with `||` an empty string is SKIPPED and the next source
+// down is what the server uses, so reporting `""` as effective would point the
+// user at the wrong file. The catalog states the difference per key
+// (falsyFallsThrough) and the guard below keeps that flag honest against server.js.
+console.log('\nfalsy config values follow the operator loadMergedConfig() actually uses:');
+{
+  const empty = resolve('lang', { localConfig: { lang: '' }, globalConfig: { lang: 'fr' } });
+  check('an empty local lang does not win', empty.effective, 'fr');
+  check('the global file is credited instead', empty.effectiveSource, 'config-global');
+  check('the dead local value is still shown to the user', empty.sources[0].value, '');
+  check('struck through, so it is visibly not in effect', empty.ignoredSources, ['config-local']);
+
+  const both = resolve('lang', { localConfig: { lang: '' }, globalConfig: { lang: '' } });
+  check('two empty files fall through to the built-in default', both.effective, 'en');
+  check('and both are flagged', both.ignoredSources, ['config-local', 'config-global']);
+
+  const engine = resolve('defaultEngine', { localConfig: { defaultEngine: '' } });
+  check('defaultEngine behaves the same way', engine.effective, 'api');
+  check('crediting the default', engine.effectiveSource, 'default');
+
+  // Positive control: the flag must not swallow real values. Only falsy ones.
+  const real = resolve('lang', { localConfig: { lang: 'he' }, globalConfig: { lang: 'fr' } });
+  check('positive control: a real value still wins', real.effective, 'he');
+  check('positive control: and is not flagged', real.ignoredSources, []);
+
+  // recentProjectsCount is the OTHER operator: `??` honours 0, and the config UI
+  // has to say so, or a user who typed 0 sees the number 5 reported back.
+  const zero = resolve('recentProjectsCount', { localConfig: { recentProjectsCount: 0 } });
+  check('a zero recentProjectsCount is honoured, not skipped', zero.effective, 0);
+  check('because it is resolved with ?? , not ||', zero.effectiveSource, 'config-local');
+  check('and it carries no falsyFallsThrough flag',
+    !!R.SETTINGS.find(s => s.key === 'recentProjectsCount').falsyFallsThrough, false);
+
+  // The guard. Read the operator straight out of loadMergedConfig() for every
+  // merged config-backed key in the catalog and require the flag to match it.
+  // Flipping either side without the other now fails here.
+  const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const body = server.slice(server.indexOf('function loadMergedConfig()'));
+  const merged = R.SETTINGS.filter(s => s.backing === 'config' && s.merge === 'merged');
+  check('there are merged config keys to check at all', merged.length > 0, true);
+  const mismatched = merged.filter(s => {
+    const m = body.match(new RegExp('^\\s*' + s.key + ':\\s*(.+)$', 'm'));
+    if (!m) return true;                       // key not resolved there → flag unverifiable
+    const usesOr = / \|\| /.test(m[1]);
+    return usesOr !== !!s.falsyFallsThrough;
+  }).map(s => s.key);
+  check('every falsyFallsThrough flag matches the operator in loadMergedConfig()', mismatched, []);
+}
+
 // ── 3. Secret masking — nothing raw leaves resolveSetting() ─────────────────
 console.log('\nsecrets are masked before they can reach the browser:');
 {
@@ -137,10 +189,13 @@ console.log('\nsecrets are masked before they can reach the browser:');
     dotenv: { ANTHROPIC_API_KEY: POISON, SESSION_SECRET: POISON },
     localConfig: {}, globalConfig: {},
   }));
+  // Sweep the WHOLE row, not just .effective — sources[i].value is a second way out,
+  // and it is exactly the field the single-key test above checks.
+  const rows = JSON.parse(payload);
   const leaked = R.SETTINGS.filter(d => R.isSecretKey(d.key, d))
-    .filter(d => JSON.parse(payload).find(s => s.key === d.key).effective === POISON)
+    .filter(d => JSON.stringify(rows.find(s => s.key === d.key)).includes(POISON))
     .map(d => d.key);
-  check('no catalogued secret leaks its value in a full resolveAll()', leaked, []);
+  check('no catalogued secret leaks its value anywhere in a full resolveAll()', leaked, []);
   check('non-secret env values DO come through (the sweep is not vacuous)',
     JSON.parse(payload).find(s => s.key === 'PORT').effective, POISON);
 }
@@ -398,13 +453,22 @@ console.log('\nlive server: /api/config/resolved + /api/config/setting');
     check('the reset is accepted', JSON.parse(del.body).ok, true);
     check('the resolver falls back to the built-in default',
       JSON.parse(del.body).setting.effectiveSource, 'default');
-    // The key itself does not necessarily vanish: loadConfig() re-seeds a missing
-    // `terminal` block with its defaults on the next read (server.js — `if
-    // (!c.terminal)`). What must be true is that the value the user set is gone
-    // and the built-in default is what applies again.
+    // DELETE removes the leaf and prunes the parent it emptied, so nothing about
+    // `terminal` is left in the file. (loadConfig() re-seeds a missing `terminal`
+    // block on the NEXT read — that is what restores the default at runtime, and
+    // it is why reading the file is the only way to see the removal.)
     const confAfter = JSON.parse(fs.readFileSync(path.join(tmp, 'config.json'), 'utf8'));
-    check('the value the user set is gone from config.json',
-      (confAfter.terminal || {}).maxLive === 4, false);
+    check('the key the user set is removed from config.json outright',
+      'maxLive' in (confAfter.terminal || {}), false);
+    // The parent survives because sibling keys remain — loadConfig() seeds
+    // enabled/idleTimeoutMin at boot. Pruning is proven separately at the unit
+    // level, where the parent really does end up empty.
+    check('its siblings in the same block are untouched',
+      'enabled' in (confAfter.terminal || {}), true);
+    // "the value is gone" alone is also true of a reset that wrote the WRONG
+    // default, so name the value the resolver must now report.
+    check('and the resolver reports the catalogued default, not some other number',
+      JSON.parse(del.body).setting.effective, R.getSetting('terminal.maxLive').def);
     check('a sibling key in config.json survived the reset', confAfter.defaultEngine, 'subscription');
 
     // A key that loadConfig() does NOT re-seed disappears from the file outright.

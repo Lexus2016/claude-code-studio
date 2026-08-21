@@ -7,6 +7,7 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const net = require('net');
 const { spawn } = require('child_process');
 
 let pass = 0, fail = 0;
@@ -16,10 +17,30 @@ function check(label, actual, expected) {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const PORT = 3997;
+// A fixed port is a hazard: if the developer's own studio is on it, this test
+// spawns a child that dies with EADDRINUSE and then POSTs/DELETEs bots against
+// the LIVE instance. So: overridable, probed before use, and the readiness check
+// below insists the answer came from the child we spawned.
+const PORT = parseInt(process.env.TEST_PORT || '', 10) || 3997;
 const BASE = `http://127.0.0.1:${PORT}`;
 const APP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-botstest-'));
+// Every early process.exit() below (port already in use, server never came up,
+// no auth cookie) jumps past the rmSync at the bottom of the file and leaves a
+// directory behind in /tmp on each run. An exit hook covers all of them.
+process.on('exit', () => { for (const _d of [APP_DIR]) { try { fs.rmSync(_d, { recursive: true, force: true }); } catch {} } });
 fs.mkdirSync(path.join(APP_DIR, 'data'), { recursive: true });
+
+const rmTemp = () => { try { fs.rmSync(APP_DIR, { recursive: true, force: true }); } catch {} };
+
+function probePort(port) {
+  return new Promise(resolve => {
+    const s = net.createConnection({ host: '127.0.0.1', port });
+    const done = busy => { try { s.destroy(); } catch {} resolve(busy); };
+    s.once('connect', () => done(true));
+    s.once('error', () => done(false));
+    setTimeout(() => done(false), 1000);
+  });
+}
 
 async function api(method, url, body) {
   const r = await fetch(BASE + url, {
@@ -33,26 +54,51 @@ async function api(method, url, body) {
 }
 
 (async () => {
+  if (await probePort(PORT)) {
+    console.error(`port ${PORT} is already in use — refusing to run, because this test`);
+    console.error('creates and deletes bots and would do it against whatever is listening.');
+    console.error(`Set TEST_PORT to a free port to run it anyway.`);
+    rmTemp(); process.exit(1);
+  }
+
   // CCS_DESKTOP=1 bypasses auth; APP_DIR redirects data/ to the temp dir.
   const srv = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     env: { ...process.env, PORT: String(PORT), CCS_DESKTOP: '1', APP_DIR, WORKDIR: APP_DIR },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  let log = '';
+  let log = '', exited = false;
+  srv.on('exit', () => { exited = true; });
   srv.stdout.on('data', d => { log += d; });
   srv.stderr.on('data', d => { log += d; });
 
-  const stop = () => { try { srv.kill('SIGTERM'); } catch {} };
+  let stopped = false;
+  const stop = () => { if (stopped) return; stopped = true; try { srv.kill('SIGTERM'); } catch {} rmTemp(); };
+  // 'exit' covers the normal and thrown-assertion paths but NOT a signal, which is
+  // how a cancelled run would otherwise orphan the server and leak the temp dir.
   process.on('exit', stop);
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { stop(); process.exit(1); });
 
   // Wait for the server to answer rather than sleeping a fixed amount.
   let up = false;
   for (let i = 0; i < 40; i++) {
+    if (exited) break;
     try { const r = await fetch(BASE + '/api/health'); if (r.ok) { up = true; break; } } catch {}
     await sleep(250);
   }
+  if (exited) {
+    console.error(`server exited before it was ready — port collision or startup crash; log:\n` + log.slice(-1500));
+    stop(); process.exit(1);
+  }
   if (!up) {
     console.error('server did not start; log:\n' + log.slice(-1500));
+    stop(); process.exit(1);
+  }
+  // /api/health is public, so a foreign instance answers it too. Only our own child
+  // prints the startup banner with this port in it.
+  if (!(/server started/.test(log) && new RegExp(`"port":\\s*"?${PORT}"?`).test(log))) {
+    console.error(`something on port ${PORT} answers /api/health but our child never logged`);
+    console.error('"server started" with that port — refusing to assert against a foreign instance.');
+    console.error(log.slice(-1500));
     stop(); process.exit(1);
   }
 
@@ -133,7 +179,6 @@ async function api(method, url, body) {
   }
 
   stop();
-  try { fs.rmSync(APP_DIR, { recursive: true, force: true }); } catch {}
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })();
