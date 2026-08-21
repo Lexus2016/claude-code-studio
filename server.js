@@ -1232,7 +1232,18 @@ function saveInterruptAttachments(rawAttachments, sessionId, interruptId, { enri
           }
         } catch {}
       }
-      saved.push({ type: 'ssh', label: normalized.label, host: normalized.host, port: normalized.port, sshKeyPath: normalized.sshKeyPath || '', password: normalized.password || '' });
+      // This object is returned verbatim to the MCP subprocess and lands in a tool result
+      // the model reads, so it is a transcript surface like any other. sshKeyPath is a path
+      // and is safe to hand over; the password is not. Report the method, not the value —
+      // the model only needs to know how the host authenticates, never with what.
+      saved.push({
+        type: 'ssh',
+        label: normalized.label,
+        host: normalized.host,
+        port: normalized.port,
+        sshKeyPath: normalized.sshKeyPath || '',
+        authMethod: normalized.sshKeyPath ? 'key' : (normalized.password ? 'password' : 'none'),
+      });
       continue;
     }
     if (normalized.base64) {
@@ -2190,10 +2201,16 @@ function normalizeStoredAttachment(att = {}) {
   };
 }
 
+// What gets written to messages.attachments in SQLite. An SSH attachment keeps its
+// hostId — the pointer to the credential — but never the credential itself: the DB
+// is plaintext on disk and would outlive by months the chat that needed it. The
+// stripping lives here, on the write path, rather than in normalizeStoredAttachment,
+// so the in-memory shape callers rely on stays unchanged.
 function serializeMessageAttachments(attachments = []) {
   return attachments
     .map(normalizeStoredAttachment)
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(a => (a && a.type === 'ssh' ? { ...a, password: '' } : a));
 }
 
 function parseMessageAttachments(raw) {
@@ -2226,7 +2243,12 @@ function buildAttachmentContentBlocks(attachments = []) {
       }
       let sshText = `[SSH Host: ${att.label || att.host || 'SSH'}]\nHost: ${att.host}:${att.port || 22}`;
       if (sshKeyPath) sshText += `\nSSH Key: ${sshKeyPath}`;
-      else if (password) sshText += `\nPassword: ${password}`;
+      // The credential NEVER goes into the prompt. This text block is persisted in
+      // messages.content and written to the CLI transcript on disk, so a secret put here
+      // leaks at rest — and it buys nothing: there is no sshpass anywhere in this project,
+      // so the model cannot use a password non-interactively even if it had one. Real SSH
+      // runs server-side in claude-ssh.js, which reads the credential from the host entry.
+      else if (password) sshText += `\nAuth: password (held server-side, not exposed)`;
       blocks.push({ type: 'text', text: sshText });
       continue;
     }
