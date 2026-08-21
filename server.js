@@ -9662,6 +9662,16 @@ try {
 } catch {}
 startTerminalReaper({ intervalMs: 60000 });
 
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`\n❌ Port ${PORT} is already in use — another process is listening on ${HOST}:${PORT}.`);
+    console.error('   Stop it, or start this server with a different PORT.\n');
+  } else {
+    console.error('❌ Server failed to start:', err && err.message ? err.message : err);
+  }
+  process.exit(1);
+});
+
 server.listen(PORT, HOST, () => {
   if (!HOST_IS_LOOPBACK) {
     console.warn(`\n\u26a0\ufe0f  Listening on ${HOST}:${PORT} — reachable from the network.`);
@@ -9730,8 +9740,9 @@ function gracefulShutdown(signal) {
   // 3. Stop accepting new HTTP connections; wait for in-flight requests
   server.close(() => {
     clearTimeout(forceExit);
-    try { db.pragma('optimize'); } catch {} // update query planner stats
-    db.close();
+    // Both calls are guarded: a throw from db.close() used to skip the exit(0) below and
+    // leave the process alive until the 10 s force-exit fired.
+    try { db.pragma('optimize'); db.close(); } catch {} // update query planner stats
     console.log('✅ Shutdown complete');
     process.exit(0);
   });
