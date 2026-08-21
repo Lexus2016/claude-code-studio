@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Four suites (terminal bridge, engine pane, terminal session, path guard)
+      # check tmux behaviour and self-skip where the binary is missing. Installing
+      # it is what keeps those checks from silently disappearing on CI.
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      # APP_DIR / CCS_DESKTOP repoint the data directory and turn the auth wall
+      # off. Nothing sets them on a runner, but the suites are written to be run
+      # without them and this keeps CI identical to the documented local command.
+      - name: Run tests
+        run: npm test
+        env:
+          CI: 'true'
+
+      - name: Syntax check every entry point
+        run: |
+          for f in server.js auth.js claude-cli.js claude-ssh.js claude-interactive.js \
+                   claude-code-manager.js agent-dag.js config-resolve.js terminal-bridge.js; do
+            [ -f "$f" ] && node -c "$f"
+          done
