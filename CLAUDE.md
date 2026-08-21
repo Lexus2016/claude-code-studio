@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. `npm test` chains 31 test files under `test/`: 10 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 21 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, usage-limit detection, the filesystem path guard plus the tunnel-blocks-terminal rule, and WS session re-subscription. It runs serially and aborts on the first failing file. No CI is wired up yet.
+No linting and no build step configured. `npm test` chains 32 test files under `test/`: 10 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 22 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, usage-limit detection, the filesystem path guard plus the tunnel-blocks-terminal rule, WS session re-subscription and the SSH remote CLI-session import. It runs serially and aborts on the first failing file. No CI is wired up yet.
 
 ## Architecture
 
@@ -159,7 +159,7 @@ These short aliases are exactly what `claude-cli.js` (`MODEL_MAP`) passes to the
 
 ## How to Verify Changes
 
-`npm test` runs 31 test files under `test/` (10 `test/render/*.test.mjs` + 21 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 32 test files under `test/` (10 `test/render/*.test.mjs` + 22 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server

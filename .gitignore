@@ -19,6 +19,9 @@ data/remote-hosts.json
 # SSH encryption key — NEVER commit this; without it encrypted passwords are unrecoverable
 data/hosts.key
 
+# Pinned SSH host-key fingerprints (trust-on-first-use store) — per-machine, not shared
+data/ssh-known-hosts.json
+
 # Uploads
 data/uploads/
 
