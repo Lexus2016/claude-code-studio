@@ -7,7 +7,7 @@ globalThis.t = (k) => k;
 globalThis.copyCode = () => {};
 
 // real helpers, resolved as globals by renderMd (loaded from the actual index.html)
-for (const fn of ['escH', '_lineIndent', 'isSafeHref', 'reformatInlineNumberedItems',
+for (const fn of ['extractFences', 'escH', '_lineIndent', 'isSafeHref', 'reformatInlineNumberedItems',
   'normalizeListContinuations', 'parseListBlock', 'replaceMarkdownLinks',
   'promoteStatusLine', 'parseKeyValueFacts', 'parseAdmonitions', 'autolinkBareUrls',
   'linkifyStandaloneButtons']) {

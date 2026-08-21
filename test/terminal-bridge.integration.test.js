@@ -87,7 +87,12 @@ const screenHas = (name, s) => String(bridge.captureScreen(name) || '').includes
   // Asserted by absence from the DEFAULT socket; actually running kill-server here
   // would destroy the developer's own tmux sessions.
   {
-    const def = require('child_process').spawnSync('tmux', ['list-sessions', '-F', '#{session_name}'], { encoding: 'utf8' });
+    // $TMUX has to be stripped from the child env. When the runner itself lives inside a
+    // studio pane, a bare `tmux` inherits THAT socket, so this check would inspect ccstudio
+    // and trip over the very session it just created — a false failure that says the
+    // isolation broke when it held.
+    const _cleanEnv = { ...process.env }; delete _cleanEnv.TMUX;
+    const def = require('child_process').spawnSync('tmux', ['list-sessions', '-F', '#{session_name}'], { encoding: 'utf8', env: _cleanEnv });
     const onDefaultSocket = String(def.stdout || '').split('\n').map(s => s.trim()).includes(name);
     check('session is NOT on the default tmux socket', onDefaultSocket, false);
     check('but the bridge sees it on its own socket', bridge.sessionInfo(name).exists, true);

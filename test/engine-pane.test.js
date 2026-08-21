@@ -238,7 +238,11 @@ const ctrlOf = (ws, type) => ws._ctrl.find(m => m.type === type);
   // same tmux server or the viewer can never see the engine's pane — and the failure
   // is silent: has-session answers "no" while the TUI is alive on the other socket.
   {
-    const def = spawnSync('tmux', ['list-sessions', '-F', '#{session_name}'], { encoding: 'utf8' });
+    // $TMUX has to be stripped: inside a studio pane a bare `tmux` inherits the ccstudio
+    // socket, and the check would then find its own bench session and report a break that
+    // never happened.
+    const _cleanEnv = { ...process.env }; delete _cleanEnv.TMUX;
+    const def = spawnSync('tmux', ['list-sessions', '-F', '#{session_name}'], { encoding: 'utf8', env: _cleanEnv });
     check('an engine session is NOT on the default tmux socket',
       String(def.stdout || '').split('\n').map(s => s.trim()).includes(bench), false);
     check('but the bridge sees it on the ccstudio socket', bridge.hasSession(bench), true);

@@ -154,7 +154,11 @@ console.log('\nfalsy config values follow the operator loadMergedConfig() actual
 // ── 3. Secret masking — nothing raw leaves resolveSetting() ─────────────────
 console.log('\nsecrets are masked before they can reach the browser:');
 {
-  const RAW = 'sk-ant-api03-SUPERSECRET-DO-NOT-LEAK';
+  // Deliberately NOT shaped like a credential: masking is driven by the key NAME
+  // (isSecretKey / secret: true), never by the value, so a credential-shaped fixture
+  // would only imply a value-shape check that does not exist — and it trips secret
+  // scanners on a public remote.
+  const RAW = 'RAW-SECRET-VALUE-MUST-NEVER-BE-SERIALISED';
   const r = resolve('ANTHROPIC_API_KEY', { processEnv: { ANTHROPIC_API_KEY: RAW }, dotenv: { ANTHROPIC_API_KEY: 'other-key' } });
   const blob = JSON.stringify(r);
   check('the raw key is absent from the whole resolved row', blob.includes(RAW), false);
@@ -334,7 +338,7 @@ console.log('\nlive server: /api/config/resolved + /api/config/setting');
 (async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-cfg40-'));
   fs.mkdirSync(path.join(tmp, 'data'), { recursive: true });
-  const RAW_SECRET = 'sk-ant-LIVE-LEAK-CANARY';
+  const RAW_SECRET = 'RAW-SECRET-VALUE-MUST-NEVER-REACH-THE-BROWSER';
   fs.writeFileSync(path.join(tmp, '.env'),
     `ANTHROPIC_API_KEY=${RAW_SECRET}\nMAX_TASK_WORKERS=7\nCLAUDE_HARD_CAP_MS=1234567\n`);
   fs.writeFileSync(path.join(tmp, 'config.json'),
