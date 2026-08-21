@@ -1047,6 +1047,19 @@ const SET_UI_STATE_SECRET = require('crypto').randomBytes(16).toString('hex');
 // ─── Task Manager (Internal MCP) ─────────────────────────────────────────
 const TASK_MANAGER_SECRET = require('crypto').randomBytes(16).toString('hex');
 
+// ─── Bot-to-bot dispatch (Internal MCP) ─────────────────────────────────
+const BOTS_SECRET = require('crypto').randomBytes(16).toString('hex');
+// Hand-offs allowed per USER MESSAGE, shared by every bot in the turn — not per bot.
+// A per-bot allowance multiplies with the line-up size, so three mentioned bots at
+// three hand-offs each is a nine-bot turn nobody asked for. 3 is enough for the real
+// case (specialist pulls in one or two peers) and keeps the worst case legible.
+const BOT_DISPATCH_BUDGET = 3;
+// sessionId -> { roster, queued, pending, budget } for the turn currently running.
+// Lives only for the duration of runBotTurns: the MCP subprocess posts into it and
+// the turn loop drains it. Absent entry = no bot turn in flight, so a stray call is
+// rejected rather than queued against the next message.
+const botDispatch = new Map();
+
 // ─── User Interrupt (Internal MCP) ──────────────────────────────────────
 const INTERRUPT_SECRET = require('crypto').randomBytes(16).toString('hex');
 // How long an interrupt's saved files stay on disk after the agent is told about
@@ -2473,6 +2486,12 @@ Most tasks should be completed directly without creating subtasks. Only create c
 
 const USER_INTERRUPT_INSTRUCTION = `\n\nYou have access to a "check_user_messages" tool (via MCP server "_ccs_user_interrupt"). The user can send clarifications or corrections WHILE you are working. Call check_user_messages BEFORE starting each major step (e.g. before editing files, running commands, or making design decisions). If it returns messages, acknowledge them and adjust your approach. If no messages, continue normally. This check is lightweight — do not skip it.`;
 
+// Only appended when the bot actually has peers. The roster block already lists them;
+// without this the bot reads the list as trivia, because nothing tells it the list is
+// actionable. Says "after you finish" twice on purpose — the failure mode in testing was
+// a bot calling message_bot and then writing its answer as if the reply had come back.
+const BOTS_DISPATCH_INSTRUCTION = `\n\nYou can hand work to any bot in the roster above with the "message_bot" tool (MCP server "_ccs_bots"): message_bot(handle, task). Use it when the work genuinely belongs to someone else's specialty — not to split your own task or to ask a peer's opinion. The bot runs AFTER you finish your turn, in the same conversation, and the user sees its answer directly. You will NOT see its reply, so never write as if you had: finish your own answer completely, and mention the hand-off in one line. Write "task" so it stands alone — the callee sees only that text, not this conversation.`;
+
 // Status line + tool call instructions (~100 tokens vs original ~170)
 const STATUS_LINE_INSTRUCTION = `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:
 - "✅ Done — [brief summary of what was completed]." when the task is fully finished.
@@ -3349,7 +3368,8 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
   // Same tool set as a normal turn, plus the internal MCP tools — without
   // check_user_messages a bot cannot see a clarification the user sends mid-run.
   const botMcpTools = ['mcp___ccs_set_ui_state__set_ui_state', 'mcp___ccs_ask_user__ask_user',
-                       'mcp___ccs_notify__notify_user', 'mcp___ccs_user_interrupt__check_user_messages'];
+                       'mcp___ccs_notify__notify_user', 'mcp___ccs_user_interrupt__check_user_messages',
+                       'mcp___ccs_bots__message_bot'];
   const botTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write', ...botMcpTools];
   // Interrupt delivery, identical to runCliSingle: a PreToolUse hook fires on every
   // tool call and a Stop hook covers a text-only answer, so a message sent while a
@@ -3368,22 +3388,63 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
   };
   const turnCap = Math.min(maxTurns || 30, MULTI_AGENT_MAX_TURNS_CAP);
   const previous = [];
+  // The line-up is a QUEUE, not the fixed argument list: a bot may append peers to it via
+  // message_bot while the turn is running. Growth is bounded by BOT_DISPATCH_BUDGET and by
+  // the once-per-handle rule in planDispatch, so this terminates.
+  const queue = bots.slice();
+  // handle -> { from, task } for bots that were pulled in by a peer rather than mentioned
+  // by the user. Only these get a rewritten prompt.
+  const dispatched = new Map();
+  const rosterMap = new Map((rosterBots || []).map(b => [b.id, b]));
+  // Owner token for the map entry below, and a string form of it for the MCP subprocess.
+  //
+  // Two turns for the same session CAN overlap. The obvious path — Stop, then a new
+  // message — is actually closed: Stop clears `ws._tabBusy` and `activeChatSessions`
+  // but not `activeTasks`, and the guard reads all three, so the next message queues.
+  // The open path is the disconnect timeout, which calls `activeTasks.delete(sid)` while
+  // runBotTurns is still running; the 15s sweeper then drops `activeChatSessions` and
+  // every lock is off. Without the token the old loop's drain would mutate the new turn's
+  // queue and its finally would delete the new turn's entry, after which every
+  // message_bot call answers "no bot turn is running".
+  const dispatchOwner = abortController || {};
+  const dispatchTurn = require('crypto').randomBytes(8).toString('hex');
+  // Bots may only hand work to peers that exist in this project's roster — the same list
+  // buildBotSystemPrompt shows them. Using the install-wide list here would let a bot
+  // summon someone the user never put in this project.
+  botDispatch.set(sessionId, {
+    owner: dispatchOwner,
+    turn: dispatchTurn,
+    roster: rosterMap,
+    queued: new Set(queue.map(b => b.id)),
+    pending: [],
+    budget: rosterMap.size > 1 ? BOT_DISPATCH_BUDGET : 0,
+  });
 
   // Announce the whole line-up before the first one starts, so the UI can show who
   // is queued instead of revealing participants one at a time as they begin.
-  try {
-    ws.send(JSON.stringify({
-      type: 'bots_turn',
-      bots: bots.map(b => ({ id: b.id, label: b.label, avatar: b.avatar || '🤖', model: b.model || model })),
-      ...(tabId ? { tabId } : {}),
-    }));
-  } catch {}
+  // `growth: true` marks a RE-announce, when a hand-off appended someone mid-turn. The
+  // client merges those and resets on everything else — without the flag it cannot tell
+  // "the line-up grew" from "a new user message", and a bot the user mentions twice in a
+  // row would start its second turn still wearing the previous turn's ✅ chip.
+  const announceQueue = (growth) => {
+    try {
+      ws.send(JSON.stringify({
+        type: 'bots_turn',
+        bots: queue.map(b => ({ id: b.id, label: b.label, avatar: b.avatar || '🤖', model: b.model || model })),
+        ...(growth ? { growth: true } : {}),
+        ...(tabId ? { tabId } : {}),
+      }));
+    } catch {}
+  };
+  announceQueue();
 
   const emitState = (id, state, detail) => {
     try { ws.send(JSON.stringify({ type: 'bot_state', bot: id, state, detail: detail || '', ...(tabId ? { tabId } : {}) })); } catch {}
   };
 
-  for (const bot of bots) {
+  try {
+  for (let qi = 0; qi < queue.length; qi++) {
+    const bot = queue[qi];
     if (abortController?.signal?.aborted) {
       // Everyone still waiting is skipped, not silently dropped.
       emitState(bot.id, 'skipped');
@@ -3395,13 +3456,52 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
       ? '\n\nWhat the bots before you produced in this same turn:\n'
         + previous.map(x => `[@${x.handle}]: ${x.text.substring(0, 4000)}`).join('\n\n')
       : '';
-    const botPrompt = prompt + ctx;
+    // A bot the user mentioned answers the user's message. A bot a PEER pulled in answers
+    // the task that peer wrote — handing it the original message instead would have it
+    // redo work the caller already did, which is the thing the hand-off was avoiding.
+    // The user's message still goes in as background so the answer stays on topic.
+    const handoff = dispatched.get(bot.id);
+    const botPrompt = handoff
+      ? `@${handoff.from} asked you to do this as part of the conversation below.\n\nYour task:\n${handoff.task}\n\nThe user's message that started this turn:\n${prompt}${ctx}`
+      : prompt + ctx;
     const isFirst = previous.length === 0;
     // The same standing instruction a normal turn gets: tell the bot the tool exists
     // and when to call it, or it will not think to look.
-    const botSp = botsLogic.buildBotSystemPrompt(bot, rosterBots) + USER_INTERRUPT_INSTRUCTION;
+    const botSp = botsLogic.buildBotSystemPrompt(bot, rosterBots) + USER_INTERRUPT_INSTRUCTION
+      + (rosterMap.size > 1 ? BOTS_DISPATCH_INSTRUCTION : '');
     const prior = stmts.getBotSession.get(sessionId, bot.id);
     let botSession = prior?.claude_session_id || null;
+
+    // claude-cli.js only passes --system-prompt when there is NO session to resume
+    // (claude-cli.js:190), and every bot keeps a persistent session per chat. So a bot that
+    // has already spoken here never sees an updated system prompt — not a peer added to the
+    // project since, and not the line below telling it message_bot exists. Without this the
+    // whole feature would be dead in every existing chat and live only in brand-new ones.
+    // Re-sent in the USER turn, the one channel --resume always delivers.
+    const standing = botSession
+      ? '\n\n' + [botsLogic.renderRoster(rosterBots, bot.id),
+                  rosterMap.size > 1 ? BOTS_DISPATCH_INSTRUCTION.trim() : ''].filter(Boolean).join('\n\n')
+      : '';
+
+    // Injected per bot, not once for the turn: BOTS_CALLER differs for each, and it is what
+    // the endpoint uses to reject self-dispatch and to label the hand-off.
+    const botMcpServers = rosterMap.size > 1
+      ? { ...mcpServers, _ccs_bots: {
+          command: NODE_CMD,
+          args: [path.join(__dirname, 'mcp-bots.js')],
+          env: {
+            BOTS_SERVER_URL: `http://127.0.0.1:${PORT}`,
+            BOTS_SESSION_ID: sessionId,
+            BOTS_CALLER: bot.id,
+            // Identifies the TURN, not just the session. A handle set alone is not a
+            // signature: a subprocess from a stopped turn whose bot is mentioned again
+            // in the next one would pass the `queued` check and post into a conversation
+            // that is already over.
+            BOTS_TURN: dispatchTurn,
+            BOTS_SECRET,
+          },
+        } }
+      : mcpServers;
 
     ws.send(JSON.stringify({ type: 'agent_status', agent: bot.id, status: `${bot.avatar || '🤖'} ${bot.label}`, ...(tabId ? { tabId } : {}) }));
 
@@ -3410,11 +3510,19 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
       let _settled = false;
       const _res = () => { if (!_settled) { _settled = true; res(); } };
       cli.send({
-        prompt: botPrompt,
+        prompt: botPrompt + standing,
         // Images and files the user attached go to the FIRST bot only: the ones after
         // it receive that bot's output as context, and re-sending the same screenshot
         // to each in turn would pay for it several times over.
-        contentBlocks: (isFirst && Array.isArray(userContent)) ? userContent : null,
+        //
+        // The trailing text block is dropped HERE rather than left to claude-cli.js.
+        // That drop is an exact `block.text !== prompt` compare (claude-cli.js:259) and
+        // `standing` breaks the equality, so a bot with a prior session plus an
+        // attachment would get the user's message twice — once as the block, once as
+        // the prompt. Filtering against `botPrompt` is the thing we actually mean.
+        contentBlocks: (isFirst && Array.isArray(userContent))
+          ? userContent.filter(b => !(b?.type === 'text' && b.text === botPrompt))
+          : null,
         sessionId: botSession,
         // A bot may pin its own model; otherwise it follows the chat's.
         model: bot.model || model,
@@ -3422,7 +3530,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
         // Only applied when there is no session to resume — that is exactly why each
         // bot needs its own session rather than sharing the chat's.
         systemPrompt: botSp,
-        mcpServers,
+        mcpServers: botMcpServers,
         allowedTools: botTools,
         abortController,
         effort,
@@ -3475,16 +3583,61 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
       ok ? '' : agentStopReason(botResult, botErrored));
     if (ok) {
       previous.push({ handle: bot.id, text: botText });
+      // Drain only on success, and only after the bot has fully finished. An incomplete
+      // answer dispatches nobody: a truncated run's hand-off would be work requested by a
+      // sentence the bot never got to finish. Appending here rather than starting anything
+      // keeps dispatch flat — the new bot is just the next iteration of this same loop.
+      const dctx = botDispatch.get(sessionId);
+      // Owner check: if a newer turn for this session replaced the entry, its queue is
+      // none of our business — draining it here would append bots to someone else's line-up.
+      const handoffs = (dctx && dctx.owner === dispatchOwner) ? dctx.pending.splice(0) : [];
+      const added = [];
+      for (const d of handoffs) {
+        const peer = dctx.roster.get(d.handle);
+        if (!peer || dctx.queued.has(d.handle)) continue;
+        dctx.queued.add(d.handle);
+        dispatched.set(d.handle, { from: d.from, task: d.task });
+        queue.push(peer);
+        added.push(peer);
+      }
+      if (added.length) {
+        announceQueue(true);
+        const note = `\n\n↪️ @@${bot.id} handed work to ${added.map(b => '@@' + b.id).join(', ')}.\n\n`;
+        // Persisted, not just streamed: this line is the ONLY place a hand-off is
+        // explained. Without the row, a reload shows a bot answering that the user
+        // never mentioned and nothing saying who pulled it in.
+        try { stmts.addMsg.run(sessionId, 'assistant', 'text', note, null, bot.id, null, null); } catch {}
+        try { ws.send(JSON.stringify({ type: 'text', text: note, agent: bot.id, ...(tabId ? { tabId } : {}) })); } catch {}
+      }
     } else {
+      // Anything this bot asked for is dropped with it — see the drain comment above.
+      // Owner-checked for the same reason the drain is. The budget those hand-offs spent
+      // IS returned: they are discarded here and this bot does not run again, so there is
+      // no retry loop to feed — and charging a later bot for work that never happened
+      // would refuse it a peer over a quota nothing consumed.
+      try {
+        const dctx = botDispatch.get(sessionId);
+        if (dctx && dctx.owner === dispatchOwner) dctx.budget += dctx.pending.splice(0).length;
+      } catch {}
       // Always visible as `text` — not just when another bot follows. `agent_status`/
       // `bot_state` reach the web UI's sidebar, but TelegramProxy.send() does not
       // handle either type at all, so on Telegram those are silently dropped; `text`
       // is the one event type every surface renders. A failure on the LAST bot used
       // to emit nothing anywhere but the sidebar — Telegram just showed "✅ Done".
       const note = `\n\n⚠️ @${bot.id} did not finish (${agentStopReason(botResult, botErrored)})`
-        + (bots.indexOf(bot) < bots.length - 1 ? ' — its output is not passed to the next bot.\n\n' : '.\n\n');
+        + (qi < queue.length - 1 ? ' — its output is not passed to the next bot.\n\n' : '.\n\n');
+      // Persisted for the same reason the hand-off note is: after a reload a failed bot
+      // would otherwise be indistinguishable from one that answered with nothing.
+      try { stmts.addMsg.run(sessionId, 'assistant', 'text', note, null, bot.id, null, null); } catch {}
       try { ws.send(JSON.stringify({ type: 'text', text: note, agent: bot.id, ...(tabId ? { tabId } : {}) })); } catch {}
     }
+  }
+  } finally {
+    // The entry is what makes /api/internal/message-bot accept anything. Dropping it here
+    // means an MCP subprocess that outlives its bot cannot queue work against the next
+    // user message, and nothing leaks if the loop throws. Only ever delete OUR entry: a
+    // newer turn for this session may already own the slot.
+    if (botDispatch.get(sessionId)?.owner === dispatchOwner) botDispatch.delete(sessionId);
   }
   return claudeSessionId || null;
 }
@@ -4270,8 +4423,82 @@ app.post('/api/internal/user-interrupt', express.json(), (req, res) => {
   return res.json({ messages });
 });
 
-app.use(auth.authMiddleware);
+// ─── Internal MCP: bot-to-bot dispatch endpoint ─────────────────────────────
+// Called by mcp-bots.js when a running bot hands work to a peer.
+// Registered BEFORE authMiddleware — MCP subprocess authenticates with BOTS_SECRET.
+//
+// Always answers 200 with { ok, accepted, reason? }. A refusal is a normal outcome the
+// model must be able to read and adapt to, not an HTTP error it would surface as a tool
+// failure. Only a bad secret or a malformed body get a 4xx.
+//
+// This records an intent; it does not start anything. The turn loop in runBotTurns drains
+// the queue after the calling bot finishes, so dispatch stays flat and sequential — no
+// nested run, no concurrent resume of the same bot session.
+app.post('/api/internal/message-bot', express.json(), (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  if (authHeader !== `Bearer ${BOTS_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 
+  const { sessionId, from, handle, task, turn } = req.body || {};
+  if (!sessionId || !from) return res.status(400).json({ error: 'Missing sessionId or from' });
+
+  const ctx = botDispatch.get(sessionId);
+  // No entry means the turn already ended — a late call from a subprocess that outlived
+  // its bot. Refusing beats queueing it against whatever the user sends next.
+  if (!ctx) return res.json({ ok: true, accepted: false, reason: 'no bot turn is running' });
+
+  // The caller must belong to the turn that currently owns this session. An MCP subprocess
+  // from a stopped turn can still be alive when the user's next message starts a new one;
+  // without this it would post into the new turn's queue and summon a bot on behalf of a
+  // conversation that is already over. The turn token is what makes that check exact —
+  // membership in `queued` alone would still pass for a bot mentioned in both turns.
+  const caller = String(from).trim().toLowerCase();
+  if (ctx.turn !== turn || !ctx.queued.has(caller)) {
+    return res.json({ ok: true, accepted: false, reason: 'this turn is no longer running' });
+  }
+
+  const want = String(handle || '').trim().toLowerCase();
+  if (!ctx.roster.has(want)) {
+    return res.json({ ok: true, accepted: false, reason: `no bot @${want || '?'} in this project` });
+  }
+
+  // planDispatch owns every other rule. Pending hand-offs count as queued so a peer named
+  // twice in the same round is caught, and the budget passed is what is actually left.
+  const already = [...ctx.queued, ...ctx.pending.map(d => d.handle)];
+  const { accepted, rejected } = botsLogic.planDispatch({
+    requested: [{ from, handle: want, task }],
+    alreadyQueued: already,
+    budget: ctx.budget,
+  });
+
+  if (accepted.length) {
+    ctx.pending.push(accepted[0]);
+    // Spent on record, returned only if the calling bot fails and its hand-offs are
+    // discarded (see the failure branch in runBotTurns). Returning it there cannot loop —
+    // the failed bot does not run again — while charging for a hand-off that never
+    // happened would refuse a later bot a peer over a quota nothing consumed.
+    ctx.budget -= 1;
+    return res.json({ ok: true, accepted: true });
+  }
+  return res.json({ ok: true, accepted: false, reason: DISPATCH_REASONS[rejected[0]?.reason] || 'refused' });
+});
+
+// Rejection codes from planDispatch are terse identifiers; the model reads prose.
+// `already-queued` says what to do instead, not just what was refused: the peer is
+// already in line and every bot after this one is handed this bot's answer as context
+// (`previous` in runBotTurns), so instructions written into the answer DO reach it.
+// Without that sentence the model reads "refused" and the task text it wrote is lost.
+const DISPATCH_REASONS = {
+  invalid: 'the handle or task was empty or malformed',
+  self: 'a bot cannot hand work to itself',
+  'already-queued': 'that bot is already part of this turn and runs after you — it will be '
+    + 'shown your answer, so put anything you wanted to tell it in your answer instead',
+  duplicate: 'you already handed work to that bot in this turn',
+  budget: 'the hand-off budget for this message is used up',
+};
+
+app.use(auth.authMiddleware);
 // Prevent browser caching for all API responses.
 // Without this Express sends ETag but no Cache-Control, so browsers may
 // serve stale cached JSON (e.g. task list after a DELETE still contains
@@ -7446,6 +7673,87 @@ function saveBot(req, res, mode) {
 }
 
 app.post('/api/bots', express.json(), (req, res) => saveBot(req, res, 'create'));
+
+// ─── Export bots as JSON ──────────────────────────────────────────────────
+// Registered before the ':id' routes: a literal path must win over a parameter, or
+// /api/bots/import would read as a bot whose handle is "import".
+app.get('/api/bots/export', (req, res) => {
+  // Scoped to a project by default is wrong here: the point of an export is to move
+  // bots, and the caller says which set it means. No project → the whole roster.
+  const projectId = req.query.project ? String(req.query.project) : null;
+  const rows = projectId ? stmts.listProjectBots.all(projectId) : stmts.listBots.all();
+  // Only what describes a bot. Timestamps and project membership are this install's
+  // bookkeeping — carrying them across would import ids that mean nothing there.
+  const bots = rows.map(b => ({
+    id: b.id,
+    label: b.label,
+    description: b.description || '',
+    model: b.model || null,
+    system_prompt: b.system_prompt || '',
+    active_skills: b.active_skills || '[]',
+    active_mcp: b.active_mcp || '[]',
+    avatar: b.avatar || '',
+    is_global: b.is_global ? 1 : 0,
+  }));
+  res.setHeader('Content-Disposition', 'attachment; filename="bots.json"');
+  res.setHeader('Content-Type', 'application/json');
+  res.json({ version: 1, exported_at: new Date().toISOString(), bots });
+});
+
+// ─── Import bots from a JSON export ───────────────────────────────────────
+app.post('/api/bots/import', express.json({ limit: '4mb' }), (req, res) => {
+  const body = req.body || {};
+  const incoming = Array.isArray(body) ? body : (Array.isArray(body.bots) ? body.bots : null);
+  if (!incoming) return res.status(400).json({ error: 'Invalid import body: a "bots" array is required' });
+
+  const plan = botsLogic.planBotImport({
+    incoming,
+    live: stmts.listBots.all().map(b => b.id),
+    reserved: stmts.allBotHandles.all().map(b => b.id),
+    overwrite: !!body.overwrite,
+  });
+
+  const writes = [...plan.create, ...plan.overwrite];
+  // One transaction: a partial roster is worse than none, because the half that landed
+  // looks like a complete import and the user has no way to tell which half is missing.
+  try {
+    db.transaction(() => {
+      for (const b of writes) {
+        stmts.upsertBot.run(
+          b.id,
+          b.label.substring(0, BOT_LABEL_MAX),
+          b.description.substring(0, BOT_DESC_MAX),
+          'claude',
+          b.model,
+          b.system_prompt.substring(0, BOT_PROMPT_MAX),
+          b.active_skills,
+          b.active_mcp,
+          Array.from(b.avatar).slice(0, 8).join(''),
+          b.is_global,
+        );
+        // A non-global bot imported while a project is open joins it, exactly as a bot
+        // created there would. Without this an import lands nowhere the user can see.
+        if (body.projectId && !b.is_global) {
+          try { stmts.addBotToProject.run(String(body.projectId), b.id); } catch {}
+        }
+      }
+    })();
+  } catch (e) {
+    log.error('bot import failed', { err: e.message });
+    return res.status(500).json({ error: 'could not import the bots' });
+  }
+
+  res.json({
+    ok: true,
+    created: plan.create.length,
+    updated: plan.overwrite.length,
+    skipped: plan.skipped,
+    // Reported separately because it is the one refusal `overwrite` will NOT resolve —
+    // the UI offers a retry with overwrite, and must not offer it for these.
+    conflicts: plan.skipped.filter(s => s.reason === 'exists').length,
+  });
+});
+
 app.put('/api/bots/:id', express.json(), (req, res) => saveBot(req, res, 'update'));
 
 app.delete('/api/bots/:id', (req, res) => {
@@ -7721,7 +8029,18 @@ wssTerm.on('connection', (ws, req) => {
   if (!termBridge.tmuxAvailable()) return fail('tmux unavailable on this host');
 
   let sessionId = null;
-  try { sessionId = new URL(req.url, 'http://x').searchParams.get('session'); } catch {}
+  // The client's real terminal size travels WITH the connect, not in a resize message
+  // that arrives a beat later. Attaching at a hardcoded 80x24 first made tmux reflow a
+  // running TUI down to 80 columns and back on every re-attach — the agent's screen
+  // visibly scrambled, and the capture-pane bootstrap could snapshot the mangled frame.
+  // Missing/garbage params fall back to 80x24; attach() clamps.
+  let termCols = 80, termRows = 24;
+  try {
+    const q = new URL(req.url, 'http://x').searchParams;
+    sessionId = q.get('session');
+    termCols = parseInt(q.get('cols'), 10) || 80;
+    termRows = parseInt(q.get('rows'), 10) || 24;
+  } catch {}
   const session = sessionId ? stmts.getSession.get(sessionId) : null;
   if (!session || session.kind !== 'terminal') return fail('not a terminal session');
 
@@ -7774,7 +8093,7 @@ wssTerm.on('connection', (ws, req) => {
     const startedAt = Date.now();
     try {
       handle = termBridge.attach({
-        name, cols: 80, rows: 24,
+        name, cols: termCols, rows: termRows,
         onData: (buf) => {
           // Drop output rather than let a slow browser grow an unbounded send queue.
           if (ws.bufferedAmount > 4 * 1024 * 1024) return;
