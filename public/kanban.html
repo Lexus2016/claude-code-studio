@@ -365,34 +365,34 @@ textarea.inp{ resize:vertical; min-height:80px; }
 <div class="hdr">
   <div class="hdr-l">
     <div class="logo">CCS</div>
-    <nav class="nav-sw" aria-label="Навігація між розділами">
-      <a class="nav-sw-btn" href="/" data-tip="Чат">
+    <nav class="nav-sw" aria-label="Navigation" data-i18n-aria="nav.aria">
+      <a class="nav-sw-btn" href="/" data-tip="Chat" data-i18n-tip="nav.chat">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        Chat
+        <span class="nav-lbl" data-i18n="nav.chat">Chat</span>
       </a>
-      <a class="nav-sw-btn active" href="/kanban" data-tip="Kanban дошка">
+      <a class="nav-sw-btn active" href="/kanban" data-tip="Kanban" data-i18n-tip="nav.kanban">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
-        Kanban
+        <span class="nav-lbl" data-i18n="hdr.title">Kanban</span>
       </a>
-      <a class="nav-sw-btn" href="/schedule" data-tip="Розклад завдань">
+      <a class="nav-sw-btn" href="/schedule" data-tip="Schedule" data-i18n-tip="nav.schedule">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        Schedule
+        <span class="nav-lbl" data-i18n="nav.schedule">Schedule</span>
       </a>
-      <a class="nav-sw-btn" href="/dashboard" data-tip="Dashboard">
+      <a class="nav-sw-btn" href="/dashboard" data-tip="Dashboard" data-i18n-tip="nav.dashboard">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
-        Dashboard
+        <span class="nav-lbl" data-i18n="nav.dashboard">Dashboard</span>
       </a>
     </nav>
     <div class="hdr-meta">
       <div class="proj-dd-wrap" id="projDdWrap">
         <button class="proj-dd-btn" id="projDdBtn" onclick="toggleProjDropdown()">
           <span class="proj-dd-icon">📁</span>
-          <span class="proj-dd-name" id="projDdName">Проект</span>
+          <span class="proj-dd-name" id="projDdName" data-i18n="hdr.project">Project</span>
           <span class="proj-dd-arrow">▼</span>
         </button>
         <div class="proj-dd-menu" id="projDdMenu">
           <div class="proj-dd-search">
-            <input type="text" id="projDdSearch" placeholder="Пошук проекту..." oninput="filterProjDropdown(this.value)">
+            <input type="text" id="projDdSearch" placeholder="Search project..." data-i18n-ph="proj.search" oninput="filterProjDropdown(this.value)">
           </div>
           <div class="proj-dd-list" id="projDdList"></div>
         </div>
@@ -401,9 +401,9 @@ textarea.inp{ resize:vertical; min-height:80px; }
   </div>
   <div class="hdr-btns">
     <span class="refresh-ts" id="refreshTs" style="margin-right:4px"></span>
-    <button class="hb" onclick="refresh(true)" id="refreshBtn" title="Оновити">&#8635;</button>
-    <button class="hb" onclick="openAddChainModal()" id="addGroupBtn">&#xFF0B; <span id="addGroupBtnLabel">Група</span></button>
-    <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel">Завдання</span></button>
+    <button class="hb" onclick="refresh(true)" id="refreshBtn" title="Refresh" data-i18n-title="hdr.refresh">&#8635;</button>
+    <button class="hb" onclick="openAddChainModal()" id="addGroupBtn">&#xFF0B; <span id="addGroupBtnLabel" data-i18n="hdr.group">Group</span></button>
+    <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel" data-i18n="hdr.add">Task</span></button>
     <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
     </a>
@@ -417,7 +417,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
   </div>
   <span class="refresh-ts" id="refreshTs2"></span>
   <span style="flex:1"></span>
-  <span class="status-dot ok" id="kbStatusEl">Connected</span>
+  <span class="status-dot ok" id="kbStatusEl" data-i18n="hdr.connected">Connected</span>
 </div>
 
 <!-- Board -->
@@ -444,8 +444,8 @@ textarea.inp{ resize:vertical; min-height:80px; }
     </div>
     <div class="modal-body" id="confirmBody" style="gap:8px"></div>
     <div class="modal-ft">
-      <button class="btn btn-ghost btn-sm" onclick="closeConfirm()" id="cancelBtn">Скасувати</button>
-      <button class="btn btn-danger btn-sm" id="confirmOkBtn">Видалити</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeConfirm()" id="cancelBtn" data-i18n="confirm.cancel">Cancel</button>
+      <button class="btn btn-danger btn-sm" id="confirmOkBtn" data-i18n="confirm.ok">Delete</button>
     </div>
   </div>
 </div>
@@ -497,6 +497,10 @@ const TR = {
     'group.delete':'Видалити групу?','group.delete_body':'Буде видалено групу та всі її завдання.',
     'group.created':'✓ Групу створено','group.saved':'✓ Групу збережено','group.task_added':'✓ Завдання додано',
     'group.edit_task':'Редагувати завдання','group.task_saved':'✓ Завдання збережено',
+    'nav.schedule':'Розклад','nav.dashboard':'Панель','hdr.project':'Проект','hdr.refresh':'Оновити',
+    'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача','agent.single':'Один','agent.multi':'Мульти',
+    'effort.auto':'Авто','effort.low':'Низьке','effort.med':'Середнє','effort.high':'Високе','effort.xhigh':'Дуже високе','effort.max':'Максимальне',
+    'engine.api':'API','engine.sub':'Підписка','tmux.required':'Потрібен tmux на сервері',
   },
   en: {
     'tb.bot':'Bot','tb.bot.none':'no bot','tb.bot.tip':'The task runs with this bot\'s prompt and model',
@@ -540,6 +544,10 @@ const TR = {
     'group.delete':'Delete group?','group.delete_body':'The group and all its tasks will be deleted.',
     'group.created':'✓ Group created','group.saved':'✓ Group saved','group.task_added':'✓ Task added',
     'group.edit_task':'Edit task','group.task_saved':'✓ Task saved',
+    'nav.schedule':'Schedule','nav.dashboard':'Dashboard','hdr.project':'Project','hdr.refresh':'Refresh',
+    'mode.auto':'Auto','mode.plan':'Plan','mode.task':'Task','agent.single':'Single','agent.multi':'Multi',
+    'effort.auto':'Auto','effort.low':'Low','effort.med':'Medium','effort.high':'High','effort.xhigh':'XHigh','effort.max':'Max',
+    'engine.api':'API','engine.sub':'Subscription','tmux.required':'tmux is required on the server',
   },
   ru: {
     'tb.bot':'Бот','tb.bot.none':'без бота','tb.bot.tip':'Задача выполнится промптом и моделью этого бота',
@@ -583,20 +591,124 @@ const TR = {
     'group.delete':'Удалить группу?','group.delete_body':'Группа и все её задания будут удалены.',
     'group.created':'✓ Группа создана','group.saved':'✓ Группа сохранена','group.task_added':'✓ Задание добавлено',
     'group.edit_task':'Редактировать задание','group.task_saved':'✓ Задание сохранено',
+    'nav.schedule':'Расписание','nav.dashboard':'Панель','hdr.project':'Проект','hdr.refresh':'Обновить',
+    'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача','agent.single':'Один','agent.multi':'Мульти',
+    'effort.auto':'Авто','effort.low':'Низкое','effort.med':'Среднее','effort.high':'Высокое','effort.xhigh':'Очень высокое','effort.max':'Максимальное',
+    'engine.api':'API','engine.sub':'Подписка','tmux.required':'Нужен tmux на сервере',
+  },
+  fr: {
+    'tb.bot':'Bot','tb.bot.none':'sans bot','tb.bot.tip':"La tâche s'exécute avec le prompt et le modèle de ce bot",
+    'hdr.title':'Kanban','hdr.add':'Tâche',
+    'proj.label':'Projet :','proj.all':'— Tous les projets —','proj.recent':'Récents','proj.search':'Rechercher un projet…','search.empty':'Aucun résultat',
+    'col.backlog':'Backlog','col.todo':'À faire','col.in_progress':'En cours',
+    'col.done':'Terminé','col.cancelled':'Annulé','col.empty':'Aucune tâche',
+    'modal.add':'Nouvelle tâche','modal.edit':'Modifier la tâche',
+    'modal.name':'Titre *','modal.status':'Statut','modal.session':'Session liée',
+    'modal.project':'Projet *','modal.project.ph':'— choisir un projet —',
+    'modal.sched':'Lancer à','modal.sched.hint':'Laisser vide pour exécuter comme une tâche normale','modal.sched.clear':'Effacer la planification',
+    'modal.recur':'Répétition','modal.recur.once':'Une fois','modal.recur.end':'Fin de la répétition',
+    'recur.unit.hour':'toutes les heures','recur.unit.day':'tous les jours','recur.unit.week':'toutes les semaines','recur.unit.month':'tous les mois','recur.unit.timesMonth':'fois par mois',
+    'toast.pick_project':'Choisissez un projet pour la tâche',
+    'modal.no_session':'— aucune session —','modal.new_session':'➕ Nouvelle session',
+    'modal.desc':'Description','modal.notes':'Notes',
+    'modal.attach':'Pièces jointes','modal.attach_hint':'Cliquez, glissez ou collez (Ctrl+V)','modal.attach_max':'Maximum 10 fichiers par tâche',
+    'modal.create':'Créer','modal.save':'Enregistrer','modal.cancel':'Annuler',
+    'modal.delete':'Supprimer',
+    'confirm.title':'Supprimer la tâche ?','confirm.body':'Cette action est irréversible.',
+    'confirm.ok':'Supprimer','confirm.cancel':'Annuler',
+    'chat.title':'Discussion de la session','chat.empty':'Aucun message','chat.open':'↗ Ouvrir dans la discussion',
+    'toast.created':'✓ Tâche créée','toast.saved':'✓ Enregistré',
+    'toast.deleted':'Tâche supprimée','toast.copied':'✓ ID copié',
+    'toast.sess_created':'✓ Session créée automatiquement','toast.err':'Erreur : ',
+    'toast.no_project':"Sélectionnez d'abord un projet",
+    'modal.new_sess_cfg':'Réglages de la nouvelle session',
+    'tb.mode':'Mode','tb.agent':'Agent','tb.model':'Modèle','tb.turns':'Tours','tb.engine':'Moteur','tb.effort':'Effort',
+    'card.running':'En cours','msg.you':'Vous','msg.tool':'Outil','refresh.now':"à l'instant",
+    'card.retry':'↩ relance',
+    'time.min':'min','time.hr':'h','time.day':'j',
+    'hdr.connected':'Connecté',
+    'card.sess_fallback':'session','card.retry_tooltip':'relance(s)','chat.copy_id':'Cliquer pour copier',
+    'nav.chat':'Discussion','nav.kanban':'Tableau Kanban','nav.aria':'Navigation',
+    'stat.total':'au total',
+    'card.sched_tip':'En attente du lancement :','modal.sched_wait':'En attente du lancement :','locale':'fr-FR',
+    'card.paused':"Limite d'utilisation",'card.paused_tip':"Arrêté par une limite d'utilisation. Reprise automatique :",
+    'hdr.group':'Groupe','group.add':'Nouveau groupe','group.edit':'Modifier le groupe',
+    'group.title':'Titre du groupe *','group.tasks':'Tâches','group.add_task':'+ Ajouter une tâche',
+    'group.empty':'Ajoutez des tâches au groupe','group.activate':'Lancer',
+    'group.delete':'Supprimer le groupe ?','group.delete_body':'Le groupe et toutes ses tâches seront supprimés.',
+    'group.created':'✓ Groupe créé','group.saved':'✓ Groupe enregistré','group.task_added':'✓ Tâche ajoutée',
+    'group.edit_task':'Modifier la tâche','group.task_saved':'✓ Tâche enregistrée',
+    'nav.schedule':'Planning','nav.dashboard':'Tableau de bord','hdr.project':'Projet','hdr.refresh':'Actualiser',
+    'mode.auto':'Auto','mode.plan':'Plan','mode.task':'Tâche','agent.single':'Simple','agent.multi':'Multi',
+    'effort.auto':'Auto','effort.low':'Faible','effort.med':'Moyen','effort.high':'Élevé','effort.xhigh':'Très élevé','effort.max':'Maximal',
+    'engine.api':'API','engine.sub':'Abonnement','tmux.required':'tmux est requis sur le serveur',
+  },
+  he: {
+    'tb.bot':'בוט','tb.bot.none':'ללא בוט','tb.bot.tip':'המשימה תרוץ עם הפרומפט והמודל של הבוט הזה',
+    'hdr.title':'קנבן','hdr.add':'משימה',
+    'proj.label':'פרויקט:','proj.all':'— כל הפרויקטים —','proj.recent':'אחרונים','proj.search':'חיפוש פרויקט...','search.empty':'לא נמצא',
+    'col.backlog':'מאגר','col.todo':'לביצוע','col.in_progress':'בתהליך',
+    'col.done':'הושלם','col.cancelled':'בוטל','col.empty':'אין משימות',
+    'modal.add':'משימה חדשה','modal.edit':'עריכת משימה',
+    'modal.name':'כותרת *','modal.status':'סטטוס','modal.session':'סשן מקושר',
+    'modal.project':'פרויקט *','modal.project.ph':'— בחרו פרויקט —',
+    'modal.sched':'להריץ ב','modal.sched.hint':'השאירו ריק כדי להריץ כמשימה רגילה','modal.sched.clear':'ניקוי התזמון',
+    'modal.recur':'חזרתיות','modal.recur.once':'פעם אחת','modal.recur.end':'סיום החזרתיות',
+    'recur.unit.hour':'כל שעה','recur.unit.day':'כל יום','recur.unit.week':'כל שבוע','recur.unit.month':'כל חודש','recur.unit.timesMonth':'פעמים בחודש',
+    'toast.pick_project':'בחרו פרויקט למשימה',
+    'modal.no_session':'— ללא סשן —','modal.new_session':'➕ סשן חדש',
+    'modal.desc':'תיאור','modal.notes':'הערות',
+    'modal.attach':'קבצים מצורפים','modal.attach_hint':'לחצו, גררו או הדביקו (Ctrl+V)','modal.attach_max':'מקסימום 10 קבצים למשימה',
+    'modal.create':'יצירה','modal.save':'שמירה','modal.cancel':'ביטול',
+    'modal.delete':'מחיקה',
+    'confirm.title':'למחוק את המשימה?','confirm.body':'הפעולה אינה הפיכה.',
+    'confirm.ok':'מחיקה','confirm.cancel':'ביטול',
+    'chat.title':'צ׳אט הסשן','chat.empty':'אין הודעות','chat.open':'↗ פתיחה בצ׳אט',
+    'toast.created':'✓ המשימה נוצרה','toast.saved':'✓ נשמר',
+    'toast.deleted':'המשימה נמחקה','toast.copied':'✓ המזהה הועתק',
+    'toast.sess_created':'✓ הסשן נוצר אוטומטית','toast.err':'שגיאה: ',
+    'toast.no_project':'בחרו קודם פרויקט',
+    'modal.new_sess_cfg':'הגדרות הסשן החדש',
+    'tb.mode':'מצב','tb.agent':'סוכן','tb.model':'מודל','tb.turns':'תורות','tb.engine':'מנוע','tb.effort':'מאמץ',
+    'card.running':'רץ','msg.you':'אתם','msg.tool':'כלי','refresh.now':'הרגע',
+    'card.retry':'↩ ניסיון חוזר',
+    'time.min':'ד׳','time.hr':'ש׳','time.day':'י׳',
+    'hdr.connected':'מחובר',
+    'card.sess_fallback':'סשן','card.retry_tooltip':'הפעלות חוזרות','chat.copy_id':'לחצו כדי להעתיק',
+    'nav.chat':'צ׳אט','nav.kanban':'לוח קנבן','nav.aria':'ניווט',
+    'stat.total':'סה״כ',
+    'card.sched_tip':'ממתין להפעלה:','modal.sched_wait':'ממתין להפעלה:','locale':'he-IL',
+    'card.paused':'מגבלת שימוש','card.paused_tip':'נעצר בגלל מגבלת שימוש. יתחדש אוטומטית:',
+    'hdr.group':'קבוצה','group.add':'קבוצה חדשה','group.edit':'עריכת הקבוצה',
+    'group.title':'שם הקבוצה *','group.tasks':'משימות','group.add_task':'+ הוספת משימה',
+    'group.empty':'הוסיפו משימות לקבוצה','group.activate':'הפעלה',
+    'group.delete':'למחוק את הקבוצה?','group.delete_body':'הקבוצה וכל המשימות שלה יימחקו.',
+    'group.created':'✓ הקבוצה נוצרה','group.saved':'✓ הקבוצה נשמרה','group.task_added':'✓ המשימה נוספה',
+    'group.edit_task':'עריכת המשימה','group.task_saved':'✓ המשימה נשמרה',
+    'nav.schedule':'לוח זמנים','nav.dashboard':'לוח מחוונים','hdr.project':'פרויקט','hdr.refresh':'רענון',
+    'mode.auto':'אוטומטי','mode.plan':'תכנון','mode.task':'משימה','agent.single':'יחיד','agent.multi':'מרובה',
+    'effort.auto':'אוטומטי','effort.low':'נמוך','effort.med':'בינוני','effort.high':'גבוה','effort.xhigh':'גבוה מאוד','effort.max':'מרבי',
+    'engine.api':'API','engine.sub':'מנוי','tmux.required':'נדרש tmux בשרת',
   },
 };
-const lang = localStorage.getItem('lang') || 'uk';
-function t(k){ return (TR[lang]||TR.uk)[k] || k; }
+const lang = localStorage.getItem('lang') || 'en';
+function t(k){ return (TR[lang]||TR.en)[k] || k; }
+document.documentElement.lang = lang;
+document.documentElement.dir = (lang === 'he') ? 'rtl' : 'ltr';
 
+// Declarative i18n — same attribute contract as index.html: the markup carries the
+// key, this pass fills in text/attributes for the active language. Every user-facing
+// literal in the markup must be annotated; test/i18n-completeness.test.js enforces it.
+function applyI18nAttrs(root) {
+  const r = root || document;
+  r.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+  for (const [attr, target] of [['data-i18n-ph', 'placeholder'], ['data-i18n-title', 'title'],
+                                ['data-i18n-aria', 'aria-label'], ['data-i18n-tip', 'data-tip']]) {
+    r.querySelectorAll('[' + attr + ']').forEach(el => { el.setAttribute(target, t(el.getAttribute(attr))); });
+  }
+}
 document.title = t('hdr.title') + ' — Claude Code Studio';
-document.getElementById('addBtnLabel').textContent=t('hdr.add');
-document.getElementById('addGroupBtnLabel').textContent=t('hdr.group');
-document.getElementById('kbStatusEl').textContent=t('hdr.connected');
-document.getElementById('cancelBtn').textContent=t('confirm.cancel');
-document.querySelector('.nav-sw').setAttribute('aria-label', t('nav.aria'));
-document.querySelector('a.nav-sw-btn[href="/"]').setAttribute('data-tip', t('nav.chat'));
-document.querySelector('a.nav-sw-btn[href="/kanban"]').setAttribute('data-tip', t('nav.kanban'));
-document.getElementById('confirmOkBtn').textContent=t('confirm.ok');
+applyI18nAttrs();
 
 // ─── State ────────────────────────────────────────────────────────────────
 const COLS=[
@@ -1438,15 +1550,15 @@ function buildChainForm(chain){
       <div class="sc-row">
         <div class="sc-seg" data-group="mode">
           <span class="sc-lbl">${t('tb.mode')}</span>
-          <button type="button" class="sc-btn${m==='auto'?' on':''}" data-v="auto" onclick="scOpt(this)">Auto</button>
-          <button type="button" class="sc-btn${m==='planning'?' on':''}" data-v="planning" onclick="scOpt(this)">Plan</button>
-          <button type="button" class="sc-btn${m==='task'?' on':''}" data-v="task" onclick="scOpt(this)">Task</button>
+          <button type="button" class="sc-btn${m==='auto'?' on':''}" data-v="auto" onclick="scOpt(this)">${escH(t('mode.auto'))}</button>
+          <button type="button" class="sc-btn${m==='planning'?' on':''}" data-v="planning" onclick="scOpt(this)">${escH(t('mode.plan'))}</button>
+          <button type="button" class="sc-btn${m==='task'?' on':''}" data-v="task" onclick="scOpt(this)">${escH(t('mode.task'))}</button>
         </div>
         <div class="sc-sep"></div>
         <div class="sc-seg" data-group="agent">
           <span class="sc-lbl">${t('tb.agent')}</span>
-          <button type="button" class="sc-btn${ag==='single'?' on':''}" data-v="single" onclick="scOpt(this)">Single</button>
-          <button type="button" class="sc-btn${ag==='multi'?' on':''}" data-v="multi" onclick="scOpt(this)">Multi</button>
+          <button type="button" class="sc-btn${ag==='single'?' on':''}" data-v="single" onclick="scOpt(this)">${escH(t('agent.single'))}</button>
+          <button type="button" class="sc-btn${ag==='multi'?' on':''}" data-v="multi" onclick="scOpt(this)">${escH(t('agent.multi'))}</button>
         </div>
         <div class="sc-sep"></div>
         <div class="sc-seg" data-group="model">
@@ -1476,12 +1588,12 @@ function buildChainForm(chain){
         <div class="sc-seg">
           <span class="sc-lbl">${t('tb.effort')}</span>
           <select class="sc-turns" id="fChainEffort" style="width:auto">
-            <option value=""${!chain.effort?' selected':''}>Auto</option>
-            <option value="low"${chain.effort==='low'?' selected':''}>Low</option>
-            <option value="medium"${chain.effort==='medium'?' selected':''}>Medium</option>
-            <option value="high"${chain.effort==='high'?' selected':''}>High</option>
-            <option value="xhigh"${chain.effort==='xhigh'?' selected':''}>XHigh</option>
-            <option value="max"${chain.effort==='max'?' selected':''}>Max</option>
+            <option value=""${!chain.effort?' selected':''}>${escH(t('effort.auto'))}</option>
+            <option value="low"${chain.effort==='low'?' selected':''}>${escH(t('effort.low'))}</option>
+            <option value="medium"${chain.effort==='medium'?' selected':''}>${escH(t('effort.med'))}</option>
+            <option value="high"${chain.effort==='high'?' selected':''}>${escH(t('effort.high'))}</option>
+            <option value="xhigh"${chain.effort==='xhigh'?' selected':''}>${escH(t('effort.xhigh'))}</option>
+            <option value="max"${chain.effort==='max'?' selected':''}>${escH(t('effort.max'))}</option>
           </select>
         </div>
       </div>
@@ -1707,12 +1819,12 @@ function engineSegHtml(val){
   const raw=val||kbSettings.run_engine||'api';
   const eng=(raw==='subscription'&&_kbTmuxAvailable)?'subscription':'api';
   const subDisabled=!_kbTmuxAvailable;
-  const subAttrs=subDisabled?` disabled style="opacity:0.4;cursor:not-allowed" title="Потрібен tmux на сервері"`:'';
+  const subAttrs=subDisabled?` disabled style="opacity:0.4;cursor:not-allowed" title="${escH(t('tmux.required'))}"`:'';
   // Engine switcher hidden (Subscription paused; API/claude -p only). Un-hide to restore.
   return `<div class="sc-seg" data-group="run_engine" style="display:none">
     <span class="sc-lbl">${t('tb.engine')}</span>
-    <button type="button" class="sc-btn${eng==='api'?' on':''}" data-v="api" onclick="scOpt(this)">API</button>
-    <button type="button" class="sc-btn${eng==='subscription'&&!subDisabled?' on':''}" data-v="subscription" onclick="scOpt(this)"${subAttrs}>Subscription</button>
+    <button type="button" class="sc-btn${eng==='api'?' on':''}" data-v="api" onclick="scOpt(this)">${escH(t('engine.api'))}</button>
+    <button type="button" class="sc-btn${eng==='subscription'&&!subDisabled?' on':''}" data-v="subscription" onclick="scOpt(this)"${subAttrs}>${escH(t('engine.sub'))}</button>
   </div>`;
 }
 
@@ -1782,15 +1894,15 @@ function buildForm(tk={}){
       <div class="sc-row">
         <div class="sc-seg" data-group="mode">
           <span class="sc-lbl">${t('tb.mode')}</span>
-          <button type="button" class="sc-btn${m==='auto'?' on':''}" data-v="auto" onclick="scOpt(this)">Auto</button>
-          <button type="button" class="sc-btn${m==='planning'?' on':''}" data-v="planning" onclick="scOpt(this)">Plan</button>
-          <button type="button" class="sc-btn${m==='task'?' on':''}" data-v="task" onclick="scOpt(this)">Task</button>
+          <button type="button" class="sc-btn${m==='auto'?' on':''}" data-v="auto" onclick="scOpt(this)">${escH(t('mode.auto'))}</button>
+          <button type="button" class="sc-btn${m==='planning'?' on':''}" data-v="planning" onclick="scOpt(this)">${escH(t('mode.plan'))}</button>
+          <button type="button" class="sc-btn${m==='task'?' on':''}" data-v="task" onclick="scOpt(this)">${escH(t('mode.task'))}</button>
         </div>
         <div class="sc-sep"></div>
         <div class="sc-seg" data-group="agent">
           <span class="sc-lbl">${t('tb.agent')}</span>
-          <button type="button" class="sc-btn${ag==='single'?' on':''}" data-v="single" onclick="scOpt(this)">Single</button>
-          <button type="button" class="sc-btn${ag==='multi'?' on':''}" data-v="multi" onclick="scOpt(this)">Multi</button>
+          <button type="button" class="sc-btn${ag==='single'?' on':''}" data-v="single" onclick="scOpt(this)">${escH(t('agent.single'))}</button>
+          <button type="button" class="sc-btn${ag==='multi'?' on':''}" data-v="multi" onclick="scOpt(this)">${escH(t('agent.multi'))}</button>
         </div>
         <div class="sc-sep"></div>
         <div class="sc-seg" data-group="model">
@@ -1820,12 +1932,12 @@ function buildForm(tk={}){
         <div class="sc-seg">
           <span class="sc-lbl">${t('tb.effort')}</span>
           <select class="sc-turns" id="fEffort" style="width:auto">
-            <option value=""${!tk.effort?' selected':''}>Auto</option>
-            <option value="low"${tk.effort==='low'?' selected':''}>Low</option>
-            <option value="medium"${tk.effort==='medium'?' selected':''}>Medium</option>
-            <option value="high"${tk.effort==='high'?' selected':''}>High</option>
-            <option value="xhigh"${tk.effort==='xhigh'?' selected':''}>XHigh</option>
-            <option value="max"${tk.effort==='max'?' selected':''}>Max</option>
+            <option value=""${!tk.effort?' selected':''}>${escH(t('effort.auto'))}</option>
+            <option value="low"${tk.effort==='low'?' selected':''}>${escH(t('effort.low'))}</option>
+            <option value="medium"${tk.effort==='medium'?' selected':''}>${escH(t('effort.med'))}</option>
+            <option value="high"${tk.effort==='high'?' selected':''}>${escH(t('effort.high'))}</option>
+            <option value="xhigh"${tk.effort==='xhigh'?' selected':''}>${escH(t('effort.xhigh'))}</option>
+            <option value="max"${tk.effort==='max'?' selected':''}>${escH(t('effort.max'))}</option>
           </select>
         </div>
       </div>

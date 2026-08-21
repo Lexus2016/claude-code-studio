@@ -2818,13 +2818,13 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('proj')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('proj')}">
         <span data-i18n="sec.projects">Проекти</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="projFilterBtn" onclick="event.stopPropagation();toggleSecFilter('proj')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-filter-btn" id="projFilterBtn" onclick="event.stopPropagation();toggleSecFilter('proj')" data-i18n-title="sec.filter" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button class="sec-add-btn" onclick="event.stopPropagation();openAddProject()" title="Додати проект" data-i18n-title="proj.add">＋</button>
           <span class="badge" id="projCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="projBody">
-        <div class="sec-filter-row" id="projFilterRow"><input type="text" id="projFilterInp" placeholder="Фільтр..." aria-label="Фільтр проектів" oninput="applySecFilter('proj',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('proj');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('proj')">×</button></div>
+        <div class="sec-filter-row" id="projFilterRow"><input type="text" id="projFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Фільтр..." data-i18n-aria="sec.filter.aria.proj" aria-label="Фільтр проектів" oninput="applySecFilter('proj',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('proj');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('proj')">×</button></div>
         <div class="sec-list"><div id="projList"></div></div>
       </div>
     </div>
@@ -2834,13 +2834,13 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('sshHosts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('sshHosts')}">
         <span data-i18n="sec.sshHosts">SSH Хости</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="sshHostsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('sshHosts')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-filter-btn" id="sshHostsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('sshHosts')" data-i18n-title="sec.filter" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button class="sec-add-btn" onclick="event.stopPropagation();openAddHostModal()" title="Додати SSH хост" data-i18n-title="ssh.add">＋</button>
           <span class="badge" id="sshHostCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="sshHostsBody">
-        <div class="sec-filter-row" id="sshHostsFilterRow"><input type="text" id="sshHostsFilterInp" placeholder="Фільтр..." aria-label="Фільтр SSH хостів" oninput="applySecFilter('sshHosts',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('sshHosts');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('sshHosts')">×</button></div>
+        <div class="sec-filter-row" id="sshHostsFilterRow"><input type="text" id="sshHostsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Фільтр..." data-i18n-aria="sec.filter.aria.ssh" aria-label="Фільтр SSH хостів" oninput="applySecFilter('sshHosts',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('sshHosts');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('sshHosts')">×</button></div>
         <div class="sec-list"><div id="sshHostList"></div></div>
       </div>
     </div>
@@ -2849,16 +2849,16 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('hist')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('hist')}">
         <span data-i18n="sec.chats">Чати</span>
         <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
-          <button class="sec-filter-btn" id="histFilterBtn" onclick="event.stopPropagation();toggleSecFilter('hist')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-filter-btn" id="histFilterBtn" onclick="event.stopPropagation();toggleSecFilter('hist')" data-i18n-title="sec.filter" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button class="hist-select-btn" id="histSelBtn" onclick="event.stopPropagation();toggleHistSelect()" data-i18n-title="hist.sel.title" title="Вибрати кілька">☑</button>
           <span class="badge" id="histCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="histBody">
-        <div class="sec-filter-row" id="histFilterRow"><input type="text" id="histFilterInp" placeholder="Фільтр..." aria-label="Фільтр чатів" oninput="applySecFilter('hist',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('hist');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('hist')">×</button></div>
+        <div class="sec-filter-row" id="histFilterRow"><input type="text" id="histFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Фільтр..." data-i18n-aria="sec.filter.aria.hist" aria-label="Фільтр чатів" oninput="applySecFilter('hist',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('hist');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('hist')">×</button></div>
         <div class="sec-list"><div class="hist-list" id="histList"></div></div>
         <div class="hist-bulk-bar" id="histBulkBar">
-          <span class="bulk-info" id="histBulkInfo">0 вибрано</span>
+          <span class="bulk-info" id="histBulkInfo"></span>
           <button class="bulk-all" onclick="selectAllHist()" data-i18n="bulk.all">Всі</button>
           <button class="bulk-del" id="histBulkDel" onclick="delSelectedHist()" disabled data-i18n="bulk.del">Видалити</button>
         </div>
@@ -2869,7 +2869,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('mcp')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('mcp')}">
         <span data-i18n="sec.mcp">MCP</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="mcpFilterBtn" onclick="event.stopPropagation();toggleSecFilter('mcp')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-filter-btn" id="mcpFilterBtn" onclick="event.stopPropagation();toggleSecFilter('mcp')" data-i18n-title="sec.filter" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button class="sec-add-btn" onclick="event.stopPropagation();openMcpImport()" title="Імпортувати MCP з JSON файлу" data-i18n-title="mcp.import.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
           <button class="sec-add-btn" onclick="event.stopPropagation();exportMcp()" title="Експортувати MCP у JSON файл" data-i18n-title="mcp.export.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
           <button class="sec-add-btn" onclick="event.stopPropagation();openMcpModal('add')" title="Додати MCP-сервер" data-i18n-title="mcp.add">＋</button>
@@ -2877,7 +2877,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         </div>
       </div>
       <div class="sec-body" id="mcpBody">
-        <div class="sec-filter-row" id="mcpFilterRow"><input type="text" id="mcpFilterInp" placeholder="Фільтр..." aria-label="Фільтр MCP-серверів" oninput="applySecFilter('mcp',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('mcp');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('mcp')">×</button></div>
+        <div class="sec-filter-row" id="mcpFilterRow"><input type="text" id="mcpFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Фільтр..." data-i18n-aria="sec.filter.aria.mcp" aria-label="Фільтр MCP-серверів" oninput="applySecFilter('mcp',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('mcp');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('mcp')">×</button></div>
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="mcp.hint">Увімкніть інструменти, які Claude може використовувати в цьому чаті.</div>
         <div class="sec-list"><div id="mcpList"></div></div>
       </div>
@@ -2887,14 +2887,14 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('skills')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('skills')}">
         <span data-i18n="sec.skills">Навички</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="skillsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('skills')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
-          <button id="autoSkillsBtn" class="auto-skills-btn" onclick="event.stopPropagation();toggleAutoSkills()">⚡ Auto</button>
+          <button class="sec-filter-btn" id="skillsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('skills')" data-i18n-title="sec.filter" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button id="autoSkillsBtn" class="auto-skills-btn" onclick="event.stopPropagation();toggleAutoSkills()" data-i18n="skills.auto.btn">⚡ Auto</button>
           <button class="sec-add-btn" onclick="event.stopPropagation();$i('skillUpload').click()" title="Завантажити .md файл" data-i18n-title="skills.upload">＋</button>
           <span class="badge" id="skillsCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="skillsBody">
-        <div class="sec-filter-row" id="skillsFilterRow"><input type="text" id="skillsFilterInp" placeholder="Фільтр..." aria-label="Фільтр навичок" oninput="applySecFilter('skills',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('skills');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('skills')">×</button></div>
+        <div class="sec-filter-row" id="skillsFilterRow"><input type="text" id="skillsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Фільтр..." data-i18n-aria="sec.filter.aria.skills" aria-label="Фільтр навичок" oninput="applySecFilter('skills',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('skills');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('skills')">×</button></div>
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="skills.hint">Навички — файли інструкцій, що додаються до системного промпту.</div>
         <div id="autoSkillsHint" class="auto-notif" style="display:none" data-i18n="skills.auto_hint">⚡ Навички обираються автоматично по тексту завдання</div>
         <div class="sec-list"><div id="skillsList"></div></div>
@@ -2906,13 +2906,13 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('cmds')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('cmds')}">
         <span data-i18n="sec.cmds">/ Команди</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="cmdsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('cmds')" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-filter-btn" id="cmdsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('cmds')" data-i18n-title="sec.filter" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button class="sec-add-btn" onclick="event.stopPropagation();openCmdForm()" title="Додати команду" data-i18n-title="cmd.add.new">＋</button>
           <span class="badge" id="cmdsCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="cmdsBody">
-        <div class="sec-filter-row" id="cmdsFilterRow"><input type="text" id="cmdsFilterInp" placeholder="Фільтр..." aria-label="Фільтр команд" oninput="applySecFilter('cmds',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('cmds');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('cmds')">×</button></div>
+        <div class="sec-filter-row" id="cmdsFilterRow"><input type="text" id="cmdsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Фільтр..." data-i18n-aria="sec.filter.aria.cmds" aria-label="Фільтр команд" oninput="applySecFilter('cmds',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('cmds');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('cmds')">×</button></div>
         <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="cmds.hint">Слеш-команди — шорткати до промптів. Набирайте / в чаті.</div>
         <div class="sec-list"><div id="cmdsList"></div></div>
       </div>
@@ -2980,10 +2980,10 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 
         <!-- Ngrok authtoken (shown only for ngrok) -->
         <div class="tg-section" id="tunnelNgrokAuth" style="display:none;margin-top:8px">
-          <label style="font-size:11px;color:var(--muted)">Authtoken: <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener" style="color:var(--accent2);text-decoration:none;opacity:.8" data-i18n="tn.ng.get_token">↗ отримати</a></label>
+          <label style="font-size:11px;color:var(--muted)"><span data-i18n="tn.ng.authtoken">Authtoken:</span> <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener" style="color:var(--accent2);text-decoration:none;opacity:.8" data-i18n="tn.ng.get_token">↗ отримати</a></label>
           <div style="display:flex;gap:4px;margin-top:4px">
             <input id="tunnelNgrokToken" type="password" placeholder="ngrok authtoken..." style="flex:1;font-size:11px;padding:5px 8px;background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:monospace">
-            <button class="bg" onclick="tunnelToggleNgrokPwd(this)" title="Show/hide" style="padding:5px 7px;font-size:12px;flex-shrink:0" aria-label="Show token">👁</button>
+            <button class="bg" onclick="tunnelToggleNgrokPwd(this)" data-i18n-title="tn.token.toggle" title="Show/hide" style="padding:5px 7px;font-size:12px;flex-shrink:0" data-i18n-aria="tn.token.aria" aria-label="Show token">👁</button>
           </div>
         </div>
 
@@ -3002,7 +3002,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <label style="font-size:11px;color:var(--muted)" data-i18n="tn.url">Публічний URL:</label>
           <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
             <input id="tunnelUrlDisplay" readonly style="flex:1;font-size:11px;padding:5px 8px;background:var(--s1);border:1px solid var(--accent);border-radius:6px;color:var(--text);font-family:monospace;cursor:copy" onclick="this.select()">
-            <button class="bg" id="tunnelCopyBtn" onclick="tunnelCopyUrl()" title="Copy URL" aria-label="Copy tunnel URL" style="padding:5px 8px;font-size:13px;transition:color .15s">📋</button>
+            <button class="bg" id="tunnelCopyBtn" onclick="tunnelCopyUrl()" data-i18n-title="tn.copy.url" title="Copy URL" data-i18n-aria="tn.copy.aria" aria-label="Copy tunnel URL" style="padding:5px 8px;font-size:13px;transition:color .15s">📋</button>
           </div>
           <div style="display:flex;gap:4px;margin-top:6px" id="tunnelUrlActions">
             <button class="bg" id="tunnelSendTgBtn" onclick="tunnelSendToTelegram()" style="display:none;flex:1;font-size:11px;padding:5px 8px" data-i18n="tn.send_tg">📤 Telegram</button>
@@ -3065,7 +3065,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 </div>
 
 <!-- LEFT PANEL TAB -->
-<div class="panel-tab panel-tab-left active" role="button" tabindex="0" aria-label="Toggle left panel" onclick="toggle('leftPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('leftPanel')}" data-tip="Сховати/показати ліву панель" data-i18n-tip="tip.panels.left">
+<div class="panel-tab panel-tab-left active" role="button" tabindex="0" data-i18n-aria="tip.panels.left" aria-label="Toggle left panel" onclick="toggle('leftPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('leftPanel')}" data-tip="Сховати/показати ліву панель" data-i18n-tip="tip.panels.left">
   <div class="panel-tab-inner">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
   </div>
@@ -3076,7 +3076,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 
   <!-- ══════ MOBILE HEADER (hidden on desktop) ══════ -->
   <div class="mob-hdr" id="mobHdr">
-    <button class="mob-hdr-btn" onclick="toggle('leftPanel')" aria-label="Menu">
+    <button class="mob-hdr-btn" onclick="toggle('leftPanel')" data-i18n-aria="aria.menu" aria-label="Menu">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div class="mob-hdr-center" onclick="openMobTabs()">
@@ -3086,14 +3086,14 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       </div>
       <div class="mob-hdr-subtitle">
         <span class="mob-status-dot warn" id="mobStatusDot"></span>
-        <span id="mobSubtitle">Auto · Sonnet</span>
+        <span id="mobSubtitle"></span>
       </div>
     </div>
     <div class="mob-hdr-actions">
-      <button class="mob-hdr-btn" onclick="newSession()" aria-label="New chat">
+      <button class="mob-hdr-btn" onclick="newSession()" data-i18n-aria="tab.new" aria-label="New chat">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
-      <button class="mob-hdr-btn" id="mobSettingsBtn" onclick="toggleMobSheet()" aria-label="Settings">
+      <button class="mob-hdr-btn" id="mobSettingsBtn" onclick="toggleMobSheet()" data-i18n-aria="cfg.title" aria-label="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       </button>
     </div>
@@ -3107,17 +3107,17 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.mode">Mode</div>
         <div class="mob-sheet-chips">
-          <button class="mob-chip on" data-mob="mode" data-v="auto" onclick="setMobOpt(this,'mode')">Auto</button>
-          <button class="mob-chip" data-mob="mode" data-v="planning" onclick="setMobOpt(this,'mode')">Plan</button>
-          <button class="mob-chip" data-mob="mode" data-v="task" onclick="setMobOpt(this,'mode')">Task</button>
+          <button class="mob-chip on" data-mob="mode" data-v="auto" onclick="setMobOpt(this,'mode')" data-i18n="mode.auto">Auto</button>
+          <button class="mob-chip" data-mob="mode" data-v="planning" onclick="setMobOpt(this,'mode')" data-i18n="mode.plan">Plan</button>
+          <button class="mob-chip" data-mob="mode" data-v="task" onclick="setMobOpt(this,'mode')" data-i18n="mode.task">Task</button>
         </div>
       </div>
       <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.agent">Agent</div>
         <div class="mob-sheet-chips">
-          <button class="mob-chip on" data-mob="agent" data-v="single" onclick="setMobOpt(this,'agent')">Single</button>
-          <button class="mob-chip" data-mob="agent" data-v="multi" onclick="setMobOpt(this,'agent')">Multi</button>
-          <button class="mob-chip" data-mob="agent" data-v="dispatch" onclick="setMobOpt(this,'agent')">Dispatch</button>
+          <button class="mob-chip on" data-mob="agent" data-v="single" onclick="setMobOpt(this,'agent')" data-i18n="agent.single">Single</button>
+          <button class="mob-chip" data-mob="agent" data-v="multi" onclick="setMobOpt(this,'agent')" data-i18n="agent.multi">Multi</button>
+          <button class="mob-chip" data-mob="agent" data-v="dispatch" onclick="setMobOpt(this,'agent')" data-i18n="agent.dispatch">Dispatch</button>
         </div>
       </div>
       <div class="mob-sheet-section">
@@ -3130,11 +3130,11 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         </div>
       </div>
       <div class="mob-sheet-section" style="display:none"><!-- Engine switcher hidden: Subscription paused; API/claude -p only -->
-        <div class="mob-sheet-label">Engine</div>
+        <div class="mob-sheet-label" data-i18n="tb.engine">Engine</div>
         <div class="mob-sheet-chips">
           <button class="mob-chip on" data-mob="engine" data-v="api" onclick="setMobOpt(this,'engine')">API</button>
-          <button class="mob-chip" data-mob="engine" data-v="subscription" onclick="setMobOpt(this,'engine')">Subscription</button>
-          <button class="mob-chip" data-default-star onclick="setDefaultEngine()" title="Зробити поточний рушій типовим для нових чатів">★ Set as default</button>
+          <button class="mob-chip" data-mob="engine" data-v="subscription" onclick="setMobOpt(this,'engine')" data-i18n="engine.sub">Subscription</button>
+          <button class="mob-chip" data-default-star onclick="setDefaultEngine()" data-i18n-title="engine.default.title" title="Зробити поточний рушій типовим для нових чатів" data-i18n="engine.default.btn">★ Set as default</button>
         </div>
       </div>
       <div class="mob-sheet-section">
@@ -3145,10 +3145,10 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       </div>
       <div class="mob-sheet-divider"></div>
       <a class="mob-sheet-link" href="/kanban" data-i18n-tip="nav.kanban.tip">
-        <span class="mob-sheet-link-icon">📊</span> Kanban
+        <span class="mob-sheet-link-icon">📊</span> <span data-i18n="nav.kanban">Kanban</span>
       </a>
       <a class="mob-sheet-link" href="/schedule" data-i18n-tip="nav.schedule.tip">
-        <span class="mob-sheet-link-icon">📅</span> Schedule
+        <span class="mob-sheet-link-icon">📅</span> <span data-i18n="nav.schedule">Schedule</span>
       </a>
       <div class="mob-sheet-divider"></div>
       <button class="mob-sheet-link" onclick="toggle('rightPanel');closeMobSheet()">
@@ -3182,26 +3182,26 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <nav class="nav-sw" aria-label="Навігація між розділами" data-i18n-aria="nav.aria">
         <a class="nav-sw-btn active" href="/" data-tip="Чат" data-i18n-tip="nav.chat.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-          Chat
+          <span data-i18n="nav.chat">Chat</span>
         </a>
         <a class="nav-sw-btn" href="/kanban" data-tip="Kanban дошка" data-i18n-tip="nav.kanban.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
-          Kanban
+          <span data-i18n="nav.kanban">Kanban</span>
         </a>
         <a class="nav-sw-btn" href="/schedule" data-tip="Розклад завдань" data-i18n-tip="nav.schedule.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          Schedule
+          <span data-i18n="nav.schedule">Schedule</span>
         </a>
         <a class="nav-sw-btn" href="/dashboard" data-tip="Dashboard" data-i18n-tip="nav.dashboard.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
-          Dashboard
+          <span data-i18n="nav.dashboard">Dashboard</span>
         </a>
       </nav>
       <div class="hdr-meta">
         <div class="proj-dd-wrap" id="projDdWrap">
           <button class="proj-dd-btn" id="projDdBtn" onclick="toggleProjDropdown()">
             <span class="proj-dd-icon">📁</span>
-            <span class="proj-dd-name" id="projDdName">Проект</span>
+            <span class="proj-dd-name" id="projDdName" data-i18n="hdr.project">Проект</span>
             <span class="proj-dd-arrow">▼</span>
           </button>
           <div class="proj-dd-menu" id="projDdMenu">
@@ -3233,7 +3233,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <button class="hb" onclick="newSession()" data-tip="Новий чат" data-i18n-tip="tip.new">&#xFF0B; <span data-i18n="btn.new">Чат</span></button>
       <button class="hb" onclick="openCliImport()" data-tip="Імпорт сесій Claude CLI" data-i18n-tip="cli.import.tip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
       <button class="hb" onclick="openCfgEditor()" data-tip="Налаштування" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
-      <select class="lang-sel" id="langSel" onchange="setLang(this.value)" aria-label="Interface language" data-tip="Мова інтерфейсу" data-i18n-tip="tip.lang">
+      <select class="lang-sel" id="langSel" onchange="setLang(this.value)" data-i18n-aria="tip.lang" aria-label="Interface language" data-tip="Мова інтерфейсу" data-i18n-tip="tip.lang">
         <option value="en">EN</option>
         <option value="uk">UK</option>
         <option value="ru">RU</option>
@@ -3248,16 +3248,16 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   <div class="toolbar">
     <div class="tb-group">
       <span class="label" data-i18n="tb.mode">Режим</span>
-      <button class="tb-btn on" data-v="auto" onclick="setOpt(this,'mode')">Auto</button>
-      <button class="tb-btn" data-v="planning" onclick="setOpt(this,'mode')">Plan</button>
-      <button class="tb-btn" data-v="task" onclick="setOpt(this,'mode')">Task</button>
+      <button class="tb-btn on" data-v="auto" onclick="setOpt(this,'mode')" data-i18n="mode.auto">Auto</button>
+      <button class="tb-btn" data-v="planning" onclick="setOpt(this,'mode')" data-i18n="mode.plan">Plan</button>
+      <button class="tb-btn" data-v="task" onclick="setOpt(this,'mode')" data-i18n="mode.task">Task</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
       <span class="label" data-i18n="tb.agent">Агент</span>
-      <button class="tb-btn on" data-v="single" onclick="setOpt(this,'agent')">Single</button>
-      <button class="tb-btn" data-v="multi" onclick="setOpt(this,'agent')">Multi</button>
-      <button class="tb-btn" data-v="dispatch" onclick="setOpt(this,'agent')">Dispatch</button>
+      <button class="tb-btn on" data-v="single" onclick="setOpt(this,'agent')" data-i18n="agent.single">Single</button>
+      <button class="tb-btn" data-v="multi" onclick="setOpt(this,'agent')" data-i18n="agent.multi">Multi</button>
+      <button class="tb-btn" data-v="dispatch" onclick="setOpt(this,'agent')" data-i18n="agent.dispatch">Dispatch</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -3271,21 +3271,21 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
          Anthropic, so only the API path (claude -p) is active. Un-hide to restore. -->
     <div class="tb-sep" style="display:none"></div>
     <div class="tb-group" style="display:none">
-      <span class="label">Engine</span>
-      <button class="tb-btn on" data-v="api" onclick="setOpt(this,'engine')" title="API engine — headless claude -p, billed per token (Claude Pro / API key)">API</button>
-      <button class="tb-btn" data-v="subscription" onclick="setOpt(this,'engine')" title="Subscription engine — persistent tmux session, billed on Claude Max subscription (no API credits). Requires: tmux + Claude Max.">Subscription</button>
-      <button class="tb-btn" data-default-star onclick="setDefaultEngine()" title="Зробити поточний рушій типовим для нових чатів" style="padding:0 8px">★</button>
+      <span class="label" data-i18n="tb.engine">Engine</span>
+      <button class="tb-btn on" data-v="api" onclick="setOpt(this,'engine')" data-i18n-title="engine.api.title" title="API engine — headless claude -p, billed per token (Claude Pro / API key)">API</button>
+      <button class="tb-btn" data-v="subscription" onclick="setOpt(this,'engine')" data-i18n-title="engine.sub.title" title="Subscription engine — persistent tmux session, billed on Claude Max subscription (no API credits). Requires: tmux + Claude Max." data-i18n="engine.sub">Subscription</button>
+      <button class="tb-btn" data-default-star onclick="setDefaultEngine()" data-i18n-title="engine.default.title" title="Зробити поточний рушій типовим для нових чатів" style="padding:0 8px">★</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
-      <span class="label">Effort</span>
-      <select class="tb-input" id="effortSel" onchange="setEffort(this.value)" style="width:78px" title="Thinking effort dial (claude --effort): Auto = CLI default, higher levels = deeper reasoning">
-        <option value="">Auto</option>
-        <option value="low">Low</option>
-        <option value="medium">Med</option>
-        <option value="high">High</option>
-        <option value="xhigh">X-High</option>
-        <option value="max">Max</option>
+      <span class="label" data-i18n="tb.effort">Effort</span>
+      <select class="tb-input" id="effortSel" onchange="setEffort(this.value)" style="width:78px" data-i18n-title="effort.title" title="Thinking effort dial (claude --effort): Auto = CLI default, higher levels = deeper reasoning">
+        <option value="" data-i18n="effort.auto">Auto</option>
+        <option value="low" data-i18n="effort.low">Low</option>
+        <option value="medium" data-i18n="effort.med">Med</option>
+        <option value="high" data-i18n="effort.high">High</option>
+        <option value="xhigh" data-i18n="effort.xhigh">X-High</option>
+        <option value="max" data-i18n="effort.max">Max</option>
       </select>
     </div>
     <div class="tb-sep"></div>
@@ -3301,13 +3301,13 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   <div class="sess-bar" id="sessBar" style="display:none">
     <span id="sessBarSkills" style="display:flex;gap:4px;align-items:center;overflow:hidden;flex-shrink:1;"></span>
     <span style="flex:1"></span>
-    <span id="sessBarMaxBadge" style="display:none;font-size:11px;font-weight:600;color:#a78bfa;background:rgba(124,106,239,.15);border:1px solid rgba(124,106,239,.35);padding:1px 7px;border-radius:4px;flex-shrink:0;" title="Running on Claude Max subscription (tmux engine — no API credits consumed)">⚡ Max</span>
-    <span id="sessBarMsgCount" style="display:none;font-size:10px;color:var(--muted);opacity:.7;flex-shrink:0;" title="Messages in this session"></span>
+    <span id="sessBarMaxBadge" style="display:none;font-size:11px;font-weight:600;color:#a78bfa;background:rgba(124,106,239,.15);border:1px solid rgba(124,106,239,.35);padding:1px 7px;border-radius:4px;flex-shrink:0;" data-i18n-title="sess.max.title" title="Running on Claude Max subscription (tmux engine — no API credits consumed)">⚡ Max</span>
+    <span id="sessBarMsgCount" style="display:none;font-size:10px;color:var(--muted);opacity:.7;flex-shrink:0;" data-i18n-title="sess.msgcount.title" title="Messages in this session"></span>
     <span id="sessBarRetry" style="display:none;font-size:11px;color:var(--warn,#f59e0b);opacity:.85;flex-shrink:0;"></span>
     <span id="sessBarClaudeId" style="display:none;font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="" onclick="copySessId()"></span>
     <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openInClaude()">⚡ Claude Code</a>
     <button id="sessBarPaneBtn" style="display:none;font-size:11px;color:var(--accent2);background:transparent;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openEnginePane()">▣ <span data-i18n="term.pane.btn">Live pane</span></button>
-    <button id="sessBarCatchupBtn" style="display:none;font-size:11px;color:var(--accent2);background:transparent;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="catchUpFromTerminal()" title="Дочитати у чат повідомлення, набрані напряму в терміналі (claude --resume)">⤵ Дочитати</button>
+    <button id="sessBarCatchupBtn" style="display:none;font-size:11px;color:var(--accent2);background:transparent;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="catchUpFromTerminal()" data-i18n-title="catchup.title" title="Дочитати у чат повідомлення, набрані напряму в терміналі (claude --resume)" data-i18n="catchup.btn">⤵ Дочитати</button>
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
     <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
     <div id="sessBarExportWrap" class="sess-export-wrap" style="display:none;">
@@ -3353,11 +3353,11 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   </div>
 
   <div class="chat-search-bar" id="chatSearchBar">
-    <input type="text" id="chatSearchInput" placeholder="Search messages... (Esc to close)" oninput="filterMessages(this.value)" onkeydown="if(event.key==='Escape')closeChatSearch();else if(event.key==='Enter')searchNavStep(event.shiftKey?-1:1)">
+    <input type="text" id="chatSearchInput" data-i18n-ph="search.ph" placeholder="Search messages... (Esc to close)" oninput="filterMessages(this.value)" onkeydown="if(event.key==='Escape')closeChatSearch();else if(event.key==='Enter')searchNavStep(event.shiftKey?-1:1)">
     <span class="search-count" id="searchCount"></span>
-    <button class="search-nav-btn" onclick="searchNavStep(-1)" title="Previous match">▲</button>
-    <button class="search-nav-btn" onclick="searchNavStep(1)" title="Next match">▼</button>
-    <button class="search-close" onclick="closeChatSearch()" title="Close search (Esc)">✕</button>
+    <button class="search-nav-btn" onclick="searchNavStep(-1)" data-i18n-title="search.prev" title="Previous match">▲</button>
+    <button class="search-nav-btn" onclick="searchNavStep(1)" data-i18n-title="search.next" title="Next match">▼</button>
+    <button class="search-close" onclick="closeChatSearch()" data-i18n-title="search.close" title="Close search (Esc)">✕</button>
   </div>
 
   <div id="termPane">
@@ -3370,7 +3370,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
     <div id="termHost"></div>
   </div>
-  <div class="msgs" id="messages" role="log" aria-live="polite" aria-label="Chat messages">
+  <div class="msgs" id="messages" role="log" aria-live="polite" data-i18n-aria="aria.chat" aria-label="Chat messages">
     <div class="welcome">
       <div class="wi">CCS</div>
       <h2>Claude Code Studio</h2>
@@ -3429,18 +3429,18 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div id="interruptPill" class="interrupt-pill">
         <button class="interrupt-pill-btn" id="interruptPillBtn" data-mode="interrupt" onclick="cycleInterruptMode()"></button>
       </div>
-      <button class="attach-btn" type="button" onclick="$i('filePickerInput').click()" data-i18n-title="attach.file" title="Додати файл" aria-label="Attach file">
+      <button class="attach-btn" type="button" onclick="$i('filePickerInput').click()" data-i18n-title="attach.file" title="Додати файл" data-i18n-aria="attach.file" aria-label="Attach file">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
         </svg>
       </button>
-      <textarea id="input" rows="1" dir="auto" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @@ — бот · @ — файл · # — SSH · 📎 — будь-який файл" autofocus aria-label="Message input" aria-multiline="true"></textarea>
-      <span id="charCounter" style="display:none;" aria-live="polite" aria-label="Character count"></span>
+      <textarea id="input" rows="1" dir="auto" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @@ — бот · @ — файл · # — SSH · 📎 — будь-який файл" autofocus data-i18n-aria="aria.input" aria-label="Message input" aria-multiline="true"></textarea>
+      <span id="charCounter" style="display:none;" aria-live="polite" data-i18n-aria="aria.charcount" aria-label="Character count"></span>
       <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Завдань у черзі"></span>
       <button class="sb stop-btn hidden" id="stopBtn" onclick="confirmStop()" data-i18n-title="stop.agent" title="Stop agent">
         <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
       </button>
-      <button class="mob-files-btn" id="mobFilesBtn" onclick="toggle('rightPanel')" aria-label="Files">
+      <button class="mob-files-btn" id="mobFilesBtn" onclick="toggle('rightPanel')" data-i18n-aria="mob.files" aria-label="Files">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
       </button>
       <button class="sb" id="sendBtn" onclick="send()" data-i18n-title="send.msg" title="Send (Enter)">
@@ -3454,7 +3454,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 </div>
 
 <!-- RIGHT PANEL TAB (left side of right panel) -->
-<div class="panel-tab panel-tab-right active" role="button" tabindex="0" aria-label="Toggle right panel" onclick="toggle('rightPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('rightPanel')}" data-tip="Сховати/показати праву панель" data-i18n-tip="tip.panels.right">
+<div class="panel-tab panel-tab-right active" role="button" tabindex="0" data-i18n-aria="tip.panels.right" aria-label="Toggle right panel" onclick="toggle('rightPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('rightPanel')}" data-tip="Сховати/показати праву панель" data-i18n-tip="tip.panels.right">
   <div class="panel-tab-inner">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
   </div>
@@ -3515,7 +3515,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
     <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto">
       <div style="font-size:12px;color:var(--muted);line-height:1.6">
-        Підтримується формат <strong>Claude Desktop</strong> (<code>claude_desktop_config.json</code>) та будь-який JSON вигляду <code style="font-size:11px">{"mcpServers":{...}}</code>
+        <span data-i18n-html="mcp.import.formats">Підтримується формат <strong>Claude Desktop</strong> (<code>claude_desktop_config.json</code>) та будь-який JSON вигляду <code style='font-size:11px'>{"mcpServers":{...}}</code></span>
       </div>
       <div id="mcpImportDrop"
            style="border:2px dashed var(--border);border-radius:8px;padding:18px 12px;text-align:center;cursor:pointer;transition:border-color .15s"
@@ -3567,7 +3567,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div id="mcpEditFormPane">
         <div class="mcp-field-row mcp-two-col">
           <div class="mcp-field-group">
-            <label class="mcp-field-label" for="meId">Server ID <span class="mcp-field-required">*</span></label>
+            <label class="mcp-field-label" for="meId"><span data-i18n="me.id">Server ID</span> <span class="mcp-field-required">*</span></label>
             <input type="text" id="meId" class="mcp-field-input mcp-field-mono" placeholder="my-server" autocomplete="off" spellcheck="false">
             <span class="mcp-field-hint" id="meIdHint"></span>
           </div>
@@ -3703,7 +3703,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <div class="rh-form-row">
           <span class="rh-label" data-i18n="dir.ssh_host">SSH Хост:</span>
           <select id="remoteHostSelect" style="flex:1">
-            <option value="">— оберіть хост —</option>
+            <option value="" data-i18n="dir.pick_host">— оберіть хост —</option>
           </select>
           <button class="bg" onclick="openAddHostModal()" style="padding:5px 10px;font-size:12px;flex-shrink:0" data-i18n="dir.remote.add_new">＋ Новий</button>
         </div>
@@ -3884,7 +3884,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   <div class="modal nt-modal" style="max-width:640px">
     <div class="modal-hdr">
       <h2 id="newTabTitle" data-i18n="newtab.title">Що відкрити?</h2>
-      <button class="modal-close" onclick="closeModalOverlay('newTabModal')" data-i18n-title="btn.close" title="Закрити" aria-label="Close">✕</button>
+      <button class="modal-close" onclick="closeModalOverlay('newTabModal')" data-i18n-title="btn.close" title="Закрити" data-i18n-aria="btn.close" aria-label="Close">✕</button>
     </div>
     <div class="modal-body">
       <div class="nt-choices" id="ntChoices"></div>
@@ -3896,7 +3896,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   <div class="modal bot-modal" style="max-width:560px">
     <div class="modal-hdr">
       <h2 id="botModalTitle" data-i18n="bot.modal.add.title">Новий бот</h2>
-      <button class="modal-close" onclick="cancelBotForm()" data-i18n-title="btn.close" title="Закрити" aria-label="Close">✕</button>
+      <button class="modal-close" onclick="cancelBotForm()" data-i18n-title="btn.close" title="Закрити" data-i18n-aria="btn.close" aria-label="Close">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="botId">
@@ -3913,7 +3913,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
                   data-i18n-title="bot.modal.avatar.pick" title="Обрати емодзі" aria-haspopup="true" aria-expanded="false">
             <span data-i18n="bot.modal.avatar.pick.btn">Обрати</span>
           </button>
-          <div class="emoji-pop hidden" id="emojiPop" role="dialog" aria-label="Emoji"></div>
+          <div class="emoji-pop hidden" id="emojiPop" role="dialog" data-i18n-aria="aria.emoji" aria-label="Emoji"></div>
         </div>
       </div>
       <div class="cmd-field">
@@ -4025,8 +4025,8 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="rlModalTitle">
     <div class="cd-icon">🚫</div>
     <div class="rl-modal-type" id="rlModalType">—</div>
-    <h3 id="rlModalTitle">Ліміт вичерпано</h3>
-    <p id="rlModalDesc">Ваш ліміт Claude Max вичерпано.</p>
+    <h3 id="rlModalTitle" data-i18n="rl.modal.title">Ліміт вичерпано</h3>
+    <p id="rlModalDesc"></p>
     <div class="rl-modal-countdown">
       <span class="rl-cd-label" data-i18n="rl.modal.reset">Скидання через:</span>
       <span id="rlModalTimer">—</span>
@@ -4271,7 +4271,7 @@ const modalStack = [];
     inEl.style.height = Math.min(inEl.scrollHeight, 120) + 'px';
     const cc = $i('charCounter');
     if (cc && draft.length >= 100) {
-      cc.textContent = draft.length + ' chars';
+      cc.textContent = t('chars.count').replace('{n}', draft.length);
       cc.className = draft.length >= 1000 ? 'cc-danger' : draft.length >= 500 ? 'cc-warn' : '';
       cc.style.display = '';
     }
@@ -4632,6 +4632,53 @@ const TRANSLATIONS = {
     'dlg.toast.send_fail':'Не вдалося надіслати','dlg.toast.send_err':'Помилка надсилання: {err}','dlg.toast.stopped':'Делегування зупинено',
     'dlg.toast.updated':'Діалог оновлено','dlg.toast.no_changes':'Без змін',
     'dlg.last_update':'оновлено {time} тому',
+    // ── issue #26: keys for text that used to be hardcoded in markup / inline JS ──
+    'tn.ng.authtoken':'Токен доступу:','chars.count':'{n} симв.',
+    'cot.label':'Ланцюжок міркувань','cot.words':'слів',
+    'mode.autoswitch':'✅ Автоматично перемкнено в режим Auto',
+    'export.failed':'Не вдалося експортувати: {err}','export.error':'Помилка експорту: {err}','export.invalid':'Некоректний файл експорту',
+    'import.failed':'Не вдалося імпортувати: {err}','import.done':'Сесію імпортовано','import.error':'Помилка імпорту: {err}',
+    'fork.failed':'Не вдалося відгалузити сесію','agent.del.failed':'Не вдалося видалити',
+    'mcp.desc.http':'MCP-сервер через HTTP','mcp.desc.sse':'MCP-сервер через SSE','mcp.desc.cmd':'MCP-сервер, запускається командою','mcp.desc.generic':'MCP-сервер',
+    'mcp.tt.transport':'Транспорт','mcp.tt.source':'Джерело','mcp.transport.cmd':'Команда',
+    'cfg.tab.global_md':'🌐 Глобальний CLAUDE.md','tabs.none_open':'Немає відкритих сесій',
+    'term.xterm.fail':'Не вдалося завантажити xterm.js','toast.git_init':'git init: {err}',
+    'sec.filter':'Фільтр','sec.filter.ph':'Фільтр...',
+    'sec.filter.aria.proj':'Фільтр проектів','sec.filter.aria.ssh':'Фільтр SSH хостів','sec.filter.aria.hist':'Фільтр чатів','sec.filter.aria.mcp':'Фільтр MCP-серверів','sec.filter.aria.skills':'Фільтр навичок','sec.filter.aria.cmds':'Фільтр команд',
+    'skills.auto.btn':'⚡ Авто',
+    'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача',
+    'agent.single':'Один','agent.multi':'Мульти','agent.dispatch':'Розподіл',
+    'tb.engine':'Рушій','engine.sub':'Підписка',
+    'engine.api.title':'Рушій API — headless claude -p, оплата за токени (Claude Pro / ключ API)',
+    'engine.sub.title':'Рушій підписки — постійна сесія tmux, оплата з підписки Claude Max (без кредитів API). Потрібні tmux і Claude Max.',
+    'engine.default.btn':'★ Зробити типовим','engine.default.title':'Зробити поточний рушій типовим для нових чатів',
+    'engine.default.set':'Зробити поточний рушій ({engine}) типовим для нових чатів','engine.default.is':'{engine} — типовий рушій для нових чатів',
+    'engine.default.toast':'★ {engine} — типовий рушій для нових чатів','engine.default.err':'⚠ Не вдалося зберегти типовий рушій',
+    'tb.effort':'Зусилля','effort.title':'Рівень обдумування (claude --effort): Авто — типове значення CLI, вищі рівні — глибші міркування',
+    'effort.auto':'Авто','effort.low':'Низьке','effort.med':'Середнє','effort.high':'Високе','effort.xhigh':'Дуже високе','effort.max':'Максимальне',
+    'catchup.btn':'⤵ Дочитати','catchup.title':'Дочитати у чат повідомлення, набрані напряму в терміналі (claude --resume)',
+    'catchup.err':'Не вдалося дочитати','catchup.baseline':'✓ Базову позицію встановлено — попрацюйте в терміналі й натисніть ще раз',
+    'catchup.done':'✓ Дочитано з терміналу: {n}','catchup.none':'Нічого нового з терміналу','catchup.fail':'⚠ Помилка дочитування',
+    'sess.max.title':'Працює на підписці Claude Max (рушій tmux — кредити API не витрачаються)',
+    'sess.msgcount.title':'Повідомлень у цій сесії','sess.msgcount':'{n} повід.',
+    'search.ph':'Пошук у повідомленнях... (Esc — закрити)','search.prev':'Попередній збіг','search.next':'Наступний збіг','search.close':'Закрити пошук (Esc)',
+    'nav.chat':'Чат','nav.kanban':'Канбан','nav.schedule':'Розклад','nav.dashboard':'Панель',
+    'aria.menu':'Меню','aria.chat':'Повідомлення чату','aria.input':'Поле вводу повідомлення','aria.charcount':'Лічильник символів','aria.emoji':'Емодзі',
+    'hdr.project':'Проект',
+    'tn.token.toggle':'Показати/приховати','tn.token.aria':'Показати токен','tn.copy.url':'Копіювати URL','tn.copy.aria':'Копіювати URL тунелю',
+    'tn.toast.url':'🟢 Віддалений доступ: {url}','tn.err.network':'Помилка мережі',
+    'mcp.import.formats':'Підтримується формат <strong>Claude Desktop</strong> (<code>claude_desktop_config.json</code>) та будь-який JSON вигляду <code style=\'font-size:11px\'>{"mcpServers":{...}}</code>',
+    'me.id':'ID сервера',
+    'dir.pick_host':'— оберіть хост —',
+    'restart.btn':'🔄 Перезапустити сесію','restart.ing':'Перезапуск...','restart.done':'✅ Сесію перезапущено — можна продовжувати',
+    'retry.title':'Повторів: {n}',
+    'plan.exec.btn':'▶️ Виконати план','plan.exec.title':'Перемкнути в режим Auto і виконати цей план',
+    'tmux.required':'Потрібен tmux на сервері (macOS/Linux/Docker/WSL). Тут недоступно.',
+    'hist.del.n':'Видалити вибрані чати ({n})?',
+    'tg.lock.on':'🔓 Нові підключення дозволено','tg.lock.off':'🔒 Нові підключення заблоковано',
+    'input.ph.mob':'Напишіть завдання...',
+    'skillcat.engineering':'⚙️ Розробка','skillcat.ai':'🧠 AI та промпти','skillcat.quality':'💎 Якість коду','skillcat.security':'🔒 Безпека','skillcat.design':'🎨 Дизайн','skillcat.product':'📋 Продукт','skillcat.finance':'💼 Фінанси','skillcat.research':'🔬 Дослідження','skillcat.workflow':'📐 Робочий процес','skillcat.system':'⚙️ Система','skillcat.plugin':'🧩 Skills плагінів',
+    'upd.available':'Доступне оновлення','upd.btn':'Оновити','upd.updating':'Оновлення… {time}','upd.copy_cmd':'Копіювати команду','upd.via_terminal':'Оновлення через термінал:','upd.copied':'Скопійовано ✓','upd.retry':'Повторити','upd.failed':'Оновлення не вдалося','upd.new_version':'Доступна нова версія {version}',
   },
   en: {
     'bot.modal.avatar.pick':'Pick an emoji','bot.modal.avatar.pick.btn':'Pick','emoji.group.roles':'Roles','emoji.group.work':'Work','emoji.group.tools':'Tools','emoji.group.ideas':'Ideas','emoji.group.nature':'Nature',
@@ -4883,6 +4930,53 @@ const TRANSLATIONS = {
     'dlg.toast.send_fail':'Failed to send message','dlg.toast.send_err':'Failed to send: {err}','dlg.toast.stopped':'Delegation stopped',
     'dlg.toast.updated':'Dialog updated','dlg.toast.no_changes':'No changes',
     'dlg.last_update':'updated {time} ago',
+    // ── issue #26: keys for text that used to be hardcoded in markup / inline JS ──
+    'tn.ng.authtoken':'Authtoken:','chars.count':'{n} chars',
+    'cot.label':'Chain of thought','cot.words':'words',
+    'mode.autoswitch':'✅ Auto-switched to auto mode',
+    'export.failed':'Export failed: {err}','export.error':'Export error: {err}','export.invalid':'Invalid export file',
+    'import.failed':'Import failed: {err}','import.done':'Session imported','import.error':'Import error: {err}',
+    'fork.failed':'Fork failed','agent.del.failed':'Delete failed',
+    'mcp.desc.http':'HTTP MCP server','mcp.desc.sse':'SSE MCP server','mcp.desc.cmd':'Command-based MCP server','mcp.desc.generic':'MCP server',
+    'mcp.tt.transport':'Transport','mcp.tt.source':'Source','mcp.transport.cmd':'Command',
+    'cfg.tab.global_md':'🌐 Global CLAUDE.md','tabs.none_open':'No open sessions',
+    'term.xterm.fail':'xterm.js failed to load','toast.git_init':'git init: {err}',
+    'sec.filter':'Filter','sec.filter.ph':'Filter...',
+    'sec.filter.aria.proj':'Filter projects','sec.filter.aria.ssh':'Filter SSH hosts','sec.filter.aria.hist':'Filter chats','sec.filter.aria.mcp':'Filter MCP servers','sec.filter.aria.skills':'Filter skills','sec.filter.aria.cmds':'Filter commands',
+    'skills.auto.btn':'⚡ Auto',
+    'mode.auto':'Auto','mode.plan':'Plan','mode.task':'Task',
+    'agent.single':'Single','agent.multi':'Multi','agent.dispatch':'Dispatch',
+    'tb.engine':'Engine','engine.sub':'Subscription',
+    'engine.api.title':'API engine — headless claude -p, billed per token (Claude Pro / API key)',
+    'engine.sub.title':'Subscription engine — persistent tmux session, billed on the Claude Max subscription (no API credits). Requires tmux + Claude Max.',
+    'engine.default.btn':'★ Set as default','engine.default.title':'Make the current engine the default for new chats',
+    'engine.default.set':'Make the current engine ({engine}) the default for new chats','engine.default.is':'{engine} — default engine for new chats',
+    'engine.default.toast':'★ {engine} — default engine for new chats','engine.default.err':'⚠ Could not save the default engine',
+    'tb.effort':'Effort','effort.title':'Thinking effort dial (claude --effort): Auto = CLI default, higher levels = deeper reasoning',
+    'effort.auto':'Auto','effort.low':'Low','effort.med':'Med','effort.high':'High','effort.xhigh':'X-High','effort.max':'Max',
+    'catchup.btn':'⤵ Catch up','catchup.title':'Pull messages typed directly in the terminal into this chat (claude --resume)',
+    'catchup.err':'Could not catch up','catchup.baseline':'✓ Baseline set — work in the terminal, then press again',
+    'catchup.done':'✓ Caught up from the terminal: {n}','catchup.none':'Nothing new from the terminal','catchup.fail':'⚠ Catch-up failed',
+    'sess.max.title':'Running on the Claude Max subscription (tmux engine — no API credits consumed)',
+    'sess.msgcount.title':'Messages in this session','sess.msgcount':'{n} msgs',
+    'search.ph':'Search messages... (Esc to close)','search.prev':'Previous match','search.next':'Next match','search.close':'Close search (Esc)',
+    'nav.chat':'Chat','nav.kanban':'Kanban','nav.schedule':'Schedule','nav.dashboard':'Dashboard',
+    'aria.menu':'Menu','aria.chat':'Chat messages','aria.input':'Message input','aria.charcount':'Character count','aria.emoji':'Emoji',
+    'hdr.project':'Project',
+    'tn.token.toggle':'Show/hide','tn.token.aria':'Show token','tn.copy.url':'Copy URL','tn.copy.aria':'Copy tunnel URL',
+    'tn.toast.url':'🟢 Remote Access: {url}','tn.err.network':'Network error',
+    'mcp.import.formats':'Supported: the <strong>Claude Desktop</strong> format (<code>claude_desktop_config.json</code>) and any JSON shaped like <code style=\'font-size:11px\'>{"mcpServers":{...}}</code>',
+    'me.id':'Server ID',
+    'dir.pick_host':'— pick a host —',
+    'restart.btn':'🔄 Restart Session','restart.ing':'Restarting...','restart.done':'✅ Session restarted — you can continue chatting',
+    'retry.title':'Retried {n} time(s)',
+    'plan.exec.btn':'▶️ Execute Plan','plan.exec.title':'Switch to Auto mode and execute this plan',
+    'tmux.required':'tmux is required on the server (macOS/Linux/Docker/WSL). Unavailable here.',
+    'hist.del.n':'Delete the selected chats ({n})?',
+    'tg.lock.on':'🔓 New connections allowed','tg.lock.off':'🔒 New connections blocked',
+    'input.ph.mob':'Write a task...',
+    'skillcat.engineering':'⚙️ Engineering','skillcat.ai':'🧠 AI & Prompts','skillcat.quality':'💎 Code Quality','skillcat.security':'🔒 Security','skillcat.design':'🎨 Design','skillcat.product':'📋 Product','skillcat.finance':'💼 Finance','skillcat.research':'🔬 Research','skillcat.workflow':'📐 Workflow','skillcat.system':'⚙️ System','skillcat.plugin':'🧩 Plugin Skills',
+    'upd.available':'Update available','upd.btn':'Update','upd.updating':'Updating… {time}','upd.copy_cmd':'Copy command','upd.via_terminal':'Update via Terminal:','upd.copied':'Copied ✓','upd.retry':'Retry','upd.failed':'Update failed','upd.new_version':'New version {version} available',
   },
   ru: {
     'bot.modal.avatar.pick':'Выбрать эмодзи','bot.modal.avatar.pick.btn':'Выбрать','emoji.group.roles':'Роли','emoji.group.work':'Работа','emoji.group.tools':'Инструменты','emoji.group.ideas':'Идеи','emoji.group.nature':'Природа',
@@ -5134,6 +5228,53 @@ const TRANSLATIONS = {
     'dlg.toast.send_fail':'Не удалось отправить','dlg.toast.send_err':'Ошибка отправки: {err}','dlg.toast.stopped':'Делегирование остановлено',
     'dlg.toast.updated':'Диалог обновлён','dlg.toast.no_changes':'Без изменений',
     'dlg.last_update':'обновлено {time} назад',
+    // ── issue #26: keys for text that used to be hardcoded in markup / inline JS ──
+    'tn.ng.authtoken':'Токен доступа:','chars.count':'{n} симв.',
+    'cot.label':'Цепочка рассуждений','cot.words':'слов',
+    'mode.autoswitch':'✅ Автоматически переключено в режим Auto',
+    'export.failed':'Не удалось экспортировать: {err}','export.error':'Ошибка экспорта: {err}','export.invalid':'Некорректный файл экспорта',
+    'import.failed':'Не удалось импортировать: {err}','import.done':'Сессия импортирована','import.error':'Ошибка импорта: {err}',
+    'fork.failed':'Не удалось создать ответвление сессии','agent.del.failed':'Не удалось удалить',
+    'mcp.desc.http':'MCP-сервер по HTTP','mcp.desc.sse':'MCP-сервер по SSE','mcp.desc.cmd':'MCP-сервер, запускается командой','mcp.desc.generic':'MCP-сервер',
+    'mcp.tt.transport':'Транспорт','mcp.tt.source':'Источник','mcp.transport.cmd':'Команда',
+    'cfg.tab.global_md':'🌐 Глобальный CLAUDE.md','tabs.none_open':'Нет открытых сессий',
+    'term.xterm.fail':'Не удалось загрузить xterm.js','toast.git_init':'git init: {err}',
+    'sec.filter':'Фильтр','sec.filter.ph':'Фильтр...',
+    'sec.filter.aria.proj':'Фильтр проектов','sec.filter.aria.ssh':'Фильтр SSH-хостов','sec.filter.aria.hist':'Фильтр чатов','sec.filter.aria.mcp':'Фильтр MCP-серверов','sec.filter.aria.skills':'Фильтр навыков','sec.filter.aria.cmds':'Фильтр команд',
+    'skills.auto.btn':'⚡ Авто',
+    'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача',
+    'agent.single':'Один','agent.multi':'Мульти','agent.dispatch':'Распределение',
+    'tb.engine':'Движок','engine.sub':'Подписка',
+    'engine.api.title':'Движок API — headless claude -p, оплата за токены (Claude Pro / ключ API)',
+    'engine.sub.title':'Движок подписки — постоянная сессия tmux, оплата по подписке Claude Max (без кредитов API). Требуются tmux и Claude Max.',
+    'engine.default.btn':'★ Сделать основным','engine.default.title':'Сделать текущий движок основным для новых чатов',
+    'engine.default.set':'Сделать текущий движок ({engine}) основным для новых чатов','engine.default.is':'{engine} — основной движок для новых чатов',
+    'engine.default.toast':'★ {engine} — основной движок для новых чатов','engine.default.err':'⚠ Не удалось сохранить основной движок',
+    'tb.effort':'Усилие','effort.title':'Уровень обдумывания (claude --effort): Авто — значение CLI по умолчанию, более высокие уровни — более глубокие рассуждения',
+    'effort.auto':'Авто','effort.low':'Низкое','effort.med':'Среднее','effort.high':'Высокое','effort.xhigh':'Очень высокое','effort.max':'Максимальное',
+    'catchup.btn':'⤵ Дочитать','catchup.title':'Подтянуть в чат сообщения, набранные прямо в терминале (claude --resume)',
+    'catchup.err':'Не удалось дочитать','catchup.baseline':'✓ Базовая позиция установлена — поработайте в терминале и нажмите ещё раз',
+    'catchup.done':'✓ Дочитано из терминала: {n}','catchup.none':'Ничего нового из терминала','catchup.fail':'⚠ Ошибка дочитывания',
+    'sess.max.title':'Работает на подписке Claude Max (движок tmux — кредиты API не расходуются)',
+    'sess.msgcount.title':'Сообщений в этой сессии','sess.msgcount':'{n} сообщ.',
+    'search.ph':'Поиск по сообщениям... (Esc — закрыть)','search.prev':'Предыдущее совпадение','search.next':'Следующее совпадение','search.close':'Закрыть поиск (Esc)',
+    'nav.chat':'Чат','nav.kanban':'Канбан','nav.schedule':'Расписание','nav.dashboard':'Панель',
+    'aria.menu':'Меню','aria.chat':'Сообщения чата','aria.input':'Поле ввода сообщения','aria.charcount':'Счётчик символов','aria.emoji':'Эмодзи',
+    'hdr.project':'Проект',
+    'tn.token.toggle':'Показать/скрыть','tn.token.aria':'Показать токен','tn.copy.url':'Копировать URL','tn.copy.aria':'Копировать URL туннеля',
+    'tn.toast.url':'🟢 Удалённый доступ: {url}','tn.err.network':'Ошибка сети',
+    'mcp.import.formats':'Поддерживается формат <strong>Claude Desktop</strong> (<code>claude_desktop_config.json</code>) и любой JSON вида <code style=\'font-size:11px\'>{"mcpServers":{...}}</code>',
+    'me.id':'ID сервера',
+    'dir.pick_host':'— выберите хост —',
+    'restart.btn':'🔄 Перезапустить сессию','restart.ing':'Перезапуск...','restart.done':'✅ Сессия перезапущена — можно продолжать',
+    'retry.title':'Повторов: {n}',
+    'plan.exec.btn':'▶️ Выполнить план','plan.exec.title':'Переключиться в режим Auto и выполнить этот план',
+    'tmux.required':'Нужен tmux на сервере (macOS/Linux/Docker/WSL). Здесь недоступно.',
+    'hist.del.n':'Удалить выбранные чаты ({n})?',
+    'tg.lock.on':'🔓 Новые подключения разрешены','tg.lock.off':'🔒 Новые подключения заблокированы',
+    'input.ph.mob':'Напишите задачу...',
+    'skillcat.engineering':'⚙️ Разработка','skillcat.ai':'🧠 AI и промпты','skillcat.quality':'💎 Качество кода','skillcat.security':'🔒 Безопасность','skillcat.design':'🎨 Дизайн','skillcat.product':'📋 Продукт','skillcat.finance':'💼 Финансы','skillcat.research':'🔬 Исследования','skillcat.workflow':'📐 Рабочий процесс','skillcat.system':'⚙️ Система','skillcat.plugin':'🧩 Skills плагинов',
+    'upd.available':'Доступно обновление','upd.btn':'Обновить','upd.updating':'Обновление… {time}','upd.copy_cmd':'Копировать команду','upd.via_terminal':'Обновление через терминал:','upd.copied':'Скопировано ✓','upd.retry':'Повторить','upd.failed':'Обновление не удалось','upd.new_version':'Доступна новая версия {version}',
   },
   fr: {
     "bot.modal.avatar.pick":"Choisir un émoji","bot.modal.avatar.pick.btn":"Choisir","emoji.group.roles":"Rôles","emoji.group.work":"Travail","emoji.group.tools":"Outils","emoji.group.ideas":"Idées","emoji.group.nature":"Nature",
@@ -5286,6 +5427,53 @@ const TRANSLATIONS = {
     "dlg.toast.select_agent":"Sélectionnez un agent","dlg.toast.describe_task":"Décrivez la tâche","dlg.toast.delegated":"Délégué à {agent}","dlg.toast.fail":"Échec de la délégation : {err}",
     "dlg.toast.send_fail":"Échec de l'envoi du message","dlg.toast.send_err":"Échec de l'envoi : {err}","dlg.toast.stopped":"Délégation arrêtée","dlg.toast.updated":"Dialogue mis à jour",
     "dlg.toast.no_changes":"Aucun changement","dlg.last_update":"mis à jour il y a {time}",
+    // ── issue #26: keys for text that used to be hardcoded in markup / inline JS ──
+    "tn.ng.authtoken":"Jeton d'accès :","chars.count":"{n} car.",
+    "cot.label":"Chaîne de raisonnement","cot.words":"mots",
+    "mode.autoswitch":"✅ Bascule automatique en mode Auto",
+    "export.failed":"Échec de l'export : {err}","export.error":"Erreur d'export : {err}","export.invalid":"Fichier d'export invalide",
+    "import.failed":"Échec de l'import : {err}","import.done":"Session importée","import.error":"Erreur d'import : {err}",
+    "fork.failed":"Échec de la duplication","agent.del.failed":"Échec de la suppression",
+    "mcp.desc.http":"Serveur MCP en HTTP","mcp.desc.sse":"Serveur MCP en SSE","mcp.desc.cmd":"Serveur MCP lancé par une commande","mcp.desc.generic":"Serveur MCP",
+    "mcp.tt.transport":"Transport","mcp.tt.source":"Source","mcp.transport.cmd":"Commande",
+    "cfg.tab.global_md":"🌐 CLAUDE.md global","tabs.none_open":"Aucune session ouverte",
+    "term.xterm.fail":"Échec du chargement de xterm.js","toast.git_init":"git init : {err}",
+    "sec.filter":"Filtrer","sec.filter.ph":"Filtrer…",
+    "sec.filter.aria.proj":"Filtrer les projets","sec.filter.aria.ssh":"Filtrer les hôtes SSH","sec.filter.aria.hist":"Filtrer les discussions","sec.filter.aria.mcp":"Filtrer les serveurs MCP","sec.filter.aria.skills":"Filtrer les compétences","sec.filter.aria.cmds":"Filtrer les commandes",
+    "skills.auto.btn":"⚡ Auto",
+    "mode.auto":"Auto","mode.plan":"Plan","mode.task":"Tâche",
+    "agent.single":"Simple","agent.multi":"Multi","agent.dispatch":"Répartition",
+    "tb.engine":"Moteur","engine.sub":"Abonnement",
+    "engine.api.title":"Moteur API — claude -p sans interface, facturé au jeton (Claude Pro / clé API)",
+    "engine.sub.title":"Moteur d'abonnement — session tmux persistante, facturée sur l'abonnement Claude Max (sans crédits API). Nécessite tmux et Claude Max.",
+    "engine.default.btn":"★ Définir par défaut","engine.default.title":"Définir le moteur actuel comme moteur par défaut des nouvelles discussions",
+    "engine.default.set":"Définir le moteur actuel ({engine}) comme moteur par défaut des nouvelles discussions","engine.default.is":"{engine} — moteur par défaut des nouvelles discussions",
+    "engine.default.toast":"★ {engine} — moteur par défaut des nouvelles discussions","engine.default.err":"⚠ Impossible d'enregistrer le moteur par défaut",
+    "tb.effort":"Effort","effort.title":"Niveau de réflexion (claude --effort) : Auto = valeur par défaut du CLI, les niveaux supérieurs raisonnent plus en profondeur",
+    "effort.auto":"Auto","effort.low":"Faible","effort.med":"Moyen","effort.high":"Élevé","effort.xhigh":"Très élevé","effort.max":"Maximal",
+    "catchup.btn":"⤵ Rattraper","catchup.title":"Reprendre dans la discussion les messages saisis directement dans le terminal (claude --resume)",
+    "catchup.err":"Impossible de rattraper","catchup.baseline":"✓ Point de repère enregistré — travaillez dans le terminal, puis cliquez à nouveau",
+    "catchup.done":"✓ Rattrapé depuis le terminal : {n}","catchup.none":"Rien de nouveau dans le terminal","catchup.fail":"⚠ Échec du rattrapage",
+    "sess.max.title":"Fonctionne sur l'abonnement Claude Max (moteur tmux — aucun crédit API consommé)",
+    "sess.msgcount.title":"Messages dans cette session","sess.msgcount":"{n} msg",
+    "search.ph":"Rechercher dans les messages… (Échap pour fermer)","search.prev":"Résultat précédent","search.next":"Résultat suivant","search.close":"Fermer la recherche (Échap)",
+    "nav.chat":"Discussion","nav.kanban":"Kanban","nav.schedule":"Planning","nav.dashboard":"Tableau de bord",
+    "aria.menu":"Menu","aria.chat":"Messages de la discussion","aria.input":"Champ de saisie du message","aria.charcount":"Compteur de caractères","aria.emoji":"Émoji",
+    "hdr.project":"Projet",
+    "tn.token.toggle":"Afficher/masquer","tn.token.aria":"Afficher le jeton","tn.copy.url":"Copier l'URL","tn.copy.aria":"Copier l'URL du tunnel",
+    "tn.toast.url":"🟢 Accès distant : {url}","tn.err.network":"Erreur réseau",
+    'mcp.import.formats':'Formats pris en charge : celui de <strong>Claude Desktop</strong> (<code>claude_desktop_config.json</code>) et tout JSON de la forme <code style=\'font-size:11px\'>{"mcpServers":{...}}</code>',
+    "me.id":"ID du serveur",
+    "dir.pick_host":"— choisir un hôte —",
+    "restart.btn":"🔄 Redémarrer la session","restart.ing":"Redémarrage…","restart.done":"✅ Session redémarrée — vous pouvez continuer à discuter",
+    "retry.title":"Tentatives : {n}",
+    "plan.exec.btn":"▶️ Exécuter le plan","plan.exec.title":"Passer en mode Auto et exécuter ce plan",
+    "tmux.required":"tmux est requis sur le serveur (macOS/Linux/Docker/WSL). Indisponible ici.",
+    "hist.del.n":"Supprimer les discussions sélectionnées ({n}) ?",
+    "tg.lock.on":"🔓 Nouvelles connexions autorisées","tg.lock.off":"🔒 Nouvelles connexions bloquées",
+    "input.ph.mob":"Écrivez une tâche…",
+    "skillcat.engineering":"⚙️ Ingénierie","skillcat.ai":"🧠 IA et prompts","skillcat.quality":"💎 Qualité du code","skillcat.security":"🔒 Sécurité","skillcat.design":"🎨 Design","skillcat.product":"📋 Produit","skillcat.finance":"💼 Finance","skillcat.research":"🔬 Recherche","skillcat.workflow":"📐 Flux de travail","skillcat.system":"⚙️ Système","skillcat.plugin":"🧩 Compétences des plugins",
+    "upd.available":"Mise à jour disponible","upd.btn":"Mettre à jour","upd.updating":"Mise à jour… {time}","upd.copy_cmd":"Copier la commande","upd.via_terminal":"Mise à jour via le terminal :","upd.copied":"Copié ✓","upd.retry":"Réessayer","upd.failed":"Échec de la mise à jour","upd.new_version":"Nouvelle version {version} disponible",
   },
   he: {
     "bot.modal.avatar.pick":"בחרו אמוג׳י","bot.modal.avatar.pick.btn":"בחירה","emoji.group.roles":"תפקידים","emoji.group.work":"עבודה","emoji.group.tools":"כלים","emoji.group.ideas":"רעיונות","emoji.group.nature":"טבע",
@@ -5410,6 +5598,53 @@ const TRANSLATIONS = {
     "dlg.message":"הודעה","dlg.stop":"עצירה","dlg.msg.ph":"שליחת הודעה ל-agent...","dlg.send":"שליחה","dlg.no_agents":"לא הוגדרו agents (הוסיפו דרך ההגדרות)","dlg.toast.select_agent":"בחרו agent",
     "dlg.toast.describe_task":"תארו את המשימה","dlg.toast.delegated":"הואצל ל-{agent}","dlg.toast.fail":"ההאצלה נכשלה: {err}","dlg.toast.send_fail":"שליחת ההודעה נכשלה",
     "dlg.toast.send_err":"השליחה נכשלה: {err}","dlg.toast.stopped":"ההאצלה נעצרה","dlg.toast.updated":"הדיאלוג עודכן","dlg.toast.no_changes":"אין שינויים","dlg.last_update":"עודכן לפני {time}",
+    // ── issue #26: keys for text that used to be hardcoded in markup / inline JS ──
+    "tn.ng.authtoken":"טוקן גישה:","chars.count":"{n} תווים",
+    "cot.label":"שרשרת החשיבה","cot.words":"מילים",
+    "mode.autoswitch":"✅ מעבר אוטומטי למצב Auto",
+    "export.failed":"הייצוא נכשל: {err}","export.error":"שגיאת ייצוא: {err}","export.invalid":"קובץ ייצוא לא תקין",
+    "import.failed":"הייבוא נכשל: {err}","import.done":"הסשן יובא","import.error":"שגיאת ייבוא: {err}",
+    "fork.failed":"יצירת ההסתעפות נכשלה","agent.del.failed":"המחיקה נכשלה",
+    "mcp.desc.http":"שרת MCP מעל HTTP","mcp.desc.sse":"שרת MCP מעל SSE","mcp.desc.cmd":"שרת MCP המופעל בפקודה","mcp.desc.generic":"שרת MCP",
+    "mcp.tt.transport":"תעבורה","mcp.tt.source":"מקור","mcp.transport.cmd":"פקודה",
+    "cfg.tab.global_md":"🌐 CLAUDE.md גלובלי","tabs.none_open":"אין סשנים פתוחים",
+    "term.xterm.fail":"טעינת xterm.js נכשלה","toast.git_init":"git init: {err}",
+    "sec.filter":"סינון","sec.filter.ph":"סינון...",
+    "sec.filter.aria.proj":"סינון פרויקטים","sec.filter.aria.ssh":"סינון מארחי SSH","sec.filter.aria.hist":"סינון צ׳אטים","sec.filter.aria.mcp":"סינון שרתי MCP","sec.filter.aria.skills":"סינון מיומנויות","sec.filter.aria.cmds":"סינון פקודות",
+    "skills.auto.btn":"⚡ אוטומטי",
+    "mode.auto":"אוטומטי","mode.plan":"תכנון","mode.task":"משימה",
+    "agent.single":"יחיד","agent.multi":"מרובה","agent.dispatch":"הקצאה",
+    "tb.engine":"מנוע","engine.sub":"מנוי",
+    "engine.api.title":"מנוע API — claude -p ללא ממשק, חיוב לפי טוקנים (Claude Pro / מפתח API)",
+    "engine.sub.title":"מנוע מנוי — סשן tmux קבוע, חיוב במסגרת מנוי Claude Max (ללא קרדיטים של API). דורש tmux ו-Claude Max.",
+    "engine.default.btn":"★ הגדרה כברירת מחדל","engine.default.title":"להגדיר את המנוע הנוכחי כברירת מחדל לצ׳אטים חדשים",
+    "engine.default.set":"להגדיר את המנוע הנוכחי ({engine}) כברירת מחדל לצ׳אטים חדשים","engine.default.is":"{engine} — מנוע ברירת המחדל לצ׳אטים חדשים",
+    "engine.default.toast":"★ {engine} — מנוע ברירת המחדל לצ׳אטים חדשים","engine.default.err":"⚠ שמירת מנוע ברירת המחדל נכשלה",
+    "tb.effort":"מאמץ","effort.title":"רמת החשיבה (claude --effort): אוטומטי = ברירת המחדל של ה-CLI, רמות גבוהות יותר = חשיבה מעמיקה יותר",
+    "effort.auto":"אוטומטי","effort.low":"נמוך","effort.med":"בינוני","effort.high":"גבוה","effort.xhigh":"גבוה מאוד","effort.max":"מרבי",
+    "catchup.btn":"⤵ להשלים","catchup.title":"למשוך לצ׳אט הודעות שהוקלדו ישירות בטרמינל (claude --resume)",
+    "catchup.err":"ההשלמה נכשלה","catchup.baseline":"✓ נקודת הבסיס נקבעה — עבדו בטרמינל ולחצו שוב",
+    "catchup.done":"✓ הושלמו מהטרמינל: {n}","catchup.none":"אין חדש מהטרמינל","catchup.fail":"⚠ שגיאה בהשלמה",
+    "sess.max.title":"פועל על מנוי Claude Max (מנוע tmux — לא נצרכים קרדיטים של API)",
+    "sess.msgcount.title":"הודעות בסשן הזה","sess.msgcount":"{n} הודעות",
+    "search.ph":"חיפוש בהודעות... (Esc לסגירה)","search.prev":"התוצאה הקודמת","search.next":"התוצאה הבאה","search.close":"סגירת החיפוש (Esc)",
+    "nav.chat":"צ׳אט","nav.kanban":"קנבן","nav.schedule":"לוח זמנים","nav.dashboard":"לוח מחוונים",
+    "aria.menu":"תפריט","aria.chat":"הודעות הצ׳אט","aria.input":"שדה הקלדת הודעה","aria.charcount":"מונה תווים","aria.emoji":"אמוג׳י",
+    "hdr.project":"פרויקט",
+    "tn.token.toggle":"הצגה/הסתרה","tn.token.aria":"הצגת הטוקן","tn.copy.url":"העתקת הכתובת","tn.copy.aria":"העתקת כתובת המנהרה",
+    "tn.toast.url":"🟢 גישה מרחוק: {url}","tn.err.network":"שגיאת רשת",
+    'mcp.import.formats':'נתמך הפורמט של <strong>Claude Desktop</strong> (<code>claude_desktop_config.json</code>) וכל JSON במבנה <code style=\'font-size:11px\'>{"mcpServers":{...}}</code>',
+    "me.id":"מזהה שרת",
+    "dir.pick_host":"— בחרו מארח —",
+    "restart.btn":"🔄 הפעלה מחדש של הסשן","restart.ing":"מפעיל מחדש...","restart.done":"✅ הסשן הופעל מחדש — אפשר להמשיך לשוחח",
+    "retry.title":"ניסיונות חוזרים: {n}",
+    "plan.exec.btn":"▶️ להריץ את התוכנית","plan.exec.title":"מעבר למצב Auto והרצת התוכנית הזו",
+    "tmux.required":"נדרש tmux בשרת (macOS/Linux/Docker/WSL). לא זמין כאן.",
+    "hist.del.n":"למחוק את הצ׳אטים שנבחרו ({n})?",
+    "tg.lock.on":"🔓 חיבורים חדשים מותרים","tg.lock.off":"🔒 חיבורים חדשים חסומים",
+    "input.ph.mob":"כתבו משימה...",
+    "skillcat.engineering":"⚙️ הנדסה","skillcat.ai":"🧠 בינה מלאכותית ופרומפטים","skillcat.quality":"💎 איכות קוד","skillcat.security":"🔒 אבטחה","skillcat.design":"🎨 עיצוב","skillcat.product":"📋 מוצר","skillcat.finance":"💼 פיננסים","skillcat.research":"🔬 מחקר","skillcat.workflow":"📐 תהליכי עבודה","skillcat.system":"⚙️ מערכת","skillcat.plugin":"🧩 מיומנויות של תוספים",
+    "upd.available":"עדכון זמין","upd.btn":"עדכון","upd.updating":"מעדכן… {time}","upd.copy_cmd":"העתקת הפקודה","upd.via_terminal":"עדכון דרך הטרמינל:","upd.copied":"הועתק ✓","upd.retry":"ניסיון נוסף","upd.failed":"העדכון נכשל","upd.new_version":"גרסה חדשה {version} זמינה",
   }
 };
 function t(key) {
@@ -5423,7 +5658,7 @@ let _i18nDynReady = false;
 const I18N_RERENDER = [
   'renderBots', 'renderBotsStrip', 'renderBotTemplates', 'renderMcp', 'renderSkills',
   'renderCommands', 'renderAgents', 'renderProjects', 'renderRemoteHostsList',
-  'renderRemoteHostSelect', 'renderTabs', 'updateSessBarSkills', 'loadHist',
+  'renderRemoteHostSelect', 'renderTabs', 'updateSessBarSkills', 'loadHist', 'updateMobSubtitle',
 ];
 function rerenderI18nDynamic() {
   if (!_i18nDynReady) return;
@@ -6456,8 +6691,8 @@ function handleWsMsg(d) {
             div.className = 'msg';
             const badge = document.createElement('button');
             badge.className = 'thinking-badge';
-            badge.setAttribute('aria-label', 'View chain of thought');
-            badge.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Chain of thought</span><span style="color:var(--muted)">·</span><span>${wordsEst.toLocaleString()} words</span><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>`;
+            badge.setAttribute('aria-label', t('cot.label'));
+            badge.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>${escH(t('cot.label'))}</span><span style="color:var(--muted)">·</span><span>${wordsEst.toLocaleString()} ${escH(t('cot.words'))}</span><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>`;
             badge.onclick = () => openThinkingModal(_tt);
             div.appendChild(badge);
             w.appendChild(div);
@@ -6527,11 +6762,11 @@ function handleWsMsg(d) {
         if (_restartSessionId && streaming.el) {
           const restartBtn = document.createElement('button');
           restartBtn.className = 'session-restart-btn';
-          restartBtn.innerHTML = '🔄 Restart Session';
+          restartBtn.innerHTML = t('restart.btn');
           restartBtn.style.cssText = 'margin-top:12px;padding:8px 16px;background:var(--bg,#1a1a2e);border:1px solid var(--accent,#00d4aa);color:var(--accent,#00d4aa);border-radius:6px;cursor:pointer;font-size:14px;';
           restartBtn.onclick = () => {
             restartBtn.disabled = true;
-            restartBtn.textContent = 'Restarting...';
+            restartBtn.textContent = t('restart.ing');
             ws.send(JSON.stringify({ type: 'restart_session', sessionId: _restartSessionId }));
           };
           const footer = streaming.el.querySelector('.msg-status-footer');
@@ -6553,7 +6788,7 @@ function handleWsMsg(d) {
             curMode = 'auto';
             syncBtn('mode', 'auto');
             // Show success toast
-            toast('✅ Auto-switched to auto mode', false, 2000);
+            toast(t('mode.autoswitch'), false, 2000);
           }
         }
         // Reset generating state for the visible tab (non-task done events only;
@@ -6652,7 +6887,7 @@ function handleWsMsg(d) {
       }
       { const openBtn = $i('sessBarOpenBtn'); if (openBtn) openBtn.style.display = 'none'; }
       { const catchupBtn = $i('sessBarCatchupBtn'); if (catchupBtn) catchupBtn.style.display = 'none'; }
-      toast('✅ Session restarted - you can continue chatting', false, 3000);
+      toast(t('restart.done'), false, 3000);
       // Reset streaming state for fresh start
       streaming.el = null; streaming.txt = '';
       streaming.toolCounts = {}; streaming.toolLog = [];
@@ -7058,7 +7293,7 @@ function handleWsMsg(d) {
         // Show retry count in session bar (not in chat)
         if (tabId === activeTabId) {
           const retryEl = $i('sessBarRetry');
-          if (retryEl) { retryEl.style.display = ''; retryEl.textContent = `↩ ×${retryCount}`; retryEl.title = `Retried ${retryCount} time(s)`; }
+          if (retryEl) { retryEl.style.display = ''; retryEl.textContent = `↩ ×${retryCount}`; retryEl.title = t('retry.title').replace('{n}', retryCount); }
         }
         // Mark tab as generating and fire retry
         const targetTab = openTabs.find(x => x.id === targetSessionId);
@@ -7091,7 +7326,7 @@ function handleWsMsg(d) {
       break;
 
     case 'tunnel_url':
-      toast(`🟢 Remote Access: ${d.url}`);
+      toast(t('tn.toast.url').replace('{url}', d.url));
       tunnelLoadStatus();
       break;
 
@@ -8282,8 +8517,8 @@ function _maybeAttachExecPlanBtn(el, text) {
   if (!planKeywords.test(text) && !text.includes('## ') && !text.includes('**Step')) return;
   const execBtn = document.createElement('button');
   execBtn.className = 'execute-plan-btn';
-  execBtn.innerHTML = '▶️ Execute Plan';
-  execBtn.title = 'Switch to Auto mode and execute this plan';
+  execBtn.innerHTML = t('plan.exec.btn');
+  execBtn.title = t('plan.exec.title');
   execBtn.onclick = () => {
     curMode = 'auto';
     syncBtn('mode', 'auto');
@@ -9286,7 +9521,7 @@ async function updateSessBar(opts = {}) {
     const msgCountEl = $i('sessBarMsgCount');
     if (msgCountEl) {
       const n = _allMsgs.filter(m => m.role === 'user' || (m.role === 'assistant' && m.type !== 'thinking')).length;
-      if (currentSessionId && n > 0) { msgCountEl.textContent = `${n} msgs`; msgCountEl.style.display = ''; }
+      if (currentSessionId && n > 0) { msgCountEl.textContent = t('sess.msgcount').replace('{n}', n); msgCountEl.style.display = ''; }
       else { msgCountEl.style.display = 'none'; }
     }
     loadNotesForSession(sess.notes);
@@ -9324,11 +9559,11 @@ async function catchUpFromTerminal() {
   try {
     const r = await fetch(`/api/sessions/${currentSessionId}/catch-up`, { method: 'POST' });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) { toast('⚠ ' + (d.error || 'Не вдалося дочитати'), true); return; }
-    if (d.baseline) { toast('✓ Базову позицію встановлено — попрацюйте в терміналі й натисніть ще раз'); return; }
-    if (d.count > 0) { await loadSess(currentSessionId); toast(`✓ Дочитано з терміналу: ${d.count}`); }
-    else { toast('Нічого нового з терміналу'); }
-  } catch { toast('⚠ Помилка дочитування', true); }
+    if (!r.ok) { toast('⚠ ' + (d.error || t('catchup.err')), true); return; }
+    if (d.baseline) { toast(t('catchup.baseline')); return; }
+    if (d.count > 0) { await loadSess(currentSessionId); toast(t('catchup.done').replace('{n}', d.count)); }
+    else { toast(t('catchup.none')); }
+  } catch { toast(t('catchup.fail'), true); }
   finally { if (btn) { delete btn.dataset.busy; btn.style.opacity = ''; } }
 }
 
@@ -9389,7 +9624,7 @@ async function exportSession() {
   if (!currentSessionId) return;
   try {
     const r = await fetch(`/api/sessions/${currentSessionId}/export`);
-    if (!r.ok) { toast('Export failed: ' + r.status, true); return; }
+    if (!r.ok) { toast(t('export.failed').replace('{err}', r.status), true); return; }
     const blob = await r.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -9397,7 +9632,7 @@ async function exportSession() {
     a.download = `session-${currentSessionId}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  } catch (e) { toast('Export error: ' + e.message, true); }
+  } catch (e) { toast(t('export.error').replace('{err}', e.message), true); }
 }
 
 async function importSessionFile(input) {
@@ -9408,19 +9643,19 @@ async function importSessionFile(input) {
     const text = await file.text();
     const data = JSON.parse(text);
     if (!data.session || !Array.isArray(data.messages)) {
-      toast('Invalid export file', true); return;
+      toast(t('export.invalid'), true); return;
     }
     const r = await fetch('/api/sessions/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session: data.session, messages: data.messages })
     });
-    if (!r.ok) { toast('Import failed: ' + r.status, true); return; }
+    if (!r.ok) { toast(t('import.failed').replace('{err}', r.status), true); return; }
     const { session } = await r.json();
-    toast('Session imported');
+    toast(t('import.done'));
     await loadHist();
     openTab(session.id, session.title);
-  } catch (e) { toast('Import error: ' + e.message, true); }
+  } catch (e) { toast(t('import.error').replace('{err}', e.message), true); }
 }
 
 function switchTab(id) {
@@ -9707,9 +9942,7 @@ function syncDefaultStar() {
   const cur = curEngine === 'subscription' ? 'Subscription' : 'API';
   document.querySelectorAll('[data-default-star]').forEach(b => {
     b.classList.toggle('on', isDefault);
-    b.title = isDefault
-      ? `${cur} — типовий рушій для нових чатів`
-      : `Зробити поточний рушій (${cur}) типовим для нових чатів`;
+    b.title = t(isDefault ? 'engine.default.is' : 'engine.default.set').replace('{engine}', cur);
   });
 }
 
@@ -9733,8 +9966,8 @@ function setDefaultEngine() {
   }).then(r => r.json()).then(d => {
     _globalDefaultEngine = d.defaultEngine === 'subscription' ? 'subscription' : 'api';
     syncDefaultStar();
-    toast('★ ' + (_globalDefaultEngine === 'subscription' ? 'Subscription' : 'API') + ' — типовий рушій для нових чатів');
-  }).catch(() => toast('⚠ Не вдалося зберегти типовий рушій', true));
+    toast(t('engine.default.toast').replace('{engine}', _globalDefaultEngine === 'subscription' ? 'Subscription' : 'API'));
+  }).catch(() => toast(t('engine.default.err'), true));
 }
 
 function updInd() { /* removed — mode indicator no longer in toolbar */ }
@@ -9748,7 +9981,7 @@ function updateSessBarSkills() {
   if (autoSkillsMode) {
     const auto = document.createElement('span');
     auto.className = 'sess-skill-chip sess-skill-auto';
-    auto.textContent = '⚡ Auto';
+    auto.textContent = t('skills.auto.btn');
     const autoTip = t('auto.title.on') || 'Skills are auto-selected based on task';
     auto.title = autoTip;
     auto.dataset.tip = autoTip;
@@ -10562,7 +10795,7 @@ inEl.addEventListener('input', () => {
   const cc = $i('charCounter');
   if (cc) {
     if (n >= 100) {
-      cc.textContent = n + ' chars';
+      cc.textContent = t('chars.count').replace('{n}', n);
       cc.className = n >= 1000 ? 'cc-danger' : n >= 500 ? 'cc-warn' : '';
       cc.style.display = '';
     } else {
@@ -10590,7 +10823,7 @@ function loadStats() { /* removed */ }
 let _tmuxAvailable = true;
 function applyTmuxCapability(available) {
   _tmuxAvailable = !!available;
-  const reason = 'Потрібен tmux на сервері (macOS/Linux/Docker/WSL). Недоступно тут.';
+  const reason = t('tmux.required');
   const sel = [
     ...document.querySelectorAll('.tb-btn[data-v="subscription"]'),
     ...document.querySelectorAll('.mob-chip[data-mob="engine"][data-v="subscription"]'),
@@ -10948,8 +11181,8 @@ function _renderMsgAt(idx, prepend = false) {
     div.className = 'msg';
     const badge = document.createElement('button');
     badge.className = 'thinking-badge';
-    badge.setAttribute('aria-label', 'View chain of thought');
-    badge.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Chain of thought</span><span style="color:var(--muted)">·</span><span>${wordsEst.toLocaleString()} words</span><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>`;
+    badge.setAttribute('aria-label', t('cot.label'));
+    badge.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>${escH(t('cot.label'))}</span><span style="color:var(--muted)">·</span><span>${wordsEst.toLocaleString()} ${escH(t('cot.words'))}</span><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>`;
     const content = m.content || '';
     badge.onclick = () => openThinkingModal(content);
     div.appendChild(badge);
@@ -11314,11 +11547,11 @@ async function loadSess(id) {
       if (lastAssistEl) {
         const restartBtn = document.createElement('button');
         restartBtn.className = 'session-restart-btn';
-        restartBtn.innerHTML = '🔄 Restart Session';
+        restartBtn.innerHTML = t('restart.btn');
         restartBtn.style.cssText = 'margin-top:12px;padding:8px 16px;background:var(--bg,#1a1a2e);border:1px solid var(--accent,#00d4aa);color:var(--accent,#00d4aa);border-radius:6px;cursor:pointer;font-size:14px;';
         restartBtn.onclick = () => {
           restartBtn.disabled = true;
-          restartBtn.textContent = 'Restarting...';
+          restartBtn.textContent = t('restart.ing');
           ws.send(JSON.stringify({ type: 'restart_session', sessionId: _restartSessionId }));
         };
         const footer = lastAssistEl.querySelector('.msg-status-footer');
@@ -11450,7 +11683,7 @@ async function delSess(id) {
 async function forkSess(id) {
   try {
     const r = await fetch(`/api/sessions/${id}/fork`, { method: 'POST' });
-    if (!r.ok) { const e = await r.json().catch(() => ({})); toast(e.error || 'Fork failed', true); return; }
+    if (!r.ok) { const e = await r.json().catch(() => ({})); toast(e.error || t('fork.failed'), true); return; }
     const s = await r.json();
     openTab(s.id, s.title);
     loadHist();
@@ -11507,12 +11740,9 @@ function selectAllHist() {
 async function delSelectedHist() {
   const ids = [...histSelected];
   if (ids.length === 0) return;
-  const lang = localStorage.getItem('lang') || 'uk';
-  let confirmMsg;
-  if (lang === 'en') confirmMsg = `Delete ${ids.length} chat${ids.length === 1 ? '' : 's'}?`;
-  else if (lang === 'ru') confirmMsg = `Удалить ${ids.length} чат${ids.length === 1 ? '' : ids.length < 5 ? 'а' : 'ов'}?`;
-  else confirmMsg = `Видалити ${ids.length} чат${ids.length === 1 ? '' : ids.length < 5 ? 'и' : 'ів'}?`;
-  if (!confirm(confirmMsg)) return;
+  // Count in parentheses instead of inflected nouns — sidesteps Slavic plural
+  // forms, so one key works for every language.
+  if (!confirm(t('hist.del.n').replace('{n}', ids.length))) return;
   const btn = $i('histBulkDel');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
@@ -11588,10 +11818,10 @@ function mcpDisplaySource(m) {
 
 function buildMcpDescription(m) {
   if (m.description && m.description.trim()) return m.description.trim();
-  if (m.type === 'http') return 'HTTP MCP server';
-  if (m.type === 'sse') return 'SSE MCP server';
-  if (m.command) return 'Command-based MCP server';
-  return 'MCP server';
+  if (m.type === 'http') return t('mcp.desc.http');
+  if (m.type === 'sse') return t('mcp.desc.sse');
+  if (m.command) return t('mcp.desc.cmd');
+  return t('mcp.desc.generic');
 }
 
 function buildMcpTooltip(id, m) {
@@ -11599,10 +11829,10 @@ function buildMcpTooltip(id, m) {
   const source = mcpDisplaySource(m);
   const transport = (m.type === 'http' || m.type === 'sse')
     ? (m.type || 'http').toUpperCase()
-    : (m.command ? 'Command' : '');
+    : (m.command ? t('mcp.transport.cmd') : '');
   return buildRichTooltipHtml(m.label || id, description, [
-    transport ? { label: 'Transport', value: transport } : null,
-    source ? { label: 'Source', value: source, code: true } : null,
+    transport ? { label: t('mcp.tt.transport'), value: transport } : null,
+    source ? { label: t('mcp.tt.source'), value: source, code: true } : null,
   ]);
 }
 
@@ -11610,9 +11840,9 @@ function buildMcpTextTooltip(id, m) {
   const description = buildMcpDescription(m);
   const source = mcpDisplaySource(m);
   const parts = [m.label || id, description];
-  if (m.type === 'http' || m.type === 'sse') parts.push(`Transport: ${(m.type || 'http').toUpperCase()}`);
-  else if (m.command) parts.push('Transport: Command');
-  if (source) parts.push(`Source: ${source}`);
+  if (m.type === 'http' || m.type === 'sse') parts.push(`${t('mcp.tt.transport')}: ${(m.type || 'http').toUpperCase()}`);
+  else if (m.command) parts.push(`${t('mcp.tt.transport')}: ${t('mcp.transport.cmd')}`);
+  if (source) parts.push(`${t('mcp.tt.source')}: ${source}`);
   return parts.filter(Boolean).join('\n\n');
 }
 
@@ -11633,7 +11863,7 @@ function buildSkillChipTooltipHtml(id, s) {
 }
 
 function buildAutoTooltipHtml() {
-  return buildRichTooltipHtml('⚡ Auto', t('auto.title.on') || 'Skills are auto-selected based on task');
+  return buildRichTooltipHtml(t('skills.auto.btn'), t('auto.title.on') || 'Skills are auto-selected based on task');
 }
 
 function renderMcp() {
@@ -12307,19 +12537,9 @@ async function _sendBotsImport(bots, overwrite) {
   }
 }
 
-const SKILL_CATS = {
-  engineering: { en: '⚙️ Engineering', uk: '⚙️ Розробка', ru: '⚙️ Разработка' },
-  ai:          { en: '🧠 AI & Prompts', uk: '🧠 AI та промпти', ru: '🧠 AI и промпты' },
-  quality:     { en: '💎 Code Quality', uk: '💎 Якість коду', ru: '💎 Качество кода' },
-  security:    { en: '🔒 Security', uk: '🔒 Безпека', ru: '🔒 Безопасность' },
-  design:      { en: '🎨 Design', uk: '🎨 Дизайн', ru: '🎨 Дизайн' },
-  product:     { en: '📋 Product', uk: '📋 Продукт', ru: '📋 Продукт' },
-  finance:     { en: '💼 Finance', uk: '💼 Фінанси', ru: '💼 Финансы' },
-  research:    { en: '🔬 Research', uk: '🔬 Дослідження', ru: '🔬 Исследования' },
-  workflow:    { en: '📐 Workflow', uk: '📐 Робочий процес', ru: '📐 Рабочий процесс' },
-  system:      { en: '⚙️ System', uk: '⚙️ Система', ru: '⚙️ Система' },
-  plugin:      { en: '🧩 Plugin Skills', uk: '🧩 Skills плагінів', ru: '🧩 Skills плагинов' },
-};
+// Category ids only — labels live in TRANSLATIONS under 'skillcat.<id>', so all
+// five languages get one (the old inline map covered en/uk/ru and left fr/he English).
+const SKILL_CATS = ['engineering', 'ai', 'quality', 'security', 'design', 'product', 'finance', 'research', 'workflow', 'system', 'plugin'];
 
 // Skill classification is now server-side (LLM-based, haiku).
 // SKILL_TRIGGERS and autoSelectSkills() removed — the server classifies via classifySkills().
@@ -12339,7 +12559,6 @@ function toggleAutoSkills() {
 function renderSkills() {
   const el = $i('skillsList'); el.innerHTML = '';
   let c = 0;
-  const lang = localStorage.getItem('lang') || 'uk';
 
   function appendSkillItem(id, s) {
     const on = activeSkills.has(id);
@@ -12384,7 +12603,7 @@ function renderSkills() {
   }
 
   // Render in defined category order, then custom
-  const catOrder = Object.keys(SKILL_CATS);
+  const catOrder = SKILL_CATS.slice();
   const toRender = [
     ...catOrder.filter(k => grouped[k]),
     ...(grouped['__custom__'] ? ['__custom__'] : [])
@@ -12395,8 +12614,7 @@ function renderSkills() {
     if (!items?.length) continue;
 
     // Category header
-    const catMeta = SKILL_CATS[catId];
-    const catLabel = catMeta ? (catMeta[lang] || catMeta.en) : t('skill.custom_cat');
+    const catLabel = SKILL_CATS.includes(catId) ? t('skillcat.' + catId) : t('skill.custom_cat');
     const catDiv = document.createElement('div');
     catDiv.className = 'sk-cat';
     catDiv.textContent = catLabel;
@@ -12717,7 +12935,7 @@ async function deleteAgent(id) {
   if (!confirm(`${t('agent.del.confirm')} "${label}"?`)) return;
   try {
     const r = await fetch(`/api/external-agents/${id}`, { method: 'DELETE' });
-    if (!r.ok) { toast(t('toast.err_prefix') + 'Delete failed', true); return; }
+    if (!r.ok) { toast(t('toast.err_prefix') + t('agent.del.failed'), true); return; }
   } catch (e) { toast(e.message, true); return; }
   delete _externalAgents[id];
   renderAgents();
@@ -12802,7 +13020,7 @@ const CFG_TABS_BASE = [
   { id: 'config.json', label: 'config.json' },
   { id: '.claude/settings.json', label: 'settings.json' },
   { id: '.env', label: '.env' },
-  { id: 'global-claude-md', label: '🌐 Global CLAUDE.md' },
+  { id: 'global-claude-md', get label() { return t('cfg.tab.global_md'); } },
 ];
 
 async function openCfgEditor() {
@@ -13631,7 +13849,7 @@ async function selectDir() {
   });
   const d = await r.json();
   if (!d.ok) { toast(t('toast.err_prefix') + (d.error || '?'), true); return; }
-  if (d.gitError) toast('git init: ' + d.gitError, true, 4000);
+  if (d.gitError) toast(t('toast.git_init').replace('{err}', d.gitError), true, 4000);
   else if (d.actions?.length) toast('✓ ' + d.actions.join(', '));
 
   await loadProjectsList();
@@ -14294,7 +14512,7 @@ async function tunnelStart() {
     });
     const d = await r.json();
     if (d.ok || d.publicUrl) {
-      toast(`🟢 Remote Access: ${d.publicUrl}`);
+      toast(t('tn.toast.url').replace('{url}', d.publicUrl));
       tunnelLoadStatus();
     } else {
       const errMsg = d.error || t('tn.err.start') || 'Failed to start remote access';
@@ -14303,7 +14521,7 @@ async function tunnelStart() {
       tunnelSetBtnState('start');
     }
   } catch (e) {
-    const errMsg = e.message || 'Network error';
+    const errMsg = e.message || t('tn.err.network');
     tunnelSetError(errMsg);
     toast(`❌ ${errMsg}`, true);
     tunnelSetBtnState('start');
@@ -14467,7 +14685,7 @@ async function tgToggleAccept(checked) {
     $i('tgPairBtn').disabled = !checked;
     $i('tgPairBtn').style.opacity = checked ? '1' : '.5';
     if (!checked) tgCancelPairing();
-    toast(checked ? '🔓 Нові підключення дозволено' : '🔒 Нові підключення заблоковано');
+    toast(t(checked ? 'tg.lock.on' : 'tg.lock.off'));
   } catch {}
 }
 
@@ -14772,7 +14990,8 @@ function updateMobTitle() {
 function updateMobSubtitle() {
   const el = $i('mobSubtitle');
   if (!el) return;
-  const modeLabel = { auto: 'Auto', planning: 'Plan', task: 'Task' }[curMode] || curMode;
+  const modeKey = { auto: 'mode.auto', planning: 'mode.plan', task: 'mode.task' }[curMode];
+  const modeLabel = modeKey ? t(modeKey) : curMode;
   const modelLabel = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' }[curModel] || curModel;
   el.textContent = modeLabel + ' · ' + modelLabel;
 }
@@ -14802,7 +15021,7 @@ function renderMobTabs() {
   if (!list) return;
   list.innerHTML = '';
   if (!openTabs || openTabs.length === 0) {
-    list.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--muted)">No open sessions</div>';
+    list.innerHTML = `<div style="padding:40px 16px;text-align:center;color:var(--muted)">${escH(t('tabs.none_open'))}</div>`;
     return;
   }
   openTabs.forEach(tab => {
@@ -14810,7 +15029,7 @@ function renderMobTabs() {
     item.className = 'mob-tab-item' + (tab.id === activeTabId ? ' active' : '');
     item.innerHTML = `
       <div class="mob-tab-dot"></div>
-      <div class="mob-tab-name">${escH(tab.title || 'New Chat')}</div>
+      <div class="mob-tab-name">${escH(tab.title || t('tab.new'))}</div>
       <button class="mob-tab-close" onclick="event.stopPropagation();closeMobTabItem('${escH(tab.id)}')">✕</button>
     `;
     item.onclick = (e) => {
@@ -14878,7 +15097,6 @@ document.addEventListener('change', (e) => {
 });
 
 // ── Initialize mobile UI on load ──
-const _mobPlaceholders = { uk: 'Напишіть завдання...', en: 'Write a task...', ru: 'Напишите задачу...' };
 let _desktopPlaceholder = '';
 function initMobUI() {
   if (!_isMob()) return;
@@ -14898,8 +15116,7 @@ function initMobUI() {
   const inp = $i('input');
   if (inp) {
     if (!_desktopPlaceholder) _desktopPlaceholder = inp.placeholder;
-    const lang = localStorage.getItem('lang') || 'en';
-    inp.placeholder = _mobPlaceholders[lang] || _mobPlaceholders.en;
+    inp.placeholder = t('input.ph.mob');
   }
 }
 function restoreDesktopPlaceholder() {
@@ -15684,6 +15901,7 @@ document.addEventListener('keydown', e => {
   var api = window.electronAPI && window.electronAPI.update;
   if (!api) return;
   var bar, msgEl, logEl, btn, spin, updating = false, startedAt = 0, tick = null;
+  function TT(k){ return (typeof window.t === 'function') ? window.t(k) : k; }
   function el(tag, css, txt){ var e=document.createElement(tag); if(css)e.style.cssText=css; if(txt!=null)e.textContent=txt; return e; }
   // brew hides its progress bar when stdout is not a TTY (measured: a real 150MB
   // download emitted two lines and no percentage), so a byte-level bar would be a
@@ -15698,8 +15916,8 @@ document.addEventListener('keydown', e => {
     spin.style.display = 'inline-block';
     tick = setInterval(function(){
       var s = Math.round((Date.now() - startedAt) / 1000);
-      var t = s < 60 ? s + 's' : Math.floor(s/60) + 'm ' + (s%60) + 's';
-      msgEl.textContent = 'Updating… ' + t;
+      var elapsed = s < 60 ? s + 's' : Math.floor(s/60) + 'm ' + (s%60) + 's';
+      msgEl.textContent = TT('upd.updating').replace('{time}', elapsed);
     }, 1000);
   }
   function stopSpinner(){
@@ -15708,8 +15926,8 @@ document.addEventListener('keydown', e => {
   }
   function build(){
     bar = el('div','position:fixed;top:0;left:0;right:0;z-index:2147483600;display:none;align-items:center;gap:10px;padding:8px 14px;background:#1f6feb;color:#fff;font:13px/1.4 -apple-system,system-ui,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.35)');
-    msgEl = el('span','font-weight:600','Update available');
-    btn = el('button','background:#fff;color:#1f6feb;border:0;border-radius:6px;padding:5px 12px;font-weight:600;cursor:pointer','Update');
+    msgEl = el('span','font-weight:600',TT('upd.available'));
+    btn = el('button','background:#fff;color:#1f6feb;border:0;border-radius:6px;padding:5px 12px;font-weight:600;cursor:pointer',TT('upd.btn'));
     logEl = el('span','opacity:.85;font-weight:400;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap','');
     var x = el('button','background:transparent;color:#fff;border:0;font-size:15px;cursor:pointer','✕');
     spin = el('span','display:none;width:13px;height:13px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:ccsUpdSpin .7s linear infinite;flex:none');
@@ -15728,15 +15946,15 @@ document.addEventListener('keydown', e => {
     Promise.resolve(api.start()).then(function(res){
       if (res && res.fallback){
         updating = false; stopSpinner();
-        btn.style.display=''; btn.disabled=false; btn.textContent='Copy command';
-        msgEl.textContent='Update via Terminal:'; logEl.textContent=res.command;
-        btn.onclick=function(){ if(navigator.clipboard) navigator.clipboard.writeText(res.command); btn.textContent='Copied ✓'; };
+        btn.style.display=''; btn.disabled=false; btn.textContent=TT('upd.copy_cmd');
+        msgEl.textContent=TT('upd.via_terminal'); logEl.textContent=res.command;
+        btn.onclick=function(){ if(navigator.clipboard) navigator.clipboard.writeText(res.command); btn.textContent=TT('upd.copied'); };
       } else if (res && res.error){
         // The refresh/download phase now fails with the app still open, so the user
         // can actually read this and retry — it no longer dies with the window.
         updating = false; stopSpinner();
-        btn.style.display=''; btn.disabled=false; btn.textContent='Retry';
-        msgEl.textContent='Update failed'; logEl.textContent=res.error;
+        btn.style.display=''; btn.disabled=false; btn.textContent=TT('upd.retry');
+        msgEl.textContent=TT('upd.failed'); logEl.textContent=res.error;
       }
       // res.started: the swap is running in a detached shell and this window is
       // about to be closed by it. Leave the bar as-is.
@@ -15744,7 +15962,7 @@ document.addEventListener('keydown', e => {
   }
   function check(){
     Promise.resolve(api.check()).then(function(r){
-      if (r && r.available){ msgEl.textContent='New version '+r.version+' available'; bar.style.display='flex'; }
+      if (r && r.available){ msgEl.textContent=TT('upd.new_version').replace('{version}', r.version); bar.style.display='flex'; }
     }).catch(function(){});
   }
   function init(){ build(); check(); setInterval(function(){ if(bar && bar.style.display==='none') check(); }, 6*3600*1000); }
@@ -15886,7 +16104,7 @@ function _fitEnginePaneFont(entry) {
 async function openTerminalTab(sessionId, label, avatar) {
   if (_terminalAvailable === null) await loadTerminalCapability();
   if (!_terminalAvailable) { toast(_termCapabilityReason || t('term.unavailable'), true); return; }
-  if (typeof Terminal === 'undefined') { toast('xterm.js failed to load', true); return; }
+  if (typeof Terminal === 'undefined') { toast(TT('term.xterm.fail'), true); return; }
   if (!openTabs.some(x => x.id === sessionId)) {
     openTabs.push({ id: sessionId, title: (avatar ? avatar + ' ' : '') + (label || 'terminal'),
                     generating: false, done: false, kind: 'terminal', termLabel: label, termAvatar: avatar });
