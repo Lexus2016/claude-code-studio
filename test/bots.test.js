@@ -368,5 +368,43 @@ check('junk entries do not throw',
   check('the import batch is not mutated', JSON.stringify(incoming), before);
 }
 
+// ─── clipTask (AC-7: the callee must SEE that its brief was cut) ──────────────
+const { clipTask, MAX_TASK_CHARS } = require('../bots.js');
+console.log('\ntask clipping (a brief too long for one prompt):');
+
+check('the limit is the same 4000 the sequential-context path uses', MAX_TASK_CHARS, 4000);
+
+{
+  const short = 'draft the summary';
+  check('a short task is passed through untouched', clipTask(short), { task: short, clipped: false });
+}
+{
+  const exact = 'x'.repeat(MAX_TASK_CHARS);
+  const r = clipTask(exact);
+  check('a task of exactly the limit is NOT clipped', r.clipped, false);
+  check('…and is returned byte for byte', r.task, exact);
+}
+{
+  // The tail must be genuinely gone — a "truncation" that still ships the rest would
+  // make the warning a lie, and the callee would act on text it was told it lacks.
+  const long = 'A'.repeat(MAX_TASK_CHARS) + 'SECRET-TAIL';
+  const r = clipTask(long);
+  check('one character over the limit clips', r.clipped, true);
+  check('the kept part is exactly the first MAX_TASK_CHARS', r.task.substring(0, MAX_TASK_CHARS), 'A'.repeat(MAX_TASK_CHARS));
+  check('the dropped tail is not smuggled through', r.task.includes('SECRET-TAIL'), false);
+  // Visibly truncated, per AC-7: the marker is what makes the cut visible, so a clipped
+  // task is deliberately LONGER than the limit.
+  check('the cut is announced in the task itself', r.task.includes('cut off at ' + MAX_TASK_CHARS + ' characters'), true);
+  check('the marker sits at the end, not the start', r.task.trimEnd().endsWith('missing.]'), true);
+}
+{
+  // The MCP handler destructures the result unconditionally, so a non-string task from a
+  // malformed tool call must not throw there.
+  check('a missing task yields an empty, unclipped result', clipTask(undefined), { task: '', clipped: false });
+  check('a non-string task does not throw', clipTask(42), { task: '', clipped: false });
+  check('a null task does not throw', clipTask(null), { task: '', clipped: false });
+}
+
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

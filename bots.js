@@ -325,8 +325,29 @@ function normList(v) {
   return '[]';
 }
 
+// ─── Task clipping (shared with mcp-bots.js) ──────────────────────────────────
+// The task text becomes the callee's prompt. The existing sequential-context path
+// already clips peer output at 4000 chars (server.js:3569) — reuse that number
+// instead of inventing a second limit for the same kind of payload.
+const MAX_TASK_CHARS = 4000;
+
+// Returns { task, clipped }. The marker is appended, so a clipped task is LONGER than
+// MAX_TASK_CHARS by design: the callee must be able to see that its brief stops early
+// rather than treat a sentence that ends mid-word as the whole spec.
+function clipTask(rawTask) {
+  const text = typeof rawTask === 'string' ? rawTask : '';
+  if (text.length <= MAX_TASK_CHARS) return { task: text, clipped: false };
+  return {
+    task: text.substring(0, MAX_TASK_CHARS)
+      + '\n\n[This task was cut off at ' + MAX_TASK_CHARS
+      + ' characters — anything after this point is missing.]',
+    clipped: true,
+  };
+}
+
 module.exports = {
   HANDLE_RE, EVIDENCE_CLAUSE, ROSTER_MAX, IMPORT_MAX,
   isValidHandle, handleFromLabel, uniqueHandle,
   parseMentions, renderRoster, buildBotSystemPrompt, planDispatch, planBotImport,
+  MAX_TASK_CHARS, clipTask,
 };

@@ -22,10 +22,10 @@ const CALLER = process.env.BOTS_CALLER || '';
 const TURN = process.env.BOTS_TURN || '';
 const SECRET = process.env.BOTS_SECRET || '';
 const MAX_STDIN_BUFFER = 10 * 1024 * 1024; // 10 MB
-// The task text becomes the callee's prompt. The existing sequential-context path
-// already clips peer output at 4000 chars (server.js:3395) — reuse that number
-// instead of inventing a second limit for the same kind of payload.
-const MAX_TASK_CHARS = 4000;
+// Clipping lives in bots.js so test/bots.test.js can assert it — this file is a stdio
+// subprocess with no exports, spawned as `node <repo>/mcp-bots.js` (server.js:3603),
+// so the relative require always resolves.
+const { MAX_TASK_CHARS, clipTask } = require('./bots.js');
 
 // ─── JSON-RPC helpers ────────────────────────────────────────────────────────
 
@@ -157,11 +157,7 @@ async function handleMessage(msg) {
       // so it does not treat a sentence that stops mid-word as the whole spec, and the
       // caller is told too — otherwise it tells the user it handed over a full brief that
       // the peer never received.
-      const clipped = rawTask.length > MAX_TASK_CHARS;
-      const task = clipped
-        ? rawTask.substring(0, MAX_TASK_CHARS) + '\n\n[This task was cut off at '
-          + MAX_TASK_CHARS + ' characters — anything after this point is missing.]'
-        : rawTask;
+      const { task, clipped } = clipTask(rawTask);
 
       try {
         const result = await postToServer({
