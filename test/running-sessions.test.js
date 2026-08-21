@@ -30,27 +30,55 @@ fs.mkdirSync(path.join(APP_DIR, 'data'), { recursive: true });
 
 // A fake `claude` that just sleeps keeps the turn in flight deterministically and for
 // free. findClaudeBin() probes $HOME/.local/bin/claude first and has no env override,
-// so HOME is what we redirect.
+// so HOME is what we redirect. `exec` so the spawned pid IS the sleep — otherwise the
+// kill lands on /bin/sh and leaves an orphaned sleep behind.
 const binDir = path.join(HOME_DIR, '.local', 'bin');
 fs.mkdirSync(binDir, { recursive: true });
-fs.writeFileSync(path.join(binDir, 'claude'), '#!/bin/sh\nsleep 60\n');
+fs.writeFileSync(path.join(binDir, 'claude'), '#!/bin/sh\nexec sleep 60\n');
 fs.chmodSync(path.join(binDir, 'claude'), 0o755);
 
-// CCS_DESKTOP=1 bypasses auth; APP_DIR redirects data/ to the temp dir.
-const srv = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-  env: { ...process.env, PORT: String(PORT), CCS_DESKTOP: '1', APP_DIR, WORKDIR: APP_DIR, HOME: HOME_DIR },
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
-let srvLog = '';
-srv.stdout.on('data', d => { srvLog += d; });
-srv.stderr.on('data', d => { srvLog += d; });
+// ─── Server lifecycle ────────────────────────────────────────────────────────
+// Only ever signals the pid recorded at spawn time — never a pid looked up by name.
+let srv = null, srvExited = false, srvLog = '';
 
-function cleanup() {
-  try { srv.kill('SIGTERM'); } catch {}
+function startServer() {
+  // CCS_DESKTOP=1 bypasses auth and binds 127.0.0.1 only; APP_DIR redirects data/ to the temp dir.
+  srv = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
+    env: { ...process.env, PORT: String(PORT), CCS_DESKTOP: '1', APP_DIR, WORKDIR: APP_DIR, HOME: HOME_DIR },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  srv.on('exit', () => { srvExited = true; });
+  srv.stdout.on('data', d => { srvLog += d; });
+  srv.stderr.on('data', d => { srvLog += d; });
+}
+
+function killServer() { if (srv && !srvExited) { try { srv.kill('SIGTERM'); } catch {} } }
+function removeTempDirs() {
   try { fs.rmSync(APP_DIR, { recursive: true, force: true }); } catch {}
   try { fs.rmSync(HOME_DIR, { recursive: true, force: true }); } catch {}
 }
+
+let cleanedUp = false;
+function cleanup() { if (cleanedUp) return; cleanedUp = true; killServer(); removeTempDirs(); }
+
+// 'exit' covers the normal and the thrown-assertion paths. It does NOT fire on a signal,
+// which is how `kill <testpid>`, a cancelled CI job or a `timeout` wrapper used to leave
+// an orphaned server holding the port — poisoning every later run.
 process.on('exit', cleanup);
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(sig, () => { cleanup(); process.exit(1); });
+}
+
+// Normal exit path: give the server a moment to finish db.pragma('optimize') + db.close()
+// before the data directory is pulled out from under it.
+async function cleanupGracefully() {
+  if (cleanedUp) return;
+  killServer();
+  for (let i = 0; i < 60 && !srvExited; i++) await sleep(50);
+  cleanup();
+}
+
+startServer();
 
 async function api(method, url, body) {
   const res = await fetch(BASE + url, {
@@ -109,6 +137,6 @@ async function api(method, url, body) {
 
   try { ws.close(); } catch {}
   console.log(`\n${pass} passed, ${fail} failed`);
-  cleanup();
+  await cleanupGracefully();
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); console.error(srvLog.slice(-2000)); cleanup(); process.exit(1); });
