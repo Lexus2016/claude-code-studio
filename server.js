@@ -8,6 +8,12 @@ const url = require('url');
 const { execSync, spawnSync, spawn: spawnProc } = require('child_process');
 const crypto = require('crypto');
 
+// Snapshot of the REAL process environment, taken before the .env loader below
+// mutates it. Without this there is no way to tell afterwards whether PORT came
+// from the shell/Docker or from .env — and that distinction is the whole point
+// of the source column in the Settings UI (see config-resolve.js).
+const _ENV_AT_BOOT = { ...process.env };
+
 // ─── Load .env file (no external dependency needed) ───────────────────────
 // MUST stay above every local require() below: claude-cli.js, claude-ssh.js and
 // claude-interactive.js capture CLAUDE_IDLE_TIMEOUT_MS / CLAUDE_HARD_CAP_MS into
@@ -30,6 +36,7 @@ const crypto = require('crypto');
 }
 
 const multer = require('multer');
+const cfgResolve = require('./config-resolve');
 const openDatabase = require('./db-adapter');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
@@ -6948,6 +6955,88 @@ app.put('/api/config-files', (req,res) => {
     res.json({ok:true});
   }
   catch(e){res.status(500).json({error:e.message})}
+});
+
+// ─── Resolved settings (form view of the config editor, issue #40) ───────────
+// Answers "where does this value come from, and which source wins" for every
+// setting the server actually reads. Behind auth like every other /api route
+// (app.use(auth.authMiddleware) above). Secret values are masked inside
+// config-resolve.resolveSetting() — they never reach this function.
+const DOTENV_PATH = path.join(APP_DIR, '.env');
+
+function collectConfigSources(workdirParam) {
+  let project = null;
+  if (workdirParam && isPathAllowed(workdirParam)) {
+    try { project = loadProjects().find(p => p.workdir === workdirParam) || null; } catch {}
+  }
+  // Only the fields the resolver needs — a project entry also carries an
+  // encrypted SSH password, and none of it belongs in this response.
+  const projectView = project ? { id: project.id, name: project.name, workdir: project.workdir } : null;
+  let dotenv = {};
+  try { dotenv = cfgResolve.parseDotenv(fs.readFileSync(DOTENV_PATH, 'utf-8')); } catch {}
+  return {
+    processEnv: _ENV_AT_BOOT,
+    dotenv,
+    globalConfig: readJsonIfExists(GLOBAL_CONFIG_PATH) || {},
+    localConfig:  readJsonIfExists(CONFIG_PATH) || {},
+    project: projectView,
+    runtimeDefaults: { WORKDIR: path.join(APP_DIR, 'workspace'), APP_DIR: __dirname },
+  };
+}
+
+app.get('/api/config/resolved', (req, res) => {
+  const workdir = req.query.workdir ? String(req.query.workdir) : '';
+  const sources = collectConfigSources(workdir);
+  res.json({
+    sections: cfgResolve.SECTIONS,
+    settings: cfgResolve.resolveAll(sources),
+    files: {
+      dotenv:       { path: DOTENV_PATH,          exists: fs.existsSync(DOTENV_PATH) },
+      configLocal:  { path: CONFIG_PATH,          exists: fs.existsSync(CONFIG_PATH) },
+      configGlobal: { path: GLOBAL_CONFIG_PATH,   exists: fs.existsSync(GLOBAL_CONFIG_PATH) },
+    },
+    project: sources.project,
+  });
+});
+
+app.put('/api/config/setting', (req, res) => {
+  const { key, value } = req.body || {};
+  const def = cfgResolve.getSetting(String(key || ''));
+  if (!def) return res.status(400).json({ error: 'unknown_setting' });
+  const c = cfgResolve.coerceValue(def, value);
+  if (!c.ok) return res.status(400).json({ error: c.error });
+
+  try {
+    if (def.backing === 'config') {
+      const conf = loadConfig();
+      const parts = def.path.split('.');
+      let cur = conf;
+      for (const p of parts.slice(0, -1)) {
+        if (!cur[p] || typeof cur[p] !== 'object') cur[p] = {};
+        cur = cur[p];
+      }
+      cur[parts[parts.length - 1]] = c.value;
+      saveConfig(conf);
+      if (def.key === 'lang' && telegramBot) telegramBot.lang = c.value;
+    } else if (def.backing === 'env') {
+      let body = '';
+      try { body = fs.readFileSync(DOTENV_PATH, 'utf-8'); } catch {}
+      const next = cfgResolve.setDotenvValue(body, def.key, c.value);
+      // .env holds API keys and the session secret — same 0600 as every other
+      // secret-bearing write path in this file.
+      const tmp = DOTENV_PATH + '.tmp';
+      fs.writeFileSync(tmp, next, { mode: 0o600 });
+      try { fs.chmodSync(tmp, 0o600); } catch {}
+      fs.renameSync(tmp, DOTENV_PATH);
+    } else {
+      return res.status(400).json({ error: 'read_only' });
+    }
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+
+  const resolved = cfgResolve.resolveSetting(def, collectConfigSources(''));
+  res.json({ ok: true, restart: !!def.restart, setting: resolved });
 });
 
 // CLAUDE.md editor — global (~/.claude/CLAUDE.md) + local (WORKDIR/CLAUDE.md)
