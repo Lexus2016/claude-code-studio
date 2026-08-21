@@ -36,7 +36,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
-const { isTransientOverload, shouldRetryOverload } = require('./rate-limit-utils');
+const { isTransientOverload, shouldRetryOverload, detectUsageLimit, taskStatusForStop } = require('./rate-limit-utils');
 const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs } = require('./delegate-terminal');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
 const {
@@ -507,6 +507,8 @@ try { db.exec(`ALTER TABLE tasks ADD COLUMN chain_id TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN source_session_id TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN failure_reason TEXT`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN task_retry_count INTEGER DEFAULT 0`); } catch {}
+// #27: how many times this task was paused by an account usage limit (bounded auto-resume)
+try { db.exec(`ALTER TABLE tasks ADD COLUMN usage_limit_pauses INTEGER DEFAULT 0`); } catch {}
 // Scheduled tasks: time-based triggers + recurring runs
 try { db.exec(`ALTER TABLE tasks ADD COLUMN scheduled_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE tasks ADD COLUMN recurrence TEXT`); } catch {}
@@ -1586,16 +1588,56 @@ async function startTask(task) {
       const wasStopped = stoppingTasks.has(task.id);
       stoppingTasks.delete(task.id);
       if (!wasStopped) {
-        const isSuccess = lastTaskResult?.subtype === 'success' && !hasError;
+        // ⏸ #27 — an account quota banner ("You've hit your session limit · resets 11pm
+        // (Europe/Paris)") ends the turn with subtype:'success', so the old
+        // `subtype === 'success'` check marked an interrupted task Done. taskStatusForStop()
+        // in rate-limit-utils.js owns that decision now. Only the TAIL of the run is scanned:
+        // the banner is the last thing the CLI emits, whereas an agent that merely *discusses*
+        // rate limits does so mid-run.
+        const _resultText = typeof lastTaskResult?.result === 'string' ? lastTaskResult.result : '';
+        const _stopTexts = [fullText.slice(-USAGE_LIMIT_TAIL_CHARS), _resultText];
+        const _stopStatus = taskStatusForStop({ texts: _stopTexts, subtype: lastTaskResult?.subtype, isError: hasError });
+        const _pausesSoFar = task.usage_limit_pauses || 0;
+        const usageLimit = (_stopStatus === 'paused' && _pausesSoFar < MAX_USAGE_LIMIT_PAUSES)
+          ? detectUsageLimit({ texts: _stopTexts })
+          : null;
+        // Pause budget spent: stop re-queuing, fail with a reason that names the cause.
+        const usageLimitExhausted = _stopStatus === 'paused' && !usageLimit;
+        const isSuccess = _stopStatus === 'done';
         const isRateLimited = isTransientOverload(fullText)
           || (hasError && (fullText.includes('rate_limit') || fullText.includes('overloaded') || fullText.includes('Too many')));
         const MAX_CHAIN_RETRIES = 2;
 
-        if (isSuccess) {
+        if (usageLimit) {
+          // Re-queue instead of completing: getTodoTasks() skips a todo row until its
+          // scheduled_at passes, and processQueue() (15s tick) starts it right after — the
+          // same machinery recurring tasks use. session_id is kept, so the run resumes the
+          // same Claude session via --resume.
+          const _nowSec = Math.floor(Date.now() / 1000);
+          const resumeAt = (usageLimit.resetAt && usageLimit.resetAt > _nowSec)
+            ? usageLimit.resetAt
+            : _nowSec + USAGE_LIMIT_FALLBACK_WAIT_S;
+          // Format: "usage_limit:<unix> <banner>" — public/kanban.html parses the prefix.
+          const reason = `usage_limit:${resumeAt} ${usageLimit.message || ''}`.trim().substring(0, 300);
+          db.prepare(`UPDATE tasks SET status='todo', scheduled_at=?, failure_reason=?, usage_limit_pauses=COALESCE(usage_limit_pauses,0)+1, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+            .run(resumeAt, reason, task.id);
+          log.warn(`[taskWorker] task ${task.id}: usage limit — paused, resuming ${new Date(resumeAt * 1000).toISOString()} (${_pausesSoFar + 1}/${MAX_USAGE_LIMIT_PAUSES})`);
+          if (task.source_session_id) {
+            const _ctx = getNotificationContext(task.source_session_id);
+            broadcastToSession(task.source_session_id, {
+              type: 'notification', level: 'warn',
+              title: `Paused: "${task.title}"`,
+              detail: `Usage limit. Resuming ${new Date(resumeAt * 1000).toLocaleString()}.`,
+              tabId: task.source_session_id,
+              chainTaskId: task.id, chainStatus: 'paused',
+              sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
+            });
+          }
+        } else if (isSuccess) {
           // ✅ Success — recurring standalone tasks re-arm directly (skip intermediate 'done')
           const reArmed = (task.recurrence && !task.chain_id) ? scheduleNextRun(task) : false;
           if (!reArmed) {
-            db.prepare(`UPDATE tasks SET status='done', failure_reason=NULL, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+            db.prepare(`UPDATE tasks SET status='done', failure_reason=NULL, usage_limit_pauses=0, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
               .run(task.id);
           }
           db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
@@ -1628,7 +1670,7 @@ async function startTask(task) {
               duration: Date.now() - _taskStartedAt,
             }).catch(() => {});
           }
-        } else if (task.chain_id && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
+        } else if (task.chain_id && !usageLimitExhausted && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure
           const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
           _retryBackoffMs = isRateLimited ? Math.min(60000 * ((task.task_retry_count || 0) + 1), 300000) : 3000;
@@ -1648,7 +1690,7 @@ async function startTask(task) {
           }
         } else {
           // ❌ Failed — retries exhausted or not a chain task
-          const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
+          const reason = usageLimitExhausted ? 'usage_limit_exhausted' : isRateLimited ? 'rate_limited' : 'agent_incomplete';
           db.prepare(`UPDATE tasks SET status='cancelled', failure_reason=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(reason, task.id);
           log.error(`[taskWorker] task ${task.id}: cancelled (${reason}, subtype: ${lastTaskResult?.subtype || 'unknown'})`);
@@ -2881,6 +2923,12 @@ const MAX_OVERLOAD_RETRIES = 5;
 const OVERLOAD_BACKOFF_BASE_MS = 20 * 1000; // 20s — first pause
 const OVERLOAD_BACKOFF_STEP_MS = 10 * 1000; // +10s per subsequent attempt
 const OVERLOAD_BACKOFF_MAX_MS = 60 * 1000;  // cap at 60s
+// Account usage-quota limit (#27) — "You've hit your session limit · resets 11pm (Europe/Paris)".
+// The turn is NOT a completed task: the card is re-queued (status='todo') at the reset time and
+// the ordinary 15s scheduler tick resumes it. Bounded, so a misparsed reset cannot loop forever.
+const MAX_USAGE_LIMIT_PAUSES = 8;
+const USAGE_LIMIT_FALLBACK_WAIT_S = 30 * 60; // 30 min when the banner carries no reset time
+const USAGE_LIMIT_TAIL_CHARS = 2000;         // only the tail of a run can hold the stop banner
 
 // Sleep that resolves on timeout or when signal fires (whichever first)
 function _sleepAbortable(ms, signal) {
@@ -5077,13 +5125,16 @@ app.get('/api/activity', (req, res) => {
     }
 
     // 3) Scheduled (upcoming) todo tasks.
-    const sched = db.prepare(`SELECT id,title,session_id,workdir,scheduled_at,recurrence FROM tasks WHERE status='todo' AND scheduled_at IS NOT NULL ORDER BY scheduled_at ASC LIMIT 50`).all();
+    const sched = db.prepare(`SELECT id,title,session_id,workdir,scheduled_at,recurrence,failure_reason FROM tasks WHERE status='todo' AND scheduled_at IS NOT NULL ORDER BY scheduled_at ASC LIMIT 50`).all();
     const scheduled = sched.map(tsk => ({
       task_id: tsk.id,
       session_id: tsk.session_id || null,
       title: tsk.title || 'Task',
       scheduled_at: tsk.scheduled_at, // unix seconds
       recurrence: tsk.recurrence || null,
+      // #27: a task waiting out an account usage limit is queued, not merely scheduled —
+      // the client marks it so the wait does not read as a user-chosen start time.
+      paused_reason: /^usage_limit\b/.test(tsk.failure_reason || '') ? 'usage_limit' : null,
       ...resolveProj(tsk.workdir),
     }));
 

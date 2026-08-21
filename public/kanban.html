@@ -184,6 +184,7 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .badge-green{ background:rgba(63,185,80,.12); color:var(--green); border:1px solid rgba(63,185,80,.2); }
 .badge-orange{ background:rgba(229,164,53,.12); color:var(--orange); border:1px solid rgba(229,164,53,.2); }
 .badge-sched{ background:rgba(56,139,253,.1); color:#58a6ff; border:1px solid rgba(56,139,253,.22); display:inline-flex; align-items:center; gap:3px; cursor:default; }
+.badge-paused{ background:rgba(229,164,53,.12); color:var(--orange); border:1px solid rgba(229,164,53,.28); display:inline-flex; align-items:center; gap:3px; cursor:default; }
 .sched-info{ display:flex; align-items:center; gap:7px; background:rgba(56,139,253,.07); border:1px solid rgba(56,139,253,.2); color:#58a6ff; border-radius:6px; padding:8px 12px; font-size:12px; line-height:1.4; }
 .sched-info strong{ color:#79b8ff; font-weight:600; }
 .card-time{ font-size:11px; color:var(--muted); margin-left:auto; }
@@ -489,6 +490,7 @@ const TR = {
     'nav.chat':'Чат','nav.kanban':'Kanban дошка','nav.aria':'Навігація між розділами',
     'stat.total':'всього',
     'card.sched_tip':'Чекає запуску:','modal.sched_wait':'Чекає запуску:','locale':'uk-UA',
+    'card.paused':'Ліміт використання','card.paused_tip':'Виконання зупинив ліміт використання. Автопродовження:',
     'hdr.group':'Група','group.add':'Нова група','group.edit':'Редагувати групу',
     'group.title':'Назва групи *','group.tasks':'Завдання','group.add_task':'+ Додати завдання',
     'group.empty':'Додайте завдання до групи','group.activate':'Запустити',
@@ -531,6 +533,7 @@ const TR = {
     'nav.chat':'Chat','nav.kanban':'Kanban board','nav.aria':'Navigation',
     'stat.total':'total',
     'card.sched_tip':'Waiting for launch:','modal.sched_wait':'Waiting for launch:','locale':'en-US',
+    'card.paused':'Usage limit','card.paused_tip':'Stopped by a usage limit. Resumes automatically:',
     'hdr.group':'Group','group.add':'New group','group.edit':'Edit group',
     'group.title':'Group title *','group.tasks':'Tasks','group.add_task':'+ Add task',
     'group.empty':'Add tasks to the group','group.activate':'Run',
@@ -573,6 +576,7 @@ const TR = {
     'nav.chat':'Чат','nav.kanban':'Kanban доска','nav.aria':'Навигация',
     'stat.total':'всего',
     'card.sched_tip':'Ожидает запуска:','modal.sched_wait':'Ожидает запуска:','locale':'ru-RU',
+    'card.paused':'Лимит использования','card.paused_tip':'Выполнение остановил лимит использования. Автопродолжение:',
     'hdr.group':'Группа','group.add':'Новая группа','group.edit':'Редактировать группу',
     'group.title':'Название группы *','group.tasks':'Задания','group.add_task':'+ Добавить задание',
     'group.empty':'Добавьте задания в группу','group.activate':'Запустить',
@@ -1107,6 +1111,15 @@ async function onKbProjectChange(){
   }
 }
 
+// #27: failure_reason "usage_limit:<unix> <banner>" means the run was stopped by an account
+// usage limit and re-queued — the scheduler resumes it once the reset passes. Distinct from
+// 'usage_limit_exhausted' (pause budget spent), which lands in the cancelled column.
+function kbUsageLimit(tk){
+  if(!tk||tk.status!=='todo')return null;
+  const m=/^usage_limit(?::(\d+))?(?:\s+([\s\S]*))?$/.exec(tk.failure_reason||'');
+  if(!m)return null;
+  return {resumeAt:m[1]?+m[1]:(tk.scheduled_at||null),message:(m[2]||'').trim().substring(0,160)};
+}
 function makeCard(tk){
   const el=document.createElement('div');el.className='card';el.dataset.id=tk.id;el.draggable=true;
   let sessBadge='';
@@ -1117,7 +1130,9 @@ function makeCard(tk){
   }
   const modelBadge=tk.sess_model?`<span class="badge badge-muted">${escH(tk.sess_model)}</span>`:'';
   const retryBadge=tk.retry_count>0?`<span class="badge badge-muted" title="${tk.retry_count} ${t('card.retry_tooltip')}">${escH(t('card.retry'))} ×${tk.retry_count}</span>`:'';
-  const schedBadge=(tk.scheduled_at&&(tk.status==='todo'||tk.status==='backlog'))?`<span class="badge badge-sched" title="${escH(t('card.sched_tip'))} ${escH(fmtScheduledAt(tk.scheduled_at))}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 12"/></svg>${escH(fmtScheduledAt(tk.scheduled_at))}</span>`:'';
+  const pausedInfo=kbUsageLimit(tk);
+  const pausedBadge=pausedInfo?`<span class="badge badge-paused" title="${escH(t('card.paused_tip'))} ${escH(pausedInfo.resumeAt?fmtScheduledAt(pausedInfo.resumeAt):'')}${pausedInfo.message?' — '+escH(pausedInfo.message):''}">⏸ ${escH(t('card.paused'))}${pausedInfo.resumeAt?' · '+escH(fmtScheduledAt(pausedInfo.resumeAt)):''}</span>`:'';
+  const schedBadge=(!pausedInfo&&tk.scheduled_at&&(tk.status==='todo'||tk.status==='backlog'))?`<span class="badge badge-sched" title="${escH(t('card.sched_tip'))} ${escH(fmtScheduledAt(tk.scheduled_at))}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 12"/></svg>${escH(fmtScheduledAt(tk.scheduled_at))}</span>`:'';
   // Only while the board shows every project: inside one project the badge would repeat
   // the same name on every card and say nothing.
   const projBadge=(!curWorkdir&&tk.workdir)?`<span class="badge badge-proj" title="${escH(tk.workdir)}">${escH(projName(tk.workdir))}</span>`:'';
@@ -1125,7 +1140,7 @@ function makeCard(tk){
     <div class="card-title">${escH(tk.title)}</div>
     ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
     <div class="card-foot">
-      ${projBadge}${schedBadge}${sessBadge}${modelBadge}${retryBadge}
+      ${projBadge}${pausedBadge}${schedBadge}${sessBadge}${modelBadge}${retryBadge}
       <span class="card-time">${relTime(tk.updated_at)}</span>
       <span class="card-actions">
         <button class="cbtn" title="${t('modal.edit')}" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
