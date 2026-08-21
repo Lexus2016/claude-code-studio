@@ -826,6 +826,7 @@ const stmts = {
   `),
   // getSession endpoint helpers — pre-compiled to avoid re-prepare on every load
   hasRunningTask: db.prepare(`SELECT id FROM tasks WHERE session_id=? AND status='in_progress' LIMIT 1`),
+  inProgressTaskSessions: db.prepare(`SELECT DISTINCT session_id FROM tasks WHERE status='in_progress' AND session_id IS NOT NULL`),
   getChainTasks:  db.prepare(`SELECT id, title, status, depends_on, chain_id FROM tasks WHERE source_session_id=? ORDER BY sort_order ASC`),
   // Task chains (groups)
   getChains: db.prepare(`SELECT * FROM task_chains WHERE (@w IS NULL OR workdir = @w) ORDER BY sort_order ASC, created_at ASC`),
@@ -1079,6 +1080,22 @@ const MAX_CHAT_BUFFER = 2 * 1024 * 1024; // 2 MB cap per session — prevents un
 const sessionQueues = new Map();   // sessionId → [msg, ...] — queue persistence across WS reconnects (page refresh)
 const activeChatSessions = new Set(); // Cross-connection lock: prevents two WS connections from running processChat on the same session
 const sessionQueueCleanupTimers = new Map(); // sessionId → setTimeout handle — delayed cleanup to survive WS reconnect race
+
+// ─── Liveness: one source of truth for "a chat turn is running in this process" ──
+// Two maps carry that state and BOTH must be consulted:
+//   activeTasks        — set once the CLI subprocess is spawned (web + telegram workers)
+//   activeChatSessions — set at the very top of processChat, i.e. it also covers the
+//                        window BEFORE activeTasks.set(). With autoSkill that window
+//                        holds `await classifyTask()` (~10-15s), so an activeTasks-only
+//                        check reports a live turn as idle for the whole classification.
+// Every membership test must go through isSessionLive(); every "which sessions are
+// live" enumeration through liveSessionIds(). Do not re-inline the union.
+const isSessionLive = (id) => activeTasks.has(id) || activeChatSessions.has(id);
+const liveSessionIds = () => {
+  const ids = new Set(activeChatSessions);
+  for (const id of activeTasks.keys()) ids.add(id);
+  return ids;
+};
 
 // ─── Ask User (Internal MCP) ─────────────────────────────────────────────
 // Pending user questions: requestId → { resolve, sessionId, timer, question, options, inputType }
@@ -4905,14 +4922,14 @@ app.get('/api/tasks', (req, res) => {
 app.get('/api/tasks/etag', (req, res) => { res.json(stmts.getTasksEtag.get()); });
 // Returns session IDs that are running right now — used by the client to restore
 // spinners on EVERY tab after a reload, including tabs that are not the active one.
-// The union must match isChatRunning (activeChatSessions || activeTasks) plus the DB:
-// a plain web chat never writes a `tasks` row, so a DB-only query reported [] while a
-// chat was mid-turn and background tabs silently lost their busy dot on reload.
+// In-memory part comes from liveSessionIds(), the same union isChatRunning reads via
+// isSessionLive(), so the two endpoints can never disagree; the DB part adds task
+// workers on top. A plain web chat never writes a `tasks` row, so a DB-only query
+// reported [] while a chat was mid-turn and background tabs silently lost their busy
+// dot on reload.
 app.get('/api/tasks/running-sessions', (req, res) => {
-  const ids = new Set();
-  for (const r of db.prepare(`SELECT DISTINCT session_id FROM tasks WHERE status='in_progress' AND session_id IS NOT NULL`).all()) ids.add(r.session_id);
-  for (const id of activeChatSessions) ids.add(id);
-  for (const id of activeTasks.keys()) ids.add(id);
+  const ids = liveSessionIds();
+  for (const r of stmts.inProgressTaskSessions.all()) ids.add(r.session_id);
   res.json([...ids]);
 });
 // ─── Activity panel aggregate (live + scheduled + recent, across ALL projects) ──
@@ -5753,7 +5770,7 @@ app.get('/api/sessions/:id', (req,res) => {
 
   s.messages = stmts.getMsgsLite.all(req.params.id);
   s.hasRunningTask = !!stmts.hasRunningTask.get(req.params.id);
-  s.isChatRunning = activeTasks.has(req.params.id);
+  s.isChatRunning = isSessionLive(req.params.id);
   const chainTasks = stmts.getChainTasks.all(req.params.id);
   if (chainTasks.length) {
     const chains = {};
@@ -5999,7 +6016,7 @@ app.post('/api/sessions/:id/catch-up', (req, res) => {
   const cid = sanitizeSessionId(session.claude_session_id);
   if (!cid) return res.status(400).json({ error: 'No Claude session ID' });
   // Don't race a live web turn — its own post-turn cursor sync would fight ours.
-  if (activeChatSessions.has(id) || activeTasks.has(id)) {
+  if (isSessionLive(id)) {
     return res.status(409).json({ error: 'Session is busy — wait for the current reply to finish.' });
   }
   // First catch-up ever (cursor never set): baseline at the current EOF and import
@@ -6723,8 +6740,8 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
   if (!telegramBot) return;
 
   // Check if session is busy — queue as interrupt instead of dropping the message.
-  // activeTasks covers both web and Telegram chat workers; activeChatSessions covers
-  // the early phase of web processChat before activeTasks.set() is called.
+  // isSessionLive() covers both web and Telegram chat workers (activeTasks) AND the
+  // early phase of web processChat before activeTasks.set() is called.
   // This check must fire for EVERY engine, remote included: skipping it for remote
   // sessions used to let a second message dispatch a fully parallel run against the
   // SAME sessionId — two overlapping `activeTasks.set()`/`chatBuffers.set()` calls
@@ -6734,7 +6751,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
   // remote host — so a queued message there is not delivered until the run in
   // progress finishes, at which point the `finally` block below runs it as the next
   // message rather than discarding it.
-  if (activeTasks.has(sessionId) || activeChatSessions.has(sessionId)) {
+  if (isSessionLive(sessionId)) {
     // Queue as interrupt (same mechanism as web UI mid-task clarifications)
     if (!pendingInterrupts.has(sessionId)) pendingInterrupts.set(sessionId, []);
     const queue = pendingInterrupts.get(sessionId);
@@ -9078,7 +9095,10 @@ wss.on('connection', (ws) => {
           } else if (!activeTasks.has(sessionId)) {
             // Check for interrupted chat session (server crash recovery).
             // Only when no live task exists in memory — prevents false interrupts on WS hiccup.
-            const sess = stmts.getSession.get(sessionId);
+            // isSessionLive() (not activeTasks alone) because a turn that is still in the
+            // pre-activeTasks phase of processChat is live, not interrupted: announcing a
+            // retry there would offer to re-run a turn that is already running.
+            const sess = isSessionLive(sessionId) ? null : stmts.getSession.get(sessionId);
             if (sess?.last_user_msg && ws.readyState === 1) {
               ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: sessionId, prompt: sess.last_user_msg, retryCount: sess.retry_count || 0 }));
             }
