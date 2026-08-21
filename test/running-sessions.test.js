@@ -231,14 +231,24 @@ function probePort(port) {
   check('in-flight plain chat IS reported by running-sessions', (await runningSessions()).includes(sid), true);
 
   const running = await api('GET', '/api/tasks/running-sessions');
-  // The DB is a fresh temp file with exactly one session and no task rows, so the
-  // endpoint's whole output is knowable. Asserting the exact set also covers dedup —
-  // unlike the old `length === new Set(...).size`, which a Set-building handler could
-  // never fail. Every reported id must additionally resolve to a real session: the
-  // client joins this list against its tabs, and a non-session string joins to nothing.
-  check('running-sessions reports exactly the in-flight session', (running.json || []).slice().sort(), [sid]);
+  // classSid and legacySid are still mid-turn here and dbSid was released above, so the
+  // whole expected set is knowable. Asserting it exactly also covers dedup and the
+  // absence of stray ids — unlike the old `length === new Set(...).size`, which a
+  // Set-building handler could never fail.
+  check('running-sessions reports exactly the sessions that are live right now',
+    (running.json || []).slice().sort(), [sid, classSid, legacySid].sort());
   const resolved = await Promise.all((running.json || []).map(id => api('GET', `/api/sessions/${id}`)));
-  check('every reported id resolves to a real session', resolved.map(r => r.status), [200]);
+  check('every reported id resolves to a real session', resolved.every(r => r.status === 200), true);
+
+  // Real invariant in place of `arr.length === new Set(arr).size`, which the handler's own
+  // Set made unfalsifiable: running-sessions must cover everything /api/activity calls
+  // live. Terminal panes are excluded — they are a liveness source /api/activity has and
+  // running-sessions deliberately does not.
+  const runningNow = await runningSessions();
+  const liveIds = [...new Set((await activityLive()).filter(x => x.kind !== 'terminal' && x.session_id).map(x => x.session_id))];
+  check('running-sessions covers every session /api/activity reports live',
+    liveIds.filter(id => !runningNow.includes(id)), []);
+  check('running-sessions returns plain session ids', runningNow.every(id => typeof id === 'string' && id.length > 0), true);
 
   // ── Transition to NOT live ─────────────────────────────────────────────────
   // A term that never releases is as broken as one that never fires: the client turns a
