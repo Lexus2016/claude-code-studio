@@ -50,7 +50,7 @@ const botsLogic = require('./bots');
 // instruction at all. One line stands in for "you were addressed with nothing else
 // to go on".
 const BARE_MENTION_PROMPT = "You were addressed directly with no other text — greet them and ask what they need, or continue naturally if there is relevant prior context in this conversation.";
-const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize } = require('./claude-interactive');
+const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName: interactiveTmuxName, listOrphanedDefaultSocketSessions } = require('./claude-interactive');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
 const TelegramBot = require('./telegram-bot');
@@ -8526,13 +8526,92 @@ wssTerm.on('connection', (ws, req) => {
   // visibly scrambled, and the capture-pane bootstrap could snapshot the mangled frame.
   // Missing/garbage params fall back to 80x24; attach() clamps.
   let termCols = 80, termRows = 24;
+  // `view=engine` switches this socket from "drive a terminal session" to "watch the
+  // pane a CHAT session's subscription engine already owns" — see the block below.
+  let termView = null;
   try {
     const q = new URL(req.url, 'http://x').searchParams;
     sessionId = q.get('session');
     termCols = parseInt(q.get('cols'), 10) || 80;
     termRows = parseInt(q.get('rows'), 10) || 24;
+    termView = q.get('view');
   } catch {}
   const session = sessionId ? stmts.getSession.get(sessionId) : null;
+
+  // ─── Live engine pane (GitHub #20) ──────────────────────────────────────────
+  // A chat running on the `subscription` engine already has a real interactive
+  // Claude TUI in a detached tmux session (`ccs-<id>`, claude-interactive.js).
+  // `view=engine` attaches a viewer to THAT pane, so a turn blocked on an
+  // interactive prompt can be answered in the actual TUI instead of dying on the
+  // idle watchdog. On the default `api` engine there is no PTY at all
+  // (claude-cli.js spawns headless `claude -p` with stdin closed), so there is
+  // nothing to attach and the branch below says so rather than inventing one.
+  //
+  // Which invariant this relaxes, and why it is still safe: the guard one line
+  // down ("chat sessions are not driven by this socket") exists because two
+  // DRIVERS on one conversation id means two `claude --resume` processes writing
+  // the same transcript. This path spawns no claude process — it attaches a tmux
+  // control client to the pane the engine itself created and still owns. There is
+  // still exactly one claude process and one writer. The ordinary path keeps the
+  // guard verbatim; nothing here weakens it. (Contrast the ⚡ Claude Code button,
+  // which really does start a SECOND `claude --resume`.)
+  //
+  // Deliberately NOT gated on session.run_engine: the pane's existence is the real
+  // precondition, and a chat toggled back to `api` with its TUI still alive should
+  // still be viewable. The UI gates the entry point on run_engine for discovery.
+  if (termView === 'engine') {
+    if (!session) return fail('session not found');
+    // The inverse of the ordinary guard: an actual terminal session has its own
+    // tmux session on the ordinary path and must not be reached through this one.
+    if (session.kind === 'terminal') return fail('this is a terminal session — open it directly');
+
+    const engName = interactiveTmuxName(session.id);
+    // MUST NOT create the session. An api-engine chat, or a subscription chat that
+    // has never run a turn, has no pane — creating one here would spawn a second
+    // claude against this conversation, which is exactly what the design forbids.
+    if (!termBridge.hasSession(engName)) {
+      send({ type: 'no_pane', code: 'no_live_pane', engine: session.run_engine || 'api' });
+      try { ws.close(); } catch {}
+      return;
+    }
+
+    // Freeze the geometry BEFORE attaching: tmux's default window-size policy lets
+    // an attaching client resize the window, which would reflow the running TUI.
+    termBridge.setWindowSizeManual(engName);
+    const geo = termBridge.paneSize(engName);
+    send({ type: 'ready', state: 'attach', view: 'engine', cols: geo.cols, rows: geo.rows });
+
+    let engHandle = null;
+    try {
+      engHandle = termBridge.attach({
+        name: engName, cols: geo.cols, rows: geo.rows, resizeOnAttach: false,
+        onData: (buf) => {
+          if (ws.bufferedAmount > 4 * 1024 * 1024) return;
+          try { ws.send(buf); } catch {}
+        },
+        onExit: () => { send({ type: 'exit' }); try { ws.close(); } catch {} },
+      });
+    } catch (e) {
+      return fail(`could not attach: ${e.message}`);
+    }
+    log.info('engine pane attached', { sessionId: session.id, tmux: engName });
+
+    ws.on('message', (raw, isBinary) => {
+      if (!engHandle) return;
+      if (isBinary) { engHandle.write(raw); return; }
+      let msg = null;
+      try { msg = JSON.parse(raw.toString('utf8')); } catch { return; }
+      if (msg.type === 'input') engHandle.write(msg.data);
+      else if (msg.type === 'paste') engHandle.paste(msg.data);
+      // 'resize' and 'kill' are deliberately unhandled here. The pane belongs to the
+      // engine: resizing reflows a live turn, and killing it would destroy the
+      // conversation's TUI from a window that is only supposed to be a viewer.
+    });
+    // Closing the viewer detaches the control client only — the engine keeps working.
+    ws.on('close', () => { try { engHandle?.close(); } catch {} });
+    return;
+  }
+
   if (!session || session.kind !== 'terminal') return fail('not a terminal session');
 
   const agents = loadConfig().externalAgents || {};
@@ -10032,6 +10111,20 @@ try {
     for (const name of termBridge.listTerminalSessions()) termBridge.detachClients(name);
   }
 } catch {}
+
+// Upgrade aid for the socket move (subscription engine: default socket → `ccstudio`).
+// Sessions started by an older build are still alive on the default tmux server and
+// are now invisible to the engine, which simply respawns them with `--resume <cid>` —
+// correct for the conversation, but the old TUI keeps the same transcript open. Warn
+// once so the user can close them; deliberately never killed from here, since the
+// default socket belongs to the user, not to this project.
+try {
+  const orphans = listOrphanedDefaultSocketSessions();
+  if (orphans.length) {
+    log.warn('subscription-engine tmux sessions found on the DEFAULT tmux socket — they are left over from a build before the socket move and are no longer used. Close them with: tmux kill-session -t <name>', { sessions: orphans });
+  }
+} catch {}
+
 startTerminalReaper({ intervalMs: 60000 });
 
 server.on('error', (err) => {

@@ -16,6 +16,10 @@
 //   reads them with its Read tool); other structured blocks are flattened to text
 // - maxTurns is IGNORED (not applicable to interactive sessions)
 //
+// - the tmux session lives on the PRIVATE `ccstudio` socket (see tmuxArgs below), the
+//   same one terminal-bridge.js uses, so the browser can attach a read/write view of
+//   this exact pane via /ws/terminal?view=engine — one claude process, one writer
+//
 // This module NEVER touches SQLite and NEVER sends the 'done' WS event — the caller
 // (server.js WS chat handler) persists collected output and sends 'done' after return.
 
@@ -26,6 +30,8 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 
 const { findClaudeBin } = require('./claude-cli');
+// ONE definition of the socket name, imported — never a second copy of the string.
+const { TMUX_SOCKET } = require('./terminal-bridge');
 
 // tmux negotiates UTF-8 support for the server from LANG/LC_ALL at the FIRST
 // `new-session` call's env — neither the Docker image (node:20-bookworm, no ENV
@@ -47,12 +53,44 @@ const IDLE_TIMEOUT_MS = parseInt(process.env.CLAUDE_IDLE_TIMEOUT_MS || process.e
 // Optional absolute ceiling — backstop against a turn that stays "busy" forever. 0 = off.
 const HARD_CAP_MS = parseInt(process.env.CLAUDE_HARD_CAP_MS || '0', 10) || 0;
 
+// ─── Interactive-prompt watchdog (GitHub #20) ────────────────────────────────
+// How often the turn loop looks at the transcript and the pane.
+const POLL_MS = 1500;
+// Consecutive polls a prompt must stay on screen before the browser is told. One
+// frame can catch a half-drawn widget, or one the agent dismisses by itself.
+const AWAIT_CONFIRM_POLLS = 2;
+// Extra time a turn is held open while a prompt is pending, on top of the ordinary
+// quiet-completion budget — the window in which a human can answer in the live pane.
+// 0 disables the hold and the turn completes exactly as it did before. The idle
+// watchdog above is untouched and stays the backstop for a prompt nobody answers.
+const AWAIT_GRACE_MS = parseInt(process.env.CLAUDE_PROMPT_GRACE_MS || '300000', 10) || 0;
+// How long a FRESHLY SPAWNED TUI is given to get past a startup dialog before the
+// prompt is pasted anyway. 0 restores the old behaviour (paste immediately).
+const SPAWN_PROMPT_WAIT_MS = parseInt(process.env.CLAUDE_STARTUP_PROMPT_WAIT_MS || '90000', 10) || 0;
+
+// ─── tmux socket ─────────────────────────────────────────────────────────────
+// The interactive engine's sessions (`ccs-<id>`) live on the SAME private tmux
+// server as terminal sessions (socket `ccstudio`, owned by terminal-bridge.js),
+// never on the default one. Two reasons, in order of weight:
+//
+//   1. A chat running on this engine can now be watched live from the browser
+//      (`/ws/terminal?view=engine`), and terminal-bridge.js can only attach to a
+//      session on its own socket. Split sockets made the attach impossible.
+//   2. `tmux kill-server` typed in any shell is server-wide, so on the default
+//      socket a single stray command destroys every live subscription session
+//      mid-turn — the exact failure that moved terminal sessions off it.
+//
+// EVERY tmux invocation in this file goes through tmuxArgs(). A missed one would
+// silently split state across two servers: has-session says "no" while the real
+// TUI is still running on the other socket.
+function tmuxArgs(args) { return ['-L', TMUX_SOCKET, ...args]; }
+
 // ─── tmux availability (checked once, cached) ───────────────────────────────
 let _tmuxAvailable = null;
 function tmuxAvailable() {
   if (_tmuxAvailable === null) {
     try {
-      const r = spawnSync('tmux', ['-V'], { stdio: 'ignore' });
+      const r = spawnSync('tmux', tmuxArgs(['-V']), { stdio: 'ignore' });
       _tmuxAvailable = !r.error && r.status === 0;
     } catch {
       _tmuxAvailable = false;
@@ -74,7 +112,7 @@ function tmuxName(localSessionId) {
 
 function tmuxHasSession(name) {
   try {
-    const r = spawnSync('tmux', ['has-session', '-t', name], { stdio: 'ignore' });
+    const r = spawnSync('tmux', tmuxArgs(['has-session', '-t', name]), { stdio: 'ignore' });
     return !r.error && r.status === 0;
   } catch {
     return false;
@@ -83,7 +121,7 @@ function tmuxHasSession(name) {
 
 function capturePane(name) {
   try {
-    const r = spawnSync('tmux', ['capture-pane', '-p', '-t', name], { encoding: 'utf8' });
+    const r = spawnSync('tmux', tmuxArgs(['capture-pane', '-p', '-t', name]), { encoding: 'utf8' });
     if (r.error || r.status !== 0) return null;
     return r.stdout || '';
   } catch {
@@ -115,6 +153,59 @@ function paneBusy(pane, prevPane) {
   if (/\d+s\s*[·)]/.test(pane)) return true;                  // 2. elapsed timer "(8s ·" / "43s ·" / "8s)"
   if (pane.includes('esc to interrupt')) return true;         // 3. legacy marker
   return false;
+}
+
+// Is the TUI blocked on a prompt only a human can answer? (GitHub #20)
+//
+// Structural, not wording-based. Every blocking prompt the Claude Code TUI renders —
+// a tool-permission request, plan approval, the --dangerously-skip-permissions
+// acceptance screen, the trust-this-folder dialog, the AskUserQuestion tool, /model —
+// is the SAME widget: numbered options with a caret on the selected one.
+//
+//     ❯ 1. Yes
+//       2. Yes, and don't ask again this session
+//       3. No, and tell Claude what to do differently
+//
+// Two conditions must BOTH hold, and only in the tail of the pane (the widget is
+// always at the bottom, just above the input box):
+//   - at least two numbered option lines, and
+//   - a selection caret directly in front of one of those numbers.
+//
+// The caret is what separates a widget from prose: an ordinary numbered list in
+// Claude's answer text has no caret glyph in front of the digit. Wording is
+// deliberately not matched — it is version- and locale-specific, and the widget
+// shape has been stable across TUI releases.
+//
+// Known failure modes, both benign by construction:
+//   - false positive: Claude prints a numbered list whose first item happens to be
+//     prefixed with '>' or '❯'. Cost is a banner the user ignores plus a longer
+//     quiet-completion budget for that turn — never a wrong answer sent anywhere.
+//   - false negative: a prompt that is not this widget (a raw readline question from
+//     a hook or an MCP server writing to the pane). Cost is the previous behaviour:
+//     the turn ends on the idle watchdog. The live pane is still reachable by hand.
+// Both are why the caller ALSO requires the spinner to be stopped before believing it.
+const AWAIT_TAIL_LINES = 24;
+function paneAwaitingInput(pane) {
+  if (typeof pane !== 'string' || !pane) return false;
+  const lines = pane.split('\n').map(l => l.trim()).filter(Boolean);
+  let numbered = 0, caret = false;
+  for (const raw of lines.slice(-AWAIT_TAIL_LINES)) {
+    // Strip a leading box border so "│ ❯ 1. Yes" reads the same as "❯ 1. Yes".
+    const line = raw.replace(/^[│┃|╎╏┆┊╷╵]+\s*/, '');
+    const m = /^([❯➤►▶›»>])?\s*(\d{1,2})[.)]\s+\S/.exec(line);
+    if (!m) continue;
+    numbered++;
+    if (m[1]) caret = true;
+  }
+  return numbered >= 2 && caret;
+}
+
+// The pane tail the browser banner shows, so the user can recognise the question
+// without opening the pane. Never the whole capture: it carries the entire visible
+// conversation and is 50 lines of noise.
+function promptExcerpt(pane, maxLines = 14) {
+  return String(pane || '').split('\n').map(l => l.replace(/\s+$/, ''))
+    .filter(l => l.trim()).slice(-maxLines).join('\n').slice(0, 2000);
 }
 
 // Locate <cid>.jsonl under ~/.claude/projects/* — do NOT hand-encode the cwd→dirname
@@ -155,7 +246,7 @@ function mcpConfigPath(mcpServers) {
 // tmux session environment — survives studio server restarts, dies with the session
 function getTmuxEnv(name, key) {
   try {
-    const r = spawnSync('tmux', ['show-environment', '-t', name, key], { encoding: 'utf8' });
+    const r = spawnSync('tmux', tmuxArgs(['show-environment', '-t', name, key]), { encoding: 'utf8' });
     if (r.error || r.status !== 0) return null;
     const line = (r.stdout || '').trim();
     const eq = line.indexOf('=');
@@ -166,15 +257,36 @@ function getTmuxEnv(name, key) {
 }
 
 function setTmuxEnv(name, key, val) {
-  try { spawnSync('tmux', ['set-environment', '-t', name, key, val], { stdio: 'ignore' }); } catch {}
+  try { spawnSync('tmux', tmuxArgs(['set-environment', '-t', name, key, val]), { stdio: 'ignore' }); } catch {}
 }
 
 // ─── public API ──────────────────────────────────────────────────────────────
 
+// One-time upgrade aid. Before the socket move, sessions were created on the
+// DEFAULT tmux socket; after it, tmuxHasSession() looks only at `ccstudio` and
+// therefore reports "gone" for every session that is in fact still running there.
+// The engine handles that on its own — an absent session is respawned with
+// `--resume <cid>`, so the conversation continues in the right place — but the
+// old TUI keeps running, holding the same transcript open. It is never sent
+// anything again (nothing in this process talks to the default socket any more),
+// yet a turn that was mid-flight when the server restarted will finish and write
+// to that transcript, which the resumed session has also opened.
+//
+// This is READ-ONLY on purpose: `kill-session` on the default socket would reach
+// into a tmux server this project does not own. We report and let the user close
+// them. Returns [] when no default tmux server is running at all.
+function listOrphanedDefaultSocketSessions() {
+  try {
+    const r = spawnSync('tmux', ['list-sessions', '-F', '#{session_name}'], { encoding: 'utf8' });
+    if (r.error || r.status !== 0) return [];
+    return String(r.stdout || '').split('\n').map(x => x.trim()).filter(x => /^ccs-/.test(x));
+  } catch { return []; }
+}
+
 // Best-effort tmux session kill (called on studio session delete)
 function killInteractiveTmux(localSessionId) {
   try {
-    spawnSync('tmux', ['kill-session', '-t', tmuxName(localSessionId)], { stdio: 'ignore' });
+    spawnSync('tmux', tmuxArgs(['kill-session', '-t', tmuxName(localSessionId)]), { stdio: 'ignore' });
   } catch {}
 }
 
@@ -234,7 +346,7 @@ async function runInteractiveSingle(params) {
 
       const env = utf8Env();
       delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses the child
-      const child = spawn('tmux', ['new-session', '-d', '-s', name, '-x', '220', '-y', '50', '-c', workdir || process.cwd(), innerCmd], { env, stdio: 'ignore' });
+      const child = spawn('tmux', tmuxArgs(['new-session', '-d', '-s', name, '-x', '220', '-y', '50', '-c', workdir || process.cwd(), innerCmd]), { env, stdio: 'ignore' });
       await new Promise((resolve) => {
         child.on('exit', resolve);
         child.on('error', resolve);
@@ -255,6 +367,23 @@ async function runInteractiveSingle(params) {
         const cap = capturePane(name);
         if (cap && cap.trim() && cap === prev) break;
         prev = cap;
+      }
+
+      // A brand-new TUI can settle ON A DIALOG rather than on its input box — the
+      // --dangerously-skip-permissions acceptance screen and the trust-this-folder
+      // question both look "settled" because they are static. Pasting the user's
+      // message into one answers it with whichever option the text lands on. Tell
+      // the browser and give a human a bounded window to clear it in the live pane
+      // (GitHub #20). On timeout we fall through and paste anyway — the pre-#20
+      // behaviour — so a false positive costs a delay, never a lost message.
+      if (SPAWN_PROMPT_WAIT_MS > 0 && paneAwaitingInput(capturePane(name))) {
+        wsSend({ type: 'input_needed', sessionId, engine: 'subscription', phase: 'startup', prompt: promptExcerpt(capturePane(name)) });
+        const until = Date.now() + SPAWN_PROMPT_WAIT_MS;
+        while (Date.now() < until) {
+          await sleep(POLL_MS);
+          if (abortController?.signal?.aborted) break;
+          if (!paneAwaitingInput(capturePane(name))) { wsSend({ type: 'input_resolved', sessionId }); break; }
+        }
       }
     }
 
@@ -292,10 +421,10 @@ async function runInteractiveSingle(params) {
     const bufName = `ccsbuf-${crypto.randomBytes(4).toString('hex')}`;
     try {
       fs.writeFileSync(tmpFile, sendText);
-      spawnSync('tmux', ['load-buffer', '-b', bufName, tmpFile], { stdio: 'ignore' });
-      spawnSync('tmux', ['paste-buffer', '-dpr', '-t', name, '-b', bufName], { stdio: 'ignore' });
+      spawnSync('tmux', tmuxArgs(['load-buffer', '-b', bufName, tmpFile]), { stdio: 'ignore' });
+      spawnSync('tmux', tmuxArgs(['paste-buffer', '-dpr', '-t', name, '-b', bufName]), { stdio: 'ignore' });
       await sleep(300);
-      spawnSync('tmux', ['send-keys', '-t', name, 'Enter'], { stdio: 'ignore' });
+      spawnSync('tmux', tmuxArgs(['send-keys', '-t', name, 'Enter']), { stdio: 'ignore' });
     } finally {
       try { fs.unlinkSync(tmpFile); } catch {}
     }
@@ -308,9 +437,11 @@ async function runInteractiveSingle(params) {
     let quietPolls = 0;               // consecutive polls with spinner gone (!busy) AND no new transcript bytes
     let prevPaneCap = null;           // previous pane capture — for spinner-animation detection in paneBusy()
     let lastActivityAt = start;       // idle watchdog cursor — bumped on transcript progress (new bytes)
+    let awaitPolls = 0;               // consecutive polls showing a blocking prompt
+    let awaitAnnounced = false;       // 'input_needed' already sent for the prompt now on screen
 
     while (true) {
-      await sleep(1500);
+      await sleep(POLL_MS);
 
       // Mid-run clarifications. The hook mechanism the headless engine uses cannot
       // apply here — there is no per-run --settings to inject, the CLI is already
@@ -332,17 +463,17 @@ async function runInteractiveSingle(params) {
           const bufName = `ccsint-${crypto.randomBytes(4).toString('hex')}`;
           try {
             fs.writeFileSync(tmpFile, note);
-            spawnSync('tmux', ['load-buffer', '-b', bufName, tmpFile], { stdio: 'ignore' });
-            spawnSync('tmux', ['paste-buffer', '-dpr', '-t', name, '-b', bufName], { stdio: 'ignore' });
+            spawnSync('tmux', tmuxArgs(['load-buffer', '-b', bufName, tmpFile]), { stdio: 'ignore' });
+            spawnSync('tmux', tmuxArgs(['paste-buffer', '-dpr', '-t', name, '-b', bufName]), { stdio: 'ignore' });
             await sleep(250);
-            spawnSync('tmux', ['send-keys', '-t', name, 'Enter'], { stdio: 'ignore' });
+            spawnSync('tmux', tmuxArgs(['send-keys', '-t', name, 'Enter']), { stdio: 'ignore' });
           } catch {} finally { try { fs.unlinkSync(tmpFile); } catch {} }
         }
       }
 
       if (abortController?.signal?.aborted) {
         // Interrupt the turn, keep the tmux session alive
-        try { spawnSync('tmux', ['send-keys', '-t', name, 'Escape'], { stdio: 'ignore' }); } catch {}
+        try { spawnSync('tmux', tmuxArgs(['send-keys', '-t', name, 'Escape']), { stdio: 'ignore' }); } catch {}
         return { cid, completed: false, resultMeta: { durationMs: Date.now() - start }, fullText, fullThinking, toolEvents };
       }
 
@@ -431,6 +562,22 @@ async function runInteractiveSingle(params) {
       const busy = paneBusy(pane, prevPaneCap);
       prevPaneCap = pane;
 
+      // ── Blocked on an interactive prompt? (GitHub #20) ─────────────────────
+      // The widget is on screen AND the spinner is stopped AND nothing was written
+      // this poll: the agent is not working, it is waiting for a human. Announce it
+      // so the browser can offer the live pane instead of letting the turn die on a
+      // timeout with no explanation. Both edges are reported — the banner has to be
+      // able to clear itself when the prompt is answered.
+      const awaiting = !busy && !gotNewBytes && paneAwaitingInput(pane);
+      awaitPolls = awaiting ? awaitPolls + 1 : 0;
+      if (awaiting && !awaitAnnounced && awaitPolls >= AWAIT_CONFIRM_POLLS) {
+        awaitAnnounced = true;
+        wsSend({ type: 'input_needed', sessionId, engine: 'subscription', prompt: promptExcerpt(pane) });
+      } else if (awaitAnnounced && !awaiting) {
+        awaitAnnounced = false;
+        wsSend({ type: 'input_resolved', sessionId });
+      }
+
       // COMPLETE on the transcript turn-end signal, but ONLY once the spinner has
       // cleared and no bytes arrived this poll. `tool_use` is the sole "continue"
       // stop_reason; any other terminal value latches endTurnSeen. Because a
@@ -450,13 +597,19 @@ async function runInteractiveSingle(params) {
       // a corrupt final transcript line that failed to JSON.parse). Safe because
       // a working agent keeps `busy` true (animation/timer), so quietPolls only
       // climbs once the turn has genuinely ended.
-      if (sawOutput && quietPolls >= 12) break;
+      // While a prompt is pending, "quiet" is the expected state, not a stalled turn:
+      // widen both quiet-based exits by the grace budget so there is time to answer in
+      // the live pane. Without this the safety-net below fires ~18s into the wait and
+      // reports the turn DONE while the TUI is still blocked — after which the next web
+      // message gets pasted into the open widget instead of into the prompt box.
+      const graceP = awaitAnnounced ? Math.ceil(AWAIT_GRACE_MS / POLL_MS) : 0;
+      if (sawOutput && quietPolls >= 12 + graceP) break;
 
       // Dead-end guard: zero output AND spinner gone for ~30s — the message never
       // registered with the TUI; fail fast instead of waiting out the idle timeout.
       // A long thinking phase or slow first tool keeps `busy` true (spinner
       // animating) or writes a record (sawOutput), so neither trips this.
-      if (!sawOutput && quietPolls >= 20) {
+      if (!sawOutput && quietPolls >= 20 + graceP) {
         wsSend({ type: 'error', error: 'interactive session went idle without producing a reply' });
         return { cid, completed: false, resultMeta: { durationMs: Date.now() - start }, fullText, fullThinking, toolEvents };
       }
@@ -557,4 +710,4 @@ function catchUpFromTranscript({ cid, startOffset = 0 } = {}) {
   return out;
 }
 
-module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize };
+module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, promptExcerpt };
