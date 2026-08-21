@@ -1497,6 +1497,16 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .msg-interrupted { margin:4px 12px 6px; font-size:11px; color:var(--yellow,#e5c07b); opacity:.8; }
 .msg-done-badge { margin:6px 14px 2px; padding:5px 10px; font-size:11px; color:var(--green,#98c379); opacity:.75; border-top:1px solid rgba(139,148,158,.06); }
 .msg-stats { margin:2px 14px 4px; padding:3px 10px; font-size:10px; color:var(--muted,#8b949e); opacity:.7; font-family:var(--mono,'Fira Code',monospace); letter-spacing:.3px; }
+/* Unfinished-turn bar — the model closed its own turn as not-done. Deliberately quieter
+   than .execute-plan-btn: this is an offer, not the primary action of the screen. */
+.pending-bar { margin:8px 14px 6px; padding:9px 12px; border:1px solid rgba(229,164,53,.28); border-radius:var(--r-sm); background:rgba(229,164,53,.07); }
+.pending-bar.pb-warn { border-color:rgba(248,81,73,.28); background:rgba(248,81,73,.07); }
+.pending-bar .pb-note { font-size:12px; line-height:1.45; color:var(--muted); }
+.pending-bar .pb-acts { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.pending-bar .pb-btn { padding:5px 12px; font-size:12px; font-weight:500; color:var(--text); background:transparent; border:1px solid var(--border); border-radius:var(--r-sm); cursor:pointer; transition: color .15s, border-color .15s, background .15s; }
+.pending-bar .pb-btn:hover { color:var(--accent); border-color:var(--accent); }
+.pending-bar .pb-btn.pb-primary { color:#fff; background:var(--accent); border-color:var(--accent); }
+.pending-bar .pb-btn.pb-primary:hover { background:var(--accent2); color:#fff; }
 .execute-plan-btn { margin:8px 14px 6px; padding:8px 16px; font-size:13px; font-weight:500; color:#fff; background:var(--accent); border:none; border-radius:var(--r-sm); cursor:pointer; transition: background .15s, border-color .15s, color .15s, box-shadow .15s, transform .15s; }
 .execute-plan-btn:hover { background:var(--accent-hover,#3b82f6); transform:translateY(-1px); }
 .execute-plan-btn:active { transform:translateY(0); }
@@ -4328,6 +4338,7 @@ const streaming = {
   set toolLog(v) { getTS(activeTabId)._toolLog = v; },
   reset() {
     const s = getTS(activeTabId);
+    _cancelStreamRender(activeTabId); // no queued repaint may outlive the bubble it targets
     // Clean orphaned spinner before clearing ref (bypasses setter)
     if (s.curEl) { const f = s.curEl.querySelector('.msg-status-footer.state-streaming'); if (f) f.remove(); }
     s.curEl = null; s.curTxt = ''; s._thinkingTxt = ''; s._toolCounts = {}; s._toolLog = []; s._hadTool = false;
@@ -4885,7 +4896,7 @@ const TRANSLATIONS = {
     'me.id':'ID сервера',
     'dir.pick_host':'— оберіть хост —',
     'restart.btn':'🔄 Перезапустити сесію','restart.ing':'Перезапуск...','restart.done':'✅ Сесію перезапущено — можна продовжувати',
-    'retry.title':'Повторів: {n}',
+    'retry.title':'Повторів: {n}','intr.title':'Хід було перервано','intr.body':'Цей запит не завершився. Він не буде виконаний сам — вирішіть, чи запускати його ще раз.','intr.body.n':'Цей запит не завершився. Спроб уже було: {n}. Він не буде виконаний сам.','intr.resume':'Відновити','intr.discard':'Відхилити','pend.run':'Хід завершився, але агент позначив роботу як незавершену. Сам він не продовжить.','pend.wait':'Агент чекає на вашу відповідь, але запитання не поставив. Хід уже завершено.','pend.blocked':'Агент повідомив, що заблокований. Хід завершено — без вашої дії нічого не зміниться.','pend.btn.continue':'Продовжити','pend.btn.ask':'Що далі?',
     'plan.exec.btn':'▶️ Виконати план','plan.exec.title':'Перемкнути в режим Auto і виконати цей план',
     'tmux.required':'Потрібен tmux на сервері (macOS/Linux/Docker/WSL). Тут недоступно.',
     'hist.del.n':'Видалити вибрані чати ({n})?',
@@ -5264,7 +5275,7 @@ const TRANSLATIONS = {
     'me.id':'Server ID',
     'dir.pick_host':'— pick a host —',
     'restart.btn':'🔄 Restart Session','restart.ing':'Restarting...','restart.done':'✅ Session restarted — you can continue chatting',
-    'retry.title':'Retried {n} time(s)',
+    'retry.title':'Retried {n} time(s)','intr.title':'This turn was interrupted','intr.body':'The request never finished. It will not run on its own — decide whether to run it again.','intr.body.n':'The request never finished. It has already been attempted {n} time(s). It will not run on its own.','intr.resume':'Resume','intr.discard':'Discard','pend.run':'The turn ended, but the agent marked its own work unfinished. It will not resume on its own.','pend.wait':'The agent is waiting on you but never asked a question. The turn is already over.','pend.blocked':'The agent reported it is blocked. The turn has ended — nothing moves without you.','pend.btn.continue':'Continue','pend.btn.ask':'What next?',
     'plan.exec.btn':'▶️ Execute Plan','plan.exec.title':'Switch to Auto mode and execute this plan',
     'tmux.required':'tmux is required on the server (macOS/Linux/Docker/WSL). Unavailable here.',
     'hist.del.n':'Delete the selected chats ({n})?',
@@ -5643,7 +5654,7 @@ const TRANSLATIONS = {
     'me.id':'ID сервера',
     'dir.pick_host':'— выберите хост —',
     'restart.btn':'🔄 Перезапустить сессию','restart.ing':'Перезапуск...','restart.done':'✅ Сессия перезапущена — можно продолжать',
-    'retry.title':'Повторов: {n}',
+    'retry.title':'Повторов: {n}','intr.title':'Ход был прерван','intr.body':'Этот запрос не завершился. Сам он не выполнится — решите, запускать ли его снова.','intr.body.n':'Этот запрос не завершился. Попыток уже было: {n}. Сам он не выполнится.','intr.resume':'Возобновить','intr.discard':'Отклонить','pend.run':'Ход завершён, но агент отметил работу как незаконченную. Сам он не продолжит.','pend.wait':'Агент ждёт вашего ответа, но вопрос не задал. Ход уже завершён.','pend.blocked':'Агент сообщил, что заблокирован. Ход завершён — без вашего действия ничего не изменится.','pend.btn.continue':'Продолжить','pend.btn.ask':'Что дальше?',
     'plan.exec.btn':'▶️ Выполнить план','plan.exec.title':'Переключиться в режим Auto и выполнить этот план',
     'tmux.required':'Нужен tmux на сервере (macOS/Linux/Docker/WSL). Здесь недоступно.',
     'hist.del.n':'Удалить выбранные чаты ({n})?',
@@ -5923,7 +5934,7 @@ const TRANSLATIONS = {
     "me.id":"ID du serveur",
     "dir.pick_host":"— choisir un hôte —",
     "restart.btn":"🔄 Redémarrer la session","restart.ing":"Redémarrage…","restart.done":"✅ Session redémarrée — vous pouvez continuer à discuter",
-    "retry.title":"Tentatives : {n}",
+    "retry.title":"Tentatives : {n}","intr.title":"Ce tour a été interrompu","intr.body":"La requête ne s'est jamais terminée. Elle ne repartira pas toute seule — à vous de décider s'il faut la relancer.","intr.body.n":"La requête ne s'est jamais terminée. Elle a déjà été tentée {n} fois. Elle ne repartira pas toute seule.","intr.resume":"Reprendre","intr.discard":"Ignorer","pend.run":"Le tour est terminé, mais l'agent a marqué son propre travail comme inachevé. Il ne repartira pas tout seul.","pend.wait":"L'agent vous attend mais n'a posé aucune question. Le tour est déjà terminé.","pend.blocked":"L'agent signale qu'il est bloqué. Le tour est terminé — rien n'avancera sans vous.","pend.btn.continue":"Continuer","pend.btn.ask":"Et ensuite ?",
     "plan.exec.btn":"▶️ Exécuter le plan","plan.exec.title":"Passer en mode Auto et exécuter ce plan",
     "tmux.required":"tmux est requis sur le serveur (macOS/Linux/Docker/WSL). Indisponible ici.",
     "hist.del.n":"Supprimer les discussions sélectionnées ({n}) ?",
@@ -6175,7 +6186,7 @@ const TRANSLATIONS = {
     "me.id":"מזהה שרת",
     "dir.pick_host":"— בחרו מארח —",
     "restart.btn":"🔄 הפעלה מחדש של הסשן","restart.ing":"מפעיל מחדש...","restart.done":"✅ הסשן הופעל מחדש — אפשר להמשיך לשוחח",
-    "retry.title":"ניסיונות חוזרים: {n}",
+    "retry.title":"ניסיונות חוזרים: {n}","intr.title":"התור הופסק","intr.body":"הבקשה מעולם לא הסתיימה. היא לא תרוץ מעצמה — החליטו אם להריץ אותה שוב.","intr.body.n":"הבקשה מעולם לא הסתיימה. כבר בוצעו {n} ניסיונות. היא לא תרוץ מעצמה.","intr.resume":"לחדש","intr.discard":"לבטל","pend.run":"התור הסתיים, אבל ה-agent סימן שהעבודה שלו לא הושלמה. הוא לא ימשיך מעצמו.","pend.wait":"ה-agent ממתין לתשובה שלכם אבל לא שאל שאלה. התור כבר הסתיים.","pend.blocked":"ה-agent דיווח שהוא חסום. התור הסתיים — בלי פעולה שלכם שום דבר לא יזוז.","pend.btn.continue":"להמשיך","pend.btn.ask":"מה הלאה?",
     "plan.exec.btn":"▶️ להריץ את התוכנית","plan.exec.title":"מעבר למצב Auto והרצת התוכנית הזו",
     "tmux.required":"נדרש tmux בשרת (macOS/Linux/Docker/WSL). לא זמין כאן.",
     "hist.del.n":"למחוק את הצ׳אטים שנבחרו ({n})?",
@@ -6658,30 +6669,84 @@ function parseKeyValueFacts(text) {
   });
 }
 
+// Fenced-code tokenizer — ONE left-to-right pass over lines, replacing the old
+// /```(\w*)\r?\n?([\s\S]*?)```/g. That regex paired fences POSITIONALLY (1-2, 3-4, …) and
+// matched anywhere, not only at a line start, which produced three failures in a single
+// user screenshot: a sentence merely MENTIONING ```json opened a block that swallowed every
+// paragraph up to the next fence; a run of four backticks donated three to the fence and
+// leaked the fourth into the prose; and one unbalanced run inverted code/prose for the whole
+// rest of the message.
+// CommonMark 4.5, the subset that matters here: an opening fence is a run of >=3 ` or ~ at
+// the start of a line, the rest of that line is the info string, and the block closes on the
+// first line that is the SAME character, AT LEAST AS LONG, and nothing else. Everything
+// between is verbatim — backticks inside never re-enter the scanner, so a ```json sample
+// nested in a ```` block stays sample text.
+// `pad` (indent plus one optional blockquote '>') is kept on the placeholder so the block
+// keeps the fence's position — that is what lets a fence inside a list item still merge as a
+// list continuation and a fence inside a quote stay in the quote — and is stripped from each
+// body line.
+// Returns { text, blocks, open, openAt }: `open` is a still-unterminated final block,
+// `openAt` its offset in the INPUT — an honest replacement for renderStreaming's
+// lastIndexOf('```'), which cannot tell a fence from a backtick run inside a sentence.
+function extractFences(text) {
+  const lines = text.split('\n');
+  const blocks = [], out = [];
+  let fence = null, at = 0, openAt = 0;
+  for (const line of lines) {
+    const m = /^([ \t]*(?:>[ \t]?)?)(`{3,}|~{3,})(.*)$/.exec(line);
+    if (!fence) {
+      // a backtick fence's info string may not itself contain a backtick (CommonMark) —
+      // that single rule is what keeps ``code`` and a quoted ``` out of this branch
+      if (m && !(m[2][0] === '`' && m[3].includes('`'))) {
+        fence = { pad: m[1], ch: m[2][0], len: m[2].length, lang: m[3].trim().split(/\s+/)[0] || '', body: [] };
+        openAt = at;
+      } else out.push(line);
+    } else if (m && m[2][0] === fence.ch && m[2].length >= fence.len && !m[3].trim()) {
+      out.push(fence.pad + `\x02BLOCK${blocks.length}\x03`);
+      blocks.push({ lang: fence.lang, code: fence.body.join('\n') });
+      fence = null;
+    } else {
+      let i = 0;                     // strip the fence's OWN indent/quote prefix, nothing more
+      while (i < fence.pad.length && line[i] === fence.pad[i]) i++;
+      fence.body.push(line.slice(i));
+    }
+    at += line.length + 1;
+  }
+  let open = null;
+  if (fence) {                       // unterminated fence: CommonMark closes it at end of input
+    open = { lang: fence.lang, code: fence.body.join('\n') };
+    out.push(fence.pad + `\x02BLOCK${blocks.length}\x03`);
+    blocks.push(open);
+  }
+  return { text: out.join('\n'), blocks, open, openAt };
+}
+
 function renderMd(text) {
   if (!text) return '';
 
   // 0. Normalize line endings (\r\n → \n)
   text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-  // 0.5. Reformat inline numbered items into proper markdown list
+  // 1. Extract and protect code blocks — FIRST, ahead of the list normalizers. They used to
+  //    run before extraction and reformatted "1." / "-" lines inside a fenced block and
+  //    spliced \x06LB\x07 continuation tokens into it, which then rendered as literal
+  //    control characters inside <code>. Order matters more than the step numbers.
+  const { text: fenced, blocks } = extractFences(text);
+  text = fenced;
+
+  // 1.5. Reformat inline numbered items into proper markdown list
   text = reformatInlineNumberedItems(text);
   text = normalizeListContinuations(text);
-
-  // 1. Extract and protect code blocks
-  const blocks = [];
-  text = text.replace(/```(\w*)\r?\n?([\s\S]*?)```/g, (_, lang, code) => {
-    const idx = blocks.length;
-    blocks.push({ lang: lang.trim(), code: code.replace(/\n$/, '') });
-    return `\x02BLOCK${idx}\x03`;
-  });
 
   // 2. Escape remaining HTML
   text = escH(text);
 
   // 2.5. Extract inline code BEFORE bold/italic to protect underscores in filenames
   const inlineCodes = [];
-  text = text.replace(/`([^`\n]+)`/g, (_, code) => {
+  // Run-length aware, same rule as the fence tokenizer: a span of N backticks closes on the
+  // next span of exactly N, so ``a`b`` keeps its inner backtick instead of closing early and
+  // leaking the rest as literal text.
+  text = text.replace(/(?<!`)(`+)(?!`)([^\n]*?)(?<!`)\1(?!`)/g, (_, _run, code) => {
     const idx = inlineCodes.length;
     inlineCodes.push(code);
     return `\x04ICODE${idx}\x05`;
@@ -6807,19 +6872,92 @@ function renderMd(text) {
 // Handle streaming: unclosed code fences shown as plain pre
 const STREAM_CURSOR = '<span class="stream-cursor"></span>';
 function renderStreaming(text) {
-  // Count code fences — if odd, the last block is open
-  const fences = (text.match(/```/g) || []).length;
-  if (fences % 2 !== 0) {
-    // Has open code block — render what's closed, append raw for open
-    const lastFence = text.lastIndexOf('```');
-    const closed = text.substring(0, lastFence);
-    const open = text.substring(lastFence + 3);
-    const langEnd = open.indexOf('\n');
-    const lang = langEnd > -1 ? open.substring(0, langEnd) : '';
-    const code = langEnd > -1 ? open.substring(langEnd + 1) : '';
-    return renderMd(closed) + `<pre><div class="pre-header"><span class="lang">${escH(lang || 'code')}</span></div><code>${escH(code)}</code></pre>` + STREAM_CURSOR;
-  }
-  return renderMd(text) + STREAM_CURSOR;
+  // "Is a block still open?" is a question only the tokenizer can answer. The old parity
+  // count on /```/g matched non-overlapping triples, so ```` counted as ONE fence and a
+  // ```json mentioned mid-sentence counted as an opening — then lastIndexOf('```') split the
+  // buffer at the wrong backtick and renderMd re-paired the rest from scratch.
+  const norm = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const { open, openAt } = extractFences(norm);
+  if (!open) return renderMd(norm) + STREAM_CURSOR;
+  // The in-flight block keeps its raw <pre> with the language label and NO copy button —
+  // there is nothing complete to copy yet; the final renderMd on 'done' adds it.
+  return renderMd(norm.slice(0, openAt))
+    + `<pre><div class="pre-header"><span class="lang">${escH(open.lang || 'code')}</span></div><code>${escH(open.code)}</code></pre>`
+    + STREAM_CURSOR;
+}
+
+// ─── Streaming render throttle ───────────────────────────────────────────────
+// server.js sends one WS frame per Anthropic text_delta (~1 token), so a streaming
+// answer arrives at 60-100 messages/sec. Re-running renderStreaming() + `innerHTML =`
+// over the WHOLE accumulated buffer for each one is O(n^2), and the DOM half dominates:
+// measured in Chrome, a 40 000-char buffer costs 1 487 ms of markdown parse but
+// 13 739 ms of innerHTML + reflow across the stream (2 897 nodes torn down and rebuilt
+// every frame).
+// setTimeout and NOT requestAnimationFrame: rAF caps renders at one PER frame, not at a
+// fraction OF a frame. At 80 deltas/s it coalesces almost nothing (measured: 639 renders
+// for 639 deltas) and a single 27k-char render already costs 15-23 ms, more than a 60 Hz
+// budget. rAF left the main thread 71% busy; this throttle leaves it at 12%. rAF also
+// never fires in a hidden tab, which would strand the buffer un-rendered.
+const STREAM_RENDER_MS = 100; // ~10 updates/sec — smooth to read, 8.7x fewer renders
+
+// Cancel a queued flush. Call before ANY code that writes .msg itself (done, error,
+// reset, agent switch, tab restore) — otherwise a late timer repaints the streaming
+// version (with STREAM_CURSOR) over the finalized markup.
+function _cancelStreamRender(tabId) {
+  const ts = tabId && tabState[tabId];
+  if (!ts) return;
+  if (ts._mdTimer) { clearTimeout(ts._mdTimer); ts._mdTimer = 0; }
+  ts._mdDirty = false;
+}
+
+// Repaint the live bubble from the tab's OWN buffer. Reads curTxt/curEl at fire time,
+// never a captured snapshot, so a catchUp replay that replaced the buffer between
+// schedule and fire renders the replacement rather than stale text.
+function _flushStreamRender(tabId) {
+  const ts = tabId && tabState[tabId];
+  if (!ts) return;
+  if (ts._mdTimer) { clearTimeout(ts._mdTimer); ts._mdTimer = 0; }
+  if (!ts._mdDirty) return;
+  // curEl is nulled by streaming.reset() — a queued flush for a bubble that is gone
+  // must do nothing (loadSess re-renders on return).
+  const m = ts.curEl && ts.curEl.querySelector('.msg');
+  if (!m) { ts._mdDirty = false; return; }
+  ts._mdDirty = false;
+  ts._mdLast = performance.now();
+  m.innerHTML = renderStreaming(ts.curTxt);
+  scrollBottom();
+}
+
+function _scheduleStreamRender(tabId) {
+  const ts = getTS(tabId);
+  ts._mdDirty = true;
+  if (ts._mdTimer) return; // a flush is already queued — it will pick up the newer text
+  const since = performance.now() - (ts._mdLast || 0);
+  if (since >= STREAM_RENDER_MS) { _flushStreamRender(tabId); return; } // leading edge
+  ts._mdTimer = setTimeout(() => { ts._mdTimer = 0; _flushStreamRender(tabId); }, STREAM_RENDER_MS - since);
+}
+
+// The model is instructed (server.js STATUS_LINE_INSTRUCTION) to close every turn with a
+// "---" status line. Only the tick means finished; the hourglass / question / warning are
+// the model saying its OWN work is not over — and nothing resumes it, because the CLI still
+// reported subtype 'success'. Deliberately mirrors promoteStatusLine's anchored regex: if
+// one matches the other must too, or the pill and the footer tell the user different stories.
+function statusLineKind(text) {
+  const m = /\n?-{3,}[ \t]*\n[ \t]*(\S[^\n]*?)[ \t]*\n?$/.exec(text || '');
+  if (!m) return '';
+  const line = m[1].trim();
+  if (/^(?:\u2705|\u2713)/.test(line)) return 'done';
+  if (/^(?:\u23f3|\ud83d\udd04)/.test(line)) return 'run';
+  if (/^(?:\u2753|\ud83d\udfe1)/.test(line)) return 'wait';
+  if (/^(?:\u26a0\ufe0f|\u26a0)/.test(line)) return 'warn';
+  if (/^(?:\u274c|\u2717|\ud83d\udd34)/.test(line)) return 'err';
+  return '';
+}
+// A turn the model itself did not call finished. 'err' is excluded on purpose — an errored
+// turn already gets the error footer and its own retry path.
+function statusLinePending(text) {
+  const k = statusLineKind(text);
+  return k === 'run' || k === 'wait' || k === 'warn';
 }
 
 function copyCode(id, btn) {
@@ -6897,7 +7035,6 @@ function connect() {
 
   ws.onopen = () => {
     _reconnectDelay = 1000; // reset backoff on successful connect
-    _retryingSessions.clear(); // new WS connection — allow retries for all sessions again
     setStatus(t('status.connected'), 'ok');
     loadFiles();
     loadHist();
@@ -6957,6 +7094,10 @@ document.addEventListener('visibilitychange', () => {
   const now = Date.now();
   if (now - _lastVisibilityResync < 1000) return; // debounce rapid toggles
   _lastVisibilityResync = now;
+  // Hidden tabs clamp setTimeout to >=1 s (and to ~1/min under heavy throttling), so a
+  // queued repaint can be minutes late. Paint now, before the catch-up round-trip, so the
+  // buffer is never visibly stale on refocus.
+  _flushStreamRender(activeTabId);
   if (!ws || ws.readyState !== 1) {
     // Socket died while hidden — reconnect now instead of waiting out the backoff.
     if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
@@ -6984,6 +7125,7 @@ document.addEventListener('visibilitychange', () => {
 function _maybeFinalizeAgentSwitch(d) {
   if (streaming.el && d.agent !== streaming.agent
       && (_botsById[d.agent] || _botsById[streaming.agent] || _deletedBotIds.has(streaming.agent))) {
+    _cancelStreamRender(activeTabId); // bubble is being finalized and detached
     try {
       streaming.el.querySelector('.msg').innerHTML = renderMd(streaming.txt);
       _finalizeToolLive(streaming.el);
@@ -7083,7 +7225,7 @@ function handleWsMsg(d) {
       }
       // catchUp = full replay from server after reconnect → replace, not append
       if (d.catchUp) { streaming.txt = d.text; } else { streaming.txt += d.text; }
-      streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
+      _scheduleStreamRender(tabId); // throttled repaint — see STREAM_RENDER_MS
       _msfSetState(streaming.el, t('msf.generating') + '…'); // streaming text → "Генерую…"; timer keeps ticking
       if (d.agent) addAgentBadge(streaming.el, d.agent);
       scrollBottom();
@@ -7218,8 +7360,6 @@ function handleWsMsg(d) {
       // Keep the finished line-up visible for a moment — it is the record of who did
       // what — then clear it so the composer area does not accumulate old turns.
       if (_turnBots.length) setTimeout(clearBotsStrip, 6000);
-      // Allow future retries for this session (task_interrupted dedup)
-      _retryingSessions.delete(tabId);
       // Update chain progress: check if this task completed or failed
       if (d.taskId && _chainData) {
         const ct = _chainData.tasks.find(x => x.id === d.taskId);
@@ -7228,6 +7368,7 @@ function handleWsMsg(d) {
       }
       getTS(tabId).agentStatus = ''; // task finished — clear saved status
       if (isVisible) {
+        _cancelStreamRender(tabId); // a queued repaint would land AFTER the final renderMd below
         // Render thinking badge before the assistant text bubble (if thinking was accumulated during streaming)
         { const _tts = getTS(tabId); const _tt = _tts._thinkingTxt || '';
           if (_tt && streaming.el) {
@@ -7255,7 +7396,7 @@ function handleWsMsg(d) {
           _renderToolActivity(streaming.el, streaming.toolCounts);
         }
         // If agent didn't write a status line, show a "Done" badge so user knows it's finished
-        if (streaming.el && streaming.txt && !/---\s*\n\s*[✅⏳❓⚠️]/.test(streaming.txt) && !/✅\s*Done/.test(streaming.txt)) {
+        if (streaming.el && streaming.txt && !statusLineKind(streaming.txt) && !/✅\s*Done/.test(streaming.txt)) {
           const badge = document.createElement('div');
           badge.className = 'msg-done-badge';
           // Build short summary from tool activity
@@ -7298,7 +7439,12 @@ function handleWsMsg(d) {
           }
         }
         _msfStopTimer(streaming.el); // stop elapsed counter
-        markDone(streaming.el);
+        // Classify the model's own closing status line BEFORE writing the footer — a turn that
+        // ended unfinished must not be labelled "Done" under its own "In progress" pill.
+        markDone(streaming.el, statusLinePending(streaming.txt));
+
+        // Unfinished turn: say so, and offer the next move.
+        _maybeAttachPendingBar(streaming.el, streaming.txt);
 
         // ─── Plan Mode: Show "Execute Plan" button ──────────────────────────────
         // When in planning mode and response contains a plan, offer to execute it
@@ -7414,7 +7560,6 @@ function handleWsMsg(d) {
       { const rb = msgsEl.querySelector('.session-restart-btn'); if (rb) rb.remove(); }
       if (tabId) {
         delete getTS(tabId)._sessionRestartAvailable;
-        _retryingSessions.delete(tabId);
       }
       {
         const retryEl = $i('sessBarRetry');
@@ -7508,6 +7653,7 @@ function handleWsMsg(d) {
       }
       getTS(tabId).agentStatus = ''; // task errored — clear saved status
       if (isVisible) {
+        _cancelStreamRender(tabId); // a late flush would erase the error text appended below
         rmStatus();
         // Finalize tool activity on error — keep live panel if exists, otherwise show pills
         if (streaming.el && streaming.el.querySelector('.tool-live')) {
@@ -7816,50 +7962,30 @@ function handleWsMsg(d) {
     }
 
     case 'task_interrupted': {
-      if (!d.prompt) {
-        const ti = openTabs.find(x => x.id === tabId);
-        if (ti) { ti.generating = false; renderTabs(); saveUIState(); }
-        if (isVisible) { isGen = false; setSendStop(false); setStatus(t('status.connected'), 'ok'); }
-        break;
-      }
       const targetSessionId = d.sessionId || tabId;
-      // Deduplicate: both resume_task and subscribe_session can fire task_interrupted
-      // for the same session — only retry once per WS connection
-      if (_retryingSessions.has(targetSessionId)) {
-        // Still reset generating state — the previous retry's done may have been lost
+      // The turn is over either way — stop the spinner first, then decide what to offer.
+      {
         const ti = openTabs.find(x => x.id === tabId);
         if (ti && ti.generating) { ti.generating = false; ti.done = true; renderTabs(); saveUIState(); }
         if (isVisible) { isGen = false; setSendStop(false); setStatus(t('status.connected'), 'ok'); }
+      }
+      const _its = getTS(targetSessionId);
+      if (!d.prompt) {
+        // Nothing recoverable: the flag was reaped, or another tab/device claimed it.
+        _its._interrupted = null;
+        if (isVisible) clearInterruptedCard();
         break;
       }
-      _retryingSessions.add(targetSessionId);
-      { // auto-retry silently — no new message in chat
-        const ti = openTabs.find(x => x.id === tabId);
-        if (ti) { ti.generating = false; renderTabs(); }
-        if (isVisible) { isGen = false; setSendStop(false); }
-        const retryCount = (d.retryCount || 0) + 1;
-        // Show retry count in session bar (not in chat)
-        if (tabId === activeTabId) {
-          const retryEl = $i('sessBarRetry');
-          if (retryEl) { retryEl.style.display = ''; retryEl.textContent = `↩ ×${retryCount}`; retryEl.title = t('retry.title').replace('{n}', retryCount); }
-        }
-        // Mark tab as generating and fire retry
-        const targetTab = openTabs.find(x => x.id === targetSessionId);
-        if (targetTab) { targetTab.generating = true; renderTabs(); saveUIState(); }
-        if (isVisible) { isGen = true; generatingTabId = activeTabId; showStatus(t('status.processing')); setStatus(t('status.processing'), 'warn'); setSendStop(true); }
-        if (ws && ws.readyState === 1) {
-          ws.send(JSON.stringify({
-            type: 'chat', text: d.prompt,
-            tabId: targetSessionId, sessionId: targetSessionId,
-            retry: true,
-            skills: [...activeSkills], mcpServers: [...activeMcp],
-            mode: curMode, agentMode: curAgent,
-            model: curModel,
-            maxTurns: parseInt($i('maxTurns').value) || 30,
-            workdir: curWorkdir || undefined,
-          }));
-        }
+      // NEVER auto-resend. The prompt behind this offer may already have run Bash, pushed to
+      // git or spent money — only the user may decide to pay for it a second time. This used
+      // to fire a fresh `chat` silently, which is why opening an old chat re-ran its prompt.
+      _its._interrupted = { sessionId: targetSessionId, prompt: d.prompt, retryCount: d.retryCount || 0 };
+      if (tabId === activeTabId && d.retryCount) {
+        const retryEl = $i('sessBarRetry');
+        if (retryEl) { retryEl.style.display = ''; retryEl.textContent = `↩ ×${d.retryCount}`; retryEl.title = t('retry.title').replace('{n}', d.retryCount); }
       }
+      if (isVisible) renderInterruptedCard(_its._interrupted);
+      else _bgNotify(tabId, found, 'warning', t('intr.title'), String(d.prompt).slice(0, 140));
       break;
     }
 
@@ -9077,12 +9203,51 @@ function _maybeAttachExecPlanBtn(el, text) {
   el.appendChild(execBtn);
 }
 
-function markDone(el) {
+// A turn that ended on the hourglass / question / warning is unfinished by the model's own
+// account, and nothing on the server picks it back up. Without this bar the bubble simply
+// stops under a purple "In progress" pill and the user is left guessing whether to wait or
+// to type. Two buttons, no modal, no new deps — same shape as _maybeAttachExecPlanBtn above.
+function _maybeAttachPendingBar(el, text) {
+  if (!el || el.querySelector('.pending-bar')) return;
+  const kind = statusLineKind(text);
+  if (!statusLinePending(text)) return;
+  const bar = document.createElement('div');
+  bar.className = `pending-bar pb-${kind}`;
+  const note = document.createElement('div');
+  note.className = 'pb-note';
+  note.textContent = kind === 'run' ? t('pend.run') : kind === 'wait' ? t('pend.wait') : t('pend.blocked');
+  bar.appendChild(note);
+  const acts = document.createElement('div');
+  acts.className = 'pb-acts';
+  const mk = (cls, label, prompt) => {
+    const b = document.createElement('button');
+    b.className = cls;
+    b.textContent = label;
+    b.onclick = () => { bar.remove(); sendChat(prompt); };
+    acts.appendChild(b);
+  };
+  // "Continue" only for the hourglass — for a question or a block the agent is waiting ON
+  // the user, so resuming blindly just reproduces the same dead end.
+  if (kind === 'run') mk('pb-btn pb-primary', t('pend.btn.continue'),
+    'Continue where you left off and finish the remaining work.');
+  // Forces the dead-end text question into the ask_user card, which the user can answer
+  // inline instead of guessing.
+  mk('pb-btn', t('pend.btn.ask'),
+    'Your turn ended while you said you were still waiting on something. State exactly what you are waiting for, whether it can finish on its own, and what the next step is. If you need anything from me, ask with the ask_user tool instead of writing the question as text.');
+  bar.appendChild(acts);
+  const footer = el.querySelector('.msg-status-footer');
+  if (footer) el.insertBefore(bar, footer); else el.appendChild(bar);
+}
+
+// `pending` = the model closed the turn with hourglass/question/warning. The run really did
+// stop, but stamping it "Done" is the contradiction users report — show the waiting footer
+// instead. _msfCreate('waiting', ...) and its CSS already existed and were unreachable.
+function markDone(el, pending) {
   rmStatus();
   if (!el) return;
   _msfRemove(el);
   if (!_msfGet(el)) {
-    const f = _msfCreate('done', t('msf.done'));
+    const f = pending ? _msfCreate('waiting', t('msf.waiting')) : _msfCreate('done', t('msf.done'));
     el.appendChild(f);
   }
 }
@@ -11796,7 +11961,6 @@ async function loadHist() {
 const MSG_PAGE = 50;
 let _allMsgs = [];   // all messages for current session (in memory)
 let _shownFrom = 0;  // index in _allMsgs from which messages are rendered
-const _retryingSessions = new Set(); // prevents duplicate retries from resume_task + subscribe_session
 
 // Format message timestamp: "25.02 14:32" or "14:32" if today
 function formatMsgTime(isoStr) {
@@ -12259,6 +12423,7 @@ async function loadSess(id) {
     //    (not running), so we don't conflict with live WS catch-up replay.
     if (_bgTxt || _bgToolLog?.length) {
       // Tab-switch restore: recreate streaming element with accumulated text + tool log
+      _cancelStreamRender(id); // fresh bubble — drop anything queued against the old one
       streaming.el = addMsg('assistant');
       streaming.txt = _bgTxt || '';
       addSpinner(streaming.el); // restored run starts a fresh 0:00 — original start time is not persisted (live "is-working" feedback, not audited duration)
@@ -16940,8 +17105,51 @@ function renderInputNeededCard(d) {
   scrollBottom();
 }
 
+// An unfinished turn is OFFERED back, never re-run silently: opening a chat must not replay
+// its Bash calls and spend the user's money. Reuses .needinput-card — the same "the system is
+// waiting on you" shape as the interactive-prompt banner.
+function renderInterruptedCard(st) {
+  if (!msgsEl || !st) return;
+  clearInterruptedCard();
+  const card = document.createElement('div');
+  card.className = 'needinput-card interrupted-card';
+  card.innerHTML =
+    `<div class="ni-title">\u26a0 ${escH(t('intr.title'))}</div>` +
+    `<div class="ni-body">${escH(st.retryCount ? t('intr.body.n').replace('{n}', st.retryCount) : t('intr.body'))}</div>` +
+    `<pre class="ni-pane">${escH(st.prompt)}</pre>` +
+    `<div class="ni-btns"><button class="ni-open">\u21bb ${escH(t('intr.resume'))}</button>` +
+    `<button class="ni-dismiss">${escH(t('intr.discard'))}</button></div>`;
+  card.querySelector('.ni-open').onclick = () => {
+    card.remove();
+    getTS(st.sessionId)._interrupted = null;
+    // The server rebuilds the turn from the SESSION's stored config and claims it atomically,
+    // so two tabs pressing this produce exactly one run.
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'resume_interrupted', sessionId: st.sessionId, tabId: st.sessionId }));
+    const tb = openTabs.find(x => x.id === st.sessionId);
+    if (tb) { tb.generating = true; tb.done = false; renderTabs(); saveUIState(); }
+    if (st.sessionId === activeTabId) { isGen = true; generatingTabId = activeTabId; showStatus(t('status.processing')); setStatus(t('status.processing'), 'warn'); setSendStop(true); }
+  };
+  // Discard is durable, not cosmetic: it clears the flag server-side, so reopening the chat
+  // does not ask again — otherwise "no" would only ever mean "not right now".
+  card.querySelector('.ni-dismiss').onclick = () => {
+    card.remove();
+    getTS(st.sessionId)._interrupted = null;
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'dismiss_interrupted', sessionId: st.sessionId, tabId: st.sessionId }));
+  };
+  msgsEl.appendChild(card);
+  scrollBottom();
+}
+
+function clearInterruptedCard() {
+  for (const el of document.querySelectorAll('.interrupted-card')) el.remove();
+}
+
+// NB the interrupted-turn card carries BOTH classes so it inherits the styling, so this
+// must exclude it explicitly — otherwise resolving an interactive prompt, or simply sending
+// the next message, silently removed the Resume/Discard offer while the server-side flag
+// stayed armed, and the card came back on the next open.
 function clearInputNeededCard() {
-  for (const el of document.querySelectorAll('.needinput-card')) el.remove();
+  for (const el of document.querySelectorAll('.needinput-card:not(.interrupted-card)')) el.remove();
 }
 
 // The session bar's ▣ button pulses while the active tab has a pending prompt —
@@ -17035,6 +17243,14 @@ function _createTerminal(sessionId) {
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(host);
+
+  // Fit BEFORE _connectTerminalWs below: the connect URL carries the geometry and the
+  // server applies it with resize-window the moment it attaches (startAndAttach →
+  // termBridge.attach, resizeOnAttach defaults true). Without this the first attach ships
+  // xterm's untouched 80x24 defaults, so opening a terminal tab squeezed a live 111x38
+  // window to 80x24 and grew it back a frame later. On one pane that is an ugly reflow; on
+  // a window agent-teams has split it permanently mangles the layout.
+  try { fit.fit(); } catch {}
 
   const entry = { term, fit, ws: null, host, label: '', dot: '#8b949e', state: '' };
   _terms.set(sessionId, entry);
@@ -17204,6 +17420,14 @@ function sendTermResize() {
   // An engine pane is a viewer: its tmux window belongs to the subscription engine
   // and stays at the geometry the engine spawned it with. Adapt the font instead.
   if (isEnginePaneId(_termSessionId)) { _fitEnginePaneFont(e); return; }
+  // A hidden xterm does NOT measure zero — it measures 100. #termPane is display:none
+  // whenever the active tab is a chat (.center.term-mode), and .term-instance is
+  // width:100%/height:100%. getComputedStyle on a non-rendered element returns the COMPUTED
+  // value, so those percentages come back as the literal string "100%" and FitAddon's
+  // parseInt gives 100 — not NaN (its isNaN guard never fires) and not 0. It then proposes
+  // ~9x5 for that 100px box and the resize goes out as if it were genuine. offsetParent is
+  // null exactly when the element sits in a display:none subtree — the only case that lies.
+  if (!e.host.offsetParent) return;
   try { e.fit.fit(); } catch { return; }
   if (e.ws && e.ws.readyState === 1) e.ws.send(JSON.stringify({ type: 'resize', cols: e.term.cols, rows: e.term.rows }));
 }

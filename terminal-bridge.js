@@ -99,10 +99,22 @@ function sessionInfo(name) {
   const fmt = '#{pane_dead}|#{session_attached}|#{window_activity}|#{session_created}';
   const r = tmux(['display-message', '-p', '-t', name, fmt]);
   const [dead, attached, activity, created] = String(r.stdout || '').trim().split('|');
+  // `-t <session>` resolves to the ACTIVE pane, so the #{pane_dead} above answers "is the
+  // focused pane dead", not "did the agent exit" — and remain-on-exit is a WINDOW option, so
+  // every pane Claude Code's agent-teams splits off leaves a dead pane behind when its
+  // teammate finishes. Reading one pane made resolveState() return 'respawn' while the
+  // user's own `claude` was still running; ensureSession then relaunched
+  // `claude --resume <the same id>` on top of it, the agent refused, the caller's self-heal
+  // read that fast exit as "nothing to resume", and it killed the whole session. Two live
+  // working sessions were lost to exactly this. The agent is gone only when EVERY pane is dead.
+  const _panes = tmux(['list-panes', '-t', name, '-F', '#{pane_dead}']);
+  const _paneStates = String(_panes.stdout || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const _allDead = _paneStates.length > 0 && _paneStates.every(s => s === '1');
   const now = Math.floor(Date.now() / 1000);
   return {
     exists: true,
-    paneDead: dead === '1',
+    // `dead` stays as the fallback for a tmux answer we could not parse.
+    paneDead: _paneStates.length ? _allDead : dead === '1',
     attached: parseInt(attached, 10) || 0,
     activityAgeSec: Math.max(0, now - (parseInt(activity, 10) || now)),
     ageSec: Math.max(0, now - (parseInt(created, 10) || now)),
@@ -315,12 +327,25 @@ function attach({ name, cols, rows, onData, onExit, resizeOnAttach = true }) {
   };
 
   const doResize = (c, r) => {
-    const cc = Math.max(20, Math.min(500, parseInt(c, 10) || 80));
-    const rr = Math.max(5, Math.min(200, parseInt(r, 10) || 24));
+    const cc = parseInt(c, 10), rr = parseInt(r, 10);
+    // Reject an implausible geometry instead of clamping it UP. The old floors (20 cols /
+    // 5 rows) turned obvious garbage into something tmux would accept: a browser measuring
+    // a hidden xterm proposes ~9x5 (getComputedStyle on a display:none element returns the
+    // literal "100%", and parseInt("100%") === 100), which used to arrive here and become a
+    // real 20x5 window. A viewport that genuinely cannot show 40x10 is not worth resizing to.
+    if (!Number.isFinite(cc) || !Number.isFinite(rr) || cc < 40 || rr < 10) return;
+    // Never resize a SPLIT window. resize-window moves the whole window and tmux
+    // redistributes panes by its own layout rules on the way down AND on the way up — it
+    // does not restore the previous window_layout, and nothing here ever calls
+    // select-layout. One shrink-and-grow cycle on a two-pane window is permanent damage:
+    // measured, a 50/50 split came back 33/77 and no later resize undid it. When the window
+    // is split the pane belongs to whoever split it (Claude Code's agent-teams does exactly
+    // this), so the browser should size its xterm to the pane instead.
+    if (paneCount(name) > 1) return;
     // resize-window, NOT `refresh-client -C`: ensureSession sets `window-size manual`
     // and the two conflict — verified in both directions (refresh-client -C leaves a
     // manually-sized window untouched). See the policy note on ensureSession.
-    tmux(['resize-window', '-t', name, '-x', String(cc), '-y', String(rr)]);
+    tmux(['resize-window', '-t', name, '-x', String(Math.min(500, cc)), '-y', String(Math.min(200, rr))]);
   };
 
   // resizeOnAttach:false is for a pane this module did NOT create — the subscription
@@ -352,6 +377,26 @@ function attach({ name, cols, rows, onData, onExit, resizeOnAttach = true }) {
     pid: p.pid,
     close() { try { p.kill('SIGTERM'); } catch {} },
   };
+}
+
+// How many panes the session's current window holds.
+//
+// The studio has no concept of panes: it creates one command per session and every tmux
+// target it writes is `-t <session>`, which tmux resolves to the ACTIVE PANE of the current
+// window. That assumption is false in practice — Claude Code's agent-teams feature
+// (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1) splits whatever window it runs in, one pane per
+// teammate. Measured on a live session: a 111x38 window holding `claude --resume <id>` at
+// 33x37 next to a teammate at 77x37.
+function paneCount(name) {
+  assertName(name);
+  const r = tmux(['list-panes', '-t', name, '-F', '#{pane_id}']);
+  // Fail SAFE, not optimistic: callers use this to decide whether it is safe to resize a
+  // window we may not own. Answering 1 on an unreadable tmux would re-enable exactly the
+  // layout-destroying resize this guard exists to prevent, so an unknown count reads as
+  // "more than one".
+  if (r.status !== 0) return 2;
+  const _n = String(r.stdout || '').split('\n').filter(Boolean).length;
+  return _n || 2;
 }
 
 // Freeze a session's geometry so an attaching client cannot resize it. tmux's default
@@ -388,6 +433,6 @@ function killSession(name) { tmux(['kill-session', '-t', name], { stdio: 'ignore
 module.exports = {
   TMUX_SOCKET, tmuxAvailable, hasSession, sessionInfo, paneHash,
   listTerminalSessions, ensureSession, attach, detachClients,
-  setWindowSizeManual, paneSize,
+  setWindowSizeManual, paneSize, paneCount,
   captureScreen, decodeOutputPayload, saveScrollback, killSession,
 };

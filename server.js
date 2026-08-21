@@ -810,6 +810,9 @@ const stmts = {
   addQueuedMsg: db.prepare(`INSERT INTO queued_messages (session_id,payload) VALUES (?,?)`),
   delQueuedMsg: db.prepare(`DELETE FROM queued_messages WHERE id=?`),
   delQueuedBySession: db.prepare(`DELETE FROM queued_messages WHERE session_id=?`),
+  // queue_edit rewrote the in-memory copy only, so the DB kept the PRE-EDIT text and a
+  // restart replayed the message the user had already corrected.
+  updQueuedMsg: db.prepare(`UPDATE queued_messages SET payload=? WHERE id=?`),
   allQueuedMsgs: db.prepare(`SELECT * FROM queued_messages ORDER BY id`),
   listBots: db.prepare(`SELECT * FROM bots WHERE deleted_at IS NULL ORDER BY label COLLATE NOCASE`),
   getBot: db.prepare(`SELECT * FROM bots WHERE id=? AND deleted_at IS NULL`),
@@ -871,6 +874,13 @@ const stmts = {
   countMsgs: db.prepare(`SELECT COUNT(*) AS total FROM messages WHERE session_id=? AND (type IS NULL OR type != 'tool')`),
   setLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=? WHERE id=?`),
   clearLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=NULL, retry_count=0 WHERE id=?`),
+  // Atomic claim of an interrupted turn: exactly ONE caller may win it. better-sqlite3 is
+  // synchronous and there is one server process, so `changes === 1` is a real mutex against
+  // a second tab or a second device that pressed Resume a millisecond later. retry_count is
+  // deliberately NOT reset here — the cap has to survive the claim.
+  claimLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=NULL WHERE id=? AND last_user_msg IS NOT NULL`),
+  // Boot sweep: a flag alive at boot belongs to the process that just died.
+  clearAllLastUserMsg: db.prepare(`UPDATE sessions SET last_user_msg=NULL, retry_count=0 WHERE last_user_msg IS NOT NULL`),
   setPartialText: db.prepare(`UPDATE sessions SET partial_text=? WHERE id=?`),
   getInterrupted: db.prepare(`SELECT id, title, last_user_msg FROM sessions WHERE last_user_msg IS NOT NULL`),
   incrementRetry: db.prepare(`UPDATE sessions SET retry_count = COALESCE(retry_count, 0) + 1 WHERE id=?`),
@@ -1243,6 +1253,35 @@ const liveSessionIds = () => {
   for (const id of activeTasks.keys()) ids.add(id);
   return ids;
 };
+
+// ─── Interrupted-turn recovery ───────────────────────────────────────────
+// A turn that died mid-flight leaves sessions.last_user_msg armed. Re-running it is never
+// safe to do automatically: the prompt may already have executed Bash, pushed to git or
+// spent money, the server has no record of how far it got, and the run costs the user
+// money they did not authorise. So the flag only ever produces an OFFER — the re-run
+// happens on an explicit `resume_interrupted` from a button.
+const INTERRUPT_MAX_RETRIES = 3;   // hard ceiling on recoveries of ONE turn
+// Returns true when it has handled the socket, false when there is nothing to recover so
+// callers with their own fallback (task_lost) can still send it.
+function offerInterruptedRecovery(ws, sessionId, tabId, session) {
+  if (!ws || ws.readyState !== 1) return false;
+  const sess = session || stmts.getSession.get(sessionId);
+  if (!sess?.last_user_msg) return false;
+  const _tab = tabId || sessionId;
+  const retries = sess.retry_count || 0;
+  // Exhausted: drop the flag instead of offering a turn we would refuse to run anyway.
+  // A promptless task_interrupted is what tells the client to stop spinning.
+  if (retries >= INTERRUPT_MAX_RETRIES) {
+    try { stmts.clearLastUserMsg.run(sessionId); } catch {}
+    log.info('interrupted flag reaped, retry cap reached', { sessionId, retries });
+    ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: _tab }));
+    return true;
+  }
+  // `recoverable` is what tells the client to render the ask-card. The shape is otherwise
+  // unchanged, so an older cached client degrades to its previous behaviour, not to a break.
+  ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: _tab, prompt: sess.last_user_msg, retryCount: retries, recoverable: true }));
+  return true;
+}
 
 // ─── Ask User (Internal MCP) ─────────────────────────────────────────────
 // Pending user questions: requestId → { resolve, sessionId, timer, question, options, inputType }
@@ -2113,6 +2152,17 @@ setInterval(() => {
 }, 30000);
 // Kick off on startup — smart recovery for in_progress tasks
 setTimeout(() => {
+  // Any session still carrying last_user_msg at boot was armed by the process that just
+  // died. That flag is a handle on a LIVE turn — its WsProxy, AbortController and
+  // chatBuffer all died with that process — so nothing here is resumable: the row is
+  // garbage that used to make the SPA silently re-run the prompt on next open.
+  // NB the `claude` child is NOT necessarily dead. Chat turns record no pid (unlike
+  // tasks.worker_pid below), so we cannot kill theirs — which is the second reason not to
+  // re-run: that would put two `claude --resume` processes on one workdir.
+  try {
+    const _orphaned = stmts.clearAllLastUserMsg.run();
+    if (_orphaned.changes) log.warn('[startup] cleared orphaned last_user_msg flags', { count: _orphaned.changes });
+  } catch (e) { log.error('[startup] clearAllLastUserMsg failed', { err: e.message }); }
   const stuck = db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`).all();
   for (const task of stuck) {
     // Step 1: Kill orphaned subprocess to prevent double-execution.
@@ -2816,8 +2866,8 @@ const BOTS_DISPATCH_INSTRUCTION = `\n\nYou can hand work to any bot in the roste
 // Status line + tool call instructions (~100 tokens vs original ~170)
 const STATUS_LINE_INSTRUCTION = `\n\nIMPORTANT: Always end your response with a single clear status line separated by "---". Use one of these patterns:
 - "✅ Done — [brief summary of what was completed]." when the task is fully finished.
-- "⏳ In progress — [what's happening now and what comes next]." when you're still working and will continue.
-- "❓ Waiting for input — [what you need from the user]." when you need the user to answer or decide something.
+- "⏳ In progress — [what's happening now and what comes next]." when you're still working and will continue. Your turn ENDS when you write this line — nothing resumes it. Never use it to announce that you are waiting on something you cannot observe; either wait for that inside this turn, or finish and say plainly what the user must do next.
+- "❓ Waiting for input — [what you need from the user]." when you need the user to answer or decide something. If the "ask_user" tool is available, CALL IT — a question written only as text ends your turn and leaves the user with nothing to answer into.
 - "⚠️ Blocked — [what went wrong and what's needed to proceed]." when something prevents you from continuing.
 This status line must always be the very last thing in your response. Never skip it.`;
 
@@ -4510,6 +4560,11 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           null, // recurrence_end_at
           callerTask?.effort || null,  // effort: inherit from caller task by default
           callerTask?.run_engine || null  // run_engine: inherit from caller task by default
+        ,
+          null // bot_id — commit a38e2a4 added this column to the INSERT but updated only
+                // one of the six call sites, so this path threw "Too few parameter values"
+                // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
+                // No bot id is in scope here; passing NULL preserves the intended behaviour.
         );
 
         // Set new columns that aren't in createTask prepared statement
@@ -4619,7 +4674,12 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
             null, null,
             td.effort || effectiveEffort,  // effort: per-task override, else chain default
             td.run_engine || callerTask?.run_engine || null  // run_engine: per-task override, else inherit from caller
-          );
+          ,
+          null // bot_id — commit a38e2a4 added this column to the INSERT but updated only
+                // one of the six call sites, so this path threw "Too few parameter values"
+                // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
+                // No bot id is in scope here; passing NULL preserves the intended behaviour.
+        );
 
           stmts.setTaskContext.run(contextJson, callerTaskId || null, taskId);
         }
@@ -5714,7 +5774,12 @@ app.post('/api/task-chains/:id/tasks', (req, res) => {
     chain.session_id || null, chain.workdir || null, chain.model || 'sonnet',
     chain.mode || 'auto', chain.agent_mode || 'single', chain.max_turns || 30,
     null, dependsOn, req.params.id, chain.source_session_id || null,
-    chain.scheduled_at || null, null, null, chain.effort || null, chain.run_engine || null);
+    chain.scheduled_at || null, null, null, chain.effort || null, chain.run_engine || null,
+          null // bot_id — commit a38e2a4 added this column to the INSERT but updated only
+                // one of the six call sites, so this path threw "Too few parameter values"
+                // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
+                // No bot id is in scope here; passing NULL preserves the intended behaviour.
+        );
   if (taskStatus === 'todo') setImmediate(processQueue);
   res.json(stmts.getTask.get(taskId));
 });
@@ -5873,7 +5938,12 @@ app.post('/api/tasks/dispatch', (req, res) => {
         null, null, null, // scheduled_at, recurrence, recurrence_end_at
         sqlVal(t.effort || effort) || null,  // per-task override else dispatch-level effort
         sqlVal(t.run_engine || run_engine) || null  // per-task override else dispatch-level engine
-      );
+      ,
+          null // bot_id — commit a38e2a4 added this column to the INSERT but updated only
+                // one of the six call sites, so this path threw "Too few parameter values"
+                // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
+                // No bot id is in scope here; passing NULL preserves the intended behaviour.
+        );
       createdTasks.push(stmts.getTask.get(taskId));
     }
   })();
@@ -6712,6 +6782,10 @@ app.delete('/api/sessions/:id', (req,res) => {
   db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(sid);
   stmts.deleteTasksBySession.run(sid);
   stmts.deleteSession.run(sid);
+  // queued_messages has no FK to sessions, so the cascade never reaches it. Bulk delete
+  // already does this; the single-session path did not, and boot-restore then resurrected
+  // rows belonging to a chat that no longer exists — forever, since nothing else deletes them.
+  try { stmts.delQueuedBySession.run(sid); } catch {}
   sessionQueues.delete(sid);
   res.json({ok:true});
 });
@@ -9285,7 +9359,16 @@ wssTerm.on('connection', (ws, req) => {
           try { ws.send(buf); } catch {}
         },
         onExit: () => {
-          if (asRestore && attempts === 1 && Date.now() - startedAt < 10000) {
+          // Self-heal ONLY a session we just cold-started, alone in its window. A fast exit
+          // after a restore means "that conversation id does not exist on the agent's side"
+          // only when nothing else was in the window; it ALSO happens when the agent REFUSES
+          // because that conversation is already open in another process — and the response
+          // below (killSession) destroys every pane in the window, including the user's live
+          // agent and every Claude Code teammate splitting it. Two working sessions were lost
+          // to exactly that. `state === 'cold'` means this socket created the session
+          // milliseconds ago, so killing it can only throw away something that never started.
+          const soloColdStart = state === 'cold' && termBridge.paneCount(name) <= 1;
+          if (asRestore && attempts === 1 && soloColdStart && Date.now() - startedAt < 10000) {
             log.info('terminal restore found nothing to resume — starting fresh', { sessionId: session.id });
             try { handle?.close(); } catch {}
             termBridge.killSession(name);
@@ -9633,10 +9716,15 @@ wss.on('connection', (ws) => {
 
       proxy.send(JSON.stringify({ type:'status', status:'thinking', mode, agentMode, model, tabId: effectiveTabId }));
 
-      // Register task in activeTasks so it survives client disconnect/reload
-      try { stmts.setLastUserMsg.run(userMessage, localSessionId); } catch (e) { log.error('setLastUserMsg failed', { err: e.message }); }
+      // Register task in activeTasks so it survives client disconnect/reload.
+      // ORDER MATTERS: claim ownership in activeTasks BEFORE arming last_user_msg. The finally
+      // block now clears the flag only for the owner of the activeTasks entry, so a flag armed
+      // while the entry still belonged to the PREVIOUS turn could be wiped by that turn's
+      // finally. There is no `await` between these lines today, which is what keeps the window
+      // unreachable — do not introduce one.
       chatBuffers.set(localSessionId, ''); // reset buffer for this session
       activeTasks.set(localSessionId, { proxy, abortController, cleanupTimer: null, source: 'web', startedAt: Date.now() });
+      try { stmts.setLastUserMsg.run(userMessage, localSessionId); } catch (e) { log.error('setLastUserMsg failed', { err: e.message }); }
       markActivityDirty();
 
       // Detect fork: if fork_from_cid is set, this is the first message in a forked session
@@ -9789,11 +9877,27 @@ wss.on('connection', (ws) => {
       // Guard: only delete activeTasks/chatBuffers if WE are the owner. In stop+new-chat
       // scenario, a newer processChat may have already called activeTasks.set() with its own
       // entry — blindly deleting would remove the new owner's task tracking.
+      // Ownership of the SESSION. activeTasks is module-level, so it still answers correctly
+      // when the socket that started the turn is already gone.
+      // Permissive (`!_ownTask ||`) on purpose: ws.on('close') arms a cleanupTimer that calls
+      // abort() AND activeTasks.delete(), so a turn killed by that timer reaches this finally
+      // with no entry at all. A strict `_ownTask &&` would skip cleanup on exactly the
+      // disconnect path this fix exists for. No entry means nobody else claimed the session.
       const _ownTask = activeTasks.get(localSessionId);
-      if (!_ownTask || _ownTask.abortController === myAbortController) {
+      const _ownsSession = !_ownTask || _ownTask.abortController === myAbortController;
+      if (_ownsSession) {
         activeTasks.delete(localSessionId);
         chatBuffers.delete(localSessionId); // cleanup in-memory buffer — only if we own the session
         markActivityDirty();
+      }
+      // last_user_msg is SESSION state, so it hangs off session ownership — NOT off isStale
+      // below. isStale is socket-scoped (ws._tabAbort), and ws.on('close') wipes ws._tabAbort
+      // wholesale, so after the user closes the tab mid-turn it reports "stale" for a turn
+      // that owns the session and then completes normally. The flag survived a SUCCESSFUL
+      // turn and armed the session to silently re-run its prompt on next open — reachable by
+      // closing a tab, with no crash involved.
+      if (_ownsSession) {
+        try { stmts.clearLastUserMsg.run(localSessionId); } catch {}
       }
       // Detect stale finally early: if a stop happened, ws._tabAbort was deleted or replaced
       // by a new processChat. In that case, another processChat now owns this tab — our
@@ -9812,7 +9916,6 @@ wss.on('connection', (ws) => {
             entry.resolve({ answer: '[Session ended]' });
           }
         }
-        try { stmts.clearLastUserMsg.run(localSessionId); } catch {}
       }
       if (!isStale && effectiveTabId) {
         ws._tabBusy[effectiveTabId] = false;
@@ -9922,6 +10025,10 @@ wss.on('connection', (ws) => {
       if (!stmts.getSession.get(tabId)) { sessionQueues.delete(tabId); return; }
       if (ws._tabQueue[tabId]?.length > 0 && !ws._tabBusy[tabId] && !activeChatSessions.has(tabId) && !activeTasks.has(tabId)) {
         const next = ws._tabQueue[tabId].shift();
+        // Delete before running — the same invariant the schema states (see queued_messages)
+        // and the finally-drain at the other dequeue site already honours. Leaving the row
+        // here made boot-restore re-run this message on EVERY later restart, forever.
+        if (next?._dbQueueId) { try { stmts.delQueuedMsg.run(next._dbQueueId); } catch {} }
         if (ws._tabQueue[tabId].length === 0) { delete ws._tabQueue[tabId]; sessionQueues.delete(tabId); }
         ws.send(queuePayload(tabId));
         processChat(next).catch(err => log.error('processChat dequeue error', { message: err.message }));
@@ -9993,14 +10100,34 @@ wss.on('connection', (ws) => {
       const _taskRunning = (() => { try { return !!stmts.hasRunningTask.get(tabId); } catch { return false; } })();
       if (!ws._tabBusy[tabId] && !activeTasks.has(tabId) && !activeChatSessions.has(tabId) && !_taskRunning) {
         log.info('[interrupt] session is idle — handling as a normal message', { tabId });
+        // The client's interrupt frame carries only text/tabId/attachments (index.html:11140)
+        // — no model, mode, skills, MCP or workdir. Handing that straight to processChat let
+        // its destructure defaults win (skills=[] mcpServers=[] mode='auto' model='sonnet'
+        // workdir=null → the global WORKDIR), and updateConfig then wrote those defaults BACK
+        // onto the session row: one message sent in this window ran in the wrong directory
+        // without the chat's skills and permanently destroyed its saved configuration.
+        // Rebuild the turn from the session's own row instead.
+        const _isess = stmts.getSession.get(tabId);
+        let _isessSkills = [], _isessMcp = [];
+        try { _isessSkills = JSON.parse(_isess?.active_skills || '[]'); } catch {}
+        try { _isessMcp    = JSON.parse(_isess?.active_mcp    || '[]'); } catch {}
         processChat({
           type: 'chat',
           text,
           tabId,
           sessionId: tabId,
           attachments: Array.isArray(msg.attachments) ? msg.attachments : undefined,
-          model: msg.model,
-          workdir: msg.workdir,
+          // undefined deliberately falls through to processChat's own defaults, so a session
+          // row that never stored a value behaves exactly as it did before this fix.
+          model:      msg.model   || _isess?.model       || undefined,
+          workdir:    msg.workdir || _isess?.workdir     || undefined,
+          mode:       _isess?.mode       || undefined,
+          agentMode:  _isess?.agent_mode || undefined,
+          // Engine deliberately omitted — see the note on resume_interrupted. The client's
+          // interrupt frame is api-only by construction; a stored 'subscription' must not
+          // reroute it through the tmux engine behind the user's back.
+          skills:     _isessSkills,
+          mcpServers: _isessMcp,
         }).catch(err => log.error('processChat error', { message: err.message }));
         return;
       }
@@ -10050,6 +10177,9 @@ wss.on('connection', (ws) => {
         activeChatSessions.delete(tabId);
         if (ws._tabQueue) ws._tabQueue[tabId] = [];
         sessionQueues.delete(tabId);
+        // ...and the persisted copies, or every queued message the user just cancelled
+        // comes back and runs after the next restart.
+        try { stmts.delQueuedBySession.run(tabId); } catch {}
         const _stoppedInterrupts = pendingInterrupts.get(tabId);
         pendingInterrupts.delete(tabId);
         cleanupInterruptAttachments(_stoppedInterrupts);
@@ -10095,6 +10225,11 @@ wss.on('connection', (ws) => {
         for (const [tid, queue] of Object.entries(ws._tabQueue || {})) {
           const idx = queue.findIndex(m => m.queueId === queueId);
           if (idx !== -1) {
+            // Drop the persisted row as well. Without this the client got a `queue_removed`
+            // confirmation while the row survived, and the message the user explicitly
+            // deleted executed after the next restart.
+            const _rm = queue[idx];
+            if (_rm?._dbQueueId) { try { stmts.delQueuedMsg.run(_rm._dbQueueId); } catch {} }
             queue.splice(idx, 1);
             if (queue.length === 0) sessionQueues.delete(tid);
             ws.send(JSON.stringify({ type: 'queue_removed', queueId, tabId: tid }));
@@ -10119,7 +10254,13 @@ wss.on('connection', (ws) => {
         // Update in per-tab queues
         for (const queue of Object.values(ws._tabQueue || {})) {
           const item = queue.find(m => m.queueId === queueId);
-          if (item) { item.text = text; break; }
+          // Rewrite the stored payload too — _dbQueueId is stripped because it is assigned
+          // after the original INSERT and boot-restore re-derives it from the row id.
+          if (item) {
+            item.text = text;
+            if (item._dbQueueId) { try { stmts.updQueuedMsg.run(JSON.stringify({ ...item, _dbQueueId: undefined }), item._dbQueueId); } catch {} }
+            break;
+          }
         }
         // Also check legacy queue
         const legacyItem = ws._queue.find(m => m.queueId === queueId);
@@ -10246,9 +10387,7 @@ wss.on('connection', (ws) => {
             // pre-activeTasks phase of processChat is live, not interrupted: announcing a
             // retry there would offer to re-run a turn that is already running.
             const sess = isSessionLive(sessionId) ? null : stmts.getSession.get(sessionId);
-            if (sess?.last_user_msg && ws.readyState === 1) {
-              ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: sessionId, prompt: sess.last_user_msg, retryCount: sess.retry_count || 0 }));
-            }
+            if (sess) offerInterruptedRecovery(ws, sessionId, sessionId, sess);
           } else {
             const activeTask = activeTasks.get(sessionId);
             // Guard: abort() may have been called (timer fired or user stopped) but the
@@ -10256,11 +10395,8 @@ wss.on('connection', (ws) => {
             // Reattaching the proxy to a dying stream would leave the client waiting
             // forever for output that will never arrive.
             if (activeTask.abortController.signal.aborted) {
-              // Stream is being killed — treat as interrupted so client can retry.
-              const sess = stmts.getSession.get(sessionId);
-              if (sess?.last_user_msg && ws.readyState === 1) {
-                ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: sessionId, prompt: sess.last_user_msg, retryCount: sess.retry_count || 0 }));
-              }
+              // Stream is being killed — offer the turn back instead of losing it silently.
+              offerInterruptedRecovery(ws, sessionId, sessionId);
             } else {
               // Chat task is running normally. The cleanup timer was already cancelled
               // above (hoisted out of this branch — it must also run for noCatchUp).
@@ -10474,7 +10610,12 @@ wss.on('connection', (ws) => {
                 null, null, null,  // scheduled_at, recurrence, recurrence_end_at
                 sqlVal(a.effort || effort) || null,
                 sqlVal(a.run_engine || source?.run_engine) || null  // run_engine: per-agent override else inherit source session
-              );
+              ,
+          null // bot_id — commit a38e2a4 added this column to the INSERT but updated only
+                // one of the six call sites, so this path threw "Too few parameter values"
+                // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
+                // No bot id is in scope here; passing NULL preserves the intended behaviour.
+        );
               created.push(stmts.getTask.get(taskId));
             }
           })();
@@ -10513,6 +10654,77 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    // The ONLY path that re-runs an interrupted turn. Explicit by construction — the client
+    // sends it from a button, never on its own. The turn is rebuilt from the SESSION's stored
+    // config, not from whatever the browser currently has selected: the old auto-retry re-sent
+    // with the live toolbar's model/mode/skills, so a turn started on opus in planning mode
+    // came back as haiku in auto.
+    if (msg.type === 'resume_interrupted') {
+      const sessionId = msg.sessionId || msg.tabId;
+      if (!sessionId) return;
+      // A plain `chat` in this position gets QUEUED (see the busy check on the chat path);
+      // resume used to go straight to processChat, so pressing Resume while the session had
+      // become live again started a SECOND `claude --resume` on the same session and workdir.
+      // That is the very dual-run this whole fix exists to prevent — the atomic claim only
+      // guards against a second Resume, not against a turn that started by another route.
+      if (isSessionLive(sessionId) || ws._tabBusy?.[sessionId]) {
+        ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: sessionId }));
+        return;
+      }
+      const sess = stmts.getSession.get(sessionId);
+      // Already claimed by another tab/device, or reaped meanwhile: a promptless
+      // task_interrupted makes the other card disappear instead of leaving it armed.
+      if (!sess?.last_user_msg) {
+        ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: sessionId }));
+        return;
+      }
+      // Server-side ceiling. The client-side cap was per-WS-connection only (a page reload
+      // reset it), so it never bounded anything; this does.
+      if ((sess.retry_count || 0) >= INTERRUPT_MAX_RETRIES) {
+        try { stmts.clearLastUserMsg.run(sessionId); } catch {}
+        ws.send(JSON.stringify({ type: 'error', error: `Recovery cancelled — this turn already failed ${INTERRUPT_MAX_RETRIES} times.`, tabId: sessionId }));
+        ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: sessionId }));
+        return;
+      }
+      // Claim BEFORE spawning anything: two devices racing on the same offer must produce
+      // exactly one run, not one run plus one queued duplicate.
+      let _claimed = false;
+      try { _claimed = stmts.claimLastUserMsg.run(sessionId).changes === 1; }
+      catch (e) { log.error('claimLastUserMsg failed', { sessionId, err: e.message }); }
+      if (!_claimed) {
+        ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: sessionId }));
+        return;
+      }
+      let _rmcp = [], _rskills = [];
+      try { _rmcp    = JSON.parse(sess.active_mcp    || '[]'); } catch {}
+      try { _rskills = JSON.parse(sess.active_skills || '[]'); } catch {}
+      log.info('resume_interrupted', { sessionId, attempt: (sess.retry_count || 0) + 1 });
+      // retry:true — the user bubble is already in `messages` from the original turn, so
+      // processChat's retry branch skips addMsg and does the incrementRetry for us.
+      processChat({
+        type: 'chat', text: sess.last_user_msg,
+        tabId: sessionId, sessionId, retry: true,
+        skills: _rskills, mcpServers: _rmcp,
+        mode: sess.mode || 'auto', agentMode: sess.agent_mode || 'single',
+        model: sess.model || 'sonnet',
+        workdir: sess.workdir || undefined,
+        // Engine is deliberately NOT taken from the session row. The client sends
+        // `engine: 'api'` on every chat (Subscription is paused per-turn in the UI), so
+        // replaying a stored 'subscription' here would silently route the turn through the
+        // tmux engine for a message the UI considers API-only — and updateConfig would then
+        // write that engine back onto the row.
+      }).catch(err => log.error('resume_interrupted processChat error', { message: err.message }));
+      return;
+    }
+
+    // User declined the offer. Drop the flag for good — reopening the chat must not ask
+    // again, otherwise "no" would only ever mean "not right now".
+    if (msg.type === 'dismiss_interrupted') {
+      const sessionId = msg.sessionId || msg.tabId;
+      if (sessionId) { try { stmts.clearLastUserMsg.run(sessionId); } catch {} }
+      return;
+    }
+
     if (msg.type === 'resume_task') {
       const { sessionId, tabId } = msg;
       const task = activeTasks.get(sessionId);
@@ -10520,10 +10732,7 @@ wss.on('connection', (ws) => {
         // Guard: abort() may have been called (user stopped, or idle timer fired) but the
         // subprocess hasn't exited yet so the entry is still in activeTasks.
         if (task.abortController.signal.aborted) {
-          const session = stmts.getSession.get(sessionId);
-          if (session?.last_user_msg) {
-            ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId, prompt: session.last_user_msg, retryCount: session.retry_count || 0 }));
-          } else {
+          if (!offerInterruptedRecovery(ws, sessionId, tabId)) {
             ws.send(JSON.stringify({ type: 'task_lost', sessionId, tabId }));
           }
         } else {
@@ -10547,10 +10756,7 @@ wss.on('connection', (ws) => {
         }
       } else {
         // Task not in memory — check if it was interrupted (server crash)
-        const session = stmts.getSession.get(sessionId);
-        if (session?.last_user_msg) {
-          ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId, prompt: session.last_user_msg, retryCount: session.retry_count || 0 }));
-        } else {
+        if (!offerInterruptedRecovery(ws, sessionId, tabId)) {
           ws.send(JSON.stringify({ type: 'task_lost', sessionId, tabId }));
         }
       }
@@ -10799,6 +11005,31 @@ server.listen(PORT, HOST, () => {
 // All known async paths have explicit .catch() — this catches any that slipped through.
 process.on('unhandledRejection', (reason) => {
   log.error('unhandledRejection', { message: reason?.message || String(reason), stack: reason?.stack });
+});
+
+// Same net for synchronous throws that reach the top: a setInterval callback
+// (cleanOldUploads, runDatabaseMaintenance, the terminal reaper), an EventEmitter 'error'
+// with no listener, an fs.watch callback. Node's default is print + exit(1), and exiting is
+// the wrong default HERE: of the three ways this ships, only Docker has a supervisor
+// (`restart: unless-stopped`). Electron merely logs the exit code and `npx
+// claude-code-studio` has nothing at all — there, exit(1) takes every live chat, tmux
+// viewer, SSH session and the Telegram poll with it, and nothing brings them back.
+//
+// The usual objection (continuing leaves undefined state) is narrow in this codebase:
+// every DB write is synchronous and both transaction paths roll back on throw, and there
+// are no .iterate() cursors to strand. Same trade the ws 'error' listener already makes.
+//
+// Installed HERE, after server.listen(), deliberately — a throw during module init still
+// crashes, which is correct for a server that cannot come up at all.
+//
+// CCS_EXIT_ON_UNCAUGHT=1 restores exit(1) for anyone running under a supervisor that
+// restarts faster than a wedged process degrades.
+process.on('uncaughtException', (err, origin) => {
+  log.error('uncaughtException', { origin, message: err?.message || String(err), stack: err?.stack });
+  if (process.env.CCS_EXIT_ON_UNCAUGHT === '1') {
+    try { db.pragma('optimize'); db.close(); } catch {}
+    process.exit(1);
+  }
 });
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────
