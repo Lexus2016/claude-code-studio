@@ -924,7 +924,11 @@ async function loadProjects() {
     } catch {}
     // Sync with the same localStorage key that Chat and Kanban use
     const state = JSON.parse(localStorage.getItem('cc_ui_state') || '{}');
-    if (state.curWorkdir) {
+    // #25: ?all=1 forces the cross-project view, without overwriting the stored choice.
+    const forceAll = new URLSearchParams(location.search).get('all') === '1';
+    if (forceAll) {
+      curWorkdir = null;
+    } else if (state.curWorkdir) {
       const found = projects.find(p => p.workdir === state.curWorkdir || p.id === state.curWorkdir);
       if (found) curWorkdir = found.workdir || found.id;
     }
