@@ -102,9 +102,14 @@ exit 0
   fs.chmodSync(brew, 0o755);
   const logPath = path.join(dir, 'update.log');
   const sh = buildUpgradeShell({ brew, logPath, fromVersion });
-  execFileSync('/bin/sh', ['-c', sh], { env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
-  const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '');
-  return { log: read(logPath), markers: read(path.join(dir, 'markers')) };
+  try {
+    execFileSync('/bin/sh', ['-c', sh], { env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
+    const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '');
+    return { log: read(logPath), markers: read(path.join(dir, 'markers')) };
+  } finally {
+    // Every other suite cleans its temp dir; this one used to leak one per call.
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
 }
 
 console.log('\na brew no-op must be reported as a failure, not as OK:');
