@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. A render + overload-detector test suite lives under `test/` (`test/render/*.test.mjs` + `test/overload-detector.test.js`) — run it with `npm test`. No CI is wired up yet.
+No linting and no build step configured. `npm test` chains 26 test files under `test/`: 10 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 16 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling and i18n completeness. It runs serially and aborts on the first failing file. No CI is wired up yet.
 
 ## Architecture
 
@@ -159,7 +159,7 @@ These short aliases are exactly what `claude-cli.js` (`MODEL_MAP`) passes to the
 
 ## How to Verify Changes
 
-A render + overload-detector test suite exists under `test/` — run it with `npm test`. There is no CI yet, and it does not cover the UI/WebSocket paths, so also verify those manually:
+`npm test` runs 26 test files under `test/` (10 `test/render/*.test.mjs` + 16 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server
