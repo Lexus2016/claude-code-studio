@@ -9,6 +9,10 @@ import { loadFn } from './_load.mjs';
 
 const subscribeAllTabs = loadFn('subscribeAllTabs');
 
+// The failure paths below log on purpose — keep the suite output readable.
+const errors = [];
+console.error = (...a) => errors.push(a.map(String).join(' '));
+
 // Fixed tab layout: 2 tabs in the current project, 1 in a background project.
 function setup(fetchImpl) {
   const sent = [];
@@ -64,7 +68,10 @@ const subscribed = s => s.filter(m => m.type === 'subscribe_session').map(m => m
   assert.deepStrictEqual(subscribed(sent), ['s1', 's2', 's3'], 'bad body: every tab still subscribed');
 }
 
-// 6. The re-entrancy guard must be released even after a failure.
+// 6. Every failure was reported, not silently swallowed.
+assert.strictEqual(errors.length, 4, 'each failing response logged exactly once');
+
+// 7. The re-entrancy guard must be released even after a failure.
 assert.strictEqual(globalThis._subscribingAllTabs, false, 'guard released');
 
 console.log('PASS subscribe-all-tabs');
