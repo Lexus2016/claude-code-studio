@@ -85,3 +85,6 @@ test-snapshot-*.md
 dist-desktop/
 
 .superpowers/
+
+# Agent worktrees (git worktree checkouts kept inside the repo)
+.ccs-worktrees/
