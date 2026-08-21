@@ -1220,6 +1220,24 @@ function broadcastToSession(sessionId, data) {
   if (!watchers.size) sessionWatchers.delete(sessionId);
 }
 
+// Same fan-out, minus one socket. Used by the plain-chat path, where the originating
+// socket is served by its own WsProxy (which buffers while the browser is away) and
+// would otherwise receive the frame twice — double-firing _bgNotify and loadHist.
+function broadcastToSessionExcept(sessionId, exceptWs, data) {
+  const watchers = sessionWatchers.get(sessionId);
+  if (!watchers?.size) return;
+  const msg = JSON.stringify(data);
+  for (const w of watchers) {
+    if (w === exceptWs) continue;
+    if (w.readyState === 1) {
+      try { w.send(msg); } catch { watchers.delete(w); }
+    } else if (w.readyState > 1) {
+      watchers.delete(w);
+    }
+  }
+  if (!watchers.size) sessionWatchers.delete(sessionId);
+}
+
 // ─── Activity panel: tell ALL connected clients the live/scheduled state changed.
 // Debounced (~400ms) + lightweight signal only — clients re-fetch /api/activity and
 // diff-render just the Activity section. Clients also reconciliation-poll as a
@@ -8631,7 +8649,14 @@ wss.on('connection', (ws) => {
       if (_forkCid) { try { db.prepare(`UPDATE sessions SET fork_from_cid=NULL WHERE id=?`).run(localSessionId); } catch {} }
 
       const _dic = proxy._deliveredInterruptCount || 0;
-      proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt, ...(resultMeta ? { resultMeta } : {}), ...(_dic ? { deliveredInterruptCount: _dic } : {}) }));
+      const _donePayload = { type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt, ...(resultMeta ? { resultMeta } : {}), ...(_dic ? { deliveredInterruptCount: _dic } : {}) };
+      proxy.send(JSON.stringify(_donePayload));
+      // `done` is what clears a tab's busy dot. Other sockets watching this session
+      // (a second window, or a background tab subscribed with noCatchUp:true — which
+      // deliberately skips proxy.attach) are not behind this proxy, so without the
+      // fan-out their spinner runs until the page is reloaded. Skip proxy._ws: it
+      // already got the frame above.
+      if (effectiveTabId) broadcastToSessionExcept(effectiveTabId, proxy._ws, _donePayload);
       proxy.send(JSON.stringify({ type:'files_changed' }));
       // Notify Telegram (if task was NOT started from Telegram — those get notified via TelegramProxy)
       if (telegramBot && telegramBot.isRunning()) {
@@ -8649,7 +8674,12 @@ wss.on('connection', (ws) => {
     } catch(err) {
       if(err.name==='AbortError') proxy.send(JSON.stringify({ type:'agent_status', status:'Stopped', statusKey:'status.stopped', tabId: effectiveTabId }));
       else { log.error('chat error', { message: err.message, name: err.name, stack: err.stack }); proxy.send(JSON.stringify({ type:'error', error:err.message, tabId: effectiveTabId })); }
-      { const _dic = proxy._deliveredInterruptCount || 0; proxy.send(JSON.stringify({ type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt, ...(_dic ? { deliveredInterruptCount: _dic } : {}) })); }
+      { const _dic = proxy._deliveredInterruptCount || 0;
+        const _donePayload = { type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt, ...(_dic ? { deliveredInterruptCount: _dic } : {}) };
+        proxy.send(JSON.stringify(_donePayload));
+        // Same fan-out as the success path — an aborted or failed turn must clear
+        // every watcher's spinner, not just the originating socket's.
+        if (effectiveTabId) broadcastToSessionExcept(effectiveTabId, proxy._ws, _donePayload); }
       // Notify Telegram about error (if task was NOT started from Telegram)
       if (telegramBot && telegramBot.isRunning() && err.name !== 'AbortError') {
         const _tgTask = activeTasks.get(localSessionId);
