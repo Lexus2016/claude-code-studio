@@ -1898,6 +1898,55 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .save-notice { color: var(--green); font-size: 12px; }
 .cfg-path { font-size: 11px; color: var(--muted); padding: 0 2px 10px; font-family: var(--font-mono); letter-spacing: .2px; display: flex; align-items: center; gap: 6px; }
 
+/* ── Settings form (issue #40) ───────────────────────────────────────────── */
+/* Wider than the shared .modal: this view shows a value plus every source that
+   defines it side by side, and those are absolute paths and env values. */
+#cfgModal .modal { width: 1180px; max-width: 96vw; height: 86vh; height: 86dvh; max-height: 92vh; min-width: 420px; min-height: 320px; resize: both; }
+.cfg-toolbar { display: flex; gap: 8px; align-items: center; padding: 10px 16px 0; }
+.cfg-toolbar input[type=search] { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 8px; font-size: 13px; outline: none; transition: border .15s; }
+.cfg-toolbar input[type=search]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.12); }
+.cfg-toggle-all { background: var(--s3); color: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.cfg-toggle-all:hover { color: var(--text); }
+.cfg-sec { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; overflow: hidden; background: var(--s2, var(--bg)); }
+.cfg-sec-hdr { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; font-size: 13px; font-weight: 700; user-select: none; background: var(--s3); }
+.cfg-sec-hdr:hover { color: var(--accent2); }
+.cfg-sec-hdr .cfg-caret { font-size: 10px; color: var(--muted); transition: transform .15s; }
+.cfg-sec.collapsed .cfg-caret { transform: rotate(-90deg); }
+.cfg-sec.collapsed .cfg-sec-body { display: none; }
+.cfg-sec-count { margin-inline-start: auto; font-size: 11px; color: var(--muted); font-weight: 500; }
+.cfg-sec-body { padding: 4px 0; }
+.cfg-row { display: grid; grid-template-columns: minmax(200px, 320px) 1fr; gap: 8px 18px; padding: 12px 14px; border-top: 1px solid var(--border); align-items: start; }
+.cfg-sec-body > .cfg-row:first-child { border-top: none; }
+.cfg-row.is-overridden { background: rgba(255,176,32,.05); }
+.cfg-k { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.cfg-k code { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); word-break: break-all; }
+.cfg-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.cfg-badge { font-size: 10px; padding: 1px 6px; border-radius: 20px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+.cfg-badge.b-changed { color: var(--green); border-color: rgba(60,200,120,.4); }
+.cfg-badge.b-overridden { color: #ffb020; border-color: rgba(255,176,32,.45); }
+.cfg-badge.b-restart { color: var(--muted); }
+.cfg-badge.b-ignored { color: #ff6b6b; border-color: rgba(255,107,107,.45); }
+.cfg-val { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.cfg-val input[type=text], .cfg-val input[type=number], .cfg-val select { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: 7px; font-family: var(--font-mono); font-size: 12.5px; outline: none; }
+.cfg-val input:focus, .cfg-val select:focus { border-color: var(--accent); }
+.cfg-val input[disabled], .cfg-val .cfg-ro { opacity: .75; }
+.cfg-ro { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); background: var(--bg); border: 1px dashed var(--border); border-radius: 7px; padding: 7px 10px; word-break: break-all; }
+.cfg-help { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.cfg-srcs { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+.cfg-src { display: flex; gap: 8px; align-items: baseline; font-family: var(--font-mono); }
+.cfg-src .s-name { color: var(--muted); white-space: nowrap; min-width: 190px; }
+.cfg-src .s-val { color: var(--text); word-break: break-all; }
+.cfg-src.win .s-name { color: var(--green); font-weight: 700; }
+.cfg-src.lost .s-val { text-decoration: line-through; opacity: .55; }
+.cfg-src.ign .s-name { color: #ff6b6b; }
+.cfg-src.ign .s-val { text-decoration: line-through; opacity: .55; }
+.cfg-note { font-size: 11px; color: #ffb020; line-height: 1.45; }
+.cfg-note.danger { color: #ff6b6b; }
+.cfg-form mark { background: rgba(124,106,239,.35); color: var(--text); border-radius: 3px; padding: 0 1px; }
+.cfg-empty { color: var(--muted); font-size: 13px; padding: 24px 4px; text-align: center; }
+.cfg-switch { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); cursor: pointer; }
+@media (max-width: 760px) { .cfg-row { grid-template-columns: 1fr; } .cfg-src .s-name { min-width: 0; } }
+
 /* ─── MCP Settings: env key-value editor ─── */
 .mcp-cfg-label { font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px }
 .mcp-cfg-input { background:var(--s2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:7px;font-size:13px;outline:none;width:100%;font-family:var(--font-mono);transition:border .15s }
@@ -3547,15 +3596,24 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <button class="modal-close" onclick="closeCfg()">✕</button>
     </div>
     <div class="modal-tabs" id="cfgTabs"></div>
+    <div class="cfg-toolbar hidden" id="cfgToolbar">
+      <input type="search" id="cfgSearch" spellcheck="false" autocomplete="off"
+             data-i18n-ph="cfg.search.ph" placeholder="Пошук параметра…"
+             data-i18n-aria="cfg.search.aria" aria-label="Пошук параметрів"
+             oninput="renderCfgForm()"
+             onkeydown="if(event.key==='Escape'){this.value='';renderCfgForm();event.stopPropagation()}">
+      <button class="cfg-toggle-all" id="cfgToggleAll" onclick="cfgToggleAllSections()" data-i18n="cfg.collapse_all">Згорнути все</button>
+    </div>
     <div class="modal-body">
       <div class="cfg-path hidden" id="cfgPathInfo"></div>
+      <div class="cfg-form hidden" id="cfgForm"></div>
       <textarea id="cfgEditor" spellcheck="false"></textarea>
     </div>
     <div class="modal-footer">
       <span class="save-notice hidden" id="saveNotice" data-i18n="cfg.saved">✓ Збережено</span>
       <div style="display:flex;gap:8px">
         <button class="bg" onclick="closeCfg()" data-i18n="cfg.close">Закрити</button>
-        <button class="bp" onclick="saveCfg()" data-i18n="cfg.save">Зберегти</button>
+        <button class="bp" id="cfgSaveBtn" onclick="saveCfg()" data-i18n="cfg.save">Зберегти</button>
       </div>
     </div>
   </div>
@@ -4277,6 +4335,9 @@ let config = { mcpServers: {}, skills: {} };
 let activeMcp = new Set(), activeSkills = new Set();
 let autoSkillsMode = true; // ON by default; user can disable
 let cfgFiles = {}, activeCfgTab = null;
+// Settings form (issue #40): last /api/config/resolved payload + collapsed sections.
+let cfgResolved = null;
+const cfgCollapsedSections = new Set();
 let curMode = 'auto', curAgent = 'single', curModel = 'sonnet', curEngine = 'api';
 // Global default engine for NEW chats (server-backed via /api/default-engine).
 // _curSessionRunEngine = the open chat's explicit run_engine (null = inherit default).
@@ -4453,6 +4514,73 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    /* settings form (issue #40) */
+    'cfg.tab.form':'⚙ Параметри',
+    'cfg.search.ph':'Пошук параметра…',
+    'cfg.search.aria':'Пошук параметрів',
+    'cfg.search.none':'Нічого не знайдено за «{q}»',
+    'cfg.sec.engine':'🤖 Моделі та рушій',
+    'cfg.sec.agents':'👥 Агенти й ліміти запуску',
+    'cfg.sec.workspace':'📁 Робоча директорія',
+    'cfg.sec.mcp':'🔌 MCP, навички, команди',
+    'cfg.sec.server':'🌐 Сервер і мережа',
+    'cfg.sec.security':'🔒 Безпека',
+    'cfg.sec.data':'🗄️ Зберігання даних',
+    'cfg.sec.ui':'🎨 Інтерфейс',
+    'cfg.sec.advanced':'🛠️ Додатково',
+    'cfg.src.project':'проєкт',
+    'cfg.src.process_env':'середовище процесу',
+    'cfg.src.dotenv':'.env',
+    'cfg.src.config_local':'config.json (локальний)',
+    'cfg.src.config_global':'~/.claude/config.json (глобальний)',
+    'cfg.src.default':'вбудоване значення',
+    'cfg.effective':'Чинне значення',
+    'cfg.sources':'Джерела',
+    'cfg.badge.overridden':'перекрито',
+    'cfg.badge.changed':'змінено',
+    'cfg.badge.restart':'потрібен перезапуск',
+    'cfg.badge.readonly':'лише читання',
+    'cfg.badge.ignored':'не читається',
+    'cfg.hint.ignored':'Значення тут задане, але сервер його не читає — воно не діє.',
+    'cfg.hint.shadowed':'Рядок у .env перекрито: змінна вже задана в середовищі процесу, і саме воно перемагає.',
+    'cfg.hint.restart':'Набере чинності після перезапуску сервера.',
+    'cfg.hint.secret':'Значення приховане. Змінюйте його на вкладці .env.',
+    'cfg.count':'записів: {n}',
+    'cfg.unset':'не задано',
+    'cfg.expand_all':'Розгорнути все',
+    'cfg.collapse_all':'Згорнути все',
+    'cfg.saved_restart':'Збережено — перезапустіть сервер, щоб застосувати',
+    'cfg.h.defaultEngine':'Рушій, попередньо вибраний для нових чатів і задач: API (без інтерфейсу) або Subscription (Claude Max).',
+    'cfg.h.ANTHROPIC_BASE_URL':'Направляє запити Claude CLI через проксі чи шлюз замість прямого звернення до Anthropic.',
+    'cfg.h.ANTHROPIC_API_KEY':'Ключ API для рушія API, коли claude CLI не має входу в акаунт.',
+    'cfg.h.ANTHROPIC_AUTH_TOKEN':'Токен для проксі, заданого в ANTHROPIC_BASE_URL.',
+    'cfg.h.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS':'Прибирає експериментальні beta-заголовки, які ламають бекенди поза Anthropic.',
+    'cfg.h.CLAUDE_IDLE_TIMEOUT_MS':'Сторож бездіяльності, а не межа загального часу: таймер скидається на кожній порції виводу.',
+    'cfg.h.CLAUDE_HARD_CAP_MS':'Абсолютна межа часу одного запуску за годинником. 0 вимикає її.',
+    'cfg.h.CLAUDE_PROMPT_GRACE_MS':'Додатковий час для ходу на підписці, який зупинився на запитанні.',
+    'cfg.h.TASK_DISCONNECT_TIMEOUT_MS':'Скільки задача живе після того, як вкладка браузера відʼєдналася. 0 — не переривати ніколи.',
+    'cfg.h.MAX_TASK_WORKERS':'Максимум задач Kanban, що виконуються паралельно.',
+    'cfg.h.MULTI_AGENT_MAX_TURNS_CAP':'Межа ходів на один підагент у багатоагентному режимі.',
+    'cfg.h.WORKDIR':'Типова робоча директорія Claude. Вибраний проєкт перекриває її для власних чатів.',
+    'cfg.h.APP_DIR':'Директорія з data/, config.json і .env. Задається програмою запуску.',
+    'cfg.h.recentProjectsCount':'Скільки нещодавніх проєктів показувати на бічній панелі.',
+    'cfg.h.mcpServers':'Сервери MCP, доступні чатам. Локальні записи перекривають глобальні з тим самим id.',
+    'cfg.h.skills':'Файли навичок, що додаються в системний промпт.',
+    'cfg.h.slashCommands':'Команди зі скісною рискою, доступні в полі вводу.',
+    'cfg.h.externalAgents':'Зовнішні CLI-агенти, яких можна запустити в терміналі.',
+    'cfg.h.PORT':'TCP-порт, який слухає сервер.',
+    'cfg.h.HOST':'Адреса привʼязки. 127.0.0.1 лишає інтерфейс доступним лише на цій машині.',
+    'cfg.h.TRUST_PROXY':'Довіряти заголовкам X-Forwarded-*. Вмикайте лише за nginx/Caddy.',
+    'cfg.h.SESSION_SECRET':'Ключ підпису сесій входу. Створюється при першому запуску, якщо порожній.',
+    'cfg.h.terminal.enabled':'Термінал у браузері — це віддалене виконання коду, тож він вимкнений, доки його не увімкнуть явно.',
+    'cfg.h.terminal.idleTimeoutMin':'Через скільки хвилин бездіяльності сесію термінала буде закрито.',
+    'cfg.h.terminal.maxLive':'Максимум одночасних сесій термінала.',
+    'cfg.h.CCS_SSH_HOST_KEY_POLICY':'Значення accept-any вимикає перевірку ключа SSH-хоста. Небезпечно поза довіреною мережею.',
+    'cfg.h.SESSION_TTL_DAYS':'Чати, старші за цей строк, видаляються при старті; повідомлення перед тим архівуються.',
+    'cfg.h.CLEANUP_INTERVAL_HOURS':'Як часто очищення повторюється після запуску.',
+    'cfg.h.lang':'Мова інтерфейсу.',
+    'cfg.h.LOG_LEVEL':'Докладність журналу сервера.',
+    'cfg.h.NODE_ENV':'Значення production перемикає журнал на JSON із розділенням рядками.',
     'bot.modal.avatar.pick':'Обрати емодзі','bot.modal.avatar.pick.btn':'Обрати','emoji.group.roles':'Ролі','emoji.group.work':'Робота','emoji.group.tools':'Інструменти','emoji.group.ideas':'Ідеї','emoji.group.nature':'Природа',
     'btn.close':'Закрити','bot.modal.label.ph':'Крипто-аналітик','bot.modal.desc.ph':'аналіз ринку криптовалют','bot.modal.prompt.ph':'Ти аналітик крипторинку...',
     'term.off.config':'Термінальні агенти вимкнені. Увімкніть їх у Конфігу: terminal.enabled = true — це навмисно вимкнено, бо термінал у браузері виконує команди на цій машині.','term.off.tmux':'На цьому хості немає tmux. Встановіть його (macOS: brew install tmux, Linux: apt install tmux), і термінальні агенти зʼявляться.','term.off.tunnel':'Активний публічний тунель — доступ до термінала заблоковано, поки він увімкнений.',
@@ -4753,6 +4881,73 @@ const TRANSLATIONS = {
     'upd.available':'Доступне оновлення','upd.btn':'Оновити','upd.updating':'Оновлення… {time}','upd.copy_cmd':'Копіювати команду','upd.via_terminal':'Оновлення через термінал:','upd.copied':'Скопійовано ✓','upd.retry':'Повторити','upd.failed':'Оновлення не вдалося','upd.new_version':'Доступна нова версія {version}',
   },
   en: {
+    /* settings form (issue #40) */
+    'cfg.tab.form':'⚙ Settings',
+    'cfg.search.ph':'Search settings…',
+    'cfg.search.aria':'Search settings',
+    'cfg.search.none':'Nothing matches “{q}”',
+    'cfg.sec.engine':'🤖 Models and engine',
+    'cfg.sec.agents':'👥 Agents and run limits',
+    'cfg.sec.workspace':'📁 Workspace',
+    'cfg.sec.mcp':'🔌 MCP, skills, commands',
+    'cfg.sec.server':'🌐 Server and network',
+    'cfg.sec.security':'🔒 Security',
+    'cfg.sec.data':'🗄️ Data retention',
+    'cfg.sec.ui':'🎨 Interface',
+    'cfg.sec.advanced':'🛠️ Advanced',
+    'cfg.src.project':'project',
+    'cfg.src.process_env':'process environment',
+    'cfg.src.dotenv':'.env',
+    'cfg.src.config_local':'config.json (local)',
+    'cfg.src.config_global':'~/.claude/config.json (global)',
+    'cfg.src.default':'built-in default',
+    'cfg.effective':'Effective value',
+    'cfg.sources':'Sources',
+    'cfg.badge.overridden':'overridden',
+    'cfg.badge.changed':'changed',
+    'cfg.badge.restart':'restart required',
+    'cfg.badge.readonly':'read-only',
+    'cfg.badge.ignored':'never read',
+    'cfg.hint.ignored':'This file sets the value, but the server never reads it here — it has no effect.',
+    'cfg.hint.shadowed':'The .env line is shadowed: the variable is already set in the process environment, which wins.',
+    'cfg.hint.restart':'Takes effect after a server restart.',
+    'cfg.hint.secret':'The value is masked. Edit it on the .env tab.',
+    'cfg.count':'{n} entries',
+    'cfg.unset':'not set',
+    'cfg.expand_all':'Expand all',
+    'cfg.collapse_all':'Collapse all',
+    'cfg.saved_restart':'Saved — restart the server to apply',
+    'cfg.h.defaultEngine':'Engine preselected for new chats and tasks: API (headless) or Subscription (Claude Max).',
+    'cfg.h.ANTHROPIC_BASE_URL':'Route Claude CLI requests through a proxy or gateway instead of Anthropic directly.',
+    'cfg.h.ANTHROPIC_API_KEY':'API key for the API engine when the claude CLI is not signed in.',
+    'cfg.h.ANTHROPIC_AUTH_TOKEN':'Token for the proxy set in ANTHROPIC_BASE_URL.',
+    'cfg.h.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS':'Strips experimental beta headers that break non-Anthropic backends.',
+    'cfg.h.CLAUDE_IDLE_TIMEOUT_MS':'An inactivity watchdog, not a total runtime cap: the timer restarts on every chunk of output.',
+    'cfg.h.CLAUDE_HARD_CAP_MS':'Absolute wall-clock ceiling for one run. 0 disables it.',
+    'cfg.h.CLAUDE_PROMPT_GRACE_MS':'Extra time granted to a subscription turn that stopped on a question.',
+    'cfg.h.TASK_DISCONNECT_TIMEOUT_MS':'How long a running task survives after the browser tab detaches. 0 = never abort.',
+    'cfg.h.MAX_TASK_WORKERS':'Maximum number of Kanban tasks running in parallel.',
+    'cfg.h.MULTI_AGENT_MAX_TURNS_CAP':'Ceiling on turns per sub-agent in multi-agent mode.',
+    'cfg.h.WORKDIR':'Default working directory for Claude. A selected project overrides it for its own chats.',
+    'cfg.h.APP_DIR':'Directory holding data/, config.json and .env. Set by the launcher.',
+    'cfg.h.recentProjectsCount':'How many recent projects the sidebar lists.',
+    'cfg.h.mcpServers':'MCP servers available to chats. Local entries override global ones with the same id.',
+    'cfg.h.skills':'Skill files merged into the system prompt.',
+    'cfg.h.slashCommands':'Slash commands offered in the input field.',
+    'cfg.h.externalAgents':'External CLI agents that can be launched in a terminal.',
+    'cfg.h.PORT':'TCP port the server listens on.',
+    'cfg.h.HOST':'Bind address. 127.0.0.1 keeps the UI on this machine only.',
+    'cfg.h.TRUST_PROXY':'Trust X-Forwarded-* headers. Enable only behind nginx or Caddy.',
+    'cfg.h.SESSION_SECRET':'Key that signs login sessions. Generated on first run when empty.',
+    'cfg.h.terminal.enabled':'A browser terminal is remote code execution, so it stays off until explicitly enabled.',
+    'cfg.h.terminal.idleTimeoutMin':'Idle minutes after which a terminal session is closed.',
+    'cfg.h.terminal.maxLive':'Maximum number of simultaneous terminal sessions.',
+    'cfg.h.CCS_SSH_HOST_KEY_POLICY':'Set to accept-any to skip SSH host-key verification. Unsafe outside a trusted network.',
+    'cfg.h.SESSION_TTL_DAYS':'Chats older than this are deleted at startup; their messages are archived first.',
+    'cfg.h.CLEANUP_INTERVAL_HOURS':'How often the cleanup repeats after startup.',
+    'cfg.h.lang':'Interface language.',
+    'cfg.h.LOG_LEVEL':'Server log verbosity.',
+    'cfg.h.NODE_ENV':'production switches the log output to newline-delimited JSON.',
     'bot.modal.avatar.pick':'Pick an emoji','bot.modal.avatar.pick.btn':'Pick','emoji.group.roles':'Roles','emoji.group.work':'Work','emoji.group.tools':'Tools','emoji.group.ideas':'Ideas','emoji.group.nature':'Nature',
     'btn.close':'Close','bot.modal.label.ph':'Crypto Analyst','bot.modal.desc.ph':'crypto market analysis','bot.modal.prompt.ph':'You are a crypto market analyst...',
     'term.off.config':'Terminal agents are off. Turn them on in Config: terminal.enabled = true — it ships off on purpose, because a browser terminal runs commands on this machine.','term.off.tmux':'tmux is not installed on this host. Install it (macOS: brew install tmux, Linux: apt install tmux) and terminal agents appear.','term.off.tunnel':'A public tunnel is active — terminal access is blocked while it is running.',
@@ -5053,6 +5248,73 @@ const TRANSLATIONS = {
     'upd.available':'Update available','upd.btn':'Update','upd.updating':'Updating… {time}','upd.copy_cmd':'Copy command','upd.via_terminal':'Update via Terminal:','upd.copied':'Copied ✓','upd.retry':'Retry','upd.failed':'Update failed','upd.new_version':'New version {version} available',
   },
   ru: {
+    /* settings form (issue #40) */
+    'cfg.tab.form':'⚙ Параметры',
+    'cfg.search.ph':'Поиск параметра…',
+    'cfg.search.aria':'Поиск параметров',
+    'cfg.search.none':'Ничего не найдено по «{q}»',
+    'cfg.sec.engine':'🤖 Модели и движок',
+    'cfg.sec.agents':'👥 Агенты и лимиты запуска',
+    'cfg.sec.workspace':'📁 Рабочая директория',
+    'cfg.sec.mcp':'🔌 MCP, навыки, команды',
+    'cfg.sec.server':'🌐 Сервер и сеть',
+    'cfg.sec.security':'🔒 Безопасность',
+    'cfg.sec.data':'🗄️ Хранение данных',
+    'cfg.sec.ui':'🎨 Интерфейс',
+    'cfg.sec.advanced':'🛠️ Дополнительно',
+    'cfg.src.project':'проект',
+    'cfg.src.process_env':'окружение процесса',
+    'cfg.src.dotenv':'.env',
+    'cfg.src.config_local':'config.json (локальный)',
+    'cfg.src.config_global':'~/.claude/config.json (глобальный)',
+    'cfg.src.default':'встроенное значение',
+    'cfg.effective':'Действующее значение',
+    'cfg.sources':'Источники',
+    'cfg.badge.overridden':'перекрыто',
+    'cfg.badge.changed':'изменено',
+    'cfg.badge.restart':'нужен перезапуск',
+    'cfg.badge.readonly':'только чтение',
+    'cfg.badge.ignored':'не читается',
+    'cfg.hint.ignored':'Значение здесь задано, но сервер его не читает — оно не действует.',
+    'cfg.hint.shadowed':'Строка в .env перекрыта: переменная уже задана в окружении процесса, и побеждает именно оно.',
+    'cfg.hint.restart':'Вступит в силу после перезапуска сервера.',
+    'cfg.hint.secret':'Значение скрыто. Меняйте его на вкладке .env.',
+    'cfg.count':'записей: {n}',
+    'cfg.unset':'не задано',
+    'cfg.expand_all':'Развернуть всё',
+    'cfg.collapse_all':'Свернуть всё',
+    'cfg.saved_restart':'Сохранено — перезапустите сервер, чтобы применить',
+    'cfg.h.defaultEngine':'Движок, предварительно выбранный для новых чатов и задач: API (без интерфейса) или Subscription (Claude Max).',
+    'cfg.h.ANTHROPIC_BASE_URL':'Направляет запросы Claude CLI через прокси или шлюз вместо прямого обращения к Anthropic.',
+    'cfg.h.ANTHROPIC_API_KEY':'Ключ API для движка API, когда claude CLI не выполнил вход.',
+    'cfg.h.ANTHROPIC_AUTH_TOKEN':'Токен для прокси, заданного в ANTHROPIC_BASE_URL.',
+    'cfg.h.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS':'Убирает экспериментальные beta-заголовки, ломающие бэкенды вне Anthropic.',
+    'cfg.h.CLAUDE_IDLE_TIMEOUT_MS':'Сторож бездействия, а не предел общего времени: таймер сбрасывается на каждой порции вывода.',
+    'cfg.h.CLAUDE_HARD_CAP_MS':'Абсолютный предел времени одного запуска по часам. 0 отключает его.',
+    'cfg.h.CLAUDE_PROMPT_GRACE_MS':'Дополнительное время для хода на подписке, остановившегося на вопросе.',
+    'cfg.h.TASK_DISCONNECT_TIMEOUT_MS':'Сколько задача живёт после отсоединения вкладки браузера. 0 — не прерывать никогда.',
+    'cfg.h.MAX_TASK_WORKERS':'Максимум задач Kanban, выполняемых параллельно.',
+    'cfg.h.MULTI_AGENT_MAX_TURNS_CAP':'Предел ходов на один подагент в многоагентном режиме.',
+    'cfg.h.WORKDIR':'Рабочая директория Claude по умолчанию. Выбранный проект перекрывает её для своих чатов.',
+    'cfg.h.APP_DIR':'Директория с data/, config.json и .env. Задаётся программой запуска.',
+    'cfg.h.recentProjectsCount':'Сколько недавних проектов показывать на боковой панели.',
+    'cfg.h.mcpServers':'Серверы MCP, доступные чатам. Локальные записи перекрывают глобальные с тем же id.',
+    'cfg.h.skills':'Файлы навыков, добавляемые в системный промпт.',
+    'cfg.h.slashCommands':'Команды со слешем, доступные в поле ввода.',
+    'cfg.h.externalAgents':'Внешние CLI-агенты, которых можно запустить в терминале.',
+    'cfg.h.PORT':'TCP-порт, который слушает сервер.',
+    'cfg.h.HOST':'Адрес привязки. 127.0.0.1 оставляет интерфейс доступным только на этой машине.',
+    'cfg.h.TRUST_PROXY':'Доверять заголовкам X-Forwarded-*. Включайте только за nginx или Caddy.',
+    'cfg.h.SESSION_SECRET':'Ключ подписи сессий входа. Создаётся при первом запуске, если пуст.',
+    'cfg.h.terminal.enabled':'Терминал в браузере — это удалённое выполнение кода, поэтому он выключен, пока его не включат явно.',
+    'cfg.h.terminal.idleTimeoutMin':'Через сколько минут бездействия сессия терминала закрывается.',
+    'cfg.h.terminal.maxLive':'Максимум одновременных сессий терминала.',
+    'cfg.h.CCS_SSH_HOST_KEY_POLICY':'Значение accept-any отключает проверку ключа SSH-хоста. Небезопасно вне доверенной сети.',
+    'cfg.h.SESSION_TTL_DAYS':'Чаты старше этого срока удаляются при старте; сообщения перед этим архивируются.',
+    'cfg.h.CLEANUP_INTERVAL_HOURS':'Как часто очистка повторяется после запуска.',
+    'cfg.h.lang':'Язык интерфейса.',
+    'cfg.h.LOG_LEVEL':'Подробность журнала сервера.',
+    'cfg.h.NODE_ENV':'Значение production переключает журнал на JSON с разделением строками.',
     'bot.modal.avatar.pick':'Выбрать эмодзи','bot.modal.avatar.pick.btn':'Выбрать','emoji.group.roles':'Роли','emoji.group.work':'Работа','emoji.group.tools':'Инструменты','emoji.group.ideas':'Идеи','emoji.group.nature':'Природа',
     'btn.close':'Закрыть','bot.modal.label.ph':'Крипто-аналитик','bot.modal.desc.ph':'анализ рынка криптовалют','bot.modal.prompt.ph':'Ты аналитик крипторынка...',
     'term.off.config':'Терминальные агенты выключены. Включите их в Конфиге: terminal.enabled = true — они выключены намеренно, потому что терминал в браузере выполняет команды на этой машине.','term.off.tmux':'На этом хосте нет tmux. Установите его (macOS: brew install tmux, Linux: apt install tmux), и терминальные агенты появятся.','term.off.tunnel':'Активен публичный туннель — доступ к терминалу заблокирован, пока он включён.',
@@ -5353,6 +5615,73 @@ const TRANSLATIONS = {
     'upd.available':'Доступно обновление','upd.btn':'Обновить','upd.updating':'Обновление… {time}','upd.copy_cmd':'Копировать команду','upd.via_terminal':'Обновление через терминал:','upd.copied':'Скопировано ✓','upd.retry':'Повторить','upd.failed':'Обновление не удалось','upd.new_version':'Доступна новая версия {version}',
   },
   fr: {
+    /* settings form (issue #40) */
+    'cfg.tab.form':'⚙ Paramètres',
+    'cfg.search.ph':'Rechercher un paramètre…',
+    'cfg.search.aria':'Rechercher un paramètre',
+    'cfg.search.none':'Aucun résultat pour « {q} »',
+    'cfg.sec.engine':'🤖 Modèles et moteur',
+    'cfg.sec.agents':'👥 Agents et limites d’exécution',
+    'cfg.sec.workspace':'📁 Répertoire de travail',
+    'cfg.sec.mcp':'🔌 MCP, compétences, commandes',
+    'cfg.sec.server':'🌐 Serveur et réseau',
+    'cfg.sec.security':'🔒 Sécurité',
+    'cfg.sec.data':'🗄️ Conservation des données',
+    'cfg.sec.ui':'🎨 Interface',
+    'cfg.sec.advanced':'🛠️ Avancé',
+    'cfg.src.project':'projet',
+    'cfg.src.process_env':'environnement du processus',
+    'cfg.src.dotenv':'.env',
+    'cfg.src.config_local':'config.json (local)',
+    'cfg.src.config_global':'~/.claude/config.json (global)',
+    'cfg.src.default':'valeur intégrée',
+    'cfg.effective':'Valeur effective',
+    'cfg.sources':'Sources',
+    'cfg.badge.overridden':'remplacé',
+    'cfg.badge.changed':'modifié',
+    'cfg.badge.restart':'redémarrage requis',
+    'cfg.badge.readonly':'lecture seule',
+    'cfg.badge.ignored':'jamais lu',
+    'cfg.hint.ignored':'Ce fichier définit la valeur, mais le serveur ne la lit jamais ici — elle reste sans effet.',
+    'cfg.hint.shadowed':'La ligne .env est masquée : la variable est déjà définie dans l’environnement du processus, qui l’emporte.',
+    'cfg.hint.restart':'Prend effet après un redémarrage du serveur.',
+    'cfg.hint.secret':'La valeur est masquée. Modifiez-la dans l’onglet .env.',
+    'cfg.count':'{n} entrées',
+    'cfg.unset':'non défini',
+    'cfg.expand_all':'Tout déplier',
+    'cfg.collapse_all':'Tout replier',
+    'cfg.saved_restart':'Enregistré — redémarrez le serveur pour appliquer',
+    'cfg.h.defaultEngine':'Moteur présélectionné pour les nouveaux chats et tâches : API (sans interface) ou Subscription (Claude Max).',
+    'cfg.h.ANTHROPIC_BASE_URL':'Fait passer les requêtes du CLI Claude par un proxy ou une passerelle au lieu d’Anthropic directement.',
+    'cfg.h.ANTHROPIC_API_KEY':'Clé API du moteur API lorsque le CLI claude n’est pas connecté.',
+    'cfg.h.ANTHROPIC_AUTH_TOKEN':'Jeton du proxy défini dans ANTHROPIC_BASE_URL.',
+    'cfg.h.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS':'Supprime les en-têtes bêta expérimentaux qui cassent les backends non Anthropic.',
+    'cfg.h.CLAUDE_IDLE_TIMEOUT_MS':'Surveillance de l’inactivité, pas une limite de durée totale : le minuteur repart à chaque bloc de sortie.',
+    'cfg.h.CLAUDE_HARD_CAP_MS':'Plafond absolu de durée pour une exécution. 0 le désactive.',
+    'cfg.h.CLAUDE_PROMPT_GRACE_MS':'Temps supplémentaire accordé à un tour Subscription arrêté sur une question.',
+    'cfg.h.TASK_DISCONNECT_TIMEOUT_MS':'Durée de survie d’une tâche après la déconnexion de l’onglet. 0 = ne jamais interrompre.',
+    'cfg.h.MAX_TASK_WORKERS':'Nombre maximal de tâches Kanban exécutées en parallèle.',
+    'cfg.h.MULTI_AGENT_MAX_TURNS_CAP':'Plafond de tours par sous-agent en mode multi-agent.',
+    'cfg.h.WORKDIR':'Répertoire de travail par défaut de Claude. Un projet sélectionné le remplace pour ses propres chats.',
+    'cfg.h.APP_DIR':'Répertoire contenant data/, config.json et .env. Défini par le lanceur.',
+    'cfg.h.recentProjectsCount':'Nombre de projets récents affichés dans la barre latérale.',
+    'cfg.h.mcpServers':'Serveurs MCP disponibles pour les chats. Les entrées locales remplacent les entrées globales de même id.',
+    'cfg.h.skills':'Fichiers de compétences ajoutés au prompt système.',
+    'cfg.h.slashCommands':'Commandes slash proposées dans le champ de saisie.',
+    'cfg.h.externalAgents':'Agents CLI externes pouvant être lancés dans un terminal.',
+    'cfg.h.PORT':'Port TCP écouté par le serveur.',
+    'cfg.h.HOST':'Adresse d’écoute. 127.0.0.1 garde l’interface accessible sur cette machine seulement.',
+    'cfg.h.TRUST_PROXY':'Faire confiance aux en-têtes X-Forwarded-*. À activer uniquement derrière nginx ou Caddy.',
+    'cfg.h.SESSION_SECRET':'Clé qui signe les sessions de connexion. Générée au premier lancement si vide.',
+    'cfg.h.terminal.enabled':'Un terminal dans le navigateur est une exécution de code à distance : il reste désactivé tant qu’il n’est pas activé explicitement.',
+    'cfg.h.terminal.idleTimeoutMin':'Minutes d’inactivité au bout desquelles une session de terminal est fermée.',
+    'cfg.h.terminal.maxLive':'Nombre maximal de sessions de terminal simultanées.',
+    'cfg.h.CCS_SSH_HOST_KEY_POLICY':'La valeur accept-any désactive la vérification de la clé d’hôte SSH. Dangereux hors d’un réseau de confiance.',
+    'cfg.h.SESSION_TTL_DAYS':'Les chats plus anciens sont supprimés au démarrage ; leurs messages sont archivés avant.',
+    'cfg.h.CLEANUP_INTERVAL_HOURS':'Fréquence de répétition du nettoyage après le démarrage.',
+    'cfg.h.lang':'Langue de l’interface.',
+    'cfg.h.LOG_LEVEL':'Niveau de détail du journal du serveur.',
+    'cfg.h.NODE_ENV':'production bascule le journal en JSON délimité par des sauts de ligne.',
     "bot.modal.avatar.pick":"Choisir un émoji","bot.modal.avatar.pick.btn":"Choisir","emoji.group.roles":"Rôles","emoji.group.work":"Travail","emoji.group.tools":"Outils","emoji.group.ideas":"Idées","emoji.group.nature":"Nature",
     "btn.close":"Fermer","bot.modal.label.ph":"Analyste crypto","bot.modal.desc.ph":"analyse du marché des cryptomonnaies","bot.modal.prompt.ph":"Tu es analyste du marché crypto...",
     "term.off.config":"Les agents terminal sont désactivés. Activez-les dans la Config : terminal.enabled = true — c'est désactivé volontairement, car un terminal dans le navigateur exécute des commandes sur cette machine.","term.off.tmux":"tmux n'est pas installé sur cet hôte. Installez-le (macOS : brew install tmux, Linux : apt install tmux) et les agents terminal apparaîtront.","term.off.tunnel":"Un tunnel public est actif — l'accès au terminal est bloqué tant qu'il fonctionne.",
@@ -5554,6 +5883,73 @@ const TRANSLATIONS = {
     "upd.available":"Mise à jour disponible","upd.btn":"Mettre à jour","upd.updating":"Mise à jour… {time}","upd.copy_cmd":"Copier la commande","upd.via_terminal":"Mise à jour via le terminal :","upd.copied":"Copié ✓","upd.retry":"Réessayer","upd.failed":"Échec de la mise à jour","upd.new_version":"Nouvelle version {version} disponible",
   },
   he: {
+    /* settings form (issue #40) */
+    'cfg.tab.form':'⚙ הגדרות',
+    'cfg.search.ph':'חיפוש הגדרה…',
+    'cfg.search.aria':'חיפוש הגדרות',
+    'cfg.search.none':'אין תוצאות עבור «{q}»',
+    'cfg.sec.engine':'🤖 מודלים ומנוע',
+    'cfg.sec.agents':'👥 סוכנים ומגבלות הרצה',
+    'cfg.sec.workspace':'📁 תיקיית עבודה',
+    'cfg.sec.mcp':'🔌 MCP, מיומנויות, פקודות',
+    'cfg.sec.server':'🌐 שרת ורשת',
+    'cfg.sec.security':'🔒 אבטחה',
+    'cfg.sec.data':'🗄️ שמירת נתונים',
+    'cfg.sec.ui':'🎨 ממשק',
+    'cfg.sec.advanced':'🛠️ מתקדם',
+    'cfg.src.project':'פרויקט',
+    'cfg.src.process_env':'סביבת התהליך',
+    'cfg.src.dotenv':'.env',
+    'cfg.src.config_local':'config.json (מקומי)',
+    'cfg.src.config_global':'~/.claude/config.json (גלובלי)',
+    'cfg.src.default':'ערך מובנה',
+    'cfg.effective':'הערך בתוקף',
+    'cfg.sources':'מקורות',
+    'cfg.badge.overridden':'נדרס',
+    'cfg.badge.changed':'שונה',
+    'cfg.badge.restart':'נדרשת הפעלה מחדש',
+    'cfg.badge.readonly':'קריאה בלבד',
+    'cfg.badge.ignored':'לא נקרא',
+    'cfg.hint.ignored':'הקובץ מגדיר את הערך, אבל השרת אינו קורא אותו כאן — הוא נשאר ללא השפעה.',
+    'cfg.hint.shadowed':'השורה ב-.env מוסתרת: המשתנה כבר מוגדר בסביבת התהליך, והיא הגוברת.',
+    'cfg.hint.restart':'ייכנס לתוקף לאחר הפעלה מחדש של השרת.',
+    'cfg.hint.secret':'הערך מוסתר. ערכו אותו בלשונית .env.',
+    'cfg.count':'{n} רשומות',
+    'cfg.unset':'לא מוגדר',
+    'cfg.expand_all':'פתיחת הכול',
+    'cfg.collapse_all':'סגירת הכול',
+    'cfg.saved_restart':'נשמר — הפעילו מחדש את השרת כדי להחיל',
+    'cfg.h.defaultEngine':'המנוע שנבחר מראש עבור צ׳אטים ומשימות חדשים: API (ללא ממשק) או Subscription‏ (Claude Max).',
+    'cfg.h.ANTHROPIC_BASE_URL':'מנתב את בקשות ה-CLI של Claude דרך פרוקסי או שער במקום ישירות ל-Anthropic.',
+    'cfg.h.ANTHROPIC_API_KEY':'מפתח API עבור מנוע ה-API כאשר ה-CLI של claude אינו מחובר.',
+    'cfg.h.ANTHROPIC_AUTH_TOKEN':'אסימון עבור הפרוקסי שהוגדר ב-ANTHROPIC_BASE_URL.',
+    'cfg.h.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS':'מסיר כותרות בטא ניסיוניות ששוברות שרתי קצה שאינם של Anthropic.',
+    'cfg.h.CLAUDE_IDLE_TIMEOUT_MS':'שומר חוסר פעילות, לא תקרת זמן כוללת: הטיימר מתאפס בכל מנת פלט.',
+    'cfg.h.CLAUDE_HARD_CAP_MS':'תקרת זמן מוחלטת להרצה אחת. הערך 0 מבטל אותה.',
+    'cfg.h.CLAUDE_PROMPT_GRACE_MS':'זמן נוסף לתור במנוי שנעצר על שאלה.',
+    'cfg.h.TASK_DISCONNECT_TIMEOUT_MS':'כמה זמן משימה שורדת אחרי שלשונית הדפדפן מתנתקת. 0 = לא להפסיק לעולם.',
+    'cfg.h.MAX_TASK_WORKERS':'מספר משימות ה-Kanban המרבי שרץ במקביל.',
+    'cfg.h.MULTI_AGENT_MAX_TURNS_CAP':'תקרת תורות לכל תת-סוכן במצב ריבוי סוכנים.',
+    'cfg.h.WORKDIR':'תיקיית העבודה המוגדרת כברירת מחדל ל-Claude. פרויקט נבחר דורס אותה בצ׳אטים שלו.',
+    'cfg.h.APP_DIR':'התיקייה שמכילה את data/‏, config.json ו-.env. נקבעת על ידי המפעיל.',
+    'cfg.h.recentProjectsCount':'כמה פרויקטים אחרונים מוצגים בסרגל הצד.',
+    'cfg.h.mcpServers':'שרתי MCP הזמינים לצ׳אטים. רשומות מקומיות דורסות רשומות גלובליות עם אותו מזהה.',
+    'cfg.h.skills':'קובצי מיומנויות המשולבים בהנחיית המערכת.',
+    'cfg.h.slashCommands':'פקודות לוכסן המוצעות בשדה הקלט.',
+    'cfg.h.externalAgents':'סוכני CLI חיצוניים שניתן להפעיל בטרמינל.',
+    'cfg.h.PORT':'פורט ה-TCP שהשרת מאזין לו.',
+    'cfg.h.HOST':'כתובת ההאזנה. הערך 127.0.0.1 משאיר את הממשק זמין במכונה זו בלבד.',
+    'cfg.h.TRUST_PROXY':'לתת אמון בכותרות X-Forwarded-*. הפעילו רק מאחורי nginx או Caddy.',
+    'cfg.h.SESSION_SECRET':'המפתח שחותם על סשני ההתחברות. נוצר בהפעלה הראשונה כשהוא ריק.',
+    'cfg.h.terminal.enabled':'טרמינל בדפדפן הוא הרצת קוד מרחוק, ולכן הוא כבוי עד להפעלה מפורשת.',
+    'cfg.h.terminal.idleTimeoutMin':'אחרי כמה דקות חוסר פעילות סשן טרמינל נסגר.',
+    'cfg.h.terminal.maxLive':'מספר סשני הטרמינל המרבי במקביל.',
+    'cfg.h.CCS_SSH_HOST_KEY_POLICY':'הערך accept-any מבטל את אימות מפתח מארח ה-SSH. מסוכן מחוץ לרשת מהימנה.',
+    'cfg.h.SESSION_TTL_DAYS':'צ׳אטים ישנים מכך נמחקים בעלייה; ההודעות שלהם מאורכבות לפני כן.',
+    'cfg.h.CLEANUP_INTERVAL_HOURS':'כל כמה זמן הניקוי חוזר אחרי ההפעלה.',
+    'cfg.h.lang':'שפת הממשק.',
+    'cfg.h.LOG_LEVEL':'רמת הפירוט של יומן השרת.',
+    'cfg.h.NODE_ENV':'הערך production מעביר את היומן ל-JSON מופרד בשורות.',
     "bot.modal.avatar.pick":"בחרו אמוג׳י","bot.modal.avatar.pick.btn":"בחירה","emoji.group.roles":"תפקידים","emoji.group.work":"עבודה","emoji.group.tools":"כלים","emoji.group.ideas":"רעיונות","emoji.group.nature":"טבע",
     "btn.close":"סגור","bot.modal.label.ph":"אנליסט קריפטו","bot.modal.desc.ph":"ניתוח שוק הקריפטו","bot.modal.prompt.ph":"אתה אנליסט שוק הקריפטו...",
     "term.off.config":"סוכני הטרמינל כבויים. הפעילו אותם בהגדרות: terminal.enabled = true — הם כבויים בכוונה, מפני שטרמינל בדפדפן מריץ פקודות על המחשב הזה.","term.off.tmux":"tmux אינו מותקן על מארח זה. התקינו אותו (macOS: brew install tmux, Linux: apt install tmux) וסוכני הטרמינל יופיעו.","term.off.tunnel":"מנהרה ציבורית פעילה — הגישה לטרמינל חסומה כל עוד היא פועלת.",
@@ -5738,7 +6134,7 @@ let _i18nDynReady = false;
 const I18N_RERENDER = [
   'renderBots', 'renderBotsStrip', 'renderBotTemplates', 'renderMcp', 'renderSkills',
   'renderCommands', 'renderAgents', 'renderProjects', 'renderRemoteHostsList',
-  'renderGlobalHome',
+  'renderGlobalHome', 'renderCfgForm',
   'renderRemoteHostSelect', 'renderTabs', 'updateSessBarSkills', 'loadHist', 'updateMobSubtitle',
 ];
 function rerenderI18nDynamic() {
@@ -13233,7 +13629,12 @@ function _selectSlashCmd(cmd) {
 }
 
 // ─── Config Editor ────────────────────────────────────────────────────────
+// Tab 0 is the form view (issue #40); the file tabs behind it are the escape
+// hatch for anything the form deliberately refuses to touch (secrets, MCP
+// blocks, CLAUDE.md prose).
+const CFG_FORM_TAB = '__form';
 const CFG_TABS_BASE = [
+  { id: CFG_FORM_TAB, get label() { return t('cfg.tab.form'); } },
   { id: 'config.json', label: 'config.json' },
   { id: '.claude/settings.json', label: 'settings.json' },
   { id: '.env', label: '.env' },
@@ -13242,9 +13643,11 @@ const CFG_TABS_BASE = [
 
 async function openCfgEditor() {
   const mdUrl = curWorkdir ? `/api/claude-md?dir=${encodeURIComponent(curWorkdir)}` : '/api/claude-md';
-  const [r1, r2] = await Promise.all([fetch('/api/config-files'), fetch(mdUrl)]);
+  const resUrl = curWorkdir ? `/api/config/resolved?workdir=${encodeURIComponent(curWorkdir)}` : '/api/config/resolved';
+  const [r1, r2, r3] = await Promise.all([fetch('/api/config-files'), fetch(mdUrl), fetch(resUrl)]);
   cfgFiles = await r1.json();
   const cm = await r2.json();
+  cfgResolved = r3.ok ? await r3.json() : null;
   cfgFiles['global-claude-md'] = cm.global || '';
   cfgFiles['__globalPath']     = cm.globalPath || '~/.claude/CLAUDE.md';
 
@@ -13267,11 +13670,11 @@ async function openCfgEditor() {
     t.appendChild(d);
   });
   activeCfgTab = tabs[0].id;
-  $i('cfgEditor').value = cfgFiles[activeCfgTab] || '';
+  $i('cfgEditor').value = '';
   $i('saveNotice').className = 'save-notice hidden';
-  updateCfgPathInfo(activeCfgTab);
+  applyCfgTabView(activeCfgTab);
   openModalOverlay('cfgModal', {
-    initialFocus: '#cfgEditor',
+    initialFocus: activeCfgTab === CFG_FORM_TAB ? '#cfgSearch' : '#cfgEditor',
     labelId: 'cfgTitle',
     onEscape: closeCfg,
   });
@@ -13287,16 +13690,28 @@ function updateCfgPathInfo(id) {
   else { el.textContent = ''; el.classList.add('hidden'); }
 }
 
+/** Show either the form or the raw textarea, and the controls that belong to it. */
+function applyCfgTabView(id) {
+  const isForm = id === CFG_FORM_TAB;
+  $i('cfgForm').classList.toggle('hidden', !isForm);
+  $i('cfgToolbar').classList.toggle('hidden', !isForm);
+  $i('cfgEditor').classList.toggle('hidden', isForm);
+  // The form saves each field on change; a global Save button there would be a lie.
+  $i('cfgSaveBtn').classList.toggle('hidden', isForm);
+  document.querySelectorAll('#cfgTabs .modal-tab').forEach(t => t.classList.toggle('active', t.dataset.tabId === id));
+  if (isForm) { $i('cfgPathInfo').classList.add('hidden'); renderCfgForm(); }
+  else { $i('cfgEditor').value = cfgFiles[id] || ''; updateCfgPathInfo(id); }
+}
+
 function switchCfgTab(id) {
-  cfgFiles[activeCfgTab] = $i('cfgEditor').value;
+  if (activeCfgTab !== CFG_FORM_TAB) cfgFiles[activeCfgTab] = $i('cfgEditor').value;
   activeCfgTab = id;
-  $i('cfgEditor').value = cfgFiles[id] || '';
   $i('saveNotice').className = 'save-notice hidden';
-  document.querySelectorAll('.modal-tab').forEach(t => t.classList.toggle('active', t.dataset.tabId === id));
-  updateCfgPathInfo(id);
+  applyCfgTabView(id);
 }
 
 async function saveCfg() {
+  if (activeCfgTab === CFG_FORM_TAB) return; // form fields save themselves on change
   cfgFiles[activeCfgTab] = $i('cfgEditor').value;
   try {
     let r;
@@ -13321,6 +13736,157 @@ async function saveCfg() {
 }
 
 function closeCfg() { closeModalOverlay('cfgModal'); }
+
+// ─── Settings form + source/precedence view (issue #40) ───────────────────
+// The server does the resolving (config-resolve.js); this only renders it.
+// Everything user-visible goes through t() — the markup carries no literals.
+
+/** Escape, then wrap every occurrence of `q` in <mark>. */
+function cfgHl(text, q) {
+  const s = String(text == null ? '' : text);
+  if (!q) return escH(s);
+  const i = s.toLowerCase().indexOf(q);
+  if (i < 0) return escH(s);
+  return escH(s.slice(0, i)) + '<mark>' + escH(s.slice(i, i + q.length)) + '</mark>' + escH(s.slice(i + q.length));
+}
+
+function cfgSrcLabel(id) { return t('cfg.src.' + String(id).replace(/-/g, '_')); }
+
+function cfgValueText(s, entry) {
+  if (s.backing === 'collection') return t('cfg.count').replace('{n}', entry.count ?? 0);
+  const v = entry.value;
+  if (v === '' || v === null || v === undefined) return t('cfg.unset');
+  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  return String(v);
+}
+
+/** Everything the search box looks at for one setting. */
+function cfgHaystack(s) {
+  const parts = [s.key, t('cfg.h.' + s.key), t('cfg.sec.' + s.section), s.codeRef];
+  for (const e of s.sources) { parts.push(cfgSrcLabel(e.source)); parts.push(cfgValueText(s, e)); }
+  return parts.join('  ').toLowerCase();
+}
+
+function cfgFieldHtml(s) {
+  const eff = s.sources.find(e => e.source === s.effectiveSource) || { value: s.effective };
+  const shown = cfgValueText(s, { ...eff, value: s.effective, count: s.count });
+  if (s.readOnly || s.secret) return `<div class="cfg-ro">${escH(shown)}</div>`;
+  const k = escArg(s.key);
+  if (s.type === 'bool') {
+    return `<label class="cfg-switch"><input type="checkbox" ${s.effective ? 'checked' : ''}
+      onchange="cfgSetSetting('${k}', this.checked)"><span>${escH(shown)}</span></label>`;
+  }
+  if (s.type === 'enum') {
+    const opts = (s.choices || []).map(c =>
+      `<option value="${escH(c)}" ${String(s.effective) === c ? 'selected' : ''}>${escH(c)}</option>`).join('');
+    return `<select onchange="cfgSetSetting('${k}', this.value)">${opts}</select>`;
+  }
+  const type = s.type === 'number' ? 'number' : 'text';
+  const val = s.effective === null || s.effective === undefined ? '' : String(s.effective);
+  return `<input type="${type}" value="${escH(val)}" onchange="cfgSetSetting('${k}', this.value)">`;
+}
+
+function cfgRowHtml(s, q) {
+  const badges = [];
+  if (s.modified)      badges.push(`<span class="cfg-badge b-changed">${escH(t('cfg.badge.changed'))}</span>`);
+  if (s.overriddenBy)  badges.push(`<span class="cfg-badge b-overridden">${escH(t('cfg.badge.overridden'))}</span>`);
+  if (s.ignoredSources.length) badges.push(`<span class="cfg-badge b-ignored">${escH(t('cfg.badge.ignored'))}</span>`);
+  if (s.readOnly)      badges.push(`<span class="cfg-badge">${escH(t('cfg.badge.readonly'))}</span>`);
+  if (s.restart)       badges.push(`<span class="cfg-badge b-restart">${escH(t('cfg.badge.restart'))}</span>`);
+
+  const srcs = s.sources.map(e => {
+    const win = !e.ignored && e.source === s.effectiveSource;
+    const cls = e.ignored ? 'ign' : (win ? 'win' : 'lost');
+    const name = cfgSrcLabel(e.source) + (e.via ? ` (${e.via})` : '') + (e.label ? ` · ${e.label}` : '');
+    return `<div class="cfg-src ${cls}"><span class="s-name">${cfgHl(name, q)}</span>`
+         + `<span class="s-val">${cfgHl(cfgValueText(s, e), q)}</span></div>`;
+  }).join('');
+
+  const notes = [];
+  if (s.ignoredSources.length) notes.push(`<div class="cfg-note danger">${escH(t('cfg.hint.ignored'))}</div>`);
+  if (s.shadowedDotenv)        notes.push(`<div class="cfg-note">${escH(t('cfg.hint.shadowed'))}</div>`);
+  if (s.secret)                notes.push(`<div class="cfg-note">${escH(t('cfg.hint.secret'))}</div>`);
+  if (s.restart)               notes.push(`<div class="cfg-note">${escH(t('cfg.hint.restart'))}</div>`);
+
+  return `<div class="cfg-row ${s.overriddenBy ? 'is-overridden' : ''}">
+    <div class="cfg-k">
+      <code>${cfgHl(s.key, q)}</code>
+      <div class="cfg-badges">${badges.join('')}</div>
+      <div class="cfg-help">${cfgHl(t('cfg.h.' + s.key), q)}</div>
+    </div>
+    <div class="cfg-val">
+      ${cfgFieldHtml(s)}
+      <div class="cfg-srcs">${srcs}</div>
+      ${notes.join('')}
+    </div>
+  </div>`;
+}
+
+function renderCfgForm() {
+  const box = $i('cfgForm');
+  if (!box) return;
+  if (!cfgResolved) { box.innerHTML = ''; return; }
+  const q = ($i('cfgSearch')?.value || '').trim().toLowerCase();
+  let shown = 0;
+  const html = cfgResolved.sections.map(sec => {
+    const rows = cfgResolved.settings.filter(s => s.section === sec && (!q || cfgHaystack(s).includes(q)));
+    if (!rows.length) return '';
+    shown += rows.length;
+    // A search always opens what it matched — a hit hidden inside a collapsed
+    // section is the same as no hit.
+    const collapsed = !q && cfgCollapsedSections.has(sec);
+    return `<div class="cfg-sec ${collapsed ? 'collapsed' : ''}">
+      <div class="cfg-sec-hdr" onclick="cfgToggleSection('${escArg(sec)}')">
+        <span class="cfg-caret">▼</span><span>${cfgHl(t('cfg.sec.' + sec), q)}</span>
+        <span class="cfg-sec-count">${rows.length}</span>
+      </div>
+      <div class="cfg-sec-body">${rows.map(s => cfgRowHtml(s, q)).join('')}</div>
+    </div>`;
+  }).join('');
+  box.innerHTML = shown ? html
+    : `<div class="cfg-empty">${escH(t('cfg.search.none').replace('{q}', q))}</div>`;
+}
+
+function cfgToggleSection(sec) {
+  if (cfgCollapsedSections.has(sec)) cfgCollapsedSections.delete(sec);
+  else cfgCollapsedSections.add(sec);
+  renderCfgForm();
+}
+
+function cfgToggleAllSections() {
+  if (!cfgResolved) return;
+  const allCollapsed = cfgResolved.sections.every(s => cfgCollapsedSections.has(s));
+  cfgCollapsedSections.clear();
+  if (!allCollapsed) cfgResolved.sections.forEach(s => cfgCollapsedSections.add(s));
+  const btn = $i('cfgToggleAll');
+  if (btn) {
+    const key = allCollapsed ? 'cfg.collapse_all' : 'cfg.expand_all';
+    btn.setAttribute('data-i18n', key);
+    btn.textContent = t(key);
+  }
+  renderCfgForm();
+}
+
+async function cfgSetSetting(key, value) {
+  try {
+    const r = await fetch('/api/config/setting', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value }),
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(t('toast.err_prefix') + (d.error || '?'), true); return; }
+    // Re-resolve rather than patch locally: one write can change which source
+    // wins for a setting, and that is exactly what this view is for.
+    const url = curWorkdir ? `/api/config/resolved?workdir=${encodeURIComponent(curWorkdir)}` : '/api/config/resolved';
+    const rr = await fetch(url);
+    if (rr.ok) cfgResolved = await rr.json();
+    renderCfgForm();
+    toast(d.restart ? t('cfg.saved_restart') : t('cfg.saved'));
+    if (key === 'lang') { localStorage.setItem('lang', String(value)); setLang(String(value)); }
+    else loadCfg();
+  } catch (e) { toast(e.message, true); }
+}
+
 
 // ─── File Browser ─────────────────────────────────────────────────────────
 function _filesQS(relPath) {
