@@ -839,9 +839,14 @@ async function loadProjects(){
     }
   }catch{}
   renderProjDropdownList('');
+  // #25: ?all=1 opens the cross-project board no matter which project was last
+  // used here. Deliberately NOT written back to cc_ui_state - it is a one-shot
+  // entry point from the global workspace, not a change of the user's project.
+  const _kbForceAll=new URLSearchParams(location.search).get('all')==='1';
   try{
     const s=JSON.parse(localStorage.getItem('cc_ui_state')||'null');
-    if(s?.curWorkdir){
+    if(_kbForceAll){curWorkdir=null;}
+    else if(s?.curWorkdir){
       const found=projects.find(p=>p.workdir===s.curWorkdir||p.id===s.curWorkdir);
       if(found)curWorkdir=found.workdir||found.id;
     }

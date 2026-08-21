@@ -2738,6 +2738,44 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 #charCounter.cc-warn { color:#e8a62a; }
 #charCounter.cc-danger { color:#e05252; }
 
+/* ─── #25 Global workspace ─── */
+/* No physical left/right anywhere in here: the modal inherits html[dir] and the
+   Hebrew build must mirror without a single extra rule. */
+button.nav-sw-btn { border: 0; background: transparent; cursor: pointer; font-family: inherit; }
+.gw-body { display: flex; flex-direction: column; gap: 14px; }
+.gw-search { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 9px 12px; border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; transition: border .15s; }
+.gw-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.12); }
+.gw-sec { border: 1px solid var(--border); border-radius: 10px; background: var(--s2); overflow: hidden; }
+.gw-sec-hdr { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 11px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+  border-bottom: 1px solid var(--border); }
+.gw-sec-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.gw-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 10px; }
+.gw-tile { background: var(--s3); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 2px; }
+.gw-tile-n { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1.1; }
+.gw-tile-l { font-size: 11px; color: var(--muted); }
+.gw-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 7px;
+  font-size: 12.5px; color: var(--text); cursor: pointer; border: 0; background: none;
+  font-family: inherit; text-align: start; width: 100%; }
+.gw-row:hover { background: rgba(255,255,255,.05); }
+.gw-row.gw-static { cursor: default; }
+.gw-row.gw-static:hover { background: none; }
+.gw-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gw-proj { flex-shrink: 0; font-size: 10.5px; padding: 1px 7px; border-radius: 20px;
+  background: var(--s3); color: var(--muted); border: 1px solid var(--border); max-width: 40%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gw-meta { flex-shrink: 0; font-size: 10.5px; color: var(--muted); }
+.gw-meta.gw-late { color: var(--err, #e5534b); font-weight: 600; }
+.gw-kind { flex-shrink: 0; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.gw-empty { padding: 10px 12px; font-size: 12px; color: var(--muted); }
+.gw-counts { flex-shrink: 0; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gw-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 720px) {
+  .gw-cols { grid-template-columns: 1fr; }
+  .gw-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 /* ─── RTL (Hebrew) overrides ─── */
 /* Flexbox, text-align and source order already mirror under dir=rtl; these rules
    flip the physical-direction properties (avatars, action buttons, accent borders,
@@ -3144,6 +3182,9 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         </div>
       </div>
       <div class="mob-sheet-divider"></div>
+      <button class="mob-sheet-link" onclick="closeMobSheet();openGlobalHome()">
+        <span class="mob-sheet-link-icon">🌐</span> <span data-i18n="gw.nav">Global</span>
+      </button>
       <a class="mob-sheet-link" href="/kanban" data-i18n-tip="nav.kanban.tip">
         <span class="mob-sheet-link-icon">📊</span> <span data-i18n="nav.kanban">Kanban</span>
       </a>
@@ -3180,6 +3221,10 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     <div class="hdr-l">
       <div class="logo">CCS</div>
       <nav class="nav-sw" aria-label="Навігація між розділами" data-i18n-aria="nav.aria">
+        <button class="nav-sw-btn" type="button" id="gwNavBtn" onclick="openGlobalHome()" data-tip="Усе по всіх проєктах" data-i18n-tip="gw.tip">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18a15 15 0 010-18"/></svg>
+          <span data-i18n="gw.nav">Global</span>
+        </button>
         <a class="nav-sw-btn active" href="/" data-tip="Чат" data-i18n-tip="nav.chat.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
           <span data-i18n="nav.chat">Chat</span>
@@ -3470,6 +3515,31 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 </div>
 
 <!-- Config Modal -->
+<!-- #25 Global workspace -->
+<div class="modal-overlay hidden" id="gwModal" aria-hidden="true" onclick="if(event.target===this)closeGlobalHome()">
+  <div class="modal" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="gwTitle" style="width:min(1020px,96vw);max-height:90vh;max-height:90dvh;display:flex;flex-direction:column">
+    <div class="modal-hdr">
+      <h2 id="gwTitle" style="font-size:14px;display:flex;align-items:center;gap:7px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18a15 15 0 010-18"/></svg>
+        <span data-i18n="gw.title">Global workspace</span>
+      </h2>
+      <button class="modal-close" onclick="closeGlobalHome()">✕</button>
+    </div>
+    <div class="modal-body gw-body">
+      <input class="gw-search" id="gwSearch" type="search" autocomplete="off"
+             data-i18n-ph="gw.search.ph" placeholder="Search tasks and chats in every project…"
+             oninput="gwOnSearchInput(this.value)">
+      <div id="gwSearchRes"></div>
+      <div id="gwMain"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="bg" onclick="loadGlobalHome()" data-i18n="gw.refresh">Refresh</button>
+      <button class="bp" onclick="location.href='/kanban?all=1'" data-i18n="gw.open.kanban">Kanban, all projects</button>
+      <button class="bp" onclick="location.href='/schedule?all=1'" data-i18n="gw.open.schedule">Schedule, all projects</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="cfgModal" aria-hidden="true" onclick="if(event.target===this)closeCfg()">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cfgTitle" tabindex="-1">
     <div class="modal-hdr">
@@ -4618,6 +4688,8 @@ const TRANSLATIONS = {
     'cli.import.msgs':'повід.','cli.import.already':'Вже імпортовано','cli.import.already_done':'✓ імпортовано',
     'cli.import.doing':'Імпортую…','cli.import.doing_n':'Імпортую {n} сесій…',
     'cli.import.result':'Імпортовано: {n}','cli.import.skipped':' пропущено: {n}','cli.import.errors':' помилок: {n}',
+    // #25 global workspace
+    'gw.nav':'Глобально','gw.tip':'Усе по всіх проєктах','gw.title':'Глобальний простір','gw.refresh':'Оновити','gw.err':'Не вдалося завантажити глобальний огляд','gw.search.ph':'Пошук завдань і чатів у всіх проєктах…','gw.search.hint':'Введіть щонайменше два символи','gw.search.none':'Нічого не знайдено','gw.search.more':'показано перші {n}','gw.tasks':'Завдання у всіх проєктах','gw.st.backlog':'Беклог','gw.st.todo':'До виконання','gw.st.in_progress':'У роботі','gw.st.done':'Готово','gw.due':'Заплановане','gw.overdue':'Прострочені','gw.today':'Сьогодні','gw.upcoming':'Найближчі','gw.chats':'Чати у всіх проєктах','gw.projects':'За проєктами','gw.unassigned':'Без проєкту','gw.open.kanban':'Kanban, усі проєкти','gw.open.schedule':'Розклад, усі проєкти','gw.kind.task':'Завдання','gw.kind.chat':'Чат',
     'thinking.title':'Ланцюжок думок','thinking.copy':'Копіювати','thinking.copied':'✓ Скопійовано','thinking.copy_err':'Не вдалося скопіювати','thinking.translate':'Перекласти','thinking.show_original':'Показати оригінал','thinking.translating':'Перекладаю…','thinking.translate_err':'Помилка перекладу',
     'dlg.title':'Делегувати агенту','dlg.agent':'Агент','dlg.agent.select':'Оберіть агента...','dlg.mode':'Режим',
     'dlg.mode.handoff':'Передача','dlg.mode.handoff.desc':'Повна передача. Відкриє термінал, ви продовжите роботу там.',
@@ -4916,6 +4988,8 @@ const TRANSLATIONS = {
     'cli.import.msgs':'msgs','cli.import.already':'Already imported','cli.import.already_done':'✓ imported',
     'cli.import.doing':'Importing…','cli.import.doing_n':'Importing {n} sessions…',
     'cli.import.result':'Imported: {n}','cli.import.skipped':' skipped: {n}','cli.import.errors':' errors: {n}',
+    // #25 global workspace
+    'gw.nav':'Global','gw.tip':'Everything across all projects','gw.title':'Global workspace','gw.refresh':'Refresh','gw.err':'Could not load the global view','gw.search.ph':'Search tasks and chats in every project…','gw.search.hint':'Type at least two characters','gw.search.none':'Nothing matched','gw.search.more':'showing the first {n}','gw.tasks':'Tasks in every project','gw.st.backlog':'Backlog','gw.st.todo':'To do','gw.st.in_progress':'In progress','gw.st.done':'Done','gw.due':'Scheduled work','gw.overdue':'Overdue','gw.today':'Today','gw.upcoming':'Upcoming','gw.chats':'Chats in every project','gw.projects':'By project','gw.unassigned':'No project','gw.open.kanban':'Kanban, all projects','gw.open.schedule':'Schedule, all projects','gw.kind.task':'Task','gw.kind.chat':'Chat',
     'thinking.title':'Chain of thought','thinking.copy':'Copy','thinking.copied':'✓ Copied','thinking.copy_err':'Failed to copy','thinking.translate':'Translate','thinking.show_original':'Show original','thinking.translating':'Translating…','thinking.translate_err':'Translation failed',
     'dlg.title':'Delegate to Agent','dlg.agent':'Agent','dlg.agent.select':'Select agent...','dlg.mode':'Mode',
     'dlg.mode.handoff':'Handoff','dlg.mode.handoff.desc':'Full transfer. Opens terminal, you continue working there.',
@@ -5214,6 +5288,8 @@ const TRANSLATIONS = {
     'cli.import.msgs':'сообщ.','cli.import.already':'Уже импортировано','cli.import.already_done':'✓ импортировано',
     'cli.import.doing':'Импортирую…','cli.import.doing_n':'Импортирую {n} сессий…',
     'cli.import.result':'Импортировано: {n}','cli.import.skipped':' пропущено: {n}','cli.import.errors':' ошибок: {n}',
+    // #25 global workspace
+    'gw.nav':'Глобально','gw.tip':'Всё по всем проектам','gw.title':'Глобальное пространство','gw.refresh':'Обновить','gw.err':'Не удалось загрузить глобальный обзор','gw.search.ph':'Поиск задач и чатов во всех проектах…','gw.search.hint':'Введите не менее двух символов','gw.search.none':'Ничего не найдено','gw.search.more':'показаны первые {n}','gw.tasks':'Задачи во всех проектах','gw.st.backlog':'Бэклог','gw.st.todo':'К выполнению','gw.st.in_progress':'В работе','gw.st.done':'Готово','gw.due':'Запланированное','gw.overdue':'Просроченные','gw.today':'Сегодня','gw.upcoming':'Ближайшие','gw.chats':'Чаты во всех проектах','gw.projects':'По проектам','gw.unassigned':'Без проекта','gw.open.kanban':'Kanban, все проекты','gw.open.schedule':'Расписание, все проекты','gw.kind.task':'Задача','gw.kind.chat':'Чат',
     'thinking.title':'Цепочка рассуждений','thinking.copy':'Копировать','thinking.copied':'✓ Скопировано','thinking.copy_err':'Не удалось скопировать','thinking.translate':'Перевести','thinking.show_original':'Показать оригинал','thinking.translating':'Перевожу…','thinking.translate_err':'Ошибка перевода',
     'dlg.title':'Делегировать агенту','dlg.agent':'Агент','dlg.agent.select':'Выберите агента...','dlg.mode':'Режим',
     'dlg.mode.handoff':'Передача','dlg.mode.handoff.desc':'Полная передача. Откроет терминал, вы продолжите работу там.',
@@ -5418,6 +5494,8 @@ const TRANSLATIONS = {
     "cli.import.loading":"Chargement…","cli.import.found_n":"Trouvé : {n} sessions dans","cli.import.no_sessions":"Aucune session trouvée","cli.import.msgs":"msgs","cli.import.already":"Déjà importé",
     "cli.import.already_done":"✓ importé","cli.import.doing":"Importation…","cli.import.doing_n":"Importation de {n} sessions…","cli.import.result":"Importées : {n}",
     "cli.import.skipped":" ignorées : {n}","cli.import.errors":" erreurs : {n}","thinking.title":"Chaîne de pensée","thinking.copy":"Copier","thinking.copied":"✓ Copié",
+    // #25 global workspace
+    "gw.nav":"Global","gw.tip":"Tout, tous projets confondus","gw.title":"Espace de travail global","gw.refresh":"Actualiser","gw.err":"Impossible de charger la vue globale","gw.search.ph":"Rechercher des tâches et des discussions dans tous les projets…","gw.search.hint":"Saisissez au moins deux caractères","gw.search.none":"Aucun résultat","gw.search.more":"affichage des {n} premiers","gw.tasks":"Tâches dans tous les projets","gw.st.backlog":"Backlog","gw.st.todo":"À faire","gw.st.in_progress":"En cours","gw.st.done":"Terminé","gw.due":"Travail planifié","gw.overdue":"En retard","gw.today":"Aujourd'hui","gw.upcoming":"À venir","gw.chats":"Discussions dans tous les projets","gw.projects":"Par projet","gw.unassigned":"Sans projet","gw.open.kanban":"Kanban, tous les projets","gw.open.schedule":"Planning, tous les projets","gw.kind.task":"Tâche","gw.kind.chat":"Discussion",
     "thinking.copy_err":"Échec de la copie","thinking.translate":"Traduire","thinking.show_original":"Afficher l'original","thinking.translating":"Traduction…",
     "thinking.translate_err":"Échec de la traduction","dlg.title":"Déléguer à un agent","dlg.agent":"Agent","dlg.agent.select":"Sélectionner un agent...","dlg.mode":"Mode","dlg.mode.handoff":"Transfert",
     "dlg.mode.handoff.desc":"Transfert complet. Ouvre un terminal, vous continuez le travail là-bas.","dlg.mode.sync":"Synchro",
@@ -5591,6 +5669,8 @@ const TRANSLATIONS = {
     "cli.import.hint":"הזינו נתיב לפרויקט ולחצו «טעינה»","cli.import.do":"ייבוא הנבחרים","cli.import.sel_all":"בחירת הכול","cli.import.loading":"טוען…","cli.import.found_n":"נמצאו: {n} סשנים ב",
     "cli.import.no_sessions":"לא נמצאו סשנים","cli.import.msgs":"הודעות","cli.import.already":"כבר יובא","cli.import.already_done":"✓ יובא","cli.import.doing":"מייבא…",
     "cli.import.doing_n":"מייבא {n} סשנים…","cli.import.result":"יובאו: {n}","cli.import.skipped":" דולגו: {n}","cli.import.errors":" שגיאות: {n}","thinking.title":"שרשרת מחשבה","thinking.copy":"העתקה",
+    // #25 global workspace
+    "gw.nav":"גלובלי","gw.tip":"הכול מכל הפרויקטים","gw.title":"מרחב עבודה גלובלי","gw.refresh":"רענון","gw.err":"לא ניתן לטעון את התצוגה הגלובלית","gw.search.ph":"חיפוש משימות ושיחות בכל הפרויקטים…","gw.search.hint":"יש להקליד שני תווים לפחות","gw.search.none":"לא נמצאו תוצאות","gw.search.more":"מוצגות {n} הראשונות","gw.tasks":"משימות בכל הפרויקטים","gw.st.backlog":"מאגר משימות","gw.st.todo":"לביצוע","gw.st.in_progress":"בעבודה","gw.st.done":"הושלם","gw.due":"עבודה מתוזמנת","gw.overdue":"באיחור","gw.today":"היום","gw.upcoming":"הקרובות","gw.chats":"שיחות בכל הפרויקטים","gw.projects":"לפי פרויקט","gw.unassigned":"ללא פרויקט","gw.open.kanban":"Kanban, כל הפרויקטים","gw.open.schedule":"לוח זמנים, כל הפרויקטים","gw.kind.task":"משימה","gw.kind.chat":"שיחה",
     "thinking.copied":"✓ הועתק","thinking.copy_err":"ההעתקה נכשלה","thinking.translate":"תרגום","thinking.show_original":"הצגת המקור","thinking.translating":"מתרגם…",
     "thinking.translate_err":"התרגום נכשל","dlg.title":"האצלה ל-Agent","dlg.agent":"Agent","dlg.agent.select":"בחרו agent...","dlg.mode":"מצב","dlg.mode.handoff":"העברה",
     "dlg.mode.handoff.desc":"העברה מלאה. פותח טרמינל, אתם ממשיכים לעבוד שם.","dlg.mode.sync":"סנכרון","dlg.mode.sync.desc":"עבודה מקבילה. שני ה-agents פעילים, מתקשרים דרך קובץ דיאלוג.","dlg.task":"משימה",
@@ -5658,6 +5738,7 @@ let _i18nDynReady = false;
 const I18N_RERENDER = [
   'renderBots', 'renderBotsStrip', 'renderBotTemplates', 'renderMcp', 'renderSkills',
   'renderCommands', 'renderAgents', 'renderProjects', 'renderRemoteHostsList',
+  'renderGlobalHome',
   'renderRemoteHostSelect', 'renderTabs', 'updateSessBarSkills', 'loadHist', 'updateMobSubtitle',
 ];
 function rerenderI18nDynamic() {
@@ -10988,6 +11069,139 @@ function activityOpen(sessionId, projectId) {
   openTab(sessionId);
 }
 
+// ═══ #25 Global workspace ═══════════════════════════════════════════════════
+// One landing surface for "what is on my plate", built from two cross-project
+// endpoints: /api/global/overview (task rollup + due buckets, aggregated in SQL)
+// and /api/activity (live + recent chats, already cross-project — reused rather
+// than duplicated so the two views can never disagree).
+let _gwOverview = null, _gwSearchTimer = null, _gwSearchSeq = 0, _gwLastQuery = '';
+
+function openGlobalHome() {
+  openModalOverlay('gwModal', { labelId: 'gwTitle', initialFocus: '#gwSearch', onEscape: closeGlobalHome });
+  loadGlobalHome();
+}
+function closeGlobalHome() { closeModalOverlay('gwModal'); }
+
+function gwIsOpen() {
+  const el = $i('gwModal');
+  return !!el && !el.classList.contains('hidden');
+}
+
+async function loadGlobalHome() {
+  const main = $i('gwMain');
+  if (!main) return;
+  try {
+    const [ovR] = await Promise.all([fetch('/api/global/overview'), loadActivity()]);
+    if (!ovR.ok) throw new Error('overview ' + ovR.status);
+    _gwOverview = await ovR.json();
+  } catch (e) {
+    main.innerHTML = `<div class="gw-empty">${escH(t('gw.err'))}</div>`;
+    return;
+  }
+  renderGlobalHome();
+}
+
+// Called by rerenderI18nDynamic() with no arguments after a language switch, so
+// everything it needs must come from cached state, never from a refetch.
+function renderGlobalHome() {
+  const main = $i('gwMain');
+  if (!main || !gwIsOpen() || !_gwOverview) return;
+  const ov = _gwOverview;
+  const act = _lastActivity || {};
+
+  const tiles = ['backlog', 'todo', 'in_progress', 'done']
+    .map(st => `<div class="gw-tile"><span class="gw-tile-n">${ov.totals?.[st] || 0}</span><span class="gw-tile-l">${escH(t('gw.st.' + st))}</span></div>`)
+    .join('');
+
+  const projRows = (ov.projects || []).map(p => {
+    const name = p.project_name || t('gw.unassigned');
+    return `<div class="gw-row gw-static"><span class="gw-name" title="${escH(p.workdir || '')}">${escH(name)}</span>`
+      + `<span class="gw-counts">${p.in_progress}&nbsp;/&nbsp;${p.todo}&nbsp;/&nbsp;${p.backlog}&nbsp;·&nbsp;${p.total}</span></div>`;
+  }).join('');
+
+  const dueRow = (it, late) => {
+    const proj = it.project_name ? `<span class="gw-proj">${escH(it.project_name)}</span>` : '';
+    const when = escH(_actSchedWhen(it.scheduled_at));
+    const paused = it.paused_reason === 'usage_limit' ? '⏸ ' : '';
+    const open = it.session_id
+      ? `onclick="activityOpen('${it.session_id}','${it.project_id || ''}')"`
+      : `onclick="location.href='/kanban?all=1'"`;
+    return `<button type="button" class="gw-row" ${open}><span class="gw-name" title="${escH(it.title)}">${escH(it.title)}</span>${proj}`
+      + `<span class="gw-meta${late ? ' gw-late' : ''}">${paused}${when}</span></button>`;
+  };
+  const chatRow = (it, meta) => `<button type="button" class="gw-row" onclick="activityOpen('${it.session_id}','${it.project_id || ''}')">`
+    + `<span class="gw-name" title="${escH(it.title)}">${escH(it.title)}</span>`
+    + (it.project_name ? `<span class="gw-proj">${escH(it.project_name)}</span>` : '')
+    + `<span class="gw-meta">${escH(meta)}</span></button>`;
+
+  const sec = (label, bodyHtml) => `<div class="gw-sec"><div class="gw-sec-hdr">${escH(label)}</div>`
+    + (bodyHtml ? `<div class="gw-sec-body">${bodyHtml}</div>` : `<div class="gw-empty">${escH(t('act.empty'))}</div>`) + `</div>`;
+
+  const due = ov.due || {};
+  const dueBody = [
+    ...(due.overdue || []).map(it => dueRow(it, true)),
+    ...(due.today || []).map(it => dueRow(it, false)),
+    ...(due.upcoming || []).map(it => dueRow(it, false)),
+  ].join('');
+
+  const live = (act.live || []).filter(it => it.session_id);
+  const recent = act.recent || [];
+  const chatBody = live.map(it => chatRow(it, t('act.live')))
+    .concat(recent.map(it => chatRow(it, it.updated_at ? _actAgo(Date.now() - _actTs(it.updated_at)) : '')))
+    .join('');
+
+  main.innerHTML =
+    `<div class="gw-sec"><div class="gw-sec-hdr">${escH(t('gw.tasks'))}</div><div class="gw-tiles">${tiles}</div></div>`
+    + `<div class="gw-cols" style="margin-top:12px">`
+    + sec(t('gw.due'), dueBody)
+    + sec(t('gw.chats'), chatBody)
+    + `</div>`
+    + `<div style="margin-top:12px">` + sec(t('gw.projects'), projRows) + `</div>`;
+}
+
+function gwOnSearchInput(v) {
+  clearTimeout(_gwSearchTimer);
+  _gwSearchTimer = setTimeout(() => gwSearch(v), 200);
+}
+
+async function gwSearch(v) {
+  const box = $i('gwSearchRes');
+  if (!box) return;
+  const q = String(v || '').trim();
+  _gwLastQuery = q;
+  if (!q) { box.innerHTML = ''; return; }
+  if (q.length < 2) { box.innerHTML = `<div class="gw-empty">${escH(t('gw.search.hint'))}</div>`; return; }
+  // Sequence guard: a slow earlier request must not overwrite a newer answer.
+  const seq = ++_gwSearchSeq;
+  let data;
+  try {
+    const r = await fetch('/api/global/search?q=' + encodeURIComponent(q));
+    if (!r.ok) throw new Error(String(r.status));
+    data = await r.json();
+  } catch { box.innerHTML = `<div class="gw-empty">${escH(t('gw.err'))}</div>`; return; }
+  if (seq !== _gwSearchSeq) return;
+  gwRenderSearch(data);
+}
+
+function gwRenderSearch(data) {
+  const box = $i('gwSearchRes');
+  if (!box) return;
+  const rows = data.results || [];
+  if (!rows.length) { box.innerHTML = `<div class="gw-empty">${escH(t('gw.search.none'))}</div>`; return; }
+  const body = rows.map(r => {
+    const proj = r.project_name ? `<span class="gw-proj">${escH(r.project_name)}</span>` : '';
+    const kind = escH(t(r.kind === 'task' ? 'gw.kind.task' : 'gw.kind.chat'));
+    const open = r.session_id
+      ? `onclick="activityOpen('${r.session_id}','${r.project_id || ''}')"`
+      : `onclick="location.href='/kanban?all=1'"`;
+    return `<button type="button" class="gw-row" ${open}><span class="gw-kind">${kind}</span>`
+      + `<span class="gw-name" title="${escH(r.title)}">${escH(r.title)}</span>${proj}</button>`;
+  }).join('');
+  const more = data.truncated
+    ? `<div class="gw-empty">${escH(t('gw.search.more').replace('{n}', rows.length))}</div>` : '';
+  box.innerHTML = `<div class="gw-sec"><div class="gw-sec-body">${body}</div>${more}</div>`;
+}
+
 async function loadActivity() {
   if (_activityFetching) { _activityRefreshQueued = true; return; }
   _activityFetching = true;
@@ -11056,6 +11270,9 @@ function renderActivity(data) {
 
   let html = section('🟢 ' + escH(t('act.live')), live, 'live') + section('⏰ ' + escH(t('act.scheduled')), scheduled, 'scheduled') + section('🕘 ' + escH(t('act.recent')), recent, 'recent');
   el.innerHTML = html || `<div class="act-empty">${escH(t('act.empty'))}</div>`;
+  // #25: the Global workspace shows the same live/recent chats. Re-render it from
+  // the data that just arrived so the two surfaces cannot drift apart.
+  try { if (typeof renderGlobalHome === 'function') renderGlobalHome(); } catch {}
 }
 
 // Tick live elapsed timers each second without refetching.

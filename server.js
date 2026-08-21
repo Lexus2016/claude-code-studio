@@ -545,6 +545,11 @@ try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); 
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_msg_created   ON messages(created_at)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_chain    ON tasks(chain_id)`); } catch {}
+// #25 global workspace: the cross-project rollup groups by exactly (workdir, status),
+// and the per-project Kanban already filters on workdir with no index of its own —
+// idx_task_status alone cannot serve either. One composite index covers both, and
+// SQLite answers the rollup straight from it without touching the table.
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_wd_status ON tasks(workdir, status)`); } catch {}
 // messages.reply_to_id is a self-referencing FK; without this index every
 // cascaded message delete triggers a full-table FK scan (O(N²) session cleanup)
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_msg_reply_to  ON messages(reply_to_id)`); } catch {}
@@ -813,6 +818,55 @@ const stmts = {
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
   countTasksBySession: db.prepare(`SELECT COUNT(*) as n FROM tasks WHERE session_id=?`),
   getTasksEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM tasks`),
+  // ── #25 Global workspace ──────────────────────────────────────────────────
+  // One GROUP BY instead of "load every project, then query it" — N projects cost
+  // one scan of idx_task_wd_status, not N round trips. Rows whose workdir is NULL
+  // (tasks created before the column existed) group under the NULL key and are
+  // reported as unassigned rather than silently dropped.
+  globalTaskRollup: db.prepare(`
+    SELECT workdir AS wd, status AS status, COUNT(*) AS n
+    FROM tasks
+    GROUP BY workdir, status
+  `),
+  // Bucketing is done by SQL, not by three separate queries or a JS pass: `now` and
+  // `dayEnd` are bound once and the CASE labels every row in the single ordered scan.
+  // status IN ('todo','in_progress') mirrors what the scheduler will actually run —
+  // a dated task left in `backlog` never fires (see test/kanban-schedule.test.js), so
+  // listing it as "overdue" would promise something the scheduler does not deliver.
+  globalDueTasks: db.prepare(`
+    SELECT id, title, status, workdir, session_id, scheduled_at, recurrence, failure_reason,
+           CASE WHEN scheduled_at <  ? THEN 'overdue'
+                WHEN scheduled_at <  ? THEN 'today'
+                ELSE 'upcoming' END AS bucket
+    FROM tasks
+    WHERE scheduled_at IS NOT NULL AND status IN ('todo','in_progress')
+    ORDER BY scheduled_at ASC
+    LIMIT 200
+  `),
+  // Cross-project search over task text + chat TITLES. Message bodies are
+  // deliberately out (see the /api/global/search comment). The two halves are
+  // UNIONed inside SQLite so the ORDER BY / LIMIT applies to the merged set —
+  // merging two separately-limited lists in JS would drop the older half.
+  globalSearch: db.prepare(`
+    SELECT * FROM (
+      SELECT 'task' AS kind, t.id AS id, t.title AS title, t.status AS status,
+             t.workdir AS workdir, t.session_id AS session_id,
+             t.scheduled_at AS scheduled_at, t.updated_at AS updated_at
+      FROM tasks t
+      WHERE (? IS NULL OR t.workdir = ?)
+        AND (t.title LIKE ? ESCAPE '\\' OR COALESCE(t.description,'') LIKE ? ESCAPE '\\')
+      UNION ALL
+      SELECT 'chat', s.id, s.title, NULL,
+             s.workdir, s.id,
+             NULL, s.updated_at
+      FROM sessions s
+      WHERE (? IS NULL OR s.workdir = ?)
+        AND COALESCE(s.kind,'chat') = 'chat'
+        AND s.title LIKE ? ESCAPE '\\'
+    )
+    ORDER BY updated_at DESC
+    LIMIT ?
+  `),
   // processQueue hot-path — prepared once, reused every 60 s
   getTodoTasks:      db.prepare(`SELECT * FROM tasks WHERE status='todo' AND (scheduled_at IS NULL OR scheduled_at <= unixepoch()) ORDER BY sort_order ASC, created_at ASC`),
   getInProgressTasks: db.prepare(`SELECT * FROM tasks WHERE status='in_progress'`),
@@ -5158,6 +5212,159 @@ app.get('/api/activity', (req, res) => {
   } catch (e) {
     log.error('/api/activity failed', { err: e.message });
     res.status(500).json({ error: 'activity_failed' });
+  }
+});
+
+// --- #25 Global workspace: cross-project task rollup, due buckets, search ----
+// Projects live in data/projects.json, not in SQLite, so a project NAME cannot be
+// joined in. The JSON is read once per request and turned into a workdir -> project
+// map; the aggregation itself stays in SQL.
+function globalProjectIndex() {
+  const byWorkdir = new Map();
+  const list = [];
+  for (const p of loadProjects()) {
+    if (!p || !p.workdir) continue;
+    let key; try { key = path.resolve(p.workdir); } catch { key = p.workdir; }
+    const entry = { id: p.id, name: p.name || path.basename(p.workdir), workdir: p.workdir, key };
+    byWorkdir.set(key, entry);
+    list.push(entry);
+  }
+  const resolve = (workdir) => {
+    if (!workdir) return { project_id: null, project_name: null };
+    let key; try { key = path.resolve(workdir); } catch { key = workdir; }
+    const m = byWorkdir.get(key);
+    // A task whose project was removed from projects.json still exists and still
+    // needs a label - fall back to the last path segment, same as /api/activity.
+    return m ? { project_id: m.id, project_name: m.name }
+             : { project_id: null, project_name: path.basename(workdir) };
+  };
+  return { list, byWorkdir, resolve };
+}
+
+// The client sends a PROJECT ID, never a path. The workdir it maps to comes from
+// projects.json server-side, so nothing here can widen a filesystem allowlist or
+// reach isPathAllowed - these endpoints touch SQLite only, never the filesystem.
+function resolveProjectFilter(req, idx) {
+  const raw = String(req.query.project || '').trim();
+  if (!raw) return { ok: true, workdir: null };
+  const p = idx.list.find(x => x.id === raw);
+  if (!p) return { ok: false };
+  return { ok: true, workdir: p.workdir };
+}
+
+// LIKE treats % and _ as wildcards. A user searching for "50%" means the character,
+// so escape both (and the escape character itself) and declare ESCAPE in the SQL.
+function likeEscape(s) { return String(s).replace(/[\\%_]/g, m => '\\' + m); }
+
+const GLOBAL_TASK_STATUSES = ['backlog', 'todo', 'in_progress', 'done'];
+// Tasks with a NULL workdir predate the column. They get their own bucket rather
+// than being dropped; the NUL prefix cannot collide with a real absolute path.
+const UNASSIGNED_WORKDIR_KEY = '\u0000unassigned';
+
+// GET /api/global/overview - every project's task counts + what is due, in two queries.
+app.get('/api/global/overview', (req, res) => {
+  try {
+    const idx = globalProjectIndex();
+
+    // 1) Rollup. One GROUP BY over all tasks; the per-project rows are assembled from
+    //    its output, so an extra project costs nothing.
+    const perProject = new Map();   // resolve-key -> row
+    const totals = Object.fromEntries(GLOBAL_TASK_STATUSES.map(st => [st, 0]));
+    let totalTasks = 0;
+    const rowFor = (workdir) => {
+      let key = UNASSIGNED_WORKDIR_KEY;
+      try { if (workdir) key = path.resolve(workdir); } catch { key = workdir; }
+      let row = perProject.get(key);
+      if (!row) {
+        row = { workdir: workdir || null, ...idx.resolve(workdir), total: 0,
+                ...Object.fromEntries(GLOBAL_TASK_STATUSES.map(st => [st, 0])) };
+        perProject.set(key, row);
+      }
+      return row;
+    };
+    for (const p of idx.list) rowFor(p.workdir);       // projects with zero tasks still appear
+    for (const r of stmts.globalTaskRollup.all()) {
+      const st = GLOBAL_TASK_STATUSES.includes(r.status) ? r.status : 'backlog';
+      const row = rowFor(r.wd);
+      row[st] += r.n;
+      row.total += r.n;
+      totals[st] += r.n;
+      totalTasks += r.n;
+    }
+
+    // 2) Due buckets. `now` and `dayEnd` are computed here (server local time, the
+    //    same clock the scheduler compares scheduled_at against) and bound into the
+    //    CASE, so the three lists come out of one ordered scan.
+    const now = Math.floor(Date.now() / 1000);
+    const d = new Date(); d.setHours(23, 59, 59, 999);
+    const dayEnd = Math.floor(d.getTime() / 1000);
+    const due = { overdue: [], today: [], upcoming: [] };
+    for (const t of stmts.globalDueTasks.all(now, dayEnd)) {
+      const bucket = due[t.bucket] ? t.bucket : 'upcoming';
+      if (due[bucket].length >= 25) continue;
+      due[bucket].push({
+        task_id: t.id,
+        session_id: t.session_id || null,
+        title: t.title || 'Task',
+        status: t.status,
+        scheduled_at: t.scheduled_at,
+        recurrence: t.recurrence || null,
+        paused_reason: /^usage_limit/.test(t.failure_reason || '') ? 'usage_limit' : null,
+        ...idx.resolve(t.workdir),
+      });
+    }
+
+    const projects = [...perProject.values()]
+      .sort((a, b) => (b.total - a.total) || String(a.project_name || '').localeCompare(String(b.project_name || '')));
+
+    res.json({ totals, total: totalTasks, projects, due });
+  } catch (e) {
+    log.error('/api/global/overview failed', { err: e.message });
+    res.status(500).json({ error: 'global_overview_failed' });
+  }
+});
+
+// GET /api/global/search?q=&project=&limit= - one UNION over tasks + chat titles.
+//
+// Message BODIES are deliberately not searched. A LIKE over `messages` is a full
+// scan of the largest table in the database with no index that can help, and a query
+// matching nothing scans all of it; making that fast means an FTS5 mirror of every
+// message, which is a whole feature with its own rebuild and sync story. Task text
+// and chat titles are a few thousand short rows - bounded, and enough to answer
+// "where was I working on X".
+app.get('/api/global/search', (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (q.length < 2) return res.json({ q, results: [], truncated: false });
+
+    const idx = globalProjectIndex();
+    const filter = resolveProjectFilter(req, idx);
+    if (!filter.ok) return res.status(400).json({ error: 'unknown_project' });
+
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 40));
+    const pattern = '%' + likeEscape(q) + '%';
+    const wd = filter.workdir;
+    // One row more than asked for: if it comes back, the list was cut off.
+    const rows = stmts.globalSearch.all(wd, wd, pattern, pattern, wd, wd, pattern, limit + 1);
+    const truncated = rows.length > limit;
+
+    res.json({
+      q,
+      truncated,
+      results: rows.slice(0, limit).map(r => ({
+        kind: r.kind,
+        id: r.id,
+        session_id: r.session_id || null,
+        title: r.title || '',
+        status: r.status || null,
+        scheduled_at: r.scheduled_at || null,
+        updated_at: r.updated_at || null,
+        ...idx.resolve(r.workdir),
+      })),
+    });
+  } catch (e) {
+    log.error('/api/global/search failed', { err: e.message });
+    res.status(500).json({ error: 'global_search_failed' });
   }
 });
 app.post('/api/tasks', (req, res) => {
