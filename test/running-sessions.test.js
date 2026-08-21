@@ -7,6 +7,13 @@
 // The endpoint must union the DB with the in-memory live set (liveSessionIds(), i.e.
 // activeChatSessions + activeTasks) — the same union isChatRunning reads.
 //
+// Each of the three union terms is asserted through a state that ONLY that term can
+// produce, so removing any one of them fails at least one assertion:
+//   DB                 — a `tasks` row in_progress with no in-memory run (kanban/scheduler)
+//   activeChatSessions — the classification window, before activeTasks.set() (server.js:8239 vs 8516)
+//   activeTasks        — a legacy (no tabId) chat; server.js:8239 only fills
+//                        activeChatSessions when a tabId is present
+//
 // Run: node test/running-sessions.test.js   (TEST_PORT=<n> to move off the default port)
 const assert = require('assert');
 const fs = require('fs');
@@ -97,6 +104,14 @@ async function api(method, url, body) {
   });
   return { status: res.status, json: await res.json().catch(() => null) };
 }
+async function runningSessions() {
+  const r = await api('GET', '/api/tasks/running-sessions');
+  return Array.isArray(r.json) ? r.json : [];
+}
+async function activityLive() {
+  const r = await api('GET', '/api/activity');
+  return (r.json && Array.isArray(r.json.live)) ? r.json.live : [];
+}
 async function waitFor(predicate, timeoutMs = 15000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -104,6 +119,18 @@ async function waitFor(predicate, timeoutMs = 15000) {
     await sleep(150);
   }
   return false;
+}
+async function newSession(title) {
+  const created = await api('POST', '/api/sessions', { title, workdir: APP_DIR });
+  return created.json && created.json.id;
+}
+function openWs() {
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}`);
+  return new Promise((resolve, reject) => {
+    ws.on('open', () => resolve(ws));
+    ws.on('error', reject);
+    setTimeout(() => reject(new Error('ws open timeout')), 10000);
+  });
 }
 
 // Preflight: resolves with null when the port is free, or with the error code otherwise.
@@ -153,34 +180,57 @@ function probePort(port) {
   if (!fs.existsSync(path.join(APP_DIR, 'data', 'chats.db'))) die('our server never created its own chats.db in the temp APP_DIR');
 
   console.log('running-sessions:');
-  const created = await api('POST', '/api/sessions', { title: 'runsess', workdir: APP_DIR });
-  const sid = created.json && created.json.id;
+  const sid = await newSession('runsess');
   check('session created', typeof sid, 'string');
-  if (!sid) { console.error(srvLog.slice(-2000)); cleanup(); process.exit(1); }
+  if (!sid) die('session was not created');
 
-  const idle = await api('GET', '/api/tasks/running-sessions');
-  check('idle session is not reported as running', (idle.json || []).includes(sid), false);
+  check('idle session is not reported as running', (await runningSessions()).includes(sid), false);
 
-  const ws = new WebSocket(`ws://127.0.0.1:${PORT}`);
-  await new Promise((resolve, reject) => {
-    ws.on('open', resolve);
-    ws.on('error', reject);
-    setTimeout(() => reject(new Error('ws open timeout')), 10000);
-  }).catch(e => { console.error(e.message); cleanup(); process.exit(1); });
+  // ── Term 1: the DB query ───────────────────────────────────────────────────
+  // A kanban/scheduler run is an in_progress `tasks` row with no in-memory entry.
+  // Dropping the DB term breaks spinner restore for exactly this case.
+  const dbSid = await newSession('runsess-db');
+  const task = await api('POST', '/api/tasks', { title: 'runsess-db-task', status: 'in_progress', session_id: dbSid, workdir: APP_DIR });
+  const taskId = task.json && task.json.id;
+  check('task created in_progress', typeof taskId, 'string');
+  check('DB in_progress task session IS reported (DB term)', (await runningSessions()).includes(dbSid), true);
+  await api('DELETE', `/api/tasks/${taskId}`);
+  check('session drops out once the task row is gone (DB term releases)',
+    await waitFor(async () => !(await runningSessions()).includes(dbSid), 5000), true);
+
+  // ── Term 2: activeChatSessions ─────────────────────────────────────────────
+  // autoSkill classification runs BEFORE activeTasks.set(), so during it the session is
+  // held by activeChatSessions alone — and /api/activity, which derives `live` from
+  // activeTasks, still reports nothing. This is the exact window the term exists for.
+  const classSid = await newSession('runsess-classify');
+  const wsClass = await openWs().catch(e => die(e.message));
+  wsClass.send(JSON.stringify({ type: 'chat', text: 'hi', tabId: classSid, sessionId: classSid, model: 'sonnet', mode: 'auto', autoSkill: true }));
+  const reportedEarly = await waitFor(async () => (await runningSessions()).includes(classSid), 15000);
+  check('classifying chat IS reported before /api/activity goes live (activeChatSessions term)', reportedEarly, true);
+  check('…and /api/activity does not report it yet (so the gate is genuinely pre-activeTasks)',
+    (await activityLive()).some(x => x.session_id === classSid), false);
+
+  // ── Term 3: activeTasks ────────────────────────────────────────────────────
+  // A legacy (no tabId) chat never enters activeChatSessions — server.js:8239 gates that
+  // add on tabId — and writes no `tasks` row, so activeTasks is the only term left.
+  const legacySid = await newSession('runsess-legacy');
+  const wsLegacy = await openWs().catch(e => die(e.message));
+  wsLegacy.send(JSON.stringify({ type: 'chat', text: 'hi', sessionId: legacySid, model: 'sonnet', mode: 'auto' }));
+  const legacyLive = await waitFor(async () => (await activityLive()).some(x => x.session_id === legacySid), 20000);
+  check('legacy chat turn is in flight (per /api/activity)', legacyLive, true);
+  check('legacy (no-tab) chat IS reported (activeTasks term)', (await runningSessions()).includes(legacySid), true);
+
+  // ── Ordinary tabbed chat, the case the endpoint was added for ──────────────
+  const ws = await openWs().catch(e => die(e.message));
   ws.send(JSON.stringify({ type: 'chat', text: 'hi', tabId: sid, sessionId: sid, model: 'sonnet', mode: 'auto' }));
 
   // Wait for the turn to actually be in flight before asserting, rather than assuming a
   // fixed delay is enough on a loaded machine.
-  let live = false;
-  for (let i = 0; i < 40; i++) {
-    const act = await api('GET', '/api/activity');
-    if (((act.json && act.json.live) || []).some(x => x.session_id === sid)) { live = true; break; }
-    await sleep(250);
-  }
+  const live = await waitFor(async () => (await activityLive()).some(x => x.session_id === sid), 20000);
   check('chat turn is in flight (per /api/activity)', live, true);
+  check('in-flight plain chat IS reported by running-sessions', (await runningSessions()).includes(sid), true);
 
   const running = await api('GET', '/api/tasks/running-sessions');
-  check('in-flight plain chat IS reported by running-sessions', (running.json || []).includes(sid), true);
   // The DB is a fresh temp file with exactly one session and no task rows, so the
   // endpoint's whole output is knowable. Asserting the exact set also covers dedup —
   // unlike the old `length === new Set(...).size`, which a Set-building handler could
@@ -190,7 +240,20 @@ function probePort(port) {
   const resolved = await Promise.all((running.json || []).map(id => api('GET', `/api/sessions/${id}`)));
   check('every reported id resolves to a real session', resolved.map(r => r.status), [200]);
 
-  try { ws.close(); } catch {}
+  // ── Transition to NOT live ─────────────────────────────────────────────────
+  // A term that never releases is as broken as one that never fires: the client turns a
+  // background tab's busy dot ON from this endpoint and would spin forever.
+  ws.send(JSON.stringify({ type: 'stop', tabId: sid }));
+  check('tabbed session DISAPPEARS after the turn ends',
+    await waitFor(async () => !(await runningSessions()).includes(sid), 15000), true);
+
+  wsLegacy.send(JSON.stringify({ type: 'stop' }));
+  check('legacy session DISAPPEARS after the turn ends (activeTasks releases)',
+    await waitFor(async () => !(await runningSessions()).includes(legacySid), 15000), true);
+
+  try { wsClass.send(JSON.stringify({ type: 'stop', tabId: classSid })); } catch {}
+  for (const sock of [ws, wsLegacy, wsClass]) { try { sock.close(); } catch {} }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   await cleanupGracefully();
   process.exit(fail ? 1 : 0);
