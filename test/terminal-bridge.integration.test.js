@@ -1,6 +1,12 @@
 // Integration test — needs a real tmux. Skips cleanly when tmux is unavailable.
-// Not part of `npm test`: it depends on tmux and takes ~8 s.
-// Run: node test/terminal-bridge.integration.test.js
+// Run standalone: node test/terminal-bridge.integration.test.js
+//
+// Synchronisation rule for this file: NEVER sleep a fixed amount to "let tmux
+// catch up". Every wait below polls the real tmux/bridge state it depends on
+// (waitFor) with a generous ceiling, so a busy machine costs extra polls rather
+// than a failed assertion. GitHub #39 / FIXES.md FIX-05: with fixed sleeps this
+// file was green on an idle box and lost 5-8 assertions whenever subagents were
+// running — a green CI that lies.
 const assert = require('assert');
 const bridge = require('../terminal-bridge');
 
@@ -10,6 +16,36 @@ function check(label, actual, expected) {
   catch { fail++; console.error(`  FAIL ${label} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`); }
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Poll until the predicate is truthy, or the ceiling expires. The ceiling is a
+// failure budget, not a delay: a satisfied condition returns immediately. On
+// timeout it returns falsy and the caller's check() reports the real state, so a
+// genuine regression still fails loudly instead of being papered over.
+async function waitFor(predicate, { timeoutMs = 20000, intervalMs = 50 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    let v = false;
+    try { v = await predicate(); } catch { v = false; }
+    if (v) return v;
+    if (Date.now() >= deadline) return v;
+    await sleep(intervalMs);
+  }
+}
+
+// For "exactly once" assertions only: the event we count has already been proven
+// to have happened AND its second possible source is already gone, so this just
+// gives a duplicate that is queued behind them a window to land in. Every call
+// site pairs it with a waitFor that establishes those two facts first.
+async function quietFor(ms, intervalMs = 50) {
+  const until = Date.now() + ms;
+  while (Date.now() < until) await sleep(intervalMs);
+}
+
+const pidAlive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const winSize = name => require('child_process')
+  .spawnSync('tmux', ['-L', bridge.TMUX_SOCKET, 'display-message', '-p', '-t', name, '#{window_width}x#{window_height}'], { encoding: 'utf8' })
+  .stdout.trim();
+const screenHas = (name, s) => String(bridge.captureScreen(name) || '').includes(s);
 
 (async () => {
   // decodeOutputPayload is pure — check it even when tmux is missing.
@@ -72,7 +108,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('agent that dies instantly throws (tmux still exits 0)', threw, true);
     bridge.killSession('ccsterm-nobin');
   }
-  await sleep(1500);
+
+  // Wait for what the four checks below actually need: a live session whose pane is
+  // running and has already printed. `tick` in the pane is the earliest proof the
+  // launch command is really executing, not merely spawned.
+  await waitFor(() => {
+    const i = bridge.sessionInfo(name);
+    return i.exists && !i.paneDead && screenHas(name, 'tick');
+  });
   let info = bridge.sessionInfo(name);
   check('session exists after cold start', info.exists, true);
   check('nobody attached yet', info.attached, 0);
@@ -82,36 +125,38 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // Attaching must deliver the program's output as bytes.
   let got = Buffer.alloc(0);
   const h = bridge.attach({ name, cols: 80, rows: 24, onData: d => { got = Buffer.concat([got, d]); }, onExit: () => {} });
-  await sleep(2000);
+  await waitFor(() => got.toString('utf8').includes('tick') && bridge.sessionInfo(name).attached === 1);
   check('attach streams output', got.toString('utf8').includes('tick'), true);
   check('attach registers a client', bridge.sessionInfo(name).attached, 1);
 
   // Input must reach the program, including control bytes.
   h.write('# marker-in\r');
-  await sleep(1200);
+  await waitFor(() => screenHas(name, 'marker-in'));
   check('input reaches the pane', bridge.captureScreen(name).toString('utf8').includes('marker-in'), true);
 
   // Multi-byte UTF-8 keystrokes/paste must reach the pane intact. send-keys -H only
   // accepts single-byte ASCII per key (per `man tmux`), so hex-encoding every byte of
   // a Cyrillic character and sending it as -H mangles it regardless of locale.
   h.write('# привіт-юнікод\r');
-  await sleep(1200);
+  await waitFor(() => screenHas(name, 'привіт-юнікод'));
   check('UTF-8 input reaches the pane intact', bridge.captureScreen(name).toString('utf8').includes('привіт-юнікод'), true);
 
   // Resize must actually change the window, without SIGWINCH.
   h.resize(100, 30);
-  await sleep(600);
-  check('resize applies', require('child_process').spawnSync('tmux', ['-L', bridge.TMUX_SOCKET, 'display-message', '-p', '-t', name, '#{window_width}x#{window_height}'], { encoding: 'utf8' }).stdout.trim(), '100x30');
+  await waitFor(() => winSize(name) === '100x30');
+  check('resize applies', winSize(name), '100x30');
 
   // Closing the browser tab must not kill the agent.
   h.close();
-  await sleep(1000);
+  await waitFor(() => !pidAlive(h.pid) && bridge.sessionInfo(name).attached === 0);
   info = bridge.sessionInfo(name);
   check('closing the client leaves the session alive', info.exists, true);
   check('client count drops to zero', info.attached, 0);
 
   // The busy signal the reaper relies on.
-  const a = bridge.paneHash(name); await sleep(3000); const b = bridge.paneHash(name);
+  const a = bridge.paneHash(name);
+  let b = a;
+  await waitFor(() => { b = bridge.paneHash(name); return b !== a; });
   check('producing output changes the pane hash', a !== b, true);
 
   // Scrollback capture is what makes reaping non-destructive for the user.
@@ -127,12 +172,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // notification and once as the client process exiting. onExit must be idempotent:
   // the WebSocket handler closes a socket in it.
   bridge.ensureSession({ name, workdir: '/tmp', launchCommand: `sh -c 'while true; do echo x; sleep 1; done'` });
-  await sleep(1200);
+  await waitFor(() => {
+    const i = bridge.sessionInfo(name);
+    return i.exists && !i.paneDead && screenHas(name, 'x');
+  });
   let exitCalls = 0;
   const h2 = bridge.attach({ name, cols: 80, rows: 24, onData: () => {}, onExit: () => { exitCalls++; } });
-  await sleep(1200);
+  // The client must be registered with tmux before the kill, or only one of the two
+  // exit reports is produced and the idempotence guard is never exercised.
+  await waitFor(() => bridge.sessionInfo(name).attached === 1);
   bridge.killSession(name);
-  await sleep(2000);
+  // Both report paths must have had their chance: the %exit notification (counted)
+  // and the control-client process exiting (its pid is gone). Only then is a count
+  // of 1 evidence of idempotence rather than of one path still being in flight.
+  await waitFor(() => exitCalls >= 1);
+  await waitFor(() => !pidAlive(h2.pid));
+  await quietFor(500);
   check('onExit fires exactly once on kill-while-attached', exitCalls, 1);
   h2.close();
 
@@ -142,10 +197,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // was introduced for.
   bridge.killSession(name);
   bridge.ensureSession({ name, workdir: '/tmp', launchCommand: `sh -c 'echo alive; sleep 2'` });
-  await sleep(600);
+  await waitFor(() => {
+    const i = bridge.sessionInfo(name);
+    return i.exists && !i.paneDead && screenHas(name, 'alive');
+  });
   let deadExit = 0;
   const h3 = bridge.attach({ name, cols: 80, rows: 24, onData: () => {}, onExit: () => { deadExit++; } });
-  await sleep(5000);
+  await waitFor(() => deadExit >= 1 && bridge.sessionInfo(name).paneDead);
+  // The control client is still alive here (the session was not killed), so the
+  // only other way to reach onExit is a second subscription report — give it a
+  // window before asserting "exactly once".
+  await quietFor(500);
   check('agent death under remain-on-exit reaches onExit', deadExit, 1);
   check('the session itself is still alive (scrollback kept)', bridge.sessionInfo(name).exists, true);
   check('and its pane is marked dead', bridge.sessionInfo(name).paneDead, true);
@@ -154,12 +216,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // A session whose command exits must leave a DEAD pane, not vanish — that is the
   // 'respawn' restore path, and it is what preserves the scrollback of a crashed agent.
   bridge.ensureSession({ name, workdir: '/tmp', launchCommand: `sh -c 'echo bye; sleep 1'` });
-  await sleep(2500);
+  // Two stages on purpose: the pane was ALREADY dead a moment ago, so polling
+  // straight for paneDead could match the state the respawn was meant to clear.
+  await waitFor(() => !bridge.sessionInfo(name).paneDead);
+  await waitFor(() => bridge.sessionInfo(name).paneDead);
   info = bridge.sessionInfo(name);
   check('exited agent leaves the session alive', info.exists, true);
   check('exited agent leaves a dead pane', info.paneDead, true);
   check('respawn revives it', bridge.ensureSession({ name, workdir: '/tmp', launchCommand: `sh -c 'echo REVIVED; sleep 5'` }), 'respawn');
-  await sleep(1000);
+  await waitFor(() => !bridge.sessionInfo(name).paneDead && screenHas(name, 'REVIVED'));
   check('revived pane is alive again', bridge.sessionInfo(name).paneDead, false);
 
   bridge.killSession(name);
