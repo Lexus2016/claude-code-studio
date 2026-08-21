@@ -7039,6 +7039,42 @@ app.put('/api/config/setting', (req, res) => {
   res.json({ ok: true, restart: !!def.restart, setting: resolved });
 });
 
+// Reset one setting back to its built-in default by REMOVING it from the file
+// the form owns, rather than writing the default in as an explicit value. The
+// difference matters: an explicit value keeps winning after the default changes,
+// and it keeps reading as "configured" in this very view.
+app.delete('/api/config/setting', (req, res) => {
+  // The key travels in the query string, not a body: a DELETE body is not
+  // reliably parsed (express.json skips it here) and proxies may drop it.
+  const key = String(req.query.key || '');
+  const def = cfgResolve.getSetting(key);
+  if (!def) return res.status(400).json({ error: 'unknown_setting' });
+  const gate = cfgResolve.formWritable(def);
+  if (!gate.ok) return res.status(400).json({ error: gate.error });
+
+  try {
+    if (def.backing === 'config') {
+      const conf = loadConfig();
+      cfgResolve.deletePath(conf, def.path);
+      saveConfig(conf);
+    } else if (def.backing === 'env') {
+      let body = '';
+      try { body = fs.readFileSync(DOTENV_PATH, 'utf-8'); } catch {}
+      const tmp = DOTENV_PATH + '.tmp';
+      fs.writeFileSync(tmp, cfgResolve.unsetDotenvValue(body, def.key), { mode: 0o600 });
+      try { fs.chmodSync(tmp, 0o600); } catch {}
+      fs.renameSync(tmp, DOTENV_PATH);
+    } else {
+      return res.status(400).json({ error: 'read_only' });
+    }
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+
+  const resolved = cfgResolve.resolveSetting(def, collectConfigSources(''));
+  res.json({ ok: true, restart: !!def.restart, setting: resolved });
+});
+
 // CLAUDE.md editor — global (~/.claude/CLAUDE.md) + local (WORKDIR/CLAUDE.md)
 const GLOBAL_CLAUDE_MD = path.join(os.homedir(), '.claude', 'CLAUDE.md');
 const LOCAL_CLAUDE_MD  = path.join(WORKDIR, 'CLAUDE.md');
