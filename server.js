@@ -9149,6 +9149,26 @@ wss.on('connection', (ws) => {
         // Cleanup happens on WS disconnect (ws.on('close') handler).
         if (!sessionWatchers.has(sessionId)) sessionWatchers.set(sessionId, new Set());
         sessionWatchers.get(sessionId).add(ws);
+        // Re-claiming a live turn is about THIS socket being a watcher — NOT about
+        // replaying buffered output. `noCatchUp` only says "don't replay the buffer",
+        // so both recovery actions live here, outside the branch below.
+        // Before, a background tab (public/index.html subscribeAllTabs sends
+        // noCatchUp:true) reconnecting mid-turn left the disconnect timer armed and
+        // never re-attached the proxy: nothing streamed to the new socket and
+        // TASK_DISCONNECT_TIMEOUT_MS later the server aborted a turn whose spinner the
+        // user still saw as live.
+        const _liveTask = activeTasks.get(sessionId);
+        if (_liveTask && !_liveTask.abortController.signal.aborted) {
+          if (_liveTask.cleanupTimer) { clearTimeout(_liveTask.cleanupTimer); _liveTask.cleanupTimer = null; }
+          // Only take the stream over when no live socket holds it. A second window with
+          // this tab in the FOREGROUND must not lose its stream to a background tab's
+          // subscribe. The !noCatchUp path below re-attaches unconditionally on purpose:
+          // there the user switched to the tab, so claiming the stream is the intent.
+          if (noCatchUp && (!_liveTask.proxy._ws || _liveTask.proxy._ws.readyState !== 1)) {
+            _liveTask.proxy.attach(ws);
+            ws._tabAbort[sessionId] = _liveTask.abortController;
+          }
+        }
         // Catch up new subscriber with any already-running task (unless suppressed)
         if (!noCatchUp) {
           const runningTask = db.prepare(
@@ -9181,8 +9201,8 @@ wss.on('connection', (ws) => {
                 ws.send(JSON.stringify({ type: 'task_interrupted', sessionId, tabId: sessionId, prompt: sess.last_user_msg, retryCount: sess.retry_count || 0 }));
               }
             } else {
-              // Chat task is running normally — cancel cleanup timer and reattach proxy.
-              if (activeTask.cleanupTimer) { clearTimeout(activeTask.cleanupTimer); activeTask.cleanupTimer = null; }
+              // Chat task is running normally. The cleanup timer was already cancelled
+              // above (hoisted out of this branch — it must also run for noCatchUp).
               // Replay ALL accumulated text from the start so the client never has a gap.
               // chatBuffers holds everything from onText since the session started.
               const chatBuf = chatBuffers.get(sessionId);
