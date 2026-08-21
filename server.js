@@ -103,8 +103,17 @@ const CONFIG_PATH = path.join(APP_DIR, 'config.json');
 const NODE_CMD = process.env.CCS_NODE_CMD || 'node';
 
 // ─── Security config ──────────────────────────────────────────────────────────
-// Trust X-Forwarded-For when behind nginx/Caddy (needed for rate limiting)
-if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', 1);
+// Trust X-Forwarded-For when behind nginx/Caddy (needed for rate limiting).
+// A tunnel (cloudflared/ngrok) is exactly that kind of proxy, but it is started
+// from the UI long after this env var was read — so the setting has to be able
+// to change at runtime, otherwise every tunnel visitor arrives as 127.0.0.1 and
+// they all share one authLimiter bucket (10 attempts / 15 min locks the owner out).
+const TRUST_PROXY_ENV = process.env.TRUST_PROXY === 'true';
+let _tunnelIsProxying = false;
+function applyProxyTrust() {
+  app.set('trust proxy', (TRUST_PROXY_ENV || _tunnelIsProxying) ? 1 : false);
+}
+applyProxyTrust();
 
 // Brute-force protection on auth mutation endpoints (login / setup)
 const authLimiter = rateLimit({
@@ -114,8 +123,10 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many attempts, please try again later' },
 });
-// Set secure flag on cookies only when served over HTTPS (behind a proxy)
-const SECURE_COOKIES = process.env.TRUST_PROXY === 'true';
+// Set secure flag on cookies only when served over HTTPS (behind a proxy).
+// Deliberately NOT tied to the tunnel: flipping it at runtime would invalidate
+// the cookie of anyone signed in over plain http on the LAN or localhost.
+const SECURE_COOKIES = TRUST_PROXY_ENV;
 // Directories that authenticated users may browse/create projects in
 const ALLOWED_BROWSE_ROOTS = [
   path.resolve(os.homedir()),
@@ -6714,6 +6725,9 @@ function initTunnelManager() {
   tunnelManager = new TunnelManager({ log, port: PORT });
 
   tunnelManager.on('url', (url) => {
+    // The tunnel now fronts us: X-Forwarded-For is real, req.ip must follow it.
+    _tunnelIsProxying = true;
+    applyProxyTrust();
     // Notify all WebSocket clients
     wss.clients.forEach(ws => {
       try { ws.send(JSON.stringify({ type: 'tunnel_url', url })); } catch {}
@@ -6725,6 +6739,8 @@ function initTunnelManager() {
   });
 
   tunnelManager.on('close', (reason) => {
+    _tunnelIsProxying = false;
+    applyProxyTrust();
     wss.clients.forEach(ws => {
       try { ws.send(JSON.stringify({ type: 'tunnel_closed', reason })); } catch {}
     });
