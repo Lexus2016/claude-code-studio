@@ -67,6 +67,19 @@ function assertName(name) {
 const TMUX_SOCKET = 'ccstudio';
 function tmuxArgs(args) { return ['-L', TMUX_SOCKET, ...args]; }
 
+// How long ensureSession() waits for a just-launched command to prove it did not die
+// on the spot, and how often it looks. See the comment at the end of ensureSession()
+// for the measurement these numbers come from.
+const LAUNCH_GRACE_MS = 300;
+const LAUNCH_POLL_MS = 20;
+
+// ensureSession() is synchronous and its callers depend on that, so the poll above
+// cannot await. Atomics.wait on a throwaway buffer blocks the thread without burning
+// CPU, unlike a spin loop (which would make the very contention being measured worse).
+function sleepSync(ms) {
+  try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); } catch { /* no SAB: fall through, the poll just spins */ }
+}
+
 function tmux(args, opts = {}) {
   try { return spawnSync('tmux', tmuxArgs(args), { encoding: 'utf8', ...opts }); }
   catch { return { status: 1, stdout: '', stderr: '' }; }
@@ -142,14 +155,40 @@ function ensureSession({ name, workdir, launchCommand }) {
   if (r.error || r.status !== 0) {
     throw new Error(`tmux new-session failed: ${String(r.stderr || r.error?.message || '').trim() || 'unknown error'}`);
   }
-  // A launch command that dies immediately also exits 0 here: the pane dies before
-  // remain-on-exit can be applied and the session disappears with it (measured with
-  // a nonexistent binary). The only reliable signal is whether the session is there.
-  if (!hasSession(name)) {
-    throw new Error(`agent command exited immediately: ${launchCommand}`);
-  }
+  // Set the options BEFORE deciding whether the launch worked. remain-on-exit is what
+  // turns "the session vanished" into "the pane is dead" — applying it first means a
+  // command that dies leaves evidence behind whichever way the race below lands.
   tmux(['set-option', '-t', name, 'remain-on-exit', 'on']);
   tmux(['set-option', '-t', name, 'window-size', 'manual']);
+
+  // A launch command that dies immediately also exits 0 above: `new-session -d`
+  // returns as soon as the session exists, which is before the command has had a
+  // chance to fail. The failure then surfaces one of two ways, depending on which
+  // side of that race set-option landed on — the session disappears, or the pane is
+  // left dead — and it surfaces LATE: measured on this machine with a nonexistent
+  // binary, tmux reaped 28/30 launches before the first has-session call but took
+  // 32-44 ms on the other 2 under CPU load. A single immediate check (what this used
+  // to be) therefore reported a dead agent as a successful cold start ~7% of the
+  // time, and the caller went on to attach to a session that was not there.
+  // So poll both signals to a deadline instead of guessing once. LAUNCH_GRACE_MS is
+  // ~7x the worst delay observed. It is only ever paid in full by a HEALTHY cold
+  // start, taking that path from ~130 ms to ~440 ms (measured) — a cost worth paying
+  // once per terminal open, next to spawning the agent process itself, and the price
+  // of not handing the caller a session that is already gone.
+  const deadline = Date.now() + LAUNCH_GRACE_MS;
+  for (;;) {
+    if (!hasSession(name)) {
+      throw new Error(`agent command exited immediately: ${launchCommand}`);
+    }
+    if (sessionInfo(name).paneDead) {
+      // Leave nothing half-created behind: the caller is getting an exception, so it
+      // will not attach, and a stray dead-pane session would later look respawnable.
+      killSession(name);
+      throw new Error(`agent command exited immediately: ${launchCommand}`);
+    }
+    if (Date.now() >= deadline) break;
+    sleepSync(LAUNCH_POLL_MS);
+  }
   return state;
 }
 
