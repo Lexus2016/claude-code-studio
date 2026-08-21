@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test test/render/*.test.mjs && node test/overload-detector.test.js && node test/env-load-order.test.js && node test/multi-agent-result.test.js && node test/terminal-session.test.js && node test/terminal-schema.test.js && node test/bots.test.js && node test/bots-api.test.js && node test/running-sessions.test.js && node test/session-liveness.test.js && node test/terminal-bridge.integration.test.js && node test/telegram-format.test.js && node test/telegram-behaviour.test.js && node test/ask-user-question.test.js && node test/delegate-terminal.test.js && node test/update-flow.test.js && node test/kanban-schedule.test.js && node test/i18n-completeness.test.js && node test/setup-gate.test.js",
+    "test": "node --test test/render/*.test.mjs && node test/overload-detector.test.js && node test/env-load-order.test.js && node test/multi-agent-result.test.js && node test/terminal-session.test.js && node test/terminal-schema.test.js && node test/bots.test.js && node test/bots-api.test.js && node test/running-sessions.test.js && node test/session-liveness.test.js && node test/terminal-bridge.integration.test.js && node test/telegram-format.test.js && node test/telegram-behaviour.test.js && node test/ask-user-question.test.js && node test/delegate-terminal.test.js && node test/update-flow.test.js && node test/kanban-schedule.test.js && node test/i18n-completeness.test.js && node test/setup-gate.test.js && node test/subscribe-nocatchup.test.js",
     "postinstall": "node scripts/install-hooks.js",
     "release": "node scripts/release.js",
     "electron:dev": "electron .",
