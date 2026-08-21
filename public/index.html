@@ -6012,9 +6012,16 @@ async function subscribeAllTabs() {
   if (_subscribingAllTabs) return; // prevent concurrent in-flight calls (e.g. rapid reconnects)
   _subscribingAllTabs = true;
   try {
-    // Fetch session IDs that currently have running tasks (for immediate spinner update)
-    const running = await (await fetch('/api/tasks/running-sessions')).json();
-    const runningSet = new Set(running);
+    // Fetch session IDs that currently have running tasks (for immediate spinner update).
+    // Best-effort only: the endpoint may 500/401, in which case it answers with the error
+    // JSON `{error:'...'}` — a plain object, which `new Set()` would reject as non-iterable.
+    // Losing the spinner hint is acceptable; losing the subscribe loop below is not.
+    let runningSet = new Set();
+    try {
+      const running = await (await fetch('/api/tasks/running-sessions')).json();
+      if (Array.isArray(running)) runningSet = new Set(running);
+      else console.error('subscribeAllTabs: running-sessions returned', running);
+    } catch (e) { console.error('subscribeAllTabs: running-sessions:', e); }
     // Collect all tabs across all projects
     const groups = [{ tabs: openTabs, isCurrent: true }];
     for (const [pid, tabs] of Object.entries(projectTabs)) {

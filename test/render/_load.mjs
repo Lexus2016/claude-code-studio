@@ -14,8 +14,10 @@ const HTML = join(dirname(fileURLToPath(import.meta.url)), '../../public/index.h
 export function loadFn(name) {
   const src = readFileSync(HTML, 'utf8');
   const sig = 'function ' + name + '(';
-  const at = src.indexOf(sig);
+  let at = src.indexOf(sig);
   if (at === -1) throw new Error(`function ${name} not found in index.html`);
+  // Keep a leading `async ` — without it `await` in the body is a SyntaxError.
+  if (src.slice(at - 6, at) === 'async ') at -= 6;
   const open = src.indexOf('{', at);
   const rel = src.slice(open).search(/\n\}/);   // first column-0 closing brace
   if (rel === -1) throw new Error(`end of function ${name} not found in index.html`);
