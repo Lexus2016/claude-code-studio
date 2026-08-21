@@ -32,7 +32,10 @@ function check(label, actual, expected) {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const PORT = 3994;
+// Overridable, and refused rather than silently run against whatever already holds the
+// port: server.listen()'s failure kills the child, and the readiness loop would then talk
+// to a foreign server — creating sessions, and billed turns, in someone else's database.
+const PORT = Number(process.env.TEST_PORT || 3994);
 const BASE = `http://127.0.0.1:${PORT}`;
 const PASSWORD = 'liveness-test-pw';
 const APP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-liveness-'));
@@ -56,6 +59,8 @@ const srv = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
   env: { ...process.env, PORT: String(PORT), APP_DIR, WORKDIR: APP_DIR, HOME: HOME_DIR },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
+let srvExited = null;
+srv.on('exit', (code, sig) => { srvExited = sig || code; });
 let srvLog = '';
 srv.stdout.on('data', d => { srvLog += d; });
 srv.stderr.on('data', d => { srvLog += d; });
@@ -65,7 +70,12 @@ function cleanup() {
   try { fs.rmSync(APP_DIR, { recursive: true, force: true }); } catch {}
   try { fs.rmSync(HOME_DIR, { recursive: true, force: true }); } catch {}
 }
-process.on('exit', cleanup);
+let cleanedUp = false;
+function cleanupOnce() { if (cleanedUp) return; cleanedUp = true; cleanup(); }
+process.on('exit', cleanupOnce);
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(sig, () => { cleanupOnce(); process.exit(1); });
+}
 
 let TOKEN = null;
 async function api(method, url, body) {
@@ -97,10 +107,21 @@ function bail(msg) { console.error(msg); console.error(srvLog.slice(-3000)); cle
 (async () => {
   let up = false;
   for (let i = 0; i < 80; i++) {
+    // Our own child dying is fatal — without this the loop keeps polling and can settle on
+    // a foreign server that happens to hold the port, running every assertion against it.
+    if (srvExited !== null) {
+      bail(`server exited before it was ready (${srvExited}). If port ${PORT} is taken, `
+        + `re-run with: TEST_PORT=<free port> node test/session-liveness.test.js`);
+    }
     try { const r = await fetch(BASE + '/api/health'); if (r.ok) { up = true; break; } } catch {}
     await sleep(250);
   }
   if (!up) bail('server did not start');
+  // …and the server that answered must be the one we spawned, not a squatter that
+  // happened to be healthy on this port.
+  if (!srvLog.includes('"port":' + PORT) && !srvLog.includes(`:${PORT}`)) {
+    bail(`the server answering on ${PORT} is not the child we spawned`);
+  }
 
   const setup = await fetch(BASE + '/api/auth/setup', {
     method: 'POST',
