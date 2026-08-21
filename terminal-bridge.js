@@ -339,6 +339,11 @@ function attach({ name, cols, rows, onData, onExit }) {
     write,
     paste,
     resize: doResize,
+    // Read-only, for callers that need to know when the control client itself is
+    // gone rather than guessing with a timer (the integration test waits on it to
+    // prove BOTH exit reports have had their chance before asserting onExit fired
+    // exactly once). Nothing in the server writes to it.
+    pid: p.pid,
     close() { try { p.kill('SIGTERM'); } catch {} },
   };
 }
