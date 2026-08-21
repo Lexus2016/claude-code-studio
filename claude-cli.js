@@ -1,4 +1,4 @@
-const { spawn, execSync } = require('child_process');
+const { spawn, execSync, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -10,7 +10,7 @@ const { StringDecoder } = require('string_decoder');
 // `taskkill /T /F` kills the entire process tree.
 function killProc(proc) {
   if (process.platform === 'win32' && proc.pid && Number.isInteger(proc.pid)) {
-    try { execSync(`taskkill /PID ${proc.pid} /T /F`, { stdio: 'ignore' }); } catch {}
+    try { spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' }); } catch {}
   } else {
     try { proc.kill('SIGTERM'); } catch {}
   }
@@ -113,7 +113,7 @@ function getMcpConfigPath(mcpServers) {
     cached.refCount++;
     return { path: cached.path, hash, isNew: false };
   }
-  const filePath = path.join(os.tmpdir(), `mcp-${hash}.json`);
+  const filePath = path.join(os.tmpdir(), `mcp-${hash.replace(/[^a-f0-9]/g, '')}.json`);
   // 0600: this config embeds internal MCP bearer secrets (ASK_USER_SECRET etc.)
   // and any user MCP API keys — must not be world-readable in shared /tmp
   // (mirrors claude-interactive.js:137). chmod AFTER write: the `mode` write
@@ -263,7 +263,7 @@ class ClaudeCLI {
             ? path.basename(srcName).replace(/[^a-zA-Z0-9._-]/g, '_')
             : `attachment-${_tempFiles.length + 1}.${ext}`;
           const fname = path.extname(safeBase) ? safeBase : `${safeBase}.${ext}`;
-          const fpath = path.join(_tempDir, fname);
+          const fpath = `${_tempDir}${path.sep}${path.basename(fname)}`;
           fs.writeFileSync(fpath, Buffer.from(block.source.data, 'base64'));
           _tempFiles.push(fpath);
           filePaths.push(fpath);
