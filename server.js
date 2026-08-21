@@ -14,6 +14,43 @@ const crypto = require('crypto');
 // of the source column in the Settings UI (see config-resolve.js).
 const _ENV_AT_BOOT = { ...process.env };
 
+// ─── One-time migration onto CCS_ENV_PATH / CCS_CONFIG_PATH ───────────────
+// Both variables exist for Docker, where /app is an image layer and a file the
+// config UI writes there is gone the next time the container is recreated. An
+// install that predates them has its .env and config.json at the OLD location,
+// and pointing the app at the new one would silently start it on defaults —
+// every MCP server, skill and terminal setting apparently wiped.
+//
+// So: if the target does not exist yet and the legacy file does, copy it across
+// once. Runs before the .env loader below, because the loader reads the target.
+//
+// It cannot rescue the one case where the legacy file is not reachable at all:
+// upgrading a container whose config.json only ever lived in the discarded
+// writable layer. That is a release note, not a code path — but a bind-mounted
+// or volume-mounted legacy file, which is how most such installs are set up,
+// is migrated here without the user doing anything.
+{
+  const legacyDir = process.env.APP_DIR || __dirname;
+  for (const [envVar, name] of [['CCS_ENV_PATH', '.env'], ['CCS_CONFIG_PATH', 'config.json']]) {
+    const target = process.env[envVar];
+    if (!target) continue;
+    const legacy = path.join(legacyDir, name);
+    try {
+      if (fs.existsSync(target) || !fs.existsSync(legacy)) continue;
+      if (path.resolve(target) === path.resolve(legacy)) continue;
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      // copyFile, not rename: the legacy file may sit on a read-only mount, and
+      // leaving it in place means a rollback to the previous version still works.
+      // COPYFILE_EXCL so a file created by a concurrent boot is never clobbered.
+      fs.copyFileSync(legacy, target, fs.constants.COPYFILE_EXCL);
+      try { fs.chmodSync(target, name === '.env' ? 0o600 : 0o644); } catch {}
+      console.log(`[migrate] ${legacy} -> ${target} (${envVar})`);
+    } catch (e) {
+      if (e.code !== 'EEXIST') console.error(`[migrate] ${legacy} -> ${target} failed:`, e.message);
+    }
+  }
+}
+
 // ─── Load .env file (no external dependency needed) ───────────────────────
 // MUST stay above every local require() below: claude-cli.js, claude-ssh.js and
 // claude-interactive.js capture CLAUDE_IDLE_TIMEOUT_MS / CLAUDE_HARD_CAP_MS into
