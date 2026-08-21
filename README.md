@@ -251,6 +251,10 @@ Both bots work the turn **in order**, and each one sees what the previous one pr
 
 A bot that fails mid-turn says so, and its unfinished output is never passed to the next bot as if it were fact.
 
+**A ready-made team to start from** — [`bots_example/cs_bots.json`](bots_example/cs_bots.json) is an exported roster of 11 named specialists, usable the moment it lands: **Vertex** (systems architect), **Bogdan** (business analyst / client interviewer), **Vira** (product analyst), **Hanna** (technical researcher), **Dan** (releaser), **Katya** (technical writer), **Kolya** (senior programmer), **Olya** (delivery lead), **Ryta** (staff engineer), **Sofiya** (application security engineer) and **Taras** (QA engineer).
+
+Import it from the **Bots** panel — the import button opens a file picker, point it at that file. Nothing else to configure: each bot arrives with its own system prompt and model already set, so `@@Sofiya audit this endpoint` works on the next message. The import is additive; if a handle collides with a bot you already have, you are asked before anything is overwritten. Treat the file as a starting point — edit the prompts to your own standards, or export your version back out to share it.
+
 ### >_ Terminal Agents — Any CLI Agent, Live in a Tab
 
 Sometimes you don't want a chat abstraction — you want **the actual agent CLI, running, with its real interface**. Claude Code, Codex, Grok, opencode, Antigravity, Kimi, Cursor Agent — or just a shell.
