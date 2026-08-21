@@ -45,6 +45,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   check('cold start reports cold', bridge.ensureSession({ name, workdir: '/tmp', launchCommand: `sh -c 'while true; do echo tick; sleep 1; done'` }), 'cold');
 
+  // Socket isolation. Studio terminals must live on their own tmux server, so that a
+  // `tmux kill-server` typed in any shell (or run by an agent before a test suite —
+  // the failure this check exists for) cannot destroy a user's live session mid-work.
+  // Asserted by absence from the DEFAULT socket; actually running kill-server here
+  // would destroy the developer's own tmux sessions.
+  {
+    const def = require('child_process').spawnSync('tmux', ['list-sessions', '-F', '#{session_name}'], { encoding: 'utf8' });
+    const onDefaultSocket = String(def.stdout || '').split('\n').map(s => s.trim()).includes(name);
+    check('session is NOT on the default tmux socket', onDefaultSocket, false);
+    check('but the bridge sees it on its own socket', bridge.sessionInfo(name).exists, true);
+  }
+
   // A tmux failure must surface, not be reported as a successful cold start —
   // otherwise the caller attaches to a session that was never created, or to one
   // running in the wrong directory.
@@ -89,7 +101,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // Resize must actually change the window, without SIGWINCH.
   h.resize(100, 30);
   await sleep(600);
-  check('resize applies', require('child_process').spawnSync('tmux', ['display-message', '-p', '-t', name, '#{window_width}x#{window_height}'], { encoding: 'utf8' }).stdout.trim(), '100x30');
+  check('resize applies', require('child_process').spawnSync('tmux', ['-L', bridge.TMUX_SOCKET, 'display-message', '-p', '-t', name, '#{window_width}x#{window_height}'], { encoding: 'utf8' }).stdout.trim(), '100x30');
 
   // Closing the browser tab must not kill the agent.
   h.close();

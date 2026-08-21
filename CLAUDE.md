@@ -105,6 +105,8 @@ This is intentional — do not introduce build tools.
 
 **Why tmux (and not node-pty):** the engine needs a PTY that survives the Node process and is readable/writable from outside it. `tmux` delivers that as a plain binary — zero new npm deps, zero build step, matching the project philosophy. `node-pty` (the cross-platform alternative) is a native module requiring compilation — rejected for that reason.
 
+**Dedicated tmux socket — do not move terminals back to the default one.** `terminal-bridge.js` runs every tmux command through `-L ccstudio` (`TMUX_SOCKET`). Reason, from a real failure: an agent working in this repo ran `tmux kill-server` before a test run and destroyed every live studio terminal mid-work. `kill-server` is server-wide (per socket) — the `ccsterm-` name prefix protects nothing. On its own socket, no tmux command typed in a shell can reach studio sessions. Note that `claude-interactive.js` (`ccs-` prefix, subscription engine) is still on the default socket and carries the same exposure.
+
 **Platform support — capability-checked, not OS-sniffed.** `/api/version` returns `tmuxAvailable` (server runs `tmux -V` once at boot); the UI disables the "Subscription" button when false. Works on macOS / Linux / Docker (tmux in Dockerfile) / Windows-via-WSL or Git-Bash. Native Windows without tmux → button disabled, user stays on `api`. There is intentionally no Windows special-casing — the capability flag covers every case.
 
 ### WebSocket Protocol — Do Not Break

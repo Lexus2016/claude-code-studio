@@ -57,8 +57,18 @@ function assertName(name) {
   return name;
 }
 
+// Terminal sessions live on their OWN tmux server (socket `ccstudio`), never the
+// default one. Measured failure this was written for: an agent working in a repo ran
+// `tmux kill-server` before a test run (a normal thing to do — the test suite itself
+// documented it), which destroyed every live studio terminal on the default socket,
+// mid-work. The session prefix alone is no protection: kill-server is server-wide.
+// A separate socket makes any tmux command a human or an agent runs in a shell —
+// kill-server included — physically unable to touch studio sessions.
+const TMUX_SOCKET = 'ccstudio';
+function tmuxArgs(args) { return ['-L', TMUX_SOCKET, ...args]; }
+
 function tmux(args, opts = {}) {
-  try { return spawnSync('tmux', args, { encoding: 'utf8', ...opts }); }
+  try { return spawnSync('tmux', tmuxArgs(args), { encoding: 'utf8', ...opts }); }
   catch { return { status: 1, stdout: '', stderr: '' }; }
 }
 
@@ -128,7 +138,7 @@ function ensureSession({ name, workdir, launchCommand }) {
   if (!workdir || !fs.existsSync(workdir)) {
     throw new Error(`workdir does not exist: ${workdir}`);
   }
-  const r = spawnSync('tmux', ['new-session', '-d', '-s', name, '-c', workdir, launchCommand], { env, encoding: 'utf8' });
+  const r = spawnSync('tmux', tmuxArgs(['new-session', '-d', '-s', name, '-c', workdir, launchCommand]), { env, encoding: 'utf8' });
   if (r.error || r.status !== 0) {
     throw new Error(`tmux new-session failed: ${String(r.stderr || r.error?.message || '').trim() || 'unknown error'}`);
   }
@@ -186,7 +196,7 @@ function attach({ name, cols, rows, onData, onExit }) {
   assertName(name);
   const env = utf8Env();
   delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses children
-  const p = spawn('tmux', ['-C', 'attach-session', '-t', name], { env, stdio: ['pipe', 'pipe', 'pipe'] });
+  const p = spawn('tmux', tmuxArgs(['-C', 'attach-session', '-t', name]), { env, stdio: ['pipe', 'pipe', 'pipe'] });
 
   let booted = false;
   const emit = (buf) => { if (!buf || !buf.length) return; try { onData(buf); } catch {} };
@@ -309,7 +319,7 @@ function saveScrollback(name, file) {
 function killSession(name) { tmux(['kill-session', '-t', name], { stdio: 'ignore' }); }
 
 module.exports = {
-  tmuxAvailable, hasSession, sessionInfo, paneHash,
+  TMUX_SOCKET, tmuxAvailable, hasSession, sessionInfo, paneHash,
   listTerminalSessions, ensureSession, attach, detachClients,
   captureScreen, decodeOutputPayload, saveScrollback, killSession,
 };
