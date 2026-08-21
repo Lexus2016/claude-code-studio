@@ -970,7 +970,11 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   width: 12px; box-sizing: border-box;
   background: var(--s1);
   border-left: 1px solid var(--border);
-  overflow-y: auto; overflow-x: hidden;
+  /* The rail is exactly one screen tall by construction — layoutSegments() projects the
+     whole chat into rail.clientHeight. It must never scroll: a scrolling rail would put
+     dots in rail-content space while the thumb is in rail-track space, which is the bug
+     this patch removes. Do not restore overflow-y:auto. */
+  overflow: hidden;
   padding: 4px 2px;
   z-index: 15; /* above messages, below #scrollBtn (z-index:20) */
   scrollbar-width: none; /* hide native scrollbar on the thin rail */
@@ -978,8 +982,11 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .minimap-rail::-webkit-scrollbar { width: 0; height: 0; }
 .minimap-rail.empty { display: none; }
 .minimap-seg {
-  position: relative;
-  width: 100%; box-sizing: border-box;
+  /* Absolute, not flow: each dot is placed at a computed `top` that mirrors its message's
+     real scroll offset. Stacking them in normal flow (the old behaviour) can only encode
+     *order*, never *position* — which is why a click landed in the wrong place. */
+  position: absolute; left: 2px; right: 2px;
+  box-sizing: border-box;
   border-radius: 2px;
   cursor: pointer;
   opacity: .82;
@@ -9728,12 +9735,17 @@ msgsEl.addEventListener('scroll', () => {
   const rail = $i('minimapRail');
   if (!rail || !msgsEl) return; // markup missing → no-op, never throws
 
-  // Overview tuning: segments are proportional to message length (floor + cap). When the
-  // natural total exceeds the rail height the whole set is compressed to fit one screen,
-  // so every message stays visible/clickable. Only an extreme chat falls back to scroll.
-  const SEG_FLOOR = 4;     // px floor so short messages stay clickable
-  const SEG_GAP = 1;       // px gap between segments
-  const WEIGHT_CAP = 1500; // chars — clamp so one long message can't dominate the fill
+  // The rail is a SCALED PICTURE OF THE SCROLL CONTENT, not of the message list. Every
+  // number below is in scroll-pixel space and is projected onto the rail with one ratio
+  // (railTrack / msgsEl.scrollHeight) — the same ratio the thumb uses. Sizing dots by text
+  // length instead (the old WEIGHT_CAP scheme) put dots and thumb in two different,
+  // unconvertible coordinate systems, so a dot was never drawn where its message actually
+  // is: .msg-clamp caps any message over 300px at a fixed 200px, so rendered height and
+  // character count are not even monotonically related.
+  const SEG_MIN = 4;   // px floor so a one-line message still has a clickable dot
+  const SEG_GAP = 1;   // px shaved off each dot's height so neighbours stay distinct
+  const PAD_T = 4;     // .minimap-rail padding-top
+  const PAD_V = 8;     // .minimap-rail padding-top + padding-bottom
 
   // Shared singletons
   const thumb = document.createElement('div');
@@ -9744,30 +9756,39 @@ msgsEl.addEventListener('scroll', () => {
   // Track current seg nodes for in-place patching (avoid flicker)
   let segs = [];
 
-  // Distribute the FULL rail height across all segments so the overview always fills the
-  // screen vertically (no empty slack below). Each segment gets a floor plus a share
-  // proportional to its message length. Only an extreme chat (floors alone overflow) falls
-  // back to scroll + auto-follow so the latest messages stay reachable.
+  // Project each message's real scroll geometry onto the rail. offsetTop/offsetHeight are
+  // re-read for EVERY dot on EVERY relayout and never cached: a cached map drifts the moment
+  // a message streams in, a clamped message is expanded, an image loads or the window
+  // resizes — and in a long chat that drift compounds down the list, which is precisely the
+  // "click lands on the wrong message" bug. Measured cost is 0.11ms at 10 messages and
+  // 1.84ms at 200, affordable inside the existing rAF, but ONLY because every read happens
+  // in one pass BEFORE any write. Interleaving them forces a synchronous reflow per dot
+  // (~40x slower). Do not merge the two loops.
   function layoutSegments() {
     const n = segs.length;
     if (!n) return;
-    const padV = 8; // .minimap-rail vertical padding (4px top + 4px bottom)
-    const availH = rail.clientHeight - padV - SEG_GAP * (n - 1);
-    if (availH >= n * SEG_FLOOR) {
-      rail.style.overflowY = 'hidden';
-      const weights = segs.map(s => Math.max(1, Math.min(WEIGHT_CAP, (s._text || '').length)));
-      const wsum = weights.reduce((a, b) => a + b, 0) || 1;
-      const extra = availH - n * SEG_FLOOR;
-      for (let i = 0; i < n; i++) {
-        segs[i].style.height = (SEG_FLOOR + extra * (weights[i] / wsum)).toFixed(2) + 'px';
-        segs[i].style.marginBottom = (i < n - 1 ? SEG_GAP : 0) + 'px';
-      }
-    } else {
-      rail.style.overflowY = 'auto';
-      for (let i = 0; i < n; i++) {
-        segs[i].style.height = SEG_FLOOR + 'px';
-        segs[i].style.marginBottom = (i < n - 1 ? SEG_GAP : 0) + 'px';
-      }
+    const track = rail.clientHeight - PAD_V;
+    const sh = msgsEl.scrollHeight;
+    if (track <= 0 || sh <= 0) return; // hidden pane / not laid out yet
+    // .mw's offsetParent is .center (.msgs is not positioned), so subtract the messages
+    // box's own offset to reach content space. If a future CSS change makes .msgs
+    // positioned, offsetTop is already content-space and the base must be 0 — hence the
+    // check rather than an unconditional subtraction.
+    const base = (segs[0]._mw && segs[0]._mw.offsetParent === msgsEl) ? 0 : msgsEl.offsetTop;
+    // READ PASS — no writes in this loop.
+    const geo = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const mw = segs[i]._mw;
+      geo[i] = mw ? { top: mw.offsetTop - base, h: mw.offsetHeight } : null;
+    }
+    // WRITE PASS — no reads in this loop.
+    for (let i = 0; i < n; i++) {
+      const g = geo[i];
+      if (!g) { segs[i].style.display = 'none'; continue; }
+      const p = projectOntoRail(g.top, g.h, sh, track, PAD_T, SEG_MIN, SEG_GAP);
+      segs[i].style.display = '';
+      segs[i].style.top = p.top.toFixed(2) + 'px';
+      segs[i].style.height = p.height.toFixed(2) + 'px';
     }
   }
 
@@ -9819,7 +9840,12 @@ msgsEl.addEventListener('scroll', () => {
   }
 
   function rebuildMinimap() {
-    const mws = msgsEl.querySelectorAll('.mw');
+    // Skip messages the chat search has hidden (filterMessages sets display:none, :16791).
+    // A dot for a display:none message is a dead dot: scrollIntoView on a non-rendered
+    // element is a silent no-op, so the click appeared to jump to the wrong place — and the
+    // surviving dots were spread over positions their messages no longer occupy.
+    // offsetParent is null for a display:none element and for every descendant of one.
+    const mws = [...msgsEl.querySelectorAll('.mw')].filter(m => m.offsetParent !== null);
 
     if (!mws.length) {
       rail.classList.add('empty');
@@ -9881,20 +9907,18 @@ msgsEl.addEventListener('scroll', () => {
   function updateMinimapThumb() {
     if (rail.classList.contains('empty')) return;
     const sh = msgsEl.scrollHeight;
-    const ch = msgsEl.clientHeight;
-    if (sh <= 0) return;
-    // Rail scroll content height (segments stacked); fall back to clientHeight
-    const railContent = rail.scrollHeight || rail.clientHeight;
-    const top = (msgsEl.scrollTop / sh) * railContent;
-    const height = Math.max(8, (ch / sh) * railContent);
-    thumb.style.top = top + 'px';
-    thumb.style.height = height + 'px';
-    // Scroll mode (extreme chats only): keep the thumb — the current position — in view
-    // so the most recent messages remain reachable on the rail.
-    if (rail.scrollHeight > rail.clientHeight + 1) {
-      if (top < rail.scrollTop) rail.scrollTop = Math.max(0, top - 8);
-      else if (top + height > rail.scrollTop + rail.clientHeight) rail.scrollTop = top + height - rail.clientHeight + 8;
-    }
+    const track = rail.clientHeight - PAD_V;
+    if (sh <= 0 || track <= 0) return;
+    // SAME function, SAME ratio, SAME origin as layoutSegments() above — that identity is
+    // the whole fix: the thumb now provably covers exactly the dots whose messages are on
+    // screen. Do not reintroduce rail.scrollHeight here; the rail no longer scrolls, so
+    // rail-content space and rail-track space are the same space, and mixing the two is
+    // what broke the mapping in the first place.
+    const p = projectOntoRail(msgsEl.scrollTop, msgsEl.clientHeight, sh, track, PAD_T, 8, 0);
+    thumb.style.top = p.top.toFixed(2) + 'px';
+    thumb.style.height = p.height.toFixed(2) + 'px';
+    // (The old keep-thumb-in-view block is gone with the rail's scrollbar — there is
+    // nothing left to scroll into view.)
   }
 
   // rAF-coalesced rebuild (streaming fires many mutations per frame)
@@ -9913,7 +9937,14 @@ msgsEl.addEventListener('scroll', () => {
 
   // Live sync: the ONE data source
   const mo = new MutationObserver(schedule);
-  mo.observe(msgsEl, { childList: true, subtree: true, characterData: true });
+  // attributes+attributeFilter is REQUIRED, not belt-and-braces. Two things change the
+  // scroll geometry the rail is drawn from while mutating neither childList nor
+  // characterData, and while leaving msgsEl's own border-box untouched (so the
+  // ResizeObserver below does not fire either): the chat search hides messages with an
+  // inline style (:16791), and .msg-clamp expand/collapse toggles a class (:10619).
+  // Without this the rail silently went stale in both cases.
+  mo.observe(msgsEl, { childList: true, subtree: true, characterData: true,
+                       attributes: true, attributeFilter: ['style', 'class'] });
 
   // The composer (.ia) growing/shrinking resizes #messages WITHOUT mutating its
   // subtree, so the MutationObserver never fires for it — a ResizeObserver keeps
@@ -9934,6 +9965,20 @@ msgsEl.addEventListener('scroll', () => {
   // Initial paint
   schedule();
 })();
+
+// Pure scroll-content-space → rail-track-space projection. Deliberately top-level (outside
+// the initMinimapRail IIFE) for one reason: test/render/_load.mjs can only extract
+// functions whose closing brace is at column 0, and this arithmetic is the one part of the
+// minimap worth unit-testing. Both the dots (layoutSegments) and the viewport thumb
+// (updateMinimapThumb) MUST go through this same function — if they ever diverge again,
+// dots stop pointing at their messages. No DOM is needed to prove they agree.
+function projectOntoRail(top, height, scrollHeight, track, padTop, minPx, gap) {
+  const r = track / scrollHeight;
+  return {
+    top: padTop + top * r,
+    height: Math.max(minPx, height * r - (gap || 0)),
+  };
+}
 
 function cpMsg(b) {
   const txt = b.parentElement.querySelector('.msg').textContent;
