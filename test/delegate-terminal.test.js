@@ -151,5 +151,49 @@ check('missing template degrades to a bare cd', () => {
   assert.strictEqual(buildTerminalCommand({}, '/proj', 'p', 'darwin'), `cd '/proj' && `);
 });
 
+// ─── Remote SSH projects are refused (issue #55) ──────────────────────────────
+// Delegation is local-only in every step: it mkdirs .crosswork on THIS disk, writes
+// CONTEXT.md/DIALOG.md there, opens a terminal here, and polls that local path for the
+// agent's reply. Given a remote project's workdir — a path on the other machine — all
+// four silently target the wrong host. On Windows it is worse than wrong: Node resolves
+// a POSIX-absolute path against the current drive, so the agent starts in
+// C:\home\user\project. That is the reporter's exact symptom, "Delegate opens a local
+// folder", and it is the same class of bug as issue #53.
+//
+// Refusing is the right outcome while there is no remote path. An external agent started
+// in the wrong tree, holding a prompt that tells it to work, is a far worse failure than
+// a message saying no. Pinned by reading the source: the guard lives in the /api/delegate
+// handler, which cannot be imported without starting a server.
+{
+  const fs = require('fs');
+  const path = require('path');
+  const SRV = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const handler = SRV.slice(SRV.indexOf("app.post('/api/delegate'"));
+  const body = handler.slice(0, handler.indexOf('\napp.'));
+
+  check('the delegate handler refuses a remote SSH project', () => {
+    assert.ok(/findRemoteProject\(workdir\)/.test(body),
+      'no findRemoteProject(workdir) check in the /api/delegate handler');
+  });
+  check('it refuses before creating anything on disk', () => {
+    const guardAt = body.indexOf('findRemoteProject(workdir)');
+    // The CALL, not the word: the guard's own comment explains what
+    // ensureDelegationDir would do, and matching that mention instead put the
+    // "mkdir" earlier than the guard and failed a correctly-ordered handler.
+    const mkdirAt = body.indexOf('= ensureDelegationDir(');
+    assert.ok(guardAt !== -1 && mkdirAt !== -1 && guardAt < mkdirAt,
+      'the remote guard must run before ensureDelegationDir, or a .crosswork dir is left behind on the wrong machine');
+  });
+  check('the refusal is a 4xx the UI can show, not a 500', () => {
+    const seg = body.slice(body.indexOf('findRemoteProject(workdir)'));
+    assert.ok(/res\.status\(400\)/.test(seg.slice(0, 600)),
+      'the remote refusal should be a 400 with an explanation');
+  });
+  check('the message names the host so the user can tell which project', () => {
+    const seg = body.slice(body.indexOf('findRemoteProject(workdir)'), body.indexOf('= ensureDelegationDir('));
+    assert.ok(/remoteHost/.test(seg), 'the refusal should name the remote host');
+  });
+}
+
 if (failed) { console.log(`\n${failed} test(s) failed`); process.exit(1); }
 console.log('\nAll delegate-terminal tests passed');

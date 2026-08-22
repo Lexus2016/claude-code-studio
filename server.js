@@ -9561,6 +9561,31 @@ app.post('/api/delegate', express.json(), (req, res) => {
   const session = sessionId ? stmts.getSession.get(sessionId) : null;
   const workdir = session?.workdir || WORKDIR;
 
+  // Delegation is LOCAL-ONLY, and on a remote project every step below silently
+  // targets the wrong machine (issue #55). `workdir` is then a path on the SSH host,
+  // e.g. /home/user/project, and nothing here goes over the wire:
+  //   - ensureDelegationDir() fs.mkdirSync's it on the LOCAL disk. On Windows Node
+  //     resolves a POSIX-absolute path against the current drive, so the delegation
+  //     lands in C:\home\user\project\.crosswork\<id> — and .gitignore is appended
+  //     in a tree that has nothing to do with the user's project;
+  //   - CONTEXT.md / DIALOG.md are written there, where the remote agent cannot see
+  //     them, and the sync watcher polls that same local path forever;
+  //   - openTerminal() opens a LOCAL terminal and cd's into the remote path, which
+  //     is what the reporter saw: "Delegate opens a local folder".
+  // Refusing is the right outcome while there is no remote path: an external AI
+  // agent started in the wrong tree, with a prompt telling it to work, is a much
+  // worse failure than a message saying no. Remote delegation is a real feature —
+  // the protocol is filesystem-based (CONTEXT.md/DIALOG.md polling), so it needs
+  // remote writes and a remote poll loop, not just a different terminal command.
+  const _delegateRemote = findRemoteProject(workdir);
+  if (_delegateRemote) {
+    return res.status(400).json({
+      error: `Delegate does not support remote SSH projects yet. "${_delegateRemote.name || workdir}" runs on ${_delegateRemote.remoteHost || 'a remote host'}, `
+        + `and delegation writes its .crosswork files and opens its terminal on THIS machine — the agent would run against a local path, not your project. `
+        + `Use chat or a task on this project instead; both run over SSH.`,
+    });
+  }
+
   // 1. Generate delegation ID and create its subdirectory
   const delegationId = genId();
   const delegationMode = mode || 'handoff';
