@@ -161,5 +161,53 @@ t('SSH clarifications carry host info but no password', () => {
   assert.ok(!/att\.password/.test(body), 'the credential must never be typed into the pane');
 });
 
+// ── 10. The one-shot task path has to deliver, not just re-queue ────────────
+// The subscription branch of taskWorker breaks out after a single run. Passing it
+// requeueInterrupts was therefore only half a fix: a paste that failed came back
+// into pendingInterrupts and stayed there, with no next turn to collect it, while
+// the final `done` repainted the badge as a finished task.
+t('task runner delivers a leftover clarification as a follow-up turn', () => {
+  const i = SRV.indexOf('const leftover = pendingInterrupts.get(sessionId)');
+  assert.ok(i > 0, 'the subscription task branch does not look at leftovers at all');
+  const brk = SRV.indexOf('break; // one-shot', i);
+  assert.ok(brk > i, 'one-shot break not found after the leftover block');
+  const body = SRV.slice(i, brk);
+  assert.ok(body.includes('pendingInterrupts.delete(sessionId)'), 'leftovers must leave the map');
+  assert.ok(body.includes('currentTaskPrompt = interruptFollowUpPrompt(leftover)'),
+    'a leftover must become the prompt of one more turn');
+  assert.ok(body.includes('continue;'), 'the follow-up turn must re-enter the loop, not fall through to break');
+});
+
+t('the follow-up turn budget is bounded', () => {
+  assert.ok(/const MAX_CLARIFY_TURNS = /.test(SRV), 'no cap on clarification follow-up turns');
+  const i = SRV.indexOf('const leftover = pendingInterrupts.get(sessionId)');
+  const body = SRV.slice(i, SRV.indexOf('break; // one-shot', i));
+  assert.ok(body.includes('clarifyTurns < MAX_CLARIFY_TURNS'), 'a pane rejecting every paste would loop forever');
+  assert.ok(body.includes('clarifyTurns++'), 'the counter must advance or the bound never bites');
+});
+
+t('an undeliverable clarification is re-queued with a warning, never dropped', () => {
+  const i = SRV.indexOf('const leftover = pendingInterrupts.get(sessionId)');
+  const body = SRV.slice(i, SRV.indexOf('break; // one-shot', i));
+  assert.ok(body.includes('unshift(...leftover)'), 'budget spent must not mean discarded');
+  assert.ok(body.includes("level: 'warn'"), 'silence here is the original bug');
+  const marked = body.indexOf('markInterruptDelivered');
+  const requeued = body.indexOf('unshift(...leftover)');
+  assert.ok(marked > 0 && marked < requeued, 'only the delivered branch may mark rows delivered');
+});
+
+t('the task follow-up prompt hands over paths, with a delayed cleanup and no credential', () => {
+  const i = SRV.indexOf('function interruptFollowUpPrompt(');
+  assert.ok(i > 0, 'follow-up prompt builder not found');
+  const body = SRV.slice(i, i + 1200);
+  assert.ok(body.includes('att.sshKeyPath'), 'key path should be passed through');
+  assert.ok(!/att\.password/.test(body), 'the credential must never reach a prompt or a transcript');
+  assert.ok(body.includes('Saved at:'), 'an attachment must reach the agent as a readable path');
+  const j = SRV.indexOf('const leftover = pendingInterrupts.get(sessionId)');
+  const branch = SRV.slice(j, SRV.indexOf('break; // one-shot', j));
+  assert.ok(branch.includes('cleanupInterruptAttachments(leftover, INTERRUPT_FILE_TTL_MS)'),
+    'immediate cleanup would delete the files the prompt points at');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

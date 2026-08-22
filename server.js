@@ -1418,6 +1418,10 @@ const INTERRUPT_SECRET = require('crypto').randomBytes(16).toString('hex');
 // would then fail on a path that no longer exists. These live in the OS temp
 // directory, so an occasional leftover is swept up by the system anyway.
 const INTERRUPT_FILE_TTL_MS = parseInt(process.env.CCS_INTERRUPT_FILE_TTL_MS || '1800000', 10) || 1800000;
+// Follow-up turns a subscription TASK may spend delivering clarifications it could
+// not paste live. Bounded: without it, a pane that rejects every paste re-queues the
+// same message and the task never ends.
+const MAX_CLARIFY_TURNS = parseInt(process.env.CCS_MAX_CLARIFY_TURNS || '3', 10) || 3;
 const pendingInterrupts = new Map(); // sessionId → [{ id, content, attachments?, createdAt }]
 let _interruptIdCounter = 0;
 
@@ -1506,6 +1510,30 @@ function cleanupInterruptAttachments(messages, delayMs = 0) {
   };
   if (delayMs > 0) setTimeout(doCleanup, delayMs);
   else doCleanup();
+}
+
+// Flatten drained interrupts into ONE prompt for a follow-up turn.
+// Mirrors the mid-turn injection builder in claude-interactive.js: an attachment
+// travels as its temp-file path plus a read instruction, and an SSH entry carries
+// host and key path only — the credential never reaches a prompt or a transcript.
+// Callers that use this must delay cleanupInterruptAttachments, or the paths point
+// at files that are already gone.
+function interruptFollowUpPrompt(messages) {
+  const parts = [];
+  for (const m of (messages || [])) {
+    if (m.content) parts.push(m.content);
+    for (const att of (Array.isArray(m.attachments) ? m.attachments : [])) {
+      if (att.type === 'ssh') {
+        let t = `[SSH Host: ${att.label || att.host || 'SSH'}]\nHost: ${att.host}:${att.port || 22}`;
+        if (att.sshKeyPath) t += `\nSSH Key: ${att.sshKeyPath}`;
+        else if (att.authMethod === 'password') t += `\nAuth: password (held server-side, not exposed)`;
+        parts.push(t);
+      } else if (att.path) {
+        parts.push(`[Attached ${att.mimeType && att.mimeType.startsWith('image/') ? 'image' : 'file'}: ${att.name || 'file'}]\nSaved at: ${att.path}\nRead it before continuing.`);
+      }
+    }
+  }
+  return parts.join('\n\n');
 }
 
 function broadcastToSession(sessionId, data) {
@@ -1713,6 +1741,7 @@ async function startTask(task) {
     // Auto-continue loop: keep resuming until agent completes or budget exhausted
     let taskContinueCount = 0;
     let taskOverloadRetryCount = 0;
+    let clarifyTurns = 0; // follow-up turns spent on undelivered clarifications — see MAX_CLARIFY_TURNS
     let currentTaskPrompt = prompt;
     let currentTaskCid = claudeSessionId;
     let lastTaskResult = null;
@@ -1778,9 +1807,9 @@ async function startTask(task) {
           // engine below delivers clarifications through the check-interrupt hook, but
           // the subscription engine has no hooks. Without these three callbacks a
           // clarification sent to a running task was stored, badged "pending" in the UI,
-          // and never handed to the agent. There is no follow-up-turn machinery here
-          // (this path is one-shot), so a failed paste stays queued for the next turn
-          // rather than being marked delivered.
+          // and never handed to the agent. A failed paste is NOT marked delivered — it
+          // comes back through requeueInterrupts and the block after the run turns it
+          // into one more turn, because a one-shot path has no "next turn" of its own.
           drainInterrupts: () => {
             const msgs = pendingInterrupts.get(sessionId) || [];
             if (msgs.length) pendingInterrupts.delete(sessionId);
@@ -1809,6 +1838,42 @@ async function startTask(task) {
         if (r.cid) { newCid = r.cid; currentTaskCid = r.cid; try { stmts.updateClaudeId.run(r.cid, sessionId); } catch {} }
         if (!r.completed) hasError = true;
         lastTaskResult = r.completed ? { subtype: 'success' } : { subtype: 'error' };
+
+        // Whatever is still queued here could not be typed into the pane (paste budget
+        // spent) or arrived between end_turn and this line. Breaking on it — which is
+        // what this branch used to do — left it in pendingInterrupts with no next turn
+        // to collect it, while the final `done` repainted its badge as a finished task.
+        // Run it as one more turn instead: the loop is already here and currentTaskCid
+        // resumes the same Claude session, so the clarification lands in the run it was
+        // written for. MAX_CLARIFY_TURNS bounds it, because a pane that rejects every
+        // paste would otherwise re-queue the same message forever.
+        const leftover = pendingInterrupts.get(sessionId) || [];
+        if (leftover.length) pendingInterrupts.delete(sessionId);
+        if (leftover.length && !taskAbort.signal.aborted && clarifyTurns < MAX_CLARIFY_TURNS) {
+          clarifyTurns++;
+          currentTaskPrompt = interruptFollowUpPrompt(leftover);
+          for (const m of leftover) {
+            if (m.dbId) { try { stmts.markInterruptDelivered.run(m.dbId); } catch {} }
+            try { broadcastToSession(sessionId, { type: 'interrupt_delivered', interruptId: m.id, tabId: sessionId }); } catch {}
+          }
+          // TTL, not immediate: the prompt hands the agent file PATHS, so the temp dir
+          // has to outlive the turn that reads them.
+          cleanupInterruptAttachments(leftover, INTERRUPT_FILE_TTL_MS);
+          log.info(`[taskWorker] task ${task.id}: ${leftover.length} clarification(s) delivered as follow-up turn ${clarifyTurns}/${MAX_CLARIFY_TURNS}`);
+          continue;
+        }
+        if (leftover.length) {
+          // Budget spent or the task was stopped. Put it back rather than dropping it —
+          // the next chat turn on this session drains the same map — but say so out
+          // loud, because silence here is the original bug.
+          if (!pendingInterrupts.has(sessionId)) pendingInterrupts.set(sessionId, []);
+          pendingInterrupts.get(sessionId).unshift(...leftover);
+          broadcastToSession(sessionId, {
+            type: 'notification', level: 'warn', tabId: sessionId,
+            title: 'Clarification not delivered',
+            detail: `The task ended before ${leftover.length} message(s) could be handed to the agent. They will be sent with your next message in this chat.`,
+          });
+        }
         break; // one-shot: interactive runs to end_turn, no auto-continue
       }
 
@@ -10424,7 +10489,7 @@ wss.on('connection', (ws) => {
         // A room seats the PROJECT's bots — a conversation mode is a property of the
         // chat, not something the user re-picks per message. Mentions are handled above,
         // so reaching here means no one bot was named and the whole room speaks.
-        newCid = await runConversationRoom(params, { bots: projectBots, prompt, rosterBots: projectBots });
+        newCid = await runConversationRoom(params, { bots: projectBots, prompt: enginePrompt, rosterBots: projectBots });
       } else if (agentMode==='multi') {
         newCid = await runMultiAgent(params);
       } else {
