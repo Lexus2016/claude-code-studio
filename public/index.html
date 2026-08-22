@@ -17252,14 +17252,25 @@ function _paintPaneWanted() {
 // The pane keeps the engine's geometry (220x50), so the browser has to meet it
 // halfway: shrink the font until that many columns fit the host, never above the
 // chat font size. Whatever still does not fit scrolls (.term-fixed).
-function _fitEnginePaneFont(entry) {
+// Fit the font so `cols` columns fill the available width.
+//
+// `grow` is the whole difference between the two callers, and getting it wrong is why
+// a split window still looked collapsed after the pane-pinning fix shipped. The engine
+// pane is WIDE (spawned at 220 columns) and must only ever shrink — capping at the base
+// size is what keeps it readable. A pane in a split window is NARROW (measured: 41
+// columns beside five teammates) and must be allowed to GROW, or 41 columns render at
+// body size inside a 160-column box and the rest of the terminal stays black.
+function _fitEnginePaneFont(entry, grow = false) {
   try {
     const cols = entry.term.cols || 220;
     const avail = entry.host.clientWidth || 0;
     if (!avail) return;
     const base = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15.5;
+    // Growth is bounded: a very narrow pane would otherwise ask for a font nobody wants
+    // to read, and xterm re-lays out the whole buffer on every change.
+    const ceiling = grow ? Math.min(base * 2.2, 30) : base;
     // xterm's monospace advance width is ~0.6em; 2px of padding slack per side.
-    const target = Math.max(5, Math.min(base, Math.floor(((avail - 6) / cols / 0.6) * 10) / 10));
+    const target = Math.max(5, Math.min(ceiling, Math.floor(((avail - 6) / cols / 0.6) * 10) / 10));
     if (Math.abs((entry.term.options.fontSize || 0) - target) > 0.15) entry.term.options.fontSize = target;
   } catch {}
 }
@@ -17392,7 +17403,7 @@ function _connectTerminalWs(sessionId) {
       entry.splitPanes = msg.panes || 1;
       if (entry.splitPanes > 1) {
         try { term.resize(msg.cols || term.cols, msg.rows || term.rows); } catch {}
-        _fitEnginePaneFont(entry);
+        _fitEnginePaneFont(entry, true);
       } else {
         // Back to a single pane: drop the scaled font and resume normal fitting.
         try { term.options.fontSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15.5; } catch {}
@@ -17525,7 +17536,7 @@ function sendTermResize() {
   if (isEnginePaneId(_termSessionId)) { _fitEnginePaneFont(e); return; }
   // Same rule for a SPLIT ordinary session: the window belongs to whoever split it, so
   // adapt the font rather than propose a geometry the server will refuse anyway.
-  if (e.splitPanes > 1) { _fitEnginePaneFont(e); return; }
+  if (e.splitPanes > 1) { _fitEnginePaneFont(e, true); return; }
   // A hidden xterm does NOT measure zero — it measures 100. #termPane is display:none
   // whenever the active tab is a chat (.center.term-mode), and .term-instance is
   // width:100%/height:100%. getComputedStyle on a non-rendered element returns the COMPUTED
