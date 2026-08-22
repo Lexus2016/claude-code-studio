@@ -3157,7 +3157,7 @@ class TelegramBot extends EventEmitter {
 
   // ─── Push Notifications ─────────────────────────────────────────────────
 
-  async notifyTaskComplete({ sessionId, title, status, duration, error }) {
+  async notifyTaskComplete({ sessionId, title, status, duration, error, botId }) {
     if (!this.running) return;
 
     const devices = this.db.prepare(
@@ -3209,12 +3209,20 @@ class TelegramBot extends EventEmitter {
       ctx.lastNotifiedAt = now;
 
       if (device.forum_chat_id) {
-        // Forum mode — try forum Activity topic first, fallback to private chat
+        // Forum mode — a bot-owned task reports into that bot's own topic; everything
+        // else goes to the shared Activity topic. Both fall back to the private chat.
         let forumOk = false;
         try {
-          forumOk = await this._forum.notifyActivity(device.forum_chat_id, text, sessionId);
+          forumOk = await this._forum.notifyBotActivity(device.forum_chat_id, text, botId, sessionId);
         } catch (err) {
-          this.log.warn(`[telegram] Forum activity notify failed: ${err.message}`);
+          this.log.warn(`[telegram] Forum bot-topic notify failed: ${err.message}`);
+        }
+        if (!forumOk) {
+          try {
+            forumOk = await this._forum.notifyActivity(device.forum_chat_id, text, sessionId);
+          } catch (err) {
+            this.log.warn(`[telegram] Forum activity notify failed: ${err.message}`);
+          }
         }
         if (!forumOk) {
           // Fallback: Activity topic missing or failed — send to private chat

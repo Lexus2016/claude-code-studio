@@ -297,6 +297,52 @@ const msg = (over = {}) => ({
     check('and is answered as a command', sends().length > 0, true);
   }
 
+  console.log('\na bot-owned task reports into that bot\'s topic:');
+  {
+    // A task can be assigned to a bot (tasks.bot_id — the Kanban and Schedule editors
+    // both offer the picker). Its result went to the shared Activity topic like every
+    // other task, so a bot's own routine work was indistinguishable from anyone else's.
+    const BOT_THREAD = 7;   // @analyst's topic, bound to /w/alpha above
+    bot._stmts.addForumTopic.run(8, FORUM_CHAT, 'activity', null);
+    bot._forum._loadTopicsFromDb();
+    db.prepare('UPDATE telegram_devices SET notifications_enabled = 1, forum_chat_id = ? WHERE telegram_user_id = ?')
+      .run(FORUM_CHAT, USER);
+    // notifyTaskComplete returns early unless the bot considers itself running; nothing
+    // else in this harness needs the flag, so it is set here rather than globally.
+    bot.running = true;
+    const unRateLimit = () => { bot._getContext(USER).lastNotifiedAt = 0; };
+    const threadOf = (t) => sends().filter(s => s.text === t || /Nightly|Plain/.test(s.text)).map(s => s.message_thread_id);
+
+    reset(); unRateLimit();
+    await bot.notifyTaskComplete({
+      sessionId: 'a1', title: 'Nightly digest', status: 'done', duration: 4000, botId: 'analyst',
+    });
+    check('the result lands in the bot\'s own topic', threadOf().includes(BOT_THREAD), true);
+    check('and not in the shared Activity topic', threadOf().includes(8), false);
+
+    // Unassigned tasks must keep their existing route exactly.
+    reset(); unRateLimit();
+    await bot.notifyTaskComplete({ sessionId: 'a1', title: 'Plain task', status: 'done', duration: 1000 });
+    check('a task with no bot still goes to Activity', threadOf().includes(8), true);
+
+    // A handle with no topic of its own falls back rather than going undelivered.
+    reset(); unRateLimit();
+    await bot.notifyTaskComplete({
+      sessionId: 'a1', title: 'Nightly digest', status: 'done', duration: 1000, botId: 'nobody-home',
+    });
+    check('a bot with no topic falls back to Activity', threadOf().includes(8), true);
+
+    // Failures must reach the bot's topic too — that is where someone watching this
+    // bot is looking, and a silent failure there is worse than a noisy one.
+    reset(); unRateLimit();
+    await bot.notifyTaskComplete({
+      sessionId: 'a1', title: 'Nightly digest', status: 'error', error: 'boom', botId: 'analyst',
+    });
+    const botMsgs = sends().filter(s => s.message_thread_id === BOT_THREAD);
+    check('a failure reaches the bot\'s topic', botMsgs.length > 0, true);
+    check('and carries the reason', /boom/.test(botMsgs.map(s => s.text).join('')), true);
+  }
+
   console.log('\nopening a bot its own topic:');
   {
     const ROSTER2 = [{ id: 'scribe', label: 'Scribe', avatar: '✍️', model: null, description: '' }];

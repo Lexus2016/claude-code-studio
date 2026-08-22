@@ -1963,6 +1963,7 @@ async function startTask(task) {
               title: task.title || 'Task',
               status: 'done',
               duration: Date.now() - _taskStartedAt,
+              botId: task.bot_id || null,
             }).catch(() => {});
           }
         } else if (task.chain_id && !usageLimitExhausted && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
@@ -2009,6 +2010,7 @@ async function startTask(task) {
               status: 'error',
               duration: Date.now() - _taskStartedAt,
               error: reason,
+              botId: task.bot_id || null,
             }).catch(() => {});
           }
           // Cascade cancel of dependents happens in next processQueue() run

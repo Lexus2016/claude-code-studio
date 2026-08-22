@@ -393,6 +393,33 @@ class TelegramBotForum {
   }
 
   /**
+   * A bot-owned task reporting into that bot's own topic.
+   *
+   * Returns false when the bot has no topic here, so the caller falls back to the
+   * shared Activity topic rather than leaving the result undelivered. That fallback is
+   * the whole reason this is a separate method and not a branch inside notifyActivity:
+   * "no topic for this handle" is a normal state (the topic is opt-in, opened by a
+   * button), not an error.
+   */
+  async notifyBotActivity(forumChatId, text, botId, sessionId) {
+    if (!botId) return false;
+    const topic = this._api.stmts.getForumBotTopic.get(forumChatId, botId);
+    if (!topic) return false;
+
+    const options = { message_thread_id: topic.thread_id, parse_mode: 'HTML' };
+    if (sessionId) {
+      // Same buttons the Activity topic offers — a result you cannot open is a dead end
+      // wherever it is posted.
+      options.reply_markup = JSON.stringify({ inline_keyboard: [[
+        { text: this._api.t('fm_btn_open_chat'), callback_data: `fa:open:${sessionId}` },
+        { text: this._api.t('fm_btn_continue'), callback_data: `fa:continue:${sessionId}` },
+      ]] });
+    }
+    await this._api.sendMessage(forumChatId, text, options);
+    return true;
+  }
+
+  /**
    * Send ask_user notification to Forum Activity topic with project link.
    */
   async notifyAskUser(forumChatId, text, session, answerRows) {
