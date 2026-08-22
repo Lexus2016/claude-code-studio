@@ -250,5 +250,21 @@ t('a Telegram paste that failed keeps its place in the queue', () => {
   assert.ok(!body.includes('markInterruptDelivered'), 'a re-queued message has not been delivered');
 });
 
+t('the Telegram follow-up turn rehydrates attachment bodies before handing them over', () => {
+  const i = SRV.indexOf("const _queued = pendingInterrupts.get(sessionId)");
+  assert.ok(i > 0, 'Telegram finally-block drain not found');
+  const body = SRV.slice(i, SRV.indexOf('cleanupInterruptAttachments(_queued', i));
+  // saveInterruptAttachments keeps `base64` only for IMAGES, and
+  // buildAttachmentContentBlocks reads att.base64 and never att.path — so without the
+  // read-back a text or binary attachment reached the follow-up turn as
+  // `data: undefined` and was dropped without a word.
+  assert.ok(body.includes('fs.readFileSync(att.path).toString(\'base64\')'),
+    'a non-image attachment reaches this point as {type,name,path} and needs its body read back');
+  assert.ok(body.includes("att.type === 'ssh'"),
+    'an SSH entry carries a credential and must never be given a body');
+  assert.ok(body.includes('.filter(Boolean).join'),
+    'an attachment-only clarification has empty content and must not pad the prompt with blank lines');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

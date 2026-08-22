@@ -8761,8 +8761,17 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     if (_queued?.length) {
       pendingInterrupts.delete(sessionId);
       for (const m of _queued) { if (m.dbId) { try { stmts.markInterruptDelivered.run(m.dbId); } catch {} } }
-      const _followText = _queued.map(m => m.content).join('\n\n');
-      const _followAttachments = _queued.flatMap(m => m.attachments || []);
+      const _followText = _queued.map(m => m.content).filter(Boolean).join('\n\n');
+      // Same rehydration the WS finally does (~server.js:10644), and for the same
+      // reason: saveInterruptAttachments only keeps `base64` for IMAGES, so a text or
+      // binary attachment reaches this point as {type,name,path}. buildAttachmentContentBlocks
+      // reads att.base64 and never att.path, so without this the follow-up turn built a
+      // file block with `data: undefined` and the attachment was lost in silence.
+      // SSH entries carry a credential and never get a body.
+      const _followAttachments = _queued.flatMap(m => m.attachments || []).map(att => {
+        if (!att || att.base64 || att.type === 'ssh' || !att.path) return att;
+        try { return { ...att, base64: fs.readFileSync(att.path).toString('base64') }; } catch { return att; }
+      });
       setImmediate(() => {
         processTelegramChat({ sessionId, text: _followText, userId, chatId, threadId, attachments: _followAttachments })
           .catch(e => log.error('[processTelegramChat] follow-up run failed', { sessionId, err: e.message }));
