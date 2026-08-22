@@ -104,6 +104,36 @@ This is intentional — do not introduce build tools.
 - **No TypeScript** — vanilla JS throughout
 - **No CSS frameworks** — vanilla CSS only
 
+### Agent modes
+
+`sessions.agent_mode`: `single` (default), `multi`, `dispatch`, `conversation`.
+
+**`conversation` — a room of bots.** 2-6 of the project's bots take SERIAL turns on one
+user message, for at most 3 rounds / 10 messages, then the room closes with ONE artifact.
+`runConversationRoom` in server.js; the decision logic (`planRoom`, `parseRoomReply`,
+`roomShouldContinue`) is pure and lives in `bots.js`, pinned by `test/bots.test.js`.
+
+Three invariants — breaking any of them is what the design was built to prevent:
+- **The room is the only dispatcher.** `_ccs_bots` is deliberately NOT injected, so no bot
+  can call `message_bot` inside a room. Two dispatchers would give one bot two owners in
+  one turn, and the UI's turn state is keyed by handle (one slot per bot) — the second run
+  would overwrite the first's chip.
+- **Serial, never parallel.** Two bots writing at once interleave into an unreadable
+  transcript, and the room's value is that it reads as a conversation.
+- **Never nested inside a multi/DAG wave.** It is a leaf that emits one artifact; that is
+  what keeps "exactly one budget object per turn" true.
+
+A `PASS` must OPEN a reply ("the tests pass now" is a contribution, not a decline).
+`@user` escalates only as a standalone token — `@@handle` addresses a peer, and neither
+`superuser` nor an email address reaches the human. Escalation outranks every other stop
+condition: once a bot has asked the human something, more bot turns only bury the question.
+
+Each round runs a FRESH CLI session per bot rather than resuming that bot's long-lived
+chat session — a room turn carries its whole transcript in the prompt, and resuming would
+splice the room's rounds into the thread the bot uses when mentioned normally.
+
+Not built: the room's artifact is not yet consumed by a DAG node (roadmap item 6b).
+
 ### Engines
 - `api` (default) — headless `claude -p` via `runCliSingle` in server.js
 - `subscription` — persistent interactive tmux session (one per chat) via `claude-interactive.js`, billed on the Claude Max subscription (UI button "Subscription"). MCP servers passed via `--mcp-config` at spawn; systemPrompt via `--append-system-prompt` at spawn; config changes (skills/mode/MCP/model) auto-respawn the tmux session with `--resume` — verified to keep writing to the same transcript jsonl. Image attachments saved to temp files, paths appended to the prompt. maxTurns is not applicable. Choice persisted per session in `sessions.run_engine` (the `engine` column belongs to telegram-bot.js — do not reuse it).
