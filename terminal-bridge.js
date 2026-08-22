@@ -227,10 +227,30 @@ function decodeOutputPayload(payload) {
 // happens to redraw. Known limitation: this restores the visible text and colours,
 // NOT the full terminal state (alternate-screen flag, cursor shape, saved cursor,
 // keyboard modes). The agent's next redraw fixes those.
+// The pane's visible screen, as bytes a terminal can replay.
+//
+// The trailing newline is stripped ON PURPOSE. `capture-pane -p` emits EVERY row of
+// the pane, each terminated by \n — so replaying it verbatim into a terminal of the
+// same height sends one newline too many: the cursor is pushed past the last row, the
+// view scrolls by one, and the cursor ends up a line BELOW where tmux has it. That is
+// the "cursor one line low after switching projects" report; switching is a re-attach,
+// and every re-attach repainted from this snapshot.
 function captureScreen(name) {
   const r = tmux(['capture-pane', '-p', '-e', '-t', name]);
   if (r.status !== 0) return null;
-  return Buffer.from(String(r.stdout || '').replace(/\n/g, '\r\n'), 'utf8');
+  const body = String(r.stdout || '').replace(/\n+$/, '');
+  return Buffer.from(body.replace(/\n/g, '\r\n'), 'utf8');
+}
+
+// Where tmux actually has the cursor, as a CUP escape. capture-pane carries no cursor
+// information at all, so without this the browser's cursor simply lands wherever the
+// replayed text happened to end.
+function cursorSeq(name) {
+  const r = tmux(['display-message', '-p', '-t', name, '#{cursor_y};#{cursor_x}']);
+  if (r.status !== 0) return null;
+  const [y, x] = String(r.stdout || '').trim().split(';').map(v => parseInt(v, 10));
+  if (!Number.isFinite(y) || !Number.isFinite(x)) return null;
+  return Buffer.from(`\x1b[${y + 1};${x + 1}H`, 'latin1');   // CUP is 1-based
 }
 
 // Attach a control-mode client.
@@ -391,7 +411,10 @@ function attach({ name, cols, rows, onData, onExit, onGeometry, resizeOnAttach =
     if (exited) return;
     const screen = captureScreen(name);   // synchronous — see the bootstrap note above
     booted = true;                        // set in the same tick, before any data event
-    if (screen) emit(Buffer.concat([Buffer.from('\x1b[H\x1b[2J', 'latin1'), screen]));
+    if (screen) {
+      const cur = cursorSeq(name);
+      emit(Buffer.concat([Buffer.from('\x1b[H\x1b[2J', 'latin1'), screen, cur || Buffer.alloc(0)]));
+    }
     refreshGeometry();   // the window may already be split when a viewer opens
   }, 150);
 
@@ -478,7 +501,7 @@ function saveScrollback(name, file) {
 function killSession(name) { tmux(['kill-session', '-t', name], { stdio: 'ignore' }); }
 
 module.exports = {
-  TMUX_SOCKET, tmuxAvailable, hasSession, sessionInfo, paneHash,
+  TMUX_SOCKET, tmuxAvailable, hasSession, sessionInfo, paneHash, cursorSeq,
   listTerminalSessions, ensureSession, attach, detachClients,
   setWindowSizeManual, paneSize, paneGeometry, paneCount, paneActiveId,
   captureScreen, decodeOutputPayload, saveScrollback, killSession,
