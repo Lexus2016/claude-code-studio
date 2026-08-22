@@ -30,6 +30,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 
 const { findClaudeBin } = require('./claude-cli');
+const { agentsMdPreamble } = require('./agents-md');
 // ONE definition of the socket name, imported — never a second copy of the string.
 const { TMUX_SOCKET } = require('./terminal-bridge');
 
@@ -331,7 +332,13 @@ async function runInteractiveSingle(params) {
     // ── Resolve per-session config (system prompt, MCP, model) ─────────────
     const mp = mode === 'planning' ? 'MODE: PLANNING ONLY. Analyze, plan, DO NOT modify files.\n\n'
       : mode === 'task' ? 'MODE: EXECUTION.\n\n' : '';
-    const sp = (mp + (systemPrompt || '')).trim();
+    // AGENTS.md (issue #54) rides along in the same --append-system-prompt this
+    // engine already spawns with. It lands in cfgHash below on purpose: editing
+    // AGENTS.md then respawns the tmux session with --resume, exactly as changing
+    // skills or the model does. Empty string when there is nothing to add, so a
+    // project without AGENTS.md keeps its previous hash and does NOT respawn.
+    const agentsMd = agentsMdPreamble(workdir || process.cwd());
+    const sp = [(mp + (systemPrompt || '')).trim(), agentsMd].filter(Boolean).join('\n\n');
     const modelAlias = /^[a-zA-Z0-9._-]+$/.test(String(model || '')) ? model : 'sonnet';
     const mcpPath = mcpConfigPath(mcpServers);
     let mcpJson = '';

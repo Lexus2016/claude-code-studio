@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 const { StringDecoder } = require('string_decoder');
+const { agentsMdPreamble } = require('./agents-md');
 
 // Kill a child process and its tree. On Windows `proc.kill()` only kills the
 // direct child (cmd.exe), leaving grandchildren (node.exe) orphaned.
@@ -215,6 +216,19 @@ class ClaudeCLI {
     // already baked into the session history. Changing it invalidates cryptographic
     // signatures on thinking blocks, causing API 400 "Invalid signature in thinking block".
     if (systemPrompt && !sessionId) args.push('--system-prompt', systemPrompt);
+
+    // AGENTS.md (issue #54). The CLI loads CLAUDE.md but not AGENTS.md, so a project
+    // that standardises on AGENTS.md ran with no conventions at all. Append it here.
+    //   --append-system-prompt, NOT --system-prompt: the latter REPLACES the CLI's
+    //   default prompt, and several callers (the task runner without a bot) pass no
+    //   systemPrompt at all — switching it on for them would silently drop every
+    //   default instruction to smuggle in a conventions file.
+    //   Same !sessionId guard as above, for the same reason: changing the system
+    //   prompt on --resume invalidates thinking-block signatures (API 400).
+    if (!sessionId) {
+      const agentsMd = agentsMdPreamble(this.cwd);
+      if (agentsMd) args.push('--append-system-prompt', agentsMd);
+    }
 
     // --tools: control which built-in tools are available.
     // "" disables all tools, "default" enables all, or specify names (e.g. "Bash,Edit,Read").

@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. `npm test` chains 55 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 37 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the remote CLI-list framing parser and the one-time config/.env migration onto CCS_CONFIG_PATH. On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
+No linting and no build step configured. `npm test` chains 56 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 38 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the remote CLI-list framing parser, the one-time config/.env migration onto CCS_CONFIG_PATH and the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
 
 ## Architecture
 
@@ -167,6 +167,35 @@ fable
 ```
 These short aliases are exactly what `claude-cli.js` (`MODEL_MAP`) passes to the CLI — pass them through **as-is**; the `claude` binary resolves each one internally. Do not use dated model-ID suffixes in CLI flags (the dated IDs are kept commented out in `MODEL_MAP`).
 
+### AGENTS.md (issue #54)
+
+The `claude` CLI discovers `CLAUDE.md` but **not** `AGENTS.md` — measured against
+2.1.231: a directory holding only `AGENTS.md` gets no project instructions at all,
+while the byte-identical file renamed `CLAUDE.md` loads. A project standardised on
+`AGENTS.md` therefore ran with none of its conventions, silently. `agents-md.js`
+closes that gap for **local** runs.
+
+- **Precedence is `CLAUDE.md` → `AGENTS.md`, and it is exclusive.** When a
+  `CLAUDE.md` exists, `agentsMdPreamble()` returns `''` and `AGENTS.md` is not read
+  at all — the CLI already loaded `CLAUDE.md`, and appending the other on top would
+  hand the model two sets of conventions to reconcile.
+- **It is passed as `--append-system-prompt`, never `--system-prompt`.** The latter
+  *replaces* the CLI's default prompt, and several callers (the task runner without
+  a bot) pass no `systemPrompt` at all — switching it on for them would drop every
+  default instruction. Same `!sessionId` guard as `--system-prompt`, for the same
+  reason: changing the system prompt on `--resume` invalidates thinking-block
+  signatures (API 400).
+- **Remote SSH runs are not covered.** The file is on the other machine and the
+  server cannot read it, so `claude-ssh.js` deliberately calls none of this.
+- The instruction-file editor (`/api/claude-md`) uses the same discovery, so it
+  edits the file the run actually uses instead of always opening `CLAUDE.md` and
+  creating a duplicate next to a real `AGENTS.md`. `POST` accepts an optional
+  `file` pin, whitelisted against the two literal names — never joined from free
+  text, or the endpoint becomes an arbitrary-write primitive.
+- `/api/config-files` still exposes a fixed `CLAUDE.md` key. That entry is dead in
+  the current UI (the config editor reads `/api/claude-md`); its key name is part of
+  the endpoint's allowlist contract, so it was left alone.
+
 ### Markdown Rendering in SPA
 - During streaming: `renderStreaming()` handles unclosed code fences
 - On `done` event: re-render with full `renderMd()` for proper final formatting
@@ -176,7 +205,7 @@ These short aliases are exactly what `claude-cli.js` (`MODEL_MAP`) passes to the
 
 ## How to Verify Changes
 
-`npm test` runs 55 test files under `test/` (18 `test/render/*.test.mjs` + 37 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 56 test files under `test/` (18 `test/render/*.test.mjs` + 38 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server
