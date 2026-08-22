@@ -150,6 +150,30 @@ const wss = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 * 1024 })
 // reason to carry.
 const wssTerm = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 * 1024 });
 
+// Heartbeat: without an active ping/pong, a connection whose TCP path died silently
+// (proxy idle timeout, laptop sleep/wake, NAT drop) sits "open" on both ends forever —
+// no 'close' event ever fires, so a terminal (or chat) socket just freezes with
+// nothing telling the client to reconnect. Ping every client periodically and
+// terminate() one that never answers; that forces a real close, which the client's
+// existing reconnect logic (chat: connect(); terminal: _connectTerminalWs onclose)
+// already handles. 30s interval, one missed pong tolerated — the standard `ws`
+// heartbeat.js pattern.
+function attachHeartbeat(server) {
+  server.on('connection', (ws) => {
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
+  });
+  setInterval(() => {
+    for (const ws of server.clients) {
+      if (ws.isAlive === false) { ws.terminate(); continue; }
+      ws.isAlive = false;
+      try { ws.ping(); } catch {}
+    }
+  }, 30000);
+}
+attachHeartbeat(wss);
+attachHeartbeat(wssTerm);
+
 const PORT = process.env.PORT || 3000;
 // Bind address. Loopback by default: this UI drives `claude
 // --dangerously-skip-permissions` with Bash rooted at $HOME, so putting it on a
