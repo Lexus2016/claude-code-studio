@@ -17383,6 +17383,21 @@ function _connectTerminalWs(sessionId) {
       // with `window-size manual` before attaching).
       try { term.resize(msg.cols || term.cols, msg.rows || term.rows); } catch {}
       _fitEnginePaneFont(entry);
+    } else if (msg.type === 'geometry') {
+      // The window is split (agent-teams gives each teammate its own pane) or has just
+      // become whole again. A split window must never be resized from here — tmux
+      // redistributes panes on the way down AND up and never restores the layout — so
+      // the xterm is sized to the PANE and the font scaled to fill the space, exactly
+      // as the engine-pane viewer already does.
+      entry.splitPanes = msg.panes || 1;
+      if (entry.splitPanes > 1) {
+        try { term.resize(msg.cols || term.cols, msg.rows || term.rows); } catch {}
+        _fitEnginePaneFont(entry);
+      } else {
+        // Back to a single pane: drop the scaled font and resume normal fitting.
+        try { term.options.fontSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--msg-font')) || 15.5; } catch {}
+        sendTermResize();
+      }
     } else if (msg.type === 'no_pane') {
       // Distinguishable from an error: nothing is broken, there is simply no live
       // TUI for this chat — an api-engine chat, or one that has never run a turn.
@@ -17508,6 +17523,9 @@ function sendTermResize() {
   // An engine pane is a viewer: its tmux window belongs to the subscription engine
   // and stays at the geometry the engine spawned it with. Adapt the font instead.
   if (isEnginePaneId(_termSessionId)) { _fitEnginePaneFont(e); return; }
+  // Same rule for a SPLIT ordinary session: the window belongs to whoever split it, so
+  // adapt the font rather than propose a geometry the server will refuse anyway.
+  if (e.splitPanes > 1) { _fitEnginePaneFont(e); return; }
   // A hidden xterm does NOT measure zero — it measures 100. #termPane is display:none
   // whenever the active tab is a chat (.center.term-mode), and .term-instance is
   // width:100%/height:100%. getComputedStyle on a non-rendered element returns the COMPUTED

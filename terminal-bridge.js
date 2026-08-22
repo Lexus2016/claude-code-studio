@@ -243,7 +243,7 @@ function captureScreen(name) {
 // snapshot. Replaying it would double-print and can corrupt a TUI's screen, so the
 // buffer is DISCARDED, not flushed. Anything arriving after the snapshot returns is
 // streamed live.
-function attach({ name, cols, rows, onData, onExit, resizeOnAttach = true }) {
+function attach({ name, cols, rows, onData, onExit, onGeometry, resizeOnAttach = true }) {
   assertName(name);
   const env = utf8Env();
   delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses children
@@ -251,6 +251,24 @@ function attach({ name, cols, rows, onData, onExit, resizeOnAttach = true }) {
 
   let booted = false;
   const emit = (buf) => { if (!buf || !buf.length) return; try { onData(buf); } catch {} };
+
+  // WHICH PANE THIS VIEWER MIRRORS.
+  // A control client receives %output for EVERY pane in the session — verified: one
+  // client, two panes, both payloads delivered. This module used to strip the pane id
+  // and emit them all into the single browser terminal, so once Claude Code's
+  // agent-teams split the window (one pane per teammate) four TUIs were writing into
+  // one screen buffer, each addressing coordinates that belong to its own pane.
+  // Everything else here targets `-t <session>`, which tmux resolves to the ACTIVE
+  // pane, so that is the one pane the viewer represents.
+  // PINNED at attach, deliberately never updated. Splitting a window makes the NEW pane
+  // active, so following the active pane would silently move the viewer onto the teammate
+  // that agent-teams just spawned — the user opened THIS agent and must keep seeing it.
+  const mirroredPane = paneActiveId(name);
+  const refreshGeometry = () => {
+    if (!onGeometry) return;
+    const g = mirroredPane ? paneGeometry(mirroredPane) : paneSize(name);
+    try { onGeometry({ cols: g.cols, rows: g.rows, panes: paneCount(name) }); } catch {}
+  };
   // A dying session reports twice — once as a `%…-closed`/`%exit` notification and
   // again when the control client process exits. Callers close a WebSocket in this
   // handler, so it must fire at most once.
@@ -271,8 +289,12 @@ function attach({ name, cols, rows, onData, onExit, resizeOnAttach = true }) {
         // payload itself contains spaces and must not be tokenised.
         const rest = line.slice('%output '.length);
         const sp = rest.indexOf(' ');
-        // Pre-boot output is already inside the snapshot below — drop it.
-        if (booted) emit(decodeOutputPayload(sp === -1 ? '' : rest.slice(sp + 1)));
+        const pane = sp === -1 ? '' : rest.slice(0, sp);
+        // Only the pane this viewer mirrors. Without the filter, a split window
+        // interleaved every pane's escape sequences into one browser terminal.
+        if (booted && (!mirroredPane || pane === mirroredPane)) {
+          emit(decodeOutputPayload(sp === -1 ? '' : rest.slice(sp + 1)));
+        }
       } else if (line.startsWith('%exit')) {
         // %exit is the ONLY exit notification tmux control mode sends (session
         // killed, server killed, or we detached). Its reason field is empty on
@@ -280,6 +302,12 @@ function attach({ name, cols, rows, onData, onExit, resizeOnAttach = true }) {
         // "gone". Note: %pane-exited / %session-closed / %pane-died do NOT exist
         // in the protocol (checked against the full list in `man tmux`).
         fireExit();
+      } else if (line.startsWith('%layout-change')) {
+        // Emitted on every split, kill-pane and layout change (confirmed against tmux
+        // 3.7b on an isolated socket). It is the only signal that the active pane's
+        // geometry moved under us — the browser must be told so it can fit its xterm
+        // to the pane, since a split window is never resized from here.
+        refreshGeometry();
       } else if (line.startsWith('%subscription-changed deadwatch ')) {
         // The agent process exiting under `remain-on-exit on` fires NO notification
         // at all — verified: the pane goes pane_dead=1 and the control client hears
@@ -364,6 +392,7 @@ function attach({ name, cols, rows, onData, onExit, resizeOnAttach = true }) {
     const screen = captureScreen(name);   // synchronous — see the bootstrap note above
     booted = true;                        // set in the same tick, before any data event
     if (screen) emit(Buffer.concat([Buffer.from('\x1b[H\x1b[2J', 'latin1'), screen]));
+    refreshGeometry();   // the window may already be split when a viewer opens
   }, 150);
 
   return {
@@ -377,6 +406,16 @@ function attach({ name, cols, rows, onData, onExit, resizeOnAttach = true }) {
     pid: p.pid,
     close() { try { p.kill('SIGTERM'); } catch {} },
   };
+}
+
+// The pane `-t <session>` resolves to. Empty string when tmux cannot answer, which the
+// %output filter reads as "do not filter" — degrading to the old merge-everything
+// behaviour is wrong, but silently showing NOTHING would be worse.
+function paneActiveId(name) {
+  assertName(name);
+  const r = tmux(['display-message', '-p', '-t', name, '#{pane_id}']);
+  if (r.status !== 0) return '';
+  return String(r.stdout || '').trim();
 }
 
 // How many panes the session's current window holds.
@@ -410,6 +449,14 @@ function setWindowSizeManual(name) {
 
 // The pane's current geometry, so a viewer can size itself to the pane.
 // Falls back to 80x24 when the session is gone or tmux answers with junk.
+// Geometry of ONE pane. paneSize() below reports the WINDOW, which is what the
+// subscription engine wants; a viewer pinned to a pane in a split window needs the pane.
+function paneGeometry(target) {
+  const r = tmux(['display-message', '-p', '-t', target, '#{pane_width}|#{pane_height}']);
+  const [c, rr] = String(r.stdout || '').trim().split('|');
+  return { cols: parseInt(c, 10) || 80, rows: parseInt(rr, 10) || 24 };
+}
+
 function paneSize(name) {
   const r = tmux(['display-message', '-p', '-t', name, '#{window_width}|#{window_height}']);
   const [c, rr] = String(r.stdout || '').trim().split('|');
@@ -433,6 +480,6 @@ function killSession(name) { tmux(['kill-session', '-t', name], { stdio: 'ignore
 module.exports = {
   TMUX_SOCKET, tmuxAvailable, hasSession, sessionInfo, paneHash,
   listTerminalSessions, ensureSession, attach, detachClients,
-  setWindowSizeManual, paneSize, paneCount,
+  setWindowSizeManual, paneSize, paneGeometry, paneCount, paneActiveId,
   captureScreen, decodeOutputPayload, saveScrollback, killSession,
 };

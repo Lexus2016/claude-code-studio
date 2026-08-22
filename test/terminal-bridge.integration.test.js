@@ -233,6 +233,55 @@ const screenHas = (name, s) => String(bridge.captureScreen(name) || '').includes
   check('revived pane is alive again', bridge.sessionInfo(name).paneDead, false);
 
   bridge.killSession(name);
+
+  // ── a viewer mirrors ONE pane, pinned, not every pane in the window ────────
+  // A control client receives %output for EVERY pane in its session. The bridge used
+  // to strip the pane id and emit them all into the single browser terminal, so once
+  // Claude Code's agent-teams split the window (one pane per teammate) four TUIs wrote
+  // into one screen buffer, each addressing its own pane's coordinates. That is the
+  // "collapsed strip" users saw: the active pane redrawing itself in 35 columns inside
+  // a 117-column terminal, with the other panes' output cutting across it.
+  console.log('\na split window: the viewer stays pinned to ITS pane:');
+  {
+    const sname = 'ccsterm-split' + Math.random().toString(36).slice(2, 8);
+    bridge.ensureSession({ name: sname, workdir: '/tmp',
+      launchCommand: `sh -c 'while :; do echo ACTIVE-PANE; sleep 0.3; done'` });
+    let seen = Buffer.alloc(0);
+    const geo = [];
+    const h = bridge.attach({ name: sname, cols: 120, rows: 40,
+      onData: b => { seen = Buffer.concat([seen, b]); },
+      onGeometry: g => { geo.push(g); },
+      onExit: () => {} });
+    await waitFor(() => seen.toString('utf8').includes('ACTIVE-PANE'));
+    check('the pinned pane reaches the viewer', seen.toString('utf8').includes('ACTIVE-PANE'), true);
+
+    // Split the window the way agent-teams does, with a LOUD neighbour.
+    require('child_process').spawnSync('tmux',
+      ['-L', bridge.TMUX_SOCKET, 'split-window', '-h', '-t', sname,
+       `sh -c 'while :; do echo TEAMMATE-NOISE; sleep 0.2; done'`], { encoding: 'utf8' });
+    await waitFor(() => geo.length > 0 && geo[geo.length - 1].panes > 1);
+    check('a layout change is reported to the caller', geo[geo.length - 1].panes >= 2, true);
+    check('...carrying the PANE geometry, not the window', geo[geo.length - 1].cols < 120, true);
+
+    // Let the neighbour shout for a while, then prove none of it leaked through.
+    const mark = seen.length;
+    await new Promise(r => setTimeout(r, 1500));
+    const after = seen.subarray(mark).toString('utf8');
+    check('the teammate pane never reaches this viewer', after.includes('TEAMMATE-NOISE'), false);
+    check('...while the mirrored pane keeps arriving', after.includes('ACTIVE-PANE'), true);
+
+    // A split window must not be resized — tmux redistributes panes on the way down AND
+    // up and never restores the layout, so one shrink-and-grow cycle is permanent damage.
+    const before = bridge.paneSize(sname);
+    h.resize(200, 60);
+    const unchanged = bridge.paneSize(sname);
+    check('resize is still refused while the window is split',
+      [unchanged.cols, unchanged.rows], [before.cols, before.rows]);
+
+    h.close();
+    bridge.killSession(sname);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })();

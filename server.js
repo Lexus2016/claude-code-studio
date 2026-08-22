@@ -9445,6 +9445,12 @@ wssTerm.on('connection', (ws, req) => {
           if (ws.bufferedAmount > 4 * 1024 * 1024) return;
           try { ws.send(buf); } catch {}
         },
+        // Additive frame — the existing shapes are untouched. Sent whenever the window
+        // layout moves (agent-teams splitting it, a pane closing). A split window is
+        // never resized from the browser, so the browser has to size its xterm to the
+        // pane instead; without this it kept fitting to the container and rendered a
+        // 35-column pane into a 117-column box — the "collapsed strip".
+        onGeometry: (g) => { send({ type: 'geometry', cols: g.cols, rows: g.rows, panes: g.panes }); },
         onExit: () => {
           // Self-heal ONLY a session we just cold-started, alone in its window. A fast exit
           // after a restore means "that conversation id does not exist on the agent's side"
