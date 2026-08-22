@@ -243,7 +243,19 @@ class ClaudeSSH {
       const tail = buffer + stdoutDecoder.end();
       if (tail.trim()) {
         try { this._handle(JSON.parse(tail), h); }
-        catch { try { if (h.onText) h.onText(tail); } catch {} }
+        catch {
+          // Same guard as claude-cli.js. A stream that closes mid-line (Stop, idle
+          // timeout, dropped link, remote OOM) leaves a TRUNCATED stream-json object
+          // here — emitting it as onText appended raw JSON into the chat and wrote it
+          // to SQLite permanently. Both transports always run with
+          // --output-format stream-json, so a structured tail is the normal case.
+          const t = tail.trim();
+          if (/^[{\[]/.test(t) || /"type"\s*:/.test(t)) {
+            console.warn('[claude-ssh] Dropping unparseable trailing stream-json chunk');
+          } else {
+            try { if (h.onText) h.onText(tail); } catch {}
+          }
+        }
       }
 
       // Report stderr errors (filter known noise)
@@ -341,7 +353,20 @@ class ClaudeSSH {
             stream.stdout.on('data', (chunk) => {
               armIdleTimer(); // remote output = alive — reset the idle clock
               buffer += stdoutDecoder.write(chunk);
-              if (buffer.length > MAX_LINE_BUFFER) { buffer = ''; return; }
+              if (buffer.length > MAX_LINE_BUFFER) {
+                // Flush whatever is complete before dropping the rest — claude-cli.js:377
+                // does the same. Discarding the whole buffer also discarded finished
+                // events queued behind one oversized tool_result, silently and unlogged.
+                const lastNl = buffer.lastIndexOf('\n');
+                if (lastNl > 0) {
+                  for (const cl of buffer.slice(0, lastNl).split(/\r?\n/)) {
+                    if (cl.trim()) { try { this._handle(JSON.parse(cl), h); } catch {} }
+                  }
+                }
+                console.warn(`[claude-ssh] Buffer overflow (${(buffer.length / 1048576).toFixed(1)} MB), dropping incomplete line`);
+                buffer = '';
+                return;
+              }
               const lines = buffer.split(/\r?\n/);
               buffer = lines.pop() || '';
               for (const line of lines) {
@@ -471,7 +496,13 @@ class ClaudeSSH {
     if (data.type === 'rate_limit_event' && data.rate_limit_info && h.onRateLimit) h.onRateLimit(data.rate_limit_info);
     if (data.type === 'result'  && h.onResult)  h.onResult(data);
     // Ensure session_id is a clean string before passing to handler
-    if (data.session_id && h.onSessionId && typeof data.session_id === 'string') h.onSessionId(data.session_id);
+    // One-shot, matching claude-cli.js:582. Without the latch every event of a
+    // --include-partial-messages stream (thousands per turn) re-fired onSessionId,
+    // and server.js answers that with a synchronous stmts.updateClaudeId.run().
+    if (data.session_id && !h._detectedSid && h.onSessionId && typeof data.session_id === 'string') {
+      h._detectedSid = data.session_id;
+      h.onSessionId(data.session_id);
+    }
   }
 }
 

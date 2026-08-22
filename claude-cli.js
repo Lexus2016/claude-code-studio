@@ -1,4 +1,4 @@
-const { spawn, execSync } = require('child_process');
+const { spawn, execSync, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -10,7 +10,13 @@ const { StringDecoder } = require('string_decoder');
 // `taskkill /T /F` kills the entire process tree.
 function killProc(proc) {
   if (process.platform === 'win32' && proc.pid && Number.isInteger(proc.pid)) {
-    try { execSync(`taskkill /PID ${proc.pid} /T /F`, { stdio: 'ignore' }); } catch {}
+    // spawnSync, not execSync: no shell means the pid can never be a command, whatever
+    // it holds. The Number.isInteger guard above already made this unreachable, but a
+    // string-built shell command on a pid is a primitive worth not having at all.
+    // (From PR #52 — the other two hunks in that PR were rejected: `hash` is already
+    // hex by construction and stripping it invites collisions, and replacing path.join
+    // with manual concatenation loses normalisation on an already-sanitised filename.)
+    try { spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' }); } catch {}
   } else {
     try { proc.kill('SIGTERM'); } catch {}
   }

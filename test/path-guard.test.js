@@ -215,6 +215,43 @@ function termWs(token, sessionId = 'nonexistent') {
     check('claude-md allows a dir inside WORKDIR',
       (await api('GET', `/api/claude-md?dir=${encodeURIComponent(APP_DIR)}`)).status, 200);
 
+    // ── issue #53: a REMOTE workdir is not judged by the LOCAL filesystem guard ──
+    // isPathAllowed() runs path.resolve(), which applies the LOCAL platform's rules.
+    // On Windows `path.resolve('/home/user/project')` prepends the current drive and
+    // returns 'C:\\home\\user\\project' — outside every allowed root, so every remote
+    // session was refused with "workdir is outside the allowed roots", and the mangled
+    // path also reached the remote shell as `cd C:/home/user/project`.
+    //
+    // The assertions below are platform-independent: on THIS machine the same remote
+    // path is simply a directory that does not exist and sits outside the roots, which
+    // is the identical failure the Windows drive-letter prefix produced.
+    console.log('\n— a registered remote workdir is accepted for a run —');
+    const REMOTE_WD = '/home/user/project-' + crypto.randomBytes(4).toString('hex');
+    // Negative control FIRST: unregistered, it must still be refused. Without this the
+    // test would pass against a guard that had simply been removed.
+    const beforeReg = await api('POST', '/api/sessions', { title: 'remote-unregistered', workdir: REMOTE_WD });
+    check('an unregistered foreign path is still refused',
+      [beforeReg.status, beforeReg.json?.error], [400, 'workdir is outside the allowed roots']);
+
+    // Register it as a remote project. Written straight to projects.json: POST /api/projects
+    // validates remoteHostId against the SSH host list, which is not what is under test here.
+    const projectsFile = path.join(APP_DIR, 'data', 'projects.json');
+    const existingProjects = (() => { try { return JSON.parse(fs.readFileSync(projectsFile, 'utf-8')); } catch { return []; } })();
+    existingProjects.push({ id: 'p-remote-53', name: 'remote 53', workdir: REMOTE_WD,
+      isRemote: true, remoteHostId: 'h1', remoteHost: 'user@example.invalid', port: 22 });
+    fs.writeFileSync(projectsFile, JSON.stringify(existingProjects, null, 2));
+
+    const afterReg = await api('POST', '/api/sessions', { title: 'remote-registered', workdir: REMOTE_WD });
+    check('a registered remote workdir is accepted', afterReg.status, 200);
+    check('...and is stored verbatim, with no local path rewriting',
+      afterReg.json?.workdir, REMOTE_WD);
+
+    // The local guard itself must NOT have been weakened — /api/files and friends rely on it.
+    check('the local browse guard still refuses that same remote path',
+      (await api('GET', `/api/browse-dirs?path=${encodeURIComponent(REMOTE_WD)}`)).status, 403);
+    check('and still refuses /etc',
+      (await api('GET', '/api/browse-dirs?path=%2Fetc')).status, 403);
+
     // ── /api/files: the same symlink rule, on the endpoint that reads content ──
     // This family compared workdir + path lexically and never resolved symlinks, so
     // a link committed to a cloned repo turned the file browser into a reader for

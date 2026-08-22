@@ -23,8 +23,13 @@ function pickRunnable(remaining, completed) {
 /**
  * The dependency output a worker is given as context, capped per dependency.
  * A dependency that produced nothing contributes nothing — deliberately, so a
- * failed upstream agent does not inject an empty `[agent-1]:` header that reads
- * to the model like a real (and empty) result.
+ * dependency that emitted no text does not inject an empty `[agent-1]:` header
+ * that reads to the model like a real (and empty) result.
+ *
+ * Note what the cap does: it keeps the HEAD of the text. runMultiAgent therefore
+ * PREFIXES its "did not finish / output is INCOMPLETE" warning onto results[] —
+ * appending it, as it used to, meant any dependency longer than the cap handed
+ * the dependent truncated work with the warning sliced off.
  */
 function buildDepContext(agent, results) {
   return (agent.depends_on || [])
@@ -52,4 +57,36 @@ function computeWaves(agents) {
   return { waves, stuck: remaining.map(a => a.id) };
 }
 
-module.exports = { pickRunnable, buildDepContext, computeWaves, DEP_CONTEXT_LIMIT };
+/**
+ * Make a model-authored plan safe to execute. The JSON schema constrains what the
+ * model is ASKED for; it does not constrain what actually reaches the scheduler,
+ * because the plan is also recovered by regex when structured output is unavailable.
+ *
+ * Three edges this closes, each of which had a concrete failure:
+ *   * duplicate ids — computeWaves runs both copies and results[id] is overwritten.
+ *     Worse, the clean copy of `a` marks 'a' completed, which makes a second `a` that
+ *     depends on itself runnable: the self-cycle guard never fires.
+ *   * a depends_on naming an id that is not in the plan — pickRunnable can never
+ *     satisfy it, so the ENTIRE plan reports "Circular deps" and no agent runs.
+ *   * a self-dependency — same stall, from one bad edge.
+ *   * plan length — an unbounded plan means unbounded concurrent `claude` subprocesses.
+ *
+ * Order is preserved; the first occurrence of an id wins.
+ */
+function sanitizePlan(agents, maxAgents) {
+  const seen = new Set();
+  const kept = [];
+  for (const a of Array.isArray(agents) ? agents : []) {
+    if (!a || typeof a.id !== 'string' || !a.id || seen.has(a.id)) continue;
+    seen.add(a.id);
+    kept.push(a);
+    if (kept.length >= maxAgents) break;
+  }
+  return kept.map(a => ({
+    ...a,
+    depends_on: (Array.isArray(a.depends_on) ? a.depends_on : [])
+      .filter(d => typeof d === 'string' && d !== a.id && seen.has(d)),
+  }));
+}
+
+module.exports = { pickRunnable, buildDepContext, computeWaves, sanitizePlan, DEP_CONTEXT_LIMIT };

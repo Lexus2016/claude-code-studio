@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. `npm test` chains 47 test files under `test/`: 11 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 36 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler, the remote CLI-list framing parser and the one-time config/.env migration onto CCS_CONFIG_PATH. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
+No linting and no build step configured. `npm test` chains 53 test files under `test/`: 16 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 37 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the remote CLI-list framing parser and the one-time config/.env migration onto CCS_CONFIG_PATH. On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
 
 ## Architecture
 
@@ -75,6 +75,11 @@ Environment (`.env`, see `.env.example`):
 - `SESSION_SECRET` — auto-generated if empty
 - `WORKDIR` — Claude working directory, default `./workspace`
 - `TRUST_PROXY` — set `true` behind nginx/Caddy
+- `MULTI_AGENT_MAX_PLAN` — max agents in one chat multi-agent plan, default 8. Also the
+  schema's `maxItems`; the plan is re-capped after parsing because the regex-recovery path
+  bypasses the schema.
+- `MULTI_AGENT_CONCURRENCY` — max `claude` subprocesses alive at once inside one wave,
+  default 3. A wave still runs every member; this only bounds how many at a time.
 
 **Models** — the UI exposes four choices: `haiku`, `sonnet` (default), `opus`, `fable`. The short aliases are mapped in `claude-cli.js` (`MODEL_MAP`, lines 81-89) and passed to the `claude` CLI **as-is** (`opus`→`opus`, `sonnet`→`sonnet`, `haiku`→`haiku`, `fable`→`fable`); the CLI resolves each alias internally. `server.js` defines no model map — it defers to `claude-cli.js`. Dated model IDs are kept commented out in `MODEL_MAP` and are not used.
 
@@ -171,7 +176,7 @@ These short aliases are exactly what `claude-cli.js` (`MODEL_MAP`) passes to the
 
 ## How to Verify Changes
 
-`npm test` runs 47 test files under `test/` (11 `test/render/*.test.mjs` + 36 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 53 test files under `test/` (16 `test/render/*.test.mjs` + 37 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server

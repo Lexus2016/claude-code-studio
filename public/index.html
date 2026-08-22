@@ -6792,17 +6792,33 @@ function renderMd(text) {
   // 3.4 Split inline table headers: move pipe-delimited header from end of text line to its own line
   // Handles LLM output like "some text | Header1 | Header2 |\n|---|---|"
   // Skip lines already starting with | (valid table rows like "| # | Col1 | Col2 |")
-  text = text.replace(/(\S)[ \t]+(\|(?:[^|\n]+\|){2,})[ \t]*\n([ \t]*\|[\s\-:|]+\|)/gm, (m, $1, $2, $3, off, src) => {
+  // The {2,40} bound is load-bearing, NOT cosmetic: `(?:[^|\n]+\|){2,}` is a nested
+  // quantifier with no anchor, so on a long pipe-heavy line that never reaches the
+  // separator row it backtracks from every start position — measured O(n^2): a single
+  // 168 KB line (a Bash tool dump full of `|`) froze the main thread for 7.4 s, and
+  // renderStreaming re-runs this every 100 ms while such a message streams. Bounding
+  // the repetition makes it linear (29 ms on the same input) with no behaviour change:
+  // an inline header past 40 columns is not a table anyone renders.
+  text = text.replace(/(\S)[ \t]+(\|(?:[^|\n]+\|){2,40})[ \t]*\n([ \t]*\|[\s\-:|]+\|)/gm, (m, $1, $2, $3, off, src) => {
     const sol = src.lastIndexOf('\n', off - 1) + 1;
     if (src.substring(sol, off + 1).trimStart().startsWith('|')) return m;
     return $1 + '\n' + $2 + '\n' + $3;
   });
 
   // 3.5 Tables — header row + separator row + data rows
-  text = text.replace(/((?:^\|.+\|\s*\n?)+)/gm, block => {
+  // `[ \t]*`, NOT `\s*`: \s matches newlines, so a blank line between two tables was
+  // swallowed and both fell into one match — the second table's header and separator
+  // rows were then rendered as data cells (<td>B</td>, <td>---</td>).
+  text = text.replace(/((?:^\|.+\|[ \t]*\n?)+)/gm, block => {
     const rows = block.trim().split('\n');
     if (rows.length < 2) return block;
-    const parseRow = row => row.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+    // GFM escapes a literal pipe inside a cell as `\|`. A naive split('|') tore
+    // `string \| null` — the ordinary way to write a union type in a docs table — into
+    // two cells and left a dangling backslash, widening the row past its header.
+    // Split on unescaped pipes only, then unescape.
+    const parseRow = row => row.replace(/^\||\|$/g, '')
+      .split(/(?<!\\)\|/)
+      .map(c => c.replace(/\\\|/g, '|').trim());
     const isSep = r => /^\|[\s\-:|]+\|$/.test(r.trim());
 
     // Standard: header + separator + data
@@ -6839,7 +6855,9 @@ function renderMd(text) {
   // Strikethrough
   text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
   // Restore inline code (was extracted in step 2.5)
-  text = text.replace(/\x04ICODE(\d+)\x05/g, (_, i) => `<code>${inlineCodes[+i]}</code>`);
+  // Same forged-token reachability as the BLOCK restore below. This one did not throw —
+  // it rendered the literal word "undefined" inside a <code> element.
+  text = text.replace(/\x04ICODE(\d+)\x05/g, (m, i) => (inlineCodes[+i] === undefined ? escH(m) : `<code>${inlineCodes[+i]}</code>`));
   // Links
   text = replaceMarkdownLinks(text);
   text = autolinkBareUrls(text);
@@ -6862,8 +6880,17 @@ function renderMd(text) {
   text = linkifyStandaloneButtons(text);
 
   // 6. Restore code blocks with header + copy button
-  text = text.replace(/\x02BLOCK(\d+)\x03/g, (_, i) => {
-    const { lang, code } = blocks[+i];
+  text = text.replace(/\x02BLOCK(\d+)\x03/g, (m, i) => {
+    // A forged token is REACHABLE: extractFences runs at step 1, before escH at step 2,
+    // so a literal \x02 byte in the source survives to here and matches this regex. Any
+    // assistant or tool output carrying raw control bytes does it — a `cat` of a binary
+    // file, a hexdump in a tool result. Destructuring the undefined slot threw an uncaught
+    // TypeError out of renderMd, and every one of its ~19 call sites is a bare
+    // `innerHTML = renderMd(...)`: in the history path that aborted the loop and the whole
+    // message list stopped rendering. An index we never issued is just text.
+    const blk = blocks[+i];
+    if (!blk) return escH(m);
+    const { lang, code } = blk;
     const id = 'cb' + Math.random().toString(36).slice(2, 8);
     const langLabel = lang || 'code';
     return `<pre><div class="pre-header"><span class="lang">${escH(langLabel)}</span><button class="copy-code-btn" onclick="copyCode('${id}',this)">${t('copy.code')}</button></div><code id="${id}">${escH(code)}</code></pre>`;

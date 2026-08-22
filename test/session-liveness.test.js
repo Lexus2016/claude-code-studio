@@ -9,6 +9,12 @@
 //         noCatchUp:true, which deliberately skips proxy.attach) therefore never
 //         learned the turn ended and kept its busy dot spinning for the page lifetime.
 //
+//   Kanban↔chat lock — `isSessionLive()` unioned two IN-MEMORY registries only, and
+//         startTask() registers in NEITHER: a Kanban worker's liveness lives solely in
+//         `tasks.status='in_progress'`. So a chat turn and a task could hold one session
+//         at the same time — two `claude --resume <same cid>` processes appending to one
+//         transcript, or on the subscription engine two pastes into the one tmux pane.
+//
 //   #30 — `GET /api/sessions/:id`.isChatRunning read activeTasks only, while
 //         `GET /api/tasks/running-sessions` unions activeChatSessions too. The gap
 //         between activeChatSessions.add() and activeTasks.set() holds
@@ -209,6 +215,43 @@ function bail(msg) { console.error(msg); console.error(srvLog.slice(-3000)); cle
   if (disagreements.length) console.error('   disagreements: ' + JSON.stringify(disagreements));
   check('running-sessions and isChatRunning never disagree', disagreements.length, 0);
   try { runner.close(); } catch {}
+
+  // ── Kanban task ↔ chat: a running task makes the session live ─────────────
+  console.log('\nKanban task holds the session:');
+  const cT = await api('POST', '/api/sessions', { title: 'liveness-task', workdir: APP_DIR });
+  const sidT = cT.json && cT.json.id;
+  check('session created', typeof sidT, 'string');
+  if (!sidT) bail('no session id for the task test');
+
+  // status:'todo' hands the task straight to processQueue; the fake `claude` sleeps 1 s,
+  // which is the window this test samples.
+  const tk = await api('POST', '/api/tasks', {
+    title: 'liveness task', description: 'x', status: 'todo',
+    session_id: sidT, workdir: APP_DIR, max_turns: 1,
+  });
+  check('task created', typeof (tk.json && tk.json.id), 'string');
+
+  let sawTaskLive = false, sawInRunning = false;
+  const taskDisagreements = [];
+  for (let i = 0; i < 60; i++) {
+    await sleep(150);
+    const [sess, running] = await Promise.all([
+      api('GET', `/api/sessions/${sidT}`),
+      api('GET', '/api/tasks/running-sessions'),
+    ]);
+    const live = !!(sess.json && sess.json.isChatRunning);
+    const inRunning = (running.json || []).includes(sidT);
+    if (live) sawTaskLive = true;
+    if (inRunning) sawInRunning = true;
+    // The whole point of folding the DB term in: the two must never disagree, in either
+    // direction. Before the fix isChatRunning was false for the entire task run.
+    if (live !== inRunning) taskDisagreements.push({ t: (i + 1) * 150, live, inRunning });
+    if (sawTaskLive && !live) break;
+  }
+  check('a running Kanban task was observed at all', sawInRunning, true);
+  check('...and it makes isSessionLive report the session as live', sawTaskLive, true);
+  if (taskDisagreements.length) console.error('   disagreements: ' + JSON.stringify(taskDisagreements));
+  check('isChatRunning and running-sessions agree throughout the task run', taskDisagreements.length, 0);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   cleanup();

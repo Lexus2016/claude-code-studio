@@ -82,7 +82,7 @@ const multer = require('multer');
 const cfgResolve = require('./config-resolve');
 // Wave scheduling for multi-agent mode. Extracted so it can be tested without
 // spawning `claude` — see agent-dag.js and test/agent-dag.test.js.
-const { pickRunnable, buildDepContext } = require('./agent-dag');
+const { pickRunnable, buildDepContext, computeWaves, sanitizePlan } = require('./agent-dag');
 const openDatabase = require('./db-adapter');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
@@ -207,6 +207,23 @@ const ALLOWED_BROWSE_ROOTS = [
 // Guard for every endpoint that accepts a filesystem path from the client. It lives
 // next to the list it enforces because that list sat here unused: declaring the roots
 // without a single caller made the control look present while nothing checked it.
+// A workdir that names a REGISTERED REMOTE project is legitimate even though it does not
+// exist on this machine. isPathAllowed() is a LOCAL filesystem control and stays strictly
+// local — it is deliberately NOT weakened here, because the /api/files family relies on it.
+// Instead the two endpoints that merely RECORD a workdir for a run consult this.
+// Without it, a Windows host resolved the Linux path '/home/user/project' to
+// 'C:\\home\\user\\project', found it outside every allowed root, and refused every
+// remote session with "workdir is outside the allowed roots" (issue #53).
+function isRegisteredRemoteWorkdir(target) {
+  if (!target || typeof target !== 'string') return false;
+  try { return loadProjects().some(p => p.isRemote && p.workdir === target); } catch { return false; }
+}
+// The guard for "may a run be configured with this workdir": local paths must sit inside
+// an allowed root, remote paths must name a registered remote project.
+function isWorkdirAllowed(target) {
+  return isPathAllowed(target) || isRegisteredRemoteWorkdir(target);
+}
+
 function isPathAllowed(target) {
   if (!target || typeof target !== 'string') return false;
   let resolved;
@@ -1247,10 +1264,17 @@ const sessionQueueCleanupTimers = new Map(); // sessionId → setTimeout handle 
 //                        check reports a live turn as idle for the whole classification.
 // Every membership test must go through isSessionLive(); every "which sessions are
 // live" enumeration through liveSessionIds(). Do not re-inline the union.
-const isSessionLive = (id) => activeTasks.has(id) || activeChatSessions.has(id);
+// The DB term is not optional. `activeTasks` holds web/Telegram CHAT workers only —
+// startTask() never registers there, its liveness lives in tasks.status='in_progress'.
+// Without hasRunningTask a Kanban worker and a chat turn could hold the same session
+// at once: two `claude --resume <same cid>` processes appending to one transcript, or
+// on the subscription engine two paste-buffers into the one tmux pane `ccs-<id>`.
+const hasRunningTaskFor = (id) => { try { return !!stmts.hasRunningTask.get(id); } catch { return false; } };
+const isSessionLive = (id) => activeTasks.has(id) || activeChatSessions.has(id) || hasRunningTaskFor(id);
 const liveSessionIds = () => {
   const ids = new Set(activeChatSessions);
   for (const id of activeTasks.keys()) ids.add(id);
+  try { for (const r of stmts.inProgressTaskSessions.all()) if (r.session_id) ids.add(r.session_id); } catch {}
   return ids;
 };
 
@@ -2103,7 +2127,7 @@ function processQueue() {
     if (task.chain_id && task.workdir && (occupiedWorkdirs.has(task.workdir) || startedWorkdirs.has(task.workdir))) continue;
     if (task.session_id) {
       // Shared session: one at a time per session
-      if (!occupiedSids.has(task.session_id) && !startedSids.has(task.session_id)) {
+      if (!occupiedSids.has(task.session_id) && !startedSids.has(task.session_id) && !isSessionLive(task.session_id)) {
         occupiedSids.add(task.session_id);
         startedSids.add(task.session_id);
         if (task.workdir) startedWorkdirs.add(task.workdir);
@@ -3726,6 +3750,12 @@ async function runSshSingle(p) {
 // turns invite tool loops, and each agent may additionally auto-continue up to
 // MAX_AUTO_CONTINUES times, so the worst case per agent is cap × (1 + MAX_AUTO_CONTINUES).
 const MULTI_AGENT_MAX_TURNS_CAP = parseInt(process.env.MULTI_AGENT_MAX_TURNS_CAP || '200', 10) || 200;
+// Plan size and wave width are hard limits, not suggestions. The orchestrator prompt asks
+// for "2-5 subtasks" and the schema now says maxItems, but neither is a guarantee — a plan
+// that came back with 20 agents used to spawn 20 concurrent `claude` subprocesses on one
+// machine, because the wave ran through a bare Promise.all with no semaphore.
+const MULTI_AGENT_MAX_PLAN = parseInt(process.env.MULTI_AGENT_MAX_PLAN || '8', 10) || 8;
+const MULTI_AGENT_CONCURRENCY = parseInt(process.env.MULTI_AGENT_CONCURRENCY || '3', 10) || 3;
 
 
 // ─── Bot dispatch ────────────────────────────────────────────────────────────
@@ -4047,6 +4077,7 @@ async function runMultiAgent(p) {
       agents: {
         type: 'array',
         minItems: 1,
+        maxItems: MULTI_AGENT_MAX_PLAN,
         items: {
           type: 'object',
           properties: {
@@ -4100,12 +4131,34 @@ async function runMultiAgent(p) {
     return fallback?.cid || null;
   }
 
+  // The schema is the model's contract, not ours — a plan still arrives here unvalidated
+  // after regex extraction. sanitizePlan drops duplicate ids, self- and ghost-dependencies
+  // and caps the length; see agent-dag.js for what each of those used to break.
+  {
+    const before = Array.isArray(plan.agents) ? plan.agents.length : 0;
+    plan.agents = sanitizePlan(plan.agents, MULTI_AGENT_MAX_PLAN);
+    if (plan.agents.length !== before) {
+      console.warn(`[multi-agent] plan sanitised: ${before} agents -> ${plan.agents.length}`);
+    }
+  }
+  if (!plan.agents.length) {
+    ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'⚠️ Falling back to single mode', statusKey:'agent.fallback_single', ...(tabId ? { tabId } : {}) }));
+    const fallback = await runCliSingle(p);
+    return fallback?.cid || null;
+  }
+
   const planSummaryText = `📋 **${plan.plan}**\n🤖 ${plan.agents.map(a=>`${a.id}(${a.role})`).join(', ')}\n---\n`;
   { const _cb = (chatBuffers.get(sessionId) || '') + planSummaryText; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
   ws.send(JSON.stringify({ type:'text', text: planSummaryText, ...(tabId ? { tabId } : {}) }));
-  ws.send(JSON.stringify({ type:'agent_plan', plan: plan.plan, agents: plan.agents.map(a => ({ id: a.id, role: a.role, task: a.task })), ...(tabId ? { tabId } : {}) }));
+  // depends_on MUST survive here. The "\ud83d\udccb Kanban" button echoes this exact payload back as
+  // `dispatch_plan` (public/index.html:8805 stores it, 8841 sends it), and the reload path
+  // re-hydrates it from the persisted copy below. Stripping the field made every dispatched
+  // plan a dependency-free free-for-all: `realDeps` further down resolved to [], so tasks
+  // planned as a chain ran concurrently up to MAX_TASK_WORKERS in arbitrary order.
+  const _planAgents = plan.agents.map(a => ({ id: a.id, role: a.role, task: a.task, depends_on: a.depends_on || [] }));
+  ws.send(JSON.stringify({ type:'agent_plan', plan: plan.plan, agents: _planAgents, ...(tabId ? { tabId } : {}) }));
   try {
-    const _apJson = JSON.stringify({ plan: plan.plan, agents: plan.agents.map(a => ({ id: a.id, role: a.role, task: a.task })), dispatched: false });
+    const _apJson = JSON.stringify({ plan: plan.plan, agents: _planAgents, dispatched: false });
     stmts.addMsg.run(sessionId,'assistant','agent_plan',_apJson,null,'orchestrator',null,null);
   } catch {}
 
@@ -4121,8 +4174,18 @@ async function runMultiAgent(p) {
     const runnable = pickRunnable(remaining, completed);
     if (!runnable.length) { ws.send(JSON.stringify({ type:'agent_status', agent:'orchestrator', status:'Circular deps', statusKey:'agent.circular_deps', ...(tabId ? { tabId } : {}) })); break; }
 
-    await Promise.all(runnable.map(async agent => {
-      remaining.splice(remaining.indexOf(agent), 1);
+    // Bounded fan-out. A wave is still a wave — every agent in it runs — but at most
+    // MULTI_AGENT_CONCURRENCY `claude` subprocesses exist at once. The bare Promise.all
+    // this replaces put no ceiling on that at all.
+    for (const a of runnable) remaining.splice(remaining.indexOf(a), 1);
+    // Snapshot BEFORE the wave runs. The attachment rule below keys off "no agent has
+    // finished yet", which was equivalent to "first wave" only while every member of a
+    // wave started at the same instant. Under the concurrency cap the 4th agent of a
+    // 5-agent first wave starts after the 1st has already completed, so reading
+    // completed.size live would silently drop its attachments.
+    const isFirstWave = completed.size === 0;
+    let _next = 0;
+    const _runOne = async agent => {
       ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`🔄 ${agent.role}`, ...(tabId ? { tabId } : {}) }));
       const depCtx = buildDepContext(agent, results);
       const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
@@ -4170,7 +4233,7 @@ async function runMultiAgent(p) {
             // Attachments go to the first wave only: later agents receive their
             // dependencies' output as context, and re-sending the same image to every
             // worker would pay for it once per agent.
-            contentBlocks: (agentContinues === 0 && !completed.size && Array.isArray(userContent)) ? userContent : null,
+            contentBlocks: (agentContinues === 0 && isFirstWave && Array.isArray(userContent)) ? userContent : null,
             sessionId: agentSessionId, model, maxTurns:agentTurnCap, systemPrompt:agentSp, mcpServers, allowedTools:agentTools, abortController, forkSession: agentFork, effort,
             extraEnv: agentInterruptEnv, extraSettings: agentInterruptSettings })
             .onText(t => { agentText+=t; { const _cb = (chatBuffers.get(sessionId) || '') + t; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); } try { ws.send(JSON.stringify({ type:'text', text:t, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {} })
@@ -4219,15 +4282,24 @@ async function runMultiAgent(p) {
       // Reporting ✅ in either case hid truncated work from the user AND handed it to
       // dependent agents (and the summarizer) as if it were complete.
       const agentOk = isAgentSuccess(agentResult, agentErrored);
+      // Dependents and the summarizer read results[] through a substring(0, LIMIT) that
+      // takes the HEAD of the text, so a notice appended to the TAIL is cut off for any
+      // agent whose output exceeds the cap — the dependent then got truncated work with
+      // no sign it WAS truncated, and the summary reported success. The stream and the
+      // stored message keep the appended form ("above" is correct there, that text has
+      // already been rendered); results[] gets the same warning as a PREFIX instead, so
+      // truncation can never eat it.
+      let depNotice = '';
       if (!agentOk) {
         const why = agentStopReason(agentResult, agentErrored, agentTurnCap, agentContinues);
         const notice = `\n\n⚠️ **${agent.id}** (${agent.role}) did not finish — ${why}. The output above is incomplete.\n\n`;
-        agentText += notice; // carried into results[] so dependents/summarizer see it too
+        depNotice = `⚠️ **${agent.id}** (${agent.role}) did not finish — ${why}. The output below is INCOMPLETE and may be cut off mid-thought.\n\n`;
+        agentText += notice;
         { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
         try { ws.send(JSON.stringify({ type:'text', text:notice, agent:agent.id, ...(tabId ? { tabId } : {}) })); } catch {}
       }
 
-      results[agent.id] = agentText;
+      results[agent.id] = depNotice + agentText;
       try { if (agentText) stmts.addMsg.run(sessionId,'assistant','text',agentText,null,agent.id,null,null); } catch {}
       completed.add(agent.id); // always — dependents would otherwise stall as "circular deps"
       if (agentOk) {
@@ -4235,6 +4307,12 @@ async function runMultiAgent(p) {
       } else if (!agentErrored) {
         // .onError already emitted ❌ for its case; don't overwrite it with a second status
         ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`⚠️ ${agent.role} — incomplete`, ...(tabId ? { tabId } : {}) }));
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(MULTI_AGENT_CONCURRENCY, runnable.length) }, async () => {
+      while (_next < runnable.length) {
+        if (abortController?.signal?.aborted) return;
+        await _runOne(runnable[_next++]);
       }
     }));
   }
@@ -5962,7 +6040,7 @@ app.post('/api/sessions', (req, res) => {
   const { title = i18nSession(), workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single', kind = 'chat', terminalAgent = null } = req.body || {};
   // This value ends up as the cwd of `claude --dangerously-skip-permissions`. Same
   // rule as every other endpoint that takes a path from the client.
-  if (workdir && !isPathAllowed(workdir)) return res.status(400).json({ error: 'workdir is outside the allowed roots' });
+  if (workdir && !isWorkdirAllowed(workdir)) return res.status(400).json({ error: 'workdir is outside the allowed roots' });
   const id = genId();
   if (kind === 'terminal') {
     // loadConfig(), not loadMergedConfig(): the merged view is a whitelist of
@@ -7399,7 +7477,13 @@ function resolveFilesWorkdir(reqWorkdir) {
     // _realish, not path.resolve: the containment check below compares against this
     // value, and comparing a resolved-but-not-realpathed root against a realpathed
     // target would deny every project that itself lives behind a symlink (/tmp on macOS).
-    if (match) return { workdir: match.isRemote ? path.resolve(match.workdir) : _realish(match.workdir), isRemote: !!match.isRemote };
+    // A REMOTE workdir is a path on another machine and is returned VERBATIM. Running it
+    // through path.resolve() applies the LOCAL platform's rules to a foreign path: on a
+    // Windows host `path.resolve('/home/user/project')` prepends the current drive and
+    // yields 'C:\\home\\user\\project', which then reached the remote shell as
+    // `cd C:/home/user/project` (issue #53). Nothing local ever opens this path —
+    // every /api/files endpoint refuses a remote project before touching the disk.
+    if (match) return { workdir: match.isRemote ? match.workdir : _realish(match.workdir), isRemote: !!match.isRemote };
     return null; // not a registered project — deny
   }
   return { workdir: _realish(WORKDIR), isRemote: false };
@@ -9506,7 +9590,7 @@ wss.on('connection', (ws) => {
       } catch (e) { log.warn('bot mention resolution failed', { err: e.message }); }
 
       // Same guard as POST /api/sessions — the chat socket can set a workdir too.
-      if (msg.workdir && !isPathAllowed(msg.workdir)) {
+      if (msg.workdir && !isWorkdirAllowed(msg.workdir)) {
         log.warn('chat refused: workdir outside allowed roots', { sessionId: localSessionId, workdir: msg.workdir });
         try { ws.send(JSON.stringify({ type: 'error', error: 'workdir is outside the allowed roots' })); } catch {}
         return;
@@ -9776,6 +9860,20 @@ wss.on('connection', (ws) => {
         if (agentMode === 'multi') {
           try { proxy.send(JSON.stringify({ type: 'text', text: 'ℹ️ Multi-agent mode uses the API engine — running in single-agent interactive mode instead.\n\n', tabId: effectiveTabId })); } catch {}
         }
+        // Arm the catch-up cursor BEFORE the turn, not only after it.
+        // The subscription engine keeps its output in memory and writes SQLite only once
+        // runInteractiveSingle returns, so a crash mid-turn leaves nothing in `messages`.
+        // The tmux transcript still has every word — catch-up can import it — but only if
+        // transcript_offset already points at the pre-turn EOF. When it is NULL (the first
+        // subscription turn of a session) catch-up takes its baseline branch instead and
+        // silently discards the whole lost turn. Setting it here costs one UPDATE and turns
+        // the only hard-loss case into a recoverable one.
+        if (localClaudeId) {
+          try {
+            const _pre = transcriptSize(localClaudeId);
+            if (_pre != null) db.prepare(`UPDATE sessions SET transcript_offset=? WHERE id=? AND transcript_offset IS NULL`).run(_pre, localSessionId);
+          } catch {}
+        }
         // The interactive engine has no hooks to inject, so it is handed a drain
         // function and types clarifications into the live pane itself.
         const r = await runInteractiveSingle({
@@ -10042,7 +10140,7 @@ wss.on('connection', (ws) => {
         // Per-tab concurrency: queue if this specific tab is busy (same WS connection),
         // another WS connection is processing this session (activeChatSessions), or
         // a Telegram/task worker is processing this session (activeTasks).
-        if (ws._tabBusy[tabId] || activeChatSessions.has(tabId) || activeTasks.has(tabId)) {
+        if (ws._tabBusy[tabId] || isSessionLive(tabId)) {
           if (!ws._tabQueue[tabId]) {
             ws._tabQueue[tabId] = sessionQueues.get(tabId) || [];
             sessionQueues.set(tabId, ws._tabQueue[tabId]);
@@ -10539,10 +10637,10 @@ wss.on('connection', (ws) => {
             }
 
             // Show plan in chat & save as agent_plan message (restorable on refresh)
-            ws.send(JSON.stringify({ type: 'agent_plan', plan: finalPlan, agents: finalAgents.map(a => ({ id: a.id, role: a.role, task: a.task })), dispatched: true, ...(tabId ? { tabId } : {}) }));
+            ws.send(JSON.stringify({ type: 'agent_plan', plan: finalPlan, agents: finalAgents.map(a => ({ id: a.id, role: a.role, task: a.task, depends_on: a.depends_on || [] })), dispatched: true, ...(tabId ? { tabId } : {}) }));
             try {
               if (sessionId) {
-                const agentPlanJson = JSON.stringify({ plan: finalPlan, agents: finalAgents.map(a => ({ id: a.id, role: a.role, task: a.task })), dispatched: true });
+                const agentPlanJson = JSON.stringify({ plan: finalPlan, agents: finalAgents.map(a => ({ id: a.id, role: a.role, task: a.task, depends_on: a.depends_on || [] })), dispatched: true });
                 stmts.addMsg.run(sessionId, 'assistant', 'agent_plan', agentPlanJson, null, 'orchestrator', null, null);
               }
             } catch {}
@@ -10554,18 +10652,21 @@ wss.on('connection', (ws) => {
           // Save agent_plan to DB for Mode 1 (plan from 📋 Kanban button — wasn't saved above)
           if (plan && agents?.length && sessionId) {
             try {
-              const agentPlanJson = JSON.stringify({ plan: finalPlan, agents: finalAgents.map(a => ({ id: a.id, role: a.role, task: a.task })), dispatched: true });
+              const agentPlanJson = JSON.stringify({ plan: finalPlan, agents: finalAgents.map(a => ({ id: a.id, role: a.role, task: a.task, depends_on: a.depends_on || [] })), dispatched: true });
               stmts.addMsg.run(sessionId, 'assistant', 'agent_plan', agentPlanJson, null, 'orchestrator', null, null);
             } catch {}
           }
 
-          // Circular dependency check
-          const adj = {};
-          for (const a of finalAgents) adj[a.id] = a.depends_on || [];
-          const _v = new Set(), _s = new Set();
-          function _cyc(n) { if (_s.has(n)) return true; if (_v.has(n)) return false; _v.add(n); _s.add(n); for (const d of (adj[n]||[])) { if (_cyc(d)) return true; } _s.delete(n); return false; }
-          if (finalAgents.some(a => _cyc(a.id))) {
-            ws.send(JSON.stringify({ type: 'error', error: 'Circular dependency detected in plan', ...(tabId ? { tabId } : {}) }));
+          // Unrunnable-plan check, through the SAME scheduler the chat path uses.
+          // This was a private DFS, and it disagreed with computeWaves on exactly one
+          // input: a depends_on naming an id that is not in the plan. DFS read
+          // `adj[ghost] || []`, saw no cycle and let the plan through — and `realDeps`
+          // below then dropped the edge with .filter(Boolean), so the task ran as if it
+          // had never had a dependency. The chat path calls the same plan "Circular deps"
+          // and refuses to start it. One plan, two opposite behaviours; now one.
+          const { stuck } = computeWaves(finalAgents);
+          if (stuck.length) {
+            ws.send(JSON.stringify({ type: 'error', error: `Plan cannot run: ${stuck.join(', ')} — circular or unresolvable dependency`, ...(tabId ? { tabId } : {}) }));
             return;
           }
 
@@ -10608,6 +10709,10 @@ wss.on('connection', (ws) => {
                 realDeps.length ? JSON.stringify(realDeps) : null,
                 chainId, sessionId || null,
                 null, null, null,  // scheduled_at, recurrence, recurrence_end_at
+                // `a.effort` / `a.run_engine` are per-agent overrides that no current plan
+                // source actually produces — neither planSchema asks for them. Kept as the
+                // hook they were written to be: adding the fields to the schema is all it
+                // takes to make them live. Until then both fall through to the chain value.
                 sqlVal(a.effort || effort) || null,
                 sqlVal(a.run_engine || source?.run_engine) || null  // run_engine: per-agent override else inherit source session
               ,
@@ -11049,6 +11154,10 @@ function gracefulShutdown(signal) {
   activeDelegations.clear();
 
   // 1. Abort all running Claude subprocesses
+  // Kanban task workers first — they hold their own AbortControllers and are NOT
+  // reachable through wss.clients (a scheduled task has no browser socket behind it).
+  // Without this they were left to be reaped by the worker_pid sweep on the NEXT boot.
+  for (const ac of runningTaskAborts.values()) { try { ac.abort(); } catch {} }
   wss.clients.forEach(ws => {
     ws._queue = [];
     if (ws._abort) { try { ws._abort.abort(); } catch {} }
@@ -11065,14 +11174,22 @@ function gracefulShutdown(signal) {
   }, 10000);
   forceExit.unref(); // don't keep the event loop alive just for this timer
 
-  // 3. Stop accepting new HTTP connections; wait for in-flight requests
+  // 3. Stop accepting new HTTP connections; wait for in-flight requests.
+  // The exit is deliberately delayed past claude-cli.js's SIGTERM→SIGKILL escalation
+  // (3 s): exiting the instant server.close() fires used to orphan subprocesses that
+  // had been signalled but not yet reaped, and cut off the save phase of a turn that
+  // was one tick away from writing its text.
   server.close(() => {
-    clearTimeout(forceExit);
-    // Both calls are guarded: a throw from db.close() used to skip the exit(0) below and
-    // leave the process alive until the 10 s force-exit fired.
-    try { db.pragma('optimize'); db.close(); } catch {} // update query planner stats
-    console.log('✅ Shutdown complete');
-    process.exit(0);
+    // NOT unref'd on purpose: this timer is the only thing holding the loop open, and
+    // its whole job is to make the process wait out the escalation instead of exiting.
+    setTimeout(() => {
+      clearTimeout(forceExit);
+      // Both calls are guarded: a throw from db.close() used to skip the exit(0) below
+      // and leave the process alive until the 10 s force-exit fired.
+      try { db.pragma('optimize'); db.close(); } catch {} // update query planner stats
+      console.log('✅ Shutdown complete');
+      process.exit(0);
+    }, 3500);
   });
 }
 
