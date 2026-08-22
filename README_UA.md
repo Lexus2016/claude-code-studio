@@ -534,12 +534,6 @@ npm start     # продакшн
 
 MIT
 
-## Історія зірок
+## Star History
 
-<a href="https://www.star-history.com/?repos=Lexus2016%2Fclaude-code-studio&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Lexus2016/claude-code-studio&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Lexus2016/claude-code-studio&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Lexus2016/claude-code-studio&type=date&legend=top-left" />
- </picture>
-</a>
+[![Star History Chart](https://api.star-history.com/chart?repos=Lexus2016/claude-code-studio&type=date&legend=top-left&sealed_token=HXp5eKq6x7fIrxnE6KNPi5hQtF0KkONjQM_rtj1aQQJTsrVntZ7KEHFAlz7eSBFlicahQxgFsoQiGVHn3MAdYz_TdNaN5gZrp5fn5C51CDcuTpNL35yM2DJEh86NacIUg7TwAjlhErotJ9V0Rc9nrqiQ8veQE1CioIzJFdV13irIQpBHLoOkXzIRtmMU)](https://www.star-history.com/?repos=Lexus2016%2Fclaude-code-studio&type=date&legend=top-left)
