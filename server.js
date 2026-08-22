@@ -5593,6 +5593,31 @@ app.get('/api/activity', (req, res) => {
     };
     const sessMeta = db.prepare('SELECT id,title,workdir,model,updated_at FROM sessions WHERE id=?');
 
+    // Who is taking part in a run, when bots are. The roadmap called for a separate
+    // "Active now" presence strip; this panel already answers "what is running", across
+    // every project, and a second widget rendering the same state from a second source
+    // is one more thing to drift. So presence rides along here instead.
+    //
+    // A chat's participants come from the live dispatch map — the same structure the turn
+    // strip is driven from, so the two cannot disagree. A task's bot comes from its row.
+    const chatBots = (sid) => {
+      const ctx = botDispatch.get(sid);
+      if (!ctx || !ctx.queued?.size) return undefined;
+      return [...ctx.queued].map(h => {
+        const b = ctx.roster?.get(h);
+        return { id: h, label: b?.label || h, avatar: b?.avatar || '' };
+      });
+    };
+    const taskBotOf = (botId) => {
+      if (!botId) return undefined;
+      try {
+        const b = stmts.getBotAny.get(botId);
+        // getBotAny, not getBot: a task can outlive the bot it was assigned to, and
+        // showing the handle it actually ran under beats showing nothing.
+        return [{ id: botId, label: b?.label || botId, avatar: b?.avatar || '', deleted: !!b?.deleted_at }];
+      } catch { return [{ id: botId, label: botId, avatar: '' }]; }
+    };
+
     const live = [];
     const liveIds = new Set();
 
@@ -5606,6 +5631,7 @@ app.get('/api/activity', (req, res) => {
         source: info?.source || 'web',
         started_at: info?.startedAt || null,
         status: 'running',
+        bots: chatBots(sid),
         ...resolveProj(s?.workdir || null),
       });
       liveIds.add(sid);
@@ -5613,7 +5639,7 @@ app.get('/api/activity', (req, res) => {
 
     // 2) DB in_progress tasks (scheduler / kanban). Skip ones already represented by an
     //    in-memory chat (precedence activeTasks > task). No live worker => 'recovering'.
-    const inProg = db.prepare(`SELECT id,title,session_id,workdir FROM tasks WHERE status='in_progress'`).all();
+    const inProg = db.prepare(`SELECT id,title,session_id,workdir,bot_id FROM tasks WHERE status='in_progress'`).all();
     for (const tsk of inProg) {
       const sid = tsk.session_id;
       if (sid && liveIds.has(sid)) continue;
@@ -5627,6 +5653,7 @@ app.get('/api/activity', (req, res) => {
         source: 'scheduler',
         started_at: null,
         status: hasWorker ? 'running' : 'recovering',
+        bots: taskBotOf(tsk.bot_id),
         ...resolveProj(tsk.workdir || s?.workdir || null),
       });
       if (sid) liveIds.add(sid);
@@ -5665,13 +5692,16 @@ app.get('/api/activity', (req, res) => {
     }
 
     // 3) Scheduled (upcoming) todo tasks.
-    const sched = db.prepare(`SELECT id,title,session_id,workdir,scheduled_at,recurrence,failure_reason FROM tasks WHERE status='todo' AND scheduled_at IS NOT NULL ORDER BY scheduled_at ASC LIMIT 50`).all();
+    const sched = db.prepare(`SELECT id,title,session_id,workdir,scheduled_at,recurrence,failure_reason,bot_id FROM tasks WHERE status='todo' AND scheduled_at IS NOT NULL ORDER BY scheduled_at ASC LIMIT 50`).all();
     const scheduled = sched.map(tsk => ({
       task_id: tsk.id,
       session_id: tsk.session_id || null,
       title: tsk.title || 'Task',
       scheduled_at: tsk.scheduled_at, // unix seconds
       recurrence: tsk.recurrence || null,
+      // A recurring job owned by a bot is the case this matters most for: the queue is
+      // where you find out a routine exists before it runs, and whose routine it is.
+      bots: taskBotOf(tsk.bot_id),
       // #27: a task waiting out an account usage limit is queued, not merely scheduled —
       // the client marks it so the wait does not read as a user-chosen start time.
       paused_reason: /^usage_limit\b/.test(tsk.failure_reason || '') ? 'usage_limit' : null,

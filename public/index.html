@@ -151,6 +151,11 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .act-paused { color: var(--orange); }
 .act-src { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 1px 4px; border-radius: 3px; background: var(--s3, #1f2637); color: var(--muted); flex-shrink: 0; }
 .act-proj { font-size: 9px; color: var(--accent2); opacity: .85; flex-shrink: 0; }
+/* Participants of a run. Shrinks before the title does (the title is what identifies the
+   row) but never collapses to nothing — min-width:0 on the name is what yields the space. */
+.act-bots { display: inline-flex; gap: 3px; align-items: center; flex-shrink: 1; min-width: 0; overflow: hidden; }
+.act-bot { font-size: 9px; line-height: 1.4; padding: 1px 4px; border-radius: 3px; background: var(--s3, #1f2637); color: var(--accent2); white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+.act-bot.gone { opacity: .5; text-decoration: line-through; }
 .act-empty { font-size: 11px; color: var(--muted); opacity: .55; padding: 8px 6px; text-align: center; }
 .sec-body.collapsed { display: none; }
 /* ─── Scrollable list inside section ─── */
@@ -11966,12 +11971,24 @@ function _actItemHtml(it, kind) {
   const clickable = !!it.session_id;
   const onclick = clickable ? `onclick="activityOpen('${it.session_id}','${it.project_id||''}')"` : '';
   const staticCls = clickable ? '' : ' act-static';
+  // Who is taking part, when bots are. This is the presence indicator: rather than a
+  // second "Active now" widget rendering the same state from its own source, it rides on
+  // the panel that already answers "what is running" across every project.
+  // Avatar + handle, not the label: the handle is what you type to reach them. A deleted
+  // bot still shows, because a task can outlive the bot it was assigned to — marked by
+  // the strike-through style alone rather than a word, since the bots section has no
+  // fr/he translations and a missing key would render as raw text here.
+  const bots = Array.isArray(it.bots) && it.bots.length
+    ? `<span class="act-bots">` + it.bots.slice(0, 4).map(b =>
+        `<span class="act-bot${b.deleted ? ' gone' : ''}" title="@@${escH(b.id)}">${escH(b.avatar || '🤖')}${escH(b.id)}</span>`
+      ).join('') + (it.bots.length > 4 ? `<span class="act-bot">+${it.bots.length - 4}</span>` : '') + `</span>`
+    : '';
   if (kind === 'live') {
     const dot = it.status === 'recovering' ? 'recovering' : 'run';
     const meta = it.status === 'recovering'
       ? `<span class="act-meta">↻ ${escH(t('act.recovering'))}</span>`
       : (it.started_at ? `<span class="act-meta act-timer" data-start="${it.started_at}">${escH(_actElapsed(it.started_at))}</span>` : '');
-    return `<div class="act-item${staticCls}" ${onclick}><span class="act-dot ${dot}"></span><span class="act-name" title="${escH(it.title)}">${escH(it.title)}</span><span class="act-src">${escH(it.source||'')}</span>${proj}${meta}</div>`;
+    return `<div class="act-item${staticCls}" ${onclick}><span class="act-dot ${dot}"></span><span class="act-name" title="${escH(it.title)}">${escH(it.title)}</span>${bots}<span class="act-src">${escH(it.source||'')}</span>${proj}${meta}</div>`;
   }
   if (kind === 'scheduled') {
     const rec = it.recurrence ? ' ↻' : '';
@@ -11979,7 +11996,7 @@ function _actItemHtml(it, kind) {
     // one; without this marker the wait reads as a start time the user picked.
     const paused = it.paused_reason === 'usage_limit'
       ? `<span class="act-meta act-paused" title="${escH(t('act.paused_tip'))}">⏸ ${escH(t('act.paused'))}</span>` : '';
-    return `<div class="act-item${staticCls}" ${onclick}><span class="act-dot sched"></span><span class="act-name" title="${escH(it.title)}">${escH(it.title)}</span>${proj}${paused}<span class="act-meta">${escH(_actSchedWhen(it.scheduled_at))}${rec}</span></div>`;
+    return `<div class="act-item${staticCls}" ${onclick}><span class="act-dot sched"></span><span class="act-name" title="${escH(it.title)}">${escH(it.title)}</span>${bots}${proj}${paused}<span class="act-meta">${escH(_actSchedWhen(it.scheduled_at))}${rec}</span></div>`;
   }
   const ago = it.updated_at ? _actAgo(Date.now() - _actTs(it.updated_at)) : '';
   return `<div class="act-item" onclick="activityOpen('${it.session_id}','${it.project_id||''}')"><span class="act-dot recent"></span><span class="act-name" title="${escH(it.title)}">${escH(it.title)}</span>${proj}<span class="act-meta">${escH(ago)}</span></div>`;
