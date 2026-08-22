@@ -4694,10 +4694,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           callerTask?.effort || null,  // effort: inherit from caller task by default
           callerTask?.run_engine || null  // run_engine: inherit from caller task by default
         ,
-          null // bot_id — commit a38e2a4 added this column to the INSERT but updated only
-                // one of the six call sites, so this path threw "Too few parameter values"
-                // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
-                // No bot id is in scope here; passing NULL preserves the intended behaviour.
+          botsLogic.inheritBotId(callerTask)  // bot_id: a bot's subtask stays that bot's
         );
 
         // Set new columns that aren't in createTask prepared statement
@@ -4808,10 +4805,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
             td.effort || effectiveEffort,  // effort: per-task override, else chain default
             td.run_engine || callerTask?.run_engine || null  // run_engine: per-task override, else inherit from caller
           ,
-          null // bot_id — commit a38e2a4 added this column to the INSERT but updated only
-                // one of the six call sites, so this path threw "Too few parameter values"
-                // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
-                // No bot id is in scope here; passing NULL preserves the intended behaviour.
+          botsLogic.inheritBotId(callerTask)  // bot_id: a bot's chain stays that bot's
         );
 
           stmts.setTaskContext.run(contextJson, callerTaskId || null, taskId);
@@ -8209,14 +8203,15 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     // Check if the active project is a remote SSH project
     const _activeProj = findRemoteProject(workdir);
     const _isSubscriptionEngine = (session.run_engine || 'api') === 'subscription';
-    if (tgBots.length && (_activeProj || _isSubscriptionEngine)) {
+    const _botsAvail = botsLogic.botsAvailability({ remote: !!_activeProj, runEngine: session.run_engine });
+    if (tgBots.length && !_botsAvail.available) {
       // Bots run through the headless `api` engine only (runBotTurns spawns its own
       // ClaudeCLI per bot) — SSH and subscription/tmux sessions silently ran the
       // mention as a normal single-agent turn with no bot involved and no word to
       // the user about why. Say so explicitly instead.
       try {
         await telegramBot.sendMessage(chatId,
-          `ℹ️ Bots aren't available on this chat's engine (${_activeProj ? 'SSH' : 'subscription'}) — answering as the regular assistant instead. Switch this chat to the API engine to use @@mentions.`,
+          `ℹ️ Bots aren't available on this chat's engine (${_botsAvail.reason === 'ssh' ? 'SSH' : 'subscription'}) — answering as the regular assistant instead. Switch this chat to the API engine to use @@mentions.`,
           threadId ? { message_thread_id: threadId } : {});
       } catch {}
     }
@@ -8443,6 +8438,34 @@ function _attachTelegramListeners(bot) {
   });
 }
 
+// The roster Telegram shows for /bots. Projects live in a JSON file, not in SQLite, so
+// telegram-bot.js cannot resolve a workdir to a project id on its own — it gets this
+// callback instead, the same composition the Forum module already uses.
+//
+// Availability travels with the roster on purpose: a bot listed without a word about the
+// engine is worse than no listing, because the user then mentions it and gets an ordinary
+// assistant answer with no bot in it.
+function telegramRoster(workdir, sessionId) {
+  const empty = { bots: [], available: true, reason: null, projectName: null };
+  try {
+    const wd = workdir || WORKDIR;
+    const proj = loadProjects().find(pr => pr.workdir === wd);
+    const session = sessionId ? stmts.getSession.get(sessionId) : null;
+    const avail = botsLogic.botsAvailability({
+      remote: !!findRemoteProject(wd),
+      runEngine: session?.run_engine,
+    });
+    return {
+      bots: proj ? stmts.listProjectBots.all(proj.id) : [],
+      projectName: proj?.name || null,
+      ...avail,
+    };
+  } catch (e) {
+    log.warn('telegram roster lookup failed', { err: e.message });
+    return empty;
+  }
+}
+
 function initTelegramBot() {
   // The bot polls Telegram outbound (no tunnel required), and /api/telegram/start
   // already starts it in desktop mode — so resume it on boot too when the user
@@ -8454,7 +8477,7 @@ function initTelegramBot() {
   const tg = c.telegram;
   if (!tg || !tg.enabled || !tg.botToken) return;
 
-  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk' });
+  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster });
   telegramBot.acceptNewConnections = tg.acceptNewConnections !== false;
   _attachTelegramListeners(telegramBot);
 
@@ -8498,7 +8521,7 @@ app.post('/api/telegram/start', (req, res) => {
   }
 
   // Start new bot
-  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk' });
+  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster });
   telegramBot.acceptNewConnections = c.telegram.acceptNewConnections !== false;
   _attachTelegramListeners(telegramBot);
 

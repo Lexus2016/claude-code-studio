@@ -179,6 +179,77 @@ const msg = (over = {}) => ({
     check('and it has a title', db.prepare('SELECT title FROM tasks ORDER BY rowid DESC LIMIT 1').get().title, 'Real task title');
   }
 
+  console.log('\n/bots lists the roster a mention can reach:');
+  {
+    // Mentions have worked from Telegram for a while; nothing here ever listed the
+    // handles, so the roster was discoverable only from the web UI.
+    const ROSTER = [
+      { id: 'analyst', label: 'Market Analyst', avatar: '📈', model: 'opus', description: 'reads the tape' },
+      { id: 'writer', label: 'Writer', avatar: '', model: null, description: '' },
+    ];
+    const withRoster = (over = {}) => {
+      bot._getRoster = () => ({ bots: ROSTER, available: true, reason: null, projectName: 'Alpha', ...over });
+    };
+    const text = () => sends().map(s => s.text).join('\n');
+
+    reset(); withRoster();
+    await bot._handleUpdate({ message: msg({ text: '/bots', message_thread_id: 4, is_topic_message: true }) });
+    check('every handle is listed in the doubled form the parser expects',
+      /@@analyst/.test(text()) && /@@writer/.test(text()), true);
+    check('a bot with no avatar still gets one', text().includes('🤖'), true);
+    check('the model is shown when the bot pins one', text().includes('opus'), true);
+    check('nothing about the engine is said when bots do run here',
+      /API engine/.test(text()), false);
+
+    reset(); withRoster({ available: false, reason: 'subscription' });
+    await bot._handleUpdate({ message: msg({ text: '/bots', message_thread_id: 4, is_topic_message: true }) });
+    check('a subscription chat is told bots will not run', /Subscription engine/.test(text()), true);
+    check('…and is still shown the roster rather than an error',
+      /@@analyst/.test(text()), true);
+
+    reset(); withRoster({ available: false, reason: 'ssh' });
+    await bot._handleUpdate({ message: msg({ text: '/bots', message_thread_id: 4, is_topic_message: true }) });
+    check('an SSH chat names SSH, not the subscription engine',
+      /remote \(SSH\) project/.test(text()), true);
+
+    reset(); withRoster({ bots: [] });
+    await bot._handleUpdate({ message: msg({ text: '/bots', message_thread_id: 4, is_topic_message: true }) });
+    check('an empty roster says where to create one', /no bots yet/.test(text()), true);
+
+    // Label, description AND avatar are all free user text rendered into an HTML
+    // message — an unescaped one would break the message or inject markup.
+    reset();
+    bot._getRoster = () => ({
+      bots: [{ id: 'evil', label: '<b>Bold</b>', avatar: '<i>x</i>', model: null, description: 'a & b' }],
+      available: true, reason: null, projectName: null,
+    });
+    await bot._handleUpdate({ message: msg({ text: '/bots', message_thread_id: 4, is_topic_message: true }) });
+    check('a label carrying markup is escaped', text().includes('&lt;b&gt;Bold&lt;/b&gt;'), true);
+    check('an avatar carrying markup is escaped too', text().includes('&lt;i&gt;x&lt;/i&gt;'), true);
+    check('an ampersand in a description is escaped', text().includes('a &amp; b'), true);
+
+    // 40 bots (ROSTER_MAX) with descriptions overrun Telegram's 4096-char cap.
+    reset();
+    bot._getRoster = () => ({
+      bots: Array.from({ length: 40 }, (_, i) => ({
+        id: `bot-${i}`, label: `Bot number ${i}`, avatar: '🤖', model: 'sonnet',
+        description: 'D'.repeat(180),
+      })),
+      available: true, reason: null, projectName: null,
+    });
+    await bot._handleUpdate({ message: msg({ text: '/bots', message_thread_id: 4, is_topic_message: true }) });
+    check('a full roster is split instead of being rejected by the API', sends().length > 1, true);
+    check('and no chunk exceeds the cap', sends().every(s => s.text.length <= 4000), true);
+
+    // The callback is optional wiring: an older embedder that constructs TelegramBot
+    // without it must get a message, not a TypeError.
+    reset();
+    bot._getRoster = null;
+    await bot._handleUpdate({ message: msg({ text: '/bots', message_thread_id: 4, is_topic_message: true }) });
+    check('with no roster callback wired, it says so instead of throwing',
+      /unavailable/.test(text()), true);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   try { fs.rmSync(path.dirname(dbPath), { recursive: true, force: true }); } catch {}
   process.exit(fail ? 1 : 0);

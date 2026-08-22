@@ -105,6 +105,12 @@ const BOT_I18N = {
 
     // Tasks
     'tasks_title': '📋 <b>Завдання</b> ({count})',
+    'bots_title': '🤖 <b>Боти проєкту</b> ({count})',
+    'bots_hint': '💡 Щоб покликати бота, напишіть <code>@@звертання</code> у повідомленні.',
+    'bots_empty': '🤖 У цьому проєкті ще немає ботів.\n\nСтворіть бота у веб-інтерфейсі Studio — і зможете кликати його звідси через <code>@@звертання</code>.',
+    'bots_unavailable': '🤖 Список ботів зараз недоступний.',
+    'bots_engine_ssh': '⚠️ Цей чат працює на віддаленому проєкті (SSH), тому боти тут не запускаються — відповідатиме звичайний асистент. Переведіть чат на движок API, щоб користуватися <code>@@згадками</code>.',
+    'bots_engine_subscription': '⚠️ Цей чат працює на движку «Subscription», тому боти тут не запускаються — відповідатиме звичайний асистент. Переведіть чат на движок API, щоб користуватися <code>@@згадками</code>.',
     'tasks_empty': '📋 Немає завдань.',
     'btn_new_chat': '➕ Новий чат',
     'btn_new_task': '➕ Нове завдання',
@@ -177,7 +183,7 @@ const BOT_I18N = {
     'time_ago_long': 'давно',
 
     // Help
-    'help_text': '📖 <b>Команди Claude Code Studio</b>\n\n<b>Навігація:</b>\n/projects — список проектів\n/project <code>&lt;n&gt;</code> — вибрати проект\n/chats — чати поточного проекту\n/chat <code>&lt;n&gt;</code> — відкрити чат\n/back — повернутися назад\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень (5)\n/full — повна остання відповідь\n/tasks — завдання (Kanban)\n/files <code>[path]</code> — файли в workspace\n/cat <code>&lt;file&gt;</code> — вміст файлу\n/diff — git diff в workspace\n/log <code>[n]</code> — останні git коміти\n\n<b>Дії:</b>\n/new <code>[title]</code> — нова сесія\n/stop — зупинити поточне завдання\n\n<b>Remote Access:</b>\n/tunnel — керування доступом\n/url — показати публічний URL\n\n<b>Forum Mode:</b>\n/forum — налаштування Forum Mode\n\n<b>Налаштування:</b>\n/status — стан Studio\n/notify <code>on/off</code> — сповіщення\n/unlink — відключити цей пристрій',
+    'help_text': '📖 <b>Команди Claude Code Studio</b>\n\n<b>Навігація:</b>\n/projects — список проектів\n/project <code>&lt;n&gt;</code> — вибрати проект\n/chats — чати поточного проекту\n/chat <code>&lt;n&gt;</code> — відкрити чат\n/back — повернутися назад\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень (5)\n/full — повна остання відповідь\n/tasks — завдання (Kanban)\n/bots — боти цього проєкту\n/files <code>[path]</code> — файли в workspace\n/cat <code>&lt;file&gt;</code> — вміст файлу\n/diff — git diff в workspace\n/log <code>[n]</code> — останні git коміти\n\n<b>Дії:</b>\n/new <code>[title]</code> — нова сесія\n/stop — зупинити поточне завдання\n\n<b>Remote Access:</b>\n/tunnel — керування доступом\n/url — показати публічний URL\n\n<b>Forum Mode:</b>\n/forum — налаштування Forum Mode\n\n<b>Налаштування:</b>\n/status — стан Studio\n/notify <code>on/off</code> — сповіщення\n/unlink — відключити цей пристрій',
 
     // Back navigation
     'back_to_chats': '↩️ Повернулися до списку чатів. Введіть /chats',
@@ -249,7 +255,7 @@ const BOT_I18N = {
     'forum_topic_project': '📁 <b>{name}</b>\n📂 {path}\n\nПросто пишіть повідомлення — вони йдуть до Claude.\n\n/new — нова сесія\n/history — попередні сесії\n/files — файли проєкту\n/diff — git diff\n/log — git log',
     'forum_topic_tasks': '📋 <b>Завдання</b>\n\nКоманди:\n/new <i>назва</i> — створити завдання\n/list — показати всі\n/done <i>#id</i> — завершити завдання\n/start <i>#id</i> — почати завдання',
     'forum_topic_activity': '🔔 <b>Сповіщення</b>\n\nТут з\'являтимуться оновлення про завершення завдань та помилки.',
-    'forum_help_project': '📖 <b>Команди проєкту</b>\n\n<b>Сесії:</b>\n/new — нова сесія\n/history — список сесій\n/session <code>&lt;n&gt;</code> — перемкнути сесію\n/info — поточна сесія та стан\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень\n/full — повна остання відповідь\n/files <code>[path]</code> — файли проєкту\n/cat <code>&lt;file&gt;</code> — вміст файлу\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Дії:</b>\n/stop — зупинити завдання\n/status — стан системи',
+    'forum_help_project': '📖 <b>Команди проєкту</b>\n\n<b>Сесії:</b>\n/new — нова сесія\n/history — список сесій\n/session <code>&lt;n&gt;</code> — перемкнути сесію\n/info — поточна сесія та стан\n\n<b>Перегляд:</b>\n/last <code>[n]</code> — останні N повідомлень\n/full — повна остання відповідь\n/files <code>[path]</code> — файли проєкту\n/cat <code>&lt;file&gt;</code> — вміст файлу\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Дії:</b>\n/stop — зупинити завдання\n/status — стан системи\n/bots — боти проєкту',
     'forum_help_tasks': '📖 <b>Команди завдань</b>\n\n/new <code>&lt;назва&gt;</code> — створити завдання\n/list — показати всі\n/start <code>#id</code> — почати\n/done <code>#id</code> — завершити\n/todo <code>#id</code> — в «todo»\n/block <code>#id</code> — заблокувати\n/backlog <code>#id</code> — в backlog\n/delete <code>#id</code> — видалити\n\n💡 Просто напишіть текст — він стане завданням.',
     'forum_help_general': '📖 <b>Команди Forum</b>\n\n/status — стан системи\n/help — ця довідка\n\n💡 Перейдіть у топік проєкту, щоб писати Claude.',
     'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}',
@@ -416,6 +422,12 @@ const BOT_I18N = {
     'compose_sent': '⏳ Message sent{note}. Waiting for response...',
 
     'tasks_title': '📋 <b>Tasks</b> ({count})',
+    'bots_title': '🤖 <b>Project bots</b> ({count})',
+    'bots_hint': '💡 To call a bot, write <code>@@handle</code> in your message.',
+    'bots_empty': '🤖 This project has no bots yet.\n\nCreate one in the Studio web UI, then call it from here with <code>@@handle</code>.',
+    'bots_unavailable': '🤖 The bot roster is unavailable right now.',
+    'bots_engine_ssh': '⚠️ This chat runs on a remote (SSH) project, so bots cannot run here — the regular assistant answers instead. Switch the chat to the API engine to use <code>@@mentions</code>.',
+    'bots_engine_subscription': '⚠️ This chat runs on the Subscription engine, so bots cannot run here — the regular assistant answers instead. Switch the chat to the API engine to use <code>@@mentions</code>.',
     'tasks_empty': '📋 No tasks.',
     'btn_new_chat': '➕ New chat',
     'btn_new_task': '➕ New task',
@@ -481,7 +493,7 @@ const BOT_I18N = {
     'time_ago_day': '{n}d ago',
     'time_ago_long': 'long ago',
 
-    'help_text': '📖 <b>Claude Code Studio Commands</b>\n\n<b>Navigation:</b>\n/projects — list projects\n/project <code>&lt;n&gt;</code> — select project\n/chats — chats of current project\n/chat <code>&lt;n&gt;</code> — open chat\n/back — go back\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages (5)\n/full — full last response\n/tasks — tasks (Kanban)\n/files <code>[path]</code> — files in workspace\n/cat <code>&lt;file&gt;</code> — file contents\n/diff — git diff in workspace\n/log <code>[n]</code> — recent git commits\n\n<b>Actions:</b>\n/new <code>[title]</code> — new session\n/stop — stop current task\n\n<b>Remote Access:</b>\n/tunnel — manage remote access\n/url — show public URL\n\n<b>Forum Mode:</b>\n/forum — set up Forum Mode\n\n<b>Settings:</b>\n/status — Studio status\n/notify <code>on/off</code> — notifications\n/unlink — unlink this device',
+    'help_text': '📖 <b>Claude Code Studio Commands</b>\n\n<b>Navigation:</b>\n/projects — list projects\n/project <code>&lt;n&gt;</code> — select project\n/chats — chats of current project\n/chat <code>&lt;n&gt;</code> — open chat\n/back — go back\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages (5)\n/full — full last response\n/tasks — tasks (Kanban)\n/bots — bots of this project\n/files <code>[path]</code> — files in workspace\n/cat <code>&lt;file&gt;</code> — file contents\n/diff — git diff in workspace\n/log <code>[n]</code> — recent git commits\n\n<b>Actions:</b>\n/new <code>[title]</code> — new session\n/stop — stop current task\n\n<b>Remote Access:</b>\n/tunnel — manage remote access\n/url — show public URL\n\n<b>Forum Mode:</b>\n/forum — set up Forum Mode\n\n<b>Settings:</b>\n/status — Studio status\n/notify <code>on/off</code> — notifications\n/unlink — unlink this device',
 
     'back_to_chats': '↩️ Back to chat list. Type /chats',
     'back_to_projects': '↩️ Back to project list. Type /projects',
@@ -548,7 +560,7 @@ const BOT_I18N = {
     'forum_topic_project': '📁 <b>{name}</b>\n📂 {path}\n\nJust write messages — they go to Claude.\n\n/new — new session\n/history — previous sessions\n/files — project files\n/diff — git diff\n/log — git log',
     'forum_topic_tasks': '📋 <b>Tasks</b>\n\nCommands:\n/new <i>title</i> — create task\n/list — show all\n/done <i>#id</i> — complete task\n/start <i>#id</i> — start task',
     'forum_topic_activity': '🔔 <b>Notifications</b>\n\nTask completions and errors will appear here.',
-    'forum_help_project': '📖 <b>Project Commands</b>\n\n<b>Sessions:</b>\n/new — new session\n/history — session list\n/session <code>&lt;n&gt;</code> — switch session\n/info — current session &amp; state\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages\n/full — full last response\n/files <code>[path]</code> — project files\n/cat <code>&lt;file&gt;</code> — file contents\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Actions:</b>\n/stop — stop current task\n/status — system status',
+    'forum_help_project': '📖 <b>Project Commands</b>\n\n<b>Sessions:</b>\n/new — new session\n/history — session list\n/session <code>&lt;n&gt;</code> — switch session\n/info — current session &amp; state\n\n<b>View:</b>\n/last <code>[n]</code> — last N messages\n/full — full last response\n/files <code>[path]</code> — project files\n/cat <code>&lt;file&gt;</code> — file contents\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Actions:</b>\n/stop — stop current task\n/status — system status\n/bots — bots of this project',
     'forum_help_tasks': '📖 <b>Task Commands</b>\n\n/new <code>&lt;title&gt;</code> — create task\n/list — show all\n/start <code>#id</code> — start\n/done <code>#id</code> — complete\n/todo <code>#id</code> — set to «todo»\n/block <code>#id</code> — mark blocked\n/backlog <code>#id</code> — set to backlog\n/delete <code>#id</code> — delete\n\n💡 Just type text — it becomes a task.',
     'forum_help_general': '📖 <b>Forum Commands</b>\n\n/status — system status\n/help — this help\n\n💡 Go to a project topic to chat with Claude.',
     'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}',
@@ -715,6 +727,12 @@ const BOT_I18N = {
     'compose_sent': '⏳ Сообщение отправлено{note}. Ожидаю ответ...',
 
     'tasks_title': '📋 <b>Задачи</b> ({count})',
+    'bots_title': '🤖 <b>Боты проекта</b> ({count})',
+    'bots_hint': '💡 Чтобы позвать бота, напишите <code>@@обращение</code> в сообщении.',
+    'bots_empty': '🤖 В этом проекте пока нет ботов.\n\nСоздайте бота в веб-интерфейсе Studio — и сможете звать его отсюда через <code>@@обращение</code>.',
+    'bots_unavailable': '🤖 Список ботов сейчас недоступен.',
+    'bots_engine_ssh': '⚠️ Этот чат работает на удалённом проекте (SSH), поэтому боты здесь не запускаются — ответит обычный ассистент. Переведите чат на движок API, чтобы пользоваться <code>@@упоминаниями</code>.',
+    'bots_engine_subscription': '⚠️ Этот чат работает на движке «Subscription», поэтому боты здесь не запускаются — ответит обычный ассистент. Переведите чат на движок API, чтобы пользоваться <code>@@упоминаниями</code>.',
     'tasks_empty': '📋 Нет задач.',
     'btn_new_chat': '➕ Новый чат',
     'btn_new_task': '➕ Новая задача',
@@ -780,7 +798,7 @@ const BOT_I18N = {
     'time_ago_day': '{n} д назад',
     'time_ago_long': 'давно',
 
-    'help_text': '📖 <b>Команды Claude Code Studio</b>\n\n<b>Навигация:</b>\n/projects — список проектов\n/project <code>&lt;n&gt;</code> — выбрать проект\n/chats — чаты текущего проекта\n/chat <code>&lt;n&gt;</code> — открыть чат\n/back — вернуться назад\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений (5)\n/full — полный последний ответ\n/tasks — задачи (Kanban)\n/files <code>[path]</code> — файлы в workspace\n/cat <code>&lt;file&gt;</code> — содержимое файла\n/diff — git diff в workspace\n/log <code>[n]</code> — последние git коммиты\n\n<b>Действия:</b>\n/new <code>[title]</code> — новая сессия\n/stop — остановить текущую задачу\n\n<b>Remote Access:</b>\n/tunnel — управление доступом\n/url — показать публичный URL\n\n<b>Forum Mode:</b>\n/forum — настройка Forum Mode\n\n<b>Настройки:</b>\n/status — состояние Studio\n/notify <code>on/off</code> — уведомления\n/unlink — отключить это устройство',
+    'help_text': '📖 <b>Команды Claude Code Studio</b>\n\n<b>Навигация:</b>\n/projects — список проектов\n/project <code>&lt;n&gt;</code> — выбрать проект\n/chats — чаты текущего проекта\n/chat <code>&lt;n&gt;</code> — открыть чат\n/back — вернуться назад\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений (5)\n/full — полный последний ответ\n/tasks — задачи (Kanban)\n/bots — боты этого проекта\n/files <code>[path]</code> — файлы в workspace\n/cat <code>&lt;file&gt;</code> — содержимое файла\n/diff — git diff в workspace\n/log <code>[n]</code> — последние git коммиты\n\n<b>Действия:</b>\n/new <code>[title]</code> — новая сессия\n/stop — остановить текущую задачу\n\n<b>Remote Access:</b>\n/tunnel — управление доступом\n/url — показать публичный URL\n\n<b>Forum Mode:</b>\n/forum — настройка Forum Mode\n\n<b>Настройки:</b>\n/status — состояние Studio\n/notify <code>on/off</code> — уведомления\n/unlink — отключить это устройство',
 
     'back_to_chats': '↩️ Вернулись к списку чатов. Введите /chats',
     'back_to_projects': '↩️ Вернулись к списку проектов. Введите /projects',
@@ -847,7 +865,7 @@ const BOT_I18N = {
     'forum_topic_project': '📁 <b>{name}</b>\n📂 {path}\n\nПросто пишите сообщения — они идут к Claude.\n\n/new — новая сессия\n/history — предыдущие сессии\n/files — файлы проекта\n/diff — git diff\n/log — git log',
     'forum_topic_tasks': '📋 <b>Задачи</b>\n\nКоманды:\n/new <i>название</i> — создать задачу\n/list — показать все\n/done <i>#id</i> — завершить задачу\n/start <i>#id</i> — начать задачу',
     'forum_topic_activity': '🔔 <b>Уведомления</b>\n\nЗдесь будут появляться обновления о завершении задач и ошибках.',
-    'forum_help_project': '📖 <b>Команды проекта</b>\n\n<b>Сессии:</b>\n/new — новая сессия\n/history — список сессий\n/session <code>&lt;n&gt;</code> — переключить сессию\n/info — текущая сессия и состояние\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений\n/full — полный последний ответ\n/files <code>[path]</code> — файлы проекта\n/cat <code>&lt;file&gt;</code> — содержимое файла\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Действия:</b>\n/stop — остановить задачу\n/status — состояние системы',
+    'forum_help_project': '📖 <b>Команды проекта</b>\n\n<b>Сессии:</b>\n/new — новая сессия\n/history — список сессий\n/session <code>&lt;n&gt;</code> — переключить сессию\n/info — текущая сессия и состояние\n\n<b>Просмотр:</b>\n/last <code>[n]</code> — последние N сообщений\n/full — полный последний ответ\n/files <code>[path]</code> — файлы проекта\n/cat <code>&lt;file&gt;</code> — содержимое файла\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Действия:</b>\n/stop — остановить задачу\n/status — состояние системы\n/bots — боты проекта',
     'forum_help_tasks': '📖 <b>Команды задач</b>\n\n/new <code>&lt;название&gt;</code> — создать задачу\n/list — показать все\n/start <code>#id</code> — начать\n/done <code>#id</code> — завершить\n/todo <code>#id</code> — в «todo»\n/block <code>#id</code> — заблокировать\n/backlog <code>#id</code> — в backlog\n/delete <code>#id</code> — удалить\n\n💡 Просто напишите текст — он станет задачей.',
     'forum_help_general': '📖 <b>Команды Forum</b>\n\n/status — состояние системы\n/help — эта справка\n\n💡 Перейдите в топик проекта, чтобы писать Claude.',
     'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}',
@@ -1023,6 +1041,12 @@ const BOT_I18N = {
 
     // Tasks
     'tasks_title': '📋 <b>Tâches</b> ({count})',
+    'bots_title': '🤖 <b>Bots du projet</b> ({count})',
+    'bots_hint': '💡 Pour appeler un bot, écrivez <code>@@identifiant</code> dans votre message.',
+    'bots_empty': '🤖 Ce projet n\'a encore aucun bot.\n\nCréez-en un dans l\'interface web de Studio, puis appelez-le d\'ici avec <code>@@identifiant</code>.',
+    'bots_unavailable': '🤖 La liste des bots est indisponible pour le moment.',
+    'bots_engine_ssh': '⚠️ Ce chat tourne sur un projet distant (SSH), les bots ne peuvent donc pas s\'y exécuter — l\'assistant habituel répond à la place. Passez le chat sur le moteur API pour utiliser les <code>@@mentions</code>.',
+    'bots_engine_subscription': '⚠️ Ce chat tourne sur le moteur « Subscription », les bots ne peuvent donc pas s\'y exécuter — l\'assistant habituel répond à la place. Passez le chat sur le moteur API pour utiliser les <code>@@mentions</code>.',
     'tasks_empty': '📋 Aucune tâche.',
     'btn_new_chat': '➕ Nouveau chat',
     'btn_new_task': '➕ Nouvelle tâche',
@@ -1095,7 +1119,7 @@ const BOT_I18N = {
     'time_ago_long': 'il y a longtemps',
 
     // Help
-    'help_text': '📖 <b>Commandes Claude Code Studio</b>\n\n<b>Navigation :</b>\n/projects — liste des projets\n/project <code>&lt;n&gt;</code> — sélectionner un projet\n/chats — chats du projet actuel\n/chat <code>&lt;n&gt;</code> — ouvrir un chat\n/back — revenir en arrière\n\n<b>Affichage :</b>\n/last <code>[n]</code> — les N derniers messages (5)\n/full — dernière réponse complète\n/tasks — tâches (Kanban)\n/files <code>[path]</code> — fichiers du workspace\n/cat <code>&lt;file&gt;</code> — contenu d\'un fichier\n/diff — git diff du workspace\n/log <code>[n]</code> — derniers commits git\n\n<b>Actions :</b>\n/new <code>[title]</code> — nouvelle session\n/stop — arrêter la tâche en cours\n\n<b>Remote Access :</b>\n/tunnel — gérer l\'accès distant\n/url — afficher l\'URL publique\n\n<b>Forum Mode :</b>\n/forum — configurer le Forum Mode\n\n<b>Paramètres :</b>\n/status — état de Studio\n/notify <code>on/off</code> — notifications\n/unlink — dissocier cet appareil',
+    'help_text': '📖 <b>Commandes Claude Code Studio</b>\n\n<b>Navigation :</b>\n/projects — liste des projets\n/project <code>&lt;n&gt;</code> — sélectionner un projet\n/chats — chats du projet actuel\n/chat <code>&lt;n&gt;</code> — ouvrir un chat\n/back — revenir en arrière\n\n<b>Affichage :</b>\n/last <code>[n]</code> — les N derniers messages (5)\n/full — dernière réponse complète\n/tasks — tâches (Kanban)\n/bots — bots de ce projet\n/files <code>[path]</code> — fichiers du workspace\n/cat <code>&lt;file&gt;</code> — contenu d\'un fichier\n/diff — git diff du workspace\n/log <code>[n]</code> — derniers commits git\n\n<b>Actions :</b>\n/new <code>[title]</code> — nouvelle session\n/stop — arrêter la tâche en cours\n\n<b>Remote Access :</b>\n/tunnel — gérer l\'accès distant\n/url — afficher l\'URL publique\n\n<b>Forum Mode :</b>\n/forum — configurer le Forum Mode\n\n<b>Paramètres :</b>\n/status — état de Studio\n/notify <code>on/off</code> — notifications\n/unlink — dissocier cet appareil',
 
     // Back navigation
     'back_to_chats': '↩️ Retour à la liste des chats. Tapez /chats',
@@ -1167,7 +1191,7 @@ const BOT_I18N = {
     'forum_topic_project': '📁 <b>{name}</b>\n📂 {path}\n\nÉcrivez simplement vos messages — ils vont à Claude.\n\n/new — nouvelle session\n/history — sessions précédentes\n/files — fichiers du projet\n/diff — git diff\n/log — git log',
     'forum_topic_tasks': '📋 <b>Tâches</b>\n\nCommandes :\n/new <i>titre</i> — créer une tâche\n/list — tout afficher\n/done <i>#id</i> — terminer une tâche\n/start <i>#id</i> — démarrer une tâche',
     'forum_topic_activity': '🔔 <b>Notifications</b>\n\nLes fins de tâches et les erreurs apparaîtront ici.',
-    'forum_help_project': '📖 <b>Commandes du projet</b>\n\n<b>Sessions :</b>\n/new — nouvelle session\n/history — liste des sessions\n/session <code>&lt;n&gt;</code> — changer de session\n/info — session actuelle et état\n\n<b>Affichage :</b>\n/last <code>[n]</code> — les N derniers messages\n/full — dernière réponse complète\n/files <code>[path]</code> — fichiers du projet\n/cat <code>&lt;file&gt;</code> — contenu d\'un fichier\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Actions :</b>\n/stop — arrêter la tâche en cours\n/status — état du système',
+    'forum_help_project': '📖 <b>Commandes du projet</b>\n\n<b>Sessions :</b>\n/new — nouvelle session\n/history — liste des sessions\n/session <code>&lt;n&gt;</code> — changer de session\n/info — session actuelle et état\n\n<b>Affichage :</b>\n/last <code>[n]</code> — les N derniers messages\n/full — dernière réponse complète\n/files <code>[path]</code> — fichiers du projet\n/cat <code>&lt;file&gt;</code> — contenu d\'un fichier\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>Actions :</b>\n/stop — arrêter la tâche en cours\n/status — état du système\n/bots — bots du projet',
     'forum_help_tasks': '📖 <b>Commandes des tâches</b>\n\n/new <code>&lt;titre&gt;</code> — créer une tâche\n/list — tout afficher\n/start <code>#id</code> — démarrer\n/done <code>#id</code> — terminer\n/todo <code>#id</code> — mettre en « todo »\n/block <code>#id</code> — bloquer\n/backlog <code>#id</code> — mettre en backlog\n/delete <code>#id</code> — supprimer\n\n💡 Écrivez simplement du texte — il deviendra une tâche.',
     'forum_help_general': '📖 <b>Commandes Forum</b>\n\n/status — état du système\n/help — cette aide\n\n💡 Allez dans un topic de projet pour discuter avec Claude.',
     'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}',
@@ -1343,6 +1367,12 @@ const BOT_I18N = {
 
     // Tasks
     'tasks_title': '📋 <b>משימות</b> ({count})',
+    'bots_title': '🤖 <b>הבוטים של הפרויקט</b> ({count})',
+    'bots_hint': '💡 כדי לקרוא לבוט, כתבו <code>@@כינוי</code> בהודעה.',
+    'bots_empty': '🤖 בפרויקט הזה עוד אין בוטים.\n\nצרו בוט בממשק הווב של Studio, ואז אפשר לקרוא לו מכאן עם <code>@@כינוי</code>.',
+    'bots_unavailable': '🤖 רשימת הבוטים אינה זמינה כרגע.',
+    'bots_engine_ssh': '⚠️ הצ׳אט הזה רץ על פרויקט מרוחק (SSH), ולכן בוטים לא יכולים לרוץ כאן — העוזר הרגיל עונה במקום. העבירו את הצ׳אט למנוע API כדי להשתמש ב־<code>@@אזכורים</code>.',
+    'bots_engine_subscription': '⚠️ הצ׳אט הזה רץ על מנוע «Subscription», ולכן בוטים לא יכולים לרוץ כאן — העוזר הרגיל עונה במקום. העבירו את הצ׳אט למנוע API כדי להשתמש ב־<code>@@אזכורים</code>.',
     'tasks_empty': '📋 אין משימות.',
     'btn_new_chat': '➕ צ\'אט חדש',
     'btn_new_task': '➕ משימה חדשה',
@@ -1415,7 +1445,7 @@ const BOT_I18N = {
     'time_ago_long': 'מזמן',
 
     // Help
-    'help_text': '📖 <b>פקודות Claude Code Studio</b>\n\n<b>ניווט:</b>\n/projects — רשימת פרויקטים\n/project <code>&lt;n&gt;</code> — בחירת פרויקט\n/chats — צ\'אטים של הפרויקט הנוכחי\n/chat <code>&lt;n&gt;</code> — פתיחת צ\'אט\n/back — חזרה אחורה\n\n<b>תצוגה:</b>\n/last <code>[n]</code> — N ההודעות האחרונות (5)\n/full — התשובה האחרונה במלואה\n/tasks — משימות (Kanban)\n/files <code>[path]</code> — קבצים ב-workspace\n/cat <code>&lt;file&gt;</code> — תוכן קובץ\n/diff — git diff ב-workspace\n/log <code>[n]</code> — קומיטים אחרונים\n\n<b>פעולות:</b>\n/new <code>[title]</code> — סשן חדש\n/stop — עצירת המשימה הנוכחית\n\n<b>Remote Access:</b>\n/tunnel — ניהול גישה מרחוק\n/url — הצגת ה-URL הציבורי\n\n<b>Forum Mode:</b>\n/forum — הגדרת Forum Mode\n\n<b>הגדרות:</b>\n/status — מצב Studio\n/notify <code>on/off</code> — התראות\n/unlink — ניתוק המכשיר הזה',
+    'help_text': '📖 <b>פקודות Claude Code Studio</b>\n\n<b>ניווט:</b>\n/projects — רשימת פרויקטים\n/project <code>&lt;n&gt;</code> — בחירת פרויקט\n/chats — צ\'אטים של הפרויקט הנוכחי\n/chat <code>&lt;n&gt;</code> — פתיחת צ\'אט\n/back — חזרה אחורה\n\n<b>תצוגה:</b>\n/last <code>[n]</code> — N ההודעות האחרונות (5)\n/full — התשובה האחרונה במלואה\n/tasks — משימות (Kanban)\n/bots — הבוטים של הפרויקט הזה\n/files <code>[path]</code> — קבצים ב-workspace\n/cat <code>&lt;file&gt;</code> — תוכן קובץ\n/diff — git diff ב-workspace\n/log <code>[n]</code> — קומיטים אחרונים\n\n<b>פעולות:</b>\n/new <code>[title]</code> — סשן חדש\n/stop — עצירת המשימה הנוכחית\n\n<b>Remote Access:</b>\n/tunnel — ניהול גישה מרחוק\n/url — הצגת ה-URL הציבורי\n\n<b>Forum Mode:</b>\n/forum — הגדרת Forum Mode\n\n<b>הגדרות:</b>\n/status — מצב Studio\n/notify <code>on/off</code> — התראות\n/unlink — ניתוק המכשיר הזה',
 
     // Back navigation
     'back_to_chats': '↩️ חזרנו לרשימת הצ\'אטים. הקלידו /chats',
@@ -1487,7 +1517,7 @@ const BOT_I18N = {
     'forum_topic_project': '📁 <b>{name}</b>\n📂 {path}\n\nפשוט כתבו הודעות — הן מגיעות ל-Claude.\n\n/new — סשן חדש\n/history — סשנים קודמים\n/files — קבצי הפרויקט\n/diff — git diff\n/log — git log',
     'forum_topic_tasks': '📋 <b>משימות</b>\n\nפקודות:\n/new <i>שם</i> — יצירת משימה\n/list — הצגת הכול\n/done <i>#id</i> — סיום משימה\n/start <i>#id</i> — התחלת משימה',
     'forum_topic_activity': '🔔 <b>התראות</b>\n\nכאן יופיעו עדכונים על סיום משימות ושגיאות.',
-    'forum_help_project': '📖 <b>פקודות פרויקט</b>\n\n<b>סשנים:</b>\n/new — סשן חדש\n/history — רשימת סשנים\n/session <code>&lt;n&gt;</code> — החלפת סשן\n/info — הסשן הנוכחי והמצב\n\n<b>תצוגה:</b>\n/last <code>[n]</code> — N ההודעות האחרונות\n/full — התשובה האחרונה במלואה\n/files <code>[path]</code> — קבצי הפרויקט\n/cat <code>&lt;file&gt;</code> — תוכן קובץ\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>פעולות:</b>\n/stop — עצירת המשימה\n/status — מצב המערכת',
+    'forum_help_project': '📖 <b>פקודות פרויקט</b>\n\n<b>סשנים:</b>\n/new — סשן חדש\n/history — רשימת סשנים\n/session <code>&lt;n&gt;</code> — החלפת סשן\n/info — הסשן הנוכחי והמצב\n\n<b>תצוגה:</b>\n/last <code>[n]</code> — N ההודעות האחרונות\n/full — התשובה האחרונה במלואה\n/files <code>[path]</code> — קבצי הפרויקט\n/cat <code>&lt;file&gt;</code> — תוכן קובץ\n/diff — git diff\n/log <code>[n]</code> — git log\n\n<b>פעולות:</b>\n/stop — עצירת המשימה\n/status — מצב המערכת\n/bots — הבוטים של הפרויקט',
     'forum_help_tasks': '📖 <b>פקודות משימות</b>\n\n/new <code>&lt;שם&gt;</code> — יצירת משימה\n/list — הצגת הכול\n/start <code>#id</code> — התחלה\n/done <code>#id</code> — סיום\n/todo <code>#id</code> — העברה ל-«todo»\n/block <code>#id</code> — חסימה\n/backlog <code>#id</code> — העברה ל-backlog\n/delete <code>#id</code> — מחיקה\n\n💡 פשוט כתבו טקסט — הוא יהפוך למשימה.',
     'forum_help_general': '📖 <b>פקודות Forum</b>\n\n/status — מצב המערכת\n/help — העזרה הזו\n\n💡 עברו לטופיק של פרויקט כדי לדבר עם Claude.',
     'forum_task_created': '📝 <b>#{id}</b> {title}\n📌 backlog{workdir_line}',

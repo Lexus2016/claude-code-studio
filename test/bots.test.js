@@ -405,6 +405,68 @@ check('the limit is the same 4000 the sequential-context path uses', MAX_TASK_CH
   check('a null task does not throw', clipTask(null), { task: '', clipped: false });
 }
 
+// ─── inheritBotId (a bot's routine must stay the bot's) ──────────────────────
+// A task owned by @analyst that spawns a subtask used to lose the owner: every other
+// field (model, mode, agent_mode, max_turns, effort, run_engine) was inherited from the
+// caller task and bot_id alone was hardcoded NULL, so the child ran as a nameless agent
+// with none of the bot's prompt or model.
+const { inheritBotId } = require('../bots.js');
+console.log('\nbot ownership of spawned subtasks:');
+
+check('a subtask of a bot-owned task belongs to the same bot',
+  inheritBotId({ bot_id: 'analyst' }), 'analyst');
+check('a subtask of an unowned task stays unowned',
+  inheritBotId({ bot_id: null }), null);
+check('no caller task at all yields no owner', inheritBotId(null), null);
+check('a caller task without the column yields no owner', inheritBotId({}), null);
+
+// An explicit handle wins: the caller is naming a specific owner, which is a stronger
+// signal than inheritance. Nothing passes one today — the parameter exists so the rule
+// is defined before a caller needs it, not invented under pressure later.
+check('an explicit owner beats inheritance',
+  inheritBotId({ bot_id: 'analyst' }, 'writer'), 'writer');
+check('an explicit owner works with no caller task',
+  inheritBotId(null, 'writer'), 'writer');
+
+// Fail closed rather than write junk into tasks.bot_id: processQueue looks the handle up
+// with getBot and logs "task bot not found", so a malformed value costs a real run.
+check('a malformed explicit owner falls back to inheritance',
+  inheritBotId({ bot_id: 'analyst' }, 'Not A Handle'), 'analyst');
+check('a malformed inherited owner yields null',
+  inheritBotId({ bot_id: 'BAD HANDLE' }), null);
+check('an empty explicit owner falls back to inheritance',
+  inheritBotId({ bot_id: 'analyst' }, ''), 'analyst');
+check('a non-string owner yields null', inheritBotId({ bot_id: 42 }), null);
+// The handle is stored lowercase everywhere else (parseMentions, planDispatch, the
+// roster); a stray capital here would silently miss getBot.
+check('an owner is normalised to lowercase', inheritBotId({ bot_id: 'Analyst' }), 'analyst');
+check('surrounding whitespace is trimmed', inheritBotId({ bot_id: '  analyst  ' }), 'analyst');
+
+// ─── botsAvailability (bots run on the headless api engine only) ─────────────
+// runBotTurns spawns its own ClaudeCLI per bot, which an SSH project and a tmux
+// subscription session cannot host. The chat path already said so in prose at one call
+// site; the rule lives here so Telegram's roster listing answers it the same way instead
+// of growing a second, drifting copy.
+const { botsAvailability } = require('../bots.js');
+console.log('\nengine availability:');
+
+check('the default api engine runs bots',
+  botsAvailability({}), { available: true, reason: null });
+check('an explicit api engine runs bots',
+  botsAvailability({ runEngine: 'api' }), { available: true, reason: null });
+check('a subscription session cannot run bots',
+  botsAvailability({ runEngine: 'subscription' }), { available: false, reason: 'subscription' });
+check('a remote SSH project cannot run bots',
+  botsAvailability({ remote: true }), { available: false, reason: 'ssh' });
+// The chat path words its refusal as `${_activeProj ? 'SSH' : 'subscription'}` — SSH wins
+// when both are true, because the remote host is the reason nothing local can spawn.
+check('SSH outranks subscription when both apply',
+  botsAvailability({ remote: true, runEngine: 'subscription' }), { available: false, reason: 'ssh' });
+check('an unknown engine is treated as api rather than refused',
+  botsAvailability({ runEngine: 'nonsense' }), { available: true, reason: null });
+check('a null engine is treated as api',
+  botsAvailability({ runEngine: null }), { available: true, reason: null });
+
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

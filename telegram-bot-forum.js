@@ -25,6 +25,7 @@ class TelegramBotForum {
    * @param {Function} api.saveDeviceContext - Persist ctx to SQLite
    * @param {Function} api.botId - Returns bot's own user ID
    * @param {Function} api.cmdStatus - Shared /status command
+   * @param {Function} api.cmdBots - Shared /bots command
    * @param {Function} api.cmdFiles - Shared /files command
    * @param {Function} api.cmdCat - Shared /cat command
    * @param {Function} api.cmdLast - Shared /last command
@@ -658,6 +659,8 @@ class TelegramBotForum {
           return this._api.cmdStop(chatId, userId);
         case '/status':
           return this._api.cmdStatus(chatId, userId);
+        case '/bots':
+          return this._api.cmdBots(chatId, userId);
         case '/help':
           return this._api.sendMessage(chatId, this._api.t('forum_help_project'));
         case '/info':

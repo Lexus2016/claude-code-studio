@@ -124,6 +124,10 @@ class TelegramBot extends EventEmitter {
     this._offset = 0;
     this._acceptNewConnections = true;
     this.lang = opts.lang || 'uk';
+    // Resolves a workdir to its bot roster plus whether this chat's engine can run one.
+    // Projects live in a JSON file that only server.js reads, so this arrives as a
+    // callback rather than a query — same composition as the Forum module's facade.
+    this._getRoster = typeof opts.getRoster === 'function' ? opts.getRoster : null;
 
     // In-memory state
     this._pairingCodes = new Map();  // code → { createdAt, expiresAt }
@@ -159,6 +163,7 @@ class TelegramBot extends EventEmitter {
       botId: () => this._botId,
       botUsername: () => this._botInfo?.username || 'your_bot',
       cmdStatus: this._cmdStatus.bind(this),
+      cmdBots: this._cmdBots.bind(this),
       cmdFiles: this._cmdFiles.bind(this),
       cmdCat: this._cmdCat.bind(this),
       cmdLast: this._cmdLast.bind(this),
@@ -989,6 +994,7 @@ class TelegramBot extends EventEmitter {
       case '/last':    return this._cmdLast(chatId, userId, args);
       case '/full':    return this._cmdFull(chatId, userId);
       case '/status':  return this._cmdStatus(chatId, userId);
+      case '/bots':    return this._cmdBots(chatId, userId);
       case '/tasks':   return this._cmdTasks(chatId, userId);
       case '/files':   return this._cmdFiles(chatId, userId, args);
       case '/cat':     return this._cmdCat(chatId, userId, args);
@@ -1019,10 +1025,53 @@ class TelegramBot extends EventEmitter {
       [[{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }]]);
   }
 
+  // The bots a mention can reach from this chat. Mentions have worked from Telegram for
+  // a while (server.js resolves them in processTelegramChat), but nothing here ever said
+  // WHICH handles exist — the roster was reachable only from the web UI, so on a phone
+  // the feature was invisible unless you already knew a handle by heart.
+  async _cmdBots(chatId, userId) {
+    const ctx = this._getContext(userId);
+    const navButtons = { reply_markup: JSON.stringify({ inline_keyboard: [
+      [{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }],
+    ] }) };
+
+    if (!this._getRoster) {
+      await this._sendMessage(chatId, this._t('bots_unavailable'), navButtons);
+      return;
+    }
+    const roster = this._getRoster(ctx.projectWorkdir, ctx.sessionId) || {};
+    const bots = Array.isArray(roster.bots) ? roster.bots : [];
+    if (!bots.length) {
+      await this._sendMessage(chatId, this._t('bots_empty'), navButtons);
+      return;
+    }
+
+    // Every field here is user-authored (label, description, and avatar, which is a free
+    // text column rather than a picker) and the message goes out as HTML — so all three
+    // are escaped, not just the obvious two.
+    const lines = bots.map(b => {
+      const avatar = this._escHtml(b.avatar || '🤖');
+      const model = b.model ? ` · <i>${this._escHtml(b.model)}</i>` : '';
+      const desc = b.description ? `\n      ${this._escHtml(b.description)}` : '';
+      return `${avatar} <code>@@${this._escHtml(b.id)}</code> — ${this._escHtml(b.label)}${model}${desc}`;
+    });
+
+    // A full roster is 40 bots (ROSTER_MAX), which overruns Telegram's per-message cap
+    // long before it runs out of bots — chunk instead of letting the API reject it.
+    const warn = roster.available === false
+      ? '\n\n' + this._t(roster.reason === 'ssh' ? 'bots_engine_ssh' : 'bots_engine_subscription')
+      : '';
+    const body = this._t('bots_title', { count: bots.length }) + '\n\n'
+      + lines.join('\n') + '\n\n' + this._t('bots_hint') + warn;
+    const chunks = this._chunkForTelegram(body, MAX_MESSAGE_LENGTH - 100);
+    for (let i = 0; i < chunks.length; i++) {
+      await this._sendMessage(chatId, chunks[i], i === chunks.length - 1 ? navButtons : {});
+    }
+  }
+
   async _cmdProjects(chatId, userId) {
     return this._screenProjects(chatId, userId, 'p:list:0');
   }
-
   async _cmdProject(chatId, userId, args) {
     const ctx = this._getContext(userId);
 

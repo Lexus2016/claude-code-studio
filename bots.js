@@ -345,9 +345,47 @@ function clipTask(rawTask) {
   };
 }
 
+// ─── Task ownership ───────────────────────────────────────────────────────────
+// Who owns a task that a running task spawned.
+//
+// A task carries its owning bot in tasks.bot_id, and processQueue reads it to build the
+// bot's system prompt and pick its model (server.js:1586). Every other field of a spawned
+// subtask is inherited from the caller — model, mode, agent_mode, max_turns, effort,
+// run_engine — so an un-inherited owner is not a policy, it is an omission: a subtask of
+// @analyst's routine ran as a nameless agent with none of @analyst's prompt.
+//
+// `explicit` wins when it is a legal handle, because naming an owner is a stronger signal
+// than inheriting one. Anything malformed falls back rather than propagating: the value
+// goes into a column that getBot is queried with, and a junk handle costs a whole run
+// before it surfaces as "task bot not found" in the log.
+function inheritBotId(callerTask, explicit) {
+  const norm = (v) => {
+    if (typeof v !== 'string') return null;
+    const h = v.trim().toLowerCase();
+    return isValidHandle(h) ? h : null;
+  };
+  return norm(explicit) || norm(callerTask?.bot_id) || null;
+}
+
+// Whether bots can run at all for a given chat.
+//
+// runBotTurns spawns its own headless ClaudeCLI per bot. A remote SSH project has no
+// local process to spawn into, and a subscription chat is one persistent tmux pane that
+// a second engine must not write into — so on both, a mention silently ran as an ordinary
+// single-agent turn until the chat path started saying so out loud.
+//
+// An unrecognised engine resolves to available rather than refused: `api` is the default
+// everywhere (sessions.run_engine is nullable), and failing closed on an unknown string
+// would disable bots for a value that simply has not been added to the enum yet.
+function botsAvailability({ remote, runEngine } = {}) {
+  if (remote) return { available: false, reason: 'ssh' };
+  if (runEngine === 'subscription') return { available: false, reason: 'subscription' };
+  return { available: true, reason: null };
+}
+
 module.exports = {
   HANDLE_RE, EVIDENCE_CLAUSE, ROSTER_MAX, IMPORT_MAX,
   isValidHandle, handleFromLabel, uniqueHandle,
   parseMentions, renderRoster, buildBotSystemPrompt, planDispatch, planBotImport,
-  MAX_TASK_CHARS, clipTask,
+  MAX_TASK_CHARS, clipTask, inheritBotId, botsAvailability,
 };
