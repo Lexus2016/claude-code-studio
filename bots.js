@@ -428,10 +428,76 @@ function planInboxDelivery({ letters, now, max, ttlMs } = {}) {
   return { deliver, expired, deferred };
 }
 
+// ─── Conversation room ────────────────────────────────────────────────────────
+// A room of bots taking SERIAL turns on one message. This is the only mode where bots
+// answer each other repeatedly rather than once, so every rule below exists to make it
+// terminate and stay affordable.
+//
+// Serial, never parallel: two bots writing at once would interleave into a transcript
+// nobody can follow, and the turn state in the UI is keyed by handle (one slot per bot).
+// The room is also never nested inside a multi-agent wave — it is a leaf that emits one
+// artifact, which is what keeps "exactly one budget object per turn" true.
+const ROOM_MIN = 2;
+const ROOM_MAX = 6;
+const ROOM_MAX_MESSAGES = 10;
+const ROOM_MAX_ROUNDS = 3;
+
+// Who sits in the room. Over the cap the extras are NAMED rather than dropped quietly —
+// a room that silently ignored half the roster would look like a bug in the roster.
+function planRoom({ bots, max } = {}) {
+  const cap = Number.isInteger(max) && max > 0 ? max : ROOM_MAX;
+  const all = (Array.isArray(bots) ? bots : []).filter(b => b && b.id);
+  if (all.length < ROOM_MIN) return { room: [], skipped: [], reason: 'too-few' };
+  return { room: all.slice(0, cap), skipped: all.slice(cap).map(b => b.id), reason: null };
+}
+
+// What a bot's reply means for the room.
+//
+// PASS must be the whole opening of the reply, not merely present in it: "the tests pass
+// now" is a contribution, not a bot declining to speak. An empty reply is treated as a
+// pass because that is what it is — the bot said nothing.
+//
+// Escalation is '@user' as a standalone token. '@@handle' addresses a peer and must never
+// be read as reaching the human, and a word like 'superuser' or an address such as
+// x@user.io must not either — hence the boundary on both sides and the explicit
+// exclusion of a preceding '@'.
+const ROOM_PASS_RE = /^pass\b[\s.:,—-]*/i;
+const ROOM_ESCALATE_RE = /(^|[^@\w])@user(?![\w.@-])/i;
+
+function parseRoomReply(raw) {
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  if (!text) return { pass: true, escalate: false, text: '' };
+  const escalate = ROOM_ESCALATE_RE.test(text);
+  if (ROOM_PASS_RE.test(text)) {
+    // Keep whatever followed the word: "PASS — nothing to add" says why, and that is
+    // worth showing rather than collapsing every pass into the same blank.
+    return { pass: true, escalate, text: text.replace(ROOM_PASS_RE, '').trim() };
+  }
+  return { pass: false, escalate, text };
+}
+
+// Whether the room takes another turn.
+//
+// Escalation outranks every other stop: once a bot has asked the human something, more
+// bot turns can only bury the question. `settled` (a whole round of passes) ends it for
+// the same reason a person would stop — nobody has anything to add, and another round
+// buys a second set of passes at full price.
+function roomShouldContinue({ round, messages, allPassed, escalated, caps } = {}) {
+  const maxRounds = caps?.rounds ?? ROOM_MAX_ROUNDS;
+  const maxMessages = caps?.messages ?? ROOM_MAX_MESSAGES;
+  if (escalated) return { go: false, reason: 'needs-you' };
+  if ((messages || 0) >= maxMessages) return { go: false, reason: 'messages' };
+  if ((round || 1) > maxRounds) return { go: false, reason: 'rounds' };
+  if (allPassed) return { go: false, reason: 'settled' };
+  return { go: true, reason: null };
+}
+
 module.exports = {
   HANDLE_RE, EVIDENCE_CLAUSE, ROSTER_MAX, IMPORT_MAX,
   isValidHandle, handleFromLabel, uniqueHandle,
   parseMentions, renderRoster, buildBotSystemPrompt, planDispatch, planBotImport,
   MAX_TASK_CHARS, clipTask, inheritBotId, botsAvailability,
   planInboxDelivery, INBOX_MAX_DELIVER, INBOX_TTL_MS,
+  planRoom, parseRoomReply, roomShouldContinue,
+  ROOM_MIN, ROOM_MAX, ROOM_MAX_MESSAGES, ROOM_MAX_ROUNDS,
 };

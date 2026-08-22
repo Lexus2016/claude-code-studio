@@ -3903,6 +3903,161 @@ function drainInbox(sessionId, botId) {
   }
 }
 
+// ─── Conversation room (agent_mode 'conversation') ───────────────────────────
+// 2-6 bots taking SERIAL turns on one user message, for a few rounds, then one artifact.
+//
+// Why this is a separate mode and not multi-agent with a loop: multi-agent PLANS and then
+// executes a DAG of independent subtasks. A room does the opposite — every bot sees what
+// the others just said and answers it. Bolting rounds onto runMultiAgent would have given
+// the planner a second, incompatible job.
+//
+// Three invariants, each load-bearing:
+//   - The room is the ONLY dispatcher. `_ccs_bots` is deliberately NOT injected: a bot
+//     calling message_bot here would make two owners for one bot in one turn, and the
+//     turn state in the UI is keyed by handle (one slot per bot).
+//   - Serial, never parallel. Two bots writing at once interleave into a transcript
+//     nobody can follow, and the room's whole value is that it reads as a conversation.
+//   - It never nests inside a multi-agent wave. It is a leaf that emits one artifact,
+//     which is what keeps "exactly one budget object per turn" true.
+async function runConversationRoom(p, { bots, prompt, rosterBots }) {
+  const { mcpServers, model, maxTurns, ws, sessionId, abortController, workdir, tabId, effort, userContent } = p;
+  const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
+  const send = (o) => { try { ws.send(JSON.stringify({ ...o, ...(tabId ? { tabId } : {}) })); } catch {} };
+  const save = (text, agentId) => { try { stmts.addMsg.run(sessionId, 'assistant', 'text', text, null, agentId, null, null); } catch {} };
+
+  const { room, skipped, reason } = botsLogic.planRoom({ bots });
+  if (reason === 'too-few') {
+    const note = `⚠️ A conversation needs at least ${botsLogic.ROOM_MIN} bots in this project. Add another, or switch this chat off conversation mode.\n\n`;
+    save(note, null); send({ type: 'text', text: note });
+    return null;
+  }
+  if (skipped.length) {
+    // Named, never silently dropped: a room that ignored half the roster would read as a
+    // roster bug rather than a cap.
+    const note = `ℹ️ A room seats ${botsLogic.ROOM_MAX} bots — sitting this one out: ${skipped.map(h => '@@' + h).join(', ')}.\n\n`;
+    save(note, null); send({ type: 'text', text: note });
+  }
+
+  send({ type: 'bots_turn', bots: room.map(b => ({ id: b.id, label: b.label, avatar: b.avatar || '🤖', model: b.model || model })) });
+  const state = (id, s, detail) => send({ type: 'bot_state', bot: id, state: s, detail: detail || '' });
+
+  // The room's own record. Each entry is one bot's contribution, in the order spoken —
+  // this is what every later bot reads, and what the closing artifact is built from.
+  const transcript = [];
+  let messages = 0, round = 1, escalatedBy = null, stopReason = null;
+
+  const ROOM_RULES = (self) => `You are in a group conversation with other bots about the user's message. `
+    + `The others' contributions appear below in the order they were said.\n\n`
+    + `How to take part:\n`
+    + `- Add what only you can add. Do not restate what someone already said.\n`
+    + `- Disagree explicitly when you disagree, and say what you would do instead.\n`
+    + `- If you have nothing to add, reply with exactly: PASS\n`
+    + `- If the room cannot proceed without a decision only the user can make, write @user `
+    + `followed by the single question. Use it sparingly — it ends the conversation.\n`
+    + `- Do not address peers with @@handles to hand work over; in this room everyone speaks in turn.\n`
+    + `- Keep it to a few sentences. You are ${self}.`;
+
+  try {
+    while (true) {
+      const cont = botsLogic.roomShouldContinue({ round, messages, escalated: !!escalatedBy });
+      if (!cont.go) { stopReason = cont.reason; break; }
+
+      let roundPassed = true;
+      for (const bot of room) {
+        if (abortController?.signal?.aborted) { stopReason = 'stopped'; break; }
+        const capNow = botsLogic.roomShouldContinue({ round, messages, escalated: !!escalatedBy });
+        if (!capNow.go) { stopReason = capNow.reason; break; }
+
+        state(bot.id, 'running');
+        const said = transcript.length
+          ? '\n\nWhat has been said so far:\n' + transcript.map(x => `[@${x.handle}]: ${x.text}`).join('\n\n')
+          : '';
+        const botPrompt = `${ROOM_RULES('@' + bot.id)}\n\nThe user's message:\n${prompt}${said}`;
+
+        // A fresh CLI session every round. A room turn is a complete brief on its own —
+        // the whole transcript is in the prompt — and resuming a bot's long-lived chat
+        // session here would splice the room's rounds into the thread it uses when
+        // mentioned normally, so a later @@mention would answer as if mid-conversation.
+        let text = '', result = null, errored = false;
+        await new Promise(res => {
+          let settled = false;
+          const done = () => { if (!settled) { settled = true; res(); } };
+          cli.send({
+            prompt: botPrompt,
+            // Attachments go to the first speaker only — everyone after reads the
+            // transcript, and re-sending the same screenshot per bot per round would
+            // multiply its cost by the size of the room.
+            contentBlocks: (transcript.length === 0 && Array.isArray(userContent))
+              ? userContent.filter(b => !(b?.type === 'text' && b.text === prompt))
+              : null,
+            model: bot.model || model,
+            maxTurns: Math.min(maxTurns || 30, MULTI_AGENT_MAX_TURNS_CAP),
+            systemPrompt: botsLogic.buildBotSystemPrompt(bot, rosterBots),
+            // No _ccs_bots: the room is the dispatcher. See the invariants above.
+            mcpServers,
+            allowedTools: ['Bash', 'View', 'GlobTool', 'GrepTool', 'ListDir'],
+            abortController,
+            effort,
+            name: bot.label,
+            settingSources: 'project,local',
+          })
+            .onText(t => {
+              text += t;
+              send({ type: 'text', text: t, agent: bot.id });
+            })
+            .onResult(r => { result = r; })
+            .onError(() => { errored = true; done(); })
+            .onDone(done);
+        });
+
+        const ok = !errored && isAgentSuccess(result);
+        if (!ok) {
+          // A failed speaker is reported and the room carries on: one bot crashing is not
+          // a reason to lose the conversation the others already had.
+          const note = `\n\n⚠️ @${bot.id} did not finish (${agentStopReason(result, errored)}).\n\n`;
+          save(note, bot.id); send({ type: 'text', text: note, agent: bot.id });
+          state(bot.id, 'failed', agentStopReason(result, errored));
+          continue;
+        }
+
+        const reply = botsLogic.parseRoomReply(text);
+        messages++;
+        if (reply.escalate) escalatedBy = bot.id;
+        if (!reply.pass) {
+          roundPassed = false;
+          transcript.push({ handle: bot.id, text: reply.text });
+          save(text, bot.id);
+        } else {
+          // A pass is recorded but not fed back: it says nothing, and repeating "PASS"
+          // into every later bot's prompt would crowd out what was actually said.
+          const note = reply.text ? `⏭️ @${bot.id} passed — ${reply.text}\n\n` : `⏭️ @${bot.id} passed.\n\n`;
+          save(note, bot.id); send({ type: 'text', text: note, agent: bot.id });
+        }
+        state(bot.id, 'done');
+        if (escalatedBy) break;
+      }
+
+      if (stopReason) break;
+      if (roundPassed) { stopReason = 'settled'; break; }
+      round++;
+    }
+  } finally {
+    for (const b of room) state(b.id, 'done');
+  }
+
+  // One artifact, always — this is what a DAG node would consume when the room is later
+  // wired into a wave, and what the user reads instead of scrolling the whole room.
+  const summary = escalatedBy
+    ? `\n\n🙋 **@${escalatedBy} needs you.** The room stopped here — answer above and it can continue.\n\n`
+    : `\n\n📋 **Room closed** — ${transcript.length} contribution${transcript.length === 1 ? '' : 's'} over ${round} round${round === 1 ? '' : 's'}`
+      + (stopReason === 'settled' ? ', nobody had more to add.' : stopReason === 'messages' ? ', message cap reached.'
+        : stopReason === 'rounds' ? ', round cap reached.' : stopReason === 'stopped' ? ', stopped.' : '.')
+      + '\n\n';
+  save(summary, null); send({ type: 'text', text: summary });
+  if (escalatedBy) send({ type: 'needs_you', bot: escalatedBy });
+  return null;
+}
+
 async function runBotTurns(p, { bots, prompt, rosterBots }) {
   const { mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort, userContent } = p;
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
@@ -8223,10 +8378,11 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     // on the subscription engine); Telegram did neither — a session left in multi
     // mode from the web UI just silently ran as a single agent here with no signal
     // that the orchestrator/subtask plan it would normally get was skipped.
-    if (session.agent_mode === 'multi') {
+    if (session.agent_mode === 'multi' || session.agent_mode === 'conversation') {
+      const _mode = session.agent_mode === 'multi' ? 'multi-agent' : 'conversation';
       try {
         await telegramBot.sendMessage(chatId,
-          'ℹ️ This chat is set to multi-agent mode, which Telegram cannot run yet — answering as a single agent instead.',
+          `ℹ️ This chat is set to ${_mode} mode, which Telegram cannot run yet — answering as a single agent instead.`,
           threadId ? { message_thread_id: threadId } : {});
       } catch {}
     }
@@ -10110,8 +10266,11 @@ wss.on('connection', (ws) => {
         // output without touching SQLite; persistence mirrors runCliSingle's save phase.
         // Checked BEFORE multi-agent: multi runs through API-billed headless calls and
         // would silently override the user's explicit billing choice.
-        if (agentMode === 'multi') {
-          try { proxy.send(JSON.stringify({ type: 'text', text: 'ℹ️ Multi-agent mode uses the API engine — running in single-agent interactive mode instead.\n\n', tabId: effectiveTabId })); } catch {}
+        if (agentMode === 'multi' || agentMode === 'conversation') {
+          // Both spawn headless API-billed runs, which would silently override the
+          // user's explicit subscription billing choice.
+          const _modeName = agentMode === 'multi' ? 'Multi-agent mode' : 'Conversation mode';
+          try { proxy.send(JSON.stringify({ type: 'text', text: `ℹ️ ${_modeName} uses the API engine — running in single-agent interactive mode instead.\n\n`, tabId: effectiveTabId })); } catch {}
         }
         // Arm the catch-up cursor BEFORE the turn, not only after it.
         // The subscription engine keeps its output in memory and writes SQLite only once
@@ -10164,6 +10323,11 @@ wss.on('connection', (ws) => {
         // message (same class of bug fixed for the Telegram bot path).
         const botUserContent = buildUserContent(botPrompt, enrichedAttachments);
         newCid = await runBotTurns({ ...params, userContent: botUserContent }, { bots: mentionedBots, prompt: botPrompt, rosterBots: projectBots });
+      } else if (agentMode === 'conversation') {
+        // A room seats the PROJECT's bots — a conversation mode is a property of the
+        // chat, not something the user re-picks per message. Mentions are handled above,
+        // so reaching here means no one bot was named and the whole room speaks.
+        newCid = await runConversationRoom(params, { bots: projectBots, prompt, rosterBots: projectBots });
       } else if (agentMode==='multi') {
         newCid = await runMultiAgent(params);
       } else {

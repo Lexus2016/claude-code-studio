@@ -3229,6 +3229,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <button class="mob-chip on" data-mob="agent" data-v="single" onclick="setMobOpt(this,'agent')" data-i18n="agent.single">Single</button>
           <button class="mob-chip" data-mob="agent" data-v="multi" onclick="setMobOpt(this,'agent')" data-i18n="agent.multi">Multi</button>
           <button class="mob-chip" data-mob="agent" data-v="dispatch" onclick="setMobOpt(this,'agent')" data-i18n="agent.dispatch">Dispatch</button>
+          <button class="mob-chip" data-mob="agent" data-v="conversation" onclick="setMobOpt(this,'agent')" data-i18n="agent.conversation">Room</button>
         </div>
       </div>
       <div class="mob-sheet-section">
@@ -3376,6 +3377,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <button class="tb-btn on" data-v="single" onclick="setOpt(this,'agent')" data-i18n="agent.single">Single</button>
       <button class="tb-btn" data-v="multi" onclick="setOpt(this,'agent')" data-i18n="agent.multi">Multi</button>
       <button class="tb-btn" data-v="dispatch" onclick="setOpt(this,'agent')" data-i18n="agent.dispatch">Dispatch</button>
+      <button class="tb-btn" data-v="conversation" onclick="setOpt(this,'agent')" data-i18n="agent.conversation" data-i18n-tip="agent.conversation.tip">Room</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -4905,7 +4907,7 @@ const TRANSLATIONS = {
     'sec.filter.aria.proj':'Фільтр проектів','sec.filter.aria.ssh':'Фільтр SSH хостів','sec.filter.aria.hist':'Фільтр чатів','sec.filter.aria.mcp':'Фільтр MCP-серверів','sec.filter.aria.skills':'Фільтр навичок','sec.filter.aria.cmds':'Фільтр команд',
     'skills.auto.btn':'⚡ Авто',
     'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача',
-    'agent.single':'Один','agent.multi':'Мульти','agent.dispatch':'Розподіл',
+    'agent.single':'Один','agent.multi':'Мульти','agent.dispatch':'Розподіл','agent.conversation':'Кімната','agent.conversation.tip':'2–6 ботів проєкту по черзі обговорюють ваше повідомлення',
     'tb.engine':'Рушій','engine.sub':'Підписка',
     'engine.api.title':'Рушій API — headless claude -p, оплата за токени (Claude Pro / ключ API)',
     'engine.sub.title':'Рушій підписки — постійна сесія tmux, оплата з підписки Claude Max (без кредитів API). Потрібні tmux і Claude Max.',
@@ -5284,7 +5286,7 @@ const TRANSLATIONS = {
     'sec.filter.aria.proj':'Filter projects','sec.filter.aria.ssh':'Filter SSH hosts','sec.filter.aria.hist':'Filter chats','sec.filter.aria.mcp':'Filter MCP servers','sec.filter.aria.skills':'Filter skills','sec.filter.aria.cmds':'Filter commands',
     'skills.auto.btn':'⚡ Auto',
     'mode.auto':'Auto','mode.plan':'Plan','mode.task':'Task',
-    'agent.single':'Single','agent.multi':'Multi','agent.dispatch':'Dispatch',
+    'agent.single':'Single','agent.multi':'Multi','agent.dispatch':'Dispatch','agent.conversation':'Room','agent.conversation.tip':'2–6 project bots discuss your message in turn',
     'tb.engine':'Engine','engine.sub':'Subscription',
     'engine.api.title':'API engine — headless claude -p, billed per token (Claude Pro / API key)',
     'engine.sub.title':'Subscription engine — persistent tmux session, billed on the Claude Max subscription (no API credits). Requires tmux + Claude Max.',
@@ -5663,7 +5665,7 @@ const TRANSLATIONS = {
     'sec.filter.aria.proj':'Фильтр проектов','sec.filter.aria.ssh':'Фильтр SSH-хостов','sec.filter.aria.hist':'Фильтр чатов','sec.filter.aria.mcp':'Фильтр MCP-серверов','sec.filter.aria.skills':'Фильтр навыков','sec.filter.aria.cmds':'Фильтр команд',
     'skills.auto.btn':'⚡ Авто',
     'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача',
-    'agent.single':'Один','agent.multi':'Мульти','agent.dispatch':'Распределение',
+    'agent.single':'Один','agent.multi':'Мульти','agent.dispatch':'Распределение','agent.conversation':'Комната','agent.conversation.tip':'2–6 ботов проекта по очереди обсуждают ваше сообщение',
     'tb.engine':'Движок','engine.sub':'Подписка',
     'engine.api.title':'Движок API — headless claude -p, оплата за токены (Claude Pro / ключ API)',
     'engine.sub.title':'Движок подписки — постоянная сессия tmux, оплата по подписке Claude Max (без кредитов API). Требуются tmux и Claude Max.',
@@ -5943,7 +5945,7 @@ const TRANSLATIONS = {
     "sec.filter.aria.proj":"Filtrer les projets","sec.filter.aria.ssh":"Filtrer les hôtes SSH","sec.filter.aria.hist":"Filtrer les discussions","sec.filter.aria.mcp":"Filtrer les serveurs MCP","sec.filter.aria.skills":"Filtrer les compétences","sec.filter.aria.cmds":"Filtrer les commandes",
     "skills.auto.btn":"⚡ Auto",
     "mode.auto":"Auto","mode.plan":"Plan","mode.task":"Tâche",
-    "agent.single":"Simple","agent.multi":"Multi","agent.dispatch":"Répartition",
+    "agent.single":"Simple","agent.multi":"Multi","agent.dispatch":"Répartition","agent.conversation":"Salon","agent.conversation.tip":"2 à 6 bots du projet discutent de votre message à tour de rôle",
     "tb.engine":"Moteur","engine.sub":"Abonnement",
     "engine.api.title":"Moteur API — claude -p sans interface, facturé au jeton (Claude Pro / clé API)",
     "engine.sub.title":"Moteur d'abonnement — session tmux persistante, facturée sur l'abonnement Claude Max (sans crédits API). Nécessite tmux et Claude Max.",
@@ -6195,7 +6197,7 @@ const TRANSLATIONS = {
     "sec.filter.aria.proj":"סינון פרויקטים","sec.filter.aria.ssh":"סינון מארחי SSH","sec.filter.aria.hist":"סינון צ׳אטים","sec.filter.aria.mcp":"סינון שרתי MCP","sec.filter.aria.skills":"סינון מיומנויות","sec.filter.aria.cmds":"סינון פקודות",
     "skills.auto.btn":"⚡ אוטומטי",
     "mode.auto":"אוטומטי","mode.plan":"תכנון","mode.task":"משימה",
-    "agent.single":"יחיד","agent.multi":"מרובה","agent.dispatch":"הקצאה",
+    "agent.single":"יחיד","agent.multi":"מרובה","agent.dispatch":"הקצאה","agent.conversation":"חדר","agent.conversation.tip":"2–6 בוטים של הפרויקט דנים בהודעה שלכם בתורות",
     "tb.engine":"מנוע","engine.sub":"מנוי",
     "engine.api.title":"מנוע API — claude -p ללא ממשק, חיוב לפי טוקנים (Claude Pro / מפתח API)",
     "engine.sub.title":"מנוע מנוי — סשן tmux קבוע, חיוב במסגרת מנוי Claude Max (ללא קרדיטים של API). דורש tmux ו-Claude Max.",
@@ -7392,7 +7394,7 @@ function handleWsMsg(d) {
 
     case 'ui_state_change': {
       // Agent requested UI state update — validate before assigning to prevent invalid state
-      const _validModes = ['auto','planning','task'], _validModels = ['haiku','sonnet','opus','fable'], _validAgents = ['single','multi','dispatch'], _validEngines = ['api','subscription'];
+      const _validModes = ['auto','planning','task'], _validModels = ['haiku','sonnet','opus','fable'], _validAgents = ['single','multi','dispatch','conversation'], _validEngines = ['api','subscription'];
       if (d.mode && _validModes.includes(d.mode)) { curMode = d.mode; syncBtn('mode', d.mode); }
       if (d.model && _validModels.includes(d.model)) { curModel = d.model; syncBtn('model', d.model); }
       if (d.agent && _validAgents.includes(d.agent)) { curAgent = d.agent; syncBtn('agent', d.agent); }
@@ -7433,6 +7435,11 @@ function handleWsMsg(d) {
       break;
 
     case 'done':
+      // Live end-of-turn signal for the session currently on screen: loadSess() is
+      // the only other writer of this flag, so without this a turn that finishes
+      // while its history is already loaded (no tab switch, no reload) leaves an
+      // undelivered clarification badge reading "pending" after the task actually ended.
+      if (tabId === currentSessionId) _curSessionTaskRunning = false;
       // Keep the finished line-up visible for a moment — it is the record of who did
       // what — then clear it so the composer area does not accumulate old turns.
       if (_turnBots.length) setTimeout(clearBotsStrip, 6000);
@@ -10837,7 +10844,7 @@ function updateSessBarSkills() {
 }
 
 function syncBtn(group, val) {
-  const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch'], model: ['haiku','sonnet','opus','fable'], engine: ['api','subscription'] };
+  const groups = { mode: ['auto','planning','task'], agent: ['single','multi','dispatch','conversation'], model: ['haiku','sonnet','opus','fable'], engine: ['api','subscription'] };
   if (!groups[group]?.includes(val)) return;
   // Sync desktop toolbar
   document.querySelectorAll('.tb-group .tb-btn').forEach(b => {

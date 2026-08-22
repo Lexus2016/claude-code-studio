@@ -525,5 +525,88 @@ check('a non-array inbox does not throw',
 }
 
 
+// ─── conversation room (agent_mode 'conversation') ───────────────────────────
+// A room of 2-6 bots taking SERIAL turns. Every rule here exists to make the room
+// terminate and stay affordable: it is the only agent mode where bots talk to each
+// other repeatedly rather than once.
+const {
+  planRoom, parseRoomReply, roomShouldContinue,
+  ROOM_MIN, ROOM_MAX, ROOM_MAX_MESSAGES, ROOM_MAX_ROUNDS,
+} = require('../bots.js');
+console.log('\nconversation room — seating:');
+
+const RB = (id) => ({ id, label: id.toUpperCase() });
+
+check('the caps are the ones the design fixed',
+  [ROOM_MIN, ROOM_MAX, ROOM_MAX_MESSAGES, ROOM_MAX_ROUNDS], [2, 6, 10, 3]);
+
+check('a full room is seated in roster order',
+  planRoom({ bots: [RB('a1'), RB('b1'), RB('c1')] }).room.map(b => b.id), ['a1', 'b1', 'c1']);
+check('one bot cannot hold a conversation',
+  planRoom({ bots: [RB('a1')] }), { room: [], skipped: [], reason: 'too-few' });
+check('an empty roster is refused the same way',
+  planRoom({ bots: [] }).reason, 'too-few');
+{
+  // Over the cap the room is seated, not refused: silently dropping the tail would be
+  // worse, and the caller reports who was left out.
+  const many = Array.from({ length: ROOM_MAX + 3 }, (_, i) => RB('bot' + (i + 10)));
+  const r = planRoom({ bots: many });
+  check('a room is capped at ROOM_MAX', r.room.length, ROOM_MAX);
+  check('and the overflow is named, not dropped silently', r.skipped.length, 3);
+  check('no bot is both seated and skipped',
+    r.skipped.some(h => r.room.some(b => b.id === h)), false);
+}
+check('a malformed roster does not throw', planRoom({}), { room: [], skipped: [], reason: 'too-few' });
+
+console.log('\nconversation room — reading a reply:');
+check('a bare PASS is a pass',
+  parseRoomReply('PASS'), { pass: true, escalate: false, text: '' });
+check('case does not matter', parseRoomReply('pass').pass, true);
+check('a trailing dot is still a pass', parseRoomReply('Pass.').pass, true);
+check('PASS with a reason keeps the reason',
+  parseRoomReply('PASS — nothing to add here'),
+  { pass: true, escalate: false, text: 'nothing to add here' });
+// The word has to be the whole opening, or any sentence mentioning a passing test reads
+// as a bot declining to speak.
+check('a sentence merely containing "pass" is not a pass',
+  parseRoomReply('the tests pass now').pass, false);
+check('an empty reply counts as a pass — the bot said nothing',
+  parseRoomReply('   ').pass, true);
+check('a normal reply is neither',
+  parseRoomReply('I think the parser is the problem'),
+  { pass: false, escalate: false, text: 'I think the parser is the problem' });
+
+check('addressing @user escalates',
+  parseRoomReply('We cannot decide this. @user which database?').escalate, true);
+check('escalation keeps the text so the question reaches the user',
+  parseRoomReply('@user which database?').text, '@user which database?');
+// '@@handle' addresses a peer and must never be mistaken for reaching the human.
+check('naming a peer is not an escalation',
+  parseRoomReply('@@analyst take this').escalate, false);
+check('a word merely ending in user is not an escalation',
+  parseRoomReply('the superuser flag is set').escalate, false);
+check('an email-looking token is not an escalation',
+  parseRoomReply('mail to admin@users.example').escalate, false);
+
+console.log('\nconversation room — when to stop:');
+const S = (over = {}) => roomShouldContinue({ round: 1, messages: 0, allPassed: false, escalated: false, ...over });
+
+check('a fresh room runs', S(), { go: true, reason: null });
+check('the round cap stops it',
+  S({ round: ROOM_MAX_ROUNDS + 1 }), { go: false, reason: 'rounds' });
+check('the last allowed round still runs', S({ round: ROOM_MAX_ROUNDS }).go, true);
+check('the message cap stops it',
+  S({ messages: ROOM_MAX_MESSAGES }), { go: false, reason: 'messages' });
+check('one message below the cap still runs', S({ messages: ROOM_MAX_MESSAGES - 1 }).go, true);
+// Everyone passing means the room has nothing left to say; continuing would burn a
+// full round of paid calls to collect another set of passes.
+check('a round where everyone passed ends it',
+  S({ allPassed: true }), { go: false, reason: 'settled' });
+// Escalation parks the room rather than looping — the answer has to come from a human.
+check('an escalation ends it',
+  S({ escalated: true }), { go: false, reason: 'needs-you' });
+check('escalation outranks the other stops',
+  S({ escalated: true, allPassed: true, round: 99 }).reason, 'needs-you');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
