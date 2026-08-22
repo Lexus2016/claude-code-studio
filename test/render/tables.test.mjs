@@ -121,6 +121,16 @@ test('an escaped pipe stays inside its cell', () => {
   assert.doesNotMatch(out, /<td>a \\<\/td>/, 'the backslash leaked into the cell');
 });
 
+test('an escaped BACKSLASH before a real separator still splits the cells', () => {
+  // The subtle half of the escaped-pipe rule, and the reason this is a scan rather than
+  // a regex split: a lookbehind sees only ONE character back, so it read the pipe in
+  // `C:\\| next` — an escaped backslash followed by a REAL separator — as escaped and
+  // merged the two cells. An EVEN run of backslashes does not escape what follows it.
+  const out = renderMd('| A | B |\n|---|---|\n| C:\\\\| next |');
+  assert.strictEqual((out.match(/<td>/g) || []).length, 2);
+  assert.match(out, /<td>C:\\<\/td><td>next<\/td>/);
+});
+
 test('the {2,40} bound on the 3.4 quantifier is still in the source', () => {
   // A direct pin on the fix: the timing test above would also pass if the whole step
   // were deleted, and a future edit could drop the bound without anyone noticing.

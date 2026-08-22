@@ -3755,7 +3755,10 @@ const MULTI_AGENT_MAX_TURNS_CAP = parseInt(process.env.MULTI_AGENT_MAX_TURNS_CAP
 // that came back with 20 agents used to spawn 20 concurrent `claude` subprocesses on one
 // machine, because the wave ran through a bare Promise.all with no semaphore.
 const MULTI_AGENT_MAX_PLAN = parseInt(process.env.MULTI_AGENT_MAX_PLAN || '8', 10) || 8;
-const MULTI_AGENT_CONCURRENCY = parseInt(process.env.MULTI_AGENT_CONCURRENCY || '3', 10) || 3;
+// Math.max(1, …): Array.from({length: 0}) spawns no workers at all, so a negative or
+// zero override made every wave complete instantly with no agent having run — and the
+// summarizer then reported on an empty result set.
+const MULTI_AGENT_CONCURRENCY = Math.max(1, parseInt(process.env.MULTI_AGENT_CONCURRENCY || '3', 10) || 3);
 
 
 // ─── Bot dispatch ────────────────────────────────────────────────────────────
@@ -10121,7 +10124,10 @@ wss.on('connection', (ws) => {
       if (!tabId) return;
       // Guard: session may have been deleted while dequeue was pending
       if (!stmts.getSession.get(tabId)) { sessionQueues.delete(tabId); return; }
-      if (ws._tabQueue[tabId]?.length > 0 && !ws._tabBusy[tabId] && !activeChatSessions.has(tabId) && !activeTasks.has(tabId)) {
+      // isSessionLive(), NOT the two in-memory sets: those are blind to Kanban workers,
+      // so a message queued BECAUSE a task held the session was dequeued and run straight
+      // back into that task — the exact double-`claude --resume` race the gate prevents.
+      if (ws._tabQueue[tabId]?.length > 0 && !ws._tabBusy[tabId] && !isSessionLive(tabId)) {
         const next = ws._tabQueue[tabId].shift();
         // Delete before running — the same invariant the schema states (see queued_messages)
         // and the finally-drain at the other dequeue site already honours. Leaving the row
@@ -10594,6 +10600,7 @@ wss.on('connection', (ws) => {
                 agents: {
                   type: 'array',
                   minItems: 1,
+                  maxItems: MULTI_AGENT_MAX_PLAN,
                   items: {
                     type: 'object',
                     properties: {
@@ -10655,6 +10662,17 @@ wss.on('connection', (ws) => {
               const agentPlanJson = JSON.stringify({ plan: finalPlan, agents: finalAgents.map(a => ({ id: a.id, role: a.role, task: a.task, depends_on: a.depends_on || [] })), dispatched: true });
               stmts.addMsg.run(sessionId, 'assistant', 'agent_plan', agentPlanJson, null, 'orchestrator', null, null);
             } catch {}
+          }
+
+          // Sanitise before ANY of this. Mode 1 takes `agents` verbatim off the WebSocket
+          // frame — no schema touches it — and Mode 2's schema is advisory the same way the
+          // chat planner's is. A duplicate id is the sharp one here: it survives
+          // computeWaves, but `idMap` keeps only the last genuine task id for it, so the
+          // earlier duplicate's row is created against an id that another agent now owns.
+          finalAgents = sanitizePlan(finalAgents, MULTI_AGENT_MAX_PLAN);
+          if (!finalAgents.length) {
+            ws.send(JSON.stringify({ type: 'error', error: 'Plan has no usable agents', ...(tabId ? { tabId } : {}) }));
+            return;
           }
 
           // Unrunnable-plan check, through the SAME scheduler the chat path uses.

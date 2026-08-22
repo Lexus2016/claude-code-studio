@@ -6797,8 +6797,10 @@ function renderMd(text) {
   // separator row it backtracks from every start position — measured O(n^2): a single
   // 168 KB line (a Bash tool dump full of `|`) froze the main thread for 7.4 s, and
   // renderStreaming re-runs this every 100 ms while such a message streams. Bounding
-  // the repetition makes it linear (29 ms on the same input) with no behaviour change:
-  // an inline header past 40 columns is not a table anyone renders.
+  // the repetition makes it linear (29 ms on the same input). It is not a pure
+  // optimisation: an inline header of 41+ columns is no longer split out of its
+  // sentence. That trade is deliberate — such a row is not a table anyone renders,
+  // and a 7-second freeze is not a price worth paying for it.
   text = text.replace(/(\S)[ \t]+(\|(?:[^|\n]+\|){2,40})[ \t]*\n([ \t]*\|[\s\-:|]+\|)/gm, (m, $1, $2, $3, off, src) => {
     const sol = src.lastIndexOf('\n', off - 1) + 1;
     if (src.substring(sol, off + 1).trimStart().startsWith('|')) return m;
@@ -6816,9 +6818,23 @@ function renderMd(text) {
     // `string \| null` — the ordinary way to write a union type in a docs table — into
     // two cells and left a dangling backslash, widening the row past its header.
     // Split on unescaped pipes only, then unescape.
-    const parseRow = row => row.replace(/^\||\|$/g, '')
-      .split(/(?<!\\)\|/)
-      .map(c => c.replace(/\\\|/g, '|').trim());
+    // Scanned, not split by regex: a lookbehind only sees ONE character back, so it read
+    // the pipe in `C:\\| next` — an ESCAPED BACKSLASH followed by a REAL separator — as
+    // escaped and merged the two cells. Walking the row is linear and gets every run of
+    // backslashes right, with no placeholder bytes to forge.
+    const parseRow = row => {
+      const body = row.replace(/^\||\|$/g, '');
+      const cells = [];
+      let cur = '';
+      for (let i = 0; i < body.length; i++) {
+        const ch = body[i];
+        if (ch === '\\' && (body[i + 1] === '|' || body[i + 1] === '\\')) { cur += body[++i]; continue; }
+        if (ch === '|') { cells.push(cur.trim()); cur = ''; continue; }
+        cur += ch;
+      }
+      cells.push(cur.trim());
+      return cells;
+    };
     const isSep = r => /^\|[\s\-:|]+\|$/.test(r.trim());
 
     // Standard: header + separator + data

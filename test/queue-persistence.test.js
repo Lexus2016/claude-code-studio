@@ -126,6 +126,12 @@ function runHandler(blockSrc, { msg, ws, activeChatSessions = new Set(), activeT
   const sandbox = {
     msg, ws, stmts, JSON, Object, Array, Number, Set, Map, console,
     activeChatSessions, activeTasks, sessionQueues,
+    // The real isSessionLive() also consults the tasks table — a Kanban worker holds a
+    // session without appearing in either in-memory set, and the dequeue gate must see
+    // that or it runs a queued message straight back into the task that queued it.
+    // `hasRunningTask` here is whatever the caller stubbed via `extra`.
+    isSessionLive: id => activeTasks.has(id) || activeChatSessions.has(id)
+      || (extra.hasRunningTask ? extra.hasRunningTask(id) : false),
     processChat: m => { started.push(m); return Promise.resolve(processChat(m)); },
     queuePayload: tabId => JSON.stringify({ type: 'queue_update', tabId }),
     log: { info() {}, warn() {}, error() {} },
@@ -169,6 +175,18 @@ console.log('_dequeue_next — the row dies before the run starts:');
     activeChatSessions: new Set(['S1']) });
   check('a refused dequeue starts nothing', busy.started.length, 0);
   check('...and leaves the row alone', restartTexts(), ['second']);
+
+  // A KANBAN TASK holding the session must refuse the dequeue too. This gate used to
+  // test activeChatSessions/activeTasks directly, and a task worker registers in
+  // NEITHER — its liveness lives only in tasks.status='in_progress'. So a message that
+  // was queued BECAUSE a task held the session was dequeued and run straight back into
+  // that task: two `claude --resume <same cid>` on one transcript.
+  const taskBusy = runHandler(DEQUEUE, { msg: { type: '_dequeue_next', tabId: 'S1' }, ws,
+    extra: { hasRunningTask: id => id === 'S1' } });
+  check('a dequeue is refused while a Kanban task holds the session', taskBusy.started.length, 0);
+  check('...and that row is untouched as well', restartTexts(), ['second']);
+  check('the gate goes through isSessionLive, not the two in-memory sets',
+    /!isSessionLive\(tabId\)/.test(DEQUEUE) && !/!activeTasks\.has\(tabId\)/.test(DEQUEUE), true);
 
   // A deleted session drops its queue entirely rather than leaving orphan rows behind.
   const gone = runHandler(DEQUEUE, { msg: { type: '_dequeue_next', tabId: 'NOPE' }, ws });
