@@ -273,23 +273,28 @@ function termWs(token, sessionId = 'nonexistent') {
     check('...which is findRemoteProject',
       (srvSrc.match(/findRemoteProject\(/g) || []).length >= 3, true);
 
-    // ── a task on a remote project is refused, not run locally ────────────────
-    // The actual cause behind #53's "remote SSH TASK execution is broken":
-    // runSshSingle() is wired into the chat and Telegram paths only. The task runner
-    // has no SSH branch, so `new ClaudeCLI({ cwd: task.workdir })` spawned the LOCAL
-    // agent with a path that lives on another machine — on Windows, Node resolves a
-    // POSIX-absolute cwd against the current drive and the agent starts in C:\home\...
-    console.log('\n— a task cannot be created on a remote SSH project —');
+    // ── a task on a remote project runs OVER SSH, not locally ────────────────
+    // The cause behind #53's "remote SSH task execution is broken": runSshSingle() was
+    // reachable from the chat and Telegram paths only. A Kanban task fell through to
+    // `new ClaudeCLI({ cwd: task.workdir })` — the agent spawned on the LOCAL machine
+    // with a directory that lives on the remote host. On Windows, Node resolves a
+    // POSIX-absolute cwd against the current drive, so the agent started in C:\home\...
+    console.log('\n— a task on a remote SSH project is accepted and routed over SSH —');
     const tRemote = await api('POST', '/api/tasks', { title: 'remote task', description: 'x', workdir: REMOTE_WD });
-    check('creating one is refused with a reason',
-      [tRemote.status, tRemote.json?.error], [400, 'tasks are not supported on remote SSH projects']);
-    check('a task on a LOCAL workdir is still fine',
+    check('creating one is allowed again', tRemote.status, 200);
+    check('...and it keeps the remote workdir verbatim', tRemote.json?.workdir, REMOTE_WD);
+    check('a task on a LOCAL workdir still works',
       (await api('POST', '/api/tasks', { title: 'local task', description: 'x', workdir: APP_DIR })).status, 200);
-    check('the runner refuses too, not just the endpoint',
-      /Tasks cannot run on the remote project/.test(srvSrc), true);
-    check('...and it checks before constructing the local CLI',
-      srvSrc.indexOf('const _taskRemote = findRemoteProject(task.workdir)')
-        < srvSrc.indexOf('const cli = new ClaudeCLI({ cwd: task.workdir'), true);
+    check('the runner picks the SSH client for a remote project',
+      /const cli = _taskRemote\s*\n\s*\? new ClaudeSSH\(\{/.test(srvSrc), true);
+    check('...and the local CLI otherwise',
+      /: new ClaudeCLI\(\{ cwd: task\.workdir \|\| WORKDIR \}\)/.test(srvSrc), true);
+    check('the old blanket refusal is gone',
+      /tasks are not supported on remote SSH projects/.test(srvSrc), false);
+    // worker_pid has no remote equivalent; the read must stay optional or a remote task
+    // throws the moment it starts streaming.
+    check('the pid read tolerates a stream with no local process',
+      /stream\.process\?\.pid/.test(srvSrc), true);
 
     // ── /api/files: the same symlink rule, on the endpoint that reads content ──
     // This family compared workdir + path lexically and never resolved symlinks, so

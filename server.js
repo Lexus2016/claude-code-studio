@@ -1617,14 +1617,35 @@ async function startTask(task) {
     // This is a missing capability, not a broken path: ClaudeSSH supports neither
     // mcpServers nor extraEnv/extraSettings, all of which this loop passes, and there
     // is no remote equivalent of worker_pid for orphan recovery.
+    // A task on a REMOTE project runs on that host, exactly as a chat on it does.
+    // Before this, runSshSingle() was reachable from the chat and Telegram paths only,
+    // so a remote task fell through to the local CLI with a workdir that lives on
+    // another machine — on Windows, Node resolves a POSIX-absolute cwd against the
+    // current drive and the agent started in C:\home\... (issue #53).
+    //
+    // ClaudeSSH exposes the same send()/onText/onResult/onDone surface as ClaudeCLI,
+    // so the loop below is unchanged. Three things do NOT cross the wire, and each
+    // degrades rather than breaks:
+    //   * mcpServers — the remote `claude` uses whatever MCP config it has of its own;
+    //   * the interrupt hook — its callback is 127.0.0.1, unreachable from the remote
+    //     host, so a mid-run clarification is delivered after the turn instead of
+    //     during it. The SSH chat path has always had this same limitation.
+    //   * worker_pid — there is no local process to record, so restart-recovery
+    //     cannot kill an orphan; the abort controller still stops it in-process.
     const _taskRemote = findRemoteProject(task.workdir);
+    const cli = _taskRemote
+      ? new ClaudeSSH({
+          host:       _taskRemote.remoteHost,
+          workdir:    _taskRemote.workdir,
+          sshKeyPath: _taskRemote.sshKeyPath || '',
+          password:   decryptPassword(_taskRemote.password) || '',
+          port:       _taskRemote.port || 22,
+        })
+      : new ClaudeCLI({ cwd: task.workdir || WORKDIR });
     if (_taskRemote) {
-      throw new Error(
-        `Tasks cannot run on the remote project "${_taskRemote.name || _taskRemote.workdir}" — `
-        + `the task runner has no SSH support (chat does). Run this from a chat on that `
-        + `project, or point the task at a local workdir.`);
+      log.info('task routed over SSH', { taskId: task.id, host: _taskRemote.remoteHost, workdir: _taskRemote.workdir });
+      try { db.prepare(`UPDATE sessions SET remote_host=? WHERE id=?`).run(_taskRemote.remoteHost, sessionId); } catch {}
     }
-    const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
     const taskAbort = new AbortController();
     runningTaskAborts.set(task.id, taskAbort);
     let fullText = '', newCid = claudeSessionId, hasError = false;
@@ -5713,12 +5734,7 @@ app.get('/api/global/search', (req, res) => {
   }
 });
 app.post('/api/tasks', (req, res) => {
-  // Same rule as the runner below: a task on a remote SSH project would spawn the local
-  // CLI with a remote workdir. Better to refuse here than to fail at run time.
-  {
-    const _rp = findRemoteProject(req.body && req.body.workdir);
-    if (_rp) return res.status(400).json({ error: 'tasks are not supported on remote SSH projects', project: _rp.name || _rp.workdir });
-  }
+
   const { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
           model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
           depends_on=null, chain_id=null, source_session_id=null,

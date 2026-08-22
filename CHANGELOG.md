@@ -1,5 +1,32 @@
 # Changelog
 
+## 7.5.4
+
+**Tasks now run on remote SSH projects** (#53). `runSshSingle()` was reachable from the
+chat and Telegram paths only, so a task on a remote project fell through to the local
+CLI with a working directory that lives on another machine — on Windows, Node resolves
+a POSIX-absolute cwd against the current drive and the agent started in `C:\home\...`.
+That is the whole of the reporter's original symptom: a run sent to the wrong machine,
+not a path mangled by one function.
+
+`ClaudeSSH` exposes the same `send()` surface as `ClaudeCLI`, so the task loop is
+unchanged. One entry point covers everything: `startTask()` is called only from
+`processQueue()`, which drives the Kanban board, scheduled tasks, recurring tasks and
+chains alike.
+
+Three things do not cross the wire, and each degrades rather than breaks:
+
+- `mcpServers` — the remote `claude` uses whatever MCP config it has of its own;
+- the interrupt hook, whose callback is `127.0.0.1` and unreachable from the remote
+  host, so a mid-run clarification arrives after the turn instead of during it. The SSH
+  **chat** path has always had this same limitation;
+- `worker_pid` — there is no local process to record, so restart-recovery cannot reap an
+  orphan. The abort controller still stops the run in-process.
+
+7.5.2's blanket refusal of such tasks is removed; it was a stopgap to stop the studio
+running an agent in the wrong tree, and is no longer needed.
+
+
 ## 7.5.3
 
 Four fixes, each proved by reverting it and watching a new test fail.
