@@ -1607,6 +1607,23 @@ async function startTask(task) {
     // Resume existing claude session if any
     const session = stmts.getSession.get(sessionId);
     const claudeSessionId = sanitizeSessionId(session?.claude_session_id) || null;
+    // Remote SSH projects are not supported by the TASK runner. runSshSingle() is wired
+    // into the chat and Telegram paths only; there is no SSH branch here, so this line
+    // would spawn the LOCAL cli with a path that exists on another machine. On Windows
+    // Node resolves a POSIX-absolute cwd against the current drive and the agent starts
+    // in C:\home\... (issue #53); on Linux/macOS it either fails obscurely or, worse,
+    // runs against a same-named local directory. Refuse and say why.
+    //
+    // This is a missing capability, not a broken path: ClaudeSSH supports neither
+    // mcpServers nor extraEnv/extraSettings, all of which this loop passes, and there
+    // is no remote equivalent of worker_pid for orphan recovery.
+    const _taskRemote = findRemoteProject(task.workdir);
+    if (_taskRemote) {
+      throw new Error(
+        `Tasks cannot run on the remote project "${_taskRemote.name || _taskRemote.workdir}" — `
+        + `the task runner has no SSH support (chat does). Run this from a chat on that `
+        + `project, or point the task at a local workdir.`);
+    }
     const cli = new ClaudeCLI({ cwd: task.workdir || WORKDIR });
     const taskAbort = new AbortController();
     runningTaskAborts.set(task.id, taskAbort);
@@ -5696,6 +5713,12 @@ app.get('/api/global/search', (req, res) => {
   }
 });
 app.post('/api/tasks', (req, res) => {
+  // Same rule as the runner below: a task on a remote SSH project would spawn the local
+  // CLI with a remote workdir. Better to refuse here than to fail at run time.
+  {
+    const _rp = findRemoteProject(req.body && req.body.workdir);
+    if (_rp) return res.status(400).json({ error: 'tasks are not supported on remote SSH projects', project: _rp.name || _rp.workdir });
+  }
   const { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
           model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
           depends_on=null, chain_id=null, source_session_id=null,

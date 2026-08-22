@@ -273,6 +273,24 @@ function termWs(token, sessionId = 'nonexistent') {
     check('...which is findRemoteProject',
       (srvSrc.match(/findRemoteProject\(/g) || []).length >= 3, true);
 
+    // ── a task on a remote project is refused, not run locally ────────────────
+    // The actual cause behind #53's "remote SSH TASK execution is broken":
+    // runSshSingle() is wired into the chat and Telegram paths only. The task runner
+    // has no SSH branch, so `new ClaudeCLI({ cwd: task.workdir })` spawned the LOCAL
+    // agent with a path that lives on another machine — on Windows, Node resolves a
+    // POSIX-absolute cwd against the current drive and the agent starts in C:\home\...
+    console.log('\n— a task cannot be created on a remote SSH project —');
+    const tRemote = await api('POST', '/api/tasks', { title: 'remote task', description: 'x', workdir: REMOTE_WD });
+    check('creating one is refused with a reason',
+      [tRemote.status, tRemote.json?.error], [400, 'tasks are not supported on remote SSH projects']);
+    check('a task on a LOCAL workdir is still fine',
+      (await api('POST', '/api/tasks', { title: 'local task', description: 'x', workdir: APP_DIR })).status, 200);
+    check('the runner refuses too, not just the endpoint',
+      /Tasks cannot run on the remote project/.test(srvSrc), true);
+    check('...and it checks before constructing the local CLI',
+      srvSrc.indexOf('const _taskRemote = findRemoteProject(task.workdir)')
+        < srvSrc.indexOf('const cli = new ClaudeCLI({ cwd: task.workdir'), true);
+
     // ── /api/files: the same symlink rule, on the endpoint that reads content ──
     // This family compared workdir + path lexically and never resolved symlinks, so
     // a link committed to a cloned repo turned the file browser into a reader for
