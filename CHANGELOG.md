@@ -1,5 +1,108 @@
 # Changelog
 
+## 7.6.0
+
+Bots stop being a web-only feature, and gain a mode where several of them talk to
+each other. Plus four fixes to paths where a message could vanish without a trace.
+
+### Bots reach Telegram
+
+- **`/bots` lists the project's roster**, with each `@@handle`, model and description.
+  Mentions from Telegram had worked for a while — the parser, the dispatch and the
+  per-bot sessions are the same ones the web chat uses — but nothing ever said WHICH
+  handles exist, so on a phone the feature was invisible unless you already knew a
+  handle by heart. Works in a direct chat and in a Forum project topic.
+
+- **A Forum topic can belong to one bot.** Everything typed there goes to that bot;
+  the handle stops being retyped on every message. It is not a second execution path —
+  the topic prefixes `@@handle` and hands the message to the ordinary project flow, so
+  the same parser and dispatch serve both. Commands, media, and text already naming
+  that bot are left alone.
+
+- **A bot-owned task reports into that bot's own topic.** Assigning a task to a bot
+  has been possible from the Kanban and Schedule editors for a while, and the task
+  already ran under that bot's prompt and model — but its result went to the shared
+  Activity topic like everyone else's, so a bot's routine work was indistinguishable
+  from anything else running. Failures are routed the same way, deliberately: someone
+  watching a bot's topic is watching that bot, and a silent failure there is worse
+  than a noisy one.
+
+### A room of bots
+
+- **New `conversation` agent mode.** Two to six of the project's bots take SERIAL
+  turns on one message, for at most three rounds or ten messages, then the room closes
+  with a single artifact. A bot with nothing to add replies `PASS`; a bot that needs a
+  human decision writes `@user` and the room stops there.
+
+  Three invariants hold it together. The room is the ONLY dispatcher — `message_bot`
+  is deliberately not available inside it, because two dispatchers would give one bot
+  two owners in one turn. It is serial and never parallel, since two bots writing at
+  once interleave into a transcript nobody can follow. And it never nests inside a
+  multi-agent wave: it is a leaf that emits one artifact.
+
+  Not yet built: a DAG node that consumes that artifact.
+
+### Messages that used to vanish
+
+- **A hand-off written after a turn ended is no longer lost.** `message_bot` refuses
+  once the turn owning the session is over, so a peer named late was discarded outright
+  along with the task text the calling bot had already written. Those now wait in the
+  recipient's inbox and are delivered on its next run in the same conversation —
+  scoped to that conversation, never global, or a letter from one project would arrive
+  inside another. It is not a live interrupt: nothing touches a running engine.
+
+- **Mid-task clarifications reach the subscription (tmux) engine.** A clarification
+  typed into a working chat has to survive a path with no return channel — queue,
+  drain, tmux paste, Enter, the agent's TUI — and every failure along it was invisible:
+  the message simply disappeared and its row was marked delivered anyway. The paste is
+  now gated on the pane actually listening, a failed paste is re-queued instead of
+  being marked delivered, and whatever is still queued when a turn ends runs as a
+  follow-up turn rather than being discarded with its attachments. The same now holds
+  on the task path, bounded by `CCS_MAX_CLARIFY_TURNS` (default 3), and on the
+  Telegram path, which had the original defect intact: it retired a clarification
+  the instant it was picked up off the queue, so a paste that never landed left the
+  sender looking at a delivered badge on text the agent had not seen.
+
+- **A file attached to a clarification survives the follow-up turn.** Only IMAGES are
+  stored with a body; a text or binary attachment is kept as a path. The turn that
+  re-sends an undelivered clarification builds its content blocks from that body and
+  never from the path, so every non-image attachment arrived empty and was dropped
+  without an error or a log line. The body is now read back before the hand-off — on
+  the Telegram path as it already was on the web one. An SSH entry is still passed as
+  host and key path only: it carries a credential, and that block is written to the
+  transcript on disk.
+
+- **Terminal and chat WebSockets are heartbeated.** Without an active ping/pong a
+  connection whose TCP path died silently — proxy idle timeout, laptop sleep, NAT drop
+  — sits "open" on both ends forever. No close event fires, so the socket just freezes
+  with nothing telling the client to reconnect.
+
+### Delegate on a remote SSH project (#55)
+
+Delegate now **refuses** a remote project with an explanation naming the host, instead
+of starting an external agent in the wrong place. Delegation is local-only in every
+step: it creates `.crosswork` on the machine running the studio, writes `CONTEXT.md`
+there, and opens a local terminal. Given a remote workdir all three targeted the wrong
+host — and on Windows, Node resolves a POSIX-absolute path against the current drive,
+so the agent started in `C:\home\user\project`. Same class as #53.
+
+This does not close #55. Full remote delegation is accepted and planned; it needs
+remote writes, a remote poll loop, and somewhere for the agent's terminal to live.
+
+### Also
+
+- `bot_id` is validated on both task endpoints. It decides whose prompt and model a
+  task runs under, and an unchecked value cost a whole run before surfacing as "task
+  bot not found" in a log nobody watches.
+- The Activity panel shows which bots are taking part in a live chat, a running task
+  and a QUEUED one — the last being where you find out a recurring routine exists, and
+  whose it is, before it runs.
+- A bot's spawned subtask keeps its owner. Every other field was inherited from the
+  caller; `bot_id` alone was hardcoded null, so a bot's own subtask ran as a nameless
+  agent with none of its prompt or model.
+- The `/` command popup clamps each preview to two lines. A command's prompt can run to
+  thousands of characters, and one entry unrolled over the whole list.
+
 ## 7.5.4
 
 **Tasks now run on remote SSH projects** (#53). `runSshSingle()` was reachable from the
