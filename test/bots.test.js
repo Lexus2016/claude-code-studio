@@ -467,6 +467,63 @@ check('an unknown engine is treated as api rather than refused',
 check('a null engine is treated as api',
   botsAvailability({ runEngine: null }), { available: true, reason: null });
 
+// ─── planInboxDelivery (a hand-off that missed its turn) ─────────────────────
+// message_bot refuses once the turn that owns the session has ended, so a peer named
+// late — after the caller's own turn finished — was simply lost. An inbox holds those
+// until the recipient next runs in the SAME conversation. It is NOT a live interrupt:
+// nothing here reaches a running engine, which is the invariant the whole dispatch
+// design rests on.
+const { planInboxDelivery, INBOX_MAX_DELIVER, INBOX_TTL_MS } = require('../bots.js');
+console.log('\ninbox delivery:');
+
+// Handles must be legal (2+ chars) — a one-letter 'a' is rejected by isValidHandle and
+// would make every fixture below read as malformed.
+const L = (id, from, ageMs) => ({ id, from, task: 't' + id, created_at: 1000000 - ageMs });
+const NOW = 1000000;
+const P = (letters, over = {}) => planInboxDelivery({ letters, now: NOW, ...over });
+
+check('an empty inbox delivers nothing',
+  P([]), { deliver: [], expired: [], deferred: [] });
+check('a non-array inbox does not throw',
+  P(null), { deliver: [], expired: [], deferred: [] });
+
+{
+  const r = P([L(1, 'aa', 0), L(2, 'bb', 10)]);
+  check('everything fresh is delivered', r.deliver.map(x => x.id), [2, 1]);
+  check('oldest first, so a reply chain keeps its order', r.deliver[0].id, 2);
+  check('nothing expires', r.expired, []);
+}
+{
+  // Past the TTL the sender's turn is long over and the user has moved on; delivering it
+  // would drop a stale instruction into an unrelated conversation.
+  const r = P([L(1, 'aa', INBOX_TTL_MS + 1), L(2, 'bb', 5)]);
+  check('a letter past the TTL is not delivered', r.deliver.map(x => x.id), [2]);
+  check('…and is reported as expired so the caller can retire it', r.expired, [1]);
+}
+{
+  // The cap bounds ONE delivery, not the inbox: the rest stay for the next run rather
+  // than being dropped, or a burst would silently lose the tail.
+  const many = Array.from({ length: INBOX_MAX_DELIVER + 3 }, (_, i) => L(i + 1, 'aa', 100 - i));
+  const r = P(many);
+  check('at most the cap is handed over at once', r.deliver.length, INBOX_MAX_DELIVER);
+  check('the overflow is deferred, not dropped', r.deferred.length, 3);
+  check('deferred and delivered do not overlap',
+    r.deferred.some(id => r.deliver.some(d => d.id === id)), false);
+  check('the oldest are the ones delivered', r.deliver[0].id, 1);
+}
+{
+  const r = P([L(1, 'aa', INBOX_TTL_MS + 1)]);
+  check('an all-expired inbox delivers nothing', r.deliver, []);
+  check('and still reports the expiry', r.expired, [1]);
+}
+{
+  // A letter whose sender or body is unusable cannot be rendered into a prompt; retiring
+  // it beats delivering "undefined asked you to do this".
+  const r = P([{ id: 1, from: '', task: 'x', created_at: NOW }, { id: 2, from: 'bb', task: '', created_at: NOW }]);
+  check('a malformed letter is expired rather than delivered', r.deliver, []);
+  check('both are retired', r.expired.sort(), [1, 2]);
+}
+
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

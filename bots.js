@@ -383,9 +383,55 @@ function botsAvailability({ remote, runEngine } = {}) {
   return { available: true, reason: null };
 }
 
+// ─── Inbox ────────────────────────────────────────────────────────────────────
+// What a bot is handed from its inbox on its next run.
+//
+// message_bot refuses once the turn owning the session has ended (see the endpoint in
+// server.js), so a hand-off written late — after the caller's own turn finished — used to
+// be lost outright. The inbox holds those until the recipient next runs IN THE SAME
+// conversation. It is not a live interrupt and never becomes one: nothing here touches a
+// running engine, which is the invariant the flat-dispatch design rests on.
+//
+// Two bounds, both earning their place:
+//   TTL     — past it the sender's turn is long over and the user has moved on. Dropping a
+//             stale instruction into an unrelated conversation is worse than losing it.
+//   DELIVER — bounds ONE delivery, not the inbox. The overflow is deferred to the next run
+//             rather than dropped, so a burst loses nothing; without the cap a loop of
+//             bots could bury a recipient under its own backlog in a single prompt.
+const INBOX_MAX_DELIVER = 5;
+const INBOX_TTL_MS = 24 * 60 * 60 * 1000;
+
+function planInboxDelivery({ letters, now, max, ttlMs } = {}) {
+  const cap = Number.isInteger(max) && max > 0 ? max : INBOX_MAX_DELIVER;
+  const ttl = Number.isInteger(ttlMs) && ttlMs > 0 ? ttlMs : INBOX_TTL_MS;
+  const at = Number.isFinite(now) ? now : 0;
+  const batch = Array.isArray(letters) ? letters : [];
+
+  const deliver = [];
+  const expired = [];
+  const deferred = [];
+  // Oldest first: these are conversation turns, and a reply that arrives before the
+  // message it answers reads as nonsense.
+  const ordered = batch.slice().sort((a, b) => (a?.created_at || 0) - (b?.created_at || 0));
+
+  for (const l of ordered) {
+    const from = typeof l?.from === 'string' ? l.from.trim() : '';
+    const task = typeof l?.task === 'string' ? l.task.trim() : '';
+    // Unusable letters are retired, not delivered: the caller renders `from` as
+    // "@{from} asked you to do this", and an empty one produces "@ asked you to do this"
+    // in a real bot's prompt.
+    if (!from || !task || !isValidHandle(from.toLowerCase())) { expired.push(l.id); continue; }
+    if (at - (l.created_at || 0) > ttl) { expired.push(l.id); continue; }
+    if (deliver.length >= cap) { deferred.push(l.id); continue; }
+    deliver.push({ id: l.id, from: from.toLowerCase(), task });
+  }
+  return { deliver, expired, deferred };
+}
+
 module.exports = {
   HANDLE_RE, EVIDENCE_CLAUSE, ROSTER_MAX, IMPORT_MAX,
   isValidHandle, handleFromLabel, uniqueHandle,
   parseMentions, renderRoster, buildBotSystemPrompt, planDispatch, planBotImport,
   MAX_TASK_CHARS, clipTask, inheritBotId, botsAvailability,
+  planInboxDelivery, INBOX_MAX_DELIVER, INBOX_TTL_MS,
 };

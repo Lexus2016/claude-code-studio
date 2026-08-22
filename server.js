@@ -786,6 +786,25 @@ db.exec(`
     created_at        TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (chat_session_id, bot_id)
   );
+
+  -- Hand-offs that missed their turn. message_bot refuses once the turn owning the
+  -- session has ended, so a peer named late was lost outright; these wait here until the
+  -- recipient next runs IN THE SAME conversation. Scoped to (session, bot) on purpose:
+  -- delivering a letter from one project inside another would leak context across
+  -- projects, and "next run" would stop meaning anything the user can predict.
+  -- Rows are kept after delivery (delivered_at set) rather than deleted, so a bot that
+  -- crashes mid-run does not silently lose the letter's audit trail.
+  CREATE TABLE IF NOT EXISTS bot_inbox (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   TEXT NOT NULL,
+    bot_id       TEXT NOT NULL,
+    from_bot     TEXT NOT NULL,
+    task         TEXT NOT NULL,
+    created_at   INTEGER NOT NULL,
+    delivered_at INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_bot_inbox_pending
+    ON bot_inbox(session_id, bot_id) WHERE delivered_at IS NULL;
 `);
 try { db.exec(`ALTER TABLE task_chains ADD COLUMN effort TEXT`); } catch {}      // claude --effort dial; chain-level default for new tasks
 // bots.deleted_at was added after the table shipped, so CREATE TABLE IF NOT EXISTS is a
@@ -891,6 +910,13 @@ const stmts = {
   getBotSession: db.prepare(`SELECT claude_session_id FROM bot_sessions WHERE chat_session_id=? AND bot_id=?`),
   setBotSession: db.prepare(`INSERT INTO bot_sessions (chat_session_id,bot_id,claude_session_id) VALUES (?,?,?)
     ON CONFLICT(chat_session_id,bot_id) DO UPDATE SET claude_session_id=excluded.claude_session_id`),
+  // Inbox: a hand-off written after the owning turn ended.
+  addInboxLetter: db.prepare(`INSERT INTO bot_inbox (session_id,bot_id,from_bot,task,created_at) VALUES (?,?,?,?,?)`),
+  pendingInbox: db.prepare(`SELECT id, from_bot AS "from", task, created_at FROM bot_inbox
+    WHERE session_id=? AND bot_id=? AND delivered_at IS NULL ORDER BY created_at ASC`),
+  markInboxDelivered: db.prepare(`UPDATE bot_inbox SET delivered_at=? WHERE id=?`),
+  countPendingInbox: db.prepare(`SELECT COUNT(*) AS n FROM bot_inbox
+    WHERE session_id=? AND bot_id=? AND delivered_at IS NULL`),
   // Positional parameters, like every other statement here: this runtime may be
   // node:sqlite (Node >= 22.5), whose named-parameter binding differs from
   // better-sqlite3's and rejects `@name` objects with "column index out of range".
@@ -3850,6 +3876,33 @@ const MULTI_AGENT_CONCURRENCY = Math.max(1, parseInt(process.env.MULTI_AGENT_CON
 //     the session, and changing it invalidates thinking-block signatures).
 // Returns the chat's own claude_session_id unchanged: a bot turn must never move the
 // assistant's session pointer.
+// Hand a bot the letters waiting for it in this conversation, and retire what it got.
+//
+// Returns a prompt PREFIX (possibly empty). Marking delivered before the run — rather
+// than after a successful answer — is deliberate: the alternative redelivers the same
+// letter after every crash, and a bot re-doing a peer's request spends money and can edit
+// files a second time. Same direction the queued_messages table already chose.
+function drainInbox(sessionId, botId) {
+  try {
+    const letters = stmts.pendingInbox.all(sessionId, botId);
+    if (!letters.length) return '';
+    const { deliver, expired } = botsLogic.planInboxDelivery({ letters, now: Date.now() });
+    const now = Date.now();
+    // Expired letters are retired too, or they are re-read on every single run forever.
+    for (const id of [...expired, ...deliver.map(d => d.id)]) {
+      try { stmts.markInboxDelivered.run(now, id); } catch {}
+    }
+    if (!deliver.length) return '';
+    const lines = deliver.map(d => `[@${d.from}]: ${d.task}`).join('\n\n');
+    return 'Messages left for you by other bots after an earlier turn had ended. '
+      + 'They are background for what follows, not a replacement for it:\n'
+      + `<<<INBOX\n${lines}\nINBOX>>>\n\n`;
+  } catch (e) {
+    log.warn('inbox drain failed', { err: e.message, botId });
+    return '';
+  }
+}
+
 async function runBotTurns(p, { bots, prompt, rosterBots }) {
   const { mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, workdir, tabId, effort, userContent } = p;
   const cli = new ClaudeCLI({ cwd: workdir || WORKDIR });
@@ -3949,9 +4002,13 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
     // redo work the caller already did, which is the thing the hand-off was avoiding.
     // The user's message still goes in as background so the answer stays on topic.
     const handoff = dispatched.get(bot.id);
-    const botPrompt = handoff
+    // Letters this bot was sent after an earlier turn had already ended. Delivered as
+    // BACKGROUND, ahead of the actual task: they are context the bot is owed, not a new
+    // instruction replacing what it was just asked to do.
+    const inbox = drainInbox(sessionId, bot.id);
+    const botPrompt = inbox + (handoff
       ? `@${handoff.from} asked you to do this as part of the conversation below.\n\nYour task:\n${handoff.task}\n\nThe user's message that started this turn:\n${prompt}${ctx}`
-      : prompt + ctx;
+      : prompt + ctx);
     const isFirst = previous.length === 0;
     // The same standing instruction a normal turn gets: tell the bot the tool exists
     // and when to call it, or it will not think to look.
@@ -5031,8 +5088,10 @@ app.post('/api/internal/message-bot', express.json(), (req, res) => {
 
   const ctx = botDispatch.get(sessionId);
   // No entry means the turn already ended — a late call from a subprocess that outlived
-  // its bot. Refusing beats queueing it against whatever the user sends next.
-  if (!ctx) return res.json({ ok: true, accepted: false, reason: 'no bot turn is running' });
+  // its bot. The work still belongs to this conversation, so it goes to the recipient's
+  // inbox and is handed over on its next run here, rather than being refused outright.
+  // This is NOT a live interrupt: nothing below reaches a running engine.
+  if (!ctx) return res.json(inboxFallback({ sessionId, from, handle, task }));
 
   // The caller must belong to the turn that currently owns this session. An MCP subprocess
   // from a stopped turn can still be alive when the user's next message starts a new one;
@@ -5069,6 +5128,46 @@ app.post('/api/internal/message-bot', express.json(), (req, res) => {
   }
   return res.json({ ok: true, accepted: false, reason: DISPATCH_REASONS[rejected[0]?.reason] || 'refused' });
 });
+
+// A hand-off written after the turn that owned the session ended. Rather than dropping
+// it, park it in the recipient's inbox for its next run in THIS conversation.
+//
+// The handle is checked against the bot table, not against a roster: there is no turn
+// context left to say which project this was, and a letter addressed to a bot that does
+// not exist can never be rendered into a prompt.
+//
+// The queue depth is bounded here as well as at delivery. Delivery caps how many letters
+// a bot is handed AT ONCE (the rest wait); this caps how many may accumulate at all, so a
+// pair of bots writing to each other after hours cannot grow the table without limit.
+const INBOX_MAX_PENDING = 20;
+
+function inboxFallback({ sessionId, from, handle, task }) {
+  const to = String(handle || '').trim().toLowerCase();
+  const sender = String(from || '').trim().toLowerCase();
+  if (!botsLogic.isValidHandle(to) || !botsLogic.isValidHandle(sender)) {
+    return { ok: true, accepted: false, reason: DISPATCH_REASONS.invalid };
+  }
+  if (to === sender) return { ok: true, accepted: false, reason: DISPATCH_REASONS.self };
+
+  const { task: clipped } = botsLogic.clipTask(task);
+  if (!clipped.trim()) return { ok: true, accepted: false, reason: DISPATCH_REASONS.invalid };
+
+  try {
+    const bot = stmts.getBot.get(to);
+    if (!bot) return { ok: true, accepted: false, reason: `no bot @${to} exists` };
+    const pending = stmts.countPendingInbox.get(sessionId, to)?.n || 0;
+    if (pending >= INBOX_MAX_PENDING) {
+      return { ok: true, accepted: false,
+        reason: `@${to} already has ${pending} undelivered messages in this conversation` };
+    }
+    stmts.addInboxLetter.run(sessionId, to, sender, clipped, Date.now());
+    return { ok: true, accepted: true, queued: 'inbox',
+      note: `This turn is over, so @${to} was not run. The message is in its inbox and will be delivered the next time it runs in this conversation.` };
+  } catch (e) {
+    log.warn('inbox write failed', { err: e.message });
+    return { ok: true, accepted: false, reason: 'this turn is no longer running' };
+  }
+}
 
 // Rejection codes from planDispatch are terse identifiers; the model reads prose.
 // `already-queued` says what to do instead, not just what was refused: the peer is
