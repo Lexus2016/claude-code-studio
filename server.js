@@ -8670,15 +8670,36 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
       // (mirrors the WS chat handler's subscription branch).
       const r = await runInteractiveSingle({
         ...params,
-        // Matches the web WS handler's subscription branch (server.js ~7927):
-        // without a drain function, a clarification typed into a busy Telegram
-        // chat on this engine sat in pendingInterrupts and was NEVER delivered —
-        // this engine has no hook to pull it mid-run, only this explicit drain call.
+        // Matches the web WS handler's subscription branch: without a drain function,
+        // a clarification typed into a busy Telegram chat on this engine sat in
+        // pendingInterrupts and was NEVER delivered — this engine has no hook to pull
+        // it mid-run, only this explicit drain call. Draining is not delivery: the
+        // engine still has to type the text into the tmux pane and that can fail, so
+        // marking the row delivered inside the drain (as this used to) retired the
+        // clarification the instant it was PICKED UP. A failed paste comes back
+        // through requeueInterrupts, and the finally block below re-runs it as one
+        // more Telegram turn — the "next turn" a one-shot path lacks on its own.
         drainInterrupts: () => {
           const msgs = pendingInterrupts.get(sessionId) || [];
           if (msgs.length) pendingInterrupts.delete(sessionId);
-          for (const m of msgs) { try { if (m.dbId) stmts.markInterruptDelivered.run(m.dbId); } catch {} }
           return msgs;
+        },
+        markInterruptsDelivered: (msgs) => {
+          // broadcastToSession only, unlike the WS path: `proxy` here is the Telegram
+          // proxy, whose send() writes to a chat rather than a socket, and this path's
+          // done frame never reads _deliveredInterruptCount. The broadcast is what a
+          // browser window watching the same chat needs to clear its pending badge.
+          for (const m of (msgs || [])) {
+            if (m.dbId) { try { stmts.markInterruptDelivered.run(m.dbId); } catch {} }
+            try { broadcastToSession(sessionId, { type: 'interrupt_delivered', interruptId: m.id, tabId: sessionId }); } catch {}
+          }
+        },
+        requeueInterrupts: (msgs) => {
+          if (!msgs?.length) return;
+          if (!pendingInterrupts.has(sessionId)) pendingInterrupts.set(sessionId, []);
+          // unshift, not push: these were queued before anything that arrived while
+          // the failed paste was in flight, and they keep that place in line.
+          pendingInterrupts.get(sessionId).unshift(...msgs);
         },
       });
       for (const ev of r.toolEvents) {

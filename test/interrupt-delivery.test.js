@@ -209,5 +209,46 @@ t('the task follow-up prompt hands over paths, with a delayed cleanup and no cre
     'immediate cleanup would delete the files the prompt points at');
 });
 
+// --- Telegram path (server.js ~8670). Same defect the WS path had: draining is not
+// delivery. Anchored on text unique to this branch — `drainInterrupts: () => {` and
+// `markInterruptsDelivered:` each match THREE call sites (task runner, Telegram, WS),
+// and a naive indexOf has already silently pinned the wrong one twice in this file.
+const TG = (() => {
+  const i = SRV.indexOf('a clarification typed into a busy Telegram');
+  if (i < 0) throw new Error('Telegram interactive branch not found');
+  return SRV.slice(i, SRV.indexOf('for (const ev of r.toolEvents)', i));
+})();
+
+t('the Telegram drain hands back messages without retiring them', () => {
+  const d = TG.indexOf('drainInterrupts: () => {');
+  const body = TG.slice(d, TG.indexOf('markInterruptsDelivered:', d));
+  assert.ok(d >= 0 && body.includes('pendingInterrupts.delete(sessionId)'), 'drain body not found');
+  assert.ok(!body.includes('markInterruptDelivered'),
+    'marking inside the drain retires the clarification the instant it is PICKED UP, not when the pane accepts it');
+});
+
+t('the Telegram path passes all three interrupt callbacks', () => {
+  for (const cb of ['drainInterrupts:', 'markInterruptsDelivered:', 'requeueInterrupts:']) {
+    assert.ok(TG.includes(cb), `Telegram branch is missing ${cb}`);
+  }
+});
+
+t('Telegram delivery marks the row and tells any watching browser window', () => {
+  const i = TG.indexOf('markInterruptsDelivered:');
+  const body = TG.slice(i, TG.indexOf('requeueInterrupts:', i));
+  assert.ok(body.includes('stmts.markInterruptDelivered.run(m.dbId)'), 'the DB row must be marked on delivery');
+  assert.ok(body.includes("type: 'interrupt_delivered'"), 'without the frame the badge stays pending until a reload');
+  assert.ok(body.includes('broadcastToSession('),
+    'proxy.send() writes to the Telegram chat here, not to a socket — the browser needs the broadcast');
+});
+
+t('a Telegram paste that failed keeps its place in the queue', () => {
+  const i = TG.indexOf('requeueInterrupts:');
+  const body = TG.slice(i);
+  assert.ok(body.includes('unshift(...msgs)'),
+    'push would let messages that arrived during the failed paste jump ahead of it');
+  assert.ok(!body.includes('markInterruptDelivered'), 'a re-queued message has not been delivered');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
