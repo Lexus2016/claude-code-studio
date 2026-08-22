@@ -1,5 +1,18 @@
 # Changelog
 
+## 7.5.1
+
+- **The updater no longer offers an update it cannot install.** `brew` owns
+  `/Applications` and nothing else, so a build running from anywhere else — a
+  `dist-desktop/` artefact left by `npm run dist`, an .app copied to Downloads —
+  could never be upgraded by `brew upgrade --cask`. It read the tap cask, offered the
+  newer version, ran brew (which correctly upgraded the bundle in `/Applications`),
+  relaunched *itself* at its own old version, saw the cask was newer again, and
+  repeated. Observed as a 7.1.1 build offering 7.5.0 on a loop while `/Applications`
+  was already 7.5.0 and `update.log` showed a single clean `OK 7.4.0 -> 7.5.0`.
+  Such a build is now reported as unmanaged instead of being sent round the loop.
+
+
 ## 7.5.0
 
 A verification release. A static audit of the chat, agent-data-flow and

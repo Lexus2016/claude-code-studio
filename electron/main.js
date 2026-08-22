@@ -311,9 +311,24 @@ function sendUpdateLog(line) {
   if (w && !w.isDestroyed()) w.webContents.send('update:log', String(line));
 }
 
+// brew owns /Applications and nothing else. A build running from anywhere else — a
+// dist-desktop/ artefact left over from `npm run dist`, or an .app copied elsewhere —
+// cannot be upgraded by `brew upgrade --cask`: brew happily updates the bundle in
+// /Applications, this process relaunches ITSELF at its own old version, sees the cask
+// is newer again and offers the same update forever. Observed as 7.1.1 offering 7.5.0
+// on repeat while /Applications was already 7.5.0 and update.log showed one clean
+// `OK 7.4.0 -> 7.5.0`. Report it instead of looping.
+function brewManagedPath() {
+  try { return app.getPath('exe').includes('/Applications/'); } catch (_) { return true; }
+}
+
 async function checkUpdate() {
   const currentVersion = app.getVersion();
   if (process.platform === 'darwin') {
+    if (!brewManagedPath()) {
+      return { platform: 'darwin', currentVersion, version: null, available: false,
+               unmanaged: true, exePath: (() => { try { return app.getPath('exe'); } catch (_) { return ''; } })() };
+    }
     const version = await fetchTapCaskVersion();
     return { platform: 'darwin', currentVersion, version, available: !!(version && semverGt(version, currentVersion)) };
   }

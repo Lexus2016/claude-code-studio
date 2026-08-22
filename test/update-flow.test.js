@@ -78,7 +78,11 @@ check('no /releases/latest call is left in main.js', () => {
 check('checkUpdate awaits the cask version on darwin', () => {
   const at = MAIN.indexOf("if (process.platform === 'darwin')", MAIN.indexOf('async function checkUpdate'));
   assert.notStrictEqual(at, -1, 'darwin branch of checkUpdate not found');
-  assert.ok(MAIN.slice(at, at + 300).includes('fetchTapCaskVersion'), 'darwin branch no longer reads the cask');
+  // Window widened from 300: the brewManagedPath guard now runs first (a build outside
+  // /Applications cannot be upgraded by brew and must not be offered a cask update).
+  // The invariant this test exists for — cask, never the release API — is asserted
+  // independently above and is unaffected.
+  assert.ok(MAIN.slice(at, at + 900).includes('fetchTapCaskVersion'), 'darwin branch no longer reads the cask');
 });
 
 // ─── Run the generated shell against a fake brew ────────────────────────────
@@ -136,6 +140,35 @@ check('no failure notification on success', () => {
 check('the app is relaunched', () => {
   assert.ok(/relaunched/.test(real.markers), 'the app was not reopened after a successful update');
 });
+
+
+// ── an .app brew does not manage must not be offered a cask upgrade ──────────
+// The loop this prevents, observed live: a 7.1.1 build left in dist-desktop/ from
+// `npm run dist` was what actually got launched. It read the tap cask (7.5.0),
+// offered the update, ran `brew upgrade --cask` — which correctly upgraded the
+// bundle in /Applications — then relaunched ITSELF, still 7.1.1, saw 7.5.0 again,
+// and repeated. update.log showed one clean `OK 7.4.0 -> 7.5.0`; nothing was broken
+// except that the running process was never the one brew was updating.
+console.log('\na build outside /Applications is not offered a cask update:');
+{
+  check('checkUpdate consults brewManagedPath before reading the cask',
+    () => assert.ok(/if \(!brewManagedPath\(\)\) \{/.test(MAIN)));
+  check('...and the guard sits BEFORE the cask fetch',
+    () => assert.ok(MAIN.indexOf('brewManagedPath()') < MAIN.indexOf('await fetchTapCaskVersion()')));
+  check('the unmanaged reply is available:false, not a version comparison',
+    () => assert.ok(/available: false,\s*\n\s*unmanaged: true/.test(MAIN)));
+
+  // The predicate itself, on the paths that actually occur.
+  const brewManaged = (exe) => exe.includes('/Applications/');
+  check('an installed app is managed',
+    () => assert.strictEqual(brewManaged('/Applications/Claude Code Studio.app/Contents/MacOS/Claude Code Studio'), true));
+  check('a dist-desktop build is NOT',
+    () => assert.strictEqual(brewManaged('/Users/me/proj/dist-desktop/mac-arm64/Claude Code Studio.app/Contents/MacOS/Claude Code Studio'), false));
+  check('nor is one run from Downloads',
+    () => assert.strictEqual(brewManaged('/Users/me/Downloads/Claude Code Studio.app/Contents/MacOS/Claude Code Studio'), false));
+  check('a user-local Applications install still counts',
+    () => assert.strictEqual(brewManaged('/Users/me/Applications/Claude Code Studio.app/Contents/MacOS/Claude Code Studio'), true));
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
