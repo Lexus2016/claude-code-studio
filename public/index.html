@@ -1406,7 +1406,10 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 #slashPopup .at-popup-hdr { padding: 9px 14px; font-size: 13px; }
 #slashPopup .at-item { padding: 10px 14px; font-size: 14px; gap: 10px; }
 #slashPopup .at-item .at-name { font-size: 14px; }
-#slashPopup .at-item .at-dir { font-size: 12px; margin-top: 3px; white-space: normal; line-height: 1.4; }
+#slashPopup .at-item { align-items: flex-start; }
+/* A command's prompt can be thousands of chars — clamp the preview to two lines,
+   otherwise `white-space: normal` unrolls one entry over the whole popup. */
+#slashPopup .at-item .at-dir { font-size: 12px; margin-top: 3px; white-space: normal; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: clip; }
 .at-loading { padding: 12px; text-align: center; color: var(--muted); font-size: 11px; }
 
 /* ─── Welcome ─── */
@@ -13988,6 +13991,14 @@ function _closeSlashPopup() {
   _slashOpen = false; _slashMatches = []; _slashActiveIdx = -1;
 }
 
+// Collapse newlines/indentation so the two-line clamp shows actual words,
+// not the prompt's leading blank lines. Cut long text server-side of the clamp
+// so we never hand the DOM a multi-KB string per row.
+function _slashPreview(text) {
+  const flat = String(text || '').replace(/\s+/g, ' ').trim();
+  return flat.length > 200 ? flat.slice(0, 200) + '…' : flat;
+}
+
 function _renderSlashList() {
   const list = $i('slashList'); list.innerHTML = '';
   _slashMatches.forEach((cmd, i) => {
@@ -13995,7 +14006,7 @@ function _renderSlashList() {
     item.className = 'at-item' + (i === _slashActiveIdx ? ' active' : '');
     item.innerHTML = `<div class="at-info">
       <span class="at-name" style="color:var(--accent)">${escH(cmd.name)}</span>
-      <span class="at-dir">${escH(cmd.text)}</span>
+      <span class="at-dir">${escH(_slashPreview(cmd.text))}</span>
     </div>`;
     item.onmousedown = e => { e.preventDefault(); _selectSlashCmd(cmd); };
     list.appendChild(item);
