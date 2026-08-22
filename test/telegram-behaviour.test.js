@@ -39,8 +39,14 @@ const calls = [];
 bot._callApi = async (method, params) => {
   calls.push({ method, ...params });
   if (method === 'sendMessage') return { message_id: calls.length, chat: { id: params.chat_id } };
+  if (method === 'createForumTopic') return { message_thread_id: 900 + calls.length };
   return {};
 };
+// The Forum module got `callApi: this._callApi.bind(this)` at construction time, so it
+// holds the ORIGINAL function — replacing bot._callApi alone leaves forum calls going to
+// the real Telegram API. (Calls the forum makes through sendMessage were always caught,
+// because _sendMessage looks up this._callApi dynamically; direct callApi ones were not.)
+bot._forum._api.callApi = (method, params) => bot._callApi(method, params);
 const sends = () => calls.filter(c => c.method === 'sendMessage');
 const reset = () => { calls.length = 0; };
 
@@ -248,6 +254,108 @@ const msg = (over = {}) => ({
     await bot._handleUpdate({ message: msg({ text: '/bots', message_thread_id: 4, is_topic_message: true }) });
     check('with no roster callback wired, it says so instead of throwing',
       /unavailable/.test(text()), true);
+  }
+
+  console.log('\na bot topic addresses one bot without retyping the handle:');
+  {
+    // A bot topic is a project topic bound to a handle. Rather than a second execution
+    // path, it prefixes '@@handle' and hands the message to the ordinary project flow —
+    // so the SAME parser and the same runBotTurns dispatch serve both, and server.js
+    // needs no bot-topic branch at all.
+    const BOT_THREAD = 7;
+    bot._stmts.addForumBotTopic.run(BOT_THREAD, FORUM_CHAT, 'bot', '/w/alpha', 'analyst');
+    bot._forum._loadTopicsFromDb();
+
+    reset(); sent.length = 0;
+    await bot._handleUpdate({ message: msg({ text: 'review the parser', message_thread_id: BOT_THREAD, is_topic_message: true }) });
+    check('plain text is addressed to the topic\'s bot',
+      sent.some(s => s.text === '@@analyst review the parser'), true);
+    check('and runs against the topic\'s project',
+      sent.some(s => {
+        const row = db.prepare('SELECT workdir FROM sessions WHERE id = ?').get(s.sessionId);
+        return row?.workdir === '/w/alpha';
+      }), true);
+
+    // Typing the handle yourself must not double it — parseMentions dedupes handles, but
+    // '@@analyst @@analyst x' would still leave a stray token in the cleaned prompt.
+    reset(); sent.length = 0;
+    await bot._handleUpdate({ message: msg({ text: '@@analyst already addressed', message_thread_id: BOT_THREAD, is_topic_message: true }) });
+    check('an explicitly typed handle is not doubled',
+      sent.some(s => s.text === '@@analyst already addressed'), true);
+
+    // A peer named explicitly still reaches that peer: the topic's own bot is prefixed,
+    // and the roster hand-off rules downstream decide the rest.
+    reset(); sent.length = 0;
+    await bot._handleUpdate({ message: msg({ text: '@@writer take this one', message_thread_id: BOT_THREAD, is_topic_message: true }) });
+    check('another bot can still be addressed from a bot topic',
+      sent.some(s => s.text === '@@analyst @@writer take this one'), true);
+
+    // Commands are commands everywhere — prefixing would turn /stop into a prompt.
+    reset(); sent.length = 0;
+    await bot._handleUpdate({ message: msg({ text: '/status', message_thread_id: BOT_THREAD, is_topic_message: true }) });
+    check('a command is not turned into a prompt', sent.length, 0);
+    check('and is answered as a command', sends().length > 0, true);
+  }
+
+  console.log('\nopening a bot its own topic:');
+  {
+    const ROSTER2 = [{ id: 'scribe', label: 'Scribe', avatar: '✍️', model: null, description: '' }];
+    bot._getRoster = () => ({ bots: ROSTER2, available: true, reason: null, projectName: 'Alpha' });
+    let nextThread = 90;
+    const origCall = bot._callApi;
+    bot._callApi = async (method, params) => {
+      if (method === 'createForumTopic') {
+        calls.push({ method, ...params });
+        return { message_thread_id: ++nextThread };
+      }
+      return origCall(method, params);
+    };
+
+    // /bots inside a Forum offers a button per bot; the same command in a private chat
+    // must not, because the fb: callback has no topic to take a project from.
+    reset();
+    await bot._handleUpdate({ message: msg({ text: '/bots', message_thread_id: 4, is_topic_message: true }) });
+    const kb = sends().map(s => s.reply_markup || '').join('');
+    check('a Forum listing offers a topic button', kb.includes('fb:scribe'), true);
+
+    reset();
+    await bot._handleUpdate({ message: msg({
+      text: '/bots', chat: { id: PRIVATE_CHAT, type: 'private' },
+      message_thread_id: undefined, is_topic_message: undefined,
+    }) });
+    check('a private-chat listing does not', sends().map(s => s.reply_markup || '').join('').includes('fb:'), false);
+
+    // Pressing it creates the topic and binds it to the project the button was in.
+    reset();
+    await bot._forum.handleBotTopicCallback(FORUM_CHAT, USER, 'fb:scribe', 4);
+    const created = calls.find(c => c.method === 'createForumTopic');
+    check('a topic is created', !!created, true);
+    check('and is named after the bot', created?.name, '✍️ Scribe');
+    const row = db.prepare("SELECT * FROM forum_topics WHERE type='bot' AND bot_id='scribe'").get();
+    check('the row records the handle', row?.bot_id, 'scribe');
+    check('and the project it was opened from', row?.workdir, '/w/alpha');
+
+    // Telegram does not reject a duplicate topic name, so without an existence check a
+    // second press would orphan the first topic's history behind an identical title.
+    reset();
+    await bot._forum.handleBotTopicCallback(FORUM_CHAT, USER, 'fb:scribe', 4);
+    check('a second press creates nothing', calls.some(c => c.method === 'createForumTopic'), false);
+    check('and points at the existing topic', sends().some(s => /already has a topic/.test(s.text)), true);
+
+    // A handle no longer in the roster (deleted bot, or another project's) must not open
+    // a topic that can never route anywhere.
+    reset();
+    await bot._forum.handleBotTopicCallback(FORUM_CHAT, USER, 'fb:ghost', 4);
+    check('an unknown handle opens no topic', calls.some(c => c.method === 'createForumTopic'), false);
+    check('and says so', sends().some(s => /no longer in this project/.test(s.text)), true);
+
+    // Pressed from the tasks topic, which has no workdir.
+    reset();
+    await bot._forum.handleBotTopicCallback(FORUM_CHAT, USER, 'fb:scribe', 6);
+    check('a topic with no project refuses', calls.some(c => c.method === 'createForumTopic'), false);
+    check('and explains where to press it', sends().some(s => /from a project topic/.test(s.text)), true);
+
+    bot._callApi = origCall;
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

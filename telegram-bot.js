@@ -164,6 +164,9 @@ class TelegramBot extends EventEmitter {
       botUsername: () => this._botInfo?.username || 'your_bot',
       cmdStatus: this._cmdStatus.bind(this),
       cmdBots: this._cmdBots.bind(this),
+      // The roster itself, for the Forum module's bot topics. Same callback the /bots
+      // listing uses; nothing in telegram-bot-forum.js can resolve a workdir on its own.
+      getRoster: (workdir, sessionId) => (this._getRoster ? this._getRoster(workdir, sessionId) : null),
       cmdFiles: this._cmdFiles.bind(this),
       cmdCat: this._cmdCat.bind(this),
       cmdLast: this._cmdLast.bind(this),
@@ -230,6 +233,10 @@ class TelegramBot extends EventEmitter {
     // been touched ANYWHERE (including from the web UI) — not the one this topic
     // itself was last showing.
     try { this.db.exec("ALTER TABLE forum_topics ADD COLUMN session_id TEXT"); } catch(e) {}
+    // Which bot owns this topic, for type='bot'. A bot topic is a project topic bound to
+    // one handle: everything typed there is addressed to that bot, so the user does not
+    // retype '@@handle' on every message. NULL for every other topic type.
+    try { this.db.exec("ALTER TABLE forum_topics ADD COLUMN bot_id TEXT"); } catch(e) {}
   }
 
   _prepareStmts() {
@@ -248,6 +255,11 @@ class TelegramBot extends EventEmitter {
       getForumOwner:     this.db.prepare('SELECT * FROM telegram_devices WHERE forum_chat_id = ? AND telegram_user_id != ? LIMIT 1'),
       getForumDevices:   this.db.prepare('SELECT * FROM telegram_devices WHERE forum_chat_id IS NOT NULL AND notifications_enabled = 1'),
       addForumTopic:     this.db.prepare('INSERT OR REPLACE INTO forum_topics (thread_id, chat_id, type, workdir) VALUES (?, ?, ?, ?)'),
+      // Separate from addForumTopic rather than a fifth parameter on it: that statement
+      // is INSERT OR REPLACE and is called from several places that know nothing about
+      // bots, and widening it would have every one of them write NULL over a bot_id.
+      addForumBotTopic:  this.db.prepare('INSERT OR REPLACE INTO forum_topics (thread_id, chat_id, type, workdir, bot_id) VALUES (?, ?, ?, ?, ?)'),
+      getForumBotTopic:  this.db.prepare("SELECT * FROM forum_topics WHERE chat_id = ? AND type = 'bot' AND bot_id = ?"),
       getForumTopic:     this.db.prepare('SELECT * FROM forum_topics WHERE thread_id = ? AND chat_id = ?'),
       getForumTopics:    this.db.prepare('SELECT * FROM forum_topics WHERE chat_id = ?'),
       getForumTopicByWorkdir: this.db.prepare('SELECT * FROM forum_topics WHERE chat_id = ? AND type = ? AND workdir = ?'),
@@ -1029,7 +1041,7 @@ class TelegramBot extends EventEmitter {
   // a while (server.js resolves them in processTelegramChat), but nothing here ever said
   // WHICH handles exist — the roster was reachable only from the web UI, so on a phone
   // the feature was invisible unless you already knew a handle by heart.
-  async _cmdBots(chatId, userId) {
+  async _cmdBots(chatId, userId, opts = {}) {
     const ctx = this._getContext(userId);
     const navButtons = { reply_markup: JSON.stringify({ inline_keyboard: [
       [{ text: this._t('btn_back_menu'), callback_data: 'm:menu' }],
@@ -1061,11 +1073,28 @@ class TelegramBot extends EventEmitter {
     const warn = roster.available === false
       ? '\n\n' + this._t(roster.reason === 'ssh' ? 'bots_engine_ssh' : 'bots_engine_subscription')
       : '';
+    // In a Forum, each bot also gets a button that opens a topic dedicated to it, so the
+    // handle stops needing to be retyped on every message. Capped: one row per bot would
+    // otherwise put 40 buttons under a single message. The cap is announced, never silent.
+    let keyboard = null;
+    if (opts.forum) {
+      const BUTTON_CAP = 12;
+      const rows = bots.slice(0, BUTTON_CAP).map(b => [{
+        text: this._t('bots_btn_topic', { name: (b.label || b.id).slice(0, 24) }),
+        callback_data: `fb:${b.id}`,
+      }]);
+      if (bots.length > BUTTON_CAP) {
+        lines.push('\n' + this._t('bots_btn_capped', { shown: BUTTON_CAP, total: bots.length }));
+      }
+      keyboard = { reply_markup: JSON.stringify({ inline_keyboard: rows }) };
+    }
+
     const body = this._t('bots_title', { count: bots.length }) + '\n\n'
       + lines.join('\n') + '\n\n' + this._t('bots_hint') + warn;
     const chunks = this._chunkForTelegram(body, MAX_MESSAGE_LENGTH - 100);
     for (let i = 0; i < chunks.length; i++) {
-      await this._sendMessage(chatId, chunks[i], i === chunks.length - 1 ? navButtons : {});
+      const last = i === chunks.length - 1;
+      await this._sendMessage(chatId, chunks[i], last ? (keyboard || navButtons) : {});
     }
   }
 

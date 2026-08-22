@@ -122,6 +122,7 @@ class TelegramBotForum {
           type: row.type,
           workdir: row.workdir,
           chatId: row.chat_id,
+          botId: row.bot_id || null,
         });
       }
     } catch (err) {
@@ -139,7 +140,7 @@ class TelegramBotForum {
 
     const row = this._api.stmts.getForumTopic.get(threadId, chatId);
     if (row) {
-      const info = { type: row.type, workdir: row.workdir, chatId };
+      const info = { type: row.type, workdir: row.workdir, chatId, botId: row.bot_id || null };
       this._forumTopics.set(key, info);
       return info;
     }
@@ -197,6 +198,8 @@ class TelegramBotForum {
     switch (topicInfo.type) {
       case 'project':
         return this._handleForumProjectMessage(msg, topicInfo.workdir, threadId);
+      case 'bot':
+        return this._handleForumBotMessage(msg, topicInfo, threadId);
       case 'tasks':
         return this._handleForumTaskMessage(msg, threadId);
       case 'activity':
@@ -216,6 +219,7 @@ class TelegramBotForum {
   async handleCallback(chatId, userId, data, threadId, msgId) {
     // Route by prefix — check ft: and fo: before f: to avoid prefix collision (Pitfall 3)
     if (data.startsWith('ft:')) return this.handleTaskCallback(chatId, userId, data, threadId);
+    if (data.startsWith('fb:')) return this.handleBotTopicCallback(chatId, userId, data, threadId);
     if (data.startsWith('fo:')) return this.handleOnboardingCallback(chatId, userId, data, msgId);
     if (data.startsWith('fs:')) return this.handleSessionCallback(chatId, userId, data, threadId);
     if (data.startsWith('fm:')) return this.handleActionCallback(chatId, userId, data, threadId);
@@ -660,7 +664,7 @@ class TelegramBotForum {
         case '/status':
           return this._api.cmdStatus(chatId, userId);
         case '/bots':
-          return this._api.cmdBots(chatId, userId);
+          return this._api.cmdBots(chatId, userId, { forum: true, threadId });
         case '/help':
           return this._api.sendMessage(chatId, this._api.t('forum_help_project'));
         case '/info':
@@ -1269,6 +1273,101 @@ class TelegramBotForum {
       parse_mode: 'HTML',
       reply_markup: JSON.stringify({ inline_keyboard: [buttons] }),
     });
+  }
+
+  // ─── Bot Topic Message Handler ───────────────────────────────────────
+
+  /**
+   * Create a topic dedicated to one bot, bound to a project.
+   * Public — called from the fb: callback.
+   */
+  async createBotTopic(chatId, workdir, bot) {
+    const label = bot.label || bot.id;
+    const topic = await this._api.callApi('createForumTopic', {
+      chat_id: chatId,
+      name: `${bot.avatar || '🤖'} ${label}`.slice(0, 128),
+    });
+
+    this._api.stmts.addForumBotTopic.run(topic.message_thread_id, chatId, 'bot', workdir, bot.id);
+    this._forumTopics.set(`${chatId}:${topic.message_thread_id}`, {
+      type: 'bot', workdir, chatId, botId: bot.id,
+    });
+
+    await this._api.sendMessage(chatId, this._api.t('forum_topic_bot', {
+      name: this._api.escHtml(label),
+      handle: this._api.escHtml(bot.id),
+      path: this._api.escHtml(workdir),
+    }), { message_thread_id: topic.message_thread_id });
+
+    return topic.message_thread_id;
+  }
+
+  /**
+   * fb:<handle> — open (or point at) this bot's own topic.
+   *
+   * The project comes from the topic the button was pressed in, not from the callback
+   * data: callback_data is capped at 64 BYTES and an absolute workdir routinely blows
+   * that, which Telegram rejects as BUTTON_DATA_INVALID for the whole message.
+   */
+  async handleBotTopicCallback(chatId, userId, data, threadId) {
+    const handle = data.slice(3).trim().toLowerCase();
+    const source = this.getTopicInfo(chatId, threadId);
+    const workdir = source?.workdir;
+    if (!workdir) return this._api.sendMessage(chatId, this._api.t('forum_bot_topic_no_project'));
+
+    const existing = this._api.stmts.getForumBotTopic.get(chatId, handle);
+    if (existing) {
+      // Telegram silently ignores createForumTopic name collisions, so without this a
+      // second press would make a duplicate topic and orphan the first one's history.
+      return this._api.sendMessage(chatId, this._api.t('forum_bot_topic_exists', {
+        link: this._topicLink(chatId, existing.thread_id),
+      }));
+    }
+
+    const roster = this._api.getRoster ? this._api.getRoster(workdir, source?.sessionId) : null;
+    const bot = (roster?.bots || []).find(b => b.id === handle);
+    if (!bot) return this._api.sendMessage(chatId, this._api.t('forum_bot_topic_gone'));
+
+    try {
+      await this.createBotTopic(chatId, workdir, bot);
+    } catch (err) {
+      this._api.log.warn(`[forum] Failed to create bot topic: ${err.message}`);
+      await this._api.sendMessage(chatId, this._api.t('forum_bot_topic_failed'));
+    }
+  }
+
+  /**
+   * Handle messages in a Bot topic — a project topic bound to one handle.
+   *
+   * Deliberately NOT a second execution path: it prefixes the topic's handle and hands
+   * the message to the ordinary project flow, so the same parseMentions and the same
+   * runBotTurns dispatch serve both, and server.js needs no bot-topic branch at all.
+   * A separate path would mean two mention parsers drifting apart.
+   */
+  async _handleForumBotMessage(msg, topicInfo, threadId) {
+    const workdir = topicInfo.workdir;
+    const handle = topicInfo.botId;
+    const text = (msg.text || '').trim();
+
+    // A topic whose bot was deleted, or a row written before bot_id existed. Falling back
+    // to the plain project flow keeps the topic usable instead of dropping every message
+    // into a branch that cannot name its bot.
+    if (!handle || !workdir) return this._handleForumProjectMessage(msg, workdir, threadId);
+
+    // Commands are commands everywhere — prefixing would turn /stop into a prompt.
+    // Non-text (photos, stickers, documents) passes through untouched too: the media
+    // path is shared with project topics and has nowhere to carry a mention.
+    if (!text || text.startsWith('/')) {
+      return this._handleForumProjectMessage(msg, workdir, threadId);
+    }
+
+    // Already addressed to this bot — prefixing again would leave a stray token. Naming a
+    // PEER is left alone: the topic's own bot is still prefixed, and the roster hand-off
+    // rules decide the rest.
+    const already = new RegExp(`(^|[\\s(\\[{'",;])@@${handle}(?![a-z0-9_-])`, 'i').test(text);
+    const prefixed = already ? text : `@@${handle} ${text}`;
+
+    return this._handleForumProjectMessage({ ...msg, text: prefixed }, workdir, threadId);
   }
 
   // ─── Tasks Topic Message Handler ─────────────────────────────────────
