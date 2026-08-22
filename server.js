@@ -4032,7 +4032,11 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   // The room's own record. Each entry is one bot's contribution, in the order spoken —
   // this is what every later bot reads, and what the closing artifact is built from.
   const transcript = [];
-  let messages = 0, round = 1, escalatedBy = null, stopReason = null;
+  // `round` is the one ABOUT to run; `roundsRun` is how many actually completed. The
+  // artifact must report the second — the first live run closed with "over 4 rounds"
+  // when the cap is 3, because the counter had already been bumped for the round the
+  // cap then refused.
+  let messages = 0, round = 1, roundsRun = 0, escalatedBy = null, stopReason = null;
 
   const ROOM_RULES = (self) => `You are in a group conversation with other bots about the user's message. `
     + `The others' contributions appear below in the order they were said.\n\n`
@@ -4058,9 +4062,16 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
 
         state(bot.id, 'running');
         const said = transcript.length
-          ? '\n\nWhat has been said so far:\n' + transcript.map(x => `[@${x.handle}]: ${x.text}`).join('\n\n')
+          ? 'What the others have said so far, in order:\n'
+            + transcript.map(x => `[@${x.handle}]: ${x.text}`).join('\n\n') + '\n\n'
           : '';
-        const botPrompt = `${ROOM_RULES('@' + bot.id)}\n\nThe user's message:\n${prompt}${said}`;
+        // The question goes LAST, immediately before the bot generates. With it first and
+        // the transcript after it, the peers' replies were the most recent thing in view
+        // and two of three bots answered "I don't see a user request" — measured on the
+        // first live run. Restating it at the end costs a few tokens and fixes that.
+        const botPrompt = `${ROOM_RULES('@' + bot.id)}\n\n${said}`
+          + `The user's message, which this conversation is about:\n${prompt}\n\n`
+          + `Now add your own contribution as @${bot.id}.`;
 
         // A fresh CLI session every round. A room turn is a complete brief on its own —
         // the whole transcript is in the prompt — and resuming a bot's long-lived chat
@@ -4118,13 +4129,19 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
         } else {
           // A pass is recorded but not fed back: it says nothing, and repeating "PASS"
           // into every later bot's prompt would crowd out what was actually said.
+          //
+          // Only PERSISTED, never re-sent. onText already streamed the bot's reply live,
+          // so sending a formatted copy showed the same pass twice in a row — measured in
+          // the first live run of this mode. What is stored is the tidy form, so a reload
+          // reads better than the raw "PASS ..." the bot actually typed.
           const note = reply.text ? `⏭️ @${bot.id} passed — ${reply.text}\n\n` : `⏭️ @${bot.id} passed.\n\n`;
-          save(note, bot.id); send({ type: 'text', text: note, agent: bot.id });
+          save(note, bot.id);
         }
         state(bot.id, 'done');
         if (escalatedBy) break;
       }
 
+      roundsRun++;
       if (stopReason) break;
       if (roundPassed) { stopReason = 'settled'; break; }
       round++;
@@ -4137,7 +4154,7 @@ async function runConversationRoom(p, { bots, prompt, rosterBots }) {
   // wired into a wave, and what the user reads instead of scrolling the whole room.
   const summary = escalatedBy
     ? `\n\n🙋 **@${escalatedBy} needs you.** The room stopped here — answer above and it can continue.\n\n`
-    : `\n\n📋 **Room closed** — ${transcript.length} contribution${transcript.length === 1 ? '' : 's'} over ${round} round${round === 1 ? '' : 's'}`
+    : `\n\n📋 **Room closed** — ${transcript.length} contribution${transcript.length === 1 ? '' : 's'} over ${roundsRun} round${roundsRun === 1 ? '' : 's'}`
       + (stopReason === 'settled' ? ', nobody had more to add.' : stopReason === 'messages' ? ', message cap reached.'
         : stopReason === 'rounds' ? ', round cap reached.' : stopReason === 'stopped' ? ', stopped.' : '.')
       + '\n\n';
@@ -10489,7 +10506,12 @@ wss.on('connection', (ws) => {
         // A room seats the PROJECT's bots — a conversation mode is a property of the
         // chat, not something the user re-picks per message. Mentions are handled above,
         // so reaching here means no one bot was named and the whole room speaks.
-        newCid = await runConversationRoom(params, { bots: projectBots, prompt: enginePrompt, rosterBots: projectBots });
+        // `botPrompt`, not `enginePrompt`. When a chat is replayed with history the engine
+        // prompt is a PREAMBLE — "Continue this chat from the replayed history above" —
+        // and the real question lives in the content blocks. Handing that preamble to the
+        // room made every bot answer "I don't see a user request", correctly: there was
+        // none. runBotTurns has always used the raw text for the same reason.
+        newCid = await runConversationRoom(params, { bots: projectBots, prompt: botPrompt, rosterBots: projectBots });
       } else if (agentMode==='multi') {
         newCid = await runMultiAgent(params);
       } else {

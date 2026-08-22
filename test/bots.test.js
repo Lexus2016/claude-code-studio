@@ -608,5 +608,46 @@ check('an escalation ends it',
 check('escalation outranks the other stops',
   S({ escalated: true, allPassed: true, round: 99 }).reason, 'needs-you');
 
+// ─── Wiring contracts, found by the first live run of a room ─────────────────
+// All three were invisible to unit tests: the pure logic above was correct and green
+// while the mode was unusable end to end. They are pinned by reading the source, the
+// same way test/script-scope.test.mjs and test/interrupt-delivery.test.js do — the
+// call sites live inside a WS handler that cannot be imported without a server.
+{
+  const _fs = require('fs'), _path = require('path');
+  const SRV = _fs.readFileSync(_path.join(__dirname, '..', 'server.js'), 'utf8');
+  // TWO slices, deliberately: the call site sits ~6000 lines AFTER the function body,
+  // so slicing forward from the call never reaches the implementation. Slicing from
+  // the wrong one reported a correct artifact template as missing.
+  const head = SRV.slice(SRV.indexOf('runConversationRoom(params'), SRV.indexOf('runConversationRoom(params') + 300);
+  const body = SRV.slice(SRV.indexOf('async function runConversationRoom'),
+                         SRV.indexOf('async function runBotTurns'));
+  console.log('\nconversation room — wiring:');
+
+  // 1. The room was dispatched with a bare `prompt`, which is not a variable in that
+  //    scope: every attempt died with "prompt is not defined" before a bot ran.
+  check('the room is dispatched with a variable that exists in scope',
+    /prompt:\s*\w+/.test(head), true);
+
+  // 2. `enginePrompt` is a PREAMBLE when a chat is replayed with history ("Continue this
+  //    chat from the replayed history above"), and the real question is in the content
+  //    blocks. Handed that, every bot answered "I don't see a user request" — correctly.
+  //    runBotTurns has always used the raw text; the room must too.
+  check('the room gets the raw user text, not the replay preamble',
+    /prompt:\s*botPrompt/.test(head), true);
+
+  // 3. `round` counts the round ABOUT to run, so reporting it in the closing artifact
+  //    claimed one more round than happened — a live room closed "over 4 rounds" with
+  //    the cap at 3.
+  check('the closing artifact reports rounds that actually ran',
+    /\$\{roundsRun\} round/.test(body), true);
+
+  // 4. onText already streams a bot's reply live, so sending a formatted copy of a PASS
+  //    showed the same pass twice on screen.
+  const passBranch = body.slice(body.indexOf('passed —'), body.indexOf('passed —') + 400);
+  check('a pass is persisted but not re-sent to the client',
+    /send\(\{\s*type:\s*'text'/.test(passBranch), false);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
