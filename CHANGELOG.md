@@ -1,5 +1,36 @@
 # Changelog
 
+## 7.5.3
+
+Four fixes, each proved by reverting it and watching a new test fail.
+
+- **A session sometimes failed to finish restoring, and the composer was left
+  unusable.** One cause, two symptoms. Function declarations hoist only within their
+  own `<script>` block; `isEnginePaneId()` lived in the terminal block at the bottom of
+  the file while `loadSess()` — which calls it on every session open — is reached from
+  `ws.onopen`. A WebSocket opens in milliseconds; parsing several thousand more lines
+  does not. Losing that race threw `ReferenceError: isEnginePaneId is not defined` and
+  aborted `loadSess` mid-way, which also left the composer at `height: 0px` so its
+  placeholder rendered a line below the box until the first keystroke.
+- **The cursor landed a line low after switching projects.** Switching re-attaches, and
+  every re-attach repaints from a `capture-pane` snapshot — which emits every row
+  terminated by a newline, including the last. One newline too many pushed the cursor
+  past the final row and scrolled the view. The snapshot also carried no cursor
+  information at all; it now ends with an explicit CUP built from tmux's own
+  `#{cursor_y}`/`#{cursor_x}`.
+- **A split terminal still looked collapsed.** 7.5.0 stopped the real corruption — a
+  control client receives output for every pane, so a split window had several TUIs
+  writing into one buffer — but the visible symptom survived, because the font helper
+  clamped with `Math.min(base, …)` and could only ever shrink. Right for the engine
+  pane, which is spawned at 220 columns; useless for a pane measured live at 41 columns
+  beside five agent-team panes. Growth is now opt-in per caller and bounded.
+- **A task on a remote SSH project is refused instead of run locally.** `runSshSingle()`
+  is wired into the chat and Telegram paths only; the task runner has no SSH branch, so
+  it spawned the local agent with a path that lives on another machine. Deliberately a
+  refusal, not an implementation: `ClaudeSSH` supports neither `mcpServers` nor
+  `extraEnv`/`extraSettings`, all of which that loop passes.
+
+
 ## 7.5.2
 
 Follow-up to #53. The 7.5.0 fix stopped the *guard* from mangling a remote workdir;
