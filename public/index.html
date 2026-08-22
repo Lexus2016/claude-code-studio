@@ -11982,12 +11982,10 @@ function _actItemHtml(it, kind) {
   // second "Active now" widget rendering the same state from its own source, it rides on
   // the panel that already answers "what is running" across every project.
   // Avatar + handle, not the label: the handle is what you type to reach them. A deleted
-  // bot still shows, because a task can outlive the bot it was assigned to — marked by
-  // the strike-through style alone rather than a word, since the bots section has no
-  // fr/he translations and a missing key would render as raw text here.
+  // bot still shows, because a task can outlive the bot it was assigned to.
   const bots = Array.isArray(it.bots) && it.bots.length
     ? `<span class="act-bots">` + it.bots.slice(0, 4).map(b =>
-        `<span class="act-bot${b.deleted ? ' gone' : ''}" title="@@${escH(b.id)}">${escH(b.avatar || '🤖')}${escH(b.id)}</span>`
+        `<span class="act-bot${b.deleted ? ' gone' : ''}" title="@@${escH(b.id)}${b.deleted ? ' — ' + escH(t('bot.deleted')) : ''}">${escH(b.avatar || '🤖')}${escH(b.id)}</span>`
       ).join('') + (it.bots.length > 4 ? `<span class="act-bot">+${it.bots.length - 4}</span>` : '') + `</span>`
     : '';
   if (kind === 'live') {

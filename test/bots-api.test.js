@@ -178,6 +178,42 @@ async function api(method, url, body) {
       (await api('POST', '/api/projects/proj-1/bots/nosuchbot')).status, 404);
   }
 
+  console.log('\nassigning a task to a bot:');
+  {
+    // tasks.bot_id decides whose prompt and model a task runs under (processQueue looks
+    // the handle up with getBot). An unchecked value costs a whole run before it surfaces
+    // as "task bot not found" in a log nobody is watching — so it is validated at the
+    // door, the way session_id already is.
+    const owner = (await api('POST', '/api/bots', { label: 'Task Owner' })).json.id;
+
+    const ok = await api('POST', '/api/tasks', { title: 'owned', workdir: APP_DIR, bot_id: owner });
+    check('a task can be assigned to a real bot', ok.json?.bot_id, owner);
+
+    check('an unknown handle is refused, not stored',
+      (await api('POST', '/api/tasks', { title: 'ghost', workdir: APP_DIR, bot_id: 'nosuchbot' })).status, 400);
+    check('a malformed handle is refused too',
+      (await api('POST', '/api/tasks', { title: 'bad', workdir: APP_DIR, bot_id: 'Not A Handle' })).status, 400);
+    check('a non-string handle is refused',
+      (await api('POST', '/api/tasks', { title: 'weird', workdir: APP_DIR, bot_id: 42 })).status, 400);
+    check('no bot at all is still fine',
+      (await api('POST', '/api/tasks', { title: 'unowned', workdir: APP_DIR })).status, 200);
+
+    // The update path takes the same field and needs the same guard — otherwise the
+    // door is locked and the window is open.
+    const tid = ok.json.id;
+    check('an unknown handle is refused on update too',
+      (await api('PUT', `/api/tasks/${tid}`, { bot_id: 'nosuchbot' })).status, 400);
+    check('clearing the owner is allowed',
+      (await api('PUT', `/api/tasks/${tid}`, { bot_id: null })).json?.bot_id, null);
+
+    // A soft-deleted bot must not be assignable: its handle is reserved forever, so the
+    // row would look valid while no bot can ever run it.
+    const gone = (await api('POST', '/api/bots', { label: 'Soon Gone' })).json.id;
+    await api('DELETE', `/api/bots/${gone}`);
+    check('a deleted bot cannot be assigned new work',
+      (await api('POST', '/api/tasks', { title: 'zombie', workdir: APP_DIR, bot_id: gone })).status, 400);
+  }
+
   stop();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

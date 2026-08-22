@@ -6039,6 +6039,24 @@ app.get('/api/global/search', (req, res) => {
     res.status(500).json({ error: 'global_search_failed' });
   }
 });
+// A task's bot decides whose system prompt and model it runs under: processQueue looks
+// the handle up with getBot and, when it misses, logs "task bot not found" and runs the
+// task as a nameless agent. That is a whole run spent before anyone notices, so the
+// handle is checked at the door — the same treatment session_id already gets below.
+//
+// getBot, not getBotAny: a soft-deleted bot's handle stays reserved forever, so the row
+// would look valid while no bot can ever run it.
+function badBotId(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string' || !botsLogic.isValidHandle(value.trim().toLowerCase())) {
+    return 'bot_id is not a valid handle';
+  }
+  try {
+    if (!stmts.getBot.get(value.trim().toLowerCase())) return 'unknown bot_id';
+  } catch { return 'unknown bot_id'; }
+  return null;
+}
+
 app.post('/api/tasks', (req, res) => {
 
   const { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
@@ -6051,6 +6069,7 @@ app.post('/api/tasks', (req, res) => {
   if (session_id && !stmts.getSession.get(String(session_id))) {
     return res.status(400).json({ error: 'unknown session_id' });
   }
+  { const bad = badBotId(bot_id); if (bad) return res.status(400).json({ error: bad }); }
   const id = genId();
   stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null, sqlVal(run_engine)||null, sqlVal(bot_id)||null);
   const task = stmts.getTask.get(id);
@@ -6069,6 +6088,11 @@ app.put('/api/tasks/:id', (req, res) => {
           scheduled_at=task.scheduled_at, recurrence=task.recurrence, recurrence_end_at=task.recurrence_end_at,
           effort=task.effort, run_engine=task.run_engine,
           bot_id=task.bot_id } = req.body;
+  // Same guard as create: the update path takes the same field, and locking the door
+  // while leaving the window open would just move the bad value one endpoint over.
+  // Defaulting to the task's CURRENT bot means a PUT that omits the field re-validates
+  // what is already stored — harmless, since it was validated to get there.
+  { const bad = badBotId(bot_id); if (bad) return res.status(400).json({ error: bad }); }
   // Stop running process when task is moved away from in_progress
   if (task.status === 'in_progress' && status !== 'in_progress') {
     const ctrl = runningTaskAborts.get(req.params.id);
