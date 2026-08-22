@@ -1774,6 +1774,29 @@ async function startTask(task) {
           prompt: currentTaskPrompt, systemPrompt: '', model: session?.model || task.model || 'sonnet',
           mode: task.mode || 'auto', ws: _proxy, sessionId, abortController: taskAbort,
           claudeSessionId: currentTaskCid, workdir: task.workdir || WORKDIR, mcpServers: taskMcpServers,
+          // Same gap the chat path had, and found while reviewing that fix: the api
+          // engine below delivers clarifications through the check-interrupt hook, but
+          // the subscription engine has no hooks. Without these three callbacks a
+          // clarification sent to a running task was stored, badged "pending" in the UI,
+          // and never handed to the agent. There is no follow-up-turn machinery here
+          // (this path is one-shot), so a failed paste stays queued for the next turn
+          // rather than being marked delivered.
+          drainInterrupts: () => {
+            const msgs = pendingInterrupts.get(sessionId) || [];
+            if (msgs.length) pendingInterrupts.delete(sessionId);
+            return msgs;
+          },
+          markInterruptsDelivered: (msgs) => {
+            for (const m of (msgs || [])) {
+              if (m.dbId) { try { stmts.markInterruptDelivered.run(m.dbId); } catch {} }
+              try { broadcastToSession(sessionId, { type: 'interrupt_delivered', interruptId: m.id, tabId: sessionId }); } catch {}
+            }
+          },
+          requeueInterrupts: (msgs) => {
+            if (!msgs?.length) return;
+            if (!pendingInterrupts.has(sessionId)) pendingInterrupts.set(sessionId, []);
+            pendingInterrupts.get(sessionId).unshift(...msgs);
+          },
         });
         for (const ev of (r.toolEvents || [])) {
           try { stmts.addMsg.run(sessionId, 'assistant', 'tool', (ev.input || '').substring(0, 500), ev.name, null, null, null); } catch {}
@@ -10319,11 +10342,36 @@ wss.on('connection', (ws) => {
           // waits for someone to answer a permission prompt. Only the blocked/unblocked
           // frames are fanned out; `ws` is excluded because it is served above.
           fanout: (obj) => { try { broadcastToSessionExcept(localSessionId, ws, obj); } catch {} },
+          // Draining no longer implies delivery: the engine still has to type the text
+          // into the tmux pane, and that can fail. It reports back through the two
+          // callbacks below, so a paste that never landed is re-queued instead of
+          // being marked delivered and lost.
           drainInterrupts: () => {
             const msgs = pendingInterrupts.get(localSessionId) || [];
             if (msgs.length) pendingInterrupts.delete(localSessionId);
-            for (const m of msgs) { try { if (m.dbId) stmts.markInterruptDelivered.run(m.dbId); } catch {} }
             return msgs;
+          },
+          markInterruptsDelivered: (msgs) => {
+            // Mirrors the MCP delivery path (~server.js:5206). The DB row is only half of
+            // it: without the socket frame the badge stays "pending", and without the
+            // proxy counter the done handler sees deliveredInterruptCount === 0 and ages
+            // every successfully delivered badge into "expired" until loadHist() redraws.
+            for (const m of (msgs || [])) {
+              if (m.dbId) { try { stmts.markInterruptDelivered.run(m.dbId); } catch {} }
+              const payload = { type: 'interrupt_delivered', interruptId: m.id, tabId: localSessionId };
+              try { proxy.send(JSON.stringify(payload)); } catch {}
+              proxy._deliveredInterruptCount = (proxy._deliveredInterruptCount || 0) + 1;
+              // Except proxy._ws — it is served by the line above; the rest are other
+              // windows watching the same chat.
+              try { broadcastToSessionExcept(localSessionId, proxy._ws, payload); } catch {}
+            }
+          },
+          requeueInterrupts: (msgs) => {
+            if (!msgs?.length) return;
+            if (!pendingInterrupts.has(localSessionId)) pendingInterrupts.set(localSessionId, []);
+            // unshift, not push: these were queued before anything that arrived while
+            // the failed paste was in flight, and they keep that place in line.
+            pendingInterrupts.get(localSessionId).unshift(...msgs);
           },
         });
         for (const ev of r.toolEvents) {
@@ -10447,6 +10495,44 @@ wss.on('connection', (ws) => {
       if (!isStale) {
         const _drainedInterrupts = pendingInterrupts.get(localSessionId);
         pendingInterrupts.delete(localSessionId);
+        if (_drainedInterrupts?.length) {
+          for (const m of _drainedInterrupts) { if (m.dbId) { try { stmts.markInterruptDelivered.run(m.dbId); } catch {} } }
+          // Mirrors processTelegramChat's finally (server.js ~8318): whatever is still
+          // queued here could not be delivered mid-run (subscription/tmux missed every
+          // idle window, SSH, or a race that finished before the api engine's hook
+          // polled). Run it as the next turn instead of discarding it — and its
+          // attachments — silently.
+          const _followText = _drainedInterrupts.map(m => m.content).filter(Boolean).join('\n\n');
+          // saveInterruptAttachments only keeps `base64` for images; a text/file
+          // attachment arrives here as {type,name,path}. The content-block builder
+          // needs base64 for BOTH kinds, so read it back now — synchronously, before
+          // cleanupInterruptAttachments below removes the temp dir out from under the
+          // queued follow-up. SSH entries carry a credential and never get a body.
+          const _followAttachments = _drainedInterrupts.flatMap(m => m.attachments || []).map(att => {
+            if (!att || att.base64 || att.type === 'ssh' || !att.path) return att;
+            try { return { ...att, base64: fs.readFileSync(att.path).toString('base64') }; } catch { return att; }
+          });
+          if (_followText || _followAttachments.length) {
+            // Spread, then strip: a clarification is its own turn. Inheriting reply_to
+            // would re-quote the original message, autoSkill/retry would re-run
+            // classification, and _dbQueueId points at a queue row that is already gone.
+          const _followMsg = { ...msg, text: _followText, attachments: _followAttachments, sessionId: localSessionId, tabId: effectiveTabId };
+          delete _followMsg.reply_to; delete _followMsg.autoSkill; delete _followMsg.retry; delete _followMsg._dbQueueId;
+            // Put it at the head of this tab's queue rather than calling processChat
+            // directly: the drain a few lines below is the single serialised entry
+            // point for this session, and a parallel call would race it into two
+            // concurrent turns on one chat.
+            if (effectiveTabId) {
+              if (!ws._tabQueue[effectiveTabId]) {
+                ws._tabQueue[effectiveTabId] = sessionQueues.get(effectiveTabId) || [];
+                sessionQueues.set(effectiveTabId, ws._tabQueue[effectiveTabId]);
+              }
+              ws._tabQueue[effectiveTabId].unshift(_followMsg);
+            } else {
+              ws._queue.unshift(_followMsg);
+            }
+          }
+        }
         cleanupInterruptAttachments(_drainedInterrupts);
         for (const [rid, entry] of pendingAskUser) {
           if (entry.sessionId === localSessionId) {

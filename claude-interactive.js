@@ -68,6 +68,12 @@ const AWAIT_GRACE_MS = parseInt(process.env.CLAUDE_PROMPT_GRACE_MS || '300000', 
 // How long a FRESHLY SPAWNED TUI is given to get past a startup dialog before the
 // prompt is pasted anyway. 0 restores the old behaviour (paste immediately).
 const SPAWN_PROMPT_WAIT_MS = parseInt(process.env.CLAUDE_STARTUP_PROMPT_WAIT_MS || '90000', 10) || 0;
+// How many consecutive failed clarification pastes are attempted before the engine
+// gives up for the rest of the turn. A dead or unreachable pane fails on every
+// poll, and retrying at POLL_MS forever spawns three tmux processes per tick for
+// nothing. The messages stay queued either way — the caller's finally block runs
+// them as the next turn.
+const INJECT_MAX_FAILS = 3;
 
 // ─── tmux socket ─────────────────────────────────────────────────────────────
 // The interactive engine's sessions (`ccs-<id>`) live on the SAME private tmux
@@ -296,7 +302,7 @@ function killInteractiveTmux(localSessionId) {
 // mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId; ignores the rest.
 // Returns { cid, completed, resultMeta, fullText, fullThinking, toolEvents }.
 async function runInteractiveSingle(params) {
-  const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent, drainInterrupts, fanout } = params;
+  const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent, drainInterrupts, markInterruptsDelivered, requeueInterrupts, fanout } = params;
   const start = Date.now();
   const wsSend = (obj) => {
     try { ws.send(JSON.stringify({ ...obj, ...(tabId ? { tabId } : {}) })); } catch {}
@@ -447,6 +453,19 @@ async function runInteractiveSingle(params) {
             fs.writeFileSync(imgFile, Buffer.from(block.source.data, 'base64'));
             extra.push(`[Attached image saved at: ${imgFile} — use the Read tool to view it]`);
           } catch {}
+        } else if (block.type === 'file' && block.source?.data) {
+          // Without this branch every non-image attachment is silently dropped on the
+          // way into the pane. buildAttachmentContentBlocks emits `file` for text files
+          // AND binaries, and the deferred clarification follow-up (server.js finally
+          // block) rehydrates base64 specifically so it can travel this path — the
+          // original temp file is already unlinked by then, so ignoring the block loses
+          // the attachment outright.
+          try {
+            const safe = path.basename(String(block.source.name || 'attachment.bin')).replace(/[^\w.\-]+/g, '_').slice(0, 60) || 'attachment.bin';
+            const outFile = path.join(os.tmpdir(), `ccs-att-${crypto.randomBytes(6).toString('hex')}-${safe}`);
+            fs.writeFileSync(outFile, Buffer.from(block.source.data, 'base64'));
+            extra.push(`[Attached file saved at: ${outFile} — use the Read tool to open it]`);
+          } catch {}
         }
       }
       if (extra.length) sendText = extra.join('\n') + '\n\n' + sendText;
@@ -473,6 +492,7 @@ async function runInteractiveSingle(params) {
     let quietPolls = 0;               // consecutive polls with spinner gone (!busy) AND no new transcript bytes
     let prevPaneCap = null;           // previous pane capture — for spinner-animation detection in paneBusy()
     let lastActivityAt = start;       // idle watchdog cursor — bumped on transcript progress (new bytes)
+    let injectFails = 0;              // consecutive failed clarification pastes — see INJECT_MAX_FAILS
     let awaitPolls = 0;               // consecutive polls showing a blocking prompt
 
     while (true) {
@@ -585,6 +605,112 @@ async function runInteractiveSingle(params) {
         wsSendAll({ type: 'input_resolved', sessionId });
       }
 
+      // Mid-run clarifications. The hook mechanism the headless engine uses cannot
+      // apply here — there is no per-run --settings to inject, the CLI is already
+      // running interactively. The equivalent for a live TUI is to type the message
+      // into it, which is exactly what a person sitting at the terminal would do —
+      // and a person cannot type into a busy TUI (spinner running) or into a
+      // permission/plan prompt without hijacking whatever option is selected. Only
+      // drain (and thus mark delivered) once the pane genuinely has an open input
+      // line: not busy, not showing a blocking widget, AND actually captured — a
+      // failed capture must NOT read as idle (paneBusy/paneAwaitingInput both
+      // return false for a null pane, the one case we can least confirm it's safe).
+      //
+      // This runs BEFORE the completion check below, not after. `busy` normally
+      // stays true (spinner/timer animation) right up until endTurnSeen latches, so
+      // the "idle and the loop hasn't exited yet" window IS the tick the turn ends —
+      // draining after the break left this code effectively dead on a normal,
+      // healthy completion, silently losing the clarification instead of typing it.
+      let injected = false;
+      // Independent re-check of the pane's prompt state, not the `awaiting` variable
+      // computed above: `awaiting` is forced false whenever `gotNewBytes` is true this
+      // tick (see its definition), so a permission/plan widget that appears in the
+      // same poll as trailing transcript bytes would otherwise pass this gate and get
+      // hijacked by a pasted clarification.
+      if (pane && !busy && !paneAwaitingInput(pane) && injectFails < INJECT_MAX_FAILS && typeof drainInterrupts === 'function') {
+        let pending = [];
+        try { pending = drainInterrupts() || []; } catch {}
+        // One paste + one Enter for the whole batch: busy/awaiting were sampled
+        // once for this tick, so pasting item 2 after item 1's Enter already
+        // restarted the spinner would land in a pane no longer listening.
+        const parts = [];
+        for (const m of pending) {
+          if (m.content) parts.push(m.content);
+          for (const att of (Array.isArray(m.attachments) ? m.attachments : [])) {
+            if (att.type === 'ssh') {
+              // An SSH entry has no `path` — without this it contributed nothing and the
+              // pane got a bare "[See attached files]". Mirrors buildAttachmentContentBlocks:
+              // host and key path only, never the credential (this text lands in the CLI
+              // transcript on disk).
+              let t = `[SSH Host: ${att.label || att.host || 'SSH'}]\nHost: ${att.host}:${att.port || 22}`;
+              if (att.sshKeyPath) t += `\nSSH Key: ${att.sshKeyPath}`;
+              else if (att.authMethod === 'password') t += `\nAuth: password (held server-side, not exposed)`;
+              parts.push(t);
+            } else if (att.path) {
+              parts.push(`[Attached ${att.mimeType && att.mimeType.startsWith('image/') ? 'image' : 'file'}: ${att.name || 'file'}]\nSaved at: ${att.path}\nRead it before continuing.`);
+            }
+          }
+        }
+        const body = parts.join('\n\n').trim();
+        if (body) {
+          const note = `USER CLARIFICATION${pending.length > 1 ? 'S' : ''} (sent while you were working):\n\n${body}`;
+          const tmpFile = path.join(os.tmpdir(), `ccs-int-${crypto.randomBytes(6).toString('hex')}.txt`);
+          const bufName = `ccsint-${crypto.randomBytes(4).toString('hex')}`;
+          let delivered = false;
+          try {
+            fs.writeFileSync(tmpFile, note);
+            const load = spawnSync('tmux', tmuxArgs(['load-buffer', '-b', bufName, tmpFile]), { stdio: 'ignore' });
+            const paste = spawnSync('tmux', tmuxArgs(['paste-buffer', '-dpr', '-t', name, '-b', bufName]), { stdio: 'ignore' });
+            if (load.status === 0 && paste.status === 0) {
+              await sleep(250);
+              const enter = spawnSync('tmux', tmuxArgs(['send-keys', '-t', name, 'Enter']), { stdio: 'ignore' });
+              delivered = enter.status === 0;
+            }
+          } catch {} finally { try { fs.unlinkSync(tmpFile); } catch {} }
+          if (delivered) {
+            injected = true;
+            injectFails = 0;
+            if (typeof markInterruptsDelivered === 'function') { try { markInterruptsDelivered(pending); } catch {} }
+          } else if (typeof requeueInterrupts === 'function') {
+            // Genuinely undo the drain: put it back for the next idle tick to retry,
+            // or — if the turn ends first — for the caller's finally-block follow-up
+            // to run it as the next turn instead of it vanishing after being popped.
+            try { requeueInterrupts(pending); } catch {}
+            injectFails++;
+            // Only the last attempt talks to the user. A dead pane fails every poll,
+            // and one error frame per ~1.5s tick for the rest of a long turn is a
+            // toast storm, not a diagnostic.
+            if (injectFails >= INJECT_MAX_FAILS) {
+              // nonTerminal: the poll loop is still running this turn. Without the flag the
+              // client's `error` case tears the turn down — clears isGen, the Stop button
+              // and tab.generating — and the user is invited to send into a live turn.
+              wsSend({ type: 'error', nonTerminal: true, error: 'clarification could not be typed into the interactive session — it will be sent as the next message instead' });
+            }
+          } else {
+            // No requeue channel (a caller that predates it): the batch is already
+            // drained and cannot be put back, so report the loss rather than imply
+            // a retry that will not happen.
+            injectFails++;
+            wsSend({ type: 'error', nonTerminal: true, error: 'clarification could not be typed into the interactive session' });
+          }
+        } else if (pending.length && typeof markInterruptsDelivered === 'function') {
+          // Nothing left to type (e.g. an SSH-only attachment, which has no file path
+          // to reference) — there's no pane action to retry, so don't leave it queued.
+          try { markInterruptsDelivered(pending); } catch {}
+        }
+      }
+
+      if (injected) {
+        // A new turn was just kicked off in the pane — the endTurnSeen/busy/
+        // gotNewBytes gathered above describe the turn that just ended, not what
+        // comes next. Skip the completion checks below and let the next poll
+        // observe the new turn fresh instead of breaking on stale state.
+        endTurnSeen = false;
+        quietPolls = 0;
+        lastActivityAt = Date.now();
+        continue;
+      }
+
       // COMPLETE on the transcript turn-end signal, but ONLY once the spinner has
       // cleared and no bytes arrived this poll. `tool_use` is the sole "continue"
       // stop_reason; any other terminal value latches endTurnSeen. Because a
@@ -595,40 +721,6 @@ async function runInteractiveSingle(params) {
       // never the PRIMARY signal (spinner wording is version-specific); it only
       // gates when to trust the already-latched transcript signal.
       if (endTurnSeen && !busy && !gotNewBytes) break;
-
-      // Mid-run clarifications. The hook mechanism the headless engine uses cannot
-      // apply here — there is no per-run --settings to inject, the CLI is already
-      // running interactively. The equivalent for a live TUI is to type the message
-      // into it, which is exactly what a person sitting at the terminal would do —
-      // and a person cannot type into a busy TUI (spinner running) or into a
-      // permission/plan prompt without hijacking whatever option is selected. Only
-      // drain (and thus mark delivered) once the pane genuinely has an open input
-      // line: not busy, not showing a blocking widget. Injecting while busy used to
-      // paste into a pane with nothing listening for text — the message vanished
-      // with no trace in the transcript and was still marked delivered.
-      if (!busy && !awaiting && typeof drainInterrupts === 'function') {
-        let pending = [];
-        try { pending = drainInterrupts() || []; } catch {}
-        for (const m of pending) {
-          const parts = [];
-          if (m.content) parts.push(m.content);
-          for (const att of (Array.isArray(m.attachments) ? m.attachments : [])) {
-            if (att.path) parts.push(`[Attached ${att.mimeType && att.mimeType.startsWith('image/') ? 'image' : 'file'}: ${att.name || 'file'}]\nSaved at: ${att.path}\nRead it before continuing.`);
-          }
-          const body = parts.join('\n\n').trim();
-          if (!body) continue;
-          const note = `USER CLARIFICATION (sent while you were working):\n\n${body}`;
-          const tmpFile = path.join(os.tmpdir(), `ccs-int-${crypto.randomBytes(6).toString('hex')}.txt`);
-          const bufName = `ccsint-${crypto.randomBytes(4).toString('hex')}`;
-          try {
-            fs.writeFileSync(tmpFile, note);
-            spawnSync('tmux', tmuxArgs(['load-buffer', '-b', bufName, tmpFile]), { stdio: 'ignore' });
-            spawnSync('tmux', tmuxArgs(['paste-buffer', '-dpr', '-t', name, '-b', bufName]), { stdio: 'ignore' });
-            await sleep(250);
-            spawnSync('tmux', tmuxArgs(['send-keys', '-t', name, 'Enter']), { stdio: 'ignore' });
-          } catch {} finally { try { fs.unlinkSync(tmpFile); } catch {} }
-        }
-      }
 
       if (gotNewBytes) lastActivityAt = Date.now(); // transcript progress = real work; resets idle watchdog
       if (gotNewBytes || busy) quietPolls = 0; else quietPolls++;

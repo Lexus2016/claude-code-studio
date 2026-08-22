@@ -7721,6 +7721,17 @@ function handleWsMsg(d) {
       break;
 
     case 'error':
+      // A non-terminal error reports a problem INSIDE a turn that is still running —
+      // e.g. a clarification the engine could not type into the tmux pane. Everything
+      // below tears the turn down (isGen, the Stop button, tab.generating,
+      // _cancelStreamRender), so a warning must never reach it or the UI would claim
+      // the task ended while the engine is still polling.
+      if (d.nonTerminal) { if (isVisible) toast(d.error, true, 5000); break; }
+      // Mirrors the 'done' case above — a turn can also end via error. A queueRejected
+      // error is the exception: it rejects a NEW message because the queue is full,
+      // while the turn already running keeps going. Clearing the flag there would age
+      // a clarification that is still genuinely pending into an "expired" badge.
+      if (tabId === currentSessionId && !d.queueRejected) _curSessionTaskRunning = false;
       // A rejected message is not a failed run: the composer cleared the text before
       // sending, so hand it back rather than leaving the user to retype it. Only if
       // they have not already started typing something else.
