@@ -226,6 +226,7 @@ function termWs(token, sessionId = 'nonexistent') {
     // path is simply a directory that does not exist and sits outside the roots, which
     // is the identical failure the Windows drive-letter prefix produced.
     console.log('\n— a registered remote workdir is accepted for a run —');
+    const srvSrc = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
     const REMOTE_WD = '/home/user/project-' + crypto.randomBytes(4).toString('hex');
     // Negative control FIRST: unregistered, it must still be refused. Without this the
     // test would pass against a guard that had simply been removed.
@@ -251,6 +252,26 @@ function termWs(token, sessionId = 'nonexistent') {
       (await api('GET', `/api/browse-dirs?path=${encodeURIComponent(REMOTE_WD)}`)).status, 403);
     check('and still refuses /etc',
       (await api('GET', '/api/browse-dirs?path=%2Fetc')).status, 403);
+
+    // ── issue #53, part 2: one lookup, and a trailing slash must not change it ──
+    // The "is this a remote project" test was written out three times with exact string
+    // equality — the workdir guard, the chat router and the Telegram router. They had to
+    // agree EXACTLY or a run the guard accepted could still be routed as local, and a
+    // remote workdir used as a local cwd is where the `C:` comes from: Node resolves a
+    // POSIX-absolute cwd against the current drive, so `/home/user/project` starts the
+    // child in `C:\home\user\project`.
+    console.log('\n— the remote-project lookup is one function, and tolerates a trailing slash —');
+    check('a trailing slash still names the same remote project',
+      (await api('POST', '/api/sessions', { title: 'remote-slash', workdir: REMOTE_WD + '/' })).status, 200);
+    // Narrowly: no lookup may pair a workdir match with an isRemote test outside the
+    // one helper. Two other `find(p => p.workdir === …)` calls remain on purpose — they
+    // resolve a project NAME for notifications and for the config resolver, and neither
+    // decides local-vs-SSH routing, which is the only thing that can misroute a run.
+    check('no remote-routing lookup is written out by hand any more',
+      (srvSrc.match(/p\.workdir === [^)]*&& p\.isRemote|p\.isRemote && p\.workdir ===/g) || [])
+        .filter(m => !m.includes('norm(p.workdir)')).length, 0);
+    check('...which is findRemoteProject',
+      (srvSrc.match(/findRemoteProject\(/g) || []).length >= 3, true);
 
     // ── /api/files: the same symlink rule, on the endpoint that reads content ──
     // This family compared workdir + path lexically and never resolved symlinks, so

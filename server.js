@@ -214,10 +214,22 @@ const ALLOWED_BROWSE_ROOTS = [
 // Without it, a Windows host resolved the Linux path '/home/user/project' to
 // 'C:\\home\\user\\project', found it outside every allowed root, and refused every
 // remote session with "workdir is outside the allowed roots" (issue #53).
-function isRegisteredRemoteWorkdir(target) {
-  if (!target || typeof target !== 'string') return false;
-  try { return loadProjects().some(p => p.isRemote && p.workdir === target); } catch { return false; }
+// THE single lookup for "is this workdir a registered remote project". It was written
+// out three times with exact string equality — the guard here, the chat router and the
+// Telegram router — and the three had to agree exactly or a run accepted by the guard
+// could be routed as LOCAL. That is not theoretical: a remote workdir used as a local
+// cwd is `/home/user/project`, and Node resolves a POSIX-absolute cwd against the
+// current drive, so on Windows the child process starts in `C:\home\user\project`.
+// A trailing slash is normalised away because it is the one difference a UI can
+// introduce without the user ever seeing it.
+function findRemoteProject(target) {
+  if (!target || typeof target !== 'string') return null;
+  const norm = (v) => String(v || '').replace(/[\\/]+$/, '');
+  const want = norm(target);
+  if (!want) return null;
+  try { return loadProjects().find(p => p.isRemote && norm(p.workdir) === want) || null; } catch { return null; }
 }
+function isRegisteredRemoteWorkdir(target) { return !!findRemoteProject(target); }
 // The guard for "may a run be configured with this workdir": local paths must sit inside
 // an allowed root, remote paths must name a registered remote project.
 function isWorkdirAllowed(target) {
@@ -8141,7 +8153,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     };
 
     // Check if the active project is a remote SSH project
-    const _activeProj = loadProjects().find(p => p.workdir === workdir && p.isRemote);
+    const _activeProj = findRemoteProject(workdir);
     const _isSubscriptionEngine = (session.run_engine || 'api') === 'subscription';
     if (tgBots.length && (_activeProj || _isSubscriptionEngine)) {
       // Bots run through the headless `api` engine only (runBotTurns spawns its own
@@ -9846,7 +9858,7 @@ wss.on('connection', (ws) => {
       let newCid;
       let resultMeta = null;
       // Check if the active project is a remote SSH project
-      const _activeProj = loadProjects().find(p => p.workdir === (workdir || WORKDIR) && p.isRemote);
+      const _activeProj = findRemoteProject(workdir || WORKDIR);
       if (_activeProj) {
         // Route to SSH engine — runs claude on remote server
         const sshResult = await runSshSingle({

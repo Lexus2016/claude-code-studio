@@ -151,6 +151,16 @@ process.on('exit', () => {
 
 class ClaudeCLI {
   constructor(options = {}) {
+    // A POSIX-absolute cwd on Windows is almost always a REMOTE path that leaked into a
+    // local spawn: Node resolves it against the current drive, so `/home/user/project`
+    // silently becomes `C:\home\user\project` and the child starts in a directory that
+    // has nothing to do with the user's project — the shape reported in issue #53. The
+    // router is what decides local vs SSH; this is the backstop for when it gets it
+    // wrong, because failing loudly here beats running an agent in the wrong tree.
+    if (process.platform === 'win32' && typeof options.cwd === 'string' && /^\//.test(options.cwd)) {
+      throw new Error(`refusing to spawn locally in a POSIX path on Windows: ${options.cwd} `
+        + `— this looks like a remote project workdir that was not routed over SSH`);
+    }
     this.cwd = options.cwd || process.cwd();
     this.claudeBin = options.claudeBin || CLAUDE_BIN;
   }

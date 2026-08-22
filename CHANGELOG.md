@@ -1,5 +1,24 @@
 # Changelog
 
+## 7.5.2
+
+Follow-up to #53. The 7.5.0 fix stopped the *guard* from mangling a remote workdir;
+it did not stop a run from being routed **locally** with that workdir, which is the
+same `C:` prefix arriving by a different road — and by making the guard accept the
+path, 7.5.0 turned a loud refusal into a quieter misroute.
+
+- **One lookup for "is this workdir a remote project".** It was written out three
+  times with exact string equality — the workdir guard, the chat router and the
+  Telegram router — and all three had to agree or a run the guard accepted could
+  still be sent to the local CLI. A trailing slash is now normalised away, since it
+  is the one difference a UI can introduce without the user ever seeing it.
+- **A POSIX-absolute cwd is refused on Windows.** Node resolves such a cwd against
+  the current drive, so `/home/user/project` starts the child process in
+  `C:\home\user\project` — a directory unrelated to the user's project, silently.
+  The router decides local vs SSH; this is the backstop for when it gets that wrong,
+  because failing loudly beats running an agent in the wrong tree.
+
+
 ## 7.5.1
 
 - **The updater no longer offers an update it cannot install.** `brew` owns
