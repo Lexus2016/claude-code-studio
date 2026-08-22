@@ -4379,6 +4379,10 @@ let curMode = 'auto', curAgent = 'single', curModel = 'sonnet', curEngine = 'api
 // Global default engine for NEW chats (server-backed via /api/default-engine).
 // _curSessionRunEngine = the open chat's explicit run_engine (null = inherit default).
 let _globalDefaultEngine = 'api', _curSessionRunEngine = null;
+// Server truth for the currently-open session, snapshotted by loadSess() — an
+// 'interrupt' row still undelivered only means "lost" if the task has actually
+// ended; while it's running, the same row is still sitting in the server's queue.
+let _curSessionTaskRunning = false;
 // --effort dial: '' (Auto, no flag) | 'low' | 'medium' | 'high' | 'xhigh' | 'max'.
 // Persisted globally in localStorage so the user's preferred reasoning depth survives reloads.
 let curEffort = (function(){ try { return localStorage.getItem('effort') || ''; } catch { return ''; } })();
@@ -12261,13 +12265,19 @@ function _renderMsgAt(idx, prepend = false) {
   } else {
     setUserMsgText(w, m.content);
     if (m.type === 'interrupt' || m.type === 'interrupt_delivered') {
-      // Interrupt messages from history — show delivery status from DB
+      // Interrupt messages from history — show delivery status from DB.
+      // An undelivered row ('interrupt') only means "lost" once the task that
+      // should have consumed it has actually ended; while the session is still
+      // running, the same row is still sitting in the server's queue waiting for
+      // an idle moment to be typed in — render it exactly like a fresh live send,
+      // not as "Task ended".
       const wasDelivered = m.type === 'interrupt_delivered';
+      const stillPending = !wasDelivered && _curSessionTaskRunning;
       const iBadge = document.createElement('div');
-      iBadge.className = `msg-interrupt ${wasDelivered ? 'delivered' : 'expired'}`;
+      iBadge.className = `msg-interrupt ${wasDelivered ? 'delivered' : (stillPending ? '' : 'expired')}`;
       const label = wasDelivered
         ? (t('interrupt.delivered') || 'Delivered to Claude')
-        : (t('interrupt.expired') || 'Task ended');
+        : (stillPending ? (t('interrupt.queued') || 'Clarification sent') : (t('interrupt.expired') || 'Task ended'));
       iBadge.innerHTML = `<span class="mq-label">${label}</span>`;
       w.appendChild(iBadge);
     } else if (hasReply) {
@@ -12380,8 +12390,9 @@ async function loadSess(id) {
     //   event lost during disconnect leaves tab.generating=true permanently)
     {
       const tabObj = openTabs.find(x => x.id === id);
+      const serverRunning = !!(d.hasRunningTask || d.isChatRunning);
+      _curSessionTaskRunning = serverRunning;
       if (tabObj) {
-        const serverRunning = !!(d.hasRunningTask || d.isChatRunning);
         if (serverRunning && !tabObj.generating) {
           tabObj.generating = true; renderTabs();
         } else if (!serverRunning && tabObj.generating) {

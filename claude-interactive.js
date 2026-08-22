@@ -478,34 +478,6 @@ async function runInteractiveSingle(params) {
     while (true) {
       await sleep(POLL_MS);
 
-      // Mid-run clarifications. The hook mechanism the headless engine uses cannot
-      // apply here — there is no per-run --settings to inject, the CLI is already
-      // running interactively. The equivalent for a live TUI is to type the message
-      // into it, which is exactly what a person sitting at the terminal would do.
-      if (typeof drainInterrupts === 'function') {
-        let pending = [];
-        try { pending = drainInterrupts() || []; } catch {}
-        for (const m of pending) {
-          const parts = [];
-          if (m.content) parts.push(m.content);
-          for (const att of (Array.isArray(m.attachments) ? m.attachments : [])) {
-            if (att.path) parts.push(`[Attached ${att.mimeType && att.mimeType.startsWith('image/') ? 'image' : 'file'}: ${att.name || 'file'}]\nSaved at: ${att.path}\nRead it before continuing.`);
-          }
-          const body = parts.join('\n\n').trim();
-          if (!body) continue;
-          const note = `USER CLARIFICATION (sent while you were working):\n\n${body}`;
-          const tmpFile = path.join(os.tmpdir(), `ccs-int-${crypto.randomBytes(6).toString('hex')}.txt`);
-          const bufName = `ccsint-${crypto.randomBytes(4).toString('hex')}`;
-          try {
-            fs.writeFileSync(tmpFile, note);
-            spawnSync('tmux', tmuxArgs(['load-buffer', '-b', bufName, tmpFile]), { stdio: 'ignore' });
-            spawnSync('tmux', tmuxArgs(['paste-buffer', '-dpr', '-t', name, '-b', bufName]), { stdio: 'ignore' });
-            await sleep(250);
-            spawnSync('tmux', tmuxArgs(['send-keys', '-t', name, 'Enter']), { stdio: 'ignore' });
-          } catch {} finally { try { fs.unlinkSync(tmpFile); } catch {} }
-        }
-      }
-
       if (abortController?.signal?.aborted) {
         // Interrupt the turn, keep the tmux session alive
         try { spawnSync('tmux', tmuxArgs(['send-keys', '-t', name, 'Escape']), { stdio: 'ignore' }); } catch {}
@@ -623,6 +595,40 @@ async function runInteractiveSingle(params) {
       // never the PRIMARY signal (spinner wording is version-specific); it only
       // gates when to trust the already-latched transcript signal.
       if (endTurnSeen && !busy && !gotNewBytes) break;
+
+      // Mid-run clarifications. The hook mechanism the headless engine uses cannot
+      // apply here — there is no per-run --settings to inject, the CLI is already
+      // running interactively. The equivalent for a live TUI is to type the message
+      // into it, which is exactly what a person sitting at the terminal would do —
+      // and a person cannot type into a busy TUI (spinner running) or into a
+      // permission/plan prompt without hijacking whatever option is selected. Only
+      // drain (and thus mark delivered) once the pane genuinely has an open input
+      // line: not busy, not showing a blocking widget. Injecting while busy used to
+      // paste into a pane with nothing listening for text — the message vanished
+      // with no trace in the transcript and was still marked delivered.
+      if (!busy && !awaiting && typeof drainInterrupts === 'function') {
+        let pending = [];
+        try { pending = drainInterrupts() || []; } catch {}
+        for (const m of pending) {
+          const parts = [];
+          if (m.content) parts.push(m.content);
+          for (const att of (Array.isArray(m.attachments) ? m.attachments : [])) {
+            if (att.path) parts.push(`[Attached ${att.mimeType && att.mimeType.startsWith('image/') ? 'image' : 'file'}: ${att.name || 'file'}]\nSaved at: ${att.path}\nRead it before continuing.`);
+          }
+          const body = parts.join('\n\n').trim();
+          if (!body) continue;
+          const note = `USER CLARIFICATION (sent while you were working):\n\n${body}`;
+          const tmpFile = path.join(os.tmpdir(), `ccs-int-${crypto.randomBytes(6).toString('hex')}.txt`);
+          const bufName = `ccsint-${crypto.randomBytes(4).toString('hex')}`;
+          try {
+            fs.writeFileSync(tmpFile, note);
+            spawnSync('tmux', tmuxArgs(['load-buffer', '-b', bufName, tmpFile]), { stdio: 'ignore' });
+            spawnSync('tmux', tmuxArgs(['paste-buffer', '-dpr', '-t', name, '-b', bufName]), { stdio: 'ignore' });
+            await sleep(250);
+            spawnSync('tmux', tmuxArgs(['send-keys', '-t', name, 'Enter']), { stdio: 'ignore' });
+          } catch {} finally { try { fs.unlinkSync(tmpFile); } catch {} }
+        }
+      }
 
       if (gotNewBytes) lastActivityAt = Date.now(); // transcript progress = real work; resets idle watchdog
       if (gotNewBytes || busy) quietPolls = 0; else quietPolls++;
