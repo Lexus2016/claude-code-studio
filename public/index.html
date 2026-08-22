@@ -4242,6 +4242,23 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <div id="notifContainer"></div>
 
 <script>
+// Engine-pane id helpers live HERE, in the first script block, and not next to the
+// terminal code that owns everything else about engine panes.
+//
+// Function declarations hoist only within their OWN <script>. These used to sit in the
+// terminal block near the bottom of the file, while loadSess() — which calls
+// isEnginePaneId() on every session open — lives in this block and is reached from
+// ws.onopen. A WebSocket can open before the parser has walked several thousand lines
+// further down, and when it did the call threw
+//   ReferenceError: isEnginePaneId is not defined
+// which aborted loadSess() mid-way. Two visible symptoms came from that one abort: the
+// session did not finish restoring, and the composer was left at `height: 0px` because
+// the code that sizes it never ran — the placeholder then overflowed the zero-height
+// box and rendered a line low until the first keystroke re-measured it.
+const ENGINE_PANE_PREFIX = 'engine:';
+function isEnginePaneId(id) { return typeof id === 'string' && id.startsWith(ENGINE_PANE_PREFIX); }
+function enginePaneIdFor(sid) { return ENGINE_PANE_PREFIX + sid; }
+function chatIdOfEnginePane(id) { return String(id).slice(ENGINE_PANE_PREFIX.length); }
 'use strict';
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -17148,10 +17165,8 @@ async function createTerminalSession(agentId, label) {
 //
 // The tab id has to be synthetic: the chat tab already occupies the session id,
 // and openTabs is keyed by id.
-const ENGINE_PANE_PREFIX = 'engine:';
-function isEnginePaneId(id) { return typeof id === 'string' && id.startsWith(ENGINE_PANE_PREFIX); }
-function enginePaneIdFor(sid) { return ENGINE_PANE_PREFIX + sid; }
-function chatIdOfEnginePane(id) { return String(id).slice(ENGINE_PANE_PREFIX.length); }
+// (ENGINE_PANE_PREFIX and the id helpers moved to the first <script> block — see the
+// note there. They are used by loadSess(), which can run before this block is parsed.)
 
 // Where a terminal tab's socket points. A plain terminal tab IS its session; an
 // engine-pane tab points at a CHAT session and asks the server for the engine view.
