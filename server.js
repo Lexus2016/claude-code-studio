@@ -89,6 +89,8 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
+// CLAUDE.md / AGENTS.md discovery + the AGENTS.md system-prompt block (issue #54).
+const agentsMd = require('./agents-md');
 const { isTransientOverload, shouldRetryOverload, detectUsageLimit, taskStatusForStop } = require('./rate-limit-utils');
 const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs } = require('./delegate-terminal');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
@@ -7482,28 +7484,41 @@ app.delete('/api/config/setting', (req, res) => {
   res.json({ ok: true, restart: !!def.restart, setting: resolved });
 });
 
-// CLAUDE.md editor — global (~/.claude/CLAUDE.md) + local (WORKDIR/CLAUDE.md)
-const GLOBAL_CLAUDE_MD = path.join(os.homedir(), '.claude', 'CLAUDE.md');
-const LOCAL_CLAUDE_MD  = path.join(WORKDIR, 'CLAUDE.md');
+// Instruction-file editor — global (~/.claude/) + local (WORKDIR or a project dir).
+//
+// AGENTS.md is a first-class alternative to CLAUDE.md here (issue #54). Before, the
+// editor opened <dir>/CLAUDE.md unconditionally: a project that keeps its conventions
+// in AGENTS.md saw an EMPTY editor, and saving it created a second, duplicate
+// instructions file next to the real one. Precedence is CLAUDE.md → AGENTS.md, from
+// agents-md.js, so the editor always shows the file the run actually uses.
+// `localPath` / `globalPath` in the response name the file that was loaded — that is
+// what the UI prints under the tab.
+const CLAUDE_HOME_DIR = path.join(os.homedir(), '.claude');
 
 app.get('/api/claude-md', (req,res) => {
   const qDir = qstr(req.query.dir);
   if (qDir && !isPathAllowed(qDir)) return res.status(403).json({ error: 'path not allowed' });
-  const localDir = qDir ? path.resolve(qDir) : null;
-  const localMd  = localDir ? path.join(localDir, 'CLAUDE.md') : LOCAL_CLAUDE_MD;
-  const result = { global: '', local: '', globalPath: GLOBAL_CLAUDE_MD, localPath: localMd };
-  try { result.global = fs.readFileSync(GLOBAL_CLAUDE_MD, 'utf-8'); } catch {}
+  const globalMd = agentsMd.resolveInstructionFile(CLAUDE_HOME_DIR);
+  const localMd  = agentsMd.resolveInstructionFile(qDir ? path.resolve(qDir) : WORKDIR);
+  const result = { global: '', local: '', globalPath: globalMd, localPath: localMd,
+                   globalName: path.basename(globalMd), localName: path.basename(localMd) };
+  try { result.global = fs.readFileSync(globalMd, 'utf-8'); } catch {}
   try { result.local  = fs.readFileSync(localMd, 'utf-8'); } catch {}
   res.json(result);
 });
 
 app.post('/api/claude-md', (req,res) => {
-  const { type, content, dir } = req.body;
+  const { type, content, dir, file } = req.body;
   if (!['global','local'].includes(type))
     return res.status(400).json({ error: 'type must be "global" or "local"' });
+  // `file` is an optional pin from a client that already knows which of the two it
+  // loaded. Whitelisted against the literal names — never joined from free text, or
+  // this endpoint becomes an arbitrary-write primitive rooted at any allowed dir.
+  if (file !== undefined && !agentsMd.INSTRUCTION_FILES.includes(file))
+    return res.status(400).json({ error: `file must be one of: ${agentsMd.INSTRUCTION_FILES.join(', ')}` });
   if (type === 'local' && dir && !isPathAllowed(dir)) return res.status(403).json({ error: 'path not allowed' });
-  const localMd = dir ? path.join(path.resolve(dir), 'CLAUDE.md') : LOCAL_CLAUDE_MD;
-  const target  = type === 'global' ? GLOBAL_CLAUDE_MD : localMd;
+  const baseDir = type === 'global' ? CLAUDE_HOME_DIR : (dir ? path.resolve(dir) : WORKDIR);
+  const target  = file ? path.join(baseDir, file) : agentsMd.resolveInstructionFile(baseDir);
   try {
     const d = path.dirname(target);
     if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
