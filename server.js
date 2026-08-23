@@ -94,6 +94,7 @@ const agentsMd = require('./agents-md');
 // Read-only remote file browsing (issue #57). Its path guard is POSIX-only on
 // purpose — see the header of the module.
 const remoteFiles = require('./remote-files');
+const chatDefaults = require('./chat-defaults');
 const { isTransientOverload, shouldRetryOverload, detectUsageLimit, taskStatusForStop } = require('./rate-limit-utils');
 const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs } = require('./delegate-terminal');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
@@ -3006,6 +3007,18 @@ function loadMergedConfig() {
     slashCommands: [...(l.slashCommands||[])],
     lang:          l.lang || g.lang || 'en',
     defaultEngine: l.defaultEngine || g.defaultEngine || 'api',
+    // Per KEY, not per object: a local config that pins only `model` must not
+    // wipe a global `mode`. Same shape as mcpServers/skills above, and it is what
+    // the settings catalog reports for chatDefaults.* (merge:'merged').
+    //
+    // Each layer is sanitised BEFORE the spread, not after. Spreading raw objects
+    // lets a local `model:""` (or a typo) mask a valid global `model:"opus"`, and
+    // the merged garbage then falls all the way to BUILTIN instead of to the
+    // global — while the settings catalog, which walks the two files separately
+    // under `falsyFallsThrough`, keeps reporting "opus" as effective. Two answers
+    // for one key. Sanitising per layer IS the `||` semantics the flag advertises.
+    chatDefaults:  { ...chatDefaults.sanitize(g.chatDefaults).value,
+                     ...chatDefaults.sanitize(l.chatDefaults).value },
     recentProjectsCount: l.recentProjectsCount ?? g.recentProjectsCount ?? 5,
   });
   return _mergedConfigCache;
@@ -8294,6 +8307,63 @@ app.patch('/api/projects/:id', (req,res) => {
 app.delete('/api/projects/:id', (req,res) => {
   saveProjects(loadProjects().filter(p => p.id !== req.params.id));
   res.json({ ok:true });
+});
+
+// ─── Chat defaults: global, with a sparse per-project override (issue #58) ────
+// The global half is edited through the ordinary settings form (chatDefaults.* in
+// config-resolve.js). This endpoint answers the question the SPA actually has:
+// "which five values should the toolbar open on for THIS project, and which of
+// them did the project pin?"
+app.get('/api/chat-defaults', (req, res) => {
+  const id = String(req.query.projectId || '');
+  // No id at all = "just the global row" (the global workspace asks for exactly
+  // that). A WRONG id is 404, matching PUT/DELETE below: answering 200 with an
+  // empty `overridden` would render a stale project as one that pinned nothing.
+  const proj = id ? loadProjects().find(p => p.id === id) : null;
+  if (id && !proj) return res.status(404).json({ error: 'not found' });
+  res.json(chatDefaults.resolveChatDefaults(loadMergedConfig().chatDefaults, proj && proj.defaults));
+});
+
+// Pin some of the five for one project. The body carries ONLY the keys being
+// pinned; a key sent as null/'' stops being pinned. The stored object stays
+// sparse on purpose — see the header of chat-defaults.js.
+app.put('/api/projects/:id/defaults', (req, res) => {
+  const projects = loadProjects();
+  const proj = projects.find(p => p.id === req.params.id);
+  if (!proj) return res.status(404).json({ error: 'not found' });
+
+  const body = req.body && typeof req.body === 'object' && req.body.defaults !== undefined
+    ? req.body.defaults : req.body;
+  // `{defaults:null}` and a bare string both used to land here as a 200 no-op,
+  // which reads exactly like a reset that worked. Reset is the DELETE below.
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return res.status(400).json({ error: 'invalid_body' });
+  }
+  const { value, invalid } = chatDefaults.sanitize(body);
+  // Refused, not trimmed: dropping a key the user just clicked would look
+  // exactly like a save that worked.
+  if (invalid.length) return res.status(400).json({ error: 'invalid_defaults', keys: invalid });
+
+  // Only the keys named in the request are touched; the rest keep their state,
+  // so pinning `model` does not silently unpin `turns`.
+  const next = { ...(chatDefaults.sanitize(proj.defaults).value) };
+  for (const k of chatDefaults.KEYS) {
+    if (!(k in Object(body))) continue;
+    if (k in value) next[k] = value[k]; else delete next[k];
+  }
+  if (Object.keys(next).length) proj.defaults = next; else delete proj.defaults;
+  saveProjects(projects);
+  res.json({ ok: true, ...chatDefaults.resolveChatDefaults(loadMergedConfig().chatDefaults, proj.defaults) });
+});
+
+// "Reset to Defaults" at project level: drop every pin, fall back to global.
+app.delete('/api/projects/:id/defaults', (req, res) => {
+  const projects = loadProjects();
+  const proj = projects.find(p => p.id === req.params.id);
+  if (!proj) return res.status(404).json({ error: 'not found' });
+  delete proj.defaults;
+  saveProjects(projects);
+  res.json({ ok: true, ...chatDefaults.resolveChatDefaults(loadMergedConfig().chatDefaults, null) });
 });
 
 // ─── Remote SSH Hosts CRUD ────────────────────────────────────────────────────

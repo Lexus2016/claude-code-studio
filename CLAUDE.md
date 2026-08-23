@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. `npm test` chains 61 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 43 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
+No linting and no build step configured. `npm test` chains 63 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 45 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does), and the new-chat defaults chain (`chat-defaults.test.js` pins the pure resolver — the built-ins are asserted to be exactly what the SPA hardcoded before #58, and the choice lists to be exactly the toolbar's `data-v` sets and `MODEL_MAP`'s aliases; `chat-defaults-api.test.js` boots a real server in a throwaway `APP_DIR` and pins that a project writes back a SPARSE override object — a five-key snapshot passes every other assertion in that file and still breaks the feature). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
 
 ## Architecture
 
@@ -290,6 +290,58 @@ closes that gap for **local** runs.
   the current UI (the config editor reads `/api/claude-md`); its key name is part of
   the endpoint's allowlist contract, so it was left alone.
 
+### New-chat defaults (issue #58)
+
+Every new chat used to open on literals: `newTab()` assigned `curMode='auto'` /
+`curAgent='single'`, the model carried over from whichever tab was open last, and
+`#maxTurns` shipped `value="50"` in the markup. `chat-defaults.js` replaces that with a
+two-link chain, and it is pure (no `fs`, no `require('./server.js')`) so the precedence
+is testable without booting anything:
+
+    project override  >  global default (config.json)  >  BUILTIN
+
+- **The project link is SPARSE, and that is the feature.** A project stores only the
+  dials it pinned. Store a full five-key snapshot instead and every project silently
+  freezes at whatever the global happened to be the day it was created — the opposite
+  of what was asked for. `test/chat-defaults-api.test.js` asserts the object written to
+  `data/projects.json`, because a snapshot satisfies every other assertion in that file.
+- **`BUILTIN` is the pre-#58 behaviour, not a fresh opinion.** Changing one of the five
+  changes how every install that never opened the settings form behaves.
+- **`effort: 'auto'` is a spelled-out sentinel** for "pass no `--effort` flag", which the
+  SPA's `<select>` and the CLI both spell `''`. It has to be a real word: `loadMergedConfig()`
+  resolves with `||`, so an empty string in a config file is indistinguishable from an
+  unset key. `effortToFlag()` is the single translation point.
+- **`loadMergedConfig()` sanitises each LAYER, then spreads — never the reverse.**
+  Spreading `~/.claude/config.json` and `config.json` raw lets a local `model:""`
+  mask a valid global `model:"opus"`; the merged empty string is then dropped and the
+  answer falls all the way to `BUILTIN`, while the settings catalog — which walks the
+  two files separately under `falsyFallsThrough` — keeps reporting `opus` as effective.
+  Two answers for one key. Per-layer sanitising IS the `||` semantics the flag claims.
+- **`sanitize()` is lenient on read, strict on write.** A typo in a hand-edited
+  `config.json` drops that one key and leaves the other four alone; the same typo arriving
+  at `PUT /api/projects/:id/defaults` is a 400 that names the key — silently dropping a dial
+  the user just clicked reads as a save that worked.
+- **The global half is a settings-catalog entry, not a bespoke form.** Five rows in
+  `config-resolve.js` (`section: 'defaults'`) give the Settings UI its section, its source
+  badges and its per-row Reset for free. `coerceValue()` gained optional `min`/`max` for
+  `chatDefaults.turns` so the form cannot store a value its own `<input>` refuses to show,
+  plus an opt-in `int: true` that parses with `Number` (so `'12px'` is refused rather than
+  read as `12`) and truncates AFTER the range check — the same order `chat-defaults.coerce`
+  uses. Settings and the toolbar must coerce one dial identically; without `int` the older
+  `parseInt` behaviour of every pre-existing number row is untouched.
+- **The `falsyFallsThrough` guard is behavioural for nested keys.** `test/config-resolve.test.js`
+  reads the `||` / `??` operator straight out of `loadMergedConfig()` for FLAT keys; a key
+  whose `path` contains a dot has no such line, so it is checked by running the resolver
+  instead. Do not weaken the flat check to make a nested key pass.
+- **Membership before the unpin sentinel.** `sanitize()` rejects an unknown key whatever
+  its value, so `{notADial: null}` is a typo that 400s instead of an unpin that reports
+  success. `PUT /api/projects/:id/defaults` likewise refuses a non-object body — a 200 on
+  `{defaults: null}` reads exactly like the reset that DELETE actually performs. A wrong
+  `projectId` is 404 on all three endpoints; only *no* id means "just the global row".
+- **Only a chat with no session of its own is seeded.** `applyChatDefaults()` runs from
+  `newTab()`, from `switchProject()` and at boot — always behind `if (!currentSessionId)`.
+  An existing chat carries its own mode/model in SQLite and `loadSess()` must keep winning.
+
 ### Markdown Rendering in SPA
 - During streaming: `renderStreaming()` handles unclosed code fences
 - On `done` event: re-render with full `renderMd()` for proper final formatting
@@ -299,7 +351,7 @@ closes that gap for **local** runs.
 
 ## How to Verify Changes
 
-`npm test` runs 61 test files under `test/` (18 `test/render/*.test.mjs` + 43 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 63 test files under `test/` (18 `test/render/*.test.mjs` + 45 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server

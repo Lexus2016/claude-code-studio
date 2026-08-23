@@ -41,12 +41,14 @@
 
 'use strict';
 
+const chatDefaults = require('./chat-defaults');
+
 // Sources, most-significant first. Ordering here IS the precedence contract;
 // resolve() walks candidates in the order it builds them, not in this order,
 // but the UI uses these ids for badges and the tests pin both.
 const SOURCES = ['project', 'process-env', 'dotenv', 'config-local', 'config-global', 'default'];
 
-const SECTIONS = ['engine', 'agents', 'workspace', 'mcp', 'server', 'security', 'data', 'ui', 'advanced'];
+const SECTIONS = ['engine', 'defaults', 'agents', 'workspace', 'mcp', 'server', 'security', 'data', 'ui', 'advanced'];
 
 // Keys whose value must never reach the browser. The explicit flag in the
 // catalog is authoritative; this pattern is a second net so that a key added
@@ -83,6 +85,28 @@ const SETTINGS = [
     src: 'server.js:loadMergedConfig' },
   { key: 'ANTHROPIC_BASE_URL', section: 'engine', backing: 'env', type: 'string', def: '', restart: true,
     src: '.env.example / claude-cli.js env passthrough' },
+
+  // -- Defaults a NEW chat opens on (issue #58) ------------------------------
+  // Each one is what the toolbar preselects; a project may pin its own value on
+  // top, and that override lives in data/projects.json, not here. The choices
+  // are not restated -- chat-defaults.js owns them, and a second copy would rot.
+  { key: 'chatDefaults.mode', section: 'defaults', backing: 'config', merge: 'merged', path: 'chatDefaults.mode',
+    type: 'enum', choices: chatDefaults.CHOICES.mode, def: chatDefaults.BUILTIN.mode, falsyFallsThrough: true,
+    src: 'chat-defaults.js:resolveChatDefaults' },
+  { key: 'chatDefaults.agent', section: 'defaults', backing: 'config', merge: 'merged', path: 'chatDefaults.agent',
+    type: 'enum', choices: chatDefaults.CHOICES.agent, def: chatDefaults.BUILTIN.agent, falsyFallsThrough: true,
+    src: 'chat-defaults.js:resolveChatDefaults' },
+  { key: 'chatDefaults.model', section: 'defaults', backing: 'config', merge: 'merged', path: 'chatDefaults.model',
+    type: 'enum', choices: chatDefaults.CHOICES.model, def: chatDefaults.BUILTIN.model, falsyFallsThrough: true,
+    src: 'chat-defaults.js:resolveChatDefaults' },
+  { key: 'chatDefaults.effort', section: 'defaults', backing: 'config', merge: 'merged', path: 'chatDefaults.effort',
+    type: 'enum', choices: chatDefaults.CHOICES.effort, def: chatDefaults.BUILTIN.effort, falsyFallsThrough: true,
+    src: 'chat-defaults.js:resolveChatDefaults' },
+  { key: 'chatDefaults.turns', section: 'defaults', backing: 'config', merge: 'merged', path: 'chatDefaults.turns',
+    type: 'number', int: true, def: chatDefaults.BUILTIN.turns,
+    min: chatDefaults.TURNS_MIN, max: chatDefaults.TURNS_MAX,
+    falsyFallsThrough: true,
+    src: 'chat-defaults.js:resolveChatDefaults' },
   { key: 'ANTHROPIC_API_KEY', section: 'engine', backing: 'env', type: 'string', def: '', secret: true,
     readOnly: true, restart: true, src: '.env.example' },
   { key: 'ANTHROPIC_AUTH_TOKEN', section: 'engine', backing: 'env', type: 'string', def: '', secret: true,
@@ -401,9 +425,20 @@ function coerceValue(def, raw) {
       return { ok: false, error: 'expected_bool' };
     }
     case 'number': {
-      const n = typeof raw === 'number' ? raw : parseInt(String(raw).trim(), 10);
-      if (!Number.isFinite(n)) return { ok: false, error: 'expected_number' };
-      return { ok: true, value: n };
+      // `int` settings parse with Number (so '12px' is refused, not read as 12)
+      // and are truncated AFTER the range check, matching chat-defaults.coerce
+      // exactly. Without `int` the old parseInt behaviour is untouched, so every
+      // setting that shipped before keeps accepting what it accepted before.
+      const n = typeof raw === 'number' ? raw
+        : (def.int ? Number(String(raw).trim()) : parseInt(String(raw).trim(), 10));
+      if (!Number.isFinite(n) || (def.int && String(raw).trim() === '')) {
+        return { ok: false, error: 'expected_number' };
+      }
+      // A bound is only checked when the catalog declares one, so the settings
+      // that never had bounds keep accepting what they accepted before.
+      if (def.min !== undefined && n < def.min) return { ok: false, error: 'out_of_range' };
+      if (def.max !== undefined && n > def.max) return { ok: false, error: 'out_of_range' };
+      return { ok: true, value: def.int ? Math.trunc(n) : n };
     }
     case 'enum': {
       const v = String(raw);
