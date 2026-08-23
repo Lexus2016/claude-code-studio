@@ -142,13 +142,31 @@ console.log('\nfalsy config values follow the operator loadMergedConfig() actual
   const body = server.slice(server.indexOf('function loadMergedConfig()'));
   const merged = R.SETTINGS.filter(s => s.backing === 'config' && s.merge === 'merged');
   check('there are merged config keys to check at all', merged.length > 0, true);
-  const mismatched = merged.filter(s => {
+  // chatDefaults.* (issue #58) has no operator of its own to read: loadMergedConfig()
+  // spread-merges the whole object, and whether a falsy value survives is settled
+  // downstream, by chat-defaults.js:sanitize(). Those keys are checked by BEHAVIOUR
+  // below — which is a stronger statement than the regex, not a waiver. Every flat
+  // key still has to match its operator exactly.
+  const nested = merged.filter(s => String(s.path || '').includes('.'));
+  const flat = merged.filter(s => !nested.includes(s));
+  check('the operator check still covers the flat keys', flat.length > 0, true);
+  const mismatched = flat.filter(s => {
     const m = body.match(new RegExp('^\\s*' + s.key + ':\\s*(.+)$', 'm'));
     if (!m) return true;                       // key not resolved there → flag unverifiable
     const usesOr = / \|\| /.test(m[1]);
     return usesOr !== !!s.falsyFallsThrough;
   }).map(s => s.key);
   check('every falsyFallsThrough flag matches the operator in loadMergedConfig()', mismatched, []);
+
+  check('every nested key belongs to an object loadMergedConfig() actually merges',
+    nested.filter(s => !new RegExp('^\\s*' + s.path.split('.')[0] + ':\\s*\\{', 'm').test(body)).map(s => s.key), []);
+  const CD = require('../chat-defaults');
+  check('a nested key flagged falsyFallsThrough really does fall through',
+    nested.filter(s => {
+      const leaf = s.path.split('.').pop();
+      const eff = CD.resolveChatDefaults({ [leaf]: '' }, null).effective[leaf];
+      return !!s.falsyFallsThrough !== (eff === CD.BUILTIN[leaf]);
+    }).map(s => s.key), []);
 }
 
 // ── 3. Secret masking — nothing raw leaves resolveSetting() ─────────────────

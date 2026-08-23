@@ -431,6 +431,11 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .toolbar { display: flex; align-items: center; gap: 7px; padding: 6px 14px; background: var(--s1); border-bottom: 1px solid var(--border); flex-wrap: nowrap; overflow-x: auto; }
 .tb-group { display: flex; align-items: center; gap: 2px; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
 .tb-group .label { font-size: 11px; color: var(--muted); padding: 0 7px; text-transform: uppercase; letter-spacing: .6px; font-weight: 700; }
+/* Issue #58: this dial is pinned by the project, not inherited from the global
+   defaults. Drawn on the group label so it reads next to the dial's name. */
+.tb-group.tbg-override { border-color: var(--accent); }
+.tb-group.tbg-override .label { color: var(--accent2); }
+.tb-group.tbg-override .label::after { content: '\2022'; margin-left: 4px; color: var(--accent); font-size: 14px; line-height: 0; }
 .tb-btn { padding: 4px 11px; border-radius: 6px; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; transition: background .12s, border-color .12s, color .12s, box-shadow .12s, transform .12s; white-space: nowrap; font-weight: 500; }
 .tb-btn:hover { color: var(--text); background: rgba(255,255,255,.06); }
 .tb-btn.on { background: var(--accent); color: white; box-shadow: 0 1px 6px rgba(124,106,239,.4); }
@@ -3368,14 +3373,14 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   </div>
 
   <div class="toolbar">
-    <div class="tb-group">
+    <div class="tb-group" data-tbg="mode">
       <span class="label" data-i18n="tb.mode">Режим</span>
       <button class="tb-btn on" data-v="auto" onclick="setOpt(this,'mode')" data-i18n="mode.auto">Auto</button>
       <button class="tb-btn" data-v="planning" onclick="setOpt(this,'mode')" data-i18n="mode.plan">Plan</button>
       <button class="tb-btn" data-v="task" onclick="setOpt(this,'mode')" data-i18n="mode.task">Task</button>
     </div>
     <div class="tb-sep"></div>
-    <div class="tb-group">
+    <div class="tb-group" data-tbg="agent">
       <span class="label" data-i18n="tb.agent">Агент</span>
       <button class="tb-btn on" data-v="single" onclick="setOpt(this,'agent')" data-i18n="agent.single">Single</button>
       <button class="tb-btn" data-v="multi" onclick="setOpt(this,'agent')" data-i18n="agent.multi">Multi</button>
@@ -3383,7 +3388,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <button class="tb-btn" data-v="conversation" onclick="setOpt(this,'agent')" data-i18n="agent.conversation" data-i18n-tip="agent.conversation.tip">Room</button>
     </div>
     <div class="tb-sep"></div>
-    <div class="tb-group">
+    <div class="tb-group" data-tbg="model">
       <span class="label" data-i18n="tb.model">Модель</span>
       <button class="tb-btn" data-v="haiku" onclick="setOpt(this,'model')">Haiku</button>
       <button class="tb-btn on" data-v="sonnet" onclick="setOpt(this,'model')">Sonnet</button>
@@ -3400,7 +3405,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <button class="tb-btn" data-default-star onclick="setDefaultEngine()" data-i18n-title="engine.default.title" title="Зробити поточний рушій типовим для нових чатів" style="padding:0 8px">★</button>
     </div>
     <div class="tb-sep"></div>
-    <div class="tb-group">
+    <div class="tb-group" data-tbg="effort">
       <span class="label" data-i18n="tb.effort">Effort</span>
       <select class="tb-input" id="effortSel" onchange="setEffort(this.value)" style="width:78px" data-i18n-title="effort.title" title="Thinking effort dial (claude --effort): Auto = CLI default, higher levels = deeper reasoning">
         <option value="" data-i18n="effort.auto">Auto</option>
@@ -3412,9 +3417,17 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       </select>
     </div>
     <div class="tb-sep"></div>
-    <div class="tb-group">
+    <div class="tb-group" data-tbg="turns">
       <span class="label" data-i18n="tb.turns">Кроки</span>
-      <input type="number" class="tb-input" id="maxTurns" value="50" min="1" max="200">
+      <input type="number" class="tb-input" id="maxTurns" value="50" min="1" max="200" onchange="markDefaultOverrides()">
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-group">
+      <span class="label" data-i18n="tb.defaults">Типове</span>
+      <button class="tb-btn" id="pinDefaultsBtn" onclick="pinProjectDefaults()"
+        data-i18n-title="defaults.pin.title" title="Save the five dials above as this project's defaults">★</button>
+      <button class="tb-btn" id="resetDefaultsBtn" onclick="resetProjectDefaults()" style="display:none"
+        data-i18n-title="defaults.reset.title" title="Drop this project's overrides and inherit the global defaults">↺</button>
     </div>
   </div>
   </div><!-- /hdr-collapse-zone -->
@@ -4571,6 +4584,7 @@ const TRANSLATIONS = {
     'cfg.search.aria':'Пошук параметрів',
     'cfg.search.none':'Нічого не знайдено за «{q}»',
     'cfg.sec.engine':'🤖 Моделі та рушій',
+    'cfg.sec.defaults':'⭐ Типові значення нового чату',
     'cfg.sec.agents':'👥 Агенти й ліміти запуску',
     'cfg.sec.workspace':'📁 Робоча директорія',
     'cfg.sec.mcp':'🔌 MCP, навички, команди',
@@ -4605,6 +4619,7 @@ const TRANSLATIONS = {
     'cfg.reset.done':'Скинуто до вбудованого значення',
     'cfg.saved_restart':'Збережено — перезапустіть сервер, щоб застосувати',
     'cfg.h.defaultEngine':'Рушій, попередньо вибраний для нових чатів і задач: API (без інтерфейсу) або Subscription (Claude Max).',
+    'cfg.h.chatDefaults.mode':'Режим, на якому відкривається новий чат. Проєкт може перевизначити його кнопкою ★ на панелі.','cfg.h.chatDefaults.agent':'Режим агента для нового чату: single, multi, dispatch або conversation.','cfg.h.chatDefaults.model':'Модель, попередньо вибрана для нового чату.','cfg.h.chatDefaults.effort':'Рівень обдумування для нового чату; auto — без прапорця --effort.','cfg.h.chatDefaults.turns':'Ліміт кроків для нового чату (1–200).',
     'cfg.h.ANTHROPIC_BASE_URL':'Направляє запити Claude CLI через проксі чи шлюз замість прямого звернення до Anthropic.',
     'cfg.h.ANTHROPIC_API_KEY':'Ключ API для рушія API, коли claude CLI не має входу в акаунт.',
     'cfg.h.ANTHROPIC_AUTH_TOKEN':'Токен для проксі, заданого в ANTHROPIC_BASE_URL.',
@@ -4919,6 +4934,7 @@ const TRANSLATIONS = {
     'engine.default.toast':'★ {engine} — типовий рушій для нових чатів','engine.default.err':'⚠ Не вдалося зберегти типовий рушій',
     'tb.effort':'Зусилля','effort.title':'Рівень обдумування (claude --effort): Авто — типове значення CLI, вищі рівні — глибші міркування',
     'effort.auto':'Авто','effort.low':'Низьке','effort.med':'Середнє','effort.high':'Високе','effort.xhigh':'Дуже високе','effort.max':'Максимальне',
+    'tb.defaults':'Типове','defaults.pin.title':'Зберегти поточні Режим / Агент / Модель / Effort / Кроки як типові для цього проєкту','defaults.reset.title':'Прибрати перевизначення проєкту й успадкувати глобальні типові значення','defaults.noproject':'Спершу відкрийте проєкт','defaults.pinned':'Типові значення проєкту збережено','defaults.reset.done':'Проєкт успадковує глобальні типові значення',
     'catchup.btn':'⤵ Дочитати','catchup.title':'Дочитати у чат повідомлення, набрані напряму в терміналі (claude --resume)',
     'catchup.err':'Не вдалося дочитати','catchup.baseline':'✓ Базову позицію встановлено — попрацюйте в терміналі й натисніть ще раз',
     'catchup.done':'✓ Дочитано з терміналу: {n}','catchup.none':'Нічого нового з терміналу','catchup.fail':'⚠ Помилка дочитування',
@@ -4950,6 +4966,7 @@ const TRANSLATIONS = {
     'cfg.search.aria':'Search settings',
     'cfg.search.none':'Nothing matches “{q}”',
     'cfg.sec.engine':'🤖 Models and engine',
+    'cfg.sec.defaults':'⭐ New-chat defaults',
     'cfg.sec.agents':'👥 Agents and run limits',
     'cfg.sec.workspace':'📁 Workspace',
     'cfg.sec.mcp':'🔌 MCP, skills, commands',
@@ -4984,6 +5001,7 @@ const TRANSLATIONS = {
     'cfg.reset.done':'Reset to the built-in default',
     'cfg.saved_restart':'Saved — restart the server to apply',
     'cfg.h.defaultEngine':'Engine preselected for new chats and tasks: API (headless) or Subscription (Claude Max).',
+    'cfg.h.chatDefaults.mode':'Mode a new chat opens on. A project can pin its own with the \u2605 button in the toolbar.','cfg.h.chatDefaults.agent':'Agent mode for a new chat: single, multi, dispatch or conversation.','cfg.h.chatDefaults.model':'Model preselected for a new chat.','cfg.h.chatDefaults.effort':'Thinking effort for a new chat; auto means no --effort flag is passed.','cfg.h.chatDefaults.turns':'Turn limit for a new chat (1\u2013200).',
     'cfg.h.ANTHROPIC_BASE_URL':'Route Claude CLI requests through a proxy or gateway instead of Anthropic directly.',
     'cfg.h.ANTHROPIC_API_KEY':'API key for the API engine when the claude CLI is not signed in.',
     'cfg.h.ANTHROPIC_AUTH_TOKEN':'Token for the proxy set in ANTHROPIC_BASE_URL.',
@@ -5298,6 +5316,7 @@ const TRANSLATIONS = {
     'engine.default.toast':'★ {engine} — default engine for new chats','engine.default.err':'⚠ Could not save the default engine',
     'tb.effort':'Effort','effort.title':'Thinking effort dial (claude --effort): Auto = CLI default, higher levels = deeper reasoning',
     'effort.auto':'Auto','effort.low':'Low','effort.med':'Med','effort.high':'High','effort.xhigh':'X-High','effort.max':'Max',
+    'tb.defaults':'Defaults','defaults.pin.title':'Save the current Mode / Agent / Model / Effort / Turns as this project\u2019s defaults','defaults.reset.title':'Drop this project\u2019s overrides and inherit the global defaults','defaults.noproject':'Open a project first','defaults.pinned':'Project defaults saved','defaults.reset.done':'Project inherits the global defaults',
     'catchup.btn':'⤵ Catch up','catchup.title':'Pull messages typed directly in the terminal into this chat (claude --resume)',
     'catchup.err':'Could not catch up','catchup.baseline':'✓ Baseline set — work in the terminal, then press again',
     'catchup.done':'✓ Caught up from the terminal: {n}','catchup.none':'Nothing new from the terminal','catchup.fail':'⚠ Catch-up failed',
@@ -5329,6 +5348,7 @@ const TRANSLATIONS = {
     'cfg.search.aria':'Поиск параметров',
     'cfg.search.none':'Ничего не найдено по «{q}»',
     'cfg.sec.engine':'🤖 Модели и движок',
+    'cfg.sec.defaults':'⭐ Значения по умолчанию для нового чата',
     'cfg.sec.agents':'👥 Агенты и лимиты запуска',
     'cfg.sec.workspace':'📁 Рабочая директория',
     'cfg.sec.mcp':'🔌 MCP, навыки, команды',
@@ -5363,6 +5383,7 @@ const TRANSLATIONS = {
     'cfg.reset.done':'Сброшено до встроенного значения',
     'cfg.saved_restart':'Сохранено — перезапустите сервер, чтобы применить',
     'cfg.h.defaultEngine':'Движок, предварительно выбранный для новых чатов и задач: API (без интерфейса) или Subscription (Claude Max).',
+    'cfg.h.chatDefaults.mode':'Режим, с которым открывается новый чат. Проект может переопределить его кнопкой ★ на панели.','cfg.h.chatDefaults.agent':'Режим агента для нового чата: single, multi, dispatch или conversation.','cfg.h.chatDefaults.model':'Модель, предварительно выбранная для нового чата.','cfg.h.chatDefaults.effort':'Уровень обдумывания для нового чата; auto — без флага --effort.','cfg.h.chatDefaults.turns':'Лимит шагов для нового чата (1–200).',
     'cfg.h.ANTHROPIC_BASE_URL':'Направляет запросы Claude CLI через прокси или шлюз вместо прямого обращения к Anthropic.',
     'cfg.h.ANTHROPIC_API_KEY':'Ключ API для движка API, когда claude CLI не выполнил вход.',
     'cfg.h.ANTHROPIC_AUTH_TOKEN':'Токен для прокси, заданного в ANTHROPIC_BASE_URL.',
@@ -5677,6 +5698,7 @@ const TRANSLATIONS = {
     'engine.default.toast':'★ {engine} — основной движок для новых чатов','engine.default.err':'⚠ Не удалось сохранить основной движок',
     'tb.effort':'Усилие','effort.title':'Уровень обдумывания (claude --effort): Авто — значение CLI по умолчанию, более высокие уровни — более глубокие рассуждения',
     'effort.auto':'Авто','effort.low':'Низкое','effort.med':'Среднее','effort.high':'Высокое','effort.xhigh':'Очень высокое','effort.max':'Максимальное',
+    'tb.defaults':'По умолчанию','defaults.pin.title':'Сохранить текущие Режим / Агент / Модель / Effort / Шаги как значения по умолчанию для этого проекта','defaults.reset.title':'Убрать переопределения проекта и унаследовать глобальные значения по умолчанию','defaults.noproject':'Сначала откройте проект','defaults.pinned':'Значения по умолчанию для проекта сохранены','defaults.reset.done':'Проект наследует глобальные значения по умолчанию',
     'catchup.btn':'⤵ Дочитать','catchup.title':'Подтянуть в чат сообщения, набранные прямо в терминале (claude --resume)',
     'catchup.err':'Не удалось дочитать','catchup.baseline':'✓ Базовая позиция установлена — поработайте в терминале и нажмите ещё раз',
     'catchup.done':'✓ Дочитано из терминала: {n}','catchup.none':'Ничего нового из терминала','catchup.fail':'⚠ Ошибка дочитывания',
@@ -5708,6 +5730,7 @@ const TRANSLATIONS = {
     'cfg.search.aria':'Rechercher un paramètre',
     'cfg.search.none':'Aucun résultat pour « {q} »',
     'cfg.sec.engine':'🤖 Modèles et moteur',
+    'cfg.sec.defaults':'⭐ Valeurs par défaut d\u2019un nouveau chat',
     'cfg.sec.agents':'👥 Agents et limites d’exécution',
     'cfg.sec.workspace':'📁 Répertoire de travail',
     'cfg.sec.mcp':'🔌 MCP, compétences, commandes',
@@ -5742,6 +5765,7 @@ const TRANSLATIONS = {
     'cfg.reset.done':'Réinitialisé à la valeur par défaut',
     'cfg.saved_restart':'Enregistré — redémarrez le serveur pour appliquer',
     'cfg.h.defaultEngine':'Moteur présélectionné pour les nouveaux chats et tâches : API (sans interface) ou Subscription (Claude Max).',
+    'cfg.h.chatDefaults.mode':'Mode avec lequel un nouveau chat s\u2019ouvre. Un projet peut le surcharger avec le bouton \u2605 de la barre d\u2019outils.','cfg.h.chatDefaults.agent':'Mode agent d\u2019un nouveau chat : single, multi, dispatch ou conversation.','cfg.h.chatDefaults.model':'Modèle présélectionné pour un nouveau chat.','cfg.h.chatDefaults.effort':'Niveau de réflexion d\u2019un nouveau chat ; auto n\u2019envoie aucun indicateur --effort.','cfg.h.chatDefaults.turns':'Limite de tours d\u2019un nouveau chat (1\u2013200).',
     'cfg.h.ANTHROPIC_BASE_URL':'Fait passer les requêtes du CLI Claude par un proxy ou une passerelle au lieu d’Anthropic directement.',
     'cfg.h.ANTHROPIC_API_KEY':'Clé API du moteur API lorsque le CLI claude n’est pas connecté.',
     'cfg.h.ANTHROPIC_AUTH_TOKEN':'Jeton du proxy défini dans ANTHROPIC_BASE_URL.',
@@ -5957,6 +5981,7 @@ const TRANSLATIONS = {
     "engine.default.toast":"★ {engine} — moteur par défaut des nouvelles discussions","engine.default.err":"⚠ Impossible d'enregistrer le moteur par défaut",
     "tb.effort":"Effort","effort.title":"Niveau de réflexion (claude --effort) : Auto = valeur par défaut du CLI, les niveaux supérieurs raisonnent plus en profondeur",
     "effort.auto":"Auto","effort.low":"Faible","effort.med":"Moyen","effort.high":"Élevé","effort.xhigh":"Très élevé","effort.max":"Maximal",
+    "tb.defaults":"Par défaut","defaults.pin.title":"Enregistrer les valeurs Mode / Agent / Modèle / Effort / Tours actuelles comme valeurs par défaut de ce projet","defaults.reset.title":"Supprimer les surcharges de ce projet et hériter des valeurs par défaut globales","defaults.noproject":"Ouvrez d\u2019abord un projet","defaults.pinned":"Valeurs par défaut du projet enregistrées","defaults.reset.done":"Le projet hérite des valeurs par défaut globales",
     "catchup.btn":"⤵ Rattraper","catchup.title":"Reprendre dans la discussion les messages saisis directement dans le terminal (claude --resume)",
     "catchup.err":"Impossible de rattraper","catchup.baseline":"✓ Point de repère enregistré — travaillez dans le terminal, puis cliquez à nouveau",
     "catchup.done":"✓ Rattrapé depuis le terminal : {n}","catchup.none":"Rien de nouveau dans le terminal","catchup.fail":"⚠ Échec du rattrapage",
@@ -5988,6 +6013,7 @@ const TRANSLATIONS = {
     'cfg.search.aria':'חיפוש הגדרות',
     'cfg.search.none':'אין תוצאות עבור «{q}»',
     'cfg.sec.engine':'🤖 מודלים ומנוע',
+    'cfg.sec.defaults':'⭐ ברירות מחדל לצ׳אט חדש',
     'cfg.sec.agents':'👥 סוכנים ומגבלות הרצה',
     'cfg.sec.workspace':'📁 תיקיית עבודה',
     'cfg.sec.mcp':'🔌 MCP, מיומנויות, פקודות',
@@ -6022,6 +6048,7 @@ const TRANSLATIONS = {
     'cfg.reset.done':'אופס לברירת המחדל',
     'cfg.saved_restart':'נשמר — הפעילו מחדש את השרת כדי להחיל',
     'cfg.h.defaultEngine':'המנוע שנבחר מראש עבור צ׳אטים ומשימות חדשים: API (ללא ממשק) או Subscription‏ (Claude Max).',
+    'cfg.h.chatDefaults.mode':'המצב שבו נפתח צ׳אט חדש. פרויקט יכול לקבוע ערך משלו בעזרת הכפתור ★ בסרגל הכלים.','cfg.h.chatDefaults.agent':'מצב הסוכן לצ׳אט חדש: single, multi, dispatch או conversation.','cfg.h.chatDefaults.model':'המודל שנבחר מראש לצ׳אט חדש.','cfg.h.chatDefaults.effort':'רמת החשיבה לצ׳אט חדש; auto פירושו שלא נשלח דגל ‎--effort‎.','cfg.h.chatDefaults.turns':'מגבלת הצעדים לצ׳אט חדש (1–200).',
     'cfg.h.ANTHROPIC_BASE_URL':'מנתב את בקשות ה-CLI של Claude דרך פרוקסי או שער במקום ישירות ל-Anthropic.',
     'cfg.h.ANTHROPIC_API_KEY':'מפתח API עבור מנוע ה-API כאשר ה-CLI של claude אינו מחובר.',
     'cfg.h.ANTHROPIC_AUTH_TOKEN':'אסימון עבור הפרוקסי שהוגדר ב-ANTHROPIC_BASE_URL.',
@@ -6209,6 +6236,7 @@ const TRANSLATIONS = {
     "engine.default.toast":"★ {engine} — מנוע ברירת המחדל לצ׳אטים חדשים","engine.default.err":"⚠ שמירת מנוע ברירת המחדל נכשלה",
     "tb.effort":"מאמץ","effort.title":"רמת החשיבה (claude --effort): אוטומטי = ברירת המחדל של ה-CLI, רמות גבוהות יותר = חשיבה מעמיקה יותר",
     "effort.auto":"אוטומטי","effort.low":"נמוך","effort.med":"בינוני","effort.high":"גבוה","effort.xhigh":"גבוה מאוד","effort.max":"מרבי",
+    "tb.defaults":"ברירת מחדל","defaults.pin.title":"שמירת המצב / הסוכן / המודל / המאמץ / הצעדים הנוכחיים כברירת המחדל של הפרויקט הזה","defaults.reset.title":"הסרת ההגדרות הייעודיות של הפרויקט וירושת ברירות המחדל הגלובליות","defaults.noproject":"יש לפתוח פרויקט תחילה","defaults.pinned":"ברירות המחדל של הפרויקט נשמרו","defaults.reset.done":"הפרויקט יורש את ברירות המחדל הגלובליות",
     "catchup.btn":"⤵ להשלים","catchup.title":"למשוך לצ׳אט הודעות שהוקלדו ישירות בטרמינל (claude --resume)",
     "catchup.err":"ההשלמה נכשלה","catchup.baseline":"✓ נקודת הבסיס נקבעה — עבדו בטרמינל ולחצו שוב",
     "catchup.done":"✓ הושלמו מהטרמינל: {n}","catchup.none":"אין חדש מהטרמינל","catchup.fail":"⚠ שגיאה בהשלמה",
@@ -10606,12 +10634,13 @@ function newTab() {
   _clearAttachments();
   clearReply();
   clearBotsStrip();
-  // Reset skills and mode settings for new tab — new chat = clean slate
+  // Reset skills for new tab — new chat = clean slate
   activeSkills = new Set();
-  curAgent = 'single';
-  curMode = 'auto';
-  syncBtn('agent', 'single');
-  syncBtn('mode', 'auto');
+  // Issue #58: a new chat opens on the project's defaults (global, with this
+  // project's overrides on top) instead of the literals that used to sit here.
+  // applyChatDefaults() no-ops until the first /api/chat-defaults answer lands,
+  // and _chatDefaults itself is seeded with the same built-ins the server uses.
+  applyChatDefaults();
   // New chat starts from the global default — handled centrally by showW() below
   // New tab is never generating — reset interrupt bar and stop button
   isGen = false; generatingTabId = null; setSendStop(false);
@@ -10769,6 +10798,86 @@ function applyMsgClamp(mw) {
 }
 
 // ─── Toolbar ─────────────────────────────────────────────────────────────
+// ─── Global chat defaults + this project's overrides (issue #58) ───────────
+// The global half is edited in Settings (chatDefaults.* rows); the per-project
+// half is the star button in the toolbar. What lands here is the RESOLVED answer
+// for the active project plus the list of dials that project pinned, which is
+// what the group dots are drawn from.
+let _chatDefaults = null;
+
+async function loadChatDefaults(projectId) {
+  const q = projectId ? '?projectId=' + encodeURIComponent(projectId) : '';
+  try {
+    const r = await fetch('/api/chat-defaults' + q);
+    if (r.ok) _chatDefaults = await r.json();
+  } catch { /* offline: keep whatever we already resolved, never blank the dials */ }
+  markDefaultOverrides();
+  return _chatDefaults;
+}
+
+// Seed the toolbar. Called for a NEW chat only — an existing session carries its
+// own mode/model in the DB and loadSess() must keep winning over any default.
+function applyChatDefaults() {
+  const d = _chatDefaults && _chatDefaults.effective;
+  if (!d) return;
+  curMode = d.mode; curAgent = d.agent; curModel = d.model;
+  syncBtn('mode', d.mode); syncBtn('agent', d.agent); syncBtn('model', d.model);
+  setEffort(d.effort === 'auto' ? '' : d.effort);
+  const es = $i('effortSel'); if (es) es.value = curEffort;
+  const mt = $i('maxTurns'); if (mt) mt.value = d.turns;
+  markDefaultOverrides();
+  if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
+}
+
+// A dot on every group the project pinned. Also the only place that decides
+// whether the reset button is worth showing — with nothing pinned it would be a
+// button that cannot do anything.
+function markDefaultOverrides() {
+  const ov = new Set((_chatDefaults && _chatDefaults.overridden) || []);
+  document.querySelectorAll('.tb-group[data-tbg]').forEach(g => {
+    g.classList.toggle('tbg-override', ov.has(g.dataset.tbg));
+  });
+  const pin = $i('pinDefaultsBtn');
+  if (pin) pin.classList.toggle('on', ov.size > 0);
+  const rst = $i('resetDefaultsBtn');
+  if (rst) rst.style.display = ov.size ? '' : 'none';
+}
+
+// Pin the CURRENT five dials to the active project. Sends all five rather than a
+// diff against the global: the user's mental model is "remember what I see", and
+// a value that merely happens to equal the global today must stay pinned when
+// the global changes tomorrow.
+async function pinProjectDefaults() {
+  if (!curProjectId) { toast(t('defaults.noproject')); return; }
+  const body = {
+    mode: curMode, agent: curAgent, model: curModel,
+    effort: curEffort || 'auto',
+    turns: Math.max(1, Math.min(200, parseInt($i('maxTurns')?.value, 10) || 50)),
+  };
+  try {
+    const r = await fetch(`/api/projects/${curProjectId}/defaults`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok) { toast('✗ ' + (d.error || r.status)); return; }
+    _chatDefaults = d;
+    markDefaultOverrides();
+    toast('✓ ' + t('defaults.pinned'));
+  } catch (e) { toast('✗ ' + e.message); }
+}
+
+async function resetProjectDefaults() {
+  if (!curProjectId) return;
+  try {
+    const r = await fetch(`/api/projects/${curProjectId}/defaults`, { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) { toast('✗ ' + (d.error || r.status)); return; }
+    _chatDefaults = d;
+    applyChatDefaults();
+    toast('✓ ' + t('defaults.reset.done'));
+  } catch (e) { toast('✗ ' + e.message); }
+}
+
 function setOpt(btn, group) {
   btn.closest('.tb-group').querySelectorAll('.tb-btn').forEach(b => b.classList.remove('on'));
   btn.classList.add('on');
@@ -11702,6 +11811,9 @@ async function checkVersion() {
     // chat's explicit run_engine wins; a chat without one inherits this default.
     _globalDefaultEngine = local.defaultEngine === 'subscription' ? 'subscription' : 'api';
     resolveEngineForView();
+    // Issue #58: resolve the dials for whatever project the session restored to.
+    // Only a brand-new tab is seeded — a restored chat keeps what it was saved with.
+    loadChatDefaults(curProjectId).then(() => { if (!currentSessionId) applyChatDefaults(); });
     const el = $i('versionBadge');
     if (!el) return;
     const cur = local.version || '?';
@@ -14862,6 +14974,9 @@ function switchProject(id) {
 
   renderProjects(); saveUIState(); loadHist(); loadFiles(''); updateSessBar();
   loadBots(); // roster is per-project: without this the sidebar keeps the old project's bots
+  // Defaults are per project too. Applied only to a tab that has no session of
+  // its own — an existing chat's stored mode/model must not be overwritten.
+  loadChatDefaults(id).then(() => { if (!currentSessionId) applyChatDefaults(); });
   toast(`✓ ${p.name}`);
 }
 

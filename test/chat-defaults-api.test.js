@@ -1,0 +1,203 @@
+// Global chat defaults + per-project overrides over HTTP — issue #58.
+//
+// test/chat-defaults.test.js pins the resolver in isolation. This one boots a real
+// server in a throwaway APP_DIR and drives the three endpoints the SPA calls, plus
+// the settings-form path that owns the global half. What it is here to catch:
+//
+//   - "the global half is edited through the ordinary settings form" — if the
+//     catalog entries were dropped, PUT /api/config/setting would 400 and the
+//     Settings section would render empty with no other test noticing.
+//   - "a PUT touches only the keys it names" — the bug that would otherwise ship
+//     is pinning Model and silently unpinning Turns.
+//   - "an invalid value is refused, not trimmed" — a trimmed key looks exactly
+//     like a save that worked.
+//   - the stored object stays SPARSE, so an unpinned dial keeps following the
+//     global. A five-key snapshot passes every other assertion here and still
+//     breaks the feature.
+//
+// Run: node test/chat-defaults-api.test.js   (TEST_PORT=<n> to move off the default)
+'use strict';
+const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawn } = require('child_process');
+
+let pass = 0, fail = 0;
+function check(label, actual, expected) {
+  try { assert.deepStrictEqual(actual, expected); pass++; console.log(`  ok   ${label}`); }
+  catch { fail++; console.error(`  FAIL ${label} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`); }
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+const PORT = Number(process.env.TEST_PORT || 4537);
+const BASE = `http://127.0.0.1:${PORT}`;
+
+const APP_DIR  = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-cd58-app-'));
+const HOME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-cd58-home-'));
+process.on('exit', () => { for (const d of [APP_DIR, HOME_DIR]) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} } });
+fs.mkdirSync(path.join(APP_DIR, 'data'), { recursive: true });
+const WORKDIR = path.join(APP_DIR, 'workspace');
+const PROJ_A = path.join(WORKDIR, 'alpha');
+const PROJ_B = path.join(WORKDIR, 'beta');
+fs.mkdirSync(PROJ_A, { recursive: true });
+fs.mkdirSync(PROJ_B, { recursive: true });
+
+// A global default already on disk at boot, so the very first answer has to come
+// from the merge chain rather than from the built-ins.
+fs.writeFileSync(path.join(APP_DIR, 'config.json'),
+  JSON.stringify({ mcpServers: {}, skills: {}, chatDefaults: { mode: 'task' } }, null, 2));
+
+let srvLog = '';
+const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
+  env: { ...process.env, PORT: String(PORT), CCS_DESKTOP: '1', APP_DIR, WORKDIR, HOME: HOME_DIR },
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
+let exited = false;
+child.on('exit', () => { exited = true; });
+child.stdout.on('data', d => { srvLog += d; });
+child.stderr.on('data', d => { srvLog += d; });
+
+let cleanedUp = false;
+function cleanup() { if (cleanedUp) return; cleanedUp = true; if (!exited) { try { child.kill('SIGTERM'); } catch {} } }
+process.on('exit', cleanup);
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { cleanup(); process.exit(1); });
+function die(msg) { console.error(msg); if (srvLog) console.error(srvLog.slice(-2000)); cleanup(); process.exit(1); }
+
+async function api(method, url, body) {
+  const res = await fetch(BASE + url, {
+    method,
+    headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  let json = null; try { json = JSON.parse(text); } catch {}
+  return { status: res.status, json, text };
+}
+const defaultsOf = async id => (await api('GET', '/api/chat-defaults' + (id ? '?projectId=' + encodeURIComponent(id) : ''))).json;
+const storedDefaults = id => {
+  const raw = JSON.parse(fs.readFileSync(path.join(APP_DIR, 'data', 'projects.json'), 'utf8'));
+  const list = Array.isArray(raw) ? raw : (raw.projects || []);
+  return (list.find(p => p.id === id) || {}).defaults;
+};
+
+(async () => {
+  let up = false;
+  for (let i = 0; i < 80 && !exited; i++) {
+    try { const r = await fetch(BASE + '/api/health'); if (r.ok) { up = true; break; } } catch {}
+    await sleep(250);
+  }
+  if (exited) die(`server exited before it became ready — port ${PORT} collision or startup crash`);
+  if (!up) die(`server on port ${PORT} did not start`);
+  if (!(srvLog.includes('server started') && new RegExp(`"port":\\s*"?${PORT}"?`).test(srvLog))) {
+    die(`something answers /api/health on ${PORT} but our server never logged "server started"`);
+  }
+
+  const a = await api('POST', '/api/projects', { name: 'alpha', workdir: PROJ_A });
+  const b = await api('POST', '/api/projects', { name: 'beta', workdir: PROJ_B });
+  if (a.status !== 200 || !a.json?.id || b.status !== 200) die(`could not create the projects: ${a.text} / ${b.text}`);
+  const A = a.json.id, B = b.json.id;
+
+  console.log('\n— the global half —');
+  const bare = await defaultsOf('');
+  check('a value already in config.json is what a chat opens on', bare.effective.mode, 'task');
+  check('the other four fall back to the built-ins',
+    [bare.effective.agent, bare.effective.model, bare.effective.effort, bare.effective.turns],
+    ['single', 'sonnet', 'auto', 50]);
+
+  // The settings form owns the global half. If the catalog entries went missing
+  // this is the assertion that says so.
+  const setModel = await api('PUT', '/api/config/setting', { key: 'chatDefaults.model', value: 'opus' });
+  check('the settings form accepts chatDefaults.model', setModel.status, 200);
+  check('and reports it as effective', setModel.json?.setting?.effective, 'opus');
+  const setTurns = await api('PUT', '/api/config/setting', { key: 'chatDefaults.turns', value: '5' });
+  check('the settings form accepts chatDefaults.turns', setTurns.status, 200);
+  check('a turns value outside #maxTurns’ own range is refused',
+    (await api('PUT', '/api/config/setting', { key: 'chatDefaults.turns', value: 9999 })).status, 400);
+  check('a model outside the CLI aliases is refused',
+    (await api('PUT', '/api/config/setting', { key: 'chatDefaults.model', value: 'gpt-4' })).status, 400);
+  const afterGlobal = await defaultsOf('');
+  check('the refused writes changed nothing', [afterGlobal.effective.model, afterGlobal.effective.turns], ['opus', 5]);
+
+  console.log('\n— the project half —');
+  const gotGlobal = await defaultsOf(A);
+  check('a project that pinned nothing inherits every dial',
+    gotGlobal.effective, { mode: 'task', agent: 'single', model: 'opus', effort: 'auto', turns: 5 });
+  check('and reports nothing as overridden', gotGlobal.overridden, []);
+
+  const pin = await api('PUT', `/api/projects/${A}/defaults`, { model: 'sonnet', turns: 10 });
+  check('pinning is accepted', pin.status, 200);
+  // The exact table from the issue body.
+  check('the effective config is the issue’s worked example',
+    pin.json.effective, { mode: 'task', agent: 'single', model: 'sonnet', effort: 'auto', turns: 10 });
+  check('exactly the pinned dials are reported as overridden', pin.json.overridden, ['model', 'turns']);
+  // The whole feature rests on this: a snapshot would pass every check above.
+  check('only the pinned keys reach projects.json', storedDefaults(A), { model: 'sonnet', turns: 10 });
+  check('the other project is untouched', storedDefaults(B), undefined);
+  check('and still inherits', (await defaultsOf(B)).effective.model, 'opus');
+
+  // Sparseness is what makes an unpinned dial follow the global later.
+  await api('PUT', '/api/config/setting', { key: 'chatDefaults.mode', value: 'planning' });
+  check('an unpinned dial follows the global when it changes', (await defaultsOf(A)).effective.mode, 'planning');
+  check('a pinned one does not', (await defaultsOf(A)).effective.model, 'sonnet');
+
+  console.log('\n— what a partial write may touch —');
+  const partial = await api('PUT', `/api/projects/${A}/defaults`, { agent: 'multi' });
+  check('naming one dial pins it', partial.json.effective.agent, 'multi');
+  check('and leaves the dials it did not name alone', storedDefaults(A), { model: 'sonnet', turns: 10, agent: 'multi' });
+  const unpin = await api('PUT', `/api/projects/${A}/defaults`, { agent: null });
+  check('sending a dial as null unpins just that one', storedDefaults(A), { model: 'sonnet', turns: 10 });
+  check('and it goes back to inheriting', unpin.json.effective.agent, 'single');
+
+  const wrapped = await api('PUT', `/api/projects/${A}/defaults`, { defaults: { effort: 'xhigh' } });
+  check('a {defaults:{...}} envelope is accepted too', wrapped.json.effective.effort, 'xhigh');
+  await api('PUT', `/api/projects/${A}/defaults`, { effort: null });
+
+  console.log('\n— refusals —');
+  const bad = await api('PUT', `/api/projects/${A}/defaults`, { model: 'gpt-4', turns: 10 });
+  check('an invalid value is refused', bad.status, 400);
+  check('and the offending key is named', bad.json.keys, ['model']);
+  check('nothing was written by the refused call', storedDefaults(A), { model: 'sonnet', turns: 10 });
+  check('a key outside the five is refused', (await api('PUT', `/api/projects/${A}/defaults`, { engine: 'api' })).status, 400);
+  check('turns above the input’s own max is refused',
+    (await api('PUT', `/api/projects/${A}/defaults`, { turns: 9999 })).status, 400);
+  check('an unknown project is 404, not 500', (await api('PUT', '/api/projects/proj-nope/defaults', { model: 'opus' })).status, 404);
+  check('and so is a reset on one', (await api('DELETE', '/api/projects/proj-nope/defaults')).status, 404);
+
+  console.log('\n— reset to defaults —');
+  const reset = await api('DELETE', `/api/projects/${A}/defaults`);
+  check('the reset is accepted', reset.status, 200);
+  check('every pin is gone from projects.json', storedDefaults(A), undefined);
+  check('and the project is back on the global row', reset.json.effective, reset.json.global);
+  check('with nothing left marked as overridden', reset.json.overridden, []);
+  check('resetting a project that pinned nothing is still fine',
+    (await api('DELETE', `/api/projects/${B}/defaults`)).status, 200);
+
+  // The global half resets through the same form row, by removing the key rather
+  // than writing the built-in in as an explicit value.
+  await api('DELETE', '/api/config/setting?key=chatDefaults.model');
+  check('resetting the global row falls back to the built-in', (await defaultsOf(A)).effective.model, 'sonnet');
+  check('and the key is gone from config.json',
+    JSON.parse(fs.readFileSync(path.join(APP_DIR, 'config.json'), 'utf8')).chatDefaults.model, undefined);
+  check('while its siblings in the same block survive',
+    JSON.parse(fs.readFileSync(path.join(APP_DIR, 'config.json'), 'utf8')).chatDefaults.turns, 5);
+
+  console.log('\n— what /api/projects hands the browser —');
+  await api('PUT', `/api/projects/${A}/defaults`, { model: 'haiku' });
+  const list = await api('GET', '/api/projects');
+  const listed = list.json.find(p => p.id === A);
+  check('the project row carries its overrides so the UI can badge them', listed.defaults, { model: 'haiku' });
+  check('and still carries no password field', 'password' in listed, false);
+
+  // The Settings UI renders whatever the resolver reports; an entry missing from
+  // the response is a section that silently loses a row.
+  const resolved = await api('GET', '/api/config/resolved');
+  check('the resolver reports all five rows',
+    resolved.json.settings.filter(s => s.section === 'defaults').map(s => s.key),
+    ['chatDefaults.mode', 'chatDefaults.agent', 'chatDefaults.model', 'chatDefaults.effort', 'chatDefaults.turns']);
+  check('and the section itself is declared', resolved.json.sections.includes('defaults'), true);
+
+  cleanup();
+  console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
+  process.exit(fail === 0 ? 0 : 1);
+})().catch(e => die(String(e && e.stack || e)));
