@@ -341,6 +341,26 @@ is testable without booting anything:
 - **Only a chat with no session of its own is seeded.** `applyChatDefaults()` runs from
   `newTab()`, from `switchProject()` and at boot — always behind `if (!currentSessionId)`.
   An existing chat carries its own mode/model in SQLite and `loadSess()` must keep winning.
+- **The chain governs chat CREATION; execution channels keep their own budget.**
+  Both server-side doors to a new interactive chat resolve it via
+  `chatDefaultsForWorkdir()` (sessions have no `project_id` column, so the project is
+  matched by workdir the way `/api/activity` does): the WS `chat` frame and
+  `POST /api/sessions`. Both used to carry a private literal set — `sonnet`/`auto`/
+  `single`/`30` — so an API client or an older cached SPA created a chat on values
+  nobody had configured while the browser's toolbar showed the resolved ones. `_cd` is
+  hoisted ABOVE the `createSession` INSERT so the stored row and the run cannot disagree.
+  `chatDefaultsForWorkdir()` returns the FLAT `.effective` row, not the
+  `{effective, global, overridden}` envelope the REST endpoints hand the browser.
+- **Telegram and the scheduler deliberately do NOT inherit it** — `UNATTENDED_MAX_TURNS`
+  (30, declared once next to the `chat-defaults` require). A scheduled job that silently
+  inherited someone's `turns: 200` would burn a budget nobody was watching, and every
+  existing install would have jumped 30 → 50 on upgrade without being asked. The same
+  constant names every task/chain creation default (REST, MCP `create_task`/`create_chain`,
+  Kanban dispatch), so a bare `30` reappearing next to a runner is a review signal. If
+  per-channel budgets are ever wanted they belong in their own setting, not in the chat
+  dials. The `maxTurns || 30` floors inside the shared runners are left alone on purpose:
+  they fire only when a caller passes nothing at all, which is a different concern from
+  a channel policy. Pinned by `test/chat-defaults-api.test.js`.
 
 ### Markdown Rendering in SPA
 - During streaming: `renderStreaming()` handles unclosed code fences
@@ -351,7 +371,7 @@ is testable without booting anything:
 
 ## How to Verify Changes
 
-`npm test` runs 63 test files under `test/` (18 `test/render/*.test.mjs` + 45 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 63 test files under `test/` (18 `test/render/*.test.mjs` + 45 `test/*.test.js`), and `.github/workflows/ci.yml` runs the same command on every push and PR to `main`. Nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server
