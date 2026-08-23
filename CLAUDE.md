@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. `npm test` chains 58 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 40 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
+No linting and no build step configured. `npm test` chains 59 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 41 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
 
 ## Architecture
 
@@ -197,6 +197,33 @@ fable
 ```
 These short aliases are exactly what `claude-cli.js` (`MODEL_MAP`) passes to the CLI — pass them through **as-is**; the `claude` binary resolves each one internally. Do not use dated model-ID suffixes in CLI flags (the dated IDs are kept commented out in `MODEL_MAP`).
 
+### Remote shell environment (issue #59)
+
+`bash -lc` is a **login** shell, not an **interactive** one. Every version manager —
+mise, asdf, nvm, pyenv, rbenv, nodenv, fnm, sdkman — publishes its binaries from
+`~/.bashrc`, and the stock Debian/Ubuntu `~/.bashrc` opens with
+`case $- in *i*) ;; *) return;; esac`, so none of it runs for us. The symptom was a
+SessionEnd hook dying with `/bin/sh: 1: node: not found` on a host where `which node`
+answers instantly.
+
+`remote-env.js` builds the prelude every remote run prepends. Three rules it exists to
+keep:
+
+- **PATH, never `. ~/.bashrc`.** That stdout is a stream-json pipe — one MOTD banner
+  derails the parse — and the rc file that would need sourcing is exactly the one the
+  `return` guards, so it would contribute nothing anyway.
+- **Chain-safe.** The caller joins with ` && `, so a prelude ending on a false
+  `[ -d … ]` test silently cancels the `claude` invocation behind it. Everything is one
+  group ending in `|| true`, and the user's `$CCS_REMOTE_INIT` runs under `eval` so a
+  syntax error in it stays a runtime failure instead of a parse error that takes the
+  whole remote command down.
+- **After the `cd`, not before.** mise and asdf pin a version per directory
+  (`mise.toml`, `.tool-versions`); running from `$HOME` reports the global one.
+
+`testSshConnection()` runs the same prelude and reports whether `node` and `claude`
+resolve, so a broken PATH is visible on the host's Test button instead of surfacing
+mid-turn as a hook failure that names the wrong problem.
+
 ### AGENTS.md (issue #54)
 
 The `claude` CLI discovers `CLAUDE.md` but **not** `AGENTS.md` — measured against
@@ -235,7 +262,7 @@ closes that gap for **local** runs.
 
 ## How to Verify Changes
 
-`npm test` runs 58 test files under `test/` (18 `test/render/*.test.mjs` + 40 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 59 test files under `test/` (18 `test/render/*.test.mjs` + 41 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server

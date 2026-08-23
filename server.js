@@ -8271,13 +8271,29 @@ app.delete('/api/remote-hosts/:id', (req,res) => {
   res.json({ ok:true });
 });
 
+// The connection test now also probes the remote interpreters (issue #59). Reporting
+// "Connection successful" while `node` is missing from the non-interactive PATH is
+// exactly how that bug stayed invisible until a SessionEnd hook failed mid-turn with
+// `node: not found` — on a host where `which node` answers instantly. The absence is
+// reported HERE, where the user is already looking at this host.
+// The probe runs from the login directory, not a project, so a directory-scoped
+// mise/asdf pin can still differ. It answers "is anything resolvable at all", which
+// is the question that had no answer before.
+function sshTestMessage(result) {
+  const env = result && result.env;
+  if (!env) return 'Connection successful';
+  const bits = [env.node ? `node ${env.nodeVersion || 'found'}` : 'node NOT FOUND on the remote PATH'];
+  if (!env.claude) bits.push('claude CLI not found');
+  return `Connection successful — ${bits.join(', ')}`;
+}
+
 // Test SSH connection — for new (unsaved) host (must be before /:id/test)
 app.post('/api/remote-hosts/test-new', async (req,res) => {
   const { host, port=22, sshKeyPath='', password='' } = req.body;
   if (!host) return res.status(400).json({ error:'host required' });
   try {
     const result = await testSshConnection({ host, port: Number(port)||22, sshKeyPath, password });
-    res.json({ ok:true, message:'Connection successful', latencyMs: result.latencyMs });
+    res.json({ ok:true, message: sshTestMessage(result), latencyMs: result.latencyMs, env: result.env || null });
   } catch(e) { res.status(400).json({ error: e.message||'Connection failed' }); }
 });
 
@@ -8288,7 +8304,7 @@ app.post('/api/remote-hosts/:id/test', async (req,res) => {
   if (!rh) return res.status(404).json({ error:'Host not found' });
   try {
     const result = await testSshConnection({ host: rh.host, port: rh.port||22, sshKeyPath: rh.sshKeyPath||'', password: decryptPassword(rh.password)||'' });
-    res.json({ ok:true, message:'Connection successful', latencyMs: result.latencyMs });
+    res.json({ ok:true, message: sshTestMessage(result), latencyMs: result.latencyMs, env: result.env || null });
   } catch(e) { res.status(400).json({ error: e.message||'Connection failed' }); }
 });
 

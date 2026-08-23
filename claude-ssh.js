@@ -1,5 +1,6 @@
 'use strict';
 const { Client } = require('ssh2');
+const { remoteEnvPrelude, remoteEnvProbeCommand, parseRemoteEnvProbe } = require('./remote-env');
 const { StringDecoder } = require('string_decoder');
 const os  = require('os');
 const path = require('path');
@@ -322,11 +323,16 @@ class ClaudeSSH {
           args.push('--include-partial-messages');
           args.push('-p', finalPrompt);
 
+          // The env prelude runs AFTER the cd, deliberately: mise and asdf pin a
+          // version PER DIRECTORY (mise.toml, .tool-versions), so asking from $HOME
+          // answers with the global one. remote-env.js explains why this is PATH work
+          // and not `. ~/.bashrc` — in short, a login shell is not an interactive one,
+          // and this stdout is a stream-json pipe that one rc-file banner derails.
           const innerCmdParts = [
-            'export PATH="$PATH:/usr/local/bin:/usr/bin:$HOME/.npm-global/bin:$HOME/.local/bin:$(npm root -g 2>/dev/null)/../.bin"',
             'export IS_SANDBOX=1',
             `mkdir -p ${shellEscape(this.workdir)}`,
             `cd ${shellEscape(this.workdir)}`,
+            remoteEnvPrelude(),
           ];
           if (remoteTempDir) innerCmdParts.push(`trap 'rm -rf ${shellEscape(remoteTempDir)}' EXIT`);
           innerCmdParts.push(`claude ${args.map(shellEscape).join(' ')}`);
@@ -507,7 +513,8 @@ class ClaudeSSH {
 }
 
 // ─── Standalone SSH connection tester ────────────────────────────────────────
-// Returns Promise<{ latencyMs }> or rejects with Error
+// Returns Promise<{ latencyMs, env }> or rejects with Error. `env` is the remote
+// interpreter probe — see remoteEnvProbeCommand() in remote-env.js.
 function testSshConnection({ host, port = 22, sshKeyPath = '', password = '' }) {
   return new Promise((resolve, reject) => {
     const { username, hostname } = parseHost(host);
@@ -534,19 +541,25 @@ function testSshConnection({ host, port = 22, sshKeyPath = '', password = '' }) 
 
     const conn = new Client();
     let done = false;
-    const finish = (err) => {
+    const finish = (err, probe) => {
       if (done) return; done = true;
       try { conn.end(); } catch {}
-      if (err) reject(err); else resolve({ latencyMs: Date.now() - start });
+      if (err) reject(err); else resolve({ latencyMs: Date.now() - start, env: probe || null });
     };
 
     conn.on('ready', () => {
-      conn.exec('echo ok', (err, stream) => {
+      // Not `echo ok` any more. The test now runs the SAME env prelude a real turn
+      // runs and reports whether `node` and `claude` resolve under it (issue #59).
+      // A host where they do not is the exact failure the reporter hit, and it used
+      // to surface as `node: not found` from a hook deep inside a turn — a message
+      // that names the wrong problem on a host where `which node` answers fine.
+      conn.exec(remoteEnvProbeCommand(), (err, stream) => {
         if (err) return finish(new Error(`Exec failed: ${err.message}`));
         let out = '';
         stream.stdout.on('data', d => { out += d.toString(); });
         stream.on('close', (code) => {
-          if (code === 0 && out.trim() === 'ok') finish(null);
+          const probe = parseRemoteEnvProbe(out);
+          if (code === 0 && probe.ok) finish(null, probe);
           else finish(new Error(`SSH test failed (exit ${code})`));
         });
       });
