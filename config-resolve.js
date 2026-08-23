@@ -103,7 +103,8 @@ const SETTINGS = [
     type: 'enum', choices: chatDefaults.CHOICES.effort, def: chatDefaults.BUILTIN.effort, falsyFallsThrough: true,
     src: 'chat-defaults.js:resolveChatDefaults' },
   { key: 'chatDefaults.turns', section: 'defaults', backing: 'config', merge: 'merged', path: 'chatDefaults.turns',
-    type: 'number', def: chatDefaults.BUILTIN.turns, min: chatDefaults.TURNS_MIN, max: chatDefaults.TURNS_MAX,
+    type: 'number', int: true, def: chatDefaults.BUILTIN.turns,
+    min: chatDefaults.TURNS_MIN, max: chatDefaults.TURNS_MAX,
     falsyFallsThrough: true,
     src: 'chat-defaults.js:resolveChatDefaults' },
   { key: 'ANTHROPIC_API_KEY', section: 'engine', backing: 'env', type: 'string', def: '', secret: true,
@@ -424,13 +425,20 @@ function coerceValue(def, raw) {
       return { ok: false, error: 'expected_bool' };
     }
     case 'number': {
-      const n = typeof raw === 'number' ? raw : parseInt(String(raw).trim(), 10);
-      if (!Number.isFinite(n)) return { ok: false, error: 'expected_number' };
+      // `int` settings parse with Number (so '12px' is refused, not read as 12)
+      // and are truncated AFTER the range check, matching chat-defaults.coerce
+      // exactly. Without `int` the old parseInt behaviour is untouched, so every
+      // setting that shipped before keeps accepting what it accepted before.
+      const n = typeof raw === 'number' ? raw
+        : (def.int ? Number(String(raw).trim()) : parseInt(String(raw).trim(), 10));
+      if (!Number.isFinite(n) || (def.int && String(raw).trim() === '')) {
+        return { ok: false, error: 'expected_number' };
+      }
       // A bound is only checked when the catalog declares one, so the settings
       // that never had bounds keep accepting what they accepted before.
       if (def.min !== undefined && n < def.min) return { ok: false, error: 'out_of_range' };
       if (def.max !== undefined && n > def.max) return { ok: false, error: 'out_of_range' };
-      return { ok: true, value: n };
+      return { ok: true, value: def.int ? Math.trunc(n) : n };
     }
     case 'enum': {
       const v = String(raw);

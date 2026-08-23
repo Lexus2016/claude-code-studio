@@ -60,8 +60,12 @@ function effortToFlag(effort) {
 function coerce(key, raw) {
   if (!KEYS.includes(key)) return { ok: false, error: 'unknown_key' };
   if (key === 'turns') {
-    const n = typeof raw === 'number' ? raw : parseInt(String(raw).trim(), 10);
-    if (!Number.isFinite(n)) return { ok: false, error: 'expected_number' };
+    // `Number`, not `parseInt`: parseInt('12px') is 12, and a settings row that
+    // silently keeps the numeric prefix of a typo is worse than one that refuses
+    // it. The same rule runs in config-resolve.coerceValue for `int` settings —
+    // the two must agree, or Settings and the toolbar show different turn limits.
+    const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
+    if (!Number.isFinite(n) || String(raw).trim() === '') return { ok: false, error: 'expected_number' };
     if (n < TURNS_MIN || n > TURNS_MAX) return { ok: false, error: 'out_of_range' };
     return { ok: true, value: Math.trunc(n) };
   }
@@ -82,6 +86,9 @@ function sanitize(raw) {
   const value = {}, invalid = [];
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { value, invalid };
   for (const [k, v] of Object.entries(raw)) {
+    // Membership is checked BEFORE the unpin sentinel: `{notADial: null}` is a
+    // typo to report, not an unpin to accept. Only a KNOWN key may be unpinned.
+    if (!KEYS.includes(k)) { invalid.push(k); continue; }
     // An explicit null/undefined means "stop pinning this key", not "invalid".
     if (v === null || v === undefined || v === '') continue;
     const c = coerce(k, v);

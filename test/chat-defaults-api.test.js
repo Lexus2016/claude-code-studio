@@ -43,10 +43,17 @@ const PROJ_B = path.join(WORKDIR, 'beta');
 fs.mkdirSync(PROJ_A, { recursive: true });
 fs.mkdirSync(PROJ_B, { recursive: true });
 
-// A global default already on disk at boot, so the very first answer has to come
-// from the merge chain rather than from the built-ins.
+// Both config layers are seeded, so the very first answer has to come from the
+// merge chain rather than from the built-ins. `agent` is the interesting pair:
+// the GLOBAL file pins a real value and the LOCAL one carries an empty string.
+// Spread the two raw and the '' masks 'multi', then sanitising drops it to the
+// built-in 'single' — a value neither file ever named. Sanitising per layer is
+// what makes the empty local fall through to the global instead.
+fs.mkdirSync(path.join(HOME_DIR, '.claude'), { recursive: true });
+fs.writeFileSync(path.join(HOME_DIR, '.claude', 'config.json'),
+  JSON.stringify({ chatDefaults: { agent: 'multi' } }, null, 2));
 fs.writeFileSync(path.join(APP_DIR, 'config.json'),
-  JSON.stringify({ mcpServers: {}, skills: {}, chatDefaults: { mode: 'task' } }, null, 2));
+  JSON.stringify({ mcpServers: {}, skills: {}, chatDefaults: { mode: 'task', agent: '' } }, null, 2));
 
 let srvLog = '';
 const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
@@ -100,10 +107,16 @@ const storedDefaults = id => {
 
   console.log('\n— the global half —');
   const bare = await defaultsOf('');
-  check('a value already in config.json is what a chat opens on', bare.effective.mode, 'task');
-  check('the other four fall back to the built-ins',
-    [bare.effective.agent, bare.effective.model, bare.effective.effort, bare.effective.turns],
-    ['single', 'sonnet', 'auto', 50]);
+  check('a value already in the local config.json is what a chat opens on', bare.effective.mode, 'task');
+  check('an empty LOCAL value falls through to the global, not to the built-in',
+    bare.effective.agent, 'multi');
+  check('the keys neither file names fall back to the built-ins',
+    [bare.effective.model, bare.effective.effort, bare.effective.turns], ['sonnet', 'auto', 50]);
+  // Back to the built-in agent for the rest of the file — as a real local pin,
+  // which also proves a VALID local value still outranks the global.
+  check('a valid local value wins over the global',
+    (await api('PUT', '/api/config/setting', { key: 'chatDefaults.agent', value: 'single' })).json?.setting?.effective,
+    'single');
 
   // The settings form owns the global half. If the catalog entries went missing
   // this is the assertion that says so.
@@ -116,6 +129,13 @@ const storedDefaults = id => {
     (await api('PUT', '/api/config/setting', { key: 'chatDefaults.turns', value: 9999 })).status, 400);
   check('a model outside the CLI aliases is refused',
     (await api('PUT', '/api/config/setting', { key: 'chatDefaults.model', value: 'gpt-4' })).status, 400);
+  // The settings row and the toolbar must coerce turns the SAME way, or the two
+  // show different limits for one dial.
+  check('the settings row refuses a numeric prefix the way the resolver does',
+    (await api('PUT', '/api/config/setting', { key: 'chatDefaults.turns', value: '12px' })).status, 400);
+  check('and truncates a float instead of storing it',
+    (await api('PUT', '/api/config/setting', { key: 'chatDefaults.turns', value: 7.9 })).json?.setting?.effective, 7);
+  await api('PUT', '/api/config/setting', { key: 'chatDefaults.turns', value: 5 });
   const afterGlobal = await defaultsOf('');
   check('the refused writes changed nothing', [afterGlobal.effective.model, afterGlobal.effective.turns], ['opus', 5]);
 
@@ -159,10 +179,23 @@ const storedDefaults = id => {
   check('and the offending key is named', bad.json.keys, ['model']);
   check('nothing was written by the refused call', storedDefaults(A), { model: 'sonnet', turns: 10 });
   check('a key outside the five is refused', (await api('PUT', `/api/projects/${A}/defaults`, { engine: 'api' })).status, 400);
+  // Sending an unknown key as null used to slip past as an unpin and answer 200.
+  check('an unknown key sent as null is still refused',
+    (await api('PUT', `/api/projects/${A}/defaults`, { notADial: null })).status, 400);
+  // A 200 here reads exactly like a reset that worked. Reset is the DELETE.
+  check('a null body is refused rather than answered as a no-op',
+    (await api('PUT', `/api/projects/${A}/defaults`, { defaults: null })).status, 400);
+  check('and so is a body that is not an object at all',
+    (await api('PUT', `/api/projects/${A}/defaults`, 'sonnet')).status, 400);
   check('turns above the input’s own max is refused',
     (await api('PUT', `/api/projects/${A}/defaults`, { turns: 9999 })).status, 400);
   check('an unknown project is 404, not 500', (await api('PUT', '/api/projects/proj-nope/defaults', { model: 'opus' })).status, 404);
   check('and so is a reset on one', (await api('DELETE', '/api/projects/proj-nope/defaults')).status, 404);
+  // A stale projectId answered 200 with an empty `overridden`, which the SPA
+  // cannot tell apart from a project that genuinely pinned nothing.
+  check('reading an unknown project is 404 too', (await api('GET', '/api/chat-defaults?projectId=proj-nope')).status, 404);
+  check('but no projectId at all is still the global row',
+    (await api('GET', '/api/chat-defaults')).status, 200);
 
   console.log('\n— reset to defaults —');
   const reset = await api('DELETE', `/api/projects/${A}/defaults`);

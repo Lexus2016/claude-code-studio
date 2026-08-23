@@ -311,6 +311,12 @@ is testable without booting anything:
   SPA's `<select>` and the CLI both spell `''`. It has to be a real word: `loadMergedConfig()`
   resolves with `||`, so an empty string in a config file is indistinguishable from an
   unset key. `effortToFlag()` is the single translation point.
+- **`loadMergedConfig()` sanitises each LAYER, then spreads — never the reverse.**
+  Spreading `~/.claude/config.json` and `config.json` raw lets a local `model:""`
+  mask a valid global `model:"opus"`; the merged empty string is then dropped and the
+  answer falls all the way to `BUILTIN`, while the settings catalog — which walks the
+  two files separately under `falsyFallsThrough` — keeps reporting `opus` as effective.
+  Two answers for one key. Per-layer sanitising IS the `||` semantics the flag claims.
 - **`sanitize()` is lenient on read, strict on write.** A typo in a hand-edited
   `config.json` drops that one key and leaves the other four alone; the same typo arriving
   at `PUT /api/projects/:id/defaults` is a 400 that names the key — silently dropping a dial
@@ -318,11 +324,20 @@ is testable without booting anything:
 - **The global half is a settings-catalog entry, not a bespoke form.** Five rows in
   `config-resolve.js` (`section: 'defaults'`) give the Settings UI its section, its source
   badges and its per-row Reset for free. `coerceValue()` gained optional `min`/`max` for
-  `chatDefaults.turns` so the form cannot store a value its own `<input>` refuses to show.
+  `chatDefaults.turns` so the form cannot store a value its own `<input>` refuses to show,
+  plus an opt-in `int: true` that parses with `Number` (so `'12px'` is refused rather than
+  read as `12`) and truncates AFTER the range check — the same order `chat-defaults.coerce`
+  uses. Settings and the toolbar must coerce one dial identically; without `int` the older
+  `parseInt` behaviour of every pre-existing number row is untouched.
 - **The `falsyFallsThrough` guard is behavioural for nested keys.** `test/config-resolve.test.js`
   reads the `||` / `??` operator straight out of `loadMergedConfig()` for FLAT keys; a key
   whose `path` contains a dot has no such line, so it is checked by running the resolver
   instead. Do not weaken the flat check to make a nested key pass.
+- **Membership before the unpin sentinel.** `sanitize()` rejects an unknown key whatever
+  its value, so `{notADial: null}` is a typo that 400s instead of an unpin that reports
+  success. `PUT /api/projects/:id/defaults` likewise refuses a non-object body — a 200 on
+  `{defaults: null}` reads exactly like the reset that DELETE actually performs. A wrong
+  `projectId` is 404 on all three endpoints; only *no* id means "just the global row".
 - **Only a chat with no session of its own is seeded.** `applyChatDefaults()` runs from
   `newTab()`, from `switchProject()` and at boot — always behind `if (!currentSessionId)`.
   An existing chat carries its own mode/model in SQLite and `loadSess()` must keep winning.
