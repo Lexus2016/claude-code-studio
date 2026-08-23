@@ -11613,7 +11613,11 @@ async function send() {
       // send the API path (claude -p) regardless of any saved/default engine. Restore: engine: curEngine,
       engine: 'api',
       effort: curEffort || undefined,
-      maxTurns: parseInt($i('maxTurns').value) || 30,
+      // An empty turns box must fall back to the user's CONFIGURED budget, not to a
+      // private literal: this is the value that actually goes on the wire, and 30 was
+      // neither the toolbar's seed nor the server's built-in. `_chatDefaults` holds the
+      // resolved project > global > built-in chain fetched at boot.
+      maxTurns: parseInt($i('maxTurns').value) || (_chatDefaults?.effective?.turns || 50),
       workdir: curWorkdir || undefined,
     }));
   }

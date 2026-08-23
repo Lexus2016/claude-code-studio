@@ -132,9 +132,15 @@ const ENGINE_WRITE = pick(/db\.prepare\(`UPDATE sessions SET run_engine=\? WHERE
 
 // Feed one dispatched message through processChat's own config-persisting path.
 function persistConfigFor(dispatchedMsg) {
+  // The lifted destructure resolves its fallbacks through the #58 chain, so the
+  // sandbox has to supply the same two names processChat has in scope. Built from
+  // the real module rather than stubbed: if a dial's built-in ever changes, this
+  // test keeps measuring the write-back against what the server would really use.
+  const chatDefaults = require('../chat-defaults');
+  const _cd = chatDefaults.resolveChatDefaults(null, null).effective;
   const sandbox = {
     msg: dispatchedMsg, stmts, db, JSON, Buffer, Object, Array, Number,
-    localSessionId: 'S1', log: { error() {} },
+    localSessionId: 'S1', log: { error() {} }, chatDefaults, _cd,
   };
   vm.createContext(sandbox);
   vm.runInContext(`

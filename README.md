@@ -417,9 +417,13 @@ The active engine is always visible at a glance: a **⚡ Max** badge appears in 
 
 **Global default** — set your preferred engine once with the **★** button next to the toolbar selector (the star lights up when the current selection is your default). Every new chat — and every new **Kanban** card and **Scheduler** task — starts on it, while any individual chat or task can still override per-item. The engine selector lives in Chat, the Kanban task form, and the Scheduler form alike, and falls back to **API** automatically when `tmux` is unavailable (e.g. native Windows without WSL) — the Subscription option is disabled with a clear hint rather than failing only after you send.
 
+**New-chat defaults** — the same idea, extended to the whole toolbar. Pin **mode, agent mode, model, effort and turn budget** in Settings → *New-chat defaults*, and every new chat opens on them instead of on the built-ins. A project can override any subset of the five in its own settings; it stores **only the dials you actually pinned**, so the rest keep following the global value as you change it later. The chain is **project override → global default → built-in**, and every row shows which of the three it came from, with a one-click Reset. Existing chats are never re-seeded — each one carries its own settings in SQLite.
+
 ### 🌐 Remote Access & SSH
 
 **SSH** — add remote servers, create projects pointing to directories on them. Claude works there as if local. Type `#` in chat for quick multi-server attachment. Screenshots and files auto-upload via SFTP.
+
+**Remote file browser** — the file tree, the file viewer and `@`-mention search now work on SSH projects as well, not only local ones. Read-only by design: list a directory, open a file. Download, share and image/PDF preview stay hidden for remote files instead of failing under your finger. Listings are capped at 2000 entries and files at 2 MB — both enforced on the remote host and announced in the UI, so an 8 GB log never crosses the link. A symlink pointing outside the project root is refused, not followed.
 
 **Remote Access** — one click: cloudflared (no signup) or ngrok. Public HTTPS URL in seconds. Works behind NAT, firewalls, corporate VPNs. URL sent to Telegram automatically.
 
@@ -485,12 +489,12 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | **Modes** | Auto, Plan (read-only + Execute Plan), Task, auto mode switching |
 | **Skills** | 30 built-in, auto-classification, plugin discovery, custom `.md` files |
 | **Commands** | 10 built-in slash commands, custom commands |
-| **Remote** | SSH servers, SFTP upload, `#` quick-attach, cloudflared/ngrok tunnels, remote CLI session import |
+| **Remote** | SSH servers, SFTP upload, `#` quick-attach, cloudflared/ngrok tunnels, remote CLI session import, read-only remote file browser (tree + viewer + `@`-mention search over SSH, capped and symlink-guarded) |
 | **Mobile** | Native-feel UI, bottom sheet, scroll-snap Kanban, iOS-safe, touch-optimized |
 | **Dashboard** | Activity heatmap, tool usage, model distribution, Automation Index, peak hours |
 | **Reliability** | security-hardened Telegram uploads, self-healing sessions, crash protection, atomic writes, instant stop, rate limit auto-wait, concurrency safety (session lock + busy_timeout), orphaned session lock auto-cleanup |
 | **Workspace** | Global view across every project at once — one search over tasks and files, jump straight to the owning project |
-| **Settings** | In-app settings form, every value shown next to the source it comes from (shell env / `.env` / local `config.json` / global / project override / built-in default), override + shadow + ignored badges, secrets masked server-side, one-click reset to default, raw-file editors alongside |
+| **Settings** | In-app settings form, every value shown next to the source it comes from (shell env / `.env` / local `config.json` / global / project override / built-in default), override + shadow + ignored badges, secrets masked server-side, one-click reset to default, raw-file editors alongside, global new-chat defaults (mode / agent / model / effort / turns) with sparse per-project overrides |
 | **Security** | bcrypt auth, AES-256-GCM SSH, Helmet.js, path traversal protection, XSS/SQLi prevention |
 | **Platform** | Windows/macOS/Linux, Docker (non-root, registry mirror), LLM proxy/gateway, 5 languages (EN/UA/RU/FR/HE), OpenRouter support |
 

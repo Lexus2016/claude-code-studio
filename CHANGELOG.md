@@ -1,5 +1,98 @@
 # Changelog
 
+## 7.7.0
+
+Three things that were true only in one place become true everywhere: the file
+browser now works on remote projects, a remote run finds the same `node` an
+interactive shell would, and the dials a new chat opens on are yours to set.
+
+### New-chat defaults
+
+- **Five dials, set once.** Mode, agent mode, model, thinking effort and turn
+  budget now have a configured default instead of a literal buried in the markup.
+  Settings owns the global half; a project can override any subset of the five.
+  The chain is **project override → global default → built-in**, every row shows
+  which of the three answered, and each has a one-click Reset.
+
+- **A project stores only the dials it pinned.** Storing all five instead would
+  freeze each project at whatever the global happened to be the day it was
+  created — the opposite of what a default is for. Pin the model, change the
+  global turn budget next month, and the project follows.
+
+- **The chain reaches the server, not just the toolbar.** Both doors to a new
+  interactive chat — the WebSocket `chat` frame and `POST /api/sessions` — used
+  to carry their own literal set (`sonnet` / `auto` / `single` / 30 turns). An
+  API client or a browser running a cached older build therefore created chats on
+  values nobody had configured, while the toolbar on screen showed the resolved
+  ones. Both now resolve the same chain, and the resolved row is computed before
+  the session is inserted so the stored row and the run cannot disagree.
+
+- **Telegram and the scheduler deliberately do not inherit it.** They keep their
+  own 30-turn budget, now under a name (`UNATTENDED_MAX_TURNS`) rather than
+  copy-pasted at eleven call sites. A scheduled job that silently inherited
+  someone's `turns: 200` would spend a budget nobody was watching, and every
+  existing install would have jumped from 30 to 50 on upgrade without being
+  asked. Per-channel budgets, if they are ever wanted, belong in their own
+  setting — not in the dials that describe a chat window.
+
+- **An empty turn-budget box no longer means 30.** The value the browser actually
+  put on the wire fell back to a literal that matched neither the box's own
+  placeholder nor the server's built-in. It now falls back to your configured
+  default.
+
+### Remote projects get a file browser
+
+- **List a directory, open a file — over SSH.** The file tree, the file viewer
+  and `@`-mention search work on remote projects, which previously answered
+  "file browser not available". That refusal was correct while there was no
+  remote read path: the browser reads the local disk, so pointing it at
+  `/home/user/project` from a Windows client resolved to `C:\home\user\project`.
+
+- **Read-only by design.** Download, share, copy-image and image/PDF preview stay
+  hidden for a remote file rather than failing under your finger, and come back
+  the moment you open a local one.
+
+- **Caps are announced, never silent.** Listings stop at 2000 entries and files
+  at 2 MB, both enforced on the remote host — an 8 GB log never crosses the link
+  — and both stated in the UI instead of quietly truncating.
+
+- **Three guard layers, none of them the local one.** Paths resolve with POSIX
+  semantics whatever this server runs on; the remote script re-checks containment
+  against the physical path (`pwd -P`), because a symlink inside the project
+  satisfies a textual check by construction; and every row whose path escapes the
+  base the remote echoed back is dropped. A symlink whose final component is a
+  file is refused rather than followed. Filenames are attacker-controlled in the
+  way that matters — a repo you cloned can contain one with a newline in it — so
+  every control line is framed by a per-request random nonce.
+
+### Remote runs find the tools that are actually installed
+
+- **`bash -lc` is a login shell, not an interactive one.** Every version manager
+  — mise, asdf, nvm, pyenv, rbenv, nodenv, fnm, sdkman — publishes its binaries
+  from `~/.bashrc`, and the stock Debian/Ubuntu `~/.bashrc` returns immediately
+  when not interactive. The symptom was a SessionEnd hook dying with
+  `node: not found` on a host where `which node` answers instantly. Remote runs
+  now build the PATH those managers would have set, after the `cd` rather than
+  before it, since mise and asdf pin a version per directory.
+
+- **It cannot take the run down with it.** The prelude is chain-safe: the caller
+  joins it to the `claude` invocation with `&&`, so it never ends on a failed
+  test, and a user's own `$CCS_REMOTE_INIT` runs under `eval` so a syntax error
+  there stays a runtime failure instead of a parse error that swallows everything
+  behind it. It sources no rc file — that output is a stream-json pipe, and one
+  MOTD banner derails the parse.
+
+- **The Test button reports it.** A connection test runs the same prelude and
+  says whether `node` and `claude` resolve, so a broken PATH shows up on the host
+  form instead of surfacing mid-turn as a hook failure that names the wrong
+  problem.
+
+### Fixes
+
+- The MCP task manager offered `haiku` / `sonnet` / `opus` in its model enum, so
+  an agent creating a task could not pick **Fable** — the fourth model the UI has
+  exposed since 7.4.
+
 ## 7.6.0
 
 Bots stop being a web-only feature, and gain a mode where several of them talk to
@@ -102,6 +195,10 @@ remote writes, a remote poll loop, and somewhere for the agent's terminal to liv
   agent with none of its prompt or model.
 - The `/` command popup clamps each preview to two lines. A command's prompt can run to
   thousands of characters, and one entry unrolled over the whole list.
+- `AGENTS.md` is read when a project has no `CLAUDE.md`. The `claude` CLI discovers only
+  the latter, so a project standardised on `AGENTS.md` ran with none of its conventions,
+  silently. Precedence is exclusive — when a `CLAUDE.md` exists the other is not read at
+  all — and the instruction-file editor opens whichever one the run actually uses.
 
 ## 7.5.4
 

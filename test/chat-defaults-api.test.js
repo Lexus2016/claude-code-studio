@@ -230,6 +230,58 @@ const storedDefaults = id => {
     ['chatDefaults.mode', 'chatDefaults.agent', 'chatDefaults.model', 'chatDefaults.effort', 'chatDefaults.turns']);
   check('and the section itself is declared', resolved.json.sections.includes('defaults'), true);
 
+  console.log('\n— the chain reaches session creation, not just the toolbar —');
+  // POST /api/sessions is the second door to an interactive chat (the WS `chat`
+  // frame is the first). Before this it fell to its own literals — 'sonnet' /
+  // 'auto' / 'single' — so an API client or an older cached SPA created a chat on
+  // values nobody had configured, while the browser's toolbar showed the resolved
+  // ones. `mode` here comes from the LOCAL config.json and `agent_mode` from the
+  // GLOBAL one, so a single row also re-proves the per-layer sanitising: spread
+  // the two files raw and the local `agent:''` masks the global 'multi'.
+  // Asserted against what the resolver reports RIGHT HERE rather than against the
+  // seeded literals: earlier blocks in this file deliberately rewrite the global
+  // row, and the property worth pinning is "the created row equals the chain",
+  // whatever the chain currently says.
+  const chainB = (await defaultsOf(B)).effective;
+  const sessB = await api('POST', '/api/sessions', { workdir: PROJ_B });
+  check('an omitted mode is seeded from the resolved chain', sessB.json.mode, chainB.mode);
+  check('and so is an omitted agent mode', sessB.json.agent_mode, chainB.agent);
+  check('and an omitted model', sessB.json.model, chainB.model);
+  // A pinned {model:'haiku'} a few assertions above; B pinned nothing.
+  const chainA = (await defaultsOf(A)).effective;
+  check('the two projects really do resolve differently', chainA.model === chainB.model, false);
+  const sessA = await api('POST', '/api/sessions', { workdir: PROJ_A });
+  check('a project override wins over both config layers', sessA.json.model, 'haiku');
+  check('while the dials it did not pin still follow the global', sessA.json.mode, chainB.mode);
+  const sessX = await api('POST', '/api/sessions', { workdir: PROJ_A, model: 'opus', mode: 'plan' });
+  check('an explicit value still beats the whole chain', [sessX.json.model, sessX.json.mode], ['opus', 'plan']);
+
+  console.log('\n— the unattended channels deliberately do NOT inherit —');
+  // Telegram and the scheduler are execution channels, not chat creation. A
+  // scheduled job that silently inherited someone\'s turns=200 would burn a budget
+  // nobody was watching, and every existing install would have jumped 30 -> 50 on
+  // upgrade without being asked. The decision is recorded as a named constant, so
+  // a bare 30 reappearing next to a runner is a review signal rather than noise.
+  const srvSrc = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  check('the unattended budget is declared exactly once',
+    (srvSrc.match(/^const UNATTENDED_MAX_TURNS = \d+;$/m) || []).length, 1);
+  check('and it is still 30 — changing it changes every install on upgrade',
+    /^const UNATTENDED_MAX_TURNS = 30;$/m.test(srvSrc), true);
+  check('the scheduled-task runner uses it',
+    /const effectiveTaskMaxTurns = task\.max_turns \|\| UNATTENDED_MAX_TURNS;/.test(srvSrc), true);
+  check('the Telegram path uses it', /maxTurns: UNATTENDED_MAX_TURNS,/.test(srvSrc), true);
+  // The WS `chat` frame is the interactive door, so it must NOT carry a private
+  // literal set any more.
+  const wsLine = srvSrc.split('\n').find(l => l.includes('const { text:userMessage, attachments=[]'));
+  check('the WS chat frame no longer defaults turns to a literal', /maxTurns=\d/.test(wsLine), false);
+  check('it resolves them from the chain instead', /maxTurns=_cd\.turns/.test(wsLine), true);
+  check('and the same for mode, agent and model',
+    ['mode=_cd.mode', 'agentMode=_cd.agent', 'model=_cd.model'].every(f => wsLine.includes(f)), true);
+  // The stored row and the run have to agree: `_cd` is hoisted above the INSERT.
+  check('the resolved defaults are hoisted above the session INSERT',
+    srvSrc.indexOf('const _cd = chatDefaultsForWorkdir(msg.workdir')
+      < srvSrc.indexOf('stmts.createSession.run(localSessionId'), true);
+
   cleanup();
   console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

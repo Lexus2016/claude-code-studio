@@ -95,6 +95,16 @@ const agentsMd = require('./agents-md');
 // purpose — see the header of the module.
 const remoteFiles = require('./remote-files');
 const chatDefaults = require('./chat-defaults');
+
+// Turn budget for the UNATTENDED execution channels — a Telegram message and a
+// scheduled task. Deliberately NOT wired to `chatDefaults.turns` (#58): that chain
+// governs the toolbar a NEW INTERACTIVE CHAT opens on, where a human watches the run
+// and can stop it. A scheduled job that silently inherited someone's turns=200 would
+// burn a budget nobody was watching, and every existing install would have jumped
+// from 30 to 50 on upgrade without asking. If per-channel budgets are ever wanted,
+// they belong in their own setting, not in the chat dials.
+const UNATTENDED_MAX_TURNS = 30;
+
 const { isTransientOverload, shouldRetryOverload, detectUsageLimit, taskStatusForStop } = require('./rate-limit-utils');
 const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs } = require('./delegate-terminal');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
@@ -1750,7 +1760,7 @@ async function startTask(task) {
     let currentTaskCid = claudeSessionId;
     let lastTaskResult = null;
     let lastTaskTurnUsage = null; // usage of the most recent assistant turn → real ctx-window occupancy
-    const effectiveTaskMaxTurns = task.max_turns || 30;
+    const effectiveTaskMaxTurns = task.max_turns || UNATTENDED_MAX_TURNS;
 
     // Build MCP config for task execution — user MCPs from config + internal task-manager
     const taskMcpServers = {};
@@ -3274,6 +3284,28 @@ async function classifyTask(userMessage, currentSkills, config, workdir) {
 // ============================================
 function loadProjects() { try { return JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8')); } catch { return []; } }
 function saveProjects(p) { const d=path.dirname(PROJECTS_FILE); if(!fs.existsSync(d)) fs.mkdirSync(d,{recursive:true}); atomicWriteJSON(PROJECTS_FILE, p); }
+
+/**
+ * The five new-chat dials (#58) resolved for a workdir: project override > global > BUILTIN.
+ * Sessions carry no `project_id` column, so the project is matched by workdir the same way
+ * /api/activity does. Used as the WS `chat` fallback for a client that omits a field — an
+ * older cached SPA, an API client, a hand-built message. Before this it fell to a private
+ * literal set (turns 30, model sonnet) that matched neither the toolbar nor BUILTIN, so the
+ * same omitted field answered differently depending on which door the turn came through.
+ * @param {string|null} workdir
+ */
+function chatDefaultsForWorkdir(workdir) {
+  let proj = null;
+  if (workdir) {
+    let key; try { key = path.resolve(workdir); } catch { key = workdir; }
+    proj = loadProjects().find(p => {
+      try { return path.resolve(p.workdir) === key; } catch { return false; }
+    }) || null;
+  }
+  // The FLAT effective row, not the {effective, global, overridden} envelope the
+  // REST endpoints hand the browser: callers here want a value per dial.
+  return chatDefaults.resolveChatDefaults(loadMergedConfig().chatDefaults, proj && proj.defaults).effective;
+}
 
 /**
  * Get notification context (session title + project name) for enriching notification payloads.
@@ -5042,7 +5074,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           model || callerTask?.model || 'sonnet',
           mode || callerTask?.mode || 'auto',
           agent_mode || callerTask?.agent_mode || 'single',
-          max_turns || callerTask?.max_turns || 30,
+          max_turns || callerTask?.max_turns || UNATTENDED_MAX_TURNS,
           null, // attachments
           depsJson,
           chain_id || null,
@@ -5117,7 +5149,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           'auto', 'single', effectiveModel, workdir);
         const effectiveEffort = chainEffort || callerTask?.effort || null;
         stmts.createChain.run(chainId, String(title).substring(0, 200), workdir,
-          effectiveModel, 'auto', 'single', 30,
+          effectiveModel, 'auto', 'single', UNATTENDED_MAX_TURNS,
           chainSessionId, toUnixTs(chainScheduledAt), recurrence || null,
           toUnixTs(recurrence_end_at), callerTask?.source_session_id || null, 0,
           effectiveEffort);
@@ -5154,7 +5186,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
             workdir,
             td.model || effectiveModel,
             'auto', 'single',
-            td.max_turns || 30,
+            td.max_turns || UNATTENDED_MAX_TURNS,
             null, // attachments
             depsJson,
             chainId,
@@ -6181,7 +6213,7 @@ function badBotId(value) {
 app.post('/api/tasks', (req, res) => {
 
   const { title=i18nTask(), description='', notes='', status='backlog', sort_order=0, session_id=null, workdir=null,
-          model='sonnet', mode='auto', agent_mode='single', max_turns=30, attachments=null,
+          model='sonnet', mode='auto', agent_mode='single', max_turns=UNATTENDED_MAX_TURNS, attachments=null,
           depends_on=null, chain_id=null, source_session_id=null,
           scheduled_at=null, recurrence=null, recurrence_end_at=null, effort=null, run_engine=null,
           bot_id=null } = req.body;
@@ -6204,7 +6236,7 @@ app.put('/api/tasks/:id', (req, res) => {
           status=task.status, sort_order=task.sort_order,
           session_id=task.session_id, workdir=task.workdir,
           model=task.model||'sonnet', mode=task.mode||'auto', agent_mode=task.agent_mode||'single',
-          max_turns=task.max_turns||30, attachments=task.attachments,
+          max_turns=task.max_turns||UNATTENDED_MAX_TURNS, attachments=task.attachments,
           depends_on=task.depends_on, chain_id=task.chain_id, source_session_id=task.source_session_id,
           scheduled_at=task.scheduled_at, recurrence=task.recurrence, recurrence_end_at=task.recurrence_end_at,
           effort=task.effort, run_engine=task.run_engine,
@@ -6288,7 +6320,7 @@ app.get('/api/task-chains/:id', (req, res) => {
 });
 app.post('/api/task-chains', (req, res) => {
   const { title = 'Task Group', workdir = null, model = 'sonnet', mode = 'auto',
-          agent_mode = 'single', max_turns = 30, scheduled_at = null,
+          agent_mode = 'single', max_turns = UNATTENDED_MAX_TURNS, scheduled_at = null,
           recurrence = null, recurrence_end_at = null, effort = null } = req.body;
   const id = genId();
   // Create shared session for the chain
@@ -6355,7 +6387,7 @@ app.post('/api/task-chains/:id/tasks', (req, res) => {
   stmts.createTask.run(taskId, String(title).substring(0, 200), String(description).substring(0, 2000),
     String(notes || '').substring(0, 2000), taskStatus, sortOrder,
     chain.session_id || null, chain.workdir || null, chain.model || 'sonnet',
-    chain.mode || 'auto', chain.agent_mode || 'single', chain.max_turns || 30,
+    chain.mode || 'auto', chain.agent_mode || 'single', chain.max_turns || UNATTENDED_MAX_TURNS,
     null, dependsOn, req.params.id, chain.source_session_id || null,
     chain.scheduled_at || null, null, null, chain.effort || null, chain.run_engine || null,
           null // bot_id — commit a38e2a4 added this column to the INSERT but updated only
@@ -6486,7 +6518,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
 
   // Register chain in task_chains table (gives it a title, session, and metadata)
   stmts.createChain.run(chainId, (plan_description || 'Task chain').substring(0, 200),
-    sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', 30,
+    sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS,
     chainSessionId, null, null, null, source_session_id || null, 0, sqlVal(effort) || null);
 
   // Chain gets its OWN Claude session — first task starts fresh,
@@ -6513,7 +6545,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
         chainSessionId,
         sqlVal(workdir) || null,
         sqlVal(model) || 'sonnet',
-        'auto', 'single', 30,
+        'auto', 'single', UNATTENDED_MAX_TURNS,
         null,          // attachments
         realDeps.length ? JSON.stringify(realDeps) : null,
         chainId,
@@ -6542,7 +6574,11 @@ app.get('/api/sessions', (req,res) => {
   res.json(workdir ? stmts.getSessionsByWorkdir.all(workdir) : stmts.getSessions.all());
 });
 app.post('/api/sessions', (req, res) => {
-  const { title = i18nSession(), workdir = null, model = 'sonnet', mode = 'auto', agentMode = 'single', kind = 'chat', terminalAgent = null } = req.body || {};
+  // The other door to creating an interactive chat, so it resolves the same #58 chain
+  // as the WS `chat` frame. The SPA sends its toolbar values; this fires for API
+  // clients and older builds, which used to land on literals nobody had configured.
+  const _cd = chatDefaultsForWorkdir((req.body || {}).workdir || null);
+  const { title = i18nSession(), workdir = null, model = _cd.model, mode = _cd.mode, agentMode = _cd.agent, kind = 'chat', terminalAgent = null } = req.body || {};
   // This value ends up as the cwd of `claude --dangerously-skip-permissions`. Same
   // rule as every other endpoint that takes a path from the client.
   if (workdir && !isWorkdirAllowed(workdir)) return res.status(400).json({ error: 'workdir is outside the allowed roots' });
@@ -8775,7 +8811,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
       systemPrompt,
       mcpServers,
       model,
-      maxTurns: 30,
+      maxTurns: UNATTENDED_MAX_TURNS,
       ws: proxy,
       sessionId,
       abortController,
@@ -10340,10 +10376,17 @@ wss.on('connection', (ws) => {
         existSess = null;
       }
 
+      // Fallbacks for a dial the client omitted come from the #58 chain, not from a
+      // private literal set: an older cached SPA, an API client or a hand-built frame
+      // must land on the same defaults the toolbar would have seeded. Resolved from
+      // `msg.workdir` because the chain's first link is the per-project override, and
+      // hoisted above the INSERT so the stored ROW and the RUN cannot disagree.
+      const _cd = chatDefaultsForWorkdir(msg.workdir || null);
+
       let isNewSession = false;
       if (!localSessionId || !existSess) {
         localSessionId = genId();
-        stmts.createSession.run(localSessionId,i18nSession(),'[]','[]',sqlVal(msg.mode)||'auto',sqlVal(msg.agentMode)||'single',sqlVal(msg.model)||'sonnet',sqlVal(msg.workdir)||null);
+        stmts.createSession.run(localSessionId,i18nSession(),'[]','[]',sqlVal(msg.mode)||_cd.mode,sqlVal(msg.agentMode)||_cd.agent,sqlVal(msg.model)||_cd.model,sqlVal(msg.workdir)||null);
         isNewSession = true;
       } else {
         localClaudeId = sanitizeSessionId(existSess.claude_session_id) || undefined;
@@ -10373,7 +10416,7 @@ wss.on('connection', (ws) => {
         }
       }
 
-      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode='auto', agentMode='single', model='sonnet', maxTurns=30, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=null, engine='api' } = msg;
+      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode=_cd.mode, agentMode=_cd.agent, model=_cd.model, maxTurns=_cd.turns, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=chatDefaults.effortToFlag(_cd.effort) || null, engine='api' } = msg;
 
       let replyQuote = '';
       if (reply_to && reply_to.content) {
@@ -11513,7 +11556,7 @@ wss.on('connection', (ws) => {
           );
           // Register chain in task_chains table
           stmts.createChain.run(chainId, (finalPlan || 'Task chain').substring(0, 200),
-            sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', 30,
+            sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS,
             chainSessionId, null, null, null, sessionId || null, 0, sqlVal(effort) || null);
           // Chain gets its OWN Claude session — first task starts fresh,
           // subsequent tasks --resume from the chain's session (NOT the source chat's).
@@ -11534,7 +11577,7 @@ wss.on('connection', (ws) => {
                 (a.role || 'Subtask').substring(0, 200),
                 (a.task || '').substring(0, 2000),
                 '', 'todo', i, chainSessionId, sqlVal(workdir) || null,
-                sqlVal(model) || 'sonnet', 'auto', 'single', 30, null,
+                sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS, null,
                 realDeps.length ? JSON.stringify(realDeps) : null,
                 chainId, sessionId || null,
                 null, null, null,  // scheduled_at, recurrence, recurrence_end_at
