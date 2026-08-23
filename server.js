@@ -91,6 +91,9 @@ const auth = require('./auth');
 const ClaudeCLI = require('./claude-cli');
 // CLAUDE.md / AGENTS.md discovery + the AGENTS.md system-prompt block (issue #54).
 const agentsMd = require('./agents-md');
+// Read-only remote file browsing (issue #57). Its path guard is POSIX-only on
+// purpose — see the header of the module.
+const remoteFiles = require('./remote-files');
 const { isTransientOverload, shouldRetryOverload, detectUsageLimit, taskStatusForStop } = require('./rate-limit-utils');
 const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs } = require('./delegate-terminal');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
@@ -7985,10 +7988,12 @@ function resolveFilesWorkdir(reqWorkdir) {
     // yields 'C:\\home\\user\\project', which then reached the remote shell as
     // `cd C:/home/user/project` (issue #53). Nothing local ever opens this path —
     // every /api/files endpoint refuses a remote project before touching the disk.
-    if (match) return { workdir: match.isRemote ? match.workdir : _realish(match.workdir), isRemote: !!match.isRemote };
+    // `project` rides along for the remote branch, which needs remoteHostId to know
+    // WHICH host to ask. Local callers ignore it.
+    if (match) return { workdir: match.isRemote ? match.workdir : _realish(match.workdir), isRemote: !!match.isRemote, project: match };
     return null; // not a registered project — deny
   }
-  return { workdir: _realish(WORKDIR), isRemote: false };
+  return { workdir: _realish(WORKDIR), isRemote: false, project: null };
 }
 
 // Containment for the /api/files family. Lexical startsWith() is not enough on its
@@ -8002,11 +8007,65 @@ function resolveInsideWorkdir(workdirReal, rel) {
   return fp;
 }
 
-app.get('/api/files', (req,res) => {
+// Remote half of /api/files (issue #57). Read-only: one SSH round trip that either
+// lists a directory or returns a file, mirroring what the local branch does in one
+// request. Download and raw serving stay refused — see the top of remote-files.js.
+async function serveRemoteFiles(res, resolved, rel) {
+  const proj = resolved.project;
+  const host = remoteHostExecOpts(proj && proj.remoteHostId ? proj.remoteHostId : '');
+  // The host can be deleted while a project still points at it. Saying so beats an
+  // "exec failed" from a connection that was never attempted.
+  if (!host) return res.status(400).json({ error: 'The SSH host for this project no longer exists' });
+
+  const plan = remoteFiles.resolveRemotePath(resolved.workdir, rel);
+  if (!plan.ok) return res.status(403).json({ error: plan.error });
+
+  const nonce = 'CCS' + crypto.randomBytes(9).toString('hex');
+  let r;
+  try {
+    r = await sshRunRemote({
+      ...host.exec,
+      command: remoteFiles.remoteBrowseScript(nonce, plan),
+      // Headroom over the file cap for the control lines and a login banner. The
+      // remote refuses an oversized file before `cat`, so this is not the real limit.
+      maxBytes: remoteFiles.MAX_FILE_BYTES + 65536,
+    });
+  } catch (e) { return remoteExecFailure(res, e); }
+
+  const out = remoteFiles.parseRemoteBrowse(r.stdout, nonce);
+  if (out.status === 'ESCAPE') return res.status(403).json({ error: 'Denied' });
+  if (out.status === 'NOENT')  return res.status(404).json({ error: 'Not found' });
+  // A symlinked FILE is refused by the remote script rather than followed — see the
+  // module header for why resolving one portably is not on the table.
+  if (out.status === 'SYMLINK') return res.status(403).json({ error: 'Symlinked files are not previewable on remote projects' });
+  if (out.status === 'BAD')    return res.status(502).json({ code: 'exec_failed', error: 'Unreadable response from the remote host' });
+
+  if (out.status === 'TOOBIG') {
+    return res.json({ type: 'file', name: path.posix.basename(plan.target), remote: true,
+      content: '[File too large to preview (>2 MB)]', ext: path.posix.extname(plan.target).toLowerCase(), workdir: resolved.workdir });
+  }
+
+  if (out.status === 'DIR') {
+    return res.json({
+      type: 'dir', remote: true, truncated: !!out.truncated, workdir: resolved.workdir,
+      // path.posix.join, never path.join: on a Windows host path.join would hand the
+      // browser 'src\\index.js', and the next request would resolve it as ONE filename.
+      items: out.items.map(it => ({ name: it.name, type: it.type, size: it.size, path: rel ? path.posix.join(rel, it.name) : it.name })),
+    });
+  }
+
+  // A file. Binary detection is by content, not extension: the local branch can stat
+  // and guess, this one already holds the bytes, and a NUL is the honest test.
+  const ext = path.posix.extname(plan.target).toLowerCase();
+  const content = out.raw.includes('\0') ? '[Binary]' : out.raw;
+  return res.json({ type: 'file', remote: true, name: path.posix.basename(plan.target), content, ext, workdir: resolved.workdir });
+}
+
+app.get('/api/files', async (req,res) => {
   const dir=qstr(req.query.path);
   const resolved = resolveFilesWorkdir(qstr(req.query.workdir));
   if (!resolved) return res.status(403).json({error:'Workdir not in registered projects'});
-  if (resolved.isRemote) return res.json({type:'remote'}); // remote FS can't be browsed locally
+  if (resolved.isRemote) return serveRemoteFiles(res, resolved, dir);
   const workdirReal = resolved.workdir;
   const fp=resolveInsideWorkdir(workdirReal,dir);
   if(!fp) return res.status(403).json({error:'Denied'});

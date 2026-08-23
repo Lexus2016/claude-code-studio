@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. `npm test` chains 59 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 41 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
+No linting and no build step configured. `npm test` chains 61 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 43 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
 
 ## Architecture
 
@@ -224,6 +224,43 @@ keep:
 resolve, so a broken PATH is visible on the host's Test button instead of surfacing
 mid-turn as a hook failure that names the wrong problem.
 
+### Remote file browser (issue #57)
+
+`/api/files` answered `{type:'remote'}` for a remote SSH project and the UI said "file
+browser not available". That refusal was correct while there was no remote read path —
+the browser reads the LOCAL disk, so pointing it at `/home/user/project` from a Windows
+client resolves to `C:\home\user\project`, the #53 failure family. `remote-files.js`
+adds the read path.
+
+**Read-only, deliberately.** List a directory, read a file. `/api/files/download` and
+`/api/files/raw` still answer 400 for a remote project, so the SPA hides the download,
+share, copy-image and image/PDF-preview affordances behind `_filesRemote` (set from the
+`remote:true` flag on the response, never inferred from the project type) instead of
+leaving them to fail under the user's finger. `closeFpv()` restores them — miss that and
+one remote file hides the download button for every local file opened afterwards.
+
+**The path guard is three layers, and it is not the local one.**
+
+1. `resolveRemotePath()` resolves with `path.posix` whatever this server runs on.
+   `path.resolve()` is exactly what produced `C:\home\user\project`.
+2. The remote script re-checks containment against the **physical** path (`cd … &&
+   pwd -P`), not the textual one. This process cannot `lstat` the remote tree, so a
+   symlink at `<project>/node_modules/x -> /etc` satisfies layer 1 by construction —
+   the string still starts with the project root. A symlink whose FINAL component is a
+   file is refused outright (`SYMLINK` → 403) rather than followed: resolving one
+   portably needs `readlink -f`, which macOS did not ship before 12.3.
+3. `parseRemoteBrowse()` drops any row whose path is not under the base the remote
+   echoed back. A FILENAME is attacker-controlled in the way that matters — `touch
+   $'x\nCCS… E d - /etc'` inside a repo you cloned — which is also why every control
+   line is framed by a per-request random nonce.
+
+Everything after the `FILE` header is the file, scanned no further: a file that happens
+to contain the nonce must not truncate itself.
+
+**Caps are announced, never silent.** `CCS_REMOTE_FILES_MAX_ENTRIES` (2000) sets
+`truncated` on the response and the tree renders a line saying so; `CCS_REMOTE_FILES_MAX_BYTES`
+(2 MB) is enforced ON THE REMOTE, before `cat`, so an 8 GB log never crosses the link.
+
 ### AGENTS.md (issue #54)
 
 The `claude` CLI discovers `CLAUDE.md` but **not** `AGENTS.md` — measured against
@@ -262,7 +299,7 @@ closes that gap for **local** runs.
 
 ## How to Verify Changes
 
-`npm test` runs 59 test files under `test/` (18 `test/render/*.test.mjs` + 41 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 61 test files under `test/` (18 `test/render/*.test.mjs` + 43 `test/*.test.js`). There is no CI yet, and nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server

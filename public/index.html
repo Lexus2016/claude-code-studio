@@ -3813,7 +3813,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
         <span data-i18n="fpv.copy_img">Копіювати</span>
       </button>
-      <button class="fpv-btn" onclick="fpvDownload()" data-i18n-title="fpv.download.title" title="Завантажити файл">
+      <button class="fpv-btn" id="fpvDownloadBtn" onclick="fpvDownload()" data-i18n-title="fpv.download.title" title="Завантажити файл">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span data-i18n="fpv.download">Завантажити</span>
       </button>
@@ -4865,7 +4865,7 @@ const TRANSLATIONS = {
     'me.toast.added':'MCP-сервер додано.','me.toast.updated':'MCP-сервер оновлено.','me.kv.del':'Видалити',
     'notif.dismiss':'Закрити','msf.plan_kanban':'План → Kanban','msf.open_kanban':'Відкрити Kanban →','msf.sent':'✅ Надіслано',
     'skill.custom_desc':'Користувацький скіл','skill.custom_cat':'🔧 Кастомні',
-    'files.remote_unavail':'🌐 Віддалений проект —<br>файловий браузер недоступний',
+    'files.remote_unavail':'🌐 Віддалений проект —<br>файловий браузер недоступний','files.truncated':'… список обрізано — у теці забагато файлів','fpv.remote_binary':'Попередній перегляд недоступний для віддалених проєктів (лише текст)',
     'hist.drag':'Перетягнути','tg.device.connected':'📱 Telegram: {name} підключено',
     'tg.bot.started':'✅ Telegram-бот запущено: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Стиснути чат і відкрити нову сесію','compact.loading':'Стиснення…','compact.success':'✅ Чат стиснено — відкриваю нову сесію','compact.err':'Помилка стиснення',
@@ -5244,7 +5244,7 @@ const TRANSLATIONS = {
     'me.toast.added':'MCP server added.','me.toast.updated':'MCP server updated.','me.kv.del':'Remove',
     'notif.dismiss':'Dismiss','msf.plan_kanban':'Plan → Kanban','msf.open_kanban':'Open Kanban →','msf.sent':'✅ Sent',
     'skill.custom_desc':'Custom skill','skill.custom_cat':'🔧 Custom',
-    'files.remote_unavail':'🌐 Remote project —<br>file browser not available',
+    'files.remote_unavail':'🌐 Remote project —<br>file browser not available','files.truncated':'… listing truncated — too many files in this folder','fpv.remote_binary':'Preview is not available for remote projects (text only)',
     'hist.drag':'Drag to reorder','tg.device.connected':'📱 Telegram: {name} connected',
     'tg.bot.started':'✅ Telegram bot started: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Compact chat and start new session','compact.loading':'Compacting…','compact.success':'✅ Chat compacted — opening new session','compact.err':'Compact failed',
@@ -5623,7 +5623,7 @@ const TRANSLATIONS = {
     'me.toast.added':'MCP-сервер добавлен.','me.toast.updated':'MCP-сервер обновлён.','me.kv.del':'Удалить',
     'notif.dismiss':'Закрыть','msf.plan_kanban':'План → Kanban','msf.open_kanban':'Открыть Kanban →','msf.sent':'✅ Отправлено',
     'skill.custom_desc':'Пользовательский навык','skill.custom_cat':'🔧 Кастомные',
-    'files.remote_unavail':'🌐 Удалённый проект —<br>файловый браузер недоступен',
+    'files.remote_unavail':'🌐 Удалённый проект —<br>файловый браузер недоступен','files.truncated':'… список обрезан — в папке слишком много файлов','fpv.remote_binary':'Предпросмотр недоступен для удалённых проектов (только текст)',
     'hist.drag':'Перетащить','tg.device.connected':'📱 Telegram: {name} подключён',
     'tg.bot.started':'✅ Telegram-бот запущен: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Сжать чат и открыть новую сессию','compact.loading':'Сжатие…','compact.success':'✅ Чат сжат — открываю новую сессию','compact.err':'Ошибка сжатия',
@@ -5913,7 +5913,7 @@ const TRANSLATIONS = {
     "me.err.url_req":"L'URL est requise pour les serveurs HTTP.","me.err.cmd_req":"La commande est requise pour les serveurs stdio.",
     "me.err.request":"La requête a échoué — consultez les journaux du serveur.","me.toast.added":"Serveur MCP ajouté.","me.toast.updated":"Serveur MCP mis à jour.","me.kv.del":"Retirer",
     "notif.dismiss":"Ignorer","msf.plan_kanban":"Plan → Kanban","msf.open_kanban":"Ouvrir Kanban →","msf.sent":"✅ Envoyé","skill.custom_desc":"Compétence personnalisée",
-    "skill.custom_cat":"🔧 Personnalisé","files.remote_unavail":"🌐 Projet distant —<br>navigateur de fichiers non disponible","hist.drag":"Glisser pour réorganiser",
+    "skill.custom_cat":"🔧 Personnalisé","files.remote_unavail":"🌐 Projet distant —<br>navigateur de fichiers non disponible","files.truncated":"… liste tronquée — trop de fichiers dans ce dossier","fpv.remote_binary":"Aperçu indisponible pour les projets distants (texte uniquement)","hist.drag":"Glisser pour réorganiser",
     "tg.device.connected":"📱 Telegram : {name} connecté","tg.bot.started":"✅ Bot Telegram démarré : @{bot}","compact.btn":"Compacter et nouveau",
     "compact.title":"Compacter le chat et démarrer une nouvelle session","compact.loading":"Compactage…","compact.success":"✅ Chat compacté — ouverture d'une nouvelle session",
     "compact.err":"Échec du compactage","cli.import.tip":"Importer des sessions Claude CLI","cli.import.title":"Importer des sessions Claude CLI","cli.import.project":"Projet :",
@@ -6169,7 +6169,7 @@ const TRANSLATIONS = {
     "me.err.id_req":"נדרש ID לשרת.","me.err.id_fmt":"ה-ID של השרת יכול להכיל רק אותיות, ספרות, מקפים וקווים תחתונים.","me.err.id_dup":"כבר קיים שרת עם ID הזה.","me.err.url_req":"נדרש URL לשרתי HTTP.",
     "me.err.cmd_req":"נדרשת פקודה לשרתי stdio.","me.err.request":"הבקשה נכשלה — בדקו את לוגי השרת.","me.toast.added":"שרת ה-MCP נוסף.","me.toast.updated":"שרת ה-MCP עודכן.","me.kv.del":"הסרה",
     "notif.dismiss":"סגירה","msf.plan_kanban":"תוכנית → Kanban","msf.open_kanban":"פתיחת Kanban →","msf.sent":"✅ נשלח","skill.custom_desc":"Skill מותאם אישית","skill.custom_cat":"🔧 מותאם אישית",
-    "files.remote_unavail":"🌐 פרויקט מרוחק —<br>דפדפן הקבצים לא זמין","hist.drag":"גררו לסידור מחדש","tg.device.connected":"📱 Telegram: {name} התחבר","tg.bot.started":"✅ בוט ה-Telegram הופעל: @{bot}",
+    "files.remote_unavail":"🌐 פרויקט מרוחק —<br>דפדפן הקבצים לא זמין","files.truncated":"… הרשימה נחתכה — יותר מדי קבצים בתיקייה זו","fpv.remote_binary":"תצוגה מקדימה אינה זמינה לפרויקטים מרוחקים (טקסט בלבד)","hist.drag":"גררו לסידור מחדש","tg.device.connected":"📱 Telegram: {name} התחבר","tg.bot.started":"✅ בוט ה-Telegram הופעל: @{bot}",
     "compact.btn":"כיווץ וחדש","compact.title":"כיווץ הצ'אט ופתיחת סשן חדש","compact.loading":"מכווץ…","compact.success":"✅ הצ'אט כווץ — פותח סשן חדש","compact.err":"הכיווץ נכשל",
     "cli.import.tip":"ייבוא סשנים של Claude CLI","cli.import.title":"ייבוא סשנים של Claude CLI","cli.import.project":"פרויקט:","cli.import.load":"טעינה",
     'cli.import.source':'מקור:', 'cli.import.source_local':'המחשב הזה', 'cli.import.no_hosts':'אין מארחי SSH שמורים — הוסיפו אחד במקטע המארחים המרוחקים', 'cli.import.remote_hint':'השאירו את הפרויקט ריק כדי לסרוק את כל פרויקטי Claude CLI במארח', 'cli.import.remote_ph':'נתיב הפרויקט במארח המרוחק (רשות)', 'cli.import.list_truncated':'מוצגים {n} הראשונים', 'cli.import.err.host_not_found':'המארח השמור לא נמצא — ייתכן שנמחק', 'cli.import.err.unreachable':'לא ניתן להגיע למארח — בדקו את הכתובת, הפורט והרשת', 'cli.import.err.auth_failed':'האימות נכשל — בדקו את המשתמש, המפתח או הסיסמה', 'cli.import.err.timeout':'המארח המרוחק לא הגיב בזמן', 'cli.import.err.no_claude_dir':'אין ~/.claude במארח המרוחק — Claude CLI מעולם לא רץ שם', 'cli.import.err.no_projects_dir':'אין ~/.claude/projects במארח המרוחק — אין מה לייבא', 'cli.import.err.invalid_path':'נתיב פרויקט לא תקין', 'cli.import.err.bad_output':'תשובה בלתי צפויה מהמעטפת המרוחקת', 'cli.import.err.exec_failed':'הפקודה המרוחקת נכשלה', 'cli.import.err.host_key_changed':'מפתח המארח המרוחק השתנה — ההתחברות נדחתה', 'cli.import.err.too_large':'הסשנים שנבחרו חורגים ממגבלת ההעברה', 'cli.import.err.too_many':'נבחרו יותר מדי סשנים בבת אחת', 'cli.import.err.import_failed':'הייבוא נכשל', 'cli.import.err.no_sessions':'לא נבחר אף סשן',
@@ -14310,6 +14310,13 @@ function _filesQS(relPath) {
   return `path=${encodeURIComponent(relPath)}${wd ? '&workdir=' + encodeURIComponent(wd) : ''}`;
 }
 
+// Set from the `remote` flag on the last /api/files answer (issue #57). A remote
+// project is browsable READ-ONLY: /api/files/raw and /api/files/download stay refused
+// server-side, so every affordance that goes through them is hidden rather than left
+// to fail. Reset on every load and never inferred from the project type — the source
+// of truth is the response that actually produced what is on screen.
+let _filesRemote = false;
+
 async function loadFiles(dir = '') {
   try {
     const gen = _switchGen;
@@ -14318,11 +14325,14 @@ async function loadFiles(dir = '') {
     const d = await r.json();
     if (gen !== _switchGen) return;
     if (d.type === 'remote') {
+      // Still reachable: a project whose SSH host was deleted has no way to browse.
+      _filesRemote = true;
       const treeEl = $i('filesTree');
       if (treeEl) treeEl.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:8px 4px;line-height:1.6">${t('files.remote_unavail')}</div>`;
       return;
     }
     if (d.type !== 'dir') return;
+    _filesRemote = !!d.remote;
     const treeEl = $i('filesTree');
     treeEl.innerHTML = '';
 
@@ -14338,13 +14348,21 @@ async function loadFiles(dir = '') {
     for (const it of items) {
       const el = document.createElement('div');
       el.className = 'fii';
-      const fileBtns = it.type === 'file' ? `<button class="fpe" onclick="event.stopPropagation();openFilePreview('${escArg(it.path)}','${escArg(it.name)}')" title="${t('files.view')}">👁</button><button class="fdl" onclick="event.stopPropagation();downloadFile('${escArg(it.path)}')" title="${t('fpv.download')}">⬇</button>` : '';
+      const dlBtn = _filesRemote ? '' : `<button class="fdl" onclick="event.stopPropagation();downloadFile('${escArg(it.path)}')" title="${t('fpv.download')}">⬇</button>`;
+      const fileBtns = it.type === 'file' ? `<button class="fpe" onclick="event.stopPropagation();openFilePreview('${escArg(it.path)}','${escArg(it.name)}')" title="${t('files.view')}">👁</button>` + dlBtn : '';
       el.innerHTML = `<span class="fi">${it.type === 'dir' ? '<span style="color:var(--accent2);font-size:13px">▸</span>' : fileIcon(it.name)}</span><span class="fn">${escH(it.name)}</span><span class="fs">${it.size ? fmtSize(it.size) : ''}</span>${fileBtns}`;
       el.onclick = it.type === 'dir' ? () => loadFiles(it.path) : () => openFilePreview(it.path, it.name);
       treeEl.appendChild(el);
     }
 
     if (!items.length) treeEl.innerHTML = `<div style="padding:14px;color:var(--muted);text-align:center;font-size:11px">${t('files.empty')}</div>`;
+    // A capped listing that says nothing reads as "this is the whole directory".
+    else if (d.truncated) {
+      const w = document.createElement('div');
+      w.style.cssText = 'padding:8px 4px;color:var(--muted);text-align:center;font-size:11px';
+      w.textContent = t('files.truncated');
+      treeEl.appendChild(w);
+    }
   } catch {}
 }
 
@@ -14355,6 +14373,9 @@ function closeFpv() {
   $i('fpvBody').innerHTML = '';
   _fpvPath = ''; _fpvName = ''; _fpvIsImg = false;
   $i('fpvCopyImgBtn').style.display = 'none';
+  // Restore what a remote file hid, or the next LOCAL file opens with no download.
+  $i('fpvDownloadBtn').style.display = '';
+  $i('fpvShareBtn').style.display = '';
 }
 
 async function openFilePreview(relPath, name) {
@@ -14382,22 +14403,38 @@ async function openFilePreview(relPath, name) {
 
   // Show/hide copy image button
   _fpvIsImg = imgExts.includes(ext);
-  $i('fpvCopyImgBtn').style.display = _fpvIsImg ? '' : 'none';
+  // Everything below the ext check reaches for /api/files/raw or /api/files/download.
+  // Both are refused for a remote project (issue #57 ships READ-ONLY), so the buttons
+  // come off rather than being left to 403 under the user's finger.
+  const remote = _filesRemote;
+  $i('fpvCopyImgBtn').style.display = (_fpvIsImg && !remote) ? '' : 'none';
+  $i('fpvDownloadBtn').style.display = remote ? 'none' : '';
+  $i('fpvShareBtn').style.display = remote ? 'none' : '';
 
-  if (_fpvIsImg) {
+  if (_fpvIsImg && !remote) {
     body.innerHTML = `<img src="${escH(rawUrl)}" alt="${escH(_fpvName)}" onerror="this.alt=t('fpv.img_error')">`;
     return;
   }
-  if (pdfExts.includes(ext)) {
+  if (pdfExts.includes(ext) && !remote) {
     body.innerHTML = `<iframe src="${escH(rawUrl)}" title="${escH(_fpvName)}"></iframe>`;
     return;
   }
+  // A remote image or PDF falls through to the text fetch, which answers '[Binary]'
+  // and lands in the block below — with no download button, since there is nowhere
+  // to download it from.
   // md and text: fetch content
   try {
     const r = await fetch(`/api/files?${_filesQS(relPath)}`);
     const d = await r.json();
+    // A refusal used to fall through to the text branch and paint an empty pane —
+    // indistinguishable from an empty file. Remote projects have more ways to refuse
+    // (host gone, symlinked file, path denied), so it is now said out loud.
+    if (d.error) {
+      body.innerHTML = `<div class="fpv-binary">${escH(d.error)}</div>`;
+      return;
+    }
     if (d.content === '[Binary]' || (!d.content && !textExts.includes(ext) && !mdExts.includes(ext))) {
-      body.innerHTML = `<div class="fpv-binary"><div style="font-size:40px">📦</div><div>${t('fpv.binary')}</div><button class="fpv-btn" onclick="fpvDownload()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('fpv.download')}</button></div>`;
+      body.innerHTML = `<div class="fpv-binary"><div style="font-size:40px">📦</div><div>${t(remote ? 'fpv.remote_binary' : 'fpv.binary')}</div><button class="fpv-btn" style="${remote ? 'display:none' : ''}" onclick="fpvDownload()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('fpv.download')}</button></div>`;
       return;
     }
     if (mdExts.includes(ext)) {
@@ -14411,11 +14448,13 @@ async function openFilePreview(relPath, name) {
 }
 
 function fpvDownload() {
-  if (_fpvPath) downloadFile(_fpvPath);
+  // Guarded as well as hidden: the button is display:none for a remote file, but the
+  // handler is a global and the modal outlives the listing that set the flag.
+  if (_fpvPath && !_filesRemote) downloadFile(_fpvPath);
 }
 
 async function fpvShare() {
-  if (!_fpvPath) return;
+  if (!_fpvPath || _filesRemote) return;
   const url = location.origin + `/api/files/raw?${_filesQS(_fpvPath)}`;
   if (navigator.share) {
     try {
@@ -14432,7 +14471,7 @@ async function fpvShare() {
 }
 
 async function fpvCopyImage() {
-  if (!_fpvPath || !_fpvIsImg) return;
+  if (!_fpvPath || !_fpvIsImg || _filesRemote) return;
   const rawUrl = `/api/files/raw?${_filesQS(_fpvPath)}`;
   try {
     await copyImageToClipboard(rawUrl);
@@ -14489,6 +14528,7 @@ async function copyChipImage(btn) {
 }
 
 function downloadFile(relPath) {
+  if (_filesRemote) return; // /api/files/download has no remote path — see issue #57
   window.open(`/api/files/download?${_filesQS(relPath)}`, '_blank');
 }
 
