@@ -33,7 +33,10 @@ function check(label, actual, expected) {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const PORT = Number(process.env.TEST_PORT || 3994);
+// 3992: unused elsewhere in test/. Sharing a port with another server-booting suite
+// works only because npm test runs them serially — one that has not released the port
+// yet fails this file's preflight instead of its own.
+const PORT = Number(process.env.TEST_PORT || 3992);
 const BASE = `http://127.0.0.1:${PORT}`;
 const APP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-restart-'));
 const HOME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-restart-home-'));
