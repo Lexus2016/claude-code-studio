@@ -52,6 +52,13 @@ work that never reached a commit. Two of them are the composer, two the terminal
   the second line of the hint clipped. `autosizeInput()` now owns the cap and is
   called from all seven paths.
 
+An adversarial review of the diff (an independent non-Claude reviewer, run before the
+merge) turned up four more, all fixed here: the composer was measured at the *start* of
+the 250ms sidebar animation, a superseded socket's `close` event could mark a working
+terminal "disconnected", a bare Return — the one key you most need at a `[Y/n]` prompt —
+was the one key the send line refused to send, and a draft left in that line followed the
+user to whichever terminal they opened next.
+
 ### Terminal sessions
 
 - **A pane no longer goes deaf until you switch tabs and back.** xterm routes

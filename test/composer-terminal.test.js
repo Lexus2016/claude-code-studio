@@ -89,6 +89,12 @@ check('setLang re-measures after swapping the placeholder', bodyOf('function set
 check('setSendStop re-measures when the pill enters/leaves the row',
   (bodyOf('function setSendStop').match(/autosizeInput\(\)/g) || []).length, 2);
 check('a sidebar toggle re-measures', /if \(id === 'leftPanel' \|\| id === 'rightPanel'\) autosizeInput\(\);/.test(b1), true);
+// ...and again once the 250ms width animation has actually finished. toggle() alone
+// measures the box the user is leaving, not the one they end up with.
+check('the composer is observed, so the panel animation is measured at its end too',
+  /new ResizeObserver\(\(\) => \{[\s\S]{0,320}?\}\)\.observe\(inEl\)/.test(b1), true);
+check('the observer compares WIDTH, so setting the height cannot re-enter it',
+  /_lastComposerW[\s\S]{0,200}?if \(w === _lastComposerW\) return;/.test(b1), true);
 
 console.log('\n— 3. the terminal refresh button —');
 
@@ -111,6 +117,16 @@ check('it detaches entry.ws BEFORE closing the old socket', at('entry.ws = null'
 check('it closes before reconnecting', at('old.close()') < at('_connectTerminalWs(sessionId)'), true);
 check('it reconnects unconditionally — no readyState test', /readyState/.test(rtsBody), false);
 
+// A close event from a socket refreshTerminalSession() already replaced must not
+// repaint the pane the user is typing into. The guard has to sit ABOVE the paint,
+// not only above the retry — nothing repaints the status back afterwards.
+const onclose = TB.slice(TB.indexOf('ws.onclose = () => {'));
+const oncloseBody = onclose.slice(0, onclose.indexOf('\n  };') + 5);
+// indexOf alone would pass on -1 (guard deleted) < paint index — assert presence first.
+check('a stale close is ignored, and before it touches the status',
+  oncloseBody.includes('entry.ws !== ws) return;')
+  && oncloseBody.indexOf('entry.ws !== ws) return;') < oncloseBody.indexOf("term.state.disconnected"), true);
+
 console.log('\n— 4. sending a line into a terminal session —');
 
 // The composer is display:none in term-mode, which is why this input has to exist at all.
@@ -132,6 +148,11 @@ check('CR, not LF — a PTY needs the Return key', /'\\n'/.test(stsBody), false)
 check('it refuses to send on a socket that is not OPEN', /readyState !== 1/.test(stsBody), true);
 check('and says so instead of failing silently', /toast\(t\('term\.paste\.notconnected'\), true\)/.test(stsBody), true);
 check('it clears the box after sending', /box\.value = ''/.test(stsBody), true);
+// A bare Return is the single most useful thing to send: it accepts a prompt default.
+check('an empty line is still sendable', /!text\.trim\(\)\) return/.test(stsBody), false);
+// One send line serves every pane, so a draft must not follow the user to another one.
+check('switching panes clears the shared send line',
+  /function showTerminalView[\s\S]{0,1600}?\$i\('termSendInput'\)[^\n]*value = ''/.test(TB), true);
 
 console.log('\n— focus: why a deaf pane used to need a tab switch —');
 

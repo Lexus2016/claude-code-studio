@@ -4497,6 +4497,20 @@ window.addEventListener('resize', () => {
   clearTimeout(_autosizeTimer);
   _autosizeTimer = setTimeout(autosizeInput, 120);
 });
+// toggle() measures at the pre-transition width -- both panels animate `width .25s`,
+// so the box the user ends up with is not the one that was measured. Observing the
+// textarea itself covers the whole animation, and a split-pane drag with it. Compare
+// the WIDTH before re-measuring: the callback sets the height, which would otherwise
+// re-enter forever.
+if (window.ResizeObserver && inEl) {
+  let _lastComposerW = 0;
+  new ResizeObserver(() => {
+    const w = inEl.clientWidth;
+    if (w === _lastComposerW) return;
+    _lastComposerW = w;
+    autosizeInput();
+  }).observe(inEl);
+}
 // Fonts land after first paint and change the wrap point; measure once they have.
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(autosizeInput).catch(() => {});
 window.addEventListener('load', autosizeInput);
@@ -17693,6 +17707,10 @@ function showTerminalView(sessionId, label) {
   // their sockets and still receiving output while hidden.
   for (const [sid, e] of _terms) e.host.style.display = sid === sessionId ? 'block' : 'none';
 
+  // One send line, many panes: a draft left in it belongs to the pane it was typed
+  // for, not to this one.
+  const _sendBox = $i('termSendInput'); if (_sendBox) _sendBox.value = '';
+
   entry.label = label || entry.label;
   _paintTermStatus(sessionId);
   // A hidden xterm cannot measure itself, so re-fit on the frame after it is shown.
@@ -17824,6 +17842,11 @@ function _connectTerminalWs(sessionId) {
     _paintTermStatus(sessionId);
   };
   ws.onclose = () => {
+    // Staleness first, and it guards the STATUS too, not just the retry. This socket
+    // may already have been superseded (refreshTerminalSession() detaches before it
+    // closes) -- painting "disconnected" from here would mark the pane the user is
+    // typing into as dead while it is working.
+    if (_terms.get(sessionId) !== entry || entry.ws !== ws) return;
     entry.dot = '#8b949e'; entry.state = t('term.state.disconnected'); _paintTermStatus(sessionId);
     // Auto-retry an unexpected drop (network blip, server restart, idle proxy
     // timeout) even while this terminal tab stays in the foreground the whole
@@ -17832,7 +17855,7 @@ function _connectTerminalWs(sessionId) {
     // user is actively looking at it. Skip retrying after a clean agent exit
     // (already reported via the 'exit' message above) or once this socket has
     // been superseded by a newer one (stale close event from the old attempt).
-    if (!entry.exited && _terms.get(sessionId) === entry && entry.ws === ws) {
+    if (!entry.exited) {
       // Exponential backoff with ±20% jitter, capped at 30s — same shape as the
       // chat socket's reconnect, so a genuinely dead server doesn't get hammered
       // with fixed-interval retries for as long as this tab stays open.
@@ -17871,7 +17894,9 @@ function refreshTerminalSession() {
 // Send one line to the visible terminal, as if it had been typed into the pane.
 function sendToTerminal() {
   const box = $i('termSendInput'); if (!box) return;
-  const text = box.value; if (!text.trim()) return;
+  // No emptiness guard: a bare Return accepts a prompt's default ("[Y/n]", "press
+  // enter to continue"), which is exactly what this line exists to reach.
+  const text = box.value;
   const entry = _termSessionId && _terms.get(_termSessionId);
   if (!entry || !entry.ws || entry.ws.readyState !== 1) { toast(t('term.paste.notconnected'), true); return; }
   // \r, not \n: a PTY sees the Return KEY, and a TUI reading in canonical or raw mode

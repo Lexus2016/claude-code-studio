@@ -431,6 +431,21 @@ Four reports that all reduce to "the UI moved or stopped listening". Pinned by
   `term.focus()`. `ws.onopen` and a `mouseup` on the host now do the same — the latter
   skipped while a selection is being dragged out. The server-side heartbeat (v7.6.0)
   is the other half and only the other half: it reaps a dead TCP path within ~60s.
+- **A stale `onclose` may not repaint the live pane.** The staleness test
+  (`_terms.get(sessionId) === entry && entry.ws === ws`) used to guard only the
+  reconnect, while the "disconnected" paint above it ran unconditionally. Since
+  `refreshTerminalSession()` deliberately detaches before it closes, the old socket's
+  close event lands *after* the new one is ready and marked a working pane dead, with
+  nothing to repaint it until the next state change. The guard is now the first line
+  of the handler.
+- **The composer is watched by a `ResizeObserver`, not only by `toggle()`.** Both
+  panels animate `width .25s`, so measuring from the click measures the box the user
+  is leaving. The observer compares `clientWidth` before re-measuring — the callback
+  sets the height, so an unguarded one re-enters forever.
+- **`sendToTerminal()` has no emptiness guard, on purpose.** A bare Return is the most
+  useful thing this line can send: it accepts a prompt's default (`[Y/n]`, "press enter
+  to continue"). `showTerminalView()` clears the box, because one send line serves every
+  pane and a draft must not follow the user to a different terminal.
 - **`refreshTerminalSession()` reconnects unconditionally.** Every automatic path is
   conditional on a state a half-dead socket does not report. It clears the latched
   `exited` flag first, then nulls `entry.ws` BEFORE closing the old socket — `onclose`
