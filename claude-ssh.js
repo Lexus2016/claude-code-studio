@@ -259,17 +259,55 @@ class ClaudeSSH {
         }
       }
 
-      // Report stderr errors (filter known noise)
-      if (code !== 0 && stderrBuf.trim() && h.onError) {
+      // Report stderr errors (filter known noise). Skipped on abort for the same
+      // reason stream 'error' is: the user pressed Stop, the teardown noise is not
+      // a failure worth showing.
+      if (code !== 0 && !aborted && stderrBuf.trim() && h.onError) {
         const realErrors = stderrBuf.trim().split('\n')
           .filter(l => l.trim() && !l.includes('Loaded MCP') && !l.includes('Starting MCP'))
           .join('\n').trim();
         if (realErrors) try { h.onError(realErrors.substring(0, 1000)); } catch {}
       }
 
+      try { abortController?.signal?.removeEventListener('abort', onAbort); } catch {}
       if (h.onDone) h.onDone(detectedSid);
       try { conn.end(); } catch {}
     };
+
+    // ── Termination guarantee (issue #67) ───────────────────────────────────
+    // runSshSingle() awaits a promise that ONLY resolves from onDone. Every path
+    // that ends this run must therefore go through finish(); one that does not
+    // leaves the caller awaiting forever, which keeps the session's activeTasks
+    // entry alive — and that entry is what makes the chat refuse new messages and
+    // makes "Restart Session" answer "Task is still running". There is no reaper
+    // for activeTasks (the 15s sweeper skips any session that has one), so a
+    // single missed onDone locks the chat until the server is restarted.
+    //
+    // Abort is registered HERE, not inside the conn.exec callback where it used to
+    // live: a Stop pressed while the handshake is still in flight had no listener
+    // at all, so it neither tore the connection down nor settled the promise.
+    let sshStream = null;
+    const onAbort = () => {
+      aborted = true;
+      try { sshStream?.close(); } catch {}
+      try { conn.end(); } catch {}
+      // A connection with no channel open has nothing left that would ever emit.
+      finish(1);
+    };
+    if (abortController?.signal) {
+      // Already aborted before we even connected. Deferred, never immediate: the
+      // caller attaches .onDone() synchronously AFTER send() returns, so a finish()
+      // running now would find h.onDone still null and settle nothing.
+      if (abortController.signal.aborted) setImmediate(onAbort);
+      else abortController.signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    // A cleanly closed socket emits NO 'error': sshd's ClientAlive/LoginGraceTime
+    // drop, a NAT idle-reap and our own conn.end() from the watchdogs all land here
+    // only. With a channel open ssh2 closes it too and stream 'close' calls finish()
+    // first — on the nextTick queue, so it wins this setImmediate and the run still
+    // reports its real exit code. With no channel open, this is the only thing left.
+    conn.on('close', () => { setImmediate(() => finish(1)); });
 
     conn.on('ready', () => {
       (async () => {
@@ -341,20 +379,17 @@ class ClaudeSSH {
           conn.exec(remoteCmd, { pty: false }, (err, stream) => {
             if (err) {
               try { if (h.onError) h.onError(`SSH exec failed: ${err.message}`); } catch {}
-              if (h.onDone) h.onDone(detectedSid);
-              try { conn.end(); } catch {}
+              finish(1);
               return;
             }
 
             try { stream.stdin.end(); } catch {}
 
-            if (abortController) {
-              abortController.signal.addEventListener('abort', () => {
-                aborted = true;
-                try { stream.close(); } catch {}
-                try { conn.end(); } catch {}
-              }, { once: true });
-            }
+            // Hand the channel to the abort listener registered above. A Stop that
+            // arrived before this point already tore the connection down, so the
+            // channel we just opened has to be closed here rather than left running.
+            sshStream = stream;
+            if (aborted) { try { stream.close(); } catch {} try { conn.end(); } catch {} return; }
 
             stream.stdout.on('data', (chunk) => {
               armIdleTimer(); // remote output = alive — reset the idle clock
@@ -407,15 +442,12 @@ class ClaudeSSH {
           });
         } catch (err) {
           try { if (h.onError) h.onError(`SSH attachment setup failed: ${err.message}`); } catch {}
-          if (h.onDone) h.onDone(detectedSid);
-          try { conn.end(); } catch {}
+          finish(1);
         }
       })();
     });
 
     conn.on('error', (err) => {
-      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
-      if (hardCapTimer) { clearTimeout(hardCapTimer); hardCapTimer = null; }
       const msg = this._hostVerifier?.state?.rejected
         ? hostKeyMismatchError(this._hostVerifier, this.hostname, this.port).message
         : err.code === 'ECONNREFUSED' ? `SSH connection refused — is sshd running on port ${this.port}?`
@@ -424,7 +456,10 @@ class ClaudeSSH {
         : err.level === 'client-authentication' ? `SSH auth failed — check password/key for ${this.username}@${this.hostname}`
         : `SSH error: ${err.message}`;
       try { if (h.onError) h.onError(msg); } catch {}
-      if (h.onDone) h.onDone(detectedSid);
+      // Through finish(), not a bare onDone: the timers are cleared there, and the
+      // `finished` guard is what stops the socket close that follows this error from
+      // re-emitting the stderr block and calling onDone a second time.
+      finish(1);
     });
 
     // Idle watchdog — armed now and reset on every chunk of remote output (the
@@ -437,6 +472,10 @@ class ClaudeSSH {
         const mins = Math.round(IDLE_TIMEOUT_MS / 60000);
         try { if (h.onError) h.onError(`SSH subprocess timed out — no output for ${mins} min (idle). Raise CLAUDE_IDLE_TIMEOUT_MS to allow longer silences.`); } catch {}
         try { conn.end(); } catch {}
+        // conn.end() alone only settles the run when a channel is open to be closed
+        // with it. Fire while still handshaking (or between 'ready' and exec) and
+        // nothing else would ever emit — the exact silent lock-up of issue #67.
+        finish(1);
       }, IDLE_TIMEOUT_MS);
     };
     armIdleTimer();
@@ -448,6 +487,7 @@ class ClaudeSSH {
         const mins = Math.round(HARD_CAP_MS / 60000);
         try { if (h.onError) h.onError(`SSH subprocess timed out — exceeded hard cap of ${mins} min (CLAUDE_HARD_CAP_MS).`); } catch {}
         try { conn.end(); } catch {}
+        finish(1); // same reason as the idle watchdog above
       }, HARD_CAP_MS);
     }
 

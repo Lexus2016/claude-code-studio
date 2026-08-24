@@ -3428,6 +3428,21 @@ function _sleepAbortable(ms, signal) {
   });
 }
 
+// Turn the CLI's stop `subtype` (plus whatever landed on stderr) into a sentence a
+// user can act on. Kept next to isResettableClaudeSessionError because both read the
+// same two fields, and both are the only places that interpret them.
+function describeStopReason(subtype, errorText = '') {
+  const err = (errorText || '').trim();
+  if (subtype === 'error_max_turns') return 'it kept hitting the per-run turn limit (raise "Max turns" for this chat)';
+  if (subtype === 'error_during_execution') return 'the agent errored mid-run';
+  if (/SSH (error|connection|stream|exec)|timed out|ECONNRESET|Host not found|auth failed/i.test(err)) {
+    return `the SSH connection to the remote host kept failing (${err.split('\n')[0].substring(0, 160)})`;
+  }
+  if (err) return `last error: ${err.split('\n')[0].substring(0, 160)}`;
+  if (subtype) return `the run kept ending as "${subtype}"`;
+  return 'the run kept ending before the agent finished';
+}
+
 function isResettableClaudeSessionError(errorText = '') {
   return /Invalid signature in thinking block|invalid session|session .* not found|could not find .*session|no conversation found|resume .*failed|failed to resume|conversation .* not found/i.test(errorText || '');
 }
@@ -3680,7 +3695,16 @@ async function runCliSingle(p) {
         : prompt;
       currentContentBlocks = replayContent || (Array.isArray(userContent) ? userContent : null);
       continueCount++;
-      if (continueCount >= MAX_AUTO_CONTINUES) break;
+      if (continueCount >= MAX_AUTO_CONTINUES) {
+        // Was a bare `break`: the turn ended on the "starting a fresh session" line
+        // above with no word that it had in fact given up, and without the restart
+        // affordance every other exhausted path offers.
+        const notice = `\n\n⚠️ **Could not re-establish the Claude session** after ${MAX_AUTO_CONTINUES} attempts.\n\n`;
+        fullText += notice;
+        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        try { ws.send(JSON.stringify({ type:'text', text: notice, session_restart_available: true, sessionId, ...(tabId ? { tabId } : {}) })); } catch {}
+        break;
+      }
       continue;
     }
 
@@ -3698,7 +3722,9 @@ async function runCliSingle(p) {
 
     // 🔄 Auto-continue budget exhausted
     if (continueCount >= MAX_AUTO_CONTINUES) {
-      const notice = `\n\n⚠️ **Agent did not complete** after ${MAX_AUTO_CONTINUES} auto-continues. Continue manually if needed.\n\n`;
+      // Same reason as the SSH loop's copy below: "gave up" without "why" is not
+      // actionable — raising Max turns and fixing a crashing tool are different fixes.
+      const notice = `\n\n⚠️ **Agent did not complete** after ${MAX_AUTO_CONTINUES} auto-continues — ${describeStopReason(resultData?.subtype, errorText)}. Send another message to continue, or use **Restart Session** to start fresh with this chat's history replayed.\n\n`;
       fullText += notice;
       { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
       try { ws.send(JSON.stringify({ type:'text', text: notice, session_restart_available: true, sessionId, ...(tabId ? { tabId } : {}) })); } catch {}
@@ -3945,7 +3971,16 @@ async function runSshSingle(p) {
         : prompt;
       currentContentBlocks = replayContent || (Array.isArray(userContent) ? userContent : null);
       continueCount++;
-      if (continueCount >= MAX_AUTO_CONTINUES) break;
+      if (continueCount >= MAX_AUTO_CONTINUES) {
+        // Was a bare `break`: the turn ended on the "starting a fresh session" line
+        // above with no word that it had in fact given up, and without the restart
+        // affordance every other exhausted path offers.
+        const notice = `\n\n⚠️ **Could not re-establish the Claude session** after ${MAX_AUTO_CONTINUES} attempts.\n\n`;
+        fullText += notice;
+        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
+        try { ws.send(JSON.stringify({ type:'text', text: notice, session_restart_available: true, sessionId, ...(tabId ? { tabId } : {}) })); } catch {}
+        break;
+      }
       continue;
     }
     if (resultData?.subtype === 'error_max_budget_usd') {
@@ -3957,7 +3992,11 @@ async function runSshSingle(p) {
     }
     if (abortController?.signal?.aborted) break;
     if (continueCount >= MAX_AUTO_CONTINUES) {
-      const notice = `\n\n⚠️ **Agent did not complete** after ${MAX_AUTO_CONTINUES} auto-continues.\n\n`;
+      // Name why it kept stopping. Without this the message said only that it gave
+      // up, so "hit the turn limit three times" (raise maxTurns) was indistinguishable
+      // from "the remote link died three times" (fix the connection) — issue #67.
+      const _why = describeStopReason(resultData?.subtype, errorText);
+      const notice = `\n\n⚠️ **Agent did not complete** after ${MAX_AUTO_CONTINUES} auto-continues — ${_why}. The chat is still usable: send another message to continue, or use **Restart Session** to start a fresh remote session with this chat's history replayed.\n\n`;
       fullText += notice;
       { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
       try { ws.send(JSON.stringify({ type:'text', text: notice, session_restart_available: true, sessionId, ...(tabId ? { tabId } : {}) })); } catch {}
@@ -11324,11 +11363,34 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      // Recovery IS this button's job, so a live turn is aborted rather than used as
+      // a reason to refuse (issue #67). The turn this is clicked on is by definition
+      // one the user has given up on: a remote run whose SSH link died leaves an
+      // activeTasks entry that nothing reaps — the 15s orphan sweeper explicitly skips
+      // any session that has one — so refusing here left the chat locked until the
+      // server was restarted, which is exactly what "Restart Session does not recover"
+      // meant. Aborting is safe for a healthy turn too: it is the same signal Stop sends.
       const task = activeTasks.get(sessionId);
       if (task && !task.abortController?.signal?.aborted) {
-        ws.send(JSON.stringify({ type: 'error', error: 'Task is still running', tabId: sessionId }));
-        return;
+        log.warn('session restart aborting live turn', { sessionId, source: task.source, ageMs: Date.now() - (task.startedAt || 0) });
+        try { task.abortController.abort(); } catch {}
       }
+      if (task) {
+        // Give the aborted turn its own finally block a moment to release the session —
+        // that path also flushes partial output to SQLite, which a forced delete skips.
+        for (let i = 0; i < 50 && activeTasks.get(sessionId) === task; i++) await _sleepAbortable(100);
+        // Backstop: a run wedged below the abort signal never returns. Identity-compare
+        // so a NEW turn's entry is never the one removed.
+        if (activeTasks.get(sessionId) === task) {
+          activeTasks.delete(sessionId);
+          log.warn('session restart reaped an unresponsive turn', { sessionId });
+        }
+      }
+      // The cross-connection lock is released with it — otherwise the next message is
+      // queued instead of run and the chat still looks dead after a "successful" restart.
+      activeChatSessions.delete(sessionId);
+      for (const client of wss.clients) { try { if (client._tabBusy) delete client._tabBusy[sessionId]; } catch {} }
+      markActivityDirty();
 
       // Get user messages from the session to transfer context
       const userMessages = stmts.getMsgsLite.all(sessionId).filter(m => m.role === 'user');
