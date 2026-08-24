@@ -1104,6 +1104,10 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 #termDot { width: 8px; height: 8px; border-radius: 50%; background: #8b949e; flex: none;
            transition: background-color .25s cubic-bezier(.2,0,0,1); }
 #termHost { flex: 1; min-height: 0; padding: 6px 8px; position: relative; }
+.term-send { display: flex; gap: 6px; align-items: center; padding: 6px 8px 8px; border-top: 1px solid var(--border); background: #0b0b0f; }
+.term-send input { flex: 1; min-width: 0; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: inherit; font-size: 13px; padding: 6px 10px; outline: none; }
+.term-send input:focus { border-color: var(--accent); }
+.term-send button { flex-shrink: 0; font-size: 13px; padding: 5px 11px; }
 .term-instance { width: 100%; height: 100%; }
 /* An engine pane keeps the geometry the subscription engine spawned it with (220x50)
    — resizing it would reflow a live Claude TUI mid-turn — so the viewer scrolls to
@@ -1745,7 +1749,7 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .interrupt-pill-btn:active { transform: scale(.96); }
 .interrupt-pill-btn[data-mode="queue"] { color: var(--muted); background: var(--s3); border-color: var(--border); border-style: dashed; }
 .interrupt-pill-btn[data-mode="queue"]:hover { color: var(--text); background: rgba(122,139,170,.12); border-color: rgba(122,139,170,.35); }
-@keyframes ib-fadein { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes ib-fadein { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: translateX(0); } }
 /* Hide message action buttons for queued messages — they are irrelevant and overlap queue controls on short texts */
 .mw:has(.msg-queued) .use-btn,
 .mw:has(.msg-queued) .reply-btn,
@@ -3502,9 +3506,23 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <span class="term-title" id="termTitle"></span>
       <span class="term-state" id="termState"></span>
       <span style="flex:1"></span>
+      <button id="termRefreshBtn" class="bg" style="font-size:12px;padding:4px 9px" onclick="refreshTerminalSession()" data-i18n-title="term.refresh.title" title="Reconnect this terminal" data-i18n-aria="term.refresh.title" aria-label="Reconnect this terminal">&#x21BB;</button>
       <button id="termKillBtn" class="bg" style="font-size:11px;padding:4px 10px"></button>
     </div>
     <div id="termHost"></div>
+    <!-- The composer (.ia) is display:none in term-mode, so until now there was no
+         way to send a line to a terminal session except typing into the pane itself
+         — which is exactly what a stale socket takes away. This writes the same
+         {type:'input'} frame term.onData() writes, so it works on an agent tab and
+         on the engine pane (where it is how a blocking prompt gets answered). -->
+    <div class="term-send">
+      <input id="termSendInput" type="text" autocomplete="off" spellcheck="false"
+             data-i18n-ph="term.send.ph" placeholder="Send a line to the terminal…"
+             data-i18n-aria="term.send.ph" aria-label="Send a line to the terminal"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();sendToTerminal()}">
+      <button id="termSendBtn" class="bg" onclick="sendToTerminal()" data-i18n-title="term.send.title" title="Send (Enter)"
+              data-i18n-aria="term.send.title" aria-label="Send to terminal">&#x27A4;</button>
+    </div>
   </div>
   <div class="msgs" id="messages" role="log" aria-live="polite" data-i18n-aria="aria.chat" aria-label="Chat messages">
     <div class="welcome">
@@ -3562,15 +3580,20 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
     <div class="bots-strip" id="botsStrip"></div>
     <div class="iw">
-      <div id="interruptPill" class="interrupt-pill">
-        <button class="interrupt-pill-btn" id="interruptPillBtn" data-mode="interrupt" onclick="cycleInterruptMode()"></button>
-      </div>
       <button class="attach-btn" type="button" onclick="$i('filePickerInput').click()" data-i18n-title="attach.file" title="Додати файл" data-i18n-aria="attach.file" aria-label="Attach file">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
         </svg>
       </button>
       <textarea id="input" rows="1" dir="auto" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @@ — бот · @ — файл · # — SSH · 📎 — будь-який файл" autofocus data-i18n-aria="aria.input" aria-label="Message input" aria-multiline="true"></textarea>
+      <!-- The pill lives DOWNSTREAM of the textarea. In a flex row every earlier
+           sibling owns the text's left edge, so showing it upstream shoved the
+           placeholder ~70px to the right the instant a turn started — and narrowed
+           the box enough to re-wrap the hint, which is the other half of the same
+           report. On this side it appears and disappears without moving a glyph. -->
+      <div id="interruptPill" class="interrupt-pill">
+        <button class="interrupt-pill-btn" id="interruptPillBtn" data-mode="interrupt" onclick="cycleInterruptMode()"></button>
+      </div>
       <span id="charCounter" style="display:none;" aria-live="polite" data-i18n-aria="aria.charcount" aria-label="Character count"></span>
       <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Завдань у черзі"></span>
       <button class="sb stop-btn hidden" id="stopBtn" onclick="confirmStop()" data-i18n-title="stop.agent" title="Stop agent">
@@ -4342,16 +4365,14 @@ function restoreComposerState(tabId) {
     // is long and wraps to 2 lines at normal composer widths, so 'auto' alone collapses
     // the box back to its native 1-row height and clips the wrapped hint text.
     // (Bug: switching to a tab-less state left the 2nd placeholder line cut off.)
-    inEl.style.height = 'auto';
-    inEl.style.height = Math.min(inEl.scrollHeight, 130) + 'px';
+    autosizeInput();
     _clearAttachments(false);
     clearReply();
     return;
   }
   const ts = getTS(tabId);
   inEl.value = ts.draft || '';
-  inEl.style.height = 'auto';
-  inEl.style.height = Math.min(inEl.scrollHeight, 130) + 'px';
+  autosizeInput();
   _restoreAttachments(ts.attachments);
   const savedReply = ts.replyTo;
   if (savedReply) {
@@ -4452,6 +4473,33 @@ let _pendingProjectSend = false;
 const $i = id => document.getElementById(id);
 const msgsEl = $i('messages');
 const inEl = $i('input');
+
+// The composer is a 1-row textarea whose real height is JS-owned. It has to be
+// recomputed whenever the WRAPPED LINE COUNT can change — which is not only when
+// the value changes:
+//   * boot            — the markup ships rows="1"; a hint that wraps is clipped on
+//                       the very first paint, before anything has typed into it
+//   * language switch — setLang() rewrites the placeholder; a longer translation wraps
+//   * the ⚡ pill     — it enters the same flex row, so the box narrows mid-turn
+//   * resize / panels — the composer's width is whatever the two sidebars leave
+// The earlier fix only ran from restoreComposerState(), so every one of those paths
+// left the second line of the hint cut off. 130px is the cap the CSS max-height
+// already enforces; the 120 and 200 that used to appear here were dead numbers.
+const COMPOSER_MAX_H = 130;
+function autosizeInput() {
+  if (!inEl) return;
+  inEl.style.height = 'auto';
+  inEl.style.height = Math.min(inEl.scrollHeight, COMPOSER_MAX_H) + 'px';
+}
+// A width change re-wraps the hint exactly like a longer translation does.
+let _autosizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_autosizeTimer);
+  _autosizeTimer = setTimeout(autosizeInput, 120);
+});
+// Fonts land after first paint and change the wrap point; measure once they have.
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(autosizeInput).catch(() => {});
+window.addEventListener('load', autosizeInput);
 const MODAL_FOCUSABLE_SEL = 'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const modalStack = [];
 
@@ -4466,8 +4514,7 @@ const modalStack = [];
   const draft = localStorage.getItem('ccs:draft');
   if (draft && inEl && !inEl.value) {
     inEl.value = draft;
-    inEl.style.height = 'auto';
-    inEl.style.height = Math.min(inEl.scrollHeight, 120) + 'px';
+    autosizeInput();
     const cc = $i('charCounter');
     if (cc && draft.length >= 100) {
       cc.textContent = t('chars.count').replace('{n}', draft.length);
@@ -4676,7 +4723,7 @@ const TRANSLATIONS = {
     'bot.state.queued':'у черзі','bot.state.running':'працює','bot.state.done':'готово','bot.state.failed':'помилка','bot.state.stopped':'зупинено','bot.state.skipped':'пропущено','bot.stop.all':'Зупинити',
     'at.no_bots':'Ботів не знайдено',
     'sec.bots':'Боти','bots.hint':'Учасники цього проєкту. Згадайте бота через @@ у повідомленні.','bot.add.new':'Створити бота','bot.add.btn':'Створити','bot.use.title':'Вставити згадку','bot.modal.add.title':'Новий бот','bot.modal.edit.title':'Редагувати бота','bot.modal.label.label':'Ім\'я','bot.modal.handle.hint':'Звертання у чаті:','bot.modal.avatar.label':'Емодзі','bot.modal.desc.label':'Призначення','bot.modal.desc.hint':'Одним рядком. Це бачать інші боти, щоб знати, кому передати роботу.','bot.modal.model.label':'Модель','bot.model.inherit':'Як у чаті','bot.modal.prompt.label':'Системний промпт','bot.modal.prompt.hint':'Хто цей бот і як він працює. До 8000 символів.','bot.err.label':'Вкажіть імʼя бота','bot.del.confirm':'Видалити бота','bot.del.note':'Його минулі повідомлення лишаться, а звертання більше ніколи не дістанеться іншому боту.','bot.deleted':'видалений бот','toast.bot_added':'✓ Бота створено','toast.bot_updated':'✓ Бота оновлено','toast.bot_deleted':'✓ Бота видалено','bot.modal.global.label':'Доступний у всіх проєктах','bot.modal.global.hint':'Роль на кшталт програміста потрібна скрізь. Увімкніть — і бот зʼявиться в кожному проєкті без окремого додавання.','bot.modal.also_in':'Також у проєктах:','bot.modal.delete':'Видалити бота','bot.global.badge':'Доступний у всіх проєктах','bot.unlink.title':'Прибрати з цього проєкту','bot.unlink.confirm':'Прибрати з цього проєкту','bot.unlink.note':'Бот лишиться в інших проєктах, його повідомлення нікуди не зникнуть.','bot.del.everywhere':'Він доступний у всіх проєктах — зникне звідусіль.','bot.del.in_n':'Він доступний у {n} проєктах — зникне з усіх.','toast.bot_unlinked':'✓ Прибрано з проєкту','bots.import.title':'Імпортувати ботів з JSON файлу','bots.export.title':'Експортувати ботів у JSON файл','bots.import.conflict':'Ботів із такими звертаннями вже є: {n}. Перезаписати їх даними з файлу? Локальні зміни в них буде втрачено.','toast.bots_imported':'✓ Імпортовано ботів: {n}, пропущено: {s}','toast.bots_import_err':'Не вдалося імпортувати: ','toast.bots_import_parse':'Файл не є коректним JSON','toast.bots_import_empty':'У файлі немає жодного бота','toast.bots_import_reserved':'Пропущено через видалених ботів: {n} ({list}) — ці звертання зарезервовані назавжди','toast.bots_export_err':'Не вдалося експортувати ботів','toast.bots_export_empty':'Немає кого експортувати','at.group.bots':'Боти','at.group.files':'Файли',
-    'term.open.title':'Відкрити живий термінал цього агента у вкладці','term.kill':'Завершити','term.killConfirm':'Завершити цю термінальну сесію? Розмову можна буде відновити пізніше.','term.unavailable':'Термінальні сесії недоступні','term.state.attached':'підключено','term.state.started':'запущено','term.state.restored':'відновлено','term.state.restoredLast':'відновлено останню розмову агента','term.state.restoreFailed':'відновлювати не було чого — почато заново','term.state.exited':'агент завершився','term.state.error':'помилка','term.state.disconnected':'з’єднання втрачено — перепідключення...','term.state.reconnecting':'перепідключення...','term.paste.title':'Вставити в термінал','term.paste.notarget':'Немає відкритого термінала для вставки','term.paste.notconnected':'Термінал не підключений','term.paste.done':'Вставлено в термінал',
+    'term.open.title':'Відкрити живий термінал цього агента у вкладці','term.kill':'Завершити','term.killConfirm':'Завершити цю термінальну сесію? Розмову можна буде відновити пізніше.','term.unavailable':'Термінальні сесії недоступні','term.state.attached':'підключено','term.state.started':'запущено','term.state.restored':'відновлено','term.state.restoredLast':'відновлено останню розмову агента','term.state.restoreFailed':'відновлювати не було чого — почато заново','term.state.exited':'агент завершився','term.state.error':'помилка','term.state.disconnected':'з’єднання втрачено — перепідключення...','term.state.reconnecting':'перепідключення...','term.paste.title':'Вставити в термінал','term.paste.notarget':'Немає відкритого термінала для вставки','term.paste.notconnected':'Термінал не підключений','term.paste.done':'Вставлено в термінал','term.refresh.title':'Перепідключити цей термінал','term.send.ph':'Надіслати рядок у термінал…','term.send.title':'Надіслати (Enter)',
     'agent.modal.newIdCommand.label':'Команда створення розмови','agent.modal.newIdCommand.hint':'Альтернатива прапорцю: команда, що створює розмову і друкує її id. Виконується один раз при створенні сесії.',
     'agent.modal.interactive.label':'Інтерактивна команда','agent.modal.interactive.hint':'Запускає TUI агента для термінальної сесії. Порожньо — агент лише для делегування.','agent.modal.resume.label':'Команда відновлення','agent.modal.resume.hint':'{sid} — ідентифікатор розмови. Використовується для відновлення сесії після перезавантаження.','agent.modal.resumeLast.label':'Відновити останню (запасний варіант)','agent.modal.resumeLast.hint':'Використовується, коли ідентифікатор невідомий. Може відновити іншу розмову.','agent.modal.newIdFlag.label':'Прапорець id нової розмови','agent.modal.newIdFlag.hint':'Якщо CLI дозволяє задати id НОВОЇ розмови, відновлення стає точним. Порожньо — не підтримується.',
     'export.btn':'Експорт','export.title':'Експортувати розмову','notes.btn':'Нотатки','notes.title':'Нотатки сесії (приватні)','notes.ph':'Приватні нотатки сесії — не надсилаються Claude...','notes.save':'Зберегти','notes.saved':'✓ Збережено',
@@ -5064,7 +5111,7 @@ const TRANSLATIONS = {
     'bot.state.queued':'queued','bot.state.running':'working','bot.state.done':'done','bot.state.failed':'failed','bot.state.stopped':'stopped','bot.state.skipped':'skipped','bot.stop.all':'Stop',
     'at.no_bots':'No bots found',
     'sec.bots':'Bots','bots.hint':'Participants in this project. Mention one with @@ in a message.','bot.add.new':'Create bot','bot.add.btn':'Create','bot.use.title':'Insert mention','bot.modal.add.title':'New bot','bot.modal.edit.title':'Edit bot','bot.modal.label.label':'Name','bot.modal.handle.hint':'Addressed in chat as:','bot.modal.avatar.label':'Emoji','bot.modal.desc.label':'Purpose','bot.modal.desc.hint':'One line. Other bots see this, so they know who to hand work to.','bot.modal.model.label':'Model','bot.model.inherit':'Same as chat','bot.modal.prompt.label':'System prompt','bot.modal.prompt.hint':'Who this bot is and how it works. Up to 8000 characters.','bot.err.label':'Give the bot a name','bot.del.confirm':'Delete bot','bot.del.note':'Its past messages stay, and its handle can never be taken by another bot.','bot.deleted':'deleted bot','toast.bot_added':'✓ Bot created','toast.bot_updated':'✓ Bot updated','toast.bot_deleted':'✓ Bot deleted','bot.modal.global.label':'Available in every project','bot.modal.global.hint':'A role like a programmer is wanted everywhere. Turn this on and the bot shows up in every project without being added to each one.','bot.modal.also_in':'Also in projects:','bot.modal.delete':'Delete bot','bot.global.badge':'Available in every project','bot.unlink.title':'Remove from this project','bot.unlink.confirm':'Remove from this project','bot.unlink.note':'The bot stays in other projects and keeps all of its messages.','bot.del.everywhere':'It is available in every project and will disappear from all of them.','bot.del.in_n':'It is available in {n} projects and will disappear from all of them.','toast.bot_unlinked':'✓ Removed from project','bots.import.title':'Import bots from a JSON file','bots.export.title':'Export bots to a JSON file','bots.import.conflict':'{n} of these handles already exist here. Overwrite them from the file? Local edits to those bots will be lost.','toast.bots_imported':'✓ Imported {n} bots, skipped {s}','toast.bots_import_err':'Could not import: ','toast.bots_import_parse':'That file is not valid JSON','toast.bots_import_empty':'No bots in that file','toast.bots_import_reserved':'Skipped {n} handle(s) belonging to deleted bots ({list}) — those are reserved forever','toast.bots_export_err':'Could not export the bots','toast.bots_export_empty':'Nothing to export','at.group.bots':'Bots','at.group.files':'Files',
-    'term.open.title':"Open this agent's live terminal in a tab",'term.kill':'Kill','term.killConfirm':'Kill this terminal session? The conversation can be resumed later.','term.unavailable':'Terminal sessions are unavailable','term.state.attached':'attached','term.state.started':'started','term.state.restored':'restored','term.state.restoredLast':"restored the agent's last conversation",'term.state.restoreFailed':'nothing to resume — started fresh','term.state.exited':'agent exited','term.state.error':'error','term.state.disconnected':'connection lost — reconnecting…','term.state.reconnecting':'reconnecting…','term.paste.title':'Paste into terminal','term.paste.notarget':'No open terminal to paste into','term.paste.notconnected':'Terminal is not connected','term.paste.done':'Pasted into terminal',
+    'term.open.title':"Open this agent's live terminal in a tab",'term.kill':'Kill','term.killConfirm':'Kill this terminal session? The conversation can be resumed later.','term.unavailable':'Terminal sessions are unavailable','term.state.attached':'attached','term.state.started':'started','term.state.restored':'restored','term.state.restoredLast':"restored the agent's last conversation",'term.state.restoreFailed':'nothing to resume — started fresh','term.state.exited':'agent exited','term.state.error':'error','term.state.disconnected':'connection lost — reconnecting…','term.state.reconnecting':'reconnecting…','term.paste.title':'Paste into terminal','term.paste.notarget':'No open terminal to paste into','term.paste.notconnected':'Terminal is not connected','term.paste.done':'Pasted into terminal','term.refresh.title':'Reconnect this terminal','term.send.ph':'Send a line to the terminal…','term.send.title':'Send (Enter)',
     'agent.modal.newIdCommand.label':'New-conversation command','agent.modal.newIdCommand.hint':'Alternative to the flag: a command that creates a conversation and prints its id. Run once when the session is created.',
     'agent.modal.interactive.label':'Interactive command','agent.modal.interactive.hint':"Starts the agent's TUI for a terminal session. Leave empty for a delegation-only agent.",'agent.modal.resume.label':'Resume command','agent.modal.resume.hint':'{sid} — the conversation id. Used to restore the session after a reboot.','agent.modal.resumeLast.label':'Resume last (fallback)','agent.modal.resumeLast.hint':'Used when no conversation id is known. May restore a different conversation.','agent.modal.newIdFlag.label':'New-conversation id flag','agent.modal.newIdFlag.hint':'If the CLI can be told the id of a NEW conversation, restore becomes exact. Leave empty if unsupported.',
     'export.btn':'Export','export.title':'Export conversation','notes.btn':'Notes','notes.title':'Session notes (private)','notes.ph':'Private session notes — not sent to Claude...','notes.save':'Save','notes.saved':'✓ Saved',
@@ -5452,7 +5499,7 @@ const TRANSLATIONS = {
     'bot.state.queued':'в очереди','bot.state.running':'работает','bot.state.done':'готово','bot.state.failed':'ошибка','bot.state.stopped':'остановлен','bot.state.skipped':'пропущен','bot.stop.all':'Остановить',
     'at.no_bots':'Боты не найдены',
     'sec.bots':'Боты','bots.hint':'Участники этого проекта. Упомяните бота через @@ в сообщении.','bot.add.new':'Создать бота','bot.add.btn':'Создать','bot.use.title':'Вставить упоминание','bot.modal.add.title':'Новый бот','bot.modal.edit.title':'Редактировать бота','bot.modal.label.label':'Имя','bot.modal.handle.hint':'Обращение в чате:','bot.modal.avatar.label':'Эмодзи','bot.modal.desc.label':'Назначение','bot.modal.desc.hint':'Одной строкой. Это видят другие боты, чтобы знать, кому передать работу.','bot.modal.model.label':'Модель','bot.model.inherit':'Как в чате','bot.modal.prompt.label':'Системный промпт','bot.modal.prompt.hint':'Кто этот бот и как он работает. До 8000 символов.','bot.err.label':'Укажите имя бота','bot.del.confirm':'Удалить бота','bot.del.note':'Его прошлые сообщения останутся, а обращение больше никогда не достанется другому боту.','bot.deleted':'удалённый бот','toast.bot_added':'✓ Бот создан','toast.bot_updated':'✓ Бот обновлён','toast.bot_deleted':'✓ Бот удалён','bot.modal.global.label':'Доступен во всех проектах','bot.modal.global.hint':'Роль вроде программиста нужна везде. Включите — и бот появится в каждом проекте без отдельного добавления.','bot.modal.also_in':'Также в проектах:','bot.modal.delete':'Удалить бота','bot.global.badge':'Доступен во всех проектах','bot.unlink.title':'Убрать из этого проекта','bot.unlink.confirm':'Убрать из этого проекта','bot.unlink.note':'Бот останется в других проектах, его сообщения никуда не денутся.','bot.del.everywhere':'Он доступен во всех проектах — исчезнет отовсюду.','bot.del.in_n':'Он доступен в {n} проектах — исчезнет из всех.','toast.bot_unlinked':'✓ Убран из проекта','bots.import.title':'Импортировать ботов из JSON файла','bots.export.title':'Экспортировать ботов в JSON файл','bots.import.conflict':'Ботов с такими обращениями уже есть: {n}. Перезаписать их данными из файла? Локальные изменения в них будут потеряны.','toast.bots_imported':'✓ Импортировано ботов: {n}, пропущено: {s}','toast.bots_import_err':'Не удалось импортировать: ','toast.bots_import_parse':'Файл не является корректным JSON','toast.bots_import_empty':'В файле нет ни одного бота','toast.bots_import_reserved':'Пропущено из-за удалённых ботов: {n} ({list}) — эти обращения зарезервированы навсегда','toast.bots_export_err':'Не удалось экспортировать ботов','toast.bots_export_empty':'Некого экспортировать','at.group.bots':'Боты','at.group.files':'Файлы',
-    'term.open.title':'Открыть живой терминал этого агента во вкладке','term.kill':'Завершить','term.killConfirm':'Завершить эту терминальную сессию? Разговор можно будет восстановить позже.','term.unavailable':'Терминальные сессии недоступны','term.state.attached':'подключено','term.state.started':'запущено','term.state.restored':'восстановлено','term.state.restoredLast':'восстановлен последний разговор агента','term.state.restoreFailed':'восстанавливать было нечего — начато заново','term.state.exited':'агент завершился','term.state.error':'ошибка','term.state.disconnected':'соединение потеряно — переподключение...','term.state.reconnecting':'переподключение...','term.paste.title':'Вставить в терминал','term.paste.notarget':'Нет открытого терминала для вставки','term.paste.notconnected':'Терминал не подключен','term.paste.done':'Вставлено в терминал',
+    'term.open.title':'Открыть живой терминал этого агента во вкладке','term.kill':'Завершить','term.killConfirm':'Завершить эту терминальную сессию? Разговор можно будет восстановить позже.','term.unavailable':'Терминальные сессии недоступны','term.state.attached':'подключено','term.state.started':'запущено','term.state.restored':'восстановлено','term.state.restoredLast':'восстановлен последний разговор агента','term.state.restoreFailed':'восстанавливать было нечего — начато заново','term.state.exited':'агент завершился','term.state.error':'ошибка','term.state.disconnected':'соединение потеряно — переподключение...','term.state.reconnecting':'переподключение...','term.paste.title':'Вставить в терминал','term.paste.notarget':'Нет открытого терминала для вставки','term.paste.notconnected':'Терминал не подключен','term.paste.done':'Вставлено в терминал','term.refresh.title':'Переподключить этот терминал','term.send.ph':'Отправить строку в терминал…','term.send.title':'Отправить (Enter)',
     'agent.modal.newIdCommand.label':'Команда создания разговора','agent.modal.newIdCommand.hint':'Альтернатива флагу: команда, создающая разговор и печатающая его id. Выполняется один раз при создании сессии.',
     'agent.modal.interactive.label':'Интерактивная команда','agent.modal.interactive.hint':'Запускает TUI агента для терминальной сессии. Пусто — агент только для делегирования.','agent.modal.resume.label':'Команда восстановления','agent.modal.resume.hint':'{sid} — идентификатор разговора. Используется для восстановления сессии после перезагрузки.','agent.modal.resumeLast.label':'Восстановить последний (запасной вариант)','agent.modal.resumeLast.hint':'Используется, когда идентификатор неизвестен. Может восстановить другой разговор.','agent.modal.newIdFlag.label':'Флаг id нового разговора','agent.modal.newIdFlag.hint':'Если CLI позволяет задать id НОВОГО разговора, восстановление становится точным. Пусто — не поддерживается.',
     'export.btn':'Экспорт','export.title':'Экспортировать разговор','notes.btn':'Заметки','notes.title':'Заметки сессии (приватные)','notes.ph':'Приватные заметки сессии — не отправляются Claude...','notes.save':'Сохранить','notes.saved':'✓ Сохранено',
@@ -5840,7 +5887,7 @@ const TRANSLATIONS = {
     "bot.state.queued":"en attente","bot.state.running":"en cours","bot.state.done":"terminé","bot.state.failed":"échec","bot.state.stopped":"arrêté","bot.state.skipped":"ignoré","bot.stop.all":"Arrêter",
     "at.no_bots":"Aucun bot trouvé",
     "sec.bots":"Bots","bots.hint":"Participants de ce projet. Mentionnez un bot avec @@ dans un message.","bot.add.new":"Créer un bot","bot.add.btn":"Créer","bot.use.title":"Insérer la mention","bot.modal.add.title":"Nouveau bot","bot.modal.edit.title":"Modifier le bot","bot.modal.label.label":"Nom","bot.modal.handle.hint":"Adressé dans le chat comme :","bot.modal.avatar.label":"Émoji","bot.modal.desc.label":"Rôle","bot.modal.desc.hint":"Une ligne. Les autres bots la voient pour savoir à qui passer le travail.","bot.modal.model.label":"Modèle","bot.model.inherit":"Comme le chat","bot.modal.prompt.label":"Invite système","bot.modal.prompt.hint":"Qui est ce bot et comment il travaille. Jusqu'à 8000 caractères.","bot.err.label":"Donnez un nom au bot","bot.del.confirm":"Supprimer le bot","bot.del.note":"Ses anciens messages restent, et son identifiant ne sera jamais repris par un autre bot.","bot.deleted":"bot supprimé","toast.bot_added":"✓ Bot créé","toast.bot_updated":"✓ Bot mis à jour","toast.bot_deleted":"✓ Bot supprimé","bot.modal.global.label":"Disponible dans tous les projets","bot.modal.global.hint":"Un rôle comme celui de programmeur est utile partout. Activez cette option et le bot apparaît dans chaque projet sans y être ajouté un par un.","bot.modal.also_in":"Aussi dans les projets :","bot.modal.delete":"Supprimer le bot","bot.global.badge":"Disponible dans tous les projets","bot.unlink.title":"Retirer de ce projet","bot.unlink.confirm":"Retirer de ce projet","bot.unlink.note":"Le bot reste dans les autres projets et conserve tous ses messages.","bot.del.everywhere":"Il est disponible dans tous les projets et disparaîtra de partout.","bot.del.in_n":"Il est disponible dans {n} projets et disparaîtra de tous.","toast.bot_unlinked":"✓ Retiré du projet","bots.import.title":"Importer des bots depuis un fichier JSON","bots.export.title":"Exporter les bots vers un fichier JSON","bots.import.conflict":"{n} de ces identifiants existent déjà ici. Les écraser avec le fichier ? Les modifications locales de ces bots seront perdues.","toast.bots_imported":"✓ {n} bots importés, {s} ignorés","toast.bots_import_err":"Import impossible : ","toast.bots_import_parse":"Ce fichier n'est pas du JSON valide","toast.bots_import_empty":"Aucun bot dans ce fichier","toast.bots_import_reserved":"{n} identifiant(s) ignoré(s), appartenant à des bots supprimés ({list}) — ils sont réservés définitivement","toast.bots_export_err":"Export des bots impossible","toast.bots_export_empty":"Rien à exporter","at.group.bots":"Bots","at.group.files":"Fichiers",
-    "term.open.title":"Ouvrir le terminal","term.kill":"Terminer","term.killConfirm":"Terminer cette session terminal ? La conversation pourra être reprise plus tard.","term.unavailable":"Sessions terminal indisponibles","term.state.attached":"connecté","term.state.started":"démarré","term.state.restored":"restauré","term.state.restoredLast":"dernière conversation de l'agent restaurée","term.state.restoreFailed":"rien à reprendre — nouveau départ","term.state.exited":"agent terminé","term.state.error":"erreur","term.state.disconnected":"connexion perdue — reconnexion…","term.state.reconnecting":"reconnexion…","term.paste.title":"Coller dans le terminal","term.paste.notarget":"Aucun terminal ouvert où coller","term.paste.notconnected":"Le terminal n'est pas connecté","term.paste.done":"Collé dans le terminal",
+    "term.open.title":"Ouvrir le terminal","term.kill":"Terminer","term.killConfirm":"Terminer cette session terminal ? La conversation pourra être reprise plus tard.","term.unavailable":"Sessions terminal indisponibles","term.state.attached":"connecté","term.state.started":"démarré","term.state.restored":"restauré","term.state.restoredLast":"dernière conversation de l'agent restaurée","term.state.restoreFailed":"rien à reprendre — nouveau départ","term.state.exited":"agent terminé","term.state.error":"erreur","term.state.disconnected":"connexion perdue — reconnexion…","term.state.reconnecting":"reconnexion…","term.paste.title":"Coller dans le terminal","term.paste.notarget":"Aucun terminal ouvert où coller","term.paste.notconnected":"Le terminal n'est pas connecté","term.paste.done":"Collé dans le terminal","term.refresh.title":"Reconnecter ce terminal","term.send.ph":"Envoyer une ligne au terminal…","term.send.title":"Envoyer (Entrée)",
     "agent.modal.newIdCommand.label":"Commande de nouvelle conversation","agent.modal.newIdCommand.hint":"Alternative à l'indicateur : une commande qui crée une conversation et affiche son id. Exécutée une fois à la création de la session.",
     "agent.modal.interactive.label":"Commande interactive","agent.modal.interactive.hint":"Lance le TUI de l'agent pour une session terminal. Vide — agent de délégation uniquement.","agent.modal.resume.label":"Commande de reprise","agent.modal.resume.hint":"{sid} — identifiant de la conversation. Sert à restaurer la session après un redémarrage.","agent.modal.resumeLast.label":"Reprendre la dernière (repli)","agent.modal.resumeLast.hint":"Utilisée quand aucun identifiant n'est connu. Peut restaurer une autre conversation.","agent.modal.newIdFlag.label":"Indicateur d'id de nouvelle conversation","agent.modal.newIdFlag.hint":"Si la CLI accepte l'id d'une NOUVELLE conversation, la restauration devient exacte. Vide si non pris en charge.",
     "export.btn":"Exporter","export.title":"Exporter la conversation","notes.btn":"Notes","notes.title":"Notes de session (privées)","notes.ph":"Notes de session privées — non envoyées à Claude...",
@@ -6129,7 +6176,7 @@ const TRANSLATIONS = {
     "bot.state.queued":"בתור","bot.state.running":"עובד","bot.state.done":"הושלם","bot.state.failed":"נכשל","bot.state.stopped":"נעצר","bot.state.skipped":"דולג","bot.stop.all":"עצור",
     "at.no_bots":"לא נמצאו בוטים",
     "sec.bots":"בוטים","bots.hint":"משתתפים בפרויקט הזה. אזכרו בוט עם @@ בהודעה.","bot.add.new":"צור בוט","bot.add.btn":"צור","bot.use.title":"הוסף אזכור","bot.modal.add.title":"בוט חדש","bot.modal.edit.title":"עריכת בוט","bot.modal.label.label":"שם","bot.modal.handle.hint":"פנייה בצ׳אט:","bot.modal.avatar.label":"אמוג׳י","bot.modal.desc.label":"ייעוד","bot.modal.desc.hint":"שורה אחת. בוטים אחרים רואים אותה כדי לדעת למי להעביר עבודה.","bot.modal.model.label":"מודל","bot.model.inherit":"כמו בצ׳אט","bot.modal.prompt.label":"הנחיית מערכת","bot.modal.prompt.hint":"מי הבוט הזה ואיך הוא עובד. עד 8000 תווים.","bot.err.label":"תנו שם לבוט","bot.del.confirm":"למחוק בוט","bot.del.note":"ההודעות הקודמות שלו נשארות, והמזהה שלו לעולם לא יעבור לבוט אחר.","bot.deleted":"בוט שנמחק","toast.bot_added":"✓ הבוט נוצר","toast.bot_updated":"✓ הבוט עודכן","toast.bot_deleted":"✓ הבוט נמחק","bot.modal.global.label":"זמין בכל הפרויקטים","bot.modal.global.hint":"תפקיד כמו מתכנת נחוץ בכל מקום. הפעילו את האפשרות והבוט יופיע בכל פרויקט בלי להוסיף אותו לכל אחד בנפרד.","bot.modal.also_in":"גם בפרויקטים:","bot.modal.delete":"מחיקת הבוט","bot.global.badge":"זמין בכל הפרויקטים","bot.unlink.title":"הסרה מהפרויקט הזה","bot.unlink.confirm":"להסיר מהפרויקט הזה","bot.unlink.note":"הבוט יישאר בפרויקטים האחרים וכל ההודעות שלו נשמרות.","bot.del.everywhere":"הוא זמין בכל הפרויקטים וייעלם מכולם.","bot.del.in_n":"הוא זמין ב-{n} פרויקטים וייעלם מכולם.","toast.bot_unlinked":"✓ הוסר מהפרויקט","bots.import.title":"ייבוא בוטים מקובץ JSON","bots.export.title":"ייצוא בוטים לקובץ JSON","bots.import.conflict":"{n} מהשמות האלה כבר קיימים כאן. לדרוס אותם מהקובץ? שינויים מקומיים בבוטים האלה יאבדו.","toast.bots_imported":"✓ יובאו {n} בוטים, {s} דולגו","toast.bots_import_err":"הייבוא נכשל: ","toast.bots_import_parse":"הקובץ אינו JSON תקין","toast.bots_import_empty":"אין בוטים בקובץ הזה","toast.bots_import_reserved":"{n} שמות דולגו כי הם שייכים לבוטים שנמחקו ({list}) — הם שמורים לתמיד","toast.bots_export_err":"ייצוא הבוטים נכשל","toast.bots_export_empty":"אין מה לייצא","at.group.bots":"בוטים","at.group.files":"קבצים",
-    "term.open.title":"פתח טרמינל","term.kill":"סיים","term.killConfirm":"לסיים את שיחת הטרמינל הזו? אפשר יהיה לשחזר אותה בהמשך.","term.unavailable":"שיחות טרמינל אינן זמינות","term.state.attached":"מחובר","term.state.started":"הופעל","term.state.restored":"שוחזר","term.state.restoredLast":"שוחזרה השיחה האחרונה של הסוכן","term.state.restoreFailed":"לא היה מה לשחזר — התחלה מחדש","term.state.exited":"הסוכן הסתיים","term.state.error":"שגיאה","term.state.disconnected":"החיבור אבד — מתחבר מחדש...","term.state.reconnecting":"מתחבר מחדש...","term.paste.title":"הדבק בטרמינל","term.paste.notarget":"אין טרמינל פתוח להדבקה","term.paste.notconnected":"הטרמינל אינו מחובר","term.paste.done":"הודבק בטרמינל",
+    "term.open.title":"פתח טרמינל","term.kill":"סיים","term.killConfirm":"לסיים את שיחת הטרמינל הזו? אפשר יהיה לשחזר אותה בהמשך.","term.unavailable":"שיחות טרמינל אינן זמינות","term.state.attached":"מחובר","term.state.started":"הופעל","term.state.restored":"שוחזר","term.state.restoredLast":"שוחזרה השיחה האחרונה של הסוכן","term.state.restoreFailed":"לא היה מה לשחזר — התחלה מחדש","term.state.exited":"הסוכן הסתיים","term.state.error":"שגיאה","term.state.disconnected":"החיבור אבד — מתחבר מחדש...","term.state.reconnecting":"מתחבר מחדש...","term.paste.title":"הדבק בטרמינל","term.paste.notarget":"אין טרמינל פתוח להדבקה","term.paste.notconnected":"הטרמינל אינו מחובר","term.paste.done":"הודבק בטרמינל","term.refresh.title":"חבר מחדש את הטרמינל","term.send.ph":"שלחו שורה לטרמינל…","term.send.title":"שליחה (Enter)",
     "agent.modal.newIdCommand.label":"פקודת יצירת שיחה","agent.modal.newIdCommand.hint":"חלופה לדגל: פקודה שיוצרת שיחה ומדפיסה את המזהה שלה. מורצת פעם אחת ביצירת השיחה.",
     "agent.modal.interactive.label":"פקודה אינטראקטיבית","agent.modal.interactive.hint":"מפעילה את ה-TUI של הסוכן עבור שיחת טרמינל. ריק — סוכן להאצלה בלבד.","agent.modal.resume.label":"פקודת שחזור","agent.modal.resume.hint":"{sid} — מזהה השיחה. משמש לשחזור השיחה לאחר הפעלה מחדש.","agent.modal.resumeLast.label":"שחזר אחרונה (גיבוי)","agent.modal.resumeLast.hint":"משמש כאשר המזהה אינו ידוע. עשוי לשחזר שיחה אחרת.","agent.modal.newIdFlag.label":"דגל מזהה לשיחה חדשה","agent.modal.newIdFlag.hint":"אם ה-CLI מאפשר לקבוע מזהה לשיחה חדשה, השחזור נעשה מדויק. ריק אם אינו נתמך.",
     "export.btn":"ייצוא","export.title":"ייצוא שיחה","notes.btn":"הערות","notes.title":"הערות סשן (פרטי)","notes.ph":"הערות פרטיות לסשן — לא נשלחות ל-Claude...","notes.save":"שמירה",
@@ -6336,6 +6383,8 @@ function setLang(lang, persist = true) {
   document.querySelectorAll('[data-i18n-aria]').forEach(el => { const k = el.getAttribute('data-i18n-aria'); if (t[k] !== undefined) el.setAttribute('aria-label', t[k]); });
   if (typeof updateHistBulkBar === 'function') updateHistBulkBar();
   if (typeof renderInterruptPill === 'function') renderInterruptPill();
+  // A translated placeholder is a different length, so it wraps at a different width.
+  if (typeof autosizeInput === 'function') autosizeInput();
   try { if (typeof renderActivity === 'function') renderActivity(_lastActivity); } catch {}
   rerenderI18nDynamic();
 }
@@ -8411,9 +8460,11 @@ function setSendStop(generating) {
       if (isRemote) { pill.classList.remove('visible'); }
       else { pill.classList.add('visible'); renderInterruptPill(); }
     }
+    autosizeInput(); // the pill and the stop button narrow the box — the hint re-wraps
   } else {
     stopBtn.classList.add('hidden');
     if (pill) pill.classList.remove('visible');
+    autosizeInput();
     interruptSendMode = 'interrupt'; // reset to default for next time
   }
 }
@@ -10167,9 +10218,7 @@ function useAsInput(btn) {
   // Get text content and set to input
   inEl.value = msgEl.textContent.trim();
   inEl.focus();
-  // Auto-resize textarea
-  inEl.style.height = 'auto';
-  inEl.style.height = Math.min(inEl.scrollHeight, 200) + 'px';
+  autosizeInput();
 }
 
 // ─── Fork conversation (continue in new chat with context) ───
@@ -10704,6 +10753,8 @@ function toggle(id) {
       if (!$i('rightPanel')?.classList.contains('collapsed')) toggle('rightPanel');
     };
   }
+  // A sidebar opening or closing changes how much width the composer has left.
+  if (id === 'leftPanel' || id === 'rightPanel') autosizeInput();
   saveUIState();
 }
 function toggleSec(id) {
@@ -11781,8 +11832,7 @@ function deleteQueuedMsg(btn) {
 
 // Input auto-resize
 inEl.addEventListener('input', () => {
-  inEl.style.height = 'auto';
-  inEl.style.height = Math.min(inEl.scrollHeight, 120) + 'px';
+  autosizeInput();
   // Persist draft to localStorage
   if (inEl.value.trim()) localStorage.setItem('ccs:draft', inEl.value);
   else localStorage.removeItem('ccs:draft');
@@ -17682,6 +17732,14 @@ function _createTerminal(sessionId) {
   // Bound to `entry.ws`, not a captured socket — so a later reconnect (fresh
   // WebSocket swapped into entry.ws) keeps routing keystrokes without re-wiring.
   term.onData(d => { if (entry.ws && entry.ws.readyState === 1) entry.ws.send(JSON.stringify({ type: 'input', data: d })); });
+  // Anything that steals focus — a modal, a toast button, the send line below, the
+  // browser restoring focus after an alt-tab — leaves the pane visually active but
+  // deaf. A click on it is an unambiguous "I am typing here"; don't steal focus back
+  // when the user is dragging out a selection.
+  host.addEventListener('mouseup', () => {
+    if (term.hasSelection && term.hasSelection()) return;
+    try { term.focus(); } catch {}
+  });
   _connectTerminalWs(sessionId);
   return entry;
 }
@@ -17708,7 +17766,16 @@ function _connectTerminalWs(sessionId) {
     + (_tgt.view ? `&view=${encodeURIComponent(_tgt.view)}` : ''));
   entry.ws = ws;
   ws.binaryType = 'arraybuffer';
-  ws.onopen = () => { entry._reconnectDelay = 1000; if (_termSessionId === sessionId) sendTermResize(); };
+  ws.onopen = () => {
+    entry._reconnectDelay = 1000;
+    if (_termSessionId !== sessionId) return;
+    sendTermResize();
+    // xterm routes keystrokes through a hidden textarea. A reconnect swaps entry.ws
+    // but leaves that textarea wherever focus went while the socket was dying, so the
+    // pane kept looking live and swallowed every key. Switching tabs away and back
+    // "fixed" it only because showTerminalView() ends on the same focus() call.
+    requestAnimationFrame(() => { try { term.focus(); } catch {} });
+  };
   ws.onmessage = (ev) => {
     if (typeof ev.data !== 'string') { term.write(new Uint8Array(ev.data)); return; }
     let msg = null; try { msg = JSON.parse(ev.data); } catch { return; }
@@ -17779,6 +17846,41 @@ function _connectTerminalWs(sessionId) {
     }
   };
   return ws;
+}
+
+// Unconditional reconnect for the visible terminal. The automatic paths are all
+// conditional — showTerminalView() and visibilitychange only act on readyState >= 2,
+// and onclose only fires if a close event ever arrives. A socket whose TCP path died
+// without a FIN reports OPEN on both ends; the server-side heartbeat now kills those
+// within ~60s, but that is a timeout, not an answer to "it is stuck NOW". This is the
+// manual escape hatch, and it works from any state.
+function refreshTerminalSession() {
+  const sessionId = _termSessionId; if (!sessionId) return;
+  const entry = _terms.get(sessionId); if (!entry) return;
+  // Clear `exited` first: a pane reported gone latches it, and _connectTerminalWs
+  // would otherwise reconnect once and let the next close event stop retrying.
+  entry.exited = false;
+  const old = entry.ws;
+  // Detach before closing. onclose checks `entry.ws === ws` to ignore stale sockets,
+  // so nulling it here means the old socket's close cannot schedule a second,
+  // competing reconnect on top of the one we are about to make.
+  entry.ws = null;
+  try { old && old.close(); } catch {}
+  _connectTerminalWs(sessionId);
+}
+
+// Send one line to the visible terminal, as if it had been typed into the pane.
+function sendToTerminal() {
+  const box = $i('termSendInput'); if (!box) return;
+  const text = box.value; if (!text.trim()) return;
+  const entry = _termSessionId && _terms.get(_termSessionId);
+  if (!entry || !entry.ws || entry.ws.readyState !== 1) { toast(t('term.paste.notconnected'), true); return; }
+  // \r, not \n: a PTY sees the Return KEY, and a TUI reading in canonical or raw mode
+  // both treat CR as submit. Sent as ONE frame with the text so a prompt that echoes
+  // and submits on the same tick cannot split them.
+  entry.ws.send(JSON.stringify({ type: 'input', data: text + '\r' }));
+  box.value = '';
+  try { entry.term.focus(); } catch {}
 }
 
 // The status bar is shared, so it always reflects the VISIBLE terminal — a
