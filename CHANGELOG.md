@@ -2,6 +2,9 @@
 
 ## 7.8.0
 
+The editor you actually use is one click away, the composer stops moving under the
+cursor, and a terminal pane you can no longer type into has two ways back.
+
 ### Open the workspace in VS Code
 
 - **One button, local or remote.** A project row and the file viewer now hand the
@@ -30,6 +33,46 @@
   folder. Per-file opening stays local-only on purpose: VS Code's own URL handler
   opens a remote *file* link as a folder, so the button comes off rather than doing
   the wrong thing — the project row still opens the remote workspace.
+
+### The composer stopped moving under the cursor
+
+Four defects reported against the shipped build, none of them a regression: each was
+work that never reached a commit. Two of them are the composer, two the terminal pane.
+
+- **The interrupt pill no longer shoves the placeholder.** It sat upstream of the
+  textarea in a flex row, so every earlier sibling owned the text's left edge: the
+  moment a turn started, the hint jumped ~70px to the right and the narrower box
+  re-wrapped it. The pill now lives downstream of the textarea, where it appears and
+  disappears without moving a glyph.
+
+- **One place computes the composer's height.** The formula was already right; it
+  simply ran from one function. Boot (the markup ships `rows="1"`), a language switch
+  (a longer translation wraps differently), a sidebar toggle, a window resize and the
+  pill entering the row all changed the wrap without re-measuring, which is what left
+  the second line of the hint clipped. `autosizeInput()` now owns the cap and is
+  called from all seven paths.
+
+### Terminal sessions
+
+- **A pane no longer goes deaf until you switch tabs and back.** xterm routes
+  keystrokes through a hidden textarea; a reconnect swapped the socket but left focus
+  wherever it had drifted, so the pane looked live and swallowed every key. The tab
+  switch "fixed" it only because `showTerminalView()` ends on `term.focus()`. A
+  reconnect and a click on the pane now do the same -- and a click is ignored while a
+  selection is being dragged out.
+
+- **A reconnect button in the terminal header.** Every automatic path is conditional:
+  the visibility handler and the tab switch only act on a socket that already reports
+  closing, and `onclose` only fires if a close event ever arrives. A socket whose TCP
+  path died without a FIN reports OPEN on both ends -- the server heartbeat kills those
+  within ~60s, but that is a timeout, not an answer to "it is stuck now".
+
+- **A send line under the pane.** The composer is `display: none` in terminal mode, so
+  the only way to send a line to a terminal session was to type into the pane -- exactly
+  what a stale socket takes away. The new input writes the same `{type:'input'}` frame
+  the pane writes, so it works on an agent tab and on the subscription engine's pane,
+  where it is how a blocking permission prompt gets answered. It refuses to send on a
+  socket that is not OPEN rather than dropping the line silently.
 
 ## 7.7.0
 

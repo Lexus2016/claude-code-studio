@@ -14223,8 +14223,7 @@ function _selectSlashCmd(cmd) {
   const pos = slashIdx + cmd.text.length;
   inEl.selectionStart = inEl.selectionEnd = pos;
   _closeSlashPopup(); inEl.focus();
-  inEl.style.height = 'auto';
-  inEl.style.height = Math.min(inEl.scrollHeight, 120) + 'px';
+  autosizeInput();
 }
 
 // ─── Config Editor ────────────────────────────────────────────────────────
