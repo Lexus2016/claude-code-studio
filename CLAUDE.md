@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. `npm test` chains 65 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 47 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does), the editor deep links (`editor-links.test.js` pins the two URI shapes literally — the browser link puts `vscode-remote` in the AUTHORITY and the CLI argument puts it in the SCHEME, and collapsing the two silently breaks one path; `editor-open-api.test.js` boots a real server with `PATH` pointed at an EMPTY directory, which both makes the `opened:'client'` fallback deterministic and guarantees the suite never launches an editor window on a developer's desktop), and the new-chat defaults chain (`chat-defaults.test.js` pins the pure resolver — the built-ins are asserted to be exactly what the SPA hardcoded before #58, and the choice lists to be exactly the toolbar's `data-v` sets and `MODEL_MAP`'s aliases; `chat-defaults-api.test.js` boots a real server in a throwaway `APP_DIR` and pins that a project writes back a SPARSE override object — a five-key snapshot passes every other assertion in that file and still breaks the feature). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
+No linting and no build step configured. `npm test` chains 66 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 48 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does), the editor deep links (`editor-links.test.js` pins the two URI shapes literally — the browser link puts `vscode-remote` in the AUTHORITY and the CLI argument puts it in the SCHEME, and collapsing the two silently breaks one path; `editor-open-api.test.js` boots a real server with `PATH` pointed at an EMPTY directory, which both makes the `opened:'client'` fallback deterministic and guarantees the suite never launches an editor window on a developer's desktop), and the new-chat defaults chain (`chat-defaults.test.js` pins the pure resolver — the built-ins are asserted to be exactly what the SPA hardcoded before #58, and the choice lists to be exactly the toolbar's `data-v` sets and `MODEL_MAP`'s aliases; `chat-defaults-api.test.js` boots a real server in a throwaway `APP_DIR` and pins that a project writes back a SPARSE override object — a five-key snapshot passes every other assertion in that file and still breaks the feature). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
 
 ## Architecture
 
@@ -407,6 +407,59 @@ always running on the machine the browser is on.
   and the settings row (`config-resolve.js`, `section: 'ui'`) reads its choices from
   there rather than restating them.
 
+### Composer geometry and terminal-pane control
+
+Four reports that all reduce to "the UI moved or stopped listening". Pinned by
+`test/composer-terminal.test.js`.
+
+- **The interrupt pill lives DOWNSTREAM of the textarea.** `.iw` is a flex row, so
+  every earlier sibling owns the text's left edge. Upstream, the pill shoved the
+  placeholder ~70px right the instant a turn started and narrowed the box enough to
+  re-wrap the hint — one report, two symptoms.
+- **`autosizeInput()` is the only place that reads `inEl.scrollHeight`.** The height
+  of a `rows="1"` textarea is JS-owned and has to be recomputed whenever the WRAPPED
+  LINE COUNT can change, which is not only when the value changes: boot, `setLang()`
+  (a longer translation wraps differently), a sidebar toggle, a window resize, fonts
+  landing after first paint, and the pill entering the row. The earlier fix was
+  correct and ran from `restoreComposerState()` alone, so every one of those paths
+  left the second line of the hint clipped. Open-coding the two lines again is the
+  regression; the test counts the reads.
+- **Focus, not the socket, is why a pane "needs a tab switch".** xterm routes
+  keystrokes through a hidden textarea. A reconnect swaps `entry.ws` but leaves focus
+  wherever it drifted while the socket died, so the pane looks live and swallows every
+  key; switching tabs away and back works only because `showTerminalView()` ends on
+  `term.focus()`. `ws.onopen` and a `mouseup` on the host now do the same — the latter
+  skipped while a selection is being dragged out. The server-side heartbeat (v7.6.0)
+  is the other half and only the other half: it reaps a dead TCP path within ~60s.
+- **A stale `onclose` may not repaint the live pane.** The staleness test
+  (`_terms.get(sessionId) === entry && entry.ws === ws`) used to guard only the
+  reconnect, while the "disconnected" paint above it ran unconditionally. Since
+  `refreshTerminalSession()` deliberately detaches before it closes, the old socket's
+  close event lands *after* the new one is ready and marked a working pane dead, with
+  nothing to repaint it until the next state change. The guard is now the first line
+  of the handler.
+- **The composer is watched by a `ResizeObserver`, not only by `toggle()`.** Both
+  panels animate `width .25s`, so measuring from the click measures the box the user
+  is leaving. The observer compares `clientWidth` before re-measuring — the callback
+  sets the height, so an unguarded one re-enters forever.
+- **`sendToTerminal()` has no emptiness guard, on purpose.** A bare Return is the most
+  useful thing this line can send: it accepts a prompt's default (`[Y/n]`, "press enter
+  to continue"). `showTerminalView()` clears the box, because one send line serves every
+  pane and a draft must not follow the user to a different terminal.
+- **`refreshTerminalSession()` reconnects unconditionally.** Every automatic path is
+  conditional on a state a half-dead socket does not report. It clears the latched
+  `exited` flag first, then nulls `entry.ws` BEFORE closing the old socket — `onclose`
+  compares `entry.ws === ws`, so detaching first is what stops the dying socket from
+  racing a second reconnect against the new one.
+- **The `.term-send` line exists because the composer is hidden.**
+  `.center.term-mode > .ia` is `display: none`, so a terminal tab had no input surface
+  except the pane itself — precisely what a stale socket takes away. It writes the same
+  `{type:'input'}` frame `term.onData()` writes, which is why it also works on the
+  subscription engine's pane (a `view=engine` viewer may only send `input`) and is a
+  way to answer a blocking permission prompt. `\r`, never `\n`: a PTY needs the Return
+  key, and the text and the CR go in ONE frame so a prompt that echoes and submits on
+  the same tick cannot split them.
+
 ### Markdown Rendering in SPA
 - During streaming: `renderStreaming()` handles unclosed code fences
 - On `done` event: re-render with full `renderMd()` for proper final formatting
@@ -416,7 +469,7 @@ always running on the machine the browser is on.
 
 ## How to Verify Changes
 
-`npm test` runs 65 test files under `test/` (18 `test/render/*.test.mjs` + 47 `test/*.test.js`), and `.github/workflows/ci.yml` runs the same command on every push and PR to `main`. Nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 66 test files under `test/` (18 `test/render/*.test.mjs` + 48 `test/*.test.js`), and `.github/workflows/ci.yml` runs the same command on every push and PR to `main`. Nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server
