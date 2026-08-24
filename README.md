@@ -423,6 +423,8 @@ The active engine is always visible at a glance: a **⚡ Max** badge appears in 
 
 **SSH** — add remote servers, create projects pointing to directories on them. Claude works there as if local. Type `#` in chat for quick multi-server attachment. Screenshots and files auto-upload via SFTP.
 
+**Open in VS Code** — the ⏻-style button on a project row hands the workspace to your desktop editor, local or over SSH. A remote project opens through **VS Code Remote-SSH** at the right path, without reconnecting by hand. The studio launches the editor itself when it can find a `code` binary; when it cannot — inside Docker, on a headless host, on Windows — it hands your browser a `vscode://` link instead, so the window opens on the machine you are actually sitting at. Pick **VS Code, Insiders, VSCodium, Cursor or Windsurf** in Settings → *UI*. The file viewer gets the same button for the file you are reading.
+
 **Remote file browser** — the file tree, the file viewer and `@`-mention search now work on SSH projects as well, not only local ones. Read-only by design: list a directory, open a file. Download, share and image/PDF preview stay hidden for remote files instead of failing under your finger. Listings are capped at 2000 entries and files at 2 MB — both enforced on the remote host and announced in the UI, so an 8 GB log never crosses the link. A symlink pointing outside the project root is refused, not followed.
 
 **Remote Access** — one click: cloudflared (no signup) or ngrok. Public HTTPS URL in seconds. Works behind NAT, firewalls, corporate VPNs. URL sent to Telegram automatically.
@@ -490,6 +492,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | **Skills** | 30 built-in, auto-classification, plugin discovery, custom `.md` files |
 | **Commands** | 10 built-in slash commands, custom commands |
 | **Remote** | SSH servers, SFTP upload, `#` quick-attach, cloudflared/ngrok tunnels, remote CLI session import, read-only remote file browser (tree + viewer + `@`-mention search over SSH, capped and symlink-guarded) |
+| **Editor** | Open the active workspace in VS Code / Insiders / VSCodium / Cursor / Windsurf — locally or through Remote-SSH; launched by the server when it has the CLI, by the browser via `vscode://` when it does not |
 | **Mobile** | Native-feel UI, bottom sheet, scroll-snap Kanban, iOS-safe, touch-optimized |
 | **Dashboard** | Activity heatmap, tool usage, model distribution, Automation Index, peak hours |
 | **Reliability** | security-hardened Telegram uploads, self-healing sessions, crash protection, atomic writes, instant stop, rate limit auto-wait, concurrency safety (session lock + busy_timeout), orphaned session lock auto-cleanup |

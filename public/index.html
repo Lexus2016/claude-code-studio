@@ -3830,6 +3830,10 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span data-i18n="fpv.download">Завантажити</span>
       </button>
+      <button class="fpv-btn" id="fpvEditorBtn" data-editor-btn onclick="fpvOpenInEditor()" data-i18n-title="editor.open.file.title" title="Відкрити у редакторі">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        <span data-i18n="editor.open">Відкрити</span>
+      </button>
       <button class="fpv-btn" onclick="fpvShare()" id="fpvShareBtn" data-i18n-title="fpv.share.title" title="Поділитись / Скопіювати посилання">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
         <span data-i18n="fpv.share">Поділитись</span>
@@ -4657,6 +4661,7 @@ const TRANSLATIONS = {
     'cfg.h.CCS_REMOTE_EXEC_TIMEOUT_MS':'Таймаут однієї команди, виконаної на віддаленому хості через SSH.',
     'cfg.h.CCS_REMOTE_EXEC_MAX_BYTES':'Ліміт обсягу виводу, який приймається від віддаленої команди.',
     'cfg.h.lang':'Мова інтерфейсу.',
+    'cfg.h.editor':'Який редактор відкриває кнопка «Відкрити у…». Усі варіанти — форки VS Code, тож віддалені SSH-проєкти працюють в усіх.',
     'cfg.h.LOG_LEVEL':'Докладність журналу сервера.',
     'cfg.h.NODE_ENV':'Значення production перемикає журнал на JSON із розділенням рядками.',
     'bot.modal.avatar.pick':'Обрати емодзі','bot.modal.avatar.pick.btn':'Обрати','emoji.group.roles':'Ролі','emoji.group.work':'Робота','emoji.group.tools':'Інструменти','emoji.group.ideas':'Ідеї','emoji.group.nature':'Природа',
@@ -4721,6 +4726,11 @@ const TRANSLATIONS = {
     'proj.active':'● Активний','proj.inactive':'○ Не активний',
     'proj.active.title':'Активний проект','proj.click.title':'Клік — активувати',
     'proj.del.title':'Видалити проект','proj.rename.title':'Перейменувати проект',
+    'editor.open':'Відкрити','editor.open.title':'Відкрити у {{editor}}',
+    'editor.open.file.title':'Відкрити цей файл у {{editor}}',
+    'editor.opened':'Відкрито у {{editor}}',
+    'editor.hint':'Якщо нічого не відкрилось — {{editor}} не встановлено на цьому комп’ютері (для віддаленого проєкту потрібне ще розширення Remote-SSH).',
+    'editor.failed':'Не вдалося відкрити у {{editor}}',
     'chip.remove':'Видалити',
     'attach.file':'Додати файл (📎)',
     'drop.title':'Відпустіть, щоб прикріпити',
@@ -5039,6 +5049,7 @@ const TRANSLATIONS = {
     'cfg.h.CCS_REMOTE_EXEC_TIMEOUT_MS':'Timeout for a single command run on a remote host over SSH.',
     'cfg.h.CCS_REMOTE_EXEC_MAX_BYTES':'Cap on the output accepted from a remote command.',
     'cfg.h.lang':'Interface language.',
+    'cfg.h.editor':'Which editor the \"Open in…\" button targets. Every option is a VS Code fork, so remote SSH projects work in all of them.',
     'cfg.h.LOG_LEVEL':'Server log verbosity.',
     'cfg.h.NODE_ENV':'production switches the log output to newline-delimited JSON.',
     'bot.modal.avatar.pick':'Pick an emoji','bot.modal.avatar.pick.btn':'Pick','emoji.group.roles':'Roles','emoji.group.work':'Work','emoji.group.tools':'Tools','emoji.group.ideas':'Ideas','emoji.group.nature':'Nature',
@@ -5103,6 +5114,11 @@ const TRANSLATIONS = {
     'proj.active':'● Active','proj.inactive':'○ Inactive',
     'proj.active.title':'Active project','proj.click.title':'Click to activate',
     'proj.del.title':'Delete project','proj.rename.title':'Rename project',
+    'editor.open':'Open','editor.open.title':'Open in {{editor}}',
+    'editor.open.file.title':'Open this file in {{editor}}',
+    'editor.opened':'Opened in {{editor}}',
+    'editor.hint':'If nothing opened, {{editor}} is not installed on this machine (a remote project also needs the Remote-SSH extension).',
+    'editor.failed':'Could not open in {{editor}}',
     'chip.remove':'Remove',
     'attach.file':'Attach file (📎)',
     'drop.title':'Drop to attach',
@@ -5421,6 +5437,7 @@ const TRANSLATIONS = {
     'cfg.h.CCS_REMOTE_EXEC_TIMEOUT_MS':'Таймаут одной команды, выполняемой на удалённом хосте по SSH.',
     'cfg.h.CCS_REMOTE_EXEC_MAX_BYTES':'Лимит объёма вывода, принимаемого от удалённой команды.',
     'cfg.h.lang':'Язык интерфейса.',
+    'cfg.h.editor':'Какой редактор открывает кнопка «Открыть в…». Все варианты — форки VS Code, поэтому удалённые SSH-проекты работают везде.',
     'cfg.h.LOG_LEVEL':'Подробность журнала сервера.',
     'cfg.h.NODE_ENV':'Значение production переключает журнал на JSON с разделением строками.',
     'bot.modal.avatar.pick':'Выбрать эмодзи','bot.modal.avatar.pick.btn':'Выбрать','emoji.group.roles':'Роли','emoji.group.work':'Работа','emoji.group.tools':'Инструменты','emoji.group.ideas':'Идеи','emoji.group.nature':'Природа',
@@ -5485,6 +5502,11 @@ const TRANSLATIONS = {
     'proj.active':'● Активен','proj.inactive':'○ Не активен',
     'proj.active.title':'Активный проект','proj.click.title':'Клик — активировать',
     'proj.del.title':'Удалить проект','proj.rename.title':'Переименовать проект',
+    'editor.open':'Открыть','editor.open.title':'Открыть в {{editor}}',
+    'editor.open.file.title':'Открыть этот файл в {{editor}}',
+    'editor.opened':'Открыто в {{editor}}',
+    'editor.hint':'Если ничего не открылось — {{editor}} не установлен на этом компьютере (для удалённого проекта нужно ещё расширение Remote-SSH).',
+    'editor.failed':'Не удалось открыть в {{editor}}',
     'chip.remove':'Удалить',
     'attach.file':'Прикрепить файл (📎)',
     'drop.title':'Отпустите, чтобы прикрепить',
@@ -5803,6 +5825,7 @@ const TRANSLATIONS = {
     'cfg.h.CCS_REMOTE_EXEC_TIMEOUT_MS':'Délai d’expiration d’une commande exécutée sur un hôte distant via SSH.',
     'cfg.h.CCS_REMOTE_EXEC_MAX_BYTES':'Limite de sortie acceptée depuis une commande distante.',
     'cfg.h.lang':'Langue de l’interface.',
+    'cfg.h.editor':'L’éditeur ciblé par le bouton « Ouvrir dans… ». Toutes les options sont des forks de VS Code, les projets SSH distants fonctionnent donc partout.',
     'cfg.h.LOG_LEVEL':'Niveau de détail du journal du serveur.',
     'cfg.h.NODE_ENV':'production bascule le journal en JSON délimité par des sauts de ligne.',
     "bot.modal.avatar.pick":"Choisir un émoji","bot.modal.avatar.pick.btn":"Choisir","emoji.group.roles":"Rôles","emoji.group.work":"Travail","emoji.group.tools":"Outils","emoji.group.ideas":"Idées","emoji.group.nature":"Nature",
@@ -5838,7 +5861,12 @@ const TRANSLATIONS = {
     "err.stop.project":"Arrêtez l'agent avant de changer de projet","queue.cancel":"Annuler","queue.save":"Enregistrer","proj.deactivated":"Projet désactivé",
     "load.more":"↑ Charger les messages précédents","logout.confirm":"Se déconnecter ?\n\nToutes les sessions actives resteront enregistrées.",
     "proj.delete.confirm":"Supprimer le projet « {{name}} » ?\n\nLe répertoire NE sera PAS supprimé.","proj.active":"● Actif","proj.inactive":"○ Inactif","proj.active.title":"Projet actif",
-    "proj.click.title":"Cliquez pour activer","proj.del.title":"Supprimer le projet","proj.rename.title":"Renommer le projet","chip.remove":"Retirer","attach.file":"Joindre un fichier (📎)",
+    "proj.click.title":"Cliquez pour activer","proj.del.title":"Supprimer le projet","proj.rename.title":"Renommer le projet",
+    "editor.open":"Ouvrir","editor.open.title":"Ouvrir dans {{editor}}",
+    "editor.open.file.title":"Ouvrir ce fichier dans {{editor}}",
+    "editor.opened":"Ouvert dans {{editor}}",
+    "editor.hint":"Si rien ne s’est ouvert, {{editor}} n’est pas installé sur cette machine (un projet distant nécessite aussi l’extension Remote-SSH).",
+    "editor.failed":"Impossible d’ouvrir dans {{editor}}","chip.remove":"Retirer","attach.file":"Joindre un fichier (📎)",
     "drop.title":"Déposez pour joindre","drop.hint":"Les images et fichiers seront ajoutés à votre message","queue.label":"En file d'attente","queue.edit.title":"Modifier le message",
     "queue.del.title":"Retirer de la file","interrupt.label":"Envoyer comme :","interrupt.stream":"📩 Clarifier en cours","interrupt.queue":"📝 Nouvelle tâche (file d'attente)",
     "interrupt.pill.clarify":"Clarifier","interrupt.pill.queue":"File d'attente","interrupt.pill.clarify.tip":"Cliquez pour passer en mode file d'attente",
@@ -6086,6 +6114,7 @@ const TRANSLATIONS = {
     'cfg.h.CCS_REMOTE_EXEC_TIMEOUT_MS':'פסק זמן לפקודה בודדת שמורצת על מארח מרוחק דרך SSH.',
     'cfg.h.CCS_REMOTE_EXEC_MAX_BYTES':'מגבלה על הפלט המתקבל מפקודה מרוחקת.',
     'cfg.h.lang':'שפת הממשק.',
+    'cfg.h.editor':'העורך שאליו מכוון הכפתור «פתח ב…». כל האפשרויות הן גרסאות של VS Code, ולכן פרויקטי SSH מרוחקים עובדים בכולן.',
     'cfg.h.LOG_LEVEL':'רמת הפירוט של יומן השרת.',
     'cfg.h.NODE_ENV':'הערך production מעביר את היומן ל-JSON מופרד בשורות.',
     "bot.modal.avatar.pick":"בחרו אמוג׳י","bot.modal.avatar.pick.btn":"בחירה","emoji.group.roles":"תפקידים","emoji.group.work":"עבודה","emoji.group.tools":"כלים","emoji.group.ideas":"רעיונות","emoji.group.nature":"טבע",
@@ -6118,7 +6147,12 @@ const TRANSLATIONS = {
     "err.stop.close":"עצרו את ה-agent לפני הסגירה","err.stop.new":"עצרו את ה-agent לפני פתיחת צ'אט חדש","err.stop.project":"עצרו את ה-agent לפני החלפת פרויקט","queue.cancel":"ביטול","queue.save":"שמירה",
     "proj.deactivated":"הפרויקט הושבת","load.more":"↑ טעינת הודעות קודמות","logout.confirm":"להתנתק?\n\nכל הסשנים הפעילים יישארו שמורים.",
     "proj.delete.confirm":"למחוק את הפרויקט \"{{name}}\"?\n\nהתיקייה לא תימחק.","proj.active":"● פעיל","proj.inactive":"○ לא פעיל","proj.active.title":"פרויקט פעיל","proj.click.title":"לחצו כדי להפעיל",
-    "proj.del.title":"מחיקת פרויקט","proj.rename.title":"שינוי שם פרויקט","chip.remove":"הסרה","attach.file":"צירוף קובץ (📎)","drop.title":"שחררו כאן לצירוף",
+    "proj.del.title":"מחיקת פרויקט","proj.rename.title":"שינוי שם פרויקט",
+    "editor.open":"פתיחה","editor.open.title":"פתיחה ב־{{editor}}",
+    "editor.open.file.title":"פתיחת הקובץ ב־{{editor}}",
+    "editor.opened":"נפתח ב־{{editor}}",
+    "editor.hint":"אם דבר לא נפתח — {{editor}} אינו מותקן במחשב הזה (פרויקט מרוחק דורש גם את התוסף Remote-SSH).",
+    "editor.failed":"לא ניתן לפתוח ב־{{editor}}","chip.remove":"הסרה","attach.file":"צירוף קובץ (📎)","drop.title":"שחררו כאן לצירוף",
     "drop.hint":"תמונות וקבצים יתווספו להודעה שלכם","queue.label":"בתור","queue.edit.title":"עריכת הודעה","queue.del.title":"הסרה מהתור","interrupt.label":"שליחה כ:","interrupt.stream":"📩 הבהרה לנוכחי",
     "interrupt.queue":"📝 משימה חדשה (תור)","interrupt.pill.clarify":"הבהרה","interrupt.pill.queue":"תור","interrupt.pill.clarify.tip":"לחצו למעבר למצב תור",
     "interrupt.pill.queue.tip":"לחצו למעבר למצב הבהרה","interrupt.queued":"ההבהרה נשלחה","interrupt.delivered":"נמסר ל-Claude","interrupt.expired":"המשימה הסתיימה","agents.title":"Agents פעילים",
@@ -11814,6 +11848,9 @@ async function checkVersion() {
     // Store the global default and resolve the current view's engine. An open
     // chat's explicit run_engine wins; a chat without one inherits this default.
     _globalDefaultEngine = local.defaultEngine === 'subscription' ? 'subscription' : 'api';
+    // Issue #63 — label the "Open in …" buttons with the editor actually configured.
+    if (local.editor && local.editor.label) _editorLabel = local.editor.label;
+    _syncEditorLabels();
     resolveEngineForView();
     // Issue #58: resolve the dials for whatever project the session restored to.
     // Only a brand-new tab is seeded — a restored chat keeps what it was saved with.
@@ -14492,6 +14529,7 @@ function closeFpv() {
   // Restore what a remote file hid, or the next LOCAL file opens with no download.
   $i('fpvDownloadBtn').style.display = '';
   $i('fpvShareBtn').style.display = '';
+  $i('fpvEditorBtn').style.display = '';
 }
 
 async function openFilePreview(relPath, name) {
@@ -14526,6 +14564,12 @@ async function openFilePreview(relPath, name) {
   $i('fpvCopyImgBtn').style.display = (_fpvIsImg && !remote) ? '' : 'none';
   $i('fpvDownloadBtn').style.display = remote ? 'none' : '';
   $i('fpvShareBtn').style.display = remote ? 'none' : '';
+  // Per-FILE open is local-only, and not for the same reason as the two above: the
+  // remote folder link works fine, but VS Code's own URL handler opens a remote FILE
+  // uri as a folder (microsoft/vscode-remote-release#4333). Offering a button that
+  // opens the wrong thing is worse than not offering it — the project row still opens
+  // the remote workspace.
+  $i('fpvEditorBtn').style.display = remote ? 'none' : '';
 
   if (_fpvIsImg && !remote) {
     body.innerHTML = `<img src="${escH(rawUrl)}" alt="${escH(_fpvName)}" onerror="this.alt=t('fpv.img_error')">`;
@@ -14561,6 +14605,14 @@ async function openFilePreview(relPath, name) {
   } catch {
     body.innerHTML = `<div class="fpv-binary">${t('fpv.load_error')}</div>`;
   }
+}
+
+// Open the file currently in the viewer (issue #63). Guarded as well as hidden, the
+// same way fpvDownload() is: the handler is a global and the modal outlives the
+// listing that set _filesRemote.
+function fpvOpenInEditor() {
+  if (!_fpvPath || _filesRemote) return;
+  openInEditor(curWorkdir, _fpvPath, true);
 }
 
 function fpvDownload() {
@@ -14784,12 +14836,56 @@ function renderProjects() {
         <div class="ds" data-tip="${escH(p.isRemote ? (p.remoteHost||'') + ':' + p.workdir : p.workdir)}">${escH(shortPath)}</div>
         <div class="st">${active ? t('proj.active') : t('proj.inactive')}</div>
       </div>
+      <button class="ren" data-editor-btn onclick="event.stopPropagation();openInEditor('${escArg(p.workdir)}')" title="${escH(t('editor.open.title').replace('{{editor}}', _editorLabel))}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
       <button class="ren" onclick="event.stopPropagation();renameProject('${p.id}',this)" title="${t('proj.rename.title')}">✏</button>
       <button class="rm" onclick="event.stopPropagation();delProject('${p.id}')" title="${t('proj.del.title')}">✕</button>`;
     _initProjDrag(div, el);
     el.appendChild(div);
   }
   _reapplySecFilter('proj');
+}
+
+// ─── Open the workspace in a desktop editor (issue #63) ────────────────────
+// The server answers one of two ways and the difference matters to the user:
+//   opened:'server' — it found an editor CLI and launched a window itself.
+//   opened:'client' — it found none, and handed back a `vscode://` deep link for
+//                     THIS machine to follow. Nothing can be detected about the
+//                     outcome: a browser reports neither that a protocol handler
+//                     exists nor that it failed. So the hint is shown every time
+//                     that path is taken, phrased as a condition rather than as an
+//                     error — saying "not installed" outright would be a lie on the
+//                     machine where it worked.
+let _editorLabel = 'VS Code';
+
+/** Re-label buttons rendered before /api/version answered. */
+function _syncEditorLabels() {
+  const title = t('editor.open.title').replace('{{editor}}', _editorLabel);
+  document.querySelectorAll('[data-editor-btn]').forEach(b => { b.title = title; });
+}
+
+async function openInEditor(workdir, rel = '', isFile = false) {
+  // An empty workdir is legal and means "the default workspace" — the server resolves
+  // it through the same resolveFilesWorkdir() the file browser uses, so the viewer's
+  // button works before any project has been activated.
+  try {
+    const r = await fetch('/api/editor/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workdir: workdir || '', path: rel, isFile }),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) { toast(d.error || t('editor.failed').replace('{{editor}}', _editorLabel), true, 6000); return; }
+    if (d.editor) { _editorLabel = d.editor; _syncEditorLabels(); }
+    if (d.opened === 'server') { toast(t('editor.opened').replace('{{editor}}', d.editor || _editorLabel)); return; }
+    // A custom scheme the OS cannot handle is a no-op in every current browser —
+    // it does not navigate away — so location.href is safe here and is the only
+    // form that reliably triggers the desktop handler (an <iframe src> is blocked
+    // for non-http schemes in Chrome).
+    window.location.href = d.url;
+    setTimeout(() => toast(t('editor.hint').replace('{{editor}}', d.editor || _editorLabel), false, 7000), 1200);
+  } catch {
+    toast(t('editor.failed').replace('{{editor}}', _editorLabel), true);
+  }
 }
 
 // ─── Project dropdown in header ────────────────────────────────────────────

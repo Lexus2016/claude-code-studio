@@ -95,6 +95,9 @@ const agentsMd = require('./agents-md');
 // purpose — see the header of the module.
 const remoteFiles = require('./remote-files');
 const chatDefaults = require('./chat-defaults');
+// "Open in VS Code" (#63). Pure link/argv builder; the spawn half lives next to
+// the endpoint below, because only that half needs the filesystem.
+const editorLinks = require('./editor-links');
 
 // Turn budget for the UNATTENDED execution channels — a Telegram message and a
 // scheduled task. Deliberately NOT wired to `chatDefaults.turns` (#58): that chain
@@ -3017,6 +3020,10 @@ function loadMergedConfig() {
     slashCommands: [...(l.slashCommands||[])],
     lang:          l.lang || g.lang || 'en',
     defaultEngine: l.defaultEngine || g.defaultEngine || 'api',
+    // Which desktop editor "Open in …" targets (#63). `||`, like lang and
+    // defaultEngine: an empty string in a config file means "unset", and
+    // editorFor() falls back once more on an unknown id.
+    editor:        l.editor || g.editor || editorLinks.DEFAULT_EDITOR,
     // Per KEY, not per object: a local config that pins only `model` must not
     // wipe a global `mode`. Same shape as mcpServers/skills above, and it is what
     // the settings catalog reports for chatDefaults.* (merge:'merged').
@@ -5626,7 +5633,10 @@ app.get('/api/version', (_, res) => {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8'));
   // tmuxAvailable: lets the UI disable the "Subscription" engine up front when the
   // server lacks tmux (e.g. native Windows) instead of failing only after a send.
-  res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable(), defaultEngine: (loadMergedConfig().defaultEngine === 'subscription' ? 'subscription' : 'api') });
+  // `editor` lets the UI label its button with the editor the user actually
+  // configured ("Open in Cursor") instead of hardcoding VS Code (#63).
+  const _ed = editorLinks.editorFor(loadMergedConfig().editor);
+  res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable(), defaultEngine: (loadMergedConfig().defaultEngine === 'subscription' ? 'subscription' : 'api'), editor: { id: _ed.id, label: _ed.label } });
 });
 
 // Capability-checked, never OS-sniffed — the same pattern as tmuxAvailable for the
@@ -5646,6 +5656,81 @@ app.get('/api/terminal/capability', (_, res) => {
   else if (!tmuxOk) { reason = 'tmux not found on this host'; reasonKey = 'term.off.tmux'; }
   else if (tunnelOn) { reason = 'a public tunnel is active — terminal access is blocked'; reasonKey = 'term.off.tunnel'; }
   res.json({ available: enabled && tmuxOk && !tunnelOn, reason, reasonKey });
+});
+
+// ─── Open the active workspace in a desktop editor (issue #63) ────────────────
+// Resolution walks $PATH in-process instead of shelling out to `which` / `where`.
+// A subprocess would need a shell on Windows, and a shell is the one thing this
+// must not involve: the value being launched is a filesystem path chosen by the
+// user, and cmd.exe re-parses arguments a second time through the npm .cmd shims
+// (the BatBadBut family the Delegate feature already had to work around).
+//
+// On Windows that same rule makes `code` UNRESOLVABLE on purpose: VS Code puts
+// `code.cmd` on PATH, not `code.exe`, and Node refuses to spawn a .cmd without
+// `shell: true`. So only directly-spawnable extensions count, and Windows simply
+// falls through to the browser deep link — which is the better answer there anyway,
+// since the desktop installer registers the `vscode://` handler.
+const _EXEC_EXTS = process.platform === 'win32' ? ['.EXE', '.COM'] : [''];
+const _editorCliCache = new Map();
+function editorCliPath(bin) {
+  if (_editorCliCache.has(bin)) return _editorCliCache.get(bin);
+  let found = null;
+  for (const dir of String(process.env.PATH || '').split(path.delimiter)) {
+    if (!dir) continue;
+    for (const ext of _EXEC_EXTS) {
+      const candidate = path.join(dir, bin + ext);
+      try { fs.accessSync(candidate, fs.constants.X_OK); found = candidate; break; } catch { /* next */ }
+    }
+    if (found) break;
+  }
+  _editorCliCache.set(bin, found);
+  return found;
+}
+
+app.post('/api/editor/open', (req, res) => {
+  const { workdir = '', path: rel = '', isFile = false } = req.body || {};
+  if (typeof workdir !== 'string' || typeof rel !== 'string') {
+    return res.status(400).json({ error: 'workdir and path must be strings' });
+  }
+  // The SAME resolver the file browser uses, deliberately: the rule this endpoint
+  // enforces is "you may open in an editor whatever you may browse". It returns null
+  // for a workdir that is not a registered project (deny), falls back to the default
+  // WORKDIR when the client sends none, and reports isRemote from the PROJECT RECORD
+  // rather than from the shape of the path — a local project whose workdir happens to
+  // look POSIX-absolute must not be handed to Remote-SSH.
+  const resolved = resolveFilesWorkdir(workdir);
+  if (!resolved) return res.status(403).json({ error: 'workdir is outside the allowed roots' });
+
+  const proj = resolved.project;
+  const target = editorLinks.resolveEditorTarget({
+    editor: loadMergedConfig().editor,
+    isRemote: resolved.isRemote,
+    workdir: resolved.workdir,
+    remoteHost: proj ? proj.remoteHost : '',
+    port: proj ? proj.port : 0,
+    rel,
+    isFile: !!isFile,
+  });
+  if (!target.ok) return res.status(400).json({ error: target.error, code: target.code });
+
+  const cli = editorCliPath(target.editor.cli);
+  if (!cli) {
+    // Nothing left to detect and nothing to report as broken: hand the browser the
+    // deep link and let the machine with the screen decide. The SPA says so out loud
+    // afterwards, because no browser reports whether a protocol handler ran.
+    return res.json({ ok: true, opened: 'client', url: target.url, editor: target.editor.label, kind: target.kind });
+  }
+  try {
+    // detached + unref so the editor outlives this process, and stdio ignored so a
+    // chatty CLI cannot fill a pipe nobody is draining.
+    const child = spawnProc(cli, target.cliArgs, { detached: true, stdio: 'ignore' });
+    child.on('error', e => log.warn('editor launch failed', { cli, err: e.message }));
+    child.unref();
+  } catch (e) {
+    log.warn('editor launch threw', { cli, err: e.message });
+    return res.json({ ok: true, opened: 'client', url: target.url, editor: target.editor.label, kind: target.kind });
+  }
+  res.json({ ok: true, opened: 'server', url: target.url, editor: target.editor.label, kind: target.kind });
 });
 
 app.get('/api/health', (_, res) => {

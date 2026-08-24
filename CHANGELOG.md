@@ -1,5 +1,36 @@
 # Changelog
 
+## 7.8.0
+
+### Open the workspace in VS Code
+
+- **One button, local or remote.** A project row and the file viewer now hand the
+  workspace to your desktop editor. A remote SSH project opens through **VS Code
+  Remote-SSH**, already at the right path — no reconnecting by hand, no hunting for
+  the folder.
+
+- **It opens on the machine you are sitting at.** The studio launches the editor
+  itself when it can find a `code` binary on the host; when it cannot — inside
+  Docker, on a headless server, on Windows — it hands your browser a `vscode://`
+  link instead, and the desktop handler takes it from there. One rule, no
+  platform-sniffing, and it lands correctly whether the studio runs on your laptop
+  or three time zones away.
+
+- **Not only VS Code.** Insiders, VSCodium, Cursor and Windsurf are selectable in
+  Settings → *UI*. All four are VS Code forks, so the remote-SSH link means the same
+  thing in each; only the scheme and the binary change.
+
+- **A remote workspace on a non-standard port carries it.** Omitting the port would
+  not be the cautious choice — the connection would simply be attempted against 22
+  and fail.
+
+- **Refusals say what is wrong.** A remote project recorded with a `~/project`
+  workdir cannot be expressed as a URI (Remote-SSH would look for a directory
+  literally named `~`), so it is refused by name rather than opening the wrong
+  folder. Per-file opening stays local-only on purpose: VS Code's own URL handler
+  opens a remote *file* link as a folder, so the button comes off rather than doing
+  the wrong thing — the project row still opens the remote workspace.
+
 ## 7.7.0
 
 Three things that were true only in one place become true everywhere: the file
