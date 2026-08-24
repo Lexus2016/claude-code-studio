@@ -42,6 +42,7 @@
 'use strict';
 
 const chatDefaults = require('./chat-defaults');
+const editorLinks = require('./editor-links');
 
 // Sources, most-significant first. Ordering here IS the precedence contract;
 // resolve() walks candidates in the order it builds them, not in this order,
@@ -197,6 +198,14 @@ const SETTINGS = [
   { key: 'lang', section: 'ui', backing: 'config', merge: 'merged', path: 'lang', type: 'enum',
     choices: ['uk', 'en', 'ru', 'fr', 'he'], def: 'en', falsyFallsThrough: true,
     src: 'server.js:loadMergedConfig' },
+
+  // Which desktop editor the "Open in workspace" action targets (issue #63). A fixed
+  // list rather than a free-text binary name: the value becomes both a URI scheme and
+  // an argv[0], and neither is somewhere to accept arbitrary text. editor-links.js
+  // owns the catalog, so the choices are not restated here.
+  { key: 'editor', section: 'ui', backing: 'config', merge: 'merged', path: 'editor', type: 'enum',
+    choices: editorLinks.EDITOR_IDS, def: editorLinks.DEFAULT_EDITOR, falsyFallsThrough: true,
+    src: 'editor-links.js:editorFor' },
 
   // ── Advanced ──────────────────────────────────────────────────────────────
   { key: 'LOG_LEVEL', section: 'advanced', backing: 'env', type: 'enum',
