@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### A terminal pane that loses its socket now reconnects when you touch it
+
+- **Typing into a dead pane was a silent drain.** `term.onData` guarded on
+  `readyState === 1` and did nothing else, so every keystroke vanished with no
+  reconnect and no sign anything was wrong. xterm renders locally, so the pane looked
+  alive — that is the "terminal freezes until I reload the browser" report.
+- **Paste and the send line named the problem and did nothing about it.** Both toasted
+  "Terminal is not connected" and returned, on the two controls that exist precisely
+  because a pane has gone unresponsive. All three paths now revive the socket and
+  carry the frame through, so the first thing you type is not the thing that is lost.
+- **A terminal socket failure used to leave no trace.** `ws.onclose` took no argument
+  (the close code was discarded) and there was no `onerror` at all. Both exist now, so
+  the next occurrence says whether it was an abnormal close, an oversized frame or a
+  server error instead of looking identical to every other cause.
+
+Note: this fixes what the UI does about a dropped terminal socket. What drops it in
+the first place is not yet identified — the close code added here is what will name it.
+
 ## 7.9.0
 
 A remote chat can no longer get stuck for good, a broken local Claude CLI install

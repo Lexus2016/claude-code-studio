@@ -120,12 +120,24 @@ check('it reconnects unconditionally — no readyState test', /readyState/.test(
 // A close event from a socket refreshTerminalSession() already replaced must not
 // repaint the pane the user is typing into. The guard has to sit ABOVE the paint,
 // not only above the retry — nothing repaints the status back afterwards.
-const onclose = TB.slice(TB.indexOf('ws.onclose = () => {'));
+// The handler takes the close EVENT: a close code is the only evidence of why a pane
+// died (1006 abnormal, 1009 frame too big, 1011 server error), and it used to be
+// discarded, which is why "the terminal freezes sometimes" had no trace to follow.
+check('the close handler receives the event', TB.includes('ws.onclose = (ev) => {'), true);
+const onclose = TB.slice(TB.indexOf('ws.onclose = (ev) => {'));
 const oncloseBody = onclose.slice(0, onclose.indexOf('\n  };') + 5);
 // indexOf alone would pass on -1 (guard deleted) < paint index — assert presence first.
 check('a stale close is ignored, and before it touches the status',
   oncloseBody.includes('entry.ws !== ws) return;')
   && oncloseBody.indexOf('entry.ws !== ws) return;') < oncloseBody.indexOf("term.state.disconnected"), true);
+// …and before the logging too: a superseded socket closing is routine, and logging
+// it would bury the closes that actually explain something.
+check('the close code is logged, after the staleness guard',
+  oncloseBody.includes('ev.code') &&
+  oncloseBody.indexOf('entry.ws !== ws) return;') < oncloseBody.indexOf('ev.code'), true);
+// The chat socket has had one since it was written; the terminal had none, so a
+// socket-level failure was invisible on both ends.
+check('the terminal socket has an onerror at all', /ws\.onerror = \(\) =>/.test(TB), true);
 
 console.log('\n— 4. sending a line into a terminal session —');
 
@@ -145,14 +157,45 @@ const stsBody = sts.slice(0, sts.indexOf('\n}\n') + 3);
 // on the engine pane alike, where a `view=engine` viewer may only send `input`.
 check('it writes the terminal protocol\'s input frame', /type: 'input', data: text \+ '\\r'/.test(stsBody), true);
 check('CR, not LF — a PTY needs the Return key', /'\\n'/.test(stsBody), false);
-check('it refuses to send on a socket that is not OPEN', /readyState !== 1/.test(stsBody), true);
-check('and says so instead of failing silently', /toast\(t\('term\.paste\.notconnected'\), true\)/.test(stsBody), true);
+check('it notices a socket that is not OPEN', /readyState !== 1/.test(stsBody), true);
+// It used to toast "not connected" and return — naming the problem and doing nothing
+// about it, on the one control that exists BECAUSE a pane has gone unresponsive.
+// Every automatic reconnect path is conditional on a state a half-dead socket does
+// not report, so touching the pane has to be a reconnect trigger of its own.
+check('and reconnects instead of refusing', /_reviveTerminal\(/.test(stsBody), true);
+check('carrying the line, so the first thing typed is not the thing that is lost',
+  /_reviveTerminal\([^)]*,\s*\{ type: 'input', data: text \+ '\\r' \}\)/.test(stsBody), true);
+check('the dead-socket refusal is gone', /paste\.notconnected/.test(stsBody), false);
 check('it clears the box after sending', /box\.value = ''/.test(stsBody), true);
 // A bare Return is the single most useful thing to send: it accepts a prompt default.
 check('an empty line is still sendable', /!text\.trim\(\)\) return/.test(stsBody), false);
 // One send line serves every pane, so a draft must not follow the user to another one.
 check('switching panes clears the shared send line',
   /function showTerminalView[\s\S]{0,1600}?\$i\('termSendInput'\)[^\n]*value = ''/.test(TB), true);
+
+console.log('\n— a dead socket must not swallow what the user does —');
+// The silent drain that produced "the terminal froze until I reloaded the page":
+// the pane renders locally, so it looks alive while every keystroke goes nowhere.
+{
+  const od = TB.slice(TB.indexOf('term.onData(d => {'));
+  const odBody = od.slice(0, od.indexOf('\n  });') + 6);
+  check('onData still fast-paths a live socket', /readyState === 1/.test(odBody), true);
+  check('and revives a dead one instead of dropping the keystroke',
+    /_reviveTerminal\(sessionId, \{ type: 'input', data: d \}\)/.test(odBody), true);
+  // Reconnecting on every keystroke would stampede the server; a socket already
+  // CONNECTING will deliver the queued frame from its own onopen.
+  const rv = TB.slice(TB.indexOf('function _reviveTerminal'));
+  const rvBody = rv.slice(0, rv.indexOf('\n}\n') + 3);
+  check('a CONNECTING socket is not raced with a second one', /readyState === 0\) return false/.test(rvBody), true);
+  check('only the LAST frame is queued — stale keystrokes replayed into a TUI are worse',
+    /entry\._pending = frame/.test(rvBody), true);
+  check('it clears the exited latch, like the manual refresh does', /entry\.exited = false/.test(rvBody), true);
+  // Cleared before the send, or a failing send replays it on the next open as well.
+  const fl = TB.slice(TB.indexOf('function _flushTerminalPending'));
+  const flBody = fl.slice(0, fl.indexOf('\n}\n') + 3);
+  check('the queued frame is cleared BEFORE it is sent',
+    flBody.indexOf('entry._pending = null') < flBody.indexOf('ws.send'), true);
+}
 
 console.log('\n— focus: why a deaf pane used to need a tab switch —');
 

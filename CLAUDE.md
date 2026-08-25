@@ -442,6 +442,22 @@ Four reports that all reduce to "the UI moved or stopped listening". Pinned by
   panels animate `width .25s`, so measuring from the click measures the box the user
   is leaving. The observer compares `clientWidth` before re-measuring — the callback
   sets the height, so an unguarded one re-enters forever.
+- **Touching a pane is itself a reconnect trigger (`_reviveTerminal`).** Every
+  automatic path is conditional on a state a half-dead socket does not report, so all
+  three interaction paths used to give up instead: `term.onData` dropped the keystroke
+  SILENTLY (the pane renders locally, so it looks alive — this is the "terminal froze
+  until I reloaded the page" report), while paste and the send line toasted "not
+  connected" and returned, naming the problem on the very controls that exist because
+  a pane went unresponsive. They now revive and carry the frame. Only the LAST frame
+  is queued — a queue of stale keystrokes replayed into a TUI is worse than a dropped
+  one — a socket already CONNECTING is not raced with a second one, and `_pending` is
+  cleared BEFORE the send so a failure cannot replay it on the next open too.
+- **A close code is the only evidence of WHY a pane died.** `ws.onclose` took no
+  argument and there was no `onerror` at all, so a terminal socket failure left no
+  trace on either end — which is why "it freezes sometimes" stayed unexplained. Both
+  exist now; the log sits AFTER the staleness guard, because a superseded socket
+  closing is routine and would bury the closes that mean something. 1006 is an
+  abnormal close with no FIN, 1009 a frame over `maxPayload`, 1011 a server error.
 - **`sendToTerminal()` has no emptiness guard, on purpose.** A bare Return is the most
   useful thing this line can send: it accepts a prompt's default (`[Y/n]`, "press enter
   to continue"). `showTerminalView()` clears the box, because one send line serves every
