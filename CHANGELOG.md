@@ -1,5 +1,46 @@
 # Changelog
 
+## 7.9.0
+
+A remote chat can no longer get stuck for good, a broken local Claude CLI install
+is caught before a chat send fails on it, and two small Telegram gaps are closed.
+
+### A remote SSH chat must never become permanently unusable (#67)
+
+- **Root cause: a missed termination, not the auto-continue budget.**
+  `runSshSingle()` awaits a promise that only resolves from `onDone`, and four paths
+  in `ClaudeSSH.send()` could end a run without ever reaching it — a socket closing
+  with no error and no channel open (an idle-timeout drop), the idle watchdog and
+  hard cap calling `conn.end()` alone, an abort arriving before `conn.exec`, and
+  `conn.on('error')` double-firing `onDone`. A pending await keeps the session's
+  `activeTasks` entry alive forever, and the 15s orphan sweeper explicitly skips any
+  session that has one — so the chat refused every new message **and** "Restart
+  Session" answered "Task is still running." No way out but a server restart.
+- **Every ending now goes through one `finish()`,** and the abort listener is
+  registered at `send()` entry instead of inside the exec callback.
+- **Restart Session is now a recovery action, not a refusal.** It aborts the live
+  turn, waits up to 5s for that turn's own cleanup to release the session, and
+  reaps it as a backstop if the run is wedged below the abort signal — then starts
+  fresh with the chat's history replayed.
+
+### See a broken local Claude CLI before it breaks a chat
+
+- **`/api/version` now reports `{ available, authenticated }`** for the local
+  `claude` binary — the same capability-check pattern already used for tmux and
+  SSH. Without it, a missing or broken local install was only discovered when a
+  chat's `spawn()` failed mid-turn.
+- **The UI shows a persistent warning** the moment the check comes back negative,
+  translated in every locale, instead of surfacing the problem as a failed send.
+
+### Telegram: two gaps closed
+
+- **`/cancel` now works.** It was advertised in the bot's own command menu but had
+  no handler in the private-chat switch, so it silently fell through to "unknown
+  command." It now clears pending attachments and returns to the dialog overview.
+- **A project added after the initial `/connect` sweep now gets its forum topic
+  immediately**, instead of only on the next session activity that happened to
+  reference its workdir.
+
 ## 7.8.0
 
 The editor you actually use is one click away, the composer stops moving under the

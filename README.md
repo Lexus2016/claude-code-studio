@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.3.0** — **Settings you can finally see.** A Settings form now lists every setting next to the place its value actually comes from — a shell variable, `.env`, the local `config.json`, the global one, a per-project override or the built-in default — flags the ones that are being overridden or silently ignored, masks every secret before it leaves the server, and resets any setting back to its default in one click. Also in this release: import Claude CLI sessions from a **remote SSH host**, answer a **blocked permission or plan prompt** straight from the browser instead of dropping to a terminal, a **global workspace** that searches tasks and files across every project at once, and the last untranslated UI surfaces translated in all five languages. Security: an SSH password or key never reaches the model, the transcript or the database.
+> **v7.9.0** — **A stuck remote chat is no longer stuck for good.** A remote SSH chat could lock up permanently when the connection dropped mid-run — every new message refused, and even **Restart Session** answered "Task is still running." The fix reworks how a remote run ends so nothing is left half-finished, and Restart Session now recovers a wedged chat instead of refusing to touch it. Also in this release: a broken or missing local Claude CLI install is now caught and shown in the UI **before** it fails a chat mid-send, and two small Telegram gaps are closed — `/cancel` works, and a project added after the initial connect gets its forum topic right away.
 >
 > **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
 > `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)
