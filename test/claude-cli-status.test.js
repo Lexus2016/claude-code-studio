@@ -1,8 +1,9 @@
 // claudeCliStatus() (claude-cli.js) and its 'claudeCli' field on GET /api/version.
 //
 // Nothing else in the suite touches either — this pins the shape of the preflight
-// result, that it caches instead of re-spawning on every call, and that the field
-// actually reaches the wire on a real server.
+// result, that it deliberately recomputes on every call rather than caching a
+// boot-time snapshot (so a `claude login` done after server start is reflected
+// without a restart), and that the field actually reaches the wire on a real server.
 //
 // findClaudeBin() checks fixed absolute paths (e.g. /opt/homebrew/bin/claude) before
 // falling back to PATH, so pointing PATH at an empty directory does NOT make
@@ -34,7 +35,8 @@ console.log('— claudeCliStatus() in-process —');
     !first.available && first.authenticated, false);
 
   const second = claudeCliStatus();
-  check('a second call returns the cached object, not a recomputation', second === first, true);
+  check('a second call is a fresh object, not a cached reference', second !== first, true);
+  check('a second call reflects the same live state (nothing changed in between)', second, first);
 }
 
 console.log('\n— GET /api/version on a real server —');
