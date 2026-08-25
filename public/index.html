@@ -17793,7 +17793,16 @@ function _createTerminal(sessionId) {
 
   // Bound to `entry.ws`, not a captured socket — so a later reconnect (fresh
   // WebSocket swapped into entry.ws) keeps routing keystrokes without re-wiring.
-  term.onData(d => { if (entry.ws && entry.ws.readyState === 1) entry.ws.send(JSON.stringify({ type: 'input', data: d })); });
+  // A dead socket used to make this a silent drain: the guard was `readyState === 1`
+  // and nothing else, so every keystroke vanished with no reconnect and no sign that
+  // anything was wrong. That IS the "terminal froze until I reloaded the page" report
+  // — the pane looks live because xterm renders locally.
+  term.onData(d => {
+    if (entry.ws && entry.ws.readyState === 1) { entry.ws.send(JSON.stringify({ type: 'input', data: d })); return; }
+    // Typing is the clearest possible "I am using this pane". Reconnect on it, and
+    // queue the keystroke so the first thing typed is not the thing that gets lost.
+    _reviveTerminal(sessionId, { type: 'input', data: d });
+  });
   // Anything that steals focus — a modal, a toast button, the send line below, the
   // browser restoring focus after an alt-tab — leaves the pane visually active but
   // deaf. A click on it is an unambiguous "I am typing here"; don't steal focus back
@@ -17812,6 +17821,42 @@ function _createTerminal(sessionId) {
 // scrollback are left untouched; only the socket is replaced, and the server
 // re-paints the current tmux pane on attach (see terminal-bridge.js captureScreen),
 // so the view catches back up to what actually happened while disconnected.
+// Bring a pane back the moment the user touches it, and don't lose what they were
+// trying to send. Every automatic reconnect path is conditional on a state a
+// half-dead socket does not report: onclose only runs if a close event arrives,
+// visibilitychange only fires on a tab switch, and the backoff can be 30s out.
+// Meanwhile the three interaction paths (typing, paste, the send line) each just
+// gave up — one silently, two with a toast that named the problem and did nothing
+// about it. This is the "just reconnect and carry on" the pane always implied.
+//   `frame` is optional and replayed once the socket opens; only the LAST one is
+// kept, because a queue of stale keystrokes replayed into a TUI is worse than a
+// dropped one. `exited` is cleared for the same reason refreshTerminalSession()
+// clears it: a latched pane never retries, and the user asking for it outranks the
+// latch. Returns true when the socket was already live and nothing was queued.
+function _reviveTerminal(sessionId, frame) {
+  const entry = _terms.get(sessionId); if (!entry) return false;
+  if (entry.ws && entry.ws.readyState === 1) {
+    if (frame) { try { entry.ws.send(JSON.stringify(frame)); } catch {} }
+    return true;
+  }
+  if (frame) entry._pending = frame;
+  // A socket still CONNECTING will deliver _pending from its own onopen; opening a
+  // second one on every keystroke would stampede the server.
+  if (entry.ws && entry.ws.readyState === 0) return false;
+  entry.exited = false;
+  entry._reconnectDelay = 1000;
+  _connectTerminalWs(sessionId);
+  return false;
+}
+
+// Deliver what the user typed or pasted into a socket that turned out to be dead.
+// Cleared BEFORE the send, so a failing send cannot replay it on the next open too.
+function _flushTerminalPending(entry, ws) {
+  if (!entry || !entry._pending) return;
+  const f = entry._pending; entry._pending = null;
+  try { ws.send(JSON.stringify(f)); } catch {}
+}
+
 function _connectTerminalWs(sessionId) {
   const entry = _terms.get(sessionId); if (!entry) return;
   const term = entry.term;
@@ -17830,6 +17875,7 @@ function _connectTerminalWs(sessionId) {
   ws.binaryType = 'arraybuffer';
   ws.onopen = () => {
     entry._reconnectDelay = 1000;
+    _flushTerminalPending(entry, ws);
     if (_termSessionId !== sessionId) return;
     sendTermResize();
     // xterm routes keystrokes through a hidden textarea. A reconnect swaps entry.ws
@@ -17886,12 +17932,23 @@ function _connectTerminalWs(sessionId) {
     }
     _paintTermStatus(sessionId);
   };
-  ws.onclose = () => {
+  // The chat socket has had one of these since it was written (search `onerror`);
+  // the terminal never did, so a socket-level failure left no trace anywhere —
+  // which is why "the terminal freezes sometimes" stayed unexplained.
+  ws.onerror = () => { console.warn('[terminal] socket error', { session: sessionId }); };
+  ws.onclose = (ev) => {
     // Staleness first, and it guards the STATUS too, not just the retry. This socket
     // may already have been superseded (refreshTerminalSession() detaches before it
     // closes) -- painting "disconnected" from here would mark the pane the user is
     // typing into as dead while it is working.
     if (_terms.get(sessionId) !== entry || entry.ws !== ws) return;
+    // `ev` used to be ignored entirely, and there was no onerror either, so a pane
+    // that died left no trace anywhere — which is why "the terminal freezes
+    // sometimes" stayed unexplained. A close code is the only evidence of WHY:
+    // 1006 abnormal/no FIN, 1001 going away, 1009 frame too big, 1011 server error.
+    // Logged AFTER the staleness guard on purpose: a superseded socket closing is
+    // routine, and logging it would bury the real ones.
+    if (ev && ev.code !== 1000) console.warn('[terminal] closed', { session: sessionId, code: ev.code, reason: ev.reason || '' });
     entry.dot = '#8b949e'; entry.state = t('term.state.disconnected'); _paintTermStatus(sessionId);
     // Auto-retry an unexpected drop (network blip, server restart, idle proxy
     // timeout) even while this terminal tab stays in the foreground the whole
@@ -17943,7 +18000,14 @@ function sendToTerminal() {
   // enter to continue"), which is exactly what this line exists to reach.
   const text = box.value;
   const entry = _termSessionId && _terms.get(_termSessionId);
-  if (!entry || !entry.ws || entry.ws.readyState !== 1) { toast(t('term.paste.notconnected'), true); return; }
+  // Reconnect and deliver, rather than refusing: this line is most useful exactly
+  // when a pane has gone unresponsive, which is also when the old guard refused.
+  if (!entry || !entry.ws || entry.ws.readyState !== 1) {
+    _reviveTerminal(_termSessionId, { type: 'input', data: text + '\r' });
+    box.value = '';
+    toast(t('term.state.reconnecting'));
+    return;
+  }
   // \r, not \n: a PTY sees the Return KEY, and a TUI reading in canonical or raw mode
   // both treat CR as submit. Sent as ONE frame with the text so a prompt that echoes
   // and submits on the same tick cannot split them.
@@ -18010,7 +18074,12 @@ function pasteToTerminal(text) {
   const sid = _terminalPasteTarget();
   if (!sid) { toast(t('term.paste.notarget'), true); return; }
   const entry = _terms.get(sid);
-  if (!entry?.ws || entry.ws.readyState !== 1) { toast(t('term.paste.notconnected'), true); return; }
+  if (!entry?.ws || entry.ws.readyState !== 1) {
+    _reviveTerminal(sid, { type: 'paste', data: text });
+    switchTab(sid);
+    toast(t('term.state.reconnecting'));
+    return;
+  }
   entry.ws.send(JSON.stringify({ type: 'paste', data: text }));
   switchTab(sid);
   toast(t('term.paste.done'));
