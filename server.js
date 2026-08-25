@@ -8381,6 +8381,7 @@ app.post('/api/projects', (req,res) => {
       const id = 'proj-' + genId();
       projects.push({ id, name, workdir, isRemote:true, remoteHostId, remoteHost: rh.host, sshKeyPath: rh.sshKeyPath||'', password: rh.password||'', port: rh.port||Number(port)||22, createdAt:new Date().toISOString() });
       saveProjects(projects);
+      if (telegramBot) telegramBot.notifyProjectAdded(workdir, name).catch(() => {});
       return res.json({ ok:true, id, actions });
     }
     // Local project (existing behavior)
@@ -8399,6 +8400,7 @@ app.post('/api/projects', (req,res) => {
     const id = 'proj-' + genId();
     projects.push({ id, name, workdir, createdAt:new Date().toISOString() });
     saveProjects(projects);
+    if (telegramBot) telegramBot.notifyProjectAdded(workdir, name).catch(() => {});
     res.json({ ok:true, id, actions });
   } catch(e) { res.status(500).json({ error:e.message }); }
 });

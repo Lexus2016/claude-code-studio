@@ -1021,6 +1021,7 @@ class TelegramBot extends EventEmitter {
       case '/forum':   return this._forum.cmdForum(chatId, userId);
       case '/tunnel':  return this._cmdTunnel(chatId, userId);
       case '/url':     return this._cmdUrl(chatId);
+      case '/cancel':  return this._cmdCancel(chatId, userId);
       default:
         await this._sendMessage(chatId, this._t('error_unknown_cmd', { cmd }), {
           reply_markup: JSON.stringify({ inline_keyboard: [
@@ -1389,6 +1390,15 @@ class TelegramBot extends EventEmitter {
     return this._screenSettings(chatId, userId);
   }
 
+  // FSM state is already reset generically before the command switch (FSM-03) —
+  // this only needs to clear pending attachments and land the user somewhere sane.
+  async _cmdCancel(chatId, userId) {
+    const ctx = this._getContext(userId);
+    ctx.pendingAttachments = [];
+    if (ctx.sessionId) return this._screenDialog(chatId, userId, { mode: 'overview' });
+    return this._screenMainMenu(chatId, userId);
+  }
+
   // ─── Tunnel Commands ──────────────────────────────────────────────────────
 
   async _cmdTunnel(chatId, userId, { editMsgId } = {}) {
@@ -1490,6 +1500,28 @@ class TelegramBot extends EventEmitter {
         }
       } else {
         try { await this._sendMessage(dev.telegram_chat_id, text); } catch {}
+      }
+    }
+  }
+
+  /**
+   * Ensure every connected forum has a topic for a newly registered project.
+   * Called by server.js right after `POST /api/projects` adds one. Without this,
+   * a project's topic list only refreshed on the initial /connect sweep, or
+   * reactively when session activity happened to reference the workdir — a
+   * project added afterward with no chat yet never got a topic at all.
+   */
+  async notifyProjectAdded(workdir, name) {
+    if (!this.running || !workdir) return;
+    const devices = this._stmts.getAllDevices.all();
+    const seenChats = new Set();
+    for (const dev of devices) {
+      if (!dev.forum_chat_id || seenChats.has(dev.forum_chat_id)) continue;
+      seenChats.add(dev.forum_chat_id);
+      try {
+        await this._forum.ensureProjectTopic(dev.forum_chat_id, workdir, name);
+      } catch (err) {
+        this.log.warn(`[telegram] Failed to sync project topic for ${workdir}: ${err.message}`);
       }
     }
   }
