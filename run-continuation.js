@@ -13,35 +13,31 @@
 //    phrases like "I'll check back" is dead on a French or Ukrainian install. A
 //    `Bash` call carrying `run_in_background` is the same JSON in every language.
 //
-//    LAUNCHES ARE COUNTED AGAINST HARVESTS, never treated as a one-way latch. The
-//    system prompt tells the agent to collect a background result inside the same
-//    turn; a latch would then charge an extra run to every agent that OBEYED, which
-//    is worse than the bug it fixes. Measured on CLI 2.1.231, a background launch
-//    answers with "Output is being written to: <cwd-hash>/tasks/<id>.output" and the
-//    agent harvests by READING that file — `BashOutput` is not called at all — so
-//    the harvest side has to recognise that read, not just the tool name.
+//    LAUNCHES ARE COUNTED AGAINST HARVESTS, ACROSS THE WHOLE TURN. Three earlier
+//    shapes of this were wrong, each in a way the next one had to fix:
+//      - a one-way `bgLaunched` latch charged an extra run to every agent that
+//        OBEYED the system prompt (launch, collect, finish) — worse than the bug;
+//      - PER-RUN counters made the rescue run start from zero, so an agent that
+//        walked away a second time WITHOUT touching a tool reported `launches:0,
+//        harvests:0`, looked clean, and the turn said "Done" one run later —
+//        exactly the bug the bound was supposed to close;
+//      - raw CALL counts let two polls of one job (`BashOutput` twice, or a `Read`
+//        of a still-growing log) cancel a second, genuinely stranded launch.
+//    So the debt is a TURN-level count, and harvests are deduplicated by the shell
+//    id they name. Measured on CLI 2.1.231, a background launch answers "Output is
+//    being written to: <cwd-hash>/<uuid>/tasks/<id>.output" and the agent harvests
+//    by READING that file — `BashOutput` is not called at all — so the harvest side
+//    recognises that read, and takes the id out of the path.
 //
-// 2. `describeTurnBudgetAnomaly` — `error_max_turns` from a run that stopped far
-//    below the budget we asked for means the limit did not come from this chat.
-//    Measured against CLI 2.1.231: a run capped at N reports num_turns === N + 1,
-//    so a genuine exhaustion lands AT the cap, never at a fraction of it. Telling
-//    such a user to "raise Max turns" (issue #67) sends them to a dial that is
-//    already high enough — the cap is being imposed somewhere else.
-//
-// KNOWN LIMIT: a process backgrounded with shell syntax (`cmd &`, `nohup`, `tmux
-// new -d`) inside a FOREGROUND Bash call is not detected, and deliberately so —
-// telling `a && b`, `2>&1` and a trailing `&` apart needs a shell parser, and the
-// false positives would land on ordinary commands. That case is covered by the
-// system-prompt half (BACKGROUND_TASK_INSTRUCTION), which is stated in terms of
-// "anything that keeps running after the call returns" rather than one tool field.
 'use strict';
 
 /** One nudge per turn. A false positive costs exactly one short run. */
 const MAX_BACKGROUND_NUDGES = 1;
 
 /** Where CLI 2.1.231 writes a background shell's output, and therefore what a
- *  harvesting `Read` looks like: `<project-hash>/<session-uuid>/tasks/<id>.output`. */
-const BG_OUTPUT_PATH_RE = /\/tasks\/[A-Za-z0-9_-]+\.output$/;
+ *  harvesting read looks like: `<project-hash>/<session-uuid>/tasks/<id>.output`.
+ *  The capture group is the shell id, which is what deduplicates repeated polls. */
+const BG_OUTPUT_PATH_RE = /\/tasks\/([A-Za-z0-9_-]+)\.output$/;
 
 /** What the nudge run is asked to do. Names both ways to collect, because the CLI
  *  routes a background shell's output to a FILE — an agent told only "use BashOutput"
@@ -76,45 +72,65 @@ function isBackgroundLaunch(toolName, toolInput) {
   return typeof toolInput === 'string' && /"run_in_background"\s*:\s*true/.test(toolInput);
 }
 
-/** True when the tool call collects a background shell's result. */
-function isBackgroundHarvest(toolName, toolInput) {
-  // Either ends the agent's relationship with that shell: one reads it, one kills it.
-  if (toolName === 'BashOutput' || toolName === 'KillShell') return true;
-  if (toolName !== 'Read') return false;
+/** The shell id this tool call collects, `''` when it collects one whose id cannot be
+ *  read, or null when it is not a harvest at all.
+ *
+ *  The id is what makes repeated polling safe: two `BashOutput` calls on one job must
+ *  count once, or they cancel a second launch that really was abandoned. `''` is a
+ *  distinct return from null on purpose — the caller still owes that harvest a slot,
+ *  it just cannot deduplicate it.
+ *
+ *  `View` is accepted alongside `Read`: it is the name in this project's allowedTools
+ *  lists, and an agent that used it would otherwise look like it collected nothing. */
+function backgroundHarvestId(toolName, toolInput) {
   const v = parseToolInput(toolInput);
-  const p = v && typeof v === 'object' ? v.file_path : null;
-  return typeof p === 'string' && BG_OUTPUT_PATH_RE.test(p);
+  const o = v && typeof v === 'object' ? v : null;
+  if (toolName === 'BashOutput' || toolName === 'KillShell') {
+    const id = o && (o.bash_id || o.shell_id);
+    return typeof id === 'string' && id ? id : '';
+  }
+  if (toolName !== 'Read' && toolName !== 'View') return null;
+  const p = o ? (o.file_path || o.path) : null;
+  if (typeof p !== 'string') return null;
+  const m = BG_OUTPUT_PATH_RE.exec(p);
+  return m ? m[1] : null;
+}
+
+/** How many background tasks this TURN has started and not collected.
+ *  Clamped at zero: a harvest with no matching launch (a poll of something started
+ *  in an earlier turn) must not drive the debt negative and mask a later launch. */
+function backgroundOutstanding({ launches = 0, harvests = 0 } = {}) {
+  return Math.max(0, launches - harvests);
 }
 
 /** Should the loop spend one more run harvesting a background task?
  *  @param {object} o
- *  @param {string} [o.subtype]   result subtype of the run that just ended
- *  @param {number} [o.launches]  background shells started in THAT run
- *  @param {number} [o.harvests]  background results collected in THAT run
- *  @param {number} [o.nudges]    how many nudges this turn already spent
- *  @param {boolean} [o.aborted]  user pressed Stop
+ *  @param {string} [o.subtype]      result subtype of the run that just ended
+ *  @param {number} [o.outstanding]  turn-level launches minus harvests
+ *  @param {number} [o.nudges]       how many nudges this turn already spent
+ *  @param {boolean} [o.aborted]     user pressed Stop
  *  @param {number} [o.maxNudges]
  */
-function shouldNudgeBackgroundWait({ subtype, launches = 0, harvests = 0, nudges = 0, aborted = false, maxNudges = MAX_BACKGROUND_NUDGES } = {}) {
+function shouldNudgeBackgroundWait({ subtype, outstanding = 0, nudges = 0, aborted = false, maxNudges = MAX_BACKGROUND_NUDGES } = {}) {
   if (aborted) return false;
   // Only a clean finish. Every other subtype already has its own ladder rung, and
   // stacking this on top would spend the auto-continue budget twice for one stop.
   if (subtype !== 'success') return false;
   // An agent that collected everything it started is not owed a rescue run — it did
   // exactly what BACKGROUND_TASK_INSTRUCTION asked of it.
-  if (launches <= harvests) return false;
+  if (outstanding <= 0) return false;
   return nudges < maxNudges;
 }
 
-/** A sentence for the user when the rescue run ALSO walked away from a background
- *  task, or null when nothing is stranded. The nudge is bounded, so this is what
- *  keeps the bound from turning back into the original silent-"Done" bug: the turn
- *  says what was left running instead of claiming completion. */
-function describeStrandedBackgroundTask({ launches = 0, harvests = 0, nudges = 0 } = {}) {
+/** A sentence for the user when the turn ends with background work still owed, or
+ *  null when nothing is outstanding. Reads the SAME turn-level debt the nudge reads,
+ *  which is the whole point: a rescue run that answered in text and collected nothing
+ *  leaves the debt exactly where it was, so this fires. A per-run count reset to zero
+ *  there and let the turn claim success — the original bug, one run later. */
+function describeStrandedBackgroundTask({ outstanding = 0, nudges = 0 } = {}) {
   if (nudges < MAX_BACKGROUND_NUDGES) return null;
-  if (launches <= harvests) return null;
-  const n = launches - harvests;
-  return `${n} background task${n === 1 ? ' is' : 's are'} still running and ${n === 1 ? 'its' : 'their'} output was never collected. ` +
+  if (outstanding <= 0) return null;
+  return `${outstanding} background task${outstanding === 1 ? ' is' : 's are'} still running and ${outstanding === 1 ? 'its' : 'their'} output was never collected. ` +
     'A turn does not resume here, so nothing will pick it up — send another message to have the agent read it, ' +
     'or check it yourself in the working directory.';
 }
@@ -144,7 +160,8 @@ module.exports = {
   BACKGROUND_WAIT_PROMPT,
   BG_OUTPUT_PATH_RE,
   isBackgroundLaunch,
-  isBackgroundHarvest,
+  backgroundHarvestId,
+  backgroundOutstanding,
   shouldNudgeBackgroundWait,
   describeStrandedBackgroundTask,
   describeTurnBudgetAnomaly,

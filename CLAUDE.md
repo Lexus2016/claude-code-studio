@@ -426,25 +426,40 @@ ladder, which fires only on NON-success, never saw it. Nothing else resumes a he
   unanchored regex counted it as a launch. The regex survives only as a fallback for
   input that does not parse at all (a truncated object), because a missed launch
   strands the task, which is the failure the module exists to stop.
-- **LAUNCHES ARE COUNTED AGAINST HARVESTS.** A one-way `bgLaunched` latch charged an
-  extra run to every agent that OBEYED `BACKGROUND_TASK_INSTRUCTION` — launch, collect,
-  finish — which is worse than the bug it fixes. Both loops now count
-  `bgLaunches`/`bgHarvests` per run and nudge only when `launches > harvests`.
+- **The debt is TURN-level, and harvests are deduplicated by shell id.** Three earlier
+  shapes were wrong, which is why the current one looks over-built:
+  a one-way `bgLaunched` latch charged an extra run to every agent that OBEYED
+  `BACKGROUND_TASK_INSTRUCTION`; PER-RUN counters made the rescue run start from zero,
+  so a second walk-away that touched no tool reported `0/0`, looked clean, and the turn
+  said "Done" one run later — the same bug the bound existed to close; and raw CALL
+  counts let two polls of one job cancel a second, genuinely abandoned launch. The
+  counters therefore live in the loop body, not inside `runOnce`, and `bgHarvestIds` is
+  a `Set`. Verified live on all three shapes.
 - **The harvest side cannot key on `BashOutput` alone.** Measured on CLI 2.1.231, a
   background launch answers `Output is being written to: <hash>/<uuid>/tasks/<id>.output`
   and the agent collects by READING that file — `BashOutput` is never called.
-  `isBackgroundHarvest()` therefore also matches a `Read` of a `/tasks/<id>.output` path
-  (`BG_OUTPUT_PATH_RE`). Verified live: an obedient agent shows `launches=1 harvests=1`
-  and is not nudged; one that walks away shows `launches=1 harvests=0` and is.
+  `backgroundHarvestId()` therefore also matches a `Read`/`View` of a
+  `/tasks/<id>.output` path and returns the id out of it (`BG_OUTPUT_PATH_RE`), which is
+  what makes repeated polling safe. It returns `''` — distinct from `null` — for a
+  harvest whose id cannot be read: that one still counts, it just cannot dedupe.
+  Verified live: an obedient agent ends at `outstanding=0` and is not nudged; one that
+  walks away ends at `outstanding=1` and is.
 - **The detector sits ABOVE the MCP early-return in `onTool`.** A background launch is a
   fact about the run, not about how one tool is rendered.
-- **Counters reset per RUN, not per turn.** A launch the agent harvested in a later run
-  is not stranded. `MAX_BACKGROUND_NUDGES` is 1, so a false positive costs one short run.
+- **`MAX_BACKGROUND_NUDGES` is 1**, so a false positive costs one short run.
 - **A bounded nudge needs an honest ending.** When the harvest run ALSO walks away,
-  `describeStrandedBackgroundTask()` says what was left running and the loop returns
-  `completed: false`. Without it the cap simply restored the original bug one run later.
-  `completed` feeds `taskWorker` (server.js:1859), so a Kanban task is not marked done
-  over unfinished work either.
+  `describeStrandedBackgroundTask()` says what was left running. The notice is written
+  as a real status line (`\n\n---\n⚠️ …`) because `statusLineKind()`
+  (public/index.html:7215) requires the `---` fence — without it the SPA stamps its own
+  `✅ Done` badge on top of the warning.
+- **It does NOT flip the returned `completed` flag, and that was tried.** `completed`
+  has no consumer that would do the right thing with it: the chat path discards it, and
+  the only reader (server.js:1859) is the SUBSCRIPTION branch consuming
+  `runInteractiveSingle`. The API Kanban worker has its own `while (true)` that breaks
+  on `subtype === 'success'` and never calls these functions at all. Worse, that one
+  reader turns `completed:false` into `{subtype:'error'}` → `taskStatusForStop` →
+  `'failed'`, which auto-retries a chain and re-runs every side effect. "Not marked
+  done" is not "failed, retry the chain".
 - **The system prompt is the first line of defence, the harvest run the second.**
   `BACKGROUND_TASK_INSTRUCTION` says plainly that the turn does not resume, and is
   phrased as "anything that keeps running after the call returns" rather than one tool
@@ -454,8 +469,9 @@ ladder, which fires only on NON-success, never saw it. Nothing else resumes a he
   the false positives would land on ordinary commands.
 - **`test/ask-user-question.test.js` extracts that `onTool` handler as source text** and
   runs it through `new Function`, so its parameter list must carry every closure the
-  handler touches — `runContinuation`, `bgLaunches` and `bgHarvests` are passed in there
-  deliberately rather than stubbed, to keep the real module in the path.
+  handler touches — `runContinuation`, `bgLaunches`, `bgHarvestIds` and `bgAnonHarvests`
+  are passed in there deliberately rather than stubbed, to keep the real module in the
+  path.
 
 **`describeTurnBudgetAnomaly()` — when "raise Max turns" is the wrong advice.** Measured
 against CLI 2.1.231, a run capped at N reports `num_turns === N + 1`, so a genuine
