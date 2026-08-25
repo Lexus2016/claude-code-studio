@@ -35,9 +35,9 @@ chat's budget is named as such rather than sending the user to the wrong dial.
   The rescue is the second line of defence, not the first.
 - **Kanban/scheduled tasks, multi-agent members and bots get that instruction too**,
   each through the channel that actually reaches it. `--system-prompt` is dropped
-  whenever there is a session to resume, so for a multi-agent worker (which starts from
-  the orchestrator's session) and for a bot (which keeps a persistent session per chat)
-  the instruction rides the user turn instead. An unattended task that walks away from a
+  whenever there is a session to resume, and is absent entirely for a task with no bot —
+  so for a multi-agent worker, a bot with a live session, and every Kanban task, the
+  instruction rides the user turn instead. An unattended task that walks away from a
   background job is the worst version of this bug — nobody is reading that chat to
   notice. A Kanban task on the `subscription` engine is still not covered: it passes no
   system prompt at all, and changing that respawns its tmux session.

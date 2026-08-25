@@ -1689,7 +1689,13 @@ async function startTask(task) {
     }
     // Task manager instruction: inform Claude about available task management tools
     parts.push(TASK_MANAGER_INSTRUCTION);
-    const prompt = parts.join('\n\n') + TASK_VERIFICATION_SUFFIX;
+    // BACKGROUND_TASK_INSTRUCTION rides the task prompt, not taskBotSp, because that
+    // system prompt is `undefined` for a task with no bot AND is dropped by
+    // claude-cli.js:252 whenever the task resumes an existing session. The prompt is
+    // the only channel that reaches every task — which is also why the verification
+    // suffix lives here. Unattended is where a stranded background job hurts most:
+    // nobody is reading that chat.
+    const prompt = parts.join('\n\n') + BACKGROUND_TASK_INSTRUCTION + TASK_VERIFICATION_SUFFIX;
     _taskStartedAt = Date.now(); // reset to accurate time after prompt building
     // Check if this is a restart: only skip saving if the LAST user message
     // has the exact same prompt (crash recovery). Previously checked for ANY
@@ -1912,15 +1918,11 @@ async function startTask(task) {
         CCS_INTERRUPT_SESSION: sessionId,
         CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
       };
-      // This runner builds its own prompt, so it does not get buildSystemPrompt's
-      // standing instructions — and it has its own auto-continue loop below, so the
-      // chat path's background-harvest rescue does not reach it either. An unattended
-      // task that walks away from a background job is the WORST case of that bug:
-      // nobody is reading the chat to notice. The instruction is the cheap half and
-      // it is what this path can have. `|| ''` because a bot-less task passes
-      // undefined here, and `--system-prompt` is only sent when there is one.
+      // The background rule is NOT appended here: this is undefined for a task with no
+      // bot, and dropped entirely when the task resumes a session. It rides the task
+      // prompt instead — see where `prompt` is built above.
       const taskBotSp = taskBot
-        ? botsLogic.buildBotSystemPrompt(taskBot, stmts.listBots.all()) + USER_INTERRUPT_INSTRUCTION + BACKGROUND_TASK_INSTRUCTION
+        ? botsLogic.buildBotSystemPrompt(taskBot, stmts.listBots.all()) + USER_INTERRUPT_INSTRUCTION
         : undefined;
       const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid,
         // The bot's own model wins over the task's: picking a bot is picking who does

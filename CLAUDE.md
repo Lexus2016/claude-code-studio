@@ -482,11 +482,15 @@ ladder, which fires only on NON-success, never saw it. Nothing else resumes a he
   resume. A multi-agent worker starts from the orchestrator's session id, and a bot
   keeps a persistent session per chat — so for those two the system prompt is dead on
   arrival, and the instruction rides the USER turn instead (`agentPrompt`, and the
-  `standing` block the bots path already re-sends its roster in). Only `taskWorker`'s
-  `taskBotSp` gets it as a system prompt, because that path sends one on a fresh run.
+  `standing` block the bots path already re-sends its roster in). `taskWorker` is the
+  same story for two reasons at once — `taskBotSp` is `undefined` for a task with no
+  bot, and dropped outright when the task resumes a session — so there too it rides the
+  task prompt, next to `TASK_VERIFICATION_SUFFIX`, which sits in that channel for
+  exactly the same reason. Chat and Telegram are the only paths that get it as a system
+  prompt, because they are the only ones that go through `buildSystemPrompt`.
   **Still NOT covered: a Kanban task on the `subscription` engine** — it calls
-  `runInteractiveSingle` with `systemPrompt: ''` (server.js:1823), and changing that
-  respawns the tmux session.
+  `runInteractiveSingle` with `systemPrompt: ''` (server.js:1823) and takes a different
+  prompt path, and changing that respawns the tmux session.
 - **The system prompt is the first line of defence, the harvest run the second.**
   `BACKGROUND_TASK_INSTRUCTION` says plainly that the turn does not resume, and is
   phrased as "anything that keeps running after the call returns" rather than one tool
