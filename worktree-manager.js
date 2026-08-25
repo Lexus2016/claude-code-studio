@@ -44,12 +44,29 @@ function hasGitRepo(dir) {
  * commits yet) — `git worktree add -b` needs an existing ref to branch from.
  * Never touches an already-initialized repo beyond reading its HEAD.
  */
+// Only written when the directory has no .gitignore of its own AND is about to
+// get its first-ever commit — a project that already tracks history keeps
+// whatever .gitignore (or lack of one) it already chose. Without this, an
+// auto `git add -A` on a never-before-versioned directory commits .env,
+// node_modules/ and any local secrets straight into history, permanently.
+const _BOOTSTRAP_GITIGNORE = `# Auto-created by Claude Code Studio before its first commit.
+node_modules/
+.env
+.env.*
+!.env.example
+.DS_Store
+`;
+
 function ensureGitInitialized(dir) {
   if (!hasGitRepo(dir)) {
     _git(['init'], dir);
   }
   let hasCommit = _gitOk(['rev-parse', '--verify', 'HEAD'], dir);
   if (!hasCommit) {
+    const gitignorePath = path.join(dir, '.gitignore');
+    if (!fs.existsSync(gitignorePath)) {
+      fs.writeFileSync(gitignorePath, _BOOTSTRAP_GITIGNORE);
+    }
     _git(['add', '-A', '--', '.'], dir);
     // --allow-empty: an empty project still needs a ref for worktrees to branch from.
     _git(['commit', '--allow-empty', '-m', 'Initial commit (auto-created by Claude Code Studio)'], dir);

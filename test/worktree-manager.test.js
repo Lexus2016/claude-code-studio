@@ -56,7 +56,7 @@ console.log('\nensureGitInitialized():');
   fs.writeFileSync(path.join(dir2, 'a.txt'), 'hello');
   const branch2 = WM.ensureGitInitialized(dir2);
   check('a project with real files gets those files in the initial commit', typeof branch2, 'string');
-  check('the file is tracked after auto-init', git(['ls-files'], dir2), 'a.txt');
+  check('the file is tracked after auto-init', git(['ls-files'], dir2).split('\n').includes('a.txt'), true);
 
   const dir3 = tmpDir('init-idempotent');
   WM.ensureGitInitialized(dir3);
@@ -64,6 +64,26 @@ console.log('\nensureGitInitialized():');
   WM.ensureGitInitialized(dir3);
   const commitCountAfter = git(['rev-list', '--count', 'HEAD'], dir3);
   check('calling it again on an already-initialized repo adds no commits', commitCountAfter, commitCountBefore);
+
+  const dir4 = tmpDir('init-gitignore-bootstrap');
+  fs.writeFileSync(path.join(dir4, '.env'), 'SECRET=abc123\n');
+  fs.writeFileSync(path.join(dir4, 'a.txt'), 'hello');
+  WM.ensureGitInitialized(dir4);
+  check('a .gitignore is auto-created before the first commit',
+    fs.existsSync(path.join(dir4, '.gitignore')), true);
+  const tracked4 = git(['ls-files'], dir4).split('\n');
+  check('.env is excluded from the initial commit', tracked4.includes('.env'), false);
+  check('.gitignore itself is committed', tracked4.includes('.gitignore'), true);
+  check('unrelated real files still get committed', tracked4.includes('a.txt'), true);
+
+  const dir5 = tmpDir('init-gitignore-preexisting');
+  fs.writeFileSync(path.join(dir5, '.gitignore'), 'custom-ignore-rule\n');
+  fs.writeFileSync(path.join(dir5, '.env'), 'SECRET=abc123\n');
+  WM.ensureGitInitialized(dir5);
+  check("a project's own pre-existing .gitignore is left untouched",
+    fs.readFileSync(path.join(dir5, '.gitignore'), 'utf8'), 'custom-ignore-rule\n');
+  check('.env still gets committed when the project chose its own .gitignore without that rule',
+    git(['ls-files'], dir5).split('\n').includes('.env'), true);
 }
 
 console.log('\nensureWorktree() / removeWorktree():');
