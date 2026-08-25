@@ -8,7 +8,7 @@ touch it instead of staying dead until a page reload; and an `error_max_turns` t
 did not come from this chat's budget is named as such rather than sending the user to
 the wrong dial. Plus a split tmux window that is composited rather than cropped, a
 paste button that stopped pasting twice, corrected toolbar tooltips, an Electron
-popup that no longer escapes the window-open policy, and hardened worktree isolation.
+popup that no longer escapes the window-open policy.
 
 ### A turn that strands a background task is not a finished turn
 
@@ -119,13 +119,6 @@ the first place is not yet identified — the close code added here is what will
 
 - A full browser reload mid bot-turn lost `streaming.agent` (in-memory only), so the
   next live chunk looked like a genuinely new speaker and opened a second bubble.
-
-### Worktree isolation, hardened
-
-- `ensureWorktree()` now verifies the `.git` marker inside the directory rather than
-  only the directory's existence: a git-registered but out-of-band-deleted worktree —
-  or an empty directory left behind by a volume restore — was treated as valid and
-  permanently stranded the session or task that depended on it.
 
 ### Room mode and the mid-turn bot hand-off are documented
 
