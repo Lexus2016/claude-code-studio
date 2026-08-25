@@ -1,5 +1,50 @@
 # Changelog
 
+## 7.11.0
+
+Desktop builds get their MCP helpers back — every `_ccs_*` tool was silently
+missing from every desktop turn in 7.10.0 — and worktree isolation ships, giving
+each session and task its own git worktree and branch.
+
+### Desktop: every `_ccs_*` MCP helper was missing (affects 7.10.0)
+
+- In an Electron build the helper scripts resolve inside `app.asar`, which cannot
+  be read as a directory, so `ask_user`, `notify_user`, `set_ui_state` and
+  `check_user_messages` failed to spawn — **silently**, on every desktop turn.
+  `helperPath()` redirects to the `app.asar.unpacked` copy that electron-builder
+  already writes. A no-op in web and Docker mode, where no path contains
+  `app.asar`. Anything a helper `require`s has to be unpacked too, or it fails one
+  level deeper.
+
+### Worktree isolation
+
+- Each session and task gets its own git worktree and branch, so two units of
+  work in one project no longer share a working copy. New endpoints:
+  `/api/sessions/:id/git-status`, `/git-commit`, `/git-merge`.
+- **It bootstraps on a machine with no git identity.** `git` only invents a
+  `user@host` author when the hostname allows it; a container or a CI runner
+  refuses with *"Author identity unknown"*, and because the bootstrap runs inside
+  `POST /api/tasks` that failure took the whole request down with it. The project's
+  own Docker image is such a machine. A fallback author is supplied — and only
+  when there is nothing to override, so a commit in your own project stays yours.
+  This covers `commitAll()` and the `--no-ff` merge as well, both of which write
+  commits, and treats an explicitly empty `user.email` as absent rather than as an
+  identity.
+- Four defects found in review before release: the chat started a new session on
+  the second message (the reuse check compared the worktree path instead of the
+  project root, losing history and `--resume`); the file browser answered 403 for
+  an isolated session, which also unset the project highlight, its bots and its
+  chat defaults; a fork pointed two conversations at one directory and one branch;
+  and MCP `create_task` / `create_chain` handed the caller's own worktree down to
+  the child.
+- **Known limit:** isolation reaches the chat, `POST /api/tasks`,
+  `POST /api/sessions` and fork. Telegram, the scheduler, the chain runner and the
+  MCP creators still create rows without a worktree, so a project can hold both
+  isolated and non-isolated units at once.
+- A worktree failure now logs its reason, including git's own stderr, before it
+  propagates — the absence of that is what made the first attempt at this feature
+  look like an unknown regression.
+
 ## 7.10.0
 
 A turn that walked away from a background job now finishes the work instead of
