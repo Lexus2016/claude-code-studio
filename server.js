@@ -5674,8 +5674,10 @@ app.get('/api/version', (_, res) => {
   // server lacks tmux (e.g. native Windows) instead of failing only after a send.
   // `editor` lets the UI label its button with the editor the user actually
   // configured ("Open in Cursor") instead of hardcoding VS Code (#63).
+  // claudeCli: same up-front-capability idea as tmuxAvailable — lets the UI warn
+  // before a chat send fails on a missing/unauthenticated local `claude` binary.
   const _ed = editorLinks.editorFor(loadMergedConfig().editor);
-  res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable(), defaultEngine: (loadMergedConfig().defaultEngine === 'subscription' ? 'subscription' : 'api'), editor: { id: _ed.id, label: _ed.label } });
+  res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable(), defaultEngine: (loadMergedConfig().defaultEngine === 'subscription' ? 'subscription' : 'api'), editor: { id: _ed.id, label: _ed.label }, claudeCli: ClaudeCLI.claudeCliStatus() });
 });
 
 // Capability-checked, never OS-sniffed — the same pattern as tmuxAvailable for the

@@ -69,6 +69,40 @@ function findClaudeBin() {
 
 const CLAUDE_BIN = findClaudeBin();
 
+// Local CLI preflight — same lazy capability-check idea as terminal-bridge.js's
+// tmuxAvailable(), but NOT cached: tmux is checked from several server request
+// paths (worth memoizing), while this is wired into a single boot-time endpoint
+// (/api/version, fetched once by the client) — caching bought only staleness
+// (e.g. surviving a `claude login` done after server start) for zero benefit.
+// Without this, a broken/missing local `claude` install is only discovered when
+// a chat's spawn() fails mid-turn; this lets the UI surface it up front instead.
+// `authenticated` mirrors the actual credential precedence run() below applies —
+// the credentials file, ANTHROPIC_AUTH_TOKEN (passed through unconditionally),
+// or ANTHROPIC_API_KEY paired with ANTHROPIC_BASE_URL (the only case where the
+// child process keeps that key — see the stripping logic in run()). It is still
+// a heuristic, not a real auth call.
+function claudeCliStatus() {
+  let available = false;
+  try {
+    // Same needsShell rule as the real chat-turn spawn() below: a .cmd/.bat
+    // CLAUDE_BIN (the common case on Windows — findClaudeBin() prefers
+    // claude.cmd) fails to launch under shell:false, which would otherwise
+    // make this preflight report a working install as unavailable.
+    const needsShell = process.platform === 'win32' &&
+      /\.(cmd|bat)$/i.test(CLAUDE_BIN);
+    const r = spawnSync(CLAUDE_BIN, ['--version'], { stdio: 'ignore', shell: needsShell, timeout: 5000 });
+    available = !r.error && r.status === 0;
+  } catch { available = false; }
+  let authenticated = false;
+  if (available) {
+    const credsPath = path.join(os.homedir(), '.claude', '.credentials.json');
+    authenticated = fs.existsSync(credsPath)
+      || !!process.env.ANTHROPIC_AUTH_TOKEN
+      || (!!process.env.ANTHROPIC_API_KEY && !!process.env.ANTHROPIC_BASE_URL);
+  }
+  return { available, authenticated };
+}
+
 // Idle (inactivity) watchdog — the subprocess is killed ONLY after it produces no
 // output (stdout or stderr) for this long. A fixed total timeout would kill a process
 // that is still actively streaming output (e.g. a long content-generation run); the
@@ -620,3 +654,4 @@ class ClaudeCLI {
 
 module.exports = ClaudeCLI;
 module.exports.findClaudeBin = findClaudeBin;
+module.exports.claudeCliStatus = claudeCliStatus;
