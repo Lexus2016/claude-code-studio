@@ -22,6 +22,11 @@ npmRebuild: false
 asarUnpack:
   - "mcp-*.js"
   - "hooks/**"
+  # Whatever those scripts require() has to be out here with them. The child is a
+  # plain `node` with no asar support, so a module left inside the archive fails one
+  # level deeper than the entry point: mcp-bots.js unpacked fine and still died on
+  # `Cannot find module './bots.js'`. Pinned by test/asar-helpers.test.js.
+  - "bots.js"
 
 files:
   - "**/*"
