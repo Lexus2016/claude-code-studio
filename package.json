@@ -1,6 +1,6 @@
 {
   "name": "claude-code-studio",
-  "version": "7.8.0",
+  "version": "7.9.0",
   "description": "Full-featured web workspace for Claude Code — chat, Kanban, multi-agent, MCP, skills, projects",
   "bin": {
     "claude-code-studio": "./bin/cli.js"
