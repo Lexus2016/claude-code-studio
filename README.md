@@ -243,6 +243,7 @@ Both bots work the turn **in order**, and each one sees what the previous one pr
 - **`@@` calls a bot, `@` still attaches a file** — two separate sigils, so a mention is never ambiguous. Unknown handle? You get told, not silence.
 - **Per-project availability, global identity** — a bot lives in your library once; you choose which projects it appears in. No philosopher bot cluttering a crypto project.
 - **They know about each other** — every bot gets a roster of its teammates, so it can hand work over instead of doing someone else's job badly.
+- **Hand-off works mid-turn, not just at the start** — a bot can call another by name before its own turn ends. If the target already took its turn, the hand-off waits in an inbox and reaches it the next time it runs, instead of getting lost.
 - **Evidence clause built in** — every bot is instructed to state the file, command output, or source behind a factual claim, and to label a guess as a guess.
 - **Visible attribution** — in chat, each bot answers in its own bubble with its name, avatar and colour. In Telegram, each answer carries its own header line.
 - **Assign a bot to work, not just chat** — pick a bot on a **Kanban** card or a **Scheduler** task, and that bot runs the job on autopilot.
@@ -250,6 +251,8 @@ Both bots work the turn **in order**, and each one sees what the previous one pr
 - **Autocomplete** — type `@@` and pick from the palette; you never have to remember a handle.
 
 A bot that fails mid-turn says so, and its unfinished output is never passed to the next bot as if it were fact.
+
+**Room mode — let the bots talk to each other.** Switch a chat to **Room** and up to 6 of the project's bots take serial turns on your message instead of you orchestrating each one by hand: every bot reads what came before and adds to it, for up to 3 rounds or 10 messages. A bot can write **PASS** to skip a turn without ending the discussion, and the room closes the moment one of them writes **@user** — the only way to escalate a question to you, so the room can't bury it under more turns instead. When the discussion settles, it closes with one artifact, not a pile of replies to sort through yourself.
 
 **A ready-made team to start from** — [`bots_example/cs_bots.json`](bots_example/cs_bots.json) is an exported roster of 11 named specialists, usable the moment it lands: **Vertex** (systems architect), **Bogdan** (business analyst / client interviewer), **Vira** (product analyst), **Hanna** (technical researcher), **Dan** (releaser), **Katya** (technical writer), **Kolya** (senior programmer), **Olya** (delivery lead), **Ryta** (staff engineer), **Sofiya** (application security engineer) and **Taras** (QA engineer).
 
@@ -479,7 +482,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | Category | Features |
 |----------|----------|
 | **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, terminal catch-up (import a `claude --resume` conversation into the web chat), extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse + Stop hooks + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom, `I` focus input, character counter, `T` scroll-to-top, `N` new session, font size adjust (`=`/`-`/`0`), draft auto-save, remote CLI session import over SSH |
-| **Bots** | Named AI specialists with own prompt/model/memory, several per chat via `@@handle`, sequential turns with context hand-off, `@@` autocomplete palette, built-in templates (Analyst / Editor / Reviewer / Explainer), per-project availability with a global library, teammate roster, evidence clause, per-bot chat bubbles with name + avatar + colour, assignable to Kanban cards and Scheduler tasks, works from Telegram with per-bot headers |
+| **Bots** | Named AI specialists with own prompt/model/memory, several per chat via `@@handle`, sequential turns with context hand-off, mid-turn hand-off to a named bot with a delivery inbox for missed turns, `@@` autocomplete palette, built-in templates (Analyst / Editor / Reviewer / Explainer), per-project availability with a global library, teammate roster, evidence clause, per-bot chat bubbles with name + avatar + colour, assignable to Kanban cards and Scheduler tasks, works from Telegram with per-bot headers |
 | **Terminal agents** | Any CLI agent live in a workspace tab (Claude Code, Codex, Grok, opencode, Antigravity, Kimi, Cursor Agent, shell), full TUI over tmux control mode, several tabs side by side with chat, survives browser/server restart, exact conversation restore by id, idle reaping with revive on reopen, shared font-size control, capability-checked (tmux) on macOS/Linux/Docker/WSL |
 | **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, global default (★ set-as-default for new chats/tasks), per-item override, available in Chat + Kanban + Scheduler, tmux-aware (auto-disabled without tmux), Opus / Sonnet / Haiku / Fable model selector, answer a blocked permission / plan prompt from the browser |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, engine + model + effort per task/chain |
@@ -487,7 +490,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
 | **Telegram** | Bot control, push notifications, ask_user forwarding (+ file answers), session bridge, Forum Mode, inline stop, deep-link navigation, rich action buttons (localized EN/UA/RU/FR/HE), Write button, file attachments, interrupt queue while busy |
 | **Delegation** | Cross-agent handoff/sync (Codex, Antigravity, opencode), CONTEXT.md + DIALOG.md protocol, fs.watch + polling, persistent across restarts, Windows support, sidebar agents manager, auto-seeded defaults, test button |
-| **Agents** | Single, Multi (2–5 in-chat, schema-validated planning), Dispatch (Kanban), auto-retry, cascade cancellation, effort propagation |
+| **Agents** | Single, Multi (2–5 in-chat, schema-validated planning), Dispatch (Kanban), Room (project bots take serial turns on one message), auto-retry, cascade cancellation, effort propagation |
 | **Modes** | Auto, Plan (read-only + Execute Plan), Task, auto mode switching |
 | **Skills** | 30 built-in, auto-classification, plugin discovery, custom `.md` files |
 | **Commands** | 10 built-in slash commands, custom commands |
