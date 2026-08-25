@@ -426,24 +426,32 @@ ladder, which fires only on NON-success, never saw it. Nothing else resumes a he
   unanchored regex counted it as a launch. The regex survives only as a fallback for
   input that does not parse at all (a truncated object), because a missed launch
   strands the task, which is the failure the module exists to stop.
-- **The debt is TURN-level, and harvests are deduplicated by shell id.** Three earlier
-  shapes were wrong, which is why the current one looks over-built:
+- **The debt is INCREMENTAL and TURN-level, and the whole rule lives in the module.**
+  Four earlier shapes were wrong, which is why the current one looks over-built — every
+  one of them shipped green:
   a one-way `bgLaunched` latch charged an extra run to every agent that OBEYED
   `BACKGROUND_TASK_INSTRUCTION`; PER-RUN counters made the rescue run start from zero,
-  so a second walk-away that touched no tool reported `0/0`, looked clean, and the turn
-  said "Done" one run later — the same bug the bound existed to close; and raw CALL
-  counts let two polls of one job cancel a second, genuinely abandoned launch. The
-  counters therefore live in the loop body, not inside `runOnce`, and `bgHarvestIds` is
-  a `Set`. Verified live on all three shapes.
+  so a second walk-away that touched no tool reported nothing owed and the turn said
+  "Done" one run later — the same bug the bound existed to close; raw CALL counts let
+  two polls of one job cancel a second, genuinely abandoned launch; and a BATCH total
+  (`max(0, launches - harvests)`) BANKED a harvest with no launch behind it, so reading
+  a leftover `tasks/<id>.output` from an earlier turn — often the first thing a resumed
+  session does — paid for a launch that came afterwards. `applyBackgroundTool()` folds
+  each tool call into `{debt, seen}`: a harvest decrements only an EXISTING debt, once
+  per shell id, and a surplus is dropped rather than banked. The loops call that one
+  function instead of open-coding it, because an open-coded copy is how the local and
+  remote paths drift apart. Verified live on all four shapes.
 - **The harvest side cannot key on `BashOutput` alone.** Measured on CLI 2.1.231, a
   background launch answers `Output is being written to: <hash>/<uuid>/tasks/<id>.output`
   and the agent collects by READING that file — `BashOutput` is never called.
   `backgroundHarvestId()` therefore also matches a `Read`/`View` of a
   `/tasks/<id>.output` path and returns the id out of it (`BG_OUTPUT_PATH_RE`), which is
-  what makes repeated polling safe. It returns `''` — distinct from `null` — for a
-  harvest whose id cannot be read: that one still counts, it just cannot dedupe.
-  Verified live: an obedient agent ends at `outstanding=0` and is not nudged; one that
-  walks away ends at `outstanding=1` and is.
+  what makes repeated polling safe. A harvest whose id cannot be read returns `null` and
+  does NOT pay the debt: `bash_id` is a required parameter, so that only happens on a
+  malformed payload, and crediting it would let two such calls cancel a real launch —
+  one extra rescue run is the cheaper mistake. Verified live: an obedient agent ends at
+  `debt=0` and is not nudged; one that launches two and collects one ends at `debt=1`
+  and is.
 - **The detector sits ABOVE the MCP early-return in `onTool`.** A background launch is a
   fact about the run, not about how one tool is rendered.
 - **`MAX_BACKGROUND_NUDGES` is 1**, so a false positive costs one short run.

@@ -19,13 +19,14 @@ chat's budget is named as such rather than sending the user to the wrong dial.
   in the UI language, so a regex over English phrases like "I'll check back" is dead
   on a French or Ukrainian one. The flag is read off a parsed object, so a foreground
   `grep '"run_in_background": true'` is not mistaken for a launch.
-- **The debt is counted across the whole turn, and harvests dedupe by shell id.** An
-  agent that starts a background job and collects it inside the same turn — exactly what
-  the new system-prompt rule asks for — is not charged a rescue run. The harvest side
-  matches a `Read`/`View` of the `tasks/<id>.output` file the CLI actually writes, not
-  just a `BashOutput` call: measured on 2.1.231, `BashOutput` is never called. Counting
-  per-run instead would let a text-only rescue run reset the debt to zero and claim
-  success — the same bug, one run later.
+- **The debt is incremental and counted across the whole turn.** An agent that starts a
+  background job and collects it inside the same turn — exactly what the new
+  system-prompt rule asks for — is not charged a rescue run. The harvest side matches a
+  `Read`/`View` of the `tasks/<id>.output` file the CLI actually writes, not just a
+  `BashOutput` call: measured on 2.1.231, `BashOutput` is never called. A harvest pays
+  down only a debt that already exists, once per shell id — so reading a leftover log
+  from an earlier turn cannot pay for a launch that comes afterwards, and polling one
+  job twice cannot cancel a second job that really was abandoned.
 - **One harvest run, and an honest ending if it is not enough.** When even the rescue
   run walks away, the turn says how many tasks were left running, as a real `---` status
   line so the SPA does not stamp its own "Done" badge over the warning.

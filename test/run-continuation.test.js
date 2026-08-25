@@ -12,9 +12,10 @@
 //     Measured on CLI 2.1.231, a run capped at N reports num_turns === N + 1, so a
 //     genuine exhaustion lands AT the cap, never at a fraction of it.
 //
-// Three shapes of the background rule were wrong before this one, and each wrong
-// shape has a test below named after it. They are the reason the module counts a
-// TURN-level debt with deduplicated harvests rather than anything simpler.
+// FOUR shapes of the background rule were wrong before this one, and each wrong
+// shape has a test below named after it. They are the reason the module keeps an
+// INCREMENTAL turn-level debt with deduplicated harvests rather than anything
+// simpler — every simplification on that list shipped green and was still broken.
 //
 // Run: node test/run-continuation.test.js
 'use strict';
@@ -70,8 +71,11 @@ console.log('\nthe harvest side recognises how the CLI actually returns output:'
     RC.backgroundHarvestId('View', JSON.stringify({ file_path: outPath })), 'b74ztexqy');
   check('BashOutput yields its bash_id', RC.backgroundHarvestId('BashOutput', '{"bash_id":"b74ztexqy"}'), 'b74ztexqy');
   check('KillShell yields its shell_id', RC.backgroundHarvestId('KillShell', '{"shell_id":"zz1"}'), 'zz1');
-  // '' is NOT null: the harvest counts, it just cannot be deduplicated.
-  check('an id-less BashOutput still counts as a harvest', RC.backgroundHarvestId('BashOutput', '{}'), '');
+  // An unidentifiable harvest does NOT pay down the debt. `bash_id` is required, so
+  // this only happens on a malformed payload; crediting it would let two such calls
+  // cancel a second launch that really was abandoned. One extra rescue run is the
+  // cheaper mistake.
+  check('an id-less BashOutput is not credited', RC.backgroundHarvestId('BashOutput', '{}'), null);
   check('an ordinary Read is not a harvest',
     RC.backgroundHarvestId('Read', JSON.stringify({ file_path: '/repo/server.js' })), null);
   // Narrow on purpose: a source file that merely lives under some tasks/ directory
@@ -82,20 +86,59 @@ console.log('\nthe harvest side recognises how the CLI actually returns output:'
   check('missing input is safe', RC.backgroundHarvestId('Read', undefined), null);
 }
 
-console.log('\nthe debt arithmetic, including what repeated polling must not do:');
+console.log('\nthe debt is incremental, and a surplus harvest is dropped, not banked:');
 {
-  check('nothing launched, nothing owed', RC.backgroundOutstanding({ launches: 0, harvests: 0 }), 0);
-  check('one launched, none collected', RC.backgroundOutstanding({ launches: 1, harvests: 0 }), 1);
-  check('one launched, one collected', RC.backgroundOutstanding({ launches: 1, harvests: 1 }), 0);
-  // WRONG SHAPE #3 — raw CALL counts. Two polls of one job (BashOutput twice, or a
-  // Read of a still-growing log) used to cancel a second launch that really was
-  // abandoned. The loop dedupes by shell id so those two polls arrive here as ONE
-  // harvest; this is the arithmetic that then leaves the second job owed.
-  check('two launched, one distinct harvest', RC.backgroundOutstanding({ launches: 2, harvests: 1 }), 1);
-  // A poll of something started in an EARLIER turn must not drive the debt negative
-  // and mask a launch that comes after it.
-  check('a harvest with no launch clamps at zero', RC.backgroundOutstanding({ launches: 0, harvests: 3 }), 0);
-  check('an empty call is zero', RC.backgroundOutstanding(), 0);
+  const OLD_LOG = JSON.stringify({ file_path: '/x/8f9da46f/tasks/old1.output' });
+  const NEW_LOG = JSON.stringify({ file_path: '/x/8f9da46f/tasks/new1.output' });
+  const LAUNCH = JSON.stringify({ command: 'sleep 60', run_in_background: true });
+
+  check('a fresh state owes nothing', RC.backgroundOutstanding(RC.newBackgroundState()), 0);
+
+  {
+    const st = RC.newBackgroundState();
+    RC.applyBackgroundTool(st, 'Bash', LAUNCH);
+    check('one launch, nothing collected', RC.backgroundOutstanding(st), 1);
+    RC.applyBackgroundTool(st, 'Read', NEW_LOG);
+    check('collected — nothing owed', RC.backgroundOutstanding(st), 0);
+  }
+  {
+    // WRONG SHAPE #4 — a BATCH total. Reading a leftover log from an EARLIER turn is
+    // often the first thing a resumed session does. Banked as a credit, it paid for
+    // the launch that came after it: no rescue, no warning, "Done" over a running job.
+    const st = RC.newBackgroundState();
+    RC.applyBackgroundTool(st, 'Read', OLD_LOG);
+    check('a harvest with no debt behind it is dropped', RC.backgroundOutstanding(st), 0);
+    RC.applyBackgroundTool(st, 'Bash', LAUNCH);
+    check('and CANNOT pay for a launch that comes later', RC.backgroundOutstanding(st), 1);
+  }
+  {
+    // WRONG SHAPE #3 — raw call counts. Polling one job twice must pay once.
+    const st = RC.newBackgroundState();
+    RC.applyBackgroundTool(st, 'Bash', LAUNCH);
+    RC.applyBackgroundTool(st, 'Bash', LAUNCH);
+    check('two launches owe two', RC.backgroundOutstanding(st), 2);
+    RC.applyBackgroundTool(st, 'BashOutput', '{"bash_id":"a1"}');
+    RC.applyBackgroundTool(st, 'BashOutput', '{"bash_id":"a1"}');
+    check('polling the same shell twice pays once', RC.backgroundOutstanding(st), 1);
+    RC.applyBackgroundTool(st, 'BashOutput', '{"bash_id":"a2"}');
+    check('a second shell pays the rest', RC.backgroundOutstanding(st), 0);
+  }
+  {
+    const st = RC.newBackgroundState();
+    RC.applyBackgroundTool(st, 'Bash', LAUNCH);
+    RC.applyBackgroundTool(st, 'BashOutput', '{}');
+    check('an unidentifiable harvest does not pay the debt', RC.backgroundOutstanding(st), 1);
+  }
+  {
+    const st = RC.newBackgroundState();
+    RC.applyBackgroundTool(st, 'Bash', JSON.stringify({ command: 'ls' }));
+    RC.applyBackgroundTool(st, 'Read', JSON.stringify({ file_path: '/repo/server.js' }));
+    RC.applyBackgroundTool(st, 'Write', JSON.stringify({ content: 'x' }));
+    check('ordinary tools move nothing', RC.backgroundOutstanding(st), 0);
+  }
+  check('a missing state is zero, not a throw', RC.backgroundOutstanding(undefined), 0);
+  check('applying to a missing state does not throw',
+    RC.applyBackgroundTool(null, 'Bash', '{"run_in_background":true}'), null);
 }
 
 console.log('\nthe nudge fires exactly on the gap the ladder leaves open:');

@@ -13,22 +13,33 @@
 //    phrases like "I'll check back" is dead on a French or Ukrainian install. A
 //    `Bash` call carrying `run_in_background` is the same JSON in every language.
 //
-//    LAUNCHES ARE COUNTED AGAINST HARVESTS, ACROSS THE WHOLE TURN. Three earlier
-//    shapes of this were wrong, each in a way the next one had to fix:
+//    THE DEBT IS INCREMENTAL AND TURN-LEVEL. Four earlier shapes were wrong, each
+//    in a way the next had to fix:
 //      - a one-way `bgLaunched` latch charged an extra run to every agent that
 //        OBEYED the system prompt (launch, collect, finish) — worse than the bug;
 //      - PER-RUN counters made the rescue run start from zero, so an agent that
-//        walked away a second time WITHOUT touching a tool reported `launches:0,
-//        harvests:0`, looked clean, and the turn said "Done" one run later —
-//        exactly the bug the bound was supposed to close;
-//      - raw CALL counts let two polls of one job (`BashOutput` twice, or a `Read`
-//        of a still-growing log) cancel a second, genuinely stranded launch.
-//    So the debt is a TURN-level count, and harvests are deduplicated by the shell
-//    id they name. Measured on CLI 2.1.231, a background launch answers "Output is
-//    being written to: <cwd-hash>/<uuid>/tasks/<id>.output" and the agent harvests
-//    by READING that file — `BashOutput` is not called at all — so the harvest side
-//    recognises that read, and takes the id out of the path.
+//        walked away a second time WITHOUT touching a tool reported nothing owed,
+//        looked clean, and the turn said "Done" one run later;
+//      - raw CALL counts let two polls of one job cancel a second, genuinely
+//        abandoned launch;
+//      - a BATCH total, `max(0, launches - harvests)`, BANKED a harvest that had no
+//        launch behind it. Reading a leftover `tasks/<id>.output` from an earlier
+//        turn — often the first thing a resumed session does — then launching a
+//        shell and walking away came out at zero owed. No rescue, no warning, Done.
+//    So a harvest decrements only a debt that already exists, and only once per
+//    shell id. A surplus harvest is DROPPED, never banked.
 //
+//    Measured on CLI 2.1.231, a background launch answers "Output is being written
+//    to: <cwd-hash>/<uuid>/tasks/<id>.output" and the agent harvests by READING that
+//    file — `BashOutput` is not called at all — so the harvest side recognises that
+//    read and takes the id out of the path.
+//
+// KNOWN LIMIT: a process backgrounded with shell syntax (`cmd &`, `nohup`, `tmux
+// new -d`) inside a FOREGROUND Bash call is not detected, and deliberately so —
+// telling `a && b`, `2>&1` and a trailing `&` apart needs a shell parser, and the
+// false positives would land on ordinary commands. That case is covered by the
+// system-prompt half (BACKGROUND_TASK_INSTRUCTION), which is stated in terms of
+// "anything that keeps running after the call returns" rather than one tool field.
 'use strict';
 
 /** One nudge per turn. A false positive costs exactly one short run. */
@@ -72,13 +83,14 @@ function isBackgroundLaunch(toolName, toolInput) {
   return typeof toolInput === 'string' && /"run_in_background"\s*:\s*true/.test(toolInput);
 }
 
-/** The shell id this tool call collects, `''` when it collects one whose id cannot be
- *  read, or null when it is not a harvest at all.
+/** The shell id this tool call collects, or null when it is not a harvest — or is
+ *  one whose id cannot be read.
  *
- *  The id is what makes repeated polling safe: two `BashOutput` calls on one job must
- *  count once, or they cancel a second launch that really was abandoned. `''` is a
- *  distinct return from null on purpose — the caller still owes that harvest a slot,
- *  it just cannot deduplicate it.
+ *  An unidentifiable harvest returns null ON PURPOSE, i.e. it does not pay down the
+ *  debt. `bash_id` is a required parameter of `BashOutput`, so this only happens on a
+ *  malformed or unparsed payload; crediting it would let two such calls cancel a
+ *  second launch that really was abandoned. The cost of not crediting it is one
+ *  short rescue run, which is the cheaper mistake.
  *
  *  `View` is accepted alongside `Read`: it is the name in this project's allowedTools
  *  lists, and an agent that used it would otherwise look like it collected nothing. */
@@ -87,7 +99,7 @@ function backgroundHarvestId(toolName, toolInput) {
   const o = v && typeof v === 'object' ? v : null;
   if (toolName === 'BashOutput' || toolName === 'KillShell') {
     const id = o && (o.bash_id || o.shell_id);
-    return typeof id === 'string' && id ? id : '';
+    return typeof id === 'string' && id ? id : null;
   }
   if (toolName !== 'Read' && toolName !== 'View') return null;
   const p = o ? (o.file_path || o.path) : null;
@@ -96,11 +108,33 @@ function backgroundHarvestId(toolName, toolInput) {
   return m ? m[1] : null;
 }
 
-/** How many background tasks this TURN has started and not collected.
- *  Clamped at zero: a harvest with no matching launch (a poll of something started
- *  in an earlier turn) must not drive the debt negative and mask a later launch. */
-function backgroundOutstanding({ launches = 0, harvests = 0 } = {}) {
-  return Math.max(0, launches - harvests);
+/** The turn's background bookkeeping. `debt` is what has been launched and not
+ *  collected; `seen` are the shell ids already credited, so repeated polling of one
+ *  job pays the debt down once rather than once per call. */
+function newBackgroundState() {
+  return { debt: 0, seen: new Set() };
+}
+
+/** Fold one tool call into the turn's state. The whole rule lives here rather than
+ *  in the two run loops: an open-coded copy is how a `''`/null distinction or an
+ *  unbanked-surplus rule silently drifts between the local and the remote path.
+ *  Returns the state, mutated. */
+function applyBackgroundTool(state, toolName, toolInput) {
+  if (!state) return state;
+  if (isBackgroundLaunch(toolName, toolInput)) { state.debt++; return state; }
+  const id = backgroundHarvestId(toolName, toolInput);
+  if (id === null) return state;
+  if (state.seen.has(id)) return state;
+  state.seen.add(id);
+  // Decrement only an EXISTING debt. A harvest with nothing behind it — a read of an
+  // earlier turn's log — is dropped, so it cannot pay for a launch that comes later.
+  if (state.debt > 0) state.debt--;
+  return state;
+}
+
+/** How many background tasks this turn started and never collected. */
+function backgroundOutstanding(state) {
+  return state && Number.isFinite(state.debt) ? Math.max(0, state.debt) : 0;
 }
 
 /** Should the loop spend one more run harvesting a background task?
@@ -161,6 +195,8 @@ module.exports = {
   BG_OUTPUT_PATH_RE,
   isBackgroundLaunch,
   backgroundHarvestId,
+  newBackgroundState,
+  applyBackgroundTool,
   backgroundOutstanding,
   shouldNudgeBackgroundWait,
   describeStrandedBackgroundTask,

@@ -38,17 +38,17 @@ function loadOnTool() {
   assert.notStrictEqual(close, -1, 'end of the onTool handler not found');
   const arrow = src.slice(open + 1, close + '\n      }'.length);
   assert.ok(/^\(\s*name\s*,\s*inp\s*\)\s*=>/.test(arrow), `unexpected handler signature: ${arrow.slice(0, 40)}`);
-  // The handler's closure references: the real module plus the three turn-level
-  // background counters it accumulates into. Passed as parameters rather than
-  // stubbed away, so this test keeps exercising the real module.
-  return new Function('ws', 'stmts', 'sessionId', 'tabId', 'runContinuation', 'bgLaunches', 'bgHarvestIds', 'bgAnonHarvests', `return (${arrow});`);
+  // The handler's closure references: the real module plus the turn-level background
+  // state it folds each tool call into. Passed as parameters rather than stubbed away,
+  // so this test keeps exercising the real module.
+  return new Function('ws', 'stmts', 'sessionId', 'tabId', 'runContinuation', 'bgState', `return (${arrow});`);
 }
 
 function run(toolName, input) {
   const sent = [], rows = [];
   const ws = { send: s => sent.push(JSON.parse(s)) };
   const stmts = { addMsg: { run: (...a) => rows.push(a) } };
-  loadOnTool()(ws, stmts, 42, null, require('../run-continuation'), 0, new Set(), 0)(toolName, input);
+  loadOnTool()(ws, stmts, 42, null, require('../run-continuation'), require('../run-continuation').newBackgroundState())(toolName, input);
   return { sent, rows };
 }
 

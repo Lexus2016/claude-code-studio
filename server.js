@@ -3480,15 +3480,12 @@ async function runCliSingle(p) {
   // Background-harvest runs spent this turn (issue: "waiting for a background task"
   // that nothing ever resumes). Capped by run-continuation.MAX_BACKGROUND_NUDGES.
   let bgNudges = 0;
-  // TURN-level debt, deliberately not per-run. A rescue run that answers in text and
+  // TURN-level, deliberately not per-run. A rescue run that answers in text and
   // touches no tool has no counts of its own; if the debt lived inside runOnce it
   // would reset to zero there and the turn would claim success — the original bug,
-  // one run later. Harvests are a Set of shell ids so repeated polling of one job
-  // cannot cancel a second launch that really was abandoned.
-  let bgLaunches = 0;
-  const bgHarvestIds = new Set();
-  let bgAnonHarvests = 0;
-  const bgOutstanding = () => runContinuation.backgroundOutstanding({ launches: bgLaunches, harvests: bgHarvestIds.size + bgAnonHarvests });
+  // one run later. The rule itself lives in run-continuation.js so the local and
+  // remote loops cannot drift apart.
+  const bgState = runContinuation.newBackgroundState();
   // Usage of the most recent assistant turn (real context-window occupancy at the
   // end). Persists across auto-continue iterations; the last write wins.
   let lastTurnUsage = null;
@@ -3539,8 +3536,7 @@ async function runCliSingle(p) {
       .onTool((name, inp) => {
         // Before the MCP early-return: a background launch is a fact about the run,
         // not about how this particular tool is rendered.
-        if (runContinuation.isBackgroundLaunch(name, inp)) bgLaunches++;
-        else { const _h = runContinuation.backgroundHarvestId(name, inp); if (_h) bgHarvestIds.add(_h); else if (_h === '') bgAnonHarvests++; }
+        runContinuation.applyBackgroundTool(bgState, name, inp);
         if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state' || name === 'check_user_messages') {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
           return;
@@ -3649,7 +3645,7 @@ async function runCliSingle(p) {
     // the CLI process exits and takes the background shell with it. Spend one run
     // collecting it instead of printing "✅ Done" over work that did not happen.
     if (runContinuation.shouldNudgeBackgroundWait({
-      subtype: resultData?.subtype, outstanding: bgOutstanding(),
+      subtype: resultData?.subtype, outstanding: runContinuation.backgroundOutstanding(bgState),
       nudges: bgNudges, aborted: !!abortController?.signal?.aborted,
     })) {
       bgNudges++;
@@ -3666,9 +3662,9 @@ async function runCliSingle(p) {
     // ✅ Success — agent finished naturally, unless it left a background task behind
     // that even the harvest run did not collect. Saying "Done" there is the bug.
     if (resultData?.subtype === 'success') {
-      const _stranded = runContinuation.describeStrandedBackgroundTask({ outstanding: bgOutstanding(), nudges: bgNudges });
+      const _stranded = runContinuation.describeStrandedBackgroundTask({ outstanding: runContinuation.backgroundOutstanding(bgState), nudges: bgNudges });
       if (_stranded) {
-        log.warn('background-task-stranded', { sessionId, launches: bgLaunches, harvests: bgHarvestIds.size + bgAnonHarvests });
+        log.warn('background-task-stranded', { sessionId, outstanding: runContinuation.backgroundOutstanding(bgState), collected: bgState.seen.size });
         const notice = `\n\n---\n\u26a0\ufe0f **Unfinished background work** \u2014 ${_stranded}\n`;
         fullText += notice;
         { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
@@ -3880,10 +3876,7 @@ async function runSshSingle(p) {
   // See the CLI loop: one run may be spent harvesting a stranded background task,
   // and the debt is TURN-level so a text-only rescue run cannot reset it.
   let bgNudges = 0;
-  let bgLaunches = 0;
-  const bgHarvestIds = new Set();
-  let bgAnonHarvests = 0;
-  const bgOutstanding = () => runContinuation.backgroundOutstanding({ launches: bgLaunches, harvests: bgHarvestIds.size + bgAnonHarvests });
+  const bgState = runContinuation.newBackgroundState();
   // Usage of the most recent assistant turn (real context-window occupancy at the end).
   let lastTurnUsage = null;
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
@@ -3910,8 +3903,7 @@ async function runSshSingle(p) {
       })
       .onThinking(t => { fullThinking += t; log.info('[THINKING-DIAG-SSH] onThinking fired', { len: t.length, totalLen: fullThinking.length, sessionId }); ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
       .onTool((name, inp) => {
-        if (runContinuation.isBackgroundLaunch(name, inp)) bgLaunches++;
-        else { const _h = runContinuation.backgroundHarvestId(name, inp); if (_h) bgHarvestIds.add(_h); else if (_h === '') bgAnonHarvests++; }
+        runContinuation.applyBackgroundTool(bgState, name, inp);
         if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state' || name === 'check_user_messages') {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
           return;
@@ -3993,7 +3985,7 @@ async function runSshSingle(p) {
     // finished, whatever the subtype says. Nothing on the remote host resumes it —
     // the `claude -p` process is gone and the background shell with it.
     if (runContinuation.shouldNudgeBackgroundWait({
-      subtype: resultData?.subtype, outstanding: bgOutstanding(),
+      subtype: resultData?.subtype, outstanding: runContinuation.backgroundOutstanding(bgState),
       nudges: bgNudges, aborted: !!abortController?.signal?.aborted,
     })) {
       bgNudges++;
@@ -4008,9 +4000,9 @@ async function runSshSingle(p) {
     }
 
     if (resultData?.subtype === 'success') {
-      const _stranded = runContinuation.describeStrandedBackgroundTask({ outstanding: bgOutstanding(), nudges: bgNudges });
+      const _stranded = runContinuation.describeStrandedBackgroundTask({ outstanding: runContinuation.backgroundOutstanding(bgState), nudges: bgNudges });
       if (_stranded) {
-        log.warn('ssh-background-task-stranded', { sessionId, launches: bgLaunches, harvests: bgHarvestIds.size + bgAnonHarvests });
+        log.warn('ssh-background-task-stranded', { sessionId, outstanding: runContinuation.backgroundOutstanding(bgState), collected: bgState.seen.size });
         const notice = `\n\n---\n\u26a0\ufe0f **Unfinished background work** \u2014 ${_stranded}\n`;
         fullText += notice;
         { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
