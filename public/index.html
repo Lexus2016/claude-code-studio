@@ -4317,7 +4317,7 @@ let openTabs = [], activeTabId = null;
 let interruptSendMode = 'interrupt'; // 'interrupt' = clarify current task, 'queue' = new task in queue
 const tabState = {}; // per-tab: { curEl, curTxt, currentSessionId, generating, draft, agentStatus, _toolCounts, _toolLog, turnBots, turnStates }
 function getTS(id) {
-  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', _thinkingTxt: '', currentSessionId: null, generating: false, draft: '', attachments: [], replyTo: null, agentStatus: '', _toolCounts: {}, _toolLog: [], turnBots: [], turnStates: {} };
+  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', curAgent: null, _thinkingTxt: '', currentSessionId: null, generating: false, draft: '', attachments: [], replyTo: null, agentStatus: '', _toolCounts: {}, _toolLog: [], turnBots: [], turnStates: {} };
   return tabState[id];
 }
 
@@ -4407,12 +4407,22 @@ const streaming = {
   set toolCounts(v) { getTS(activeTabId)._toolCounts = v; },
   get toolLog() { return getTS(activeTabId)._toolLog; },
   set toolLog(v) { getTS(activeTabId)._toolLog = v; },
+  // Which bot (agent_id) is speaking in the CURRENT tab's live bubble, used by
+  // _maybeFinalizeAgentSwitch to detect a change of speaker in a multi-bot
+  // "conversation room". Per-tab for the same reason el/txt/toolLog are: without
+  // this, switching tabs clobbers the one shared value, so returning to a tab where
+  // a bot is still mid-turn reads a DIFFERENT tab's last speaker and is misread as a
+  // speaker change — the live bubble is wrongly finalized/orphaned (headerless, since
+  // it never got an addAgentBadge) and a second, correctly-badged bubble is created
+  // right after for the same bot's next chunk.
+  get agent() { return getTS(activeTabId).curAgent; },
+  set agent(v) { getTS(activeTabId).curAgent = v; },
   reset() {
     const s = getTS(activeTabId);
     _cancelStreamRender(activeTabId); // no queued repaint may outlive the bubble it targets
     // Clean orphaned spinner before clearing ref (bypasses setter)
     if (s.curEl) { const f = s.curEl.querySelector('.msg-status-footer.state-streaming'); if (f) f.remove(); }
-    s.curEl = null; s.curTxt = ''; s._thinkingTxt = ''; s._toolCounts = {}; s._toolLog = []; s._hadTool = false;
+    s.curEl = null; s.curTxt = ''; s._thinkingTxt = ''; s._toolCounts = {}; s._toolLog = []; s._hadTool = false; s.curAgent = null;
   },
 };
 let config = { mcpServers: {}, skills: {} };
@@ -7385,6 +7395,27 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+// catchUp is a full-buffer replay after a WS reconnect (e.g. returning to a tab
+// mid-turn) and never carries `agent`. Treating that absence as "speaker switched to
+// none" would finalize a bubble that was correctly restored moments earlier (visible
+// tab) or erase the speaker a background tab already had tracked (background tab) —
+// in both cases producing the "bubble vanishes, an unfamiliar one takes its place"
+// symptom this file's tests are named after.
+function _isCatchUpNoAgent(d) {
+  return !!(d.catchUp && !d.agent);
+}
+
+// Shared by the visible-tab handler and its regression test, so the test exercises
+// the real guarded sequence instead of re-typing it. `ensureBubble` runs BETWEEN the
+// finalize and the agent assignment — same position as the visible branch's own
+// bubble-creation line — so a caller with no bubble step (the test) can pass none.
+function _applyAgentSwitch(d, ensureBubble) {
+  const skip = _isCatchUpNoAgent(d);
+  if (!skip) _maybeFinalizeAgentSwitch(d);
+  if (ensureBubble) ensureBubble();
+  if (!skip) streaming.agent = d.agent || null;
+}
+
 // A turn normally streams into ONE bubble. Bots break that assumption: several
 // answer in the same turn, one after another, and merging them would leave the
 // reader unable to tell who said what. So when the speaker changes and either
@@ -7480,12 +7511,20 @@ function handleWsMsg(d) {
           ts._hadTool = false;
         }
         ts.curTxt = d.catchUp ? d.text : (ts.curTxt || '') + d.text;
+        // Same catchUp-has-no-agent case as the visible branch below: don't let a
+        // reconnect replay for a tab that went background mid-flight erase the speaker
+        // it already tracked.
+        if (!_isCatchUpNoAgent(d)) ts.curAgent = d.agent || null; // which bot is speaking — needed to restore the badge on tab switch
         break;
       }
       rmStatus();
-      _maybeFinalizeAgentSwitch(d);
-      if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
-      streaming.agent = d.agent || null;
+      // catchUp is a full-buffer replay after a WS reconnect (e.g. returning to a tab
+      // mid-turn) and never carries `agent` — treating its absence as "speaker switched
+      // to none" would finalize the bubble _maybeFinalizeAgentSwitch/loadSess just
+      // restored and immediately re-open a fresh, unlabeled one under it.
+      _applyAgentSwitch(d, () => {
+        if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
+      });
       // Ensure paragraph break between text blocks separated by tool calls
       if (!d.catchUp && streaming.txt && getTS(tabId)._hadTool) {
         if (!streaming.txt.endsWith('\n\n') && !d.text.startsWith('\n')) {
@@ -7524,6 +7563,7 @@ function handleWsMsg(d) {
         // Background tab — accumulate tool log for restoration on tab switch
         const ts = getTS(tabId); if (!ts._toolLog) ts._toolLog = [];
         ts._toolLog.push({ tool: d.tool || 'tool', brief: _toolInputBrief(d.tool, d.input), input: d.input || '' });
+        ts.curAgent = d.agent || null; // which bot is speaking — needed to restore the badge on tab switch
       }
       break;
 
@@ -7772,6 +7812,7 @@ function handleWsMsg(d) {
         streaming.txt = '';
         streaming.toolCounts = {};
         streaming.toolLog = [];
+        streaming.agent = null; // stale speaker must not survive into the next turn's bubble
       } else {
         // Only clear global streaming state if the done event is for the currently
         // generating tab. Without this guard, a done event from a background tab
@@ -7780,6 +7821,7 @@ function handleWsMsg(d) {
         if (tabId === generatingTabId) {
           streaming.el = null; streaming.txt = '';
           streaming.toolCounts = {}; streaming.toolLog = [];
+          streaming.agent = null;
         }
         // Clear retry badge on successful completion (only for visible messages area)
         if (tabId === activeTabId) {
@@ -7822,7 +7864,7 @@ function handleWsMsg(d) {
         });
       }
       // For background tabs: clear saved streaming text (message is now persisted to DB)
-      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; } }
+      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; ts.curAgent = null; } }
       if (found?.tab) { found.tab.generating = false; found.tab.done = true; }
       if (isCurrent) { renderTabs(); if ((tabId === activeTabId || tabId === generatingTabId) && !d.taskId) generatingTabId = null; }
       else renderProjects(); // background: remove busy dot from project
@@ -7860,6 +7902,7 @@ function handleWsMsg(d) {
       // Reset streaming state for fresh start
       streaming.el = null; streaming.txt = '';
       streaming.toolCounts = {}; streaming.toolLog = [];
+      streaming.agent = null; // the restarted turn has no speaker yet — don't carry the old one over
       isGen = false;
       setSendStop(false);
       // Clear the per-tab busy state too, the same way `done` does. Restart is reached
@@ -7974,7 +8017,7 @@ function handleWsMsg(d) {
       }
       // For background tabs: clear saved streaming text on error
       if (!isVisible) {
-        const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; }
+        const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; ts.curAgent = null; }
         _bgNotify(tabId, found, 'error', t('notif.bg_error'), d.error);
       }
       if (found?.tab) { found.tab.generating = false; }
@@ -12730,6 +12773,7 @@ async function loadSess(id) {
     const _bgTxt = tabState[id]?.curTxt || '';
     const _bgToolLog = tabState[id]?._toolLog ? tabState[id]._toolLog.slice() : null;
     const _bgToolCounts = tabState[id]?._toolCounts ? {...tabState[id]._toolCounts} : null;
+    const _bgAgent = tabState[id]?.curAgent || null;
     streaming.el = null; streaming.txt = ''; streaming.toolCounts = {}; streaming.toolLog = []; // Reset streaming state — stale refs cleared
     msgsEl.removeAttribute('aria-live'); // Suppress screen reader flood during batch history load
     msgsEl.innerHTML = '';
@@ -12895,6 +12939,8 @@ async function loadSess(id) {
       _cancelStreamRender(id); // fresh bubble — drop anything queued against the old one
       streaming.el = addMsg('assistant');
       streaming.txt = _bgTxt || '';
+      streaming.agent = _bgAgent; // same bot identity the background chunks carried — keeps
+      if (_bgAgent) addAgentBadge(streaming.el, _bgAgent); // _maybeFinalizeAgentSwitch from misfiring on the next chunk
       addSpinner(streaming.el); // restored run starts a fresh 0:00 — original start time is not persisted (live "is-working" feedback, not audited duration)
       if (_bgTxt) streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
       // Restore live tool activity panel even if there's no text yet (tools-only phase)
