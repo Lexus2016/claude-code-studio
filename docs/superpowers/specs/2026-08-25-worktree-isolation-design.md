@@ -1,6 +1,6 @@
 # Worktree isolation — design spec
 
-Status: approved, implementing now (2026-08-25)
+Status: implemented and verified (2026-08-25) — branch `worktree-worktree-isolation`
 
 ## Problem
 
@@ -39,7 +39,12 @@ in.
   the exact hazard this feature removes.
 - Project has no `.git` → auto `git init` + an initial commit (worktrees
   need an existing ref to branch from) the first time a session is created
-  against it.
+  against it. If the project has no `.gitignore` of its own at that point,
+  one is auto-written first (`node_modules/`, `.env`, `.env.*` with a
+  `!.env.example` exception, `.DS_Store`) so the bootstrap `git add -A`
+  cannot commit secrets or dependency trees into history on its first run.
+  A project that already tracks history, or already has its own
+  `.gitignore`, is left untouched either way.
 
 ### Dependency isolation
 
@@ -69,7 +74,13 @@ WebSocket channel alongside `done`:
 | green  | on the project's default branch       | none (nothing to do)   |
 | amber  | session branch, clean, not merged     | Merge                  |
 | red    | session branch, uncommitted changes   | Commit                 |
-| purple | merge conflict (`MERGE_HEAD` present) | view conflict / resolve|
+| purple | last merge attempt conflicted         | view conflict / resolve|
+
+Purple is a **stored** `git_conflict` flag on the session/task row, not a
+live `MERGE_HEAD` check — `mergeBranch()` always runs `git merge --abort` on
+failure, so the shared root's `MERGE_HEAD` never persists for another
+session to trip over. The flag is set on a failed merge and cleared on the
+next successful one.
 
 Recomputed on session open and after every turn — not only per-turn, so a
 tab reopened later still shows the true state.
