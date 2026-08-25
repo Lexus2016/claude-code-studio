@@ -2096,7 +2096,24 @@ async function startTask(task) {
             let _mergeConflict = false;
             if (task.git_root && task.git_branch) {
               try {
+                // Auto-commit any edits the task left uncommitted before merging.
+                // mergeBranch() only merges already-committed history, and nothing
+                // forces the claude subprocess to `git commit` as its last action —
+                // without this, an ordinary task run would have its own edits
+                // silently destroyed by the removeWorktree() below. Only commit if
+                // the worktree is still actually on the task's own branch — a stray
+                // `git checkout` inside the task (or a detached HEAD, which reports
+                // '' from `branch --show-current`) would otherwise commit real work
+                // onto the wrong ref, or silently no-op into limbo.
                 const _defaultBranch = WM.getDefaultBranch(task.git_root);
+                if (task.workdir) {
+                  const _wtStatus = WM.getStatus({ worktreeDir: task.workdir, defaultBranch: _defaultBranch });
+                  if (_wtStatus.branch === task.git_branch) {
+                    WM.commitAll({ worktreeDir: task.workdir, message: `Auto-commit: task ${task.id} completion` });
+                  } else {
+                    log.warn('[taskWorker] worktree not on expected branch, skipping auto-commit', { taskId: task.id, expected: task.git_branch, actual: _wtStatus.branch });
+                  }
+                }
                 const _merge = await WM.mergeBranch({ projectDir: task.git_root, defaultBranch: _defaultBranch, branch: task.git_branch });
                 _mergeConflict = !_merge.ok;
               } catch (e) {
@@ -2110,13 +2127,14 @@ async function startTask(task) {
                 .run(task.id);
               log.warn(`[taskWorker] task ${task.id}: merge conflict — cancelled instead of done, not retried`);
             } else {
+              stmts.setTaskGitConflict.run(0, task.id);
               db.prepare(`UPDATE tasks SET status='done', failure_reason=NULL, usage_limit_pauses=0, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
                 .run(task.id);
               // Merged cleanly — the branch's commits now live on the default branch,
               // so the worktree/branch pair is safe to remove. On conflict, leave both
               // in place: removeWorktree also deletes the branch, which would strand
               // the unmerged commits with no ref pointing at them.
-              if (task.git_root && task.workdir) {
+              if (task.git_root && task.workdir && task.git_branch) {
                 try { WM.removeWorktree({ projectDir: task.git_root, worktreeDir: task.workdir, branch: task.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed after task auto-merge', { taskId: task.id, err: e.message }); }
               }
             }

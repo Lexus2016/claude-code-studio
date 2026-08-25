@@ -113,8 +113,15 @@ function _listWorktrees(projectDir) {
  * the same unit — e.g. after a server restart with the row already in SQLite.
  */
 function ensureWorktree({ projectDir, worktreeDir, branch }) {
+  // Must also confirm the directory is still on disk with a real `.git` link
+  // — git's own registration survives an out-of-band removal (independent
+  // Docker volume reset/restore, manual cleanup, disk pruning) and reports it
+  // as merely 'prunable', which would otherwise short-circuit this function
+  // into returning a workdir that does not exist (or, after a restore that
+  // recreates an empty directory at the same path, one that is not actually a
+  // usable worktree), permanently stranding the session/task.
   const existing = _listWorktrees(projectDir).find(w => _real(w.worktree) === _real(worktreeDir));
-  if (existing) return { created: false, path: worktreeDir, branch: existing.branch || branch };
+  if (existing && fs.existsSync(path.join(worktreeDir, '.git'))) return { created: false, path: worktreeDir, branch: existing.branch || branch };
 
   // A directory can be left on disk without git's own registration (crash
   // between mkdir and `worktree add`, or a stale entry after manual cleanup)
