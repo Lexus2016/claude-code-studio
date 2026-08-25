@@ -25,6 +25,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { TMUX_PREFIX, resolveState } = require('./terminal-session');
+const composite = require('./tmux-composite');
 
 // tmux negotiates UTF-8 support for the control-mode client (and for the server on
 // first `new-session`) from LANG/LC_ALL at process start via setlocale(). Neither the
@@ -72,6 +73,12 @@ function tmuxArgs(args) { return ['-L', TMUX_SOCKET, ...args]; }
 // for the measurement these numbers come from.
 const LAUNCH_GRACE_MS = 300;
 const LAUNCH_POLL_MS = 20;
+
+// How long a composited frame waits for more pane output before it is drawn. A Claude
+// TUI repaints for every spinner tick, and five teammates doing that at once would ask
+// for a recapture ~50 times a second; at 60 ms the browser still sees a live picture
+// and the frames stay coalesced. Overridable so a test does not have to sleep.
+const COMPOSITE_FRAME_MS = parseInt(process.env.CCS_TMUX_FRAME_MS, 10) || 60;
 
 // ensureSession() is synchronous and its callers depend on that, so the poll above
 // cannot await. Atomics.wait on a throwaway buffer blocks the thread without burning
@@ -270,30 +277,153 @@ function attach({ name, cols, rows, onData, onExit, onGeometry, resizeOnAttach =
   const p = spawn('tmux', tmuxArgs(['-C', 'attach-session', '-t', name]), { env, stdio: ['pipe', 'pipe', 'pipe'] });
 
   let booted = false;
+  // Declared up here, not next to fireExit below, because sendCmd and the compositor
+  // both read it and JS would give them a temporal-dead-zone throw instead of `false`.
+  let exited = false;
   const emit = (buf) => { if (!buf || !buf.length) return; try { onData(buf); } catch {} };
 
-  // WHICH PANE THIS VIEWER MIRRORS.
-  // A control client receives %output for EVERY pane in the session — verified: one
-  // client, two panes, both payloads delivered. This module used to strip the pane id
-  // and emit them all into the single browser terminal, so once Claude Code's
-  // agent-teams split the window (one pane per teammate) four TUIs were writing into
-  // one screen buffer, each addressing coordinates that belong to its own pane.
-  // Everything else here targets `-t <session>`, which tmux resolves to the ACTIVE
-  // pane, so that is the one pane the viewer represents.
-  // PINNED at attach, deliberately never updated. Splitting a window makes the NEW pane
-  // active, so following the active pane would silently move the viewer onto the teammate
-  // that agent-teams just spawned — the user opened THIS agent and must keep seeing it.
-  const mirroredPane = paneActiveId(name);
-  const refreshGeometry = () => {
-    if (!onGeometry) return;
-    const g = mirroredPane ? paneGeometry(mirroredPane) : paneSize(name);
-    try { onGeometry({ cols: g.cols, rows: g.rows, panes: paneCount(name) }); } catch {}
+  // ── Control-mode command channel ───────────────────────────────────────────
+  // Every command written to a control client is answered with a `%begin <t> <num>
+  // <flags>` … `%end <t> <num> <flags>` block, and the blocks come back in the order
+  // the commands were sent. That is what lets the compositor below ask tmux for a
+  // pane's contents without spawning a process per frame (measured: ~15 ms and a fork
+  // for every spawnSync capture-pane, times one per pane per frame).
+  //
+  // Two rules, both load-bearing:
+  //  * EVERY write goes through sendCmd, including send-keys and refresh-client, or the
+  //    FIFO drifts and a capture reply gets handed to the wrong waiter.
+  //  * the block closes on the `%end` carrying the SAME command number, never on any
+  //    line that starts with `%end`. Pane CONTENT is inside the block, and a pane that
+  //    happens to be showing the text `%end 1 2 3` — this repository's own test output
+  //    does — would otherwise truncate the capture and blank half the screen.
+  let reply = null;                 // {num, lines, waiter} while inside a %begin block
+  const waiters = [];               // FIFO, one entry per command written
+  // A write to a control client that has just died raises EPIPE ASYNCHRONOUSLY, as an
+  // 'error' event on the stream — a try/catch around the write does not see it, and an
+  // unhandled 'error' on a stream is an uncaughtException, i.e. the whole studio
+  // process. Rare while the only writes were keystrokes; routine now that the
+  // compositor writes a command per frame, and it crashed a probe run on the first try.
+  p.stdin.on('error', () => {});
+  // Nothing reads stderr, and an unread pipe that fills blocks the writer — tmux would
+  // stall rather than report whatever it was trying to say.
+  try { p.stderr.resume(); } catch {}
+  const sendCmd = (line, waiter = null) => {
+    if (exited || !p.stdin.writable) { if (waiter) { try { waiter(null); } catch {} } return; }
+    waiters.push(waiter);
+    try { p.stdin.write(line.endsWith('\n') ? line : line + '\n'); }
+    catch { waiters.pop(); if (waiter) { try { waiter(null); } catch {} } }
+  };
+  const cmd = (line) => new Promise((resolve) => sendCmd(line, resolve));
+
+  // ── Composite renderer for a SPLIT window ──────────────────────────────────
+  // See tmux-composite.js for why merging raw %output is not an option.
+  let panes = [];                   // current layout
+  let win = { cols, rows };
+  let mirroredPane = '';            // the pane raw streaming mirrors when NOT compositing
+  let compositing = false;
+  const dirty = new Set();
+  let prevRows = new Map();
+  let painting = false, repaintTimer = null, wantFull = false;
+
+  const readLayout = async () => {
+    const rows_ = await cmd(`list-panes -t ${name} -F "${composite.PANE_FORMAT}"`);
+    const info = await cmd(`display-message -p -t ${name} "#{window_width}|#{window_height}"`);
+    if (Array.isArray(rows_)) {
+      const parsed = composite.parsePaneList(rows_);
+      if (parsed.length) panes = parsed;
+    }
+    if (Array.isArray(info) && info[0]) {
+      const [c, r] = String(info[0]).split('|');
+      const cc = parseInt(c, 10), rr = parseInt(r, 10);
+      if (Number.isFinite(cc) && Number.isFinite(rr)) win = { cols: cc, rows: rr };
+    }
+    const prim = composite.primaryPane(panes);
+    // Re-pinned on every layout read, and it must be: `mirroredPane` used to be the
+    // ACTIVE pane sampled once at attach, so a reconnect into an already-split window
+    // silently moved the viewer onto the last teammate agent-teams had spawned.
+    if (prim) mirroredPane = prim.id;
+    return panes;
+  };
+
+  const cursorOf = async (paneId) => {
+    const r = await cmd(`display-message -p -t ${paneId} "#{cursor_x}|#{cursor_y}|#{cursor_flag}"`);
+    if (!Array.isArray(r) || !r[0]) return null;
+    const [x, y, flag] = String(r[0]).split('|');
+    return { pane: paneId, x: parseInt(x, 10), y: parseInt(y, 10), visible: flag !== '0' };
+  };
+
+  // Coalesced: a five-pane window with every teammate spinning would otherwise ask for
+  // a repaint on every %output line.
+  const scheduleRepaint = (full = false) => {
+    wantFull = wantFull || full;
+    if (repaintTimer || painting) return;
+    repaintTimer = setTimeout(() => { repaintTimer = null; repaint(); }, COMPOSITE_FRAME_MS);
+    if (repaintTimer.unref) repaintTimer.unref();
+  };
+
+  async function repaint() {
+    if (painting || exited || !compositing) return;
+    painting = true;
+    const full = wantFull; wantFull = false;
+    try {
+      if (full) await readLayout();
+      const targets = full ? panes : panes.filter(p => dirty.has(p.id));
+      dirty.clear();
+      if (!targets.length && !full) return;
+      const captures = new Map();
+      for (const p of targets) {
+        const lines = await cmd(`capture-pane -e -p -t ${p.id}`);
+        if (Array.isArray(lines)) captures.set(p.id, lines);
+      }
+      const active = panes.find(p => p.active) || composite.primaryPane(panes);
+      const cursor = active ? await cursorOf(active.id) : null;
+      if (exited || !compositing) return;
+      const { data, prev } = composite.buildFrame({ panes, win, captures, prev: prevRows, cursor, full });
+      prevRows = prev;
+      if (data) emit(Buffer.from(data, 'utf8'));
+    } catch { /* a repaint that fails is a dropped frame, not a dead viewer */ }
+    finally {
+      painting = false;
+      if (dirty.size || wantFull) scheduleRepaint();
+    }
+  }
+
+  // Enter/leave compositing. Leaving restores exactly the pre-split behaviour: raw
+  // %output for the one surviving pane, repainted once from a capture so the browser
+  // is not left holding a composited picture of a window that no longer exists.
+  const applyLayout = async (announce = true) => {
+    await readLayout();
+    const split = panes.length > 1;
+    if (split && !compositing) { compositing = true; prevRows = new Map(); wantFull = true; }
+    else if (!split && compositing) {
+      compositing = false; prevRows = new Map();
+      const screen = captureScreen(name);
+      const cur = cursorSeq(name);
+      if (screen) emit(Buffer.concat([Buffer.from('\x1b[H\x1b[2J', 'latin1'), screen, cur || Buffer.alloc(0)]));
+    }
+    if (announce && onGeometry) {
+      // The WINDOW, not the pane. The browser sizes its xterm to this and the composed
+      // frame is addressed in window coordinates; handing it a pane size is what made a
+      // split window render as a 46-column strip with the rest of the screen black.
+      try { onGeometry({ cols: win.cols, rows: win.rows, panes: panes.length, composited: compositing }); } catch {}
+    }
+    if (compositing) scheduleRepaint(true);
   };
   // A dying session reports twice — once as a `%…-closed`/`%exit` notification and
   // again when the control client process exits. Callers close a WebSocket in this
   // handler, so it must fire at most once.
-  let exited = false;
-  const fireExit = () => { if (exited) return; exited = true; try { onExit(); } catch {} };
+  const fireExit = () => {
+    if (exited) return;
+    exited = true;
+    // A pending repaint would fire against a dead control client and, worse, keep the
+    // process alive; a pending `cmd()` await would never settle and leak its closure.
+    compositing = false;
+    if (repaintTimer) { clearTimeout(repaintTimer); repaintTimer = null; }
+    while (waiters.length) { const w = waiters.shift(); if (w) { try { w(null); } catch {} } }
+    if (reply && reply.waiter) { try { reply.waiter(null); } catch {} }
+    reply = null;
+    try { onExit(); } catch {}
+  };
 
   // Line assembly: a tmux notification can be split across chunk boundaries, and
   // several can arrive in one chunk. Accumulate raw bytes and cut on LF only.
@@ -302,17 +432,43 @@ function attach({ name, cols, rows, onData, onExit, onGeometry, resizeOnAttach =
     buf = Buffer.concat([buf, chunk]);
     let nl;
     while ((nl = buf.indexOf(0x0a)) !== -1) {
+      // latin1, NOT utf8: decodeOutputPayload() below reads the payload back with
+      // `charCodeAt(i) & 0xff`, i.e. one JS char per BYTE. A utf8 decode here would
+      // turn any raw high byte into U+FFFD and the mask would emit 0xFD. Reply bodies
+      // (which really are utf8 — pane text, titles) are converted back where they are
+      // collected, a few lines down.
       const line = buf.subarray(0, nl).toString('latin1').replace(/\r$/, '');
       buf = buf.subarray(nl + 1);
+      // Inside a command reply, EVERYTHING is reply body until the `%end`/`%error`
+      // carrying this block's own command number. See the note on sendCmd: pane text
+      // that looks like a notification must not be able to close the block early.
+      if (reply) {
+        const m = /^%(end|error) \d+ (\d+) /.exec(line);
+        if (m && m[2] === reply.num) {
+          const w = reply.waiter; const body = m[1] === 'error' ? null : reply.lines;
+          reply = null;
+          if (w) { try { w(body); } catch {} }
+        } else {
+          reply.lines.push(Buffer.from(line, 'latin1').toString('utf8'));
+        }
+        continue;
+      }
+      const begin = /^%begin \d+ (\d+) /.exec(line);
+      if (begin) { reply = { num: begin[1], lines: [], waiter: waiters.length ? waiters.shift() : null }; continue; }
       if (line.startsWith('%output ')) {
         // `%output %<pane-id> <payload>` — split off exactly two fields; the
         // payload itself contains spaces and must not be tokenised.
         const rest = line.slice('%output '.length);
         const sp = rest.indexOf(' ');
         const pane = sp === -1 ? '' : rest.slice(0, sp);
-        // Only the pane this viewer mirrors. Without the filter, a split window
-        // interleaved every pane's escape sequences into one browser terminal.
-        if (booted && (!mirroredPane || pane === mirroredPane)) {
+        if (!booted) continue;
+        if (compositing) {
+          // The bytes themselves are unusable here — every pane addresses cursor
+          // positions local to itself — so they only mark the pane as needing a
+          // recapture. tmux-composite.js explains why.
+          if (pane) dirty.add(pane);
+          scheduleRepaint();
+        } else if (!mirroredPane || pane === mirroredPane) {
           emit(decodeOutputPayload(sp === -1 ? '' : rest.slice(sp + 1)));
         }
       } else if (line.startsWith('%exit')) {
@@ -324,10 +480,14 @@ function attach({ name, cols, rows, onData, onExit, onGeometry, resizeOnAttach =
         fireExit();
       } else if (line.startsWith('%layout-change')) {
         // Emitted on every split, kill-pane and layout change (confirmed against tmux
-        // 3.7b on an isolated socket). It is the only signal that the active pane's
-        // geometry moved under us — the browser must be told so it can fit its xterm
-        // to the pane, since a split window is never resized from here.
-        refreshGeometry();
+        // 3.7b on an isolated socket). It is the only signal that the window's shape
+        // moved under us, so it is what switches the compositor on and off.
+        if (booted) applyLayout();
+      } else if (line.startsWith('%window-pane-changed')) {
+        // The active pane moved. Nothing about the layout changed, but the composed
+        // frame highlights the active border and places the cursor inside it, so the
+        // picture is now one repaint out of date.
+        if (booted && compositing) scheduleRepaint(true);
       } else if (line.startsWith('%subscription-changed deadwatch ')) {
         // The agent process exiting under `remain-on-exit on` fires NO notification
         // at all — verified: the pane goes pane_dead=1 and the control client hears
@@ -351,7 +511,10 @@ function attach({ name, cols, rows, onData, onExit, onGeometry, resizeOnAttach =
     // parser. 512 bytes keeps every command line under ~1.6 KB.
     for (let i = 0; i < b.length; i += 512) {
       const hex = b.subarray(i, i + 512).toString('hex').replace(/(..)/g, '$1 ').trim();
-      try { p.stdin.write(`send-keys -t ${name} -H ${hex}\n`); } catch {}
+      // Through sendCmd, not p.stdin: send-keys is answered with a %begin/%end block
+      // like every other command, and a write that skipped the FIFO would hand that
+      // empty block to whichever capture-pane was waiting next.
+      sendCmd(`send-keys -t ${name} -H ${hex}`);
     }
   };
 
@@ -404,18 +567,33 @@ function attach({ name, cols, rows, onData, onExit, onGeometry, resizeOnAttach =
   // the pane instead of the other way round.
   if (resizeOnAttach) doResize(cols, rows);
   // Subscribe to the pane's liveness — see the %subscription-changed branch above.
-  try { p.stdin.write('refresh-client -B "deadwatch:%*:#{pane_dead}"\n'); } catch {}
+  sendCmd('refresh-client -B "deadwatch:%*:#{pane_dead}"');
   // Bootstrap once the client is registered: give tmux a moment to attach, then
   // paint the current screen and release everything buffered since.
   setTimeout(() => {
     if (exited) return;
-    const screen = captureScreen(name);   // synchronous — see the bootstrap note above
+    // Read the layout FIRST, synchronously: a viewer very often opens onto a window
+    // that agent-teams split minutes ago, and painting the single-pane snapshot before
+    // finding that out shows the wrong picture and then flashes.
+    const boot = paneLayout(name);
+    if (boot.length) panes = boot;
+    const bw = paneSize(name);
+    if (bw.cols && bw.rows) win = bw;
+    const bp = composite.primaryPane(panes);
+    if (bp) mirroredPane = bp.id;
     booted = true;                        // set in the same tick, before any data event
+    if (panes.length > 1) {
+      compositing = true; prevRows = new Map();
+      if (onGeometry) { try { onGeometry({ cols: win.cols, rows: win.rows, panes: panes.length, composited: true }); } catch {} }
+      scheduleRepaint(true);
+      return;
+    }
+    const screen = captureScreen(name);   // synchronous — see the bootstrap note above
     if (screen) {
       const cur = cursorSeq(name);
       emit(Buffer.concat([Buffer.from('\x1b[H\x1b[2J', 'latin1'), screen, cur || Buffer.alloc(0)]));
     }
-    refreshGeometry();   // the window may already be split when a viewer opens
+    if (onGeometry) { try { onGeometry({ cols: win.cols, rows: win.rows, panes: panes.length || 1, composited: false }); } catch {} }
   }, 150);
 
   return {
@@ -427,7 +605,11 @@ function attach({ name, cols, rows, onData, onExit, onGeometry, resizeOnAttach =
     // prove BOTH exit reports have had their chance before asserting onExit fired
     // exactly once). Nothing in the server writes to it.
     pid: p.pid,
-    close() { try { p.kill('SIGTERM'); } catch {} },
+    close() {
+      if (repaintTimer) { clearTimeout(repaintTimer); repaintTimer = null; }
+      compositing = false;
+      try { p.kill('SIGTERM'); } catch {}
+    },
   };
 }
 
@@ -459,6 +641,16 @@ function paneCount(name) {
   if (r.status !== 0) return 2;
   const _n = String(r.stdout || '').split('\n').filter(Boolean).length;
   return _n || 2;
+}
+
+// The session's current pane layout, synchronously. attach() reads this once at
+// bootstrap (before its control-mode command channel is usable) and then keeps the
+// layout up to date over that channel instead of spawning a process per frame.
+function paneLayout(name) {
+  assertName(name);
+  const r = tmux(['list-panes', '-t', name, '-F', composite.PANE_FORMAT]);
+  if (r.status !== 0) return [];
+  return composite.parsePaneList(String(r.stdout || '').split('\n'));
 }
 
 // Freeze a session's geometry so an attaching client cannot resize it. tmux's default
@@ -503,6 +695,6 @@ function killSession(name) { tmux(['kill-session', '-t', name], { stdio: 'ignore
 module.exports = {
   TMUX_SOCKET, tmuxAvailable, hasSession, sessionInfo, paneHash, cursorSeq,
   listTerminalSessions, ensureSession, attach, detachClients,
-  setWindowSizeManual, paneSize, paneGeometry, paneCount, paneActiveId,
+  setWindowSizeManual, paneSize, paneGeometry, paneCount, paneActiveId, paneLayout,
   captureScreen, decodeOutputPayload, saveScrollback, killSession,
 };

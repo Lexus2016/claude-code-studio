@@ -18076,10 +18076,13 @@ function _connectTerminalWs(sessionId) {
       _fitEnginePaneFont(entry);
     } else if (msg.type === 'geometry') {
       // The window is split (agent-teams gives each teammate its own pane) or has just
-      // become whole again. A split window must never be resized from here — tmux
-      // redistributes panes on the way down AND up and never restores the layout — so
-      // the xterm is sized to the PANE and the font scaled to fill the space, exactly
-      // as the engine-pane viewer already does.
+      // become whole again. `cols`/`rows` are the WINDOW's — the server composites every
+      // pane into one frame addressed in window coordinates (terminal-bridge.js →
+      // tmux-composite.js), so the xterm must be the size of the WINDOW. Sizing it to
+      // the mirrored pane, as this did, is what showed the user's own agent as a
+      // 46-column strip with four teammates missing entirely.
+      // A split window is still never resized from here: tmux redistributes panes on
+      // the way down AND up and never restores the layout.
       entry.splitPanes = msg.panes || 1;
       if (entry.splitPanes > 1) {
         try { term.resize(msg.cols || term.cols, msg.rows || term.rows); } catch {}

@@ -10658,6 +10658,10 @@ wssTerm.on('connection', (ws, req) => {
           if (ws.bufferedAmount > 4 * 1024 * 1024) return;
           try { ws.send(buf); } catch {}
         },
+        // The engine's own window gets split by agent-teams exactly like a terminal
+        // session's does, and this path used to pass no onGeometry at all — so the
+        // live pane had no way to tell the browser the window had changed shape.
+        onGeometry: (g) => { send({ type: 'geometry', cols: g.cols, rows: g.rows, panes: g.panes, composited: g.composited }); },
         onExit: () => { send({ type: 'exit' }); try { ws.close(); } catch {} },
       });
     } catch (e) {
@@ -10741,11 +10745,12 @@ wssTerm.on('connection', (ws, req) => {
           try { ws.send(buf); } catch {}
         },
         // Additive frame — the existing shapes are untouched. Sent whenever the window
-        // layout moves (agent-teams splitting it, a pane closing). A split window is
-        // never resized from the browser, so the browser has to size its xterm to the
-        // pane instead; without this it kept fitting to the container and rendered a
-        // 35-column pane into a 117-column box — the "collapsed strip".
-        onGeometry: (g) => { send({ type: 'geometry', cols: g.cols, rows: g.rows, panes: g.panes }); },
+        // layout moves (agent-teams splitting it, a pane closing). `cols`/`rows` are the
+        // WINDOW's, because a split window is composited server-side and the composed
+        // frame is addressed in window coordinates; they used to be the mirrored PANE's,
+        // which is what rendered a five-pane window as a 46-column strip.
+        onGeometry: (g) => { send({ type: 'geometry', cols: g.cols, rows: g.rows, panes: g.panes, composited: g.composited }); },
+
         onExit: () => {
           // Self-heal ONLY a session we just cold-started, alone in its window. A fast exit
           // after a restore means "that conversation id does not exist on the agent's side"

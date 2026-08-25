@@ -241,7 +241,7 @@ const screenHas = (name, s) => String(bridge.captureScreen(name) || '').includes
   // into one screen buffer, each addressing its own pane's coordinates. That is the
   // "collapsed strip" users saw: the active pane redrawing itself in 35 columns inside
   // a 117-column terminal, with the other panes' output cutting across it.
-  console.log('\na split window: the viewer stays pinned to ITS pane:');
+  console.log('\na split window: the viewer composites EVERY pane:');
   {
     const sname = 'ccsterm-split' + Math.random().toString(36).slice(2, 8);
     bridge.ensureSession({ name: sname, workdir: '/tmp',
@@ -253,7 +253,7 @@ const screenHas = (name, s) => String(bridge.captureScreen(name) || '').includes
       onGeometry: g => { geo.push(g); },
       onExit: () => {} });
     await waitFor(() => seen.toString('utf8').includes('ACTIVE-PANE'));
-    check('the pinned pane reaches the viewer', seen.toString('utf8').includes('ACTIVE-PANE'), true);
+    check('the pane reaches the viewer', seen.toString('utf8').includes('ACTIVE-PANE'), true);
 
     // Split the window the way agent-teams does, with a LOUD neighbour.
     require('child_process').spawnSync('tmux',
@@ -261,14 +261,26 @@ const screenHas = (name, s) => String(bridge.captureScreen(name) || '').includes
        `sh -c 'while :; do echo TEAMMATE-NOISE; sleep 0.2; done'`], { encoding: 'utf8' });
     await waitFor(() => geo.length > 0 && geo[geo.length - 1].panes > 1);
     check('a layout change is reported to the caller', geo[geo.length - 1].panes >= 2, true);
-    check('...carrying the PANE geometry, not the window', geo[geo.length - 1].cols < 120, true);
+    // The WINDOW, not the pane. The browser sizes its xterm to this number and the
+    // composed frame is addressed in window coordinates; reporting the mirrored pane's
+    // width instead is what rendered a five-pane window as a 46-column strip.
+    check('...carrying the WINDOW geometry, not the pane', geo[geo.length - 1].cols, 120);
+    check('...and saying the frame is composited', geo[geo.length - 1].composited, true);
 
-    // Let the neighbour shout for a while, then prove none of it leaked through.
+    // Both panes must keep arriving. The whole point of compositing is that the user
+    // sees the teammates agent-teams spawned, not just the one pane tmux calls active.
     const mark = seen.length;
-    await new Promise(r => setTimeout(r, 1500));
+    await waitFor(() => {
+      const s = seen.subarray(mark).toString('utf8');
+      return s.includes('TEAMMATE-NOISE') && s.includes('ACTIVE-PANE');
+    });
     const after = seen.subarray(mark).toString('utf8');
-    check('the teammate pane never reaches this viewer', after.includes('TEAMMATE-NOISE'), false);
-    check('...while the mirrored pane keeps arriving', after.includes('ACTIVE-PANE'), true);
+    check('the teammate pane now reaches this viewer', after.includes('TEAMMATE-NOISE'), true);
+    check('...and so does the original pane', after.includes('ACTIVE-PANE'), true);
+    // Composited frames are absolutely addressed — a pane's rows are re-homed into
+    // window coordinates. Raw pane bytes carry no CUP at all, so this is what tells the
+    // two modes apart.
+    check('...as an absolutely addressed frame', /\x1b\[\d+;\d+H/.test(after), true);
 
     // A split window must not be resized — tmux redistributes panes on the way down AND
     // up and never restores the layout, so one shrink-and-grow cycle is permanent damage.
