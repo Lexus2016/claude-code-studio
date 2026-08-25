@@ -7340,6 +7340,16 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+// catchUp is a full-buffer replay after a WS reconnect (e.g. returning to a tab
+// mid-turn) and never carries `agent`. Treating that absence as "speaker switched to
+// none" would finalize a bubble that was correctly restored moments earlier (visible
+// tab) or erase the speaker a background tab already had tracked (background tab) —
+// in both cases producing the "bubble vanishes, an unfamiliar one takes its place"
+// symptom this file's tests are named after.
+function _isCatchUpNoAgent(d) {
+  return !!(d.catchUp && !d.agent);
+}
+
 // A turn normally streams into ONE bubble. Bots break that assumption: several
 // answer in the same turn, one after another, and merging them would leave the
 // reader unable to tell who said what. So when the speaker changes and either
@@ -7435,13 +7445,21 @@ function handleWsMsg(d) {
           ts._hadTool = false;
         }
         ts.curTxt = d.catchUp ? d.text : (ts.curTxt || '') + d.text;
-        ts.curAgent = d.agent || null; // which bot is speaking — needed to restore the badge on tab switch
+        // Same catchUp-has-no-agent case as the visible branch below: don't let a
+        // reconnect replay for a tab that went background mid-flight erase the speaker
+        // it already tracked.
+        if (!_isCatchUpNoAgent(d)) ts.curAgent = d.agent || null; // which bot is speaking — needed to restore the badge on tab switch
         break;
       }
       rmStatus();
-      _maybeFinalizeAgentSwitch(d);
+      // catchUp is a full-buffer replay after a WS reconnect (e.g. returning to a tab
+      // mid-turn) and never carries `agent` — treating its absence as "speaker switched
+      // to none" would finalize the bubble _maybeFinalizeAgentSwitch/loadSess just
+      // restored and immediately re-open a fresh, unlabeled one under it.
+      const _catchUpNoAgent = _isCatchUpNoAgent(d);
+      if (!_catchUpNoAgent) _maybeFinalizeAgentSwitch(d);
       if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
-      streaming.agent = d.agent || null;
+      if (!_catchUpNoAgent) streaming.agent = d.agent || null;
       // Ensure paragraph break between text blocks separated by tool calls
       if (!d.catchUp && streaming.txt && getTS(tabId)._hadTool) {
         if (!streaming.txt.endsWith('\n\n') && !d.text.startsWith('\n')) {
@@ -7729,6 +7747,7 @@ function handleWsMsg(d) {
         streaming.txt = '';
         streaming.toolCounts = {};
         streaming.toolLog = [];
+        streaming.agent = null; // stale speaker must not survive into the next turn's bubble
       } else {
         // Only clear global streaming state if the done event is for the currently
         // generating tab. Without this guard, a done event from a background tab
@@ -7737,6 +7756,7 @@ function handleWsMsg(d) {
         if (tabId === generatingTabId) {
           streaming.el = null; streaming.txt = '';
           streaming.toolCounts = {}; streaming.toolLog = [];
+          streaming.agent = null;
         }
         // Clear retry badge on successful completion (only for visible messages area)
         if (tabId === activeTabId) {
@@ -7779,7 +7799,7 @@ function handleWsMsg(d) {
         });
       }
       // For background tabs: clear saved streaming text (message is now persisted to DB)
-      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; } }
+      if (!isVisible) { const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; ts.curAgent = null; } }
       if (found?.tab) { found.tab.generating = false; found.tab.done = true; }
       if (isCurrent) { renderTabs(); if ((tabId === activeTabId || tabId === generatingTabId) && !d.taskId) generatingTabId = null; }
       else renderProjects(); // background: remove busy dot from project
@@ -7931,7 +7951,7 @@ function handleWsMsg(d) {
       }
       // For background tabs: clear saved streaming text on error
       if (!isVisible) {
-        const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; }
+        const ts = getTS(tabId); if (ts) { ts.curTxt = ''; ts._thinkingTxt = ''; ts._toolCounts = {}; ts._toolLog = []; ts._hadTool = false; ts.curAgent = null; }
         _bgNotify(tabId, found, 'error', t('notif.bg_error'), d.error);
       }
       if (found?.tab) { found.tab.generating = false; }

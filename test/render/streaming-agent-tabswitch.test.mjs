@@ -72,4 +72,39 @@ streaming.agent = 'bipa';
 _maybeFinalizeAgentSwitch({ agent: 'olya', tabId: 'A' });
 assert.strictEqual(streaming.el, null, 'a genuine same-tab speaker change must still finalize the bubble');
 
+// ── catchUp replay (WS reconnect on tab return) never carries `agent` ──────────
+//
+// loadSess() restores streaming.agent from the tab's saved curAgent BEFORE the socket
+// reconnects. The reconnect's subscribe_session then triggers a server-side catchUp
+// replay (server.js ~line 11516: `{type:'text', text: chatBuf, catchUp:true}`, no
+// `agent` field) of everything buffered for that session. Read literally by
+// _maybeFinalizeAgentSwitch, an absent d.agent looks like "speaker changed to none"
+// and finalizes the just-restored bubble — reproducing the exact symptom this file
+// guards against, one step later than the first scenario above.
+const _isCatchUpNoAgent = loadFn('_isCatchUpNoAgent');
+
+assert.strictEqual(_isCatchUpNoAgent({ catchUp: true, agent: undefined }), true,
+  'a catchUp packet with no agent must be recognized as such');
+assert.strictEqual(_isCatchUpNoAgent({ catchUp: true, agent: 'bipa' }), false,
+  'a catchUp packet that DOES carry an agent is not this case');
+assert.strictEqual(_isCatchUpNoAgent({ catchUp: false, agent: undefined }), false,
+  'a live (non-catchUp) chunk with no agent is a real "no speaker" state, not this case');
+
+// Tab A: loadSess() just restored the bubble and streaming.agent = 'bipa' for the bot's
+// still-running turn. The reconnect's catchUp packet for tab A arrives right after.
+globalThis.activeTabId = 'A';
+const elRestored = fakeEl();
+streaming.el = elRestored;
+streaming.txt = 'restored partial answer';
+streaming.agent = 'bipa';
+
+const catchUpPacket = { agent: undefined, tabId: 'A', catchUp: true, text: 'restored partial answer' };
+if (!_isCatchUpNoAgent(catchUpPacket)) _maybeFinalizeAgentSwitch(catchUpPacket);
+if (!_isCatchUpNoAgent(catchUpPacket)) streaming.agent = catchUpPacket.agent || null;
+
+assert.strictEqual(streaming.el, elRestored,
+  'a catchUp replay with no agent must not finalize the bubble loadSess just restored');
+assert.strictEqual(streaming.agent, 'bipa',
+  'a catchUp replay with no agent must not clobber the restored speaker to null');
+
 console.log('PASS streaming-agent-tabswitch');
