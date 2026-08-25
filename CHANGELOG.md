@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## 7.10.0
 
 A turn that walked away from a background job now finishes the work instead of
-printing "Done" over it, and an `error_max_turns` that did not come from this
-chat's budget is named as such rather than sending the user to the wrong dial.
+printing "Done" over it; a terminal pane that loses its socket reconnects when you
+touch it instead of staying dead until a page reload; and an `error_max_turns` that
+did not come from this chat's budget is named as such rather than sending the user to
+the wrong dial. Plus a split tmux window that is composited rather than cropped, a
+paste button that stopped pasting twice, corrected toolbar tooltips, an Electron
+popup that no longer escapes the window-open policy, and hardened worktree isolation.
 
 ### A turn that strands a background task is not a finished turn
 
@@ -78,6 +82,55 @@ chat's budget is named as such rather than sending the user to the wrong dial.
 Note: this fixes what the UI does about a dropped terminal socket. What drops it in
 the first place is not yet identified — the close code added here is what will name it.
 
+
+### A split tmux window is composited, not cropped
+
+- Claude Code's agent-teams splits whatever tmux window it runs in, one pane per
+  teammate. Measured on a live session: a 155x39 window with the user's own `claude`
+  squeezed into 46x38 on the left and four teammates stacked 108x9 down the right —
+  and the viewer showed the 46-column strip and nothing else. The window is now
+  composited whole.
+
+### The ›_ paste button no longer pastes again on every Enter
+
+- Click ›_ beside a saved command or skill, press Enter to submit, and the same text
+  was pasted a second time — and a third. The button kept focus, so Enter kept
+  re-triggering it; it only stopped once focus moved elsewhere.
+
+### Terminal tooltips, and three of them were wrong
+
+- The mode, agent and model toolbar buttons and the max-turns input gained tooltips,
+  following the pattern the Room button already used.
+- `turns.tip` claimed Claude "stops automatically" at the limit. It does not: it
+  auto-continues up to three more times before surfacing an incomplete-run notice, so
+  real usage can reach roughly four times the number shown. Corrected in all five
+  locales, along with two other inaccurate tips.
+
+### A popup window no longer escapes the window-open policy
+
+- `setWindowOpenHandler` was applied only to the top-level Electron window, so a
+  same-origin link opened inside a popup fell back to Electron's allow-anything
+  default instead of the app's own same-origin/external policy. The policy is now
+  re-attached to every window it creates.
+- Kanban: a stale response from a previously opened task could be appended to
+  whatever modal happened to be open by the time it arrived.
+
+### Bot bubbles no longer flicker on reload
+
+- A full browser reload mid bot-turn lost `streaming.agent` (in-memory only), so the
+  next live chunk looked like a genuinely new speaker and opened a second bubble.
+
+### Worktree isolation, hardened
+
+- `ensureWorktree()` now verifies the `.git` marker inside the directory rather than
+  only the directory's existence: a git-registered but out-of-band-deleted worktree —
+  or an empty directory left behind by a volume restore — was treated as valid and
+  permanently stranded the session or task that depended on it.
+
+### Room mode and the mid-turn bot hand-off are documented
+
+- Both shipped as user-facing features with no mention anywhere in the README. Added
+  in all three translations (EN/RU/UA).
 
 ## 7.9.0
 
