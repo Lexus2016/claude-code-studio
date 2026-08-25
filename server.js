@@ -1912,8 +1912,15 @@ async function startTask(task) {
         CCS_INTERRUPT_SESSION: sessionId,
         CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
       };
+      // This runner builds its own prompt, so it does not get buildSystemPrompt's
+      // standing instructions — and it has its own auto-continue loop below, so the
+      // chat path's background-harvest rescue does not reach it either. An unattended
+      // task that walks away from a background job is the WORST case of that bug:
+      // nobody is reading the chat to notice. The instruction is the cheap half and
+      // it is what this path can have. `|| ''` because a bot-less task passes
+      // undefined here, and `--system-prompt` is only sent when there is one.
       const taskBotSp = taskBot
-        ? botsLogic.buildBotSystemPrompt(taskBot, stmts.listBots.all()) + USER_INTERRUPT_INSTRUCTION
+        ? botsLogic.buildBotSystemPrompt(taskBot, stmts.listBots.all()) + USER_INTERRUPT_INSTRUCTION + BACKGROUND_TASK_INSTRUCTION
         : undefined;
       const stream = cli.send({ prompt: currentTaskPrompt, sessionId: currentTaskCid,
         // The bot's own model wins over the task's: picking a bot is picking who does
@@ -4499,6 +4506,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
     // The same standing instruction a normal turn gets: tell the bot the tool exists
     // and when to call it, or it will not think to look.
     const botSp = botsLogic.buildBotSystemPrompt(bot, rosterBots) + USER_INTERRUPT_INSTRUCTION
+      + BACKGROUND_TASK_INSTRUCTION
       + (rosterMap.size > 1 ? BOTS_DISPATCH_INSTRUCTION : '');
     const prior = stmts.getBotSession.get(sessionId, bot.id);
     let botSession = prior?.claude_session_id || null;
@@ -4815,7 +4823,7 @@ async function runMultiAgent(p) {
       const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
       // Same standing instruction a single-agent turn gets: without it a worker does
       // not know user clarifications can arrive mid-run.
-      const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.` + USER_INTERRUPT_INSTRUCTION;
+      const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.` + USER_INTERRUPT_INSTRUCTION + BACKGROUND_TASK_INSTRUCTION;
       const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write',
         'mcp___ccs_user_interrupt__check_user_messages'];
       // Interrupt delivery, identical to runCliSingle. Workers had neither the hooks

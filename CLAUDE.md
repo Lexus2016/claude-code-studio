@@ -468,6 +468,15 @@ ladder, which fires only on NON-success, never saw it. Nothing else resumes a he
   reader turns `completed:false` into `{subtype:'error'}` → `taskStatusForStop` →
   `'failed'`, which auto-retries a chain and re-runs every side effect. "Not marked
   done" is not "failed, retry the chain".
+- **Coverage is uneven, and deliberately so.** The harvest rescue lives in
+  `runCliSingle`/`runSshSingle` only — the chat and Telegram paths. `taskWorker`
+  (Kanban/scheduled), the multi-agent DAG members and the bots/dispatch path each run
+  their own `cli.send` loop and build their own system prompt, so they got neither half.
+  They now get `BACKGROUND_TASK_INSTRUCTION` (the cheap half, one concatenation each);
+  the rescue would mean duplicating the debt accounting into a third and fourth loop.
+  An UNATTENDED task walking away from a background job is the worst version of this
+  bug — nobody is reading that chat — which is why the instruction was worth wiring
+  even where the rescue is not.
 - **The system prompt is the first line of defence, the harvest run the second.**
   `BACKGROUND_TASK_INSTRUCTION` says plainly that the turn does not resume, and is
   phrased as "anything that keeps running after the call returns" rather than one tool
