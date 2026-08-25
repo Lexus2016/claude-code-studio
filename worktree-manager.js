@@ -35,24 +35,34 @@ function _gitOk(args, cwd) {
   try { _git(args, cwd); return true; } catch { return false; }
 }
 
-/** Identity to hand `git commit` when the machine has none configured.
+/** Read a git config value, or '' when it is unset — `_git` throws on a missing key,
+ *  and an exception is not an answer to "is there an identity here". */
+function _gitRead(args, cwd) {
+  try { return _git(args, cwd); } catch { return ''; }
+}
+
+/** Identity to hand a commit-creating git command when the machine has none.
  *
  *  Git only invents `user@host` when it can build a plausible address from the
- *  hostname; on a bare CI runner or a container it refuses with "unable to
- *  auto-detect email address" and the commit fails. That failure surfaced as a
- *  DEAD SERVER, not a bad response: setupUnitWorktree() runs inside the
- *  POST /api/tasks handler, this throws synchronously, and the request dies
- *  mid-flight (`SocketError: other side closed` in test/bots-api.test.js).
- *  The official Docker image is exactly such a machine — git is installed,
- *  no identity is set — so this was not only a CI problem.
+ *  hostname; a bare CI runner or a container refuses with "Author identity unknown
+ *  / Please tell me who you are" and the commit fails. Reproduced in a Linux
+ *  container, which is also what the project's own Dockerfile produces: git
+ *  installed, no identity configured.
  *
- *  Returns EMPTY when a real identity exists: a bootstrap commit in the user's
- *  own project must be attributed to the user, not to us. `-c` would override
- *  it, so it is only added when there is nothing to override. */
+ *  Returns EMPTY when a real identity exists: a commit in the user's own project
+ *  must stay attributed to the user, and `-c` would override it.
+ *
+ *  BOTH halves are checked, and both must be NON-EMPTY. `git config user.email`
+ *  exits 0 for a key explicitly set to the empty string, so testing the exit code
+ *  alone accepted `user.email = ""` as an identity and produced a commit with an
+ *  empty author — verified in the container before this was tightened. */
 function _identityArgs(dir) {
-  if (_gitOk(['config', 'user.email'], dir)) return [];
+  const email = _gitRead(['config', 'user.email'], dir);
+  const name = _gitRead(['config', 'user.name'], dir);
+  if (email && name) return [];
   return ['-c', 'user.email=claude-code-studio@localhost', '-c', 'user.name=Claude Code Studio'];
 }
+
 
 function hasGitRepo(dir) {
   try { return fs.existsSync(path.join(dir, '.git')); } catch { return false; }
@@ -206,7 +216,7 @@ function commitAll({ worktreeDir, message }) {
   const dirty = _git(['status', '--porcelain'], worktreeDir).length > 0;
   if (!dirty) return { committed: false };
   _git(['add', '-A', '--', '.'], worktreeDir);
-  _git(['commit', '-m', message], worktreeDir);
+  _git([..._identityArgs(worktreeDir), 'commit', '-m', message], worktreeDir);
   return { committed: true };
 }
 
@@ -231,7 +241,8 @@ function mergeBranch({ projectDir, defaultBranch, branch }) {
     const current = _git(['rev-parse', '--abbrev-ref', 'HEAD'], projectDir);
     if (current !== defaultBranch) _git(['checkout', defaultBranch], projectDir);
     try {
-      _git(['merge', '--no-ff', '--no-edit', branch], projectDir);
+      // A --no-ff merge writes a merge COMMIT, so it needs an author just as much.
+      _git([..._identityArgs(projectDir), 'merge', '--no-ff', '--no-edit', branch], projectDir);
       return { ok: true };
     } catch (e) {
       try { _git(['merge', '--abort'], projectDir); } catch { /* nothing to abort */ }

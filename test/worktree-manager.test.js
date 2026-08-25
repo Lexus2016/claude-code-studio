@@ -275,6 +275,19 @@ console.log('\nbootstrapping without a configured git identity:');
     const author = execFileSync('git', ['log', '-1', '--format=%ae'], { cwd: dir, encoding: 'utf8' }).trim();
     check('the bootstrap commit is attributed to the studio, not to a guessed address',
       author, 'claude-code-studio@localhost');
+
+    // `git config user.email` EXITS 0 for a key explicitly set to "", so testing the
+    // exit code alone accepted an empty identity and produced a commit with an empty
+    // author. Verified in a container before this was tightened.
+    const dir2 = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'wm-emptyident-'));
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: dir2, stdio: 'ignore' });
+      execFileSync('git', ['config', 'user.email', ''], { cwd: dir2, stdio: 'ignore' });
+      execFileSync('git', ['config', 'user.name', ''], { cwd: dir2, stdio: 'ignore' });
+      WM.ensureGitInitialized(dir2);
+      const a2 = execFileSync('git', ['log', '-1', '--format=%ae'], { cwd: dir2, encoding: 'utf8' }).trim();
+      check('an EMPTY user.email does not count as an identity', a2, 'claude-code-studio@localhost');
+    } finally { try { fs2.rmSync(dir2, { recursive: true, force: true }); } catch {} }
   } finally {
     if (saved.g === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = saved.g;
     if (saved.s === undefined) delete process.env.GIT_CONFIG_SYSTEM; else process.env.GIT_CONFIG_SYSTEM = saved.s;

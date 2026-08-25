@@ -214,6 +214,26 @@ const DOTENV_PATH = process.env.CCS_ENV_PATH   || path.join(APP_DIR, '.env');
 // Dual-mode child interpreter: web=node; desktop(Electron)=Electron-as-Node via CCS_NODE_CMD (set by electron/main.js). A packaged app has no standalone node.
 const NODE_CMD = process.env.CCS_NODE_CMD || 'node';
 
+// Path of a script this process hands to a SEPARATE `node` (an MCP helper, a hook) —
+// never for our own require(), which Electron resolves inside the archive just fine.
+//
+// In the packaged desktop app `__dirname` is `…/Resources/app.asar/`. server.js itself
+// runs under `utilityProcess.fork`, i.e. Electron, whose patched `fs` reads that archive
+// transparently. NODE_CMD does not: it is the plain system `node`, which has no asar
+// support at all, so `node …/app.asar/mcp-bots.js` dies with MODULE_NOT_FOUND before it
+// prints anything. The `claude` CLI reports a failed MCP server only as a missing tool —
+// so every `_ccs_*` tool silently vanished from every desktop turn (v7.10.0).
+//
+// electron-builder already writes these files out to `app.asar.unpacked/` (see
+// electron-builder.yml → asarUnpack); this points the child at the copy it can actually
+// read. Anything a helper `require`s must be unpacked too, or it fails one level deeper.
+// No-op in web/Docker mode — no path there contains `app.asar`.
+const ASAR_SEG = `${path.sep}app.asar${path.sep}`;
+function helperPath(...parts) {
+  const p = path.join(__dirname, ...parts);
+  return p.includes(ASAR_SEG) ? p.replace(ASAR_SEG, `${path.sep}app.asar.unpacked${path.sep}`) : p;
+}
+
 // ─── Security config ──────────────────────────────────────────────────────────
 // Trust X-Forwarded-For when behind nginx/Caddy (needed for rate limiting).
 // A tunnel (cloudflared/ngrok) is exactly that kind of proxy, but it is started
@@ -1816,7 +1836,7 @@ async function startTask(task) {
     // even if it wants to.
     taskMcpServers['_ccs_user_interrupt'] = {
       command: NODE_CMD,
-      args: [path.join(__dirname, 'mcp-user-interrupt.js')],
+      args: [helperPath('mcp-user-interrupt.js')],
       env: {
         INTERRUPT_SERVER_URL: `http://127.0.0.1:${PORT}`,
         INTERRUPT_SESSION_ID: sessionId,
@@ -1825,7 +1845,7 @@ async function startTask(task) {
     };
     taskMcpServers['_ccs_task_manager'] = {
       command: NODE_CMD,
-      args: [path.join(__dirname, 'mcp-task-manager.js')],
+      args: [helperPath('mcp-task-manager.js')],
       env: {
         TASK_MANAGER_SERVER_URL: `http://127.0.0.1:${PORT}`,
         TASK_MANAGER_TASK_ID: task.id,
@@ -1929,7 +1949,7 @@ async function startTask(task) {
       // Interrupt delivery, same as a chat turn. A running task ACCEPTS clarifications
       // — the interrupt handler explicitly checks activeTasks — but without these the
       // message was stored, never handed to the worker, and cleaned up at the end.
-      const taskInterruptCmd = `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`;
+      const taskInterruptCmd = `"${NODE_CMD}" "${helperPath('hooks', 'check-interrupt.js')}"`;
       const taskInterruptSettings = {
         hooks: {
           PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: taskInterruptCmd, timeout: 3 }] }],
@@ -3707,7 +3727,7 @@ async function runCliSingle(p) {
     // otherwise be drained undelivered in finally (see pendingInterrupts cleanup below).
     // Both consume the same one-shot queue, so an emptied queue makes the next Stop
     // approve — no infinite loop.
-    const interruptCmd = `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`;
+    const interruptCmd = `"${NODE_CMD}" "${helperPath('hooks', 'check-interrupt.js')}"`;
     const interruptHookSettings = {
       hooks: {
         PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: interruptCmd, timeout: 3 }] }],
@@ -4574,7 +4594,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
   // Interrupt delivery, identical to runCliSingle: a PreToolUse hook fires on every
   // tool call and a Stop hook covers a text-only answer, so a message sent while a
   // bot is working reaches it during the run instead of waiting for the next turn.
-  const botInterruptCmd = `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`;
+  const botInterruptCmd = `"${NODE_CMD}" "${helperPath('hooks', 'check-interrupt.js')}"`;
   const botInterruptSettings = {
     hooks: {
       PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: botInterruptCmd, timeout: 3 }] }],
@@ -4694,7 +4714,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
     const botMcpServers = rosterMap.size > 1
       ? { ...mcpServers, _ccs_bots: {
           command: NODE_CMD,
-          args: [path.join(__dirname, 'mcp-bots.js')],
+          args: [helperPath('mcp-bots.js')],
           env: {
             BOTS_SERVER_URL: `http://127.0.0.1:${PORT}`,
             BOTS_SESSION_ID: sessionId,
@@ -5003,7 +5023,7 @@ async function runMultiAgent(p) {
       // Interrupt delivery, identical to runCliSingle. Workers had neither the hooks
       // nor the tool, so a clarification sent while the team was working was silently
       // discarded at the end of the turn.
-      const agentInterruptCmd = `"${NODE_CMD}" "${path.join(__dirname, 'hooks', 'check-interrupt.js')}"`;
+      const agentInterruptCmd = `"${NODE_CMD}" "${helperPath('hooks', 'check-interrupt.js')}"`;
       const agentInterruptSettings = {
         hooks: {
           PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: agentInterruptCmd, timeout: 3 }] }],
@@ -9268,7 +9288,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     // Internal MCPs (always injected)
     mcpServers['_ccs_ask_user'] = {
       command: NODE_CMD,
-      args: [path.join(__dirname, 'mcp-ask-user.js')],
+      args: [helperPath('mcp-ask-user.js')],
       env: {
         ASK_USER_SERVER_URL: `http://127.0.0.1:${PORT}`,
         ASK_USER_SESSION_ID: sessionId,
@@ -9277,7 +9297,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     };
     mcpServers['_ccs_notify'] = {
       command: NODE_CMD,
-      args: [path.join(__dirname, 'mcp-notify.js')],
+      args: [helperPath('mcp-notify.js')],
       env: {
         NOTIFY_SERVER_URL: `http://127.0.0.1:${PORT}`,
         NOTIFY_SESSION_ID: sessionId,
@@ -9286,7 +9306,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     };
     mcpServers['_ccs_set_ui_state'] = {
       command: NODE_CMD,
-      args: [path.join(__dirname, 'mcp-set-ui-state.js')],
+      args: [helperPath('mcp-set-ui-state.js')],
       env: {
         SET_UI_STATE_SERVER_URL: `http://127.0.0.1:${PORT}`,
         SET_UI_STATE_SESSION_ID: sessionId,
@@ -9295,7 +9315,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     };
     mcpServers['_ccs_user_interrupt'] = {
       command: NODE_CMD,
-      args: [path.join(__dirname, 'mcp-user-interrupt.js')],
+      args: [helperPath('mcp-user-interrupt.js')],
       env: {
         INTERRUPT_SERVER_URL: `http://127.0.0.1:${PORT}`,
         INTERRUPT_SESSION_ID: sessionId,
@@ -11105,7 +11125,7 @@ wss.on('connection', (ws) => {
       // --- Internal MCPs (always injected, invisible to user) ---
       mcpServers['_ccs_ask_user'] = {
         command: NODE_CMD,
-        args: [path.join(__dirname, 'mcp-ask-user.js')],
+        args: [helperPath('mcp-ask-user.js')],
         env: {
           ASK_USER_SERVER_URL: `http://127.0.0.1:${PORT}`,
           ASK_USER_SESSION_ID: localSessionId,
@@ -11115,7 +11135,7 @@ wss.on('connection', (ws) => {
 
       mcpServers['_ccs_notify'] = {
         command: NODE_CMD,
-        args: [path.join(__dirname, 'mcp-notify.js')],
+        args: [helperPath('mcp-notify.js')],
         env: {
           NOTIFY_SERVER_URL: `http://127.0.0.1:${PORT}`,
           NOTIFY_SESSION_ID: localSessionId,
@@ -11124,7 +11144,7 @@ wss.on('connection', (ws) => {
       };
       mcpServers['_ccs_set_ui_state'] = {
         command: NODE_CMD,
-        args: [path.join(__dirname, 'mcp-set-ui-state.js')],
+        args: [helperPath('mcp-set-ui-state.js')],
         env: {
           SET_UI_STATE_SERVER_URL: `http://127.0.0.1:${PORT}`,
           SET_UI_STATE_SESSION_ID: localSessionId,
@@ -11133,7 +11153,7 @@ wss.on('connection', (ws) => {
       };
       mcpServers['_ccs_user_interrupt'] = {
         command: NODE_CMD,
-        args: [path.join(__dirname, 'mcp-user-interrupt.js')],
+        args: [helperPath('mcp-user-interrupt.js')],
         env: {
           INTERRUPT_SERVER_URL: `http://127.0.0.1:${PORT}`,
           INTERRUPT_SESSION_ID: localSessionId,
