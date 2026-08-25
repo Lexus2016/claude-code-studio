@@ -148,6 +148,7 @@ const msg = (over = {}) => ({
     dctx.pendingAttachments = [];
     dctx.sessionId = 'a1';
     // Stub the file download so no network call happens.
+    const preMediaCallApi = bot._callApi;
     bot._callApi = async (method, params) => {
       calls.push({ method, ...params });
       if (method === 'getFile') return { file_path: 'photos/x.jpg' };
@@ -158,6 +159,7 @@ const msg = (over = {}) => ({
     global.fetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
     await bot._handleMediaMessage(msg({ text: undefined, photo: [{ file_id: 'F1' }], message_thread_id: 4 }));
     global.fetch = realFetch;
+    bot._callApi = preMediaCallApi;
     check('a photo sent in a topic is stored for THAT topic', fctx.pendingAttachments.length, 1);
     check('and does not leak into the private-chat context', dctx.pendingAttachments.length, 0);
   }
@@ -402,6 +404,48 @@ const msg = (over = {}) => ({
     check('and explains where to press it', sends().some(s => /from a project topic/.test(s.text)), true);
 
     bot._callApi = origCall;
+  }
+
+  console.log('\n/cancel is advertised in the native menu and must actually be handled:');
+  {
+    const privMsg = (over = {}) => ({
+      message_id: 1, from: { id: USER }, chat: { id: PRIVATE_CHAT, type: 'private' }, text: '/cancel', ...over,
+    });
+
+    reset(); sent.length = 0;
+    const ctx = bot._getContext(USER);
+    ctx.sessionId = 'a1';
+    ctx.pendingAttachments = [{ name: 'x.png' }];
+    await bot._handleUpdate({ message: privMsg() });
+    check('never falls through to "unknown command"', sends().some(s => /Unknown command/i.test(s.text || '')), false);
+    check('clears pending attachments', ctx.pendingAttachments.length, 0);
+
+    reset(); sent.length = 0;
+    ctx.sessionId = null;
+    await bot._handleUpdate({ message: privMsg() });
+    check('with no active session, lands on the main menu, not an error', sends().some(s => /Unknown command/i.test(s.text || '')), false);
+  }
+
+  console.log('\na project added after /connect still gets a forum topic:');
+  {
+    reset();
+    // No topic exists yet for /w/gamma in any forum.
+    const before = db.prepare("SELECT * FROM forum_topics WHERE type='project' AND workdir='/w/gamma'").get();
+    check('no topic exists yet', before, undefined);
+
+    await bot.notifyProjectAdded('/w/gamma', 'Gamma');
+    const created = calls.filter(c => c.method === 'createForumTopic');
+    check('exactly one topic is created (one connected forum)', created.length, 1);
+    const row = db.prepare("SELECT * FROM forum_topics WHERE type='project' AND workdir='/w/gamma'").get();
+    check('and it is recorded against the workdir', row?.workdir, '/w/gamma');
+
+    reset();
+    await bot.notifyProjectAdded('/w/gamma', 'Gamma');
+    check('a second registration creates no duplicate', calls.some(c => c.method === 'createForumTopic'), false);
+
+    reset();
+    await bot.notifyProjectAdded('', 'No workdir');
+    check('an empty workdir is a no-op, not a crash', calls.some(c => c.method === 'createForumTopic'), false);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
