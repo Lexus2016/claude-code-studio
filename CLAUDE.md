@@ -468,15 +468,25 @@ ladder, which fires only on NON-success, never saw it. Nothing else resumes a he
   reader turns `completed:false` into `{subtype:'error'}` → `taskStatusForStop` →
   `'failed'`, which auto-retries a chain and re-runs every side effect. "Not marked
   done" is not "failed, retry the chain".
-- **Coverage is uneven, and deliberately so.** The harvest rescue lives in
-  `runCliSingle`/`runSshSingle` only — the chat and Telegram paths. `taskWorker`
-  (Kanban/scheduled), the multi-agent DAG members and the bots/dispatch path each run
-  their own `cli.send` loop and build their own system prompt, so they got neither half.
-  They now get `BACKGROUND_TASK_INSTRUCTION` (the cheap half, one concatenation each);
-  the rescue would mean duplicating the debt accounting into a third and fourth loop.
-  An UNATTENDED task walking away from a background job is the worst version of this
-  bug — nobody is reading that chat — which is why the instruction was worth wiring
-  even where the rescue is not.
+- **Coverage is uneven, and each path takes the channel that actually reaches it.**
+  The harvest rescue lives in `runCliSingle`/`runSshSingle` only — the chat and Telegram
+  paths. `taskWorker` (Kanban/scheduled, API engine), the multi-agent DAG members and
+  the bots/dispatch path each run their own `cli.send` loop and build their own system
+  prompt, so they got neither half; duplicating the debt accounting into a third and
+  fourth loop is exactly how the local and remote paths would drift apart, so they get
+  the instruction only. An UNATTENDED task walking away from a background job is the
+  worst version of this bug — nobody is reading that chat — which is why it was worth
+  wiring even where the rescue is not.
+  **Which channel matters, and appending to the system prompt is usually the wrong
+  one.** `claude-cli.js:252` drops `--system-prompt` whenever there is a session to
+  resume. A multi-agent worker starts from the orchestrator's session id, and a bot
+  keeps a persistent session per chat — so for those two the system prompt is dead on
+  arrival, and the instruction rides the USER turn instead (`agentPrompt`, and the
+  `standing` block the bots path already re-sends its roster in). Only `taskWorker`'s
+  `taskBotSp` gets it as a system prompt, because that path sends one on a fresh run.
+  **Still NOT covered: a Kanban task on the `subscription` engine** — it calls
+  `runInteractiveSingle` with `systemPrompt: ''` (server.js:1823), and changing that
+  respawns the tmux session.
 - **The system prompt is the first line of defence, the harvest run the second.**
   `BACKGROUND_TASK_INSTRUCTION` says plainly that the turn does not resume, and is
   phrased as "anything that keeps running after the call returns" rather than one tool

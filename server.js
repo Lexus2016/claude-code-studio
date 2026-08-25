@@ -4519,6 +4519,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
     // Re-sent in the USER turn, the one channel --resume always delivers.
     const standing = botSession
       ? '\n\n' + [botsLogic.renderRoster(rosterBots, bot.id),
+                  BACKGROUND_TASK_INSTRUCTION.trim(),
                   rosterMap.size > 1 ? BOTS_DISPATCH_INSTRUCTION.trim() : ''].filter(Boolean).join('\n\n')
       : '';
 
@@ -4820,10 +4821,17 @@ async function runMultiAgent(p) {
     const _runOne = async agent => {
       ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`🔄 ${agent.role}`, ...(tabId ? { tabId } : {}) }));
       const depCtx = buildDepContext(agent, results);
-      const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
+      // The background rule rides the USER turn, not the system prompt. A worker
+      // resumes the orchestrator's session id (agentSessionId below starts as
+      // currentSessionId), and claude-cli.js:252 drops --system-prompt whenever there
+      // is a session to resume — so anything appended to agentSp reaches a worker only
+      // in the rare case where the orchestrator never got an id. The user turn is the
+      // one channel --resume always delivers, which is the same reason the bots path
+      // re-sends its roster there.
+      const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '') + BACKGROUND_TASK_INSTRUCTION;
       // Same standing instruction a single-agent turn gets: without it a worker does
       // not know user clarifications can arrive mid-run.
-      const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.` + USER_INTERRUPT_INSTRUCTION + BACKGROUND_TASK_INSTRUCTION;
+      const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.` + USER_INTERRUPT_INSTRUCTION;
       const agentTools = ['Bash','View','GlobTool','GrepTool','ListDir','SearchReplace','Write',
         'mcp___ccs_user_interrupt__check_user_messages'];
       // Interrupt delivery, identical to runCliSingle. Workers had neither the hooks

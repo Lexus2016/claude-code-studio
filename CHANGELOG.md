@@ -33,10 +33,14 @@ chat's budget is named as such rather than sending the user to the wrong dial.
 - **The system prompt states the constraint up front** — collect a background job's
   result inside the same turn, because there is no later moment in which to get it.
   The rescue is the second line of defence, not the first.
-- **Kanban/scheduled tasks, multi-agent members and bots get that instruction too.**
-  Each of those runs its own `cli.send` loop with its own system prompt, so neither
-  half reached them. An unattended task that walks away from a background job is the
-  worst version of this bug — nobody is reading that chat to notice.
+- **Kanban/scheduled tasks, multi-agent members and bots get that instruction too**,
+  each through the channel that actually reaches it. `--system-prompt` is dropped
+  whenever there is a session to resume, so for a multi-agent worker (which starts from
+  the orchestrator's session) and for a bot (which keeps a persistent session per chat)
+  the instruction rides the user turn instead. An unattended task that walks away from a
+  background job is the worst version of this bug — nobody is reading that chat to
+  notice. A Kanban task on the `subscription` engine is still not covered: it passes no
+  system prompt at all, and changing that respawns its tmux session.
 - **Known limit:** a process backgrounded with shell syntax (`cmd &`, `nohup`) inside a
   foreground `Bash` call is not detected — separating that from `a && b` and `2>&1`
   needs a shell parser. The system-prompt rule covers it in words.
