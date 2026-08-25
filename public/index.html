@@ -5024,6 +5024,8 @@ const TRANSLATIONS = {
     'retry.title':'Повторів: {n}','intr.title':'Хід було перервано','intr.body':'Цей запит не завершився. Він не буде виконаний сам — вирішіть, чи запускати його ще раз.','intr.body.n':'Цей запит не завершився. Спроб уже було: {n}. Він не буде виконаний сам.','intr.resume':'Відновити','intr.discard':'Відхилити','pend.run':'Хід завершився, але агент позначив роботу як незавершену. Сам він не продовжить.','pend.wait':'Агент чекає на вашу відповідь, але запитання не поставив. Хід уже завершено.','pend.blocked':'Агент повідомив, що заблокований. Хід завершено — без вашої дії нічого не зміниться.','pend.btn.continue':'Продовжити','pend.btn.ask':'Що далі?',
     'plan.exec.btn':'▶️ Виконати план','plan.exec.title':'Перемкнути в режим Auto і виконати цей план',
     'tmux.required':'Потрібен tmux на сервері (macOS/Linux/Docker/WSL). Тут недоступно.',
+    'claudecli.unavailable.title':'Claude CLI недоступний',
+    'claudecli.unavailable.detail':'Бінарник `claude` не знайдено на сервері — чат не запуститься. Встановіть Claude Code CLI.',
     'hist.del.n':'Видалити вибрані чати ({n})?',
     'tg.lock.on':'🔓 Нові підключення дозволено','tg.lock.off':'🔒 Нові підключення заблоковано',
     'input.ph.mob':'Напишіть завдання...',
@@ -5412,6 +5414,8 @@ const TRANSLATIONS = {
     'retry.title':'Retried {n} time(s)','intr.title':'This turn was interrupted','intr.body':'The request never finished. It will not run on its own — decide whether to run it again.','intr.body.n':'The request never finished. It has already been attempted {n} time(s). It will not run on its own.','intr.resume':'Resume','intr.discard':'Discard','pend.run':'The turn ended, but the agent marked its own work unfinished. It will not resume on its own.','pend.wait':'The agent is waiting on you but never asked a question. The turn is already over.','pend.blocked':'The agent reported it is blocked. The turn has ended — nothing moves without you.','pend.btn.continue':'Continue','pend.btn.ask':'What next?',
     'plan.exec.btn':'▶️ Execute Plan','plan.exec.title':'Switch to Auto mode and execute this plan',
     'tmux.required':'tmux is required on the server (macOS/Linux/Docker/WSL). Unavailable here.',
+    'claudecli.unavailable.title':'Claude CLI unavailable',
+    'claudecli.unavailable.detail':'The `claude` binary was not found on the server — chats will fail. Install the Claude Code CLI.',
     'hist.del.n':'Delete the selected chats ({n})?',
     'tg.lock.on':'🔓 New connections allowed','tg.lock.off':'🔒 New connections blocked',
     'input.ph.mob':'Write a task...',
@@ -5800,6 +5804,8 @@ const TRANSLATIONS = {
     'retry.title':'Повторов: {n}','intr.title':'Ход был прерван','intr.body':'Этот запрос не завершился. Сам он не выполнится — решите, запускать ли его снова.','intr.body.n':'Этот запрос не завершился. Попыток уже было: {n}. Сам он не выполнится.','intr.resume':'Возобновить','intr.discard':'Отклонить','pend.run':'Ход завершён, но агент отметил работу как незаконченную. Сам он не продолжит.','pend.wait':'Агент ждёт вашего ответа, но вопрос не задал. Ход уже завершён.','pend.blocked':'Агент сообщил, что заблокирован. Ход завершён — без вашего действия ничего не изменится.','pend.btn.continue':'Продолжить','pend.btn.ask':'Что дальше?',
     'plan.exec.btn':'▶️ Выполнить план','plan.exec.title':'Переключиться в режим Auto и выполнить этот план',
     'tmux.required':'Нужен tmux на сервере (macOS/Linux/Docker/WSL). Здесь недоступно.',
+    'claudecli.unavailable.title':'Claude CLI недоступен',
+    'claudecli.unavailable.detail':'Бинарник `claude` не найден на сервере — чат не запустится. Установите Claude Code CLI.',
     'hist.del.n':'Удалить выбранные чаты ({n})?',
     'tg.lock.on':'🔓 Новые подключения разрешены','tg.lock.off':'🔒 Новые подключения заблокированы',
     'input.ph.mob':'Напишите задачу...',
@@ -11907,6 +11913,12 @@ async function checkVersion() {
   try {
     const local = await fetch('/api/version').then(r => r.json());
     applyTmuxCapability(local.tmuxAvailable !== false);
+    // Surface a missing local `claude` binary up front — every chat send would
+    // otherwise fail mid-turn with no warning beforehand. `error` level never
+    // auto-dismisses (NOTIF_DURATIONS), matching how broken this actually is.
+    if (local.claudeCli && local.claudeCli.available === false) {
+      showNotification({ level: 'error', title: t('claudecli.unavailable.title'), detail: t('claudecli.unavailable.detail'), timestamp: Date.now() });
+    }
     loadTerminalCapability();
     loadBots();
     // Store the global default and resolve the current view's engine. An open
