@@ -3253,7 +3253,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
           <button class="mob-chip" data-mob="model" data-v="fable" onclick="setMobOpt(this,'model')">Fable</button>
         </div>
       </div>
-      <div class="mob-sheet-section" style="display:none"><!-- Engine switcher hidden: Subscription paused; API/claude -p only -->
+      <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.engine">Engine</div>
         <div class="mob-sheet-chips">
           <button class="mob-chip on" data-mob="engine" data-v="api" onclick="setMobOpt(this,'engine')">API</button>
@@ -3399,10 +3399,8 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <button class="tb-btn" data-v="opus" onclick="setOpt(this,'model')">Opus</button>
       <button class="tb-btn" data-v="fable" onclick="setOpt(this,'model')">Fable</button>
     </div>
-    <!-- Engine switcher hidden: Subscription (Usage-credits via terminal) is paused by
-         Anthropic, so only the API path (claude -p) is active. Un-hide to restore. -->
-    <div class="tb-sep" style="display:none"></div>
-    <div class="tb-group" style="display:none">
+    <div class="tb-sep"></div>
+    <div class="tb-group">
       <span class="label" data-i18n="tb.engine">Engine</span>
       <button class="tb-btn on" data-v="api" onclick="setOpt(this,'engine')" data-i18n-title="engine.api.title" title="API engine — headless claude -p, billed per token (Claude Pro / API key)">API</button>
       <button class="tb-btn" data-v="subscription" onclick="setOpt(this,'engine')" data-i18n-title="engine.sub.title" title="Subscription engine — persistent tmux session, billed on Claude Max subscription (no API credits). Requires: tmux + Claude Max." data-i18n="engine.sub">Subscription</button>
@@ -11751,9 +11749,7 @@ async function send() {
       mcpServers: [...activeMcp],
       mode: curMode, agentMode: curAgent,
       model: curModel,
-      // Subscription engine paused (Anthropic halted Usage-credits via terminal) — always
-      // send the API path (claude -p) regardless of any saved/default engine. Restore: engine: curEngine,
-      engine: 'api',
+      engine: curEngine,
       effort: curEffort || undefined,
       // An empty turns box must fall back to the user's CONFIGURED budget, not to a
       // private literal: this is the value that actually goes on the wire, and 30 was
