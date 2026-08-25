@@ -77,10 +77,16 @@ const CLAUDE_BIN = findClaudeBin();
 // inference routers use for this): it does not call out to Anthropic.
 let _claudeCliStatus = null;
 function claudeCliStatus() {
-  if (_claudeCliStatus) return _claudeCliStatus;
+  if (_claudeCliStatus !== null) return _claudeCliStatus;
   let available = false;
   try {
-    const r = spawnSync(CLAUDE_BIN, ['--version'], { stdio: 'ignore' });
+    // Same needsShell rule as the real chat-turn spawn() below: a .cmd/.bat
+    // CLAUDE_BIN (the common case on Windows — findClaudeBin() prefers
+    // claude.cmd) fails to launch under shell:false, which would otherwise
+    // make this preflight report a working install as unavailable.
+    const needsShell = process.platform === 'win32' &&
+      /\.(cmd|bat)$/i.test(CLAUDE_BIN);
+    const r = spawnSync(CLAUDE_BIN, ['--version'], { stdio: 'ignore', shell: needsShell });
     available = !r.error && r.status === 0;
   } catch { available = false; }
   let authenticated = false;
