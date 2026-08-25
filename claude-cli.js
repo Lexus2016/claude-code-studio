@@ -69,6 +69,29 @@ function findClaudeBin() {
 
 const CLAUDE_BIN = findClaudeBin();
 
+// Local CLI preflight — same lazy-cached spawnSync pattern as terminal-bridge.js's
+// tmuxAvailable(). Without this, a broken/missing local `claude` install is only
+// discovered when a chat's spawn() fails mid-turn; this lets the UI (via
+// /api/version) surface it up front instead. `authenticated` is a proxy, not a
+// real auth check (mirrors the "credentials file present" heuristic other
+// inference routers use for this): it does not call out to Anthropic.
+let _claudeCliStatus = null;
+function claudeCliStatus() {
+  if (_claudeCliStatus) return _claudeCliStatus;
+  let available = false;
+  try {
+    const r = spawnSync(CLAUDE_BIN, ['--version'], { stdio: 'ignore' });
+    available = !r.error && r.status === 0;
+  } catch { available = false; }
+  let authenticated = false;
+  if (available) {
+    const credsPath = path.join(os.homedir(), '.claude', '.credentials.json');
+    authenticated = fs.existsSync(credsPath) || !!process.env.ANTHROPIC_API_KEY;
+  }
+  _claudeCliStatus = { available, authenticated };
+  return _claudeCliStatus;
+}
+
 // Idle (inactivity) watchdog — the subprocess is killed ONLY after it produces no
 // output (stdout or stderr) for this long. A fixed total timeout would kill a process
 // that is still actively streaming output (e.g. a long content-generation run); the
@@ -620,3 +643,4 @@ class ClaudeCLI {
 
 module.exports = ClaudeCLI;
 module.exports.findClaudeBin = findClaudeBin;
+module.exports.claudeCliStatus = claudeCliStatus;
