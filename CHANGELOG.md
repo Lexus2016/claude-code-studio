@@ -39,8 +39,9 @@ chat's budget is named as such rather than sending the user to the wrong dial.
   so for a multi-agent worker, a bot with a live session, and every Kanban task, the
   instruction rides the user turn instead. An unattended task that walks away from a
   background job is the worst version of this bug — nobody is reading that chat to
-  notice. A Kanban task on the `subscription` engine is still not covered: it passes no
-  system prompt at all, and changing that respawns its tmux session.
+  notice. Riding the user turn also covers a Kanban task on the `subscription` engine
+  for free: it passes no system prompt at all, but its prompt is typed into the tmux
+  pane like any other.
 - **Known limit:** a process backgrounded with shell syntax (`cmd &`, `nohup`) inside a
   foreground `Bash` call is not detected — separating that from `a && b` and `2>&1`
   needs a shell parser. The system-prompt rule covers it in words.

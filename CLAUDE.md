@@ -486,11 +486,13 @@ ladder, which fires only on NON-success, never saw it. Nothing else resumes a he
   same story for two reasons at once — `taskBotSp` is `undefined` for a task with no
   bot, and dropped outright when the task resumes a session — so there too it rides the
   task prompt, next to `TASK_VERIFICATION_SUFFIX`, which sits in that channel for
-  exactly the same reason. Chat and Telegram are the only paths that get it as a system
-  prompt, because they are the only ones that go through `buildSystemPrompt`.
-  **Still NOT covered: a Kanban task on the `subscription` engine** — it calls
-  `runInteractiveSingle` with `systemPrompt: ''` (server.js:1823) and takes a different
-  prompt path, and changing that respawns the tmux session.
+  exactly the same reason. Chat and Telegram get it as a system prompt through
+  `buildSystemPrompt`; a bot on a FRESH session gets it that way too, via `botSp`, and
+  falls back to the `standing` user block once it has a session to resume.
+  Putting it in the task prompt also covers a Kanban task on the `subscription`
+  engine for free: that path passes `systemPrompt: ''` (server.js:1829) but
+  `runInteractiveSingle` types the prompt itself into the tmux pane
+  (claude-interactive.js:441), so the user-turn channel reaches it like every other.
 - **The system prompt is the first line of defence, the harvest run the second.**
   `BACKGROUND_TASK_INSTRUCTION` says plainly that the turn does not resume, and is
   phrased as "anything that keeps running after the call returns" rather than one tool

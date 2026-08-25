@@ -231,5 +231,57 @@ console.log('\nan error_max_turns far below the budget is named as a foreign cap
   check('an empty call decides nothing', RC.describeTurnBudgetAnomaly(), null);
 }
 
+// ── The instruction has to reach every runner, and each takes a different channel ──
+// Rounds 5-7 of review found three no-ops in a row here: appending to a system prompt
+// that `--resume` drops, to one that is `undefined` for a task with no bot, and to one
+// a bot only sees on its first turn. Every one of them shipped green, because nothing
+// pinned WHICH string carries the rule. This reads server.js as source text — the same
+// technique test/render/script-scope.test.mjs uses — because the property being pinned
+// is textual: which expression the constant is concatenated onto.
+console.log('\nthe background rule reaches every runner:');
+{
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const K = 'BACKGROUND_TASK_INSTRUCTION';
+
+  const near = (anchor, span = 400) => {
+    const i = src.indexOf(anchor);
+    return i === -1 ? null : src.slice(i, i + span);
+  };
+  const carries = (label, anchor) => {
+    const win = near(anchor);
+    if (win === null) { fail++; console.error(`  FAIL ${label} — anchor gone: ${anchor}`); return; }
+    check(label, win.includes(K), true);
+  };
+
+  // chat + telegram: the only two that go through buildSystemPrompt.
+  carries('buildSystemPrompt appends it', 'prompt += TOOL_CALL_INSTRUCTION;');
+  // Kanban/scheduled, every engine: the task prompt is the one channel that reaches a
+  // task with no bot, a task that resumes a session, AND the subscription engine
+  // (which passes systemPrompt:'' and types the prompt into its tmux pane).
+  carries('the task prompt carries it', "const prompt = parts.join('\\n\\n')");
+  // multi-agent workers resume the orchestrator's session id, so --system-prompt is
+  // dropped for them; the rule has to ride the user turn.
+  carries('the multi-agent worker prompt carries it', 'const agentPrompt = agent.task');
+  // a bot with a live session likewise never sees an updated system prompt.
+  carries('the bots standing block carries it', 'const standing = botSession');
+
+  // And it must NOT sit where it would be silently dropped: taskBotSp is undefined for
+  // a bot-less task and dropped on resume. Its presence there reads as coverage.
+  {
+    const win = near('const taskBotSp = taskBot');
+    check('taskBotSp does NOT carry it (undefined for a bot-less task, dropped on resume)',
+      win !== null && !win.includes(K), true);
+  }
+  // Concatenated onto a prompt, so it must open with its own separator or it welds
+  // itself onto the last word of whatever precedes it.
+  {
+    const m = /const BACKGROUND_TASK_INSTRUCTION = `([\s\S]*?)`;/.exec(src);
+    check('it is declared', !!m, true);
+    if (m) check('and opens with a blank-line separator', m[1].startsWith('\\n\\n'), true);
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
