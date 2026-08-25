@@ -49,7 +49,9 @@ console.log('\n— GET /api/version on a real server —');
   fs.mkdirSync(path.join(APP_DIR, 'data'), { recursive: true });
 
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PORT: String(PORT), APP_DIR, WORKDIR: path.join(APP_DIR, 'workspace'), HOME: HOME_DIR },
+    // CCS_DESKTOP=1 bypasses auth; without it a fresh APP_DIR has no auth.json,
+    // so authMiddleware redirects /api/version to /setup (HTML) instead of JSON.
+    env: { ...process.env, PORT: String(PORT), CCS_DESKTOP: '1', APP_DIR, WORKDIR: path.join(APP_DIR, 'workspace'), HOME: HOME_DIR },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let exited = false, srvLog = '';
