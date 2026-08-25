@@ -35,6 +35,25 @@ function _gitOk(args, cwd) {
   try { _git(args, cwd); return true; } catch { return false; }
 }
 
+/** Identity to hand `git commit` when the machine has none configured.
+ *
+ *  Git only invents `user@host` when it can build a plausible address from the
+ *  hostname; on a bare CI runner or a container it refuses with "unable to
+ *  auto-detect email address" and the commit fails. That failure surfaced as a
+ *  DEAD SERVER, not a bad response: setupUnitWorktree() runs inside the
+ *  POST /api/tasks handler, this throws synchronously, and the request dies
+ *  mid-flight (`SocketError: other side closed` in test/bots-api.test.js).
+ *  The official Docker image is exactly such a machine — git is installed,
+ *  no identity is set — so this was not only a CI problem.
+ *
+ *  Returns EMPTY when a real identity exists: a bootstrap commit in the user's
+ *  own project must be attributed to the user, not to us. `-c` would override
+ *  it, so it is only added when there is nothing to override. */
+function _identityArgs(dir) {
+  if (_gitOk(['config', 'user.email'], dir)) return [];
+  return ['-c', 'user.email=claude-code-studio@localhost', '-c', 'user.name=Claude Code Studio'];
+}
+
 function hasGitRepo(dir) {
   try { return fs.existsSync(path.join(dir, '.git')); } catch { return false; }
 }
@@ -69,7 +88,7 @@ function ensureGitInitialized(dir) {
     }
     _git(['add', '-A', '--', '.'], dir);
     // --allow-empty: an empty project still needs a ref for worktrees to branch from.
-    _git(['commit', '--allow-empty', '-m', 'Initial commit (auto-created by Claude Code Studio)'], dir);
+    _git([..._identityArgs(dir), 'commit', '--allow-empty', '-m', 'Initial commit (auto-created by Claude Code Studio)'], dir);
   }
   return getDefaultBranch(dir);
 }

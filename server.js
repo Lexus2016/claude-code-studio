@@ -3429,12 +3429,28 @@ function setupUnitWorktree(kind, unitId, requestedWorkdir) {
     err.code = 'GIT_UNAVAILABLE';
     throw err;
   }
-  const defaultBranch = WM.ensureGitInitialized(root);
-  const slug = _worktreeProjectSlug(root);
-  const worktreeDir = WM.worktreePath(APP_DIR, slug, `${kind}-${unitId}`);
-  const branch = WM.branchNameFor(kind, unitId);
-  WM.ensureWorktree({ projectDir: root, worktreeDir, branch });
-  return { workdir: worktreeDir, git_root: root, git_branch: branch, defaultBranch };
+  // Every git step below can fail for an environment reason that has nothing to do
+  // with this request — no identity configured, a read-only mount, a stale index
+  // lock. Those used to travel out of here as a bare throw and were reported only
+  // as a dead HTTP request: the v7.10.0 release candidate failed CI as
+  // `SocketError: other side closed`, with nothing anywhere saying `git`. Whatever
+  // else happens, the reason is now on the record before it propagates.
+  try {
+    const defaultBranch = WM.ensureGitInitialized(root);
+    const slug = _worktreeProjectSlug(root);
+    const worktreeDir = WM.worktreePath(APP_DIR, slug, `${kind}-${unitId}`);
+    const branch = WM.branchNameFor(kind, unitId);
+    WM.ensureWorktree({ projectDir: root, worktreeDir, branch });
+    return { workdir: worktreeDir, git_root: root, git_branch: branch, defaultBranch };
+  } catch (e) {
+    log.error('worktree setup failed', {
+      kind, unitId, root,
+      message: e?.message,
+      // execFileSync puts git's own diagnosis on stderr, not in the message.
+      stderr: String(e?.stderr || '').slice(0, 500),
+    });
+    throw e;
+  }
 }
 
 /**

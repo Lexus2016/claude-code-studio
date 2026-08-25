@@ -248,6 +248,59 @@ console.log('\nmergeBranch() — serializes concurrent merges into the same proj
     units.every(u => fs.existsSync(path.join(projectDir, `${u}.txt`))), true);
 }
 
+// ── A machine with no git identity must still bootstrap, and be attributable ──
+// `git commit` invents user@host only when it can build a plausible address from
+// the hostname; a bare container refuses with "unable to auto-detect email
+// address". setupUnitWorktree() runs inside POST /api/tasks, so that failure took
+// the whole request down with it. The official Docker image is exactly such a
+// machine: git installed, no identity set.
+//
+// Asserting "it did not throw" is NOT enough — a developer machine auto-detects
+// and passes either way, which is how a green test can hide a broken fix. The
+// pin is the AUTHOR: with the fallback the commit is ours, without it the commit
+// is whatever git guessed (or there is no commit at all).
+console.log('\nbootstrapping without a configured git identity:');
+{
+  const os2 = require('os'), fs2 = require('fs'), path2 = require('path');
+  const { execFileSync } = require('child_process');
+  const dir = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'wm-noident-'));
+  const saved = { g: process.env.GIT_CONFIG_GLOBAL, s: process.env.GIT_CONFIG_SYSTEM };
+  try {
+    process.env.GIT_CONFIG_GLOBAL = '/dev/null';
+    process.env.GIT_CONFIG_SYSTEM = '/dev/null';
+    let branch = null, threw = null;
+    try { branch = WM.ensureGitInitialized(dir); } catch (e) { threw = e; }
+    check('it does not throw', threw === null, true);
+    check('and reports a branch', typeof branch === 'string' && branch.length > 0, true);
+    const author = execFileSync('git', ['log', '-1', '--format=%ae'], { cwd: dir, encoding: 'utf8' }).trim();
+    check('the bootstrap commit is attributed to the studio, not to a guessed address',
+      author, 'claude-code-studio@localhost');
+  } finally {
+    if (saved.g === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = saved.g;
+    if (saved.s === undefined) delete process.env.GIT_CONFIG_SYSTEM; else process.env.GIT_CONFIG_SYSTEM = saved.s;
+    try { fs2.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
+}
+
+// A project that DOES have an identity must keep it — a bootstrap commit in the
+// user's own repo belongs to the user, not to us.
+console.log('\nan existing identity is never overridden:');
+{
+  const os2 = require('os'), fs2 = require('fs'), path2 = require('path');
+  const { execFileSync } = require('child_process');
+  const dir = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'wm-ident-'));
+  try {
+    execFileSync('git', ['init', '-q'], { cwd: dir, stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.email', 'someone@example.com'], { cwd: dir, stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.name', 'Someone'], { cwd: dir, stdio: 'ignore' });
+    WM.ensureGitInitialized(dir);
+    const author = execFileSync('git', ['log', '-1', '--format=%ae'], { cwd: dir, encoding: 'utf8' }).trim();
+    check('the project owner authored the bootstrap commit', author, 'someone@example.com');
+  } finally {
+    try { fs2.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
+}
+
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
 }
