@@ -1514,12 +1514,6 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .export-menu { position:absolute; top:calc(100% + 4px); left:0; z-index:60; background:var(--s2); border:1px solid var(--border); border-radius:var(--r-sm); padding:6px; display:flex; flex-direction:column; gap:3px; min-width:150px; box-shadow:var(--shadow-md); }
 .export-menu-opt { display:flex; align-items:center; gap:6px; width:100%; text-align:left; font-family:inherit; font-size:12px; color:var(--text); background:transparent; border:none; padding:5px 7px; border-radius:4px; cursor:pointer; user-select:none; transition:background .15s,color .15s; }
 .export-menu-opt:hover { background:var(--s3); color:var(--green); }
-.sess-git-chip { font-size:11px; color:var(--text-dim); background:transparent; border:1px solid var(--border); padding:1px 7px; border-radius:4px; cursor:pointer; flex-shrink:0; display:inline-flex; align-items:center; gap:5px; }
-.sess-git-dot { width:7px; height:7px; border-radius:50%; display:inline-block; background:var(--muted); }
-.sess-git-dot.green { background:#3fb950; }
-.sess-git-dot.amber { background:#f59e0b; }
-.sess-git-dot.red { background:#f85149; }
-.sess-git-dot.purple { background:#a78bfa; }
 
 /* ─── Retry indicators ─── */
 .retry-badge { font-size:11px; color:var(--text-dim); opacity:.65; margin-top:3px; letter-spacing:.01em; }
@@ -3462,14 +3456,6 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <button type="button" class="export-menu-opt" onclick="closeExportMenu();exportSessionMd()">Markdown (.md)</button>
       </div>
     </div>
-    <div id="sessBarGitWrap" class="sess-export-wrap" style="display:none;">
-      <button id="sessBarGitChip" class="sess-git-chip" onclick="toggleGitChipMenu(event)"><span id="sessBarGitDot" class="sess-git-dot"></span><span id="sessBarGitLabel"></span></button>
-      <div id="sessBarGitMenu" class="export-menu" style="display:none;">
-        <div id="sessBarGitBranchName" style="padding:6px 10px 2px;font-family:monospace;font-size:10px;color:var(--muted);word-break:break-all;"></div>
-        <button type="button" class="export-menu-opt" id="sessBarGitCommitOpt" onclick="gitChipCommit()" data-i18n="git.commit">Commit changes</button>
-        <button type="button" class="export-menu-opt" id="sessBarGitMergeOpt" onclick="gitChipMerge()" data-i18n="git.merge">Merge into main</button>
-      </div>
-    </div>
     <button id="sessBarNotesBtn" class="sess-export-btn" style="display:none;" onclick="toggleNotesPanel()" data-i18n-title="notes.title" title="Session notes (private)">📝 <span data-i18n="notes.btn">Notes</span></button>
     <input type="file" id="sessImportInput" accept=".json" style="display:none" onchange="importSessionFile(this)">
   </div>
@@ -4978,7 +4964,6 @@ const TRANSLATIONS = {
     'hist.drag':'Перетягнути','tg.device.connected':'📱 Telegram: {name} підключено',
     'tg.bot.started':'✅ Telegram-бот запущено: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Стиснути чат і відкрити нову сесію','compact.loading':'Стиснення…','compact.success':'✅ Чат стиснено — відкриваю нову сесію','compact.err':'Помилка стиснення',
-    'git.clean':'на основній гілці','git.ahead':'є незлиті зміни','git.dirty':'є незбережені зміни','git.conflict':'конфлікт злиття','git.commit':'Закомітити зміни','git.merge':'Злити в основну гілку','git.committed':'✅ Закомічено','git.nothing':'Немає змін для коміту','git.merged':'✅ Злито в основну гілку','git.err':'Помилка git',
     'cli.import.tip':'Імпорт сесій Claude CLI','cli.import.title':'Імпорт сесій Claude CLI',
     'cli.import.source':'Джерело:', 'cli.import.source_local':'Ця машина', 'cli.import.no_hosts':'Немає збережених SSH-хостів — додайте його в розділі віддалених хостів', 'cli.import.remote_hint':'Залиште проект порожнім, щоб просканувати всі проекти Claude CLI на хості', 'cli.import.remote_ph':'шлях до проекту на віддаленому хості (необовʼязково)', 'cli.import.list_truncated':'показано перші {n}', 'cli.import.err.host_not_found':'Збережений SSH-хост не знайдено — можливо, його видалили', 'cli.import.err.unreachable':'Не вдається дістатися до хоста — перевірте адресу, порт і мережу', 'cli.import.err.auth_failed':'Помилка автентифікації — перевірте користувача, ключ або пароль', 'cli.import.err.timeout':'Віддалений хост не відповів вчасно', 'cli.import.err.no_claude_dir':'На віддаленому хості немає ~/.claude — Claude CLI там ніколи не запускався', 'cli.import.err.no_projects_dir':'На віддаленому хості немає ~/.claude/projects — імпортувати нічого', 'cli.import.err.invalid_path':'Некоректний шлях до проекту', 'cli.import.err.bad_output':'Неочікувана відповідь віддаленої оболонки', 'cli.import.err.exec_failed':'Віддалена команда завершилася помилкою', 'cli.import.err.host_key_changed':'Ключ віддаленого хоста змінився — зʼєднання відхилено', 'cli.import.err.too_large':'Вибрані сесії перевищують ліміт передавання', 'cli.import.err.too_many':'Вибрано забагато сесій одночасно', 'cli.import.err.import_failed':'Імпорт не вдався', 'cli.import.err.no_sessions':'Не вибрано жодної сесії',
     'cli.import.project':'Проект:','cli.import.load':'Завантажити',
@@ -5380,7 +5365,6 @@ const TRANSLATIONS = {
     'hist.drag':'Drag to reorder','tg.device.connected':'📱 Telegram: {name} connected',
     'tg.bot.started':'✅ Telegram bot started: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Compact chat and start new session','compact.loading':'Compacting…','compact.success':'✅ Chat compacted — opening new session','compact.err':'Compact failed',
-    'git.clean':'on default branch','git.ahead':'has unmerged changes','git.dirty':'has uncommitted changes','git.conflict':'merge conflict','git.commit':'Commit changes','git.merge':'Merge into main','git.committed':'✅ Committed','git.nothing':'Nothing to commit','git.merged':'✅ Merged into main','git.err':'Git error',
     'cli.import.tip':'Import Claude CLI sessions','cli.import.title':'Import Claude CLI Sessions',
     'cli.import.source':'Source:', 'cli.import.source_local':'This machine', 'cli.import.no_hosts':'No saved SSH hosts — add one under Remote hosts', 'cli.import.remote_hint':'Leave the project empty to scan every Claude CLI project on the host', 'cli.import.remote_ph':'project path on the remote host (optional)', 'cli.import.list_truncated':'showing the first {n}', 'cli.import.err.host_not_found':'Saved SSH host not found — it may have been deleted', 'cli.import.err.unreachable':'Cannot reach the host — check the address, the port and the network', 'cli.import.err.auth_failed':'Authentication failed — check the user, the key or the password', 'cli.import.err.timeout':'The remote host did not answer in time', 'cli.import.err.no_claude_dir':'No ~/.claude on the remote host — Claude CLI has never run there', 'cli.import.err.no_projects_dir':'No ~/.claude/projects on the remote host — nothing to import', 'cli.import.err.invalid_path':'Invalid project path', 'cli.import.err.bad_output':'Unexpected reply from the remote shell', 'cli.import.err.exec_failed':'The remote command failed', 'cli.import.err.host_key_changed':'The remote host key changed — refusing to connect', 'cli.import.err.too_large':'The selected sessions exceed the transfer limit', 'cli.import.err.too_many':'Too many sessions selected at once', 'cli.import.err.import_failed':'Import failed', 'cli.import.err.no_sessions':'No sessions selected',
     'cli.import.project':'Project:','cli.import.load':'Load',
@@ -5782,7 +5766,6 @@ const TRANSLATIONS = {
     'hist.drag':'Перетащить','tg.device.connected':'📱 Telegram: {name} подключён',
     'tg.bot.started':'✅ Telegram-бот запущен: @{bot}',
     'compact.btn':'Compact & New','compact.title':'Сжать чат и открыть новую сессию','compact.loading':'Сжатие…','compact.success':'✅ Чат сжат — открываю новую сессию','compact.err':'Ошибка сжатия',
-    'git.clean':'на основной ветке','git.ahead':'есть незлитые изменения','git.dirty':'есть несохранённые изменения','git.conflict':'конфликт слияния','git.commit':'Закоммитить изменения','git.merge':'Слить в основную ветку','git.committed':'✅ Закоммичено','git.nothing':'Нет изменений для коммита','git.merged':'✅ Слито в основную ветку','git.err':'Ошибка git',
     'cli.import.tip':'Импорт сессий Claude CLI','cli.import.title':'Импорт сессий Claude CLI',
     'cli.import.source':'Источник:', 'cli.import.source_local':'Эта машина', 'cli.import.no_hosts':'Нет сохранённых SSH-хостов — добавьте его в разделе удалённых хостов', 'cli.import.remote_hint':'Оставьте проект пустым, чтобы просканировать все проекты Claude CLI на хосте', 'cli.import.remote_ph':'путь к проекту на удалённом хосте (необязательно)', 'cli.import.list_truncated':'показаны первые {n}', 'cli.import.err.host_not_found':'Сохранённый SSH-хост не найден — возможно, он удалён', 'cli.import.err.unreachable':'Не удаётся связаться с хостом — проверьте адрес, порт и сеть', 'cli.import.err.auth_failed':'Ошибка аутентификации — проверьте пользователя, ключ или пароль', 'cli.import.err.timeout':'Удалённый хост не ответил вовремя', 'cli.import.err.no_claude_dir':'На удалённом хосте нет ~/.claude — Claude CLI там никогда не запускался', 'cli.import.err.no_projects_dir':'На удалённом хосте нет ~/.claude/projects — импортировать нечего', 'cli.import.err.invalid_path':'Некорректный путь к проекту', 'cli.import.err.bad_output':'Неожиданный ответ удалённой оболочки', 'cli.import.err.exec_failed':'Удалённая команда завершилась ошибкой', 'cli.import.err.host_key_changed':'Ключ удалённого хоста изменился — соединение отклонено', 'cli.import.err.too_large':'Выбранные сессии превышают лимит передачи', 'cli.import.err.too_many':'Выбрано слишком много сессий сразу', 'cli.import.err.import_failed':'Импорт не удался', 'cli.import.err.no_sessions':'Не выбрано ни одной сессии',
     'cli.import.project':'Проект:','cli.import.load':'Загрузить',
@@ -6094,7 +6077,7 @@ const TRANSLATIONS = {
     "skill.custom_cat":"🔧 Personnalisé","files.remote_unavail":"🌐 Projet distant —<br>navigateur de fichiers non disponible","files.truncated":"… liste tronquée — trop de fichiers dans ce dossier","fpv.remote_binary":"Aperçu indisponible pour les projets distants (texte uniquement)","hist.drag":"Glisser pour réorganiser",
     "tg.device.connected":"📱 Telegram : {name} connecté","tg.bot.started":"✅ Bot Telegram démarré : @{bot}","compact.btn":"Compacter et nouveau",
     "compact.title":"Compacter le chat et démarrer une nouvelle session","compact.loading":"Compactage…","compact.success":"✅ Chat compacté — ouverture d'une nouvelle session",
-    "compact.err":"Échec du compactage","git.clean":"sur la branche par défaut","git.ahead":"a des changements non fusionnés","git.dirty":"a des changements non commités","git.conflict":"conflit de fusion","git.commit":"Commiter les changements","git.merge":"Fusionner dans la branche principale","git.committed":"✅ Commité","git.nothing":"Rien à commiter","git.merged":"✅ Fusionné dans la branche principale","git.err":"Erreur git","cli.import.tip":"Importer des sessions Claude CLI","cli.import.title":"Importer des sessions Claude CLI","cli.import.project":"Projet :",
+    "compact.err":"Échec du compactage","cli.import.tip":"Importer des sessions Claude CLI","cli.import.title":"Importer des sessions Claude CLI","cli.import.project":"Projet :",
     'cli.import.source':'Source :', 'cli.import.source_local':'Cette machine', 'cli.import.no_hosts':'Aucun hôte SSH enregistré — ajoutez-en un dans la section des hôtes distants', 'cli.import.remote_hint':'Laissez le projet vide pour analyser tous les projets Claude CLI de l’hôte', 'cli.import.remote_ph':'chemin du projet sur l’hôte distant (facultatif)', 'cli.import.list_truncated':'les {n} premières affichées', 'cli.import.err.host_not_found':'Hôte SSH enregistré introuvable — il a peut-être été supprimé', 'cli.import.err.unreachable':'Impossible de joindre l’hôte — vérifiez l’adresse, le port et le réseau', 'cli.import.err.auth_failed':'Échec de l’authentification — vérifiez l’utilisateur, la clé ou le mot de passe', 'cli.import.err.timeout':'L’hôte distant n’a pas répondu à temps', 'cli.import.err.no_claude_dir':'Aucun ~/.claude sur l’hôte distant — Claude CLI n’y a jamais été lancé', 'cli.import.err.no_projects_dir':'Aucun ~/.claude/projects sur l’hôte distant — rien à importer', 'cli.import.err.invalid_path':'Chemin de projet invalide', 'cli.import.err.bad_output':'Réponse inattendue du shell distant', 'cli.import.err.exec_failed':'La commande distante a échoué', 'cli.import.err.host_key_changed':'La clé de l’hôte distant a changé — connexion refusée', 'cli.import.err.too_large':'Les sessions sélectionnées dépassent la limite de transfert', 'cli.import.err.too_many':'Trop de sessions sélectionnées à la fois', 'cli.import.err.import_failed':'Échec de l’importation', 'cli.import.err.no_sessions':'Aucune session sélectionnée',
     "cli.import.load":"Charger","cli.import.hint":"Saisissez le chemin du projet et cliquez sur «Charger»","cli.import.do":"Importer la sélection","cli.import.sel_all":"Tout sélectionner",
     "cli.import.loading":"Chargement…","cli.import.found_n":"Trouvé : {n} sessions dans","cli.import.no_sessions":"Aucune session trouvée","cli.import.msgs":"msgs","cli.import.already":"Déjà importé",
@@ -6371,7 +6354,6 @@ const TRANSLATIONS = {
     "notif.dismiss":"סגירה","msf.plan_kanban":"תוכנית → Kanban","msf.open_kanban":"פתיחת Kanban →","msf.sent":"✅ נשלח","skill.custom_desc":"Skill מותאם אישית","skill.custom_cat":"🔧 מותאם אישית",
     "files.remote_unavail":"🌐 פרויקט מרוחק —<br>דפדפן הקבצים לא זמין","files.truncated":"… הרשימה נחתכה — יותר מדי קבצים בתיקייה זו","fpv.remote_binary":"תצוגה מקדימה אינה זמינה לפרויקטים מרוחקים (טקסט בלבד)","hist.drag":"גררו לסידור מחדש","tg.device.connected":"📱 Telegram: {name} התחבר","tg.bot.started":"✅ בוט ה-Telegram הופעל: @{bot}",
     "compact.btn":"כיווץ וחדש","compact.title":"כיווץ הצ'אט ופתיחת סשן חדש","compact.loading":"מכווץ…","compact.success":"✅ הצ'אט כווץ — פותח סשן חדש","compact.err":"הכיווץ נכשל",
-    "git.clean":"על הענף הראשי","git.ahead":"יש שינויים לא ממוזגים","git.dirty":"יש שינויים לא שמורים","git.conflict":"התנגשות מיזוג","git.commit":"קומיט לשינויים","git.merge":"מיזוג לענף הראשי","git.committed":"✅ בוצע קומיט","git.nothing":"אין שינויים לקומיט","git.merged":"✅ מוזג לענף הראשי","git.err":"שגיאת git",
     "cli.import.tip":"ייבוא סשנים של Claude CLI","cli.import.title":"ייבוא סשנים של Claude CLI","cli.import.project":"פרויקט:","cli.import.load":"טעינה",
     'cli.import.source':'מקור:', 'cli.import.source_local':'המחשב הזה', 'cli.import.no_hosts':'אין מארחי SSH שמורים — הוסיפו אחד במקטע המארחים המרוחקים', 'cli.import.remote_hint':'השאירו את הפרויקט ריק כדי לסרוק את כל פרויקטי Claude CLI במארח', 'cli.import.remote_ph':'נתיב הפרויקט במארח המרוחק (רשות)', 'cli.import.list_truncated':'מוצגים {n} הראשונים', 'cli.import.err.host_not_found':'המארח השמור לא נמצא — ייתכן שנמחק', 'cli.import.err.unreachable':'לא ניתן להגיע למארח — בדקו את הכתובת, הפורט והרשת', 'cli.import.err.auth_failed':'האימות נכשל — בדקו את המשתמש, המפתח או הסיסמה', 'cli.import.err.timeout':'המארח המרוחק לא הגיב בזמן', 'cli.import.err.no_claude_dir':'אין ~/.claude במארח המרוחק — Claude CLI מעולם לא רץ שם', 'cli.import.err.no_projects_dir':'אין ~/.claude/projects במארח המרוחק — אין מה לייבא', 'cli.import.err.invalid_path':'נתיב פרויקט לא תקין', 'cli.import.err.bad_output':'תשובה בלתי צפויה מהמעטפת המרוחקת', 'cli.import.err.exec_failed':'הפקודה המרוחקת נכשלה', 'cli.import.err.host_key_changed':'מפתח המארח המרוחק השתנה — ההתחברות נדחתה', 'cli.import.err.too_large':'הסשנים שנבחרו חורגים ממגבלת ההעברה', 'cli.import.err.too_many':'נבחרו יותר מדי סשנים בבת אחת', 'cli.import.err.import_failed':'הייבוא נכשל', 'cli.import.err.no_sessions':'לא נבחר אף סשן',
     "cli.import.hint":"הזינו נתיב לפרויקט ולחצו «טעינה»","cli.import.do":"ייבוא הנבחרים","cli.import.sel_all":"בחירת הכול","cli.import.loading":"טוען…","cli.import.found_n":"נמצאו: {n} סשנים ב",
@@ -7690,9 +7672,6 @@ function handleWsMsg(d) {
       // while its history is already loaded (no tab switch, no reload) leaves an
       // undelivered clarification badge reading "pending" after the task actually ended.
       if (tabId === currentSessionId) _curSessionTaskRunning = false;
-      // gitStatus rides the `done` frame so the branch chip updates without an
-      // extra round trip — only meaningful for the tab currently on screen.
-      if (tabId === currentSessionId && d.gitStatus !== undefined) _renderGitStatus(d.gitStatus);
       // Keep the finished line-up visible for a moment — it is the record of who did
       // what — then clear it so the composer area does not accumulate old turns.
       if (_turnBots.length) setTimeout(clearBotsStrip, 6000);
@@ -10614,7 +10593,6 @@ async function updateSessBar(opts = {}) {
     }
     const exportWrap = $i('sessBarExportWrap');
     if (exportWrap) exportWrap.style.display = currentSessionId ? 'inline-flex' : 'none';
-    _renderGitStatus(sess.gitStatus);
     const notesBtn = $i('sessBarNotesBtn');
     if (notesBtn) notesBtn.style.display = currentSessionId ? 'inline-flex' : 'none';
     const maxBadge = $i('sessBarMaxBadge');
@@ -10753,63 +10731,6 @@ document.addEventListener('click', (e) => {
   const wrap = $i('sessBarExportWrap');
   if (wrap && !wrap.contains(e.target)) closeExportMenu();
 });
-
-// ─── Worktree branch-status chip ─────────────────────────────────────────
-// green = on default branch (or no isolation); amber = own branch, clean;
-// red = own branch, uncommitted changes; purple = auto-merge hit a conflict.
-function _renderGitStatus(status) {
-  const wrap = $i('sessBarGitWrap');
-  if (!wrap) return;
-  if (!status) { wrap.style.display = 'none'; closeGitChipMenu(); return; }
-  wrap.style.display = '';
-  const dot = $i('sessBarGitDot');
-  const label = $i('sessBarGitLabel');
-  const branchEl = $i('sessBarGitBranchName');
-  const commitOpt = $i('sessBarGitCommitOpt');
-  const mergeOpt = $i('sessBarGitMergeOpt');
-  dot.className = 'sess-git-dot ' + (status.state || '');
-  const labels = { green: t('git.clean'), amber: t('git.ahead'), red: t('git.dirty'), purple: t('git.conflict') };
-  label.textContent = labels[status.state] || status.state || '';
-  if (branchEl) branchEl.textContent = status.branch || '';
-  if (commitOpt) commitOpt.style.display = status.state === 'red' ? '' : 'none';
-  if (mergeOpt) mergeOpt.style.display = (status.state === 'amber' || status.state === 'red' || status.state === 'purple') ? '' : 'none';
-}
-function toggleGitChipMenu(e) {
-  if (e) e.stopPropagation();
-  const menu = $i('sessBarGitMenu');
-  if (!menu) return;
-  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
-}
-function closeGitChipMenu() {
-  const menu = $i('sessBarGitMenu');
-  if (menu) menu.style.display = 'none';
-}
-document.addEventListener('click', (e) => {
-  const wrap = $i('sessBarGitWrap');
-  if (wrap && !wrap.contains(e.target)) closeGitChipMenu();
-});
-async function gitChipCommit() {
-  closeGitChipMenu();
-  if (!currentSessionId) return;
-  try {
-    const r = await fetch(`/api/sessions/${currentSessionId}/git-commit`, { method: 'POST' });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) { toast('❌ ' + (d.error || t('git.err')), true); return; }
-    _renderGitStatus(d.status);
-    toast(d.committed ? t('git.committed') : t('git.nothing'));
-  } catch (e) { toast('❌ ' + t('git.err') + ': ' + e.message, true); }
-}
-async function gitChipMerge() {
-  closeGitChipMenu();
-  if (!currentSessionId) return;
-  try {
-    const r = await fetch(`/api/sessions/${currentSessionId}/git-merge`, { method: 'POST' });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) { toast('❌ ' + (d.error || t('git.err')), true); return; }
-    _renderGitStatus(d.status);
-    toast(d.ok ? t('git.merged') : ('⚠️ ' + t('git.conflict')), !d.ok);
-  } catch (e) { toast('❌ ' + t('git.err') + ': ' + e.message, true); }
-}
 
 async function exportSession() {
   if (!currentSessionId) return;

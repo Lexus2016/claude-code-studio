@@ -126,7 +126,6 @@ const botsLogic = require('./bots');
 // to go on".
 const BARE_MENTION_PROMPT = "You were addressed directly with no other text — greet them and ask what they need, or continue naturally if there is relevant prior context in this conversation.";
 const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName: interactiveTmuxName, listOrphanedDefaultSocketSessions } = require('./claude-interactive');
-const WM = require('./worktree-manager');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
 const TelegramBot = require('./telegram-bot');
@@ -688,17 +687,6 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN agent_conv_id TEXT`); } catch {} 
 // conversation id is NOT resumable: starting with `--resume <uuid>` before the
 // first run makes the agent fail on a conversation that does not exist yet.
 try { db.exec(`ALTER TABLE sessions ADD COLUMN terminal_started INTEGER DEFAULT 0`); } catch {}
-// Worktree isolation (issue: git-worktree-per-session). git_root is the ORIGINAL
-// project workdir (session.workdir becomes the worktree path once isolated);
-// git_conflict is a stored flag, not derived from git state — a merge conflict
-// happens in git_root, not in the session's own worktree, so it cannot be
-// recomputed from the worktree alone. See worktree-manager.js.
-try { db.exec(`ALTER TABLE sessions ADD COLUMN git_root TEXT`); } catch {}
-try { db.exec(`ALTER TABLE sessions ADD COLUMN git_branch TEXT`); } catch {}
-try { db.exec(`ALTER TABLE sessions ADD COLUMN git_conflict INTEGER DEFAULT 0`); } catch {}
-try { db.exec(`ALTER TABLE tasks ADD COLUMN git_root TEXT`); } catch {}
-try { db.exec(`ALTER TABLE tasks ADD COLUMN git_branch TEXT`); } catch {}
-try { db.exec(`ALTER TABLE tasks ADD COLUMN git_conflict INTEGER DEFAULT 0`); } catch {}
 // Performance indexes — safe to re-run (IF NOT EXISTS)
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_status   ON tasks(status)`); } catch {}
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_task_session  ON tasks(session_id)`); } catch {}
@@ -974,7 +962,7 @@ const stmts = {
   })(),
   updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
   getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
-  getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE COALESCE(git_root, workdir)=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
+  getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE workdir=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSession: db.prepare(`SELECT * FROM sessions WHERE id=?`),
   deleteSession: db.prepare(`DELETE FROM sessions WHERE id=?`),
   addMsg: db.prepare(`INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments) VALUES (?,?,?,?,?,?,?,?)`),
@@ -1002,7 +990,7 @@ const stmts = {
     SELECT t.*, s.title as sess_title, s.claude_session_id, s.model as sess_model,
            s.updated_at as sess_updated_at, COALESCE(s.retry_count, 0) as retry_count
     FROM tasks t LEFT JOIN sessions s ON t.session_id = s.id
-    WHERE (@w IS NULL OR COALESCE(t.git_root, t.workdir) = @w)
+    WHERE (@w IS NULL OR t.workdir = @w)
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
@@ -1018,16 +1006,10 @@ const stmts = {
   // one scan of idx_task_wd_status, not N round trips. Rows whose workdir is NULL
   // (tasks created before the column existed) group under the NULL key and are
   // reported as unassigned rather than silently dropped.
-  // COALESCE(git_root, workdir): a worktree-isolated task's `workdir` is its own
-  // private worktree subdirectory (see setupUnitWorktree), not the project root —
-  // grouping/matching on the bare column would put every isolated task in its own
-  // one-task "project". git_root is the original project workdir; NULL for a task
-  // that predates isolation or whose project has no git, so the coalesce is a no-op
-  // for those and they resolve exactly as before.
   globalTaskRollup: db.prepare(`
-    SELECT COALESCE(git_root, workdir) AS wd, status AS status, COUNT(*) AS n
+    SELECT workdir AS wd, status AS status, COUNT(*) AS n
     FROM tasks
-    GROUP BY COALESCE(git_root, workdir), status
+    GROUP BY workdir, status
   `),
   // Bucketing is done by SQL, not by three separate queries or a JS pass: `now` and
   // `dayEnd` are bound once and the CASE labels every row in the single ordered scan.
@@ -1035,7 +1017,7 @@ const stmts = {
   // a dated task left in `backlog` never fires (see test/kanban-schedule.test.js), so
   // listing it as "overdue" would promise something the scheduler does not deliver.
   globalDueTasks: db.prepare(`
-    SELECT id, title, status, COALESCE(git_root, workdir) AS workdir, session_id, scheduled_at, recurrence, failure_reason,
+    SELECT id, title, status, workdir, session_id, scheduled_at, recurrence, failure_reason,
            CASE WHEN scheduled_at <  ? THEN 'overdue'
                 WHEN scheduled_at <  ? THEN 'today'
                 ELSE 'upcoming' END AS bucket
@@ -1051,17 +1033,17 @@ const stmts = {
   globalSearch: db.prepare(`
     SELECT * FROM (
       SELECT 'task' AS kind, t.id AS id, t.title AS title, t.status AS status,
-             COALESCE(t.git_root, t.workdir) AS workdir, t.session_id AS session_id,
+             t.workdir AS workdir, t.session_id AS session_id,
              t.scheduled_at AS scheduled_at, t.updated_at AS updated_at
       FROM tasks t
-      WHERE (? IS NULL OR COALESCE(t.git_root, t.workdir) = ?)
+      WHERE (? IS NULL OR t.workdir = ?)
         AND (t.title LIKE ? ESCAPE '\\' OR COALESCE(t.description,'') LIKE ? ESCAPE '\\')
       UNION ALL
       SELECT 'chat', s.id, s.title, NULL,
-             COALESCE(s.git_root, s.workdir), s.id,
+             s.workdir, s.id,
              NULL, s.updated_at
       FROM sessions s
-      WHERE (? IS NULL OR COALESCE(s.git_root, s.workdir) = ?)
+      WHERE (? IS NULL OR s.workdir = ?)
         AND COALESCE(s.kind,'chat') = 'chat'
         AND s.title LIKE ? ESCAPE '\\'
     )
@@ -1075,11 +1057,6 @@ const stmts = {
   // startTask hot-path
   setTaskSession:    db.prepare(`UPDATE tasks SET session_id=?, updated_at=datetime('now') WHERE id=?`),
   setTaskInProgress: db.prepare(`UPDATE tasks SET status='in_progress', updated_at=datetime('now') WHERE id=?`),
-  // Worktree isolation
-  setSessionGit: db.prepare(`UPDATE sessions SET workdir=?, git_root=?, git_branch=? WHERE id=?`),
-  setSessionGitConflict: db.prepare(`UPDATE sessions SET git_conflict=? WHERE id=?`),
-  setTaskGit: db.prepare(`UPDATE tasks SET workdir=?, git_root=?, git_branch=? WHERE id=?`),
-  setTaskGitConflict: db.prepare(`UPDATE tasks SET git_conflict=? WHERE id=?`),
   // Stats queries
   activeAgents: db.prepare(`
     SELECT DISTINCT agent_id
@@ -2098,58 +2075,8 @@ async function startTask(task) {
           // ✅ Success — recurring standalone tasks re-arm directly (skip intermediate 'done')
           const reArmed = (task.recurrence && !task.chain_id) ? scheduleNextRun(task) : false;
           if (!reArmed) {
-            // Autonomous tasks auto-merge into the project's default branch the
-            // moment they would be marked done (actor-differentiated merge
-            // policy — interactive sessions never auto-merge). A conflict must
-            // not retry silently: it lands on the existing 'cancelled' terminal
-            // state (same convention the usage-limit-exhausted/rate-limited
-            // branches below already use) with git_conflict set so the branch
-            // status chip can show 'purple' and failure_reason naming the cause.
-            let _mergeConflict = false;
-            if (task.git_root && task.git_branch) {
-              try {
-                // Auto-commit any edits the task left uncommitted before merging.
-                // mergeBranch() only merges already-committed history, and nothing
-                // forces the claude subprocess to `git commit` as its last action —
-                // without this, an ordinary task run would have its own edits
-                // silently destroyed by the removeWorktree() below. Only commit if
-                // the worktree is still actually on the task's own branch — a stray
-                // `git checkout` inside the task (or a detached HEAD, which reports
-                // '' from `branch --show-current`) would otherwise commit real work
-                // onto the wrong ref, or silently no-op into limbo.
-                const _defaultBranch = WM.getDefaultBranch(task.git_root);
-                if (task.workdir) {
-                  const _wtStatus = WM.getStatus({ worktreeDir: task.workdir, defaultBranch: _defaultBranch });
-                  if (_wtStatus.branch === task.git_branch) {
-                    WM.commitAll({ worktreeDir: task.workdir, message: `Auto-commit: task ${task.id} completion` });
-                  } else {
-                    log.warn('[taskWorker] worktree not on expected branch, skipping auto-commit', { taskId: task.id, expected: task.git_branch, actual: _wtStatus.branch });
-                  }
-                }
-                const _merge = await WM.mergeBranch({ projectDir: task.git_root, defaultBranch: _defaultBranch, branch: task.git_branch });
-                _mergeConflict = !_merge.ok;
-              } catch (e) {
-                log.error('[taskWorker] auto-merge failed', { taskId: task.id, err: e.message });
-                _mergeConflict = true;
-              }
-            }
-            if (_mergeConflict) {
-              stmts.setTaskGitConflict.run(1, task.id);
-              db.prepare(`UPDATE tasks SET status='cancelled', failure_reason='merge_conflict', worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
-                .run(task.id);
-              log.warn(`[taskWorker] task ${task.id}: merge conflict — cancelled instead of done, not retried`);
-            } else {
-              stmts.setTaskGitConflict.run(0, task.id);
-              db.prepare(`UPDATE tasks SET status='done', failure_reason=NULL, usage_limit_pauses=0, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
-                .run(task.id);
-              // Merged cleanly — the branch's commits now live on the default branch,
-              // so the worktree/branch pair is safe to remove. On conflict, leave both
-              // in place: removeWorktree also deletes the branch, which would strand
-              // the unmerged commits with no ref pointing at them.
-              if (task.git_root && task.workdir && task.git_branch) {
-                try { WM.removeWorktree({ projectDir: task.git_root, worktreeDir: task.workdir, branch: task.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed after task auto-merge', { taskId: task.id, err: e.message }); }
-              }
-            }
+            db.prepare(`UPDATE tasks SET status='done', failure_reason=NULL, usage_limit_pauses=0, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
+              .run(task.id);
           }
           db.prepare(`UPDATE sessions SET retry_count=0 WHERE id=?`).run(sessionId);
           log.info(`[taskWorker] task ${task.id}: ${reArmed ? 're-armed' : 'done'}`);
@@ -3388,73 +3315,6 @@ async function classifyTask(userMessage, currentSkills, config, workdir) {
 function loadProjects() { try { return JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8')); } catch { return []; } }
 function saveProjects(p) { const d=path.dirname(PROJECTS_FILE); if(!fs.existsSync(d)) fs.mkdirSync(d,{recursive:true}); atomicWriteJSON(PROJECTS_FILE, p); }
 
-// ============================================
-// WORKTREE ISOLATION — see docs/superpowers/specs/2026-08-25-worktree-isolation-design.md
-// ============================================
-// Namespaces the worktree path by project. A registered project keeps its own id;
-// most sessions run against the bare default WORKDIR with no project record at
-// all, so those get a stable hash of the resolved root instead.
-function _worktreeProjectSlug(root) {
-  let resolved; try { resolved = path.resolve(root); } catch { resolved = String(root); }
-  const proj = loadProjects().find(p => { try { return path.resolve(p.workdir) === resolved; } catch { return false; } });
-  if (proj) return proj.id;
-  return crypto.createHash('sha1').update(resolved).digest('hex').slice(0, 12);
-}
-
-/**
- * Creates (or reuses) a per-unit git worktree so a chat/terminal session or an
- * autonomous task never writes into the same directory another one is using —
- * holds for all three write channels (claude CLI, tmux pane, Telegram bot)
- * because it is filesystem isolation, not an interceptable lock.
- *
- * Returns null for a remote project (out of scope — different filesystem
- * boundary) or when no local root is given at all. Throws GIT_UNAVAILABLE
- * when git is missing — session/task creation must hard-block, not silently
- * fall back to the shared workdir that isolation exists to remove.
- * @param {'session'|'task'} kind
- * @param {string} unitId
- * @param {string|null} requestedWorkdir
- */
-function setupUnitWorktree(kind, unitId, requestedWorkdir) {
-  // No workdir at all means "not tied to a project" — a legitimate, distinct state
-  // (see test/global-workspace.test.js: a task with no workdir keeps workdir=NULL
-  // in the aggregation instead of being folded into a phantom default-WORKDIR
-  // project). Defaulting to the global WORKDIR here would silently attribute it
-  // to one.
-  if (!requestedWorkdir) return null;
-  if (isRegisteredRemoteWorkdir(requestedWorkdir)) return null;
-  const root = requestedWorkdir;
-  if (!WM.gitAvailable()) {
-    const err = new Error('Git is required for session isolation but is not available on this server');
-    err.code = 'GIT_UNAVAILABLE';
-    throw err;
-  }
-  const defaultBranch = WM.ensureGitInitialized(root);
-  const slug = _worktreeProjectSlug(root);
-  const worktreeDir = WM.worktreePath(APP_DIR, slug, `${kind}-${unitId}`);
-  const branch = WM.branchNameFor(kind, unitId);
-  WM.ensureWorktree({ projectDir: root, worktreeDir, branch });
-  return { workdir: worktreeDir, git_root: root, git_branch: branch, defaultBranch };
-}
-
-/**
- * Branch-status for the chat UI chip. green/amber/red from git state; purple
- * (merge conflict) overlays the stored git_conflict flag — a conflict happens
- * in git_root, the shared project root, not in the unit's own worktree, so it
- * cannot be recomputed from the worktree alone.
- */
-function getUnitGitStatus(row) {
-  if (!row || !row.git_root || !row.workdir) return null;
-  if (row.git_conflict) return { state: 'purple', branch: row.git_branch, git_root: row.git_root };
-  try {
-    const defaultBranch = WM.getDefaultBranch(row.git_root);
-    const status = WM.getStatus({ worktreeDir: row.workdir, defaultBranch });
-    return { ...status, git_root: row.git_root };
-  } catch {
-    return null;
-  }
-}
-
 /**
  * The five new-chat dials (#58) resolved for a workdir: project override > global > BUILTIN.
  * Sessions carry no `project_id` column, so the project is matched by workdir the same way
@@ -3489,9 +3349,8 @@ function getNotificationContext(sessionId) {
     if (!sess) return { sessionTitle: null, projectName: null };
     const sessionTitle = (sess.title && !DEFAULT_SESSION_TITLES.has(sess.title)) ? sess.title : null;
     let projectName = null;
-    const sessWd = sess.git_root || sess.workdir;
-    if (sessWd) {
-      const proj = loadProjects().find(p => p.workdir === sessWd);
+    if (sess.workdir) {
+      const proj = loadProjects().find(p => p.workdir === sess.workdir);
       projectName = proj?.name || null;
     }
     return { sessionTitle, projectName };
@@ -5557,16 +5416,13 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         let query = 'SELECT id, title, status, sort_order, chain_id, depends_on, parent_task_id, scheduled_at, created_at FROM tasks WHERE 1=1';
         const params = [];
 
-        // Scope to same workdir as caller (explicit NULL handling). git_root, when set,
-        // is the project root a worktree-isolated task actually belongs to — its own
-        // `workdir` is a private per-task worktree no sibling task shares.
+        // Scope to same workdir as caller (explicit NULL handling)
         const callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
-        const callerWd = callerTask ? (callerTask.git_root || callerTask.workdir) : null;
-        if (callerWd) {
-          query += ' AND COALESCE(git_root, workdir)=?';
-          params.push(callerWd);
+        if (callerTask?.workdir) {
+          query += ' AND workdir=?';
+          params.push(callerTask.workdir);
         } else if (callerTask) {
-          query += ' AND COALESCE(git_root, workdir) IS NULL';
+          query += ' AND workdir IS NULL';
         }
         if (filterStatus) { query += ' AND status=?'; params.push(filterStatus); }
         if (filterChain) { query += ' AND chain_id=?'; params.push(filterChain); }
@@ -5978,7 +5834,7 @@ app.get('/api/version', (_, res) => {
   // claudeCli: same up-front-capability idea as tmuxAvailable — lets the UI warn
   // before a chat send fails on a missing/unauthenticated local `claude` binary.
   const _ed = editorLinks.editorFor(loadMergedConfig().editor);
-  res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable(), gitAvailable: WM.gitAvailable(), defaultEngine: (loadMergedConfig().defaultEngine === 'subscription' ? 'subscription' : 'api'), editor: { id: _ed.id, label: _ed.label }, claudeCli: ClaudeCLI.claudeCliStatus() });
+  res.json({ version: pkg.version, name: pkg.name, tmuxAvailable: tmuxAvailable(), defaultEngine: (loadMergedConfig().defaultEngine === 'subscription' ? 'subscription' : 'api'), editor: { id: _ed.id, label: _ed.label }, claudeCli: ClaudeCLI.claudeCliStatus() });
 });
 
 // Capability-checked, never OS-sniffed — the same pattern as tmuxAvailable for the
@@ -6326,7 +6182,7 @@ app.get('/api/activity', (req, res) => {
       return m ? { project_id: m.id, project_name: m.name }
                : { project_id: null, project_name: path.basename(workdir) };
     };
-    const sessMeta = db.prepare('SELECT id,title,workdir,git_root,model,updated_at FROM sessions WHERE id=?');
+    const sessMeta = db.prepare('SELECT id,title,workdir,model,updated_at FROM sessions WHERE id=?');
 
     // Who is taking part in a run, when bots are. The roadmap called for a separate
     // "Active now" presence strip; this panel already answers "what is running", across
@@ -6367,14 +6223,14 @@ app.get('/api/activity', (req, res) => {
         started_at: info?.startedAt || null,
         status: 'running',
         bots: chatBots(sid),
-        ...resolveProj(s?.git_root || s?.workdir || null),
+        ...resolveProj(s?.workdir || null),
       });
       liveIds.add(sid);
     }
 
     // 2) DB in_progress tasks (scheduler / kanban). Skip ones already represented by an
     //    in-memory chat (precedence activeTasks > task). No live worker => 'recovering'.
-    const inProg = db.prepare(`SELECT id,title,session_id,workdir,git_root,bot_id FROM tasks WHERE status='in_progress'`).all();
+    const inProg = db.prepare(`SELECT id,title,session_id,workdir,bot_id FROM tasks WHERE status='in_progress'`).all();
     for (const tsk of inProg) {
       const sid = tsk.session_id;
       if (sid && liveIds.has(sid)) continue;
@@ -6389,7 +6245,7 @@ app.get('/api/activity', (req, res) => {
         started_at: null,
         status: hasWorker ? 'running' : 'recovering',
         bots: taskBotOf(tsk.bot_id),
-        ...resolveProj(tsk.git_root || tsk.workdir || s?.git_root || s?.workdir || null),
+        ...resolveProj(tsk.workdir || s?.workdir || null),
       });
       if (sid) liveIds.add(sid);
     }
@@ -6419,7 +6275,7 @@ app.get('/api/activity', (req, res) => {
             source: 'terminal',
             started_at: null,
             status: 'running',
-            ...resolveProj(s.git_root || s.workdir || null),
+            ...resolveProj(s.workdir || null),
           });
           liveIds.add(sid);
         }
@@ -6427,7 +6283,7 @@ app.get('/api/activity', (req, res) => {
     }
 
     // 3) Scheduled (upcoming) todo tasks.
-    const sched = db.prepare(`SELECT id,title,session_id,workdir,git_root,scheduled_at,recurrence,failure_reason,bot_id FROM tasks WHERE status='todo' AND scheduled_at IS NOT NULL ORDER BY scheduled_at ASC LIMIT 50`).all();
+    const sched = db.prepare(`SELECT id,title,session_id,workdir,scheduled_at,recurrence,failure_reason,bot_id FROM tasks WHERE status='todo' AND scheduled_at IS NOT NULL ORDER BY scheduled_at ASC LIMIT 50`).all();
     const scheduled = sched.map(tsk => ({
       task_id: tsk.id,
       session_id: tsk.session_id || null,
@@ -6440,11 +6296,11 @@ app.get('/api/activity', (req, res) => {
       // #27: a task waiting out an account usage limit is queued, not merely scheduled —
       // the client marks it so the wait does not read as a user-chosen start time.
       paused_reason: /^usage_limit\b/.test(tsk.failure_reason || '') ? 'usage_limit' : null,
-      ...resolveProj(tsk.git_root || tsk.workdir),
+      ...resolveProj(tsk.workdir),
     }));
 
     // 4) Recent finished sessions (exclude anything currently live).
-    const recentRows = db.prepare('SELECT id,title,workdir,git_root,updated_at FROM sessions ORDER BY updated_at DESC LIMIT 40').all();
+    const recentRows = db.prepare('SELECT id,title,workdir,updated_at FROM sessions ORDER BY updated_at DESC LIMIT 40').all();
     const recent = [];
     for (const s of recentRows) {
       if (liveIds.has(s.id)) continue;
@@ -6452,7 +6308,7 @@ app.get('/api/activity', (req, res) => {
         session_id: s.id,
         title: s.title || 'Untitled',
         updated_at: s.updated_at,
-        ...resolveProj(s.git_root || s.workdir),
+        ...resolveProj(s.workdir),
       });
       if (recent.length >= 10) break;
     }
@@ -6650,21 +6506,8 @@ app.post('/api/tasks', (req, res) => {
     return res.status(400).json({ error: 'unknown session_id' });
   }
   { const bad = badBotId(bot_id); if (bad) return res.status(400).json({ error: bad }); }
-  // Same guard as POST /api/sessions — a Kanban task's workdir becomes the cwd of
-  // an unattended `claude` run, and (below) the project git worktree-isolation
-  // is created against, so it needs the same containment check.
-  if (workdir && !isWorkdirAllowed(workdir)) return res.status(400).json({ error: 'workdir is outside the allowed roots' });
   const id = genId();
-  // Every task that names a project workdir gets its own worktree (design: no
-  // on/off switch) — the actor that auto-merges on completion, unlike an
-  // interactive session. A task with NO workdir is not tied to a project and
-  // stays unisolated, same as before this feature (setupUnitWorktree returns
-  // null for that case).
-  let _wt = null;
-  try { _wt = setupUnitWorktree('task', id, workdir); }
-  catch (e) { if (e.code === 'GIT_UNAVAILABLE') return res.status(400).json({ error: e.message }); throw e; }
-  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(_wt ? _wt.workdir : workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null, sqlVal(run_engine)||null, sqlVal(bot_id)||null);
-  if (_wt) stmts.setTaskGit.run(_wt.workdir, _wt.git_root, _wt.git_branch, id);
+  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null, sqlVal(run_engine)||null, sqlVal(bot_id)||null);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
   res.json(task);
@@ -6717,18 +6560,6 @@ app.put('/api/tasks/:id', (req, res) => {
 });
 app.delete('/api/tasks/:id', (req, res) => {
   const tid = req.params.id;
-  const task = stmts.getTask.get(tid);
-  // Same guard as DELETE /api/sessions/:id: a task cancelled on merge conflict
-  // (or deleted mid-run) can still hold uncommitted/unmerged work in its own
-  // worktree — ?force / body.force bypasses it, same convention.
-  const force = req.query.force === '1' || req.body?.force === true;
-  if (task?.git_root && task?.workdir && !force) {
-    let unmerged = false;
-    try {
-      unmerged = WM.hasUnmergedWork({ worktreeDir: task.workdir, projectDir: task.git_root, defaultBranch: WM.getDefaultBranch(task.git_root), branch: task.git_branch });
-    } catch { /* worktree already gone — nothing to lose */ }
-    if (unmerged) return res.status(409).json({ error: 'task has unmerged or uncommitted changes', code: 'UNMERGED_WORK' });
-  }
   // Abort running subprocess if this task is in progress
   const taskAbort = runningTaskAborts.get(tid);
   if (taskAbort) {
@@ -6736,6 +6567,7 @@ app.delete('/api/tasks/:id', (req, res) => {
     try { taskAbort.abort(); } catch {}
   }
   // Kill worker process directly if PID is known
+  const task = stmts.getTask.get(tid);
   if (task?.worker_pid) killByPid(task.worker_pid);
   // Re-link depends_on for chain tasks so the next task doesn't get stuck
   if (task?.chain_id) {
@@ -6749,15 +6581,6 @@ app.delete('/api/tasks/:id', (req, res) => {
     }
   }
   stmts.deleteTask.run(tid);
-  // Autonomous tasks auto-merge on success and clean up their own worktree there;
-  // this path only still finds one for a task deleted while running, cancelled, or
-  // stuck in a merge conflict. force:true because a conflicted branch's commits
-  // are exactly what a task's own worktree holds and deleting it is what the
-  // user asked for by deleting the task — mirrors the session delete guard's
-  // ?force bypass, not a silent skip of it.
-  if (task?.git_root && task?.workdir) {
-    try { WM.removeWorktree({ projectDir: task.git_root, worktreeDir: task.workdir, branch: task.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on task delete', { tid, err: e.message }); }
-  }
   res.json({ ok: true });
 });
 
@@ -7043,9 +6866,6 @@ app.post('/api/sessions', (req, res) => {
   // rule as every other endpoint that takes a path from the client.
   if (workdir && !isWorkdirAllowed(workdir)) return res.status(400).json({ error: 'workdir is outside the allowed roots' });
   const id = genId();
-  let _wt = null;
-  try { _wt = setupUnitWorktree('session', id, workdir); }
-  catch (e) { if (e.code === 'GIT_UNAVAILABLE') return res.status(400).json({ error: e.message }); throw e; }
   if (kind === 'terminal') {
     // loadConfig(), not loadMergedConfig(): the merged view is a whitelist of
     // mcpServers/skills/slashCommands/lang/defaultEngine and does NOT carry
@@ -7072,12 +6892,10 @@ app.post('/api/sessions', (req, res) => {
         log.warn('newIdCommand failed', { agent: terminalAgent, err: e.message });
       }
     }
-    stmts.createTerminalSession.run(id, String(title).substring(0, 200), sqlVal(model), sqlVal(_wt ? _wt.workdir : workdir) || null, terminalAgent, convId);
-    if (_wt) stmts.setSessionGit.run(_wt.workdir, _wt.git_root, _wt.git_branch, id);
+    stmts.createTerminalSession.run(id, String(title).substring(0, 200), sqlVal(model), sqlVal(workdir) || null, terminalAgent, convId);
     return res.json(stmts.getSession.get(id));
   }
-  stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', sqlVal(mode), sqlVal(agentMode), sqlVal(model), sqlVal(_wt ? _wt.workdir : workdir) || null);
-  if (_wt) stmts.setSessionGit.run(_wt.workdir, _wt.git_root, _wt.git_branch, id);
+  stmts.createSession.run(id, String(title).substring(0, 200), '[]', '[]', sqlVal(mode), sqlVal(agentMode), sqlVal(model), sqlVal(workdir) || null);
   res.json(stmts.getSession.get(id));
 });
 // Fork session — create a branch from an existing conversation
@@ -7731,7 +7549,6 @@ app.get('/api/sessions/:id', (req,res) => {
   s.messages = stmts.getMsgsLite.all(req.params.id);
   s.hasRunningTask = !!stmts.hasRunningTask.get(req.params.id);
   s.isChatRunning = isSessionLive(req.params.id);
-  s.gitStatus = getUnitGitStatus(s);
   const chainTasks = stmts.getChainTasks.all(req.params.id);
   if (chainTasks.length) {
     const chains = {};
@@ -7851,19 +7668,6 @@ ${transcript}`;
 app.get('/api/sessions/:id/tasks-count', (req,res) => { res.json(stmts.countTasksBySession.get(req.params.id)); });
 app.delete('/api/sessions/:id', (req,res) => {
   const sid = req.params.id;
-  const sessRow = stmts.getSession.get(sid);
-  // Deleting a session whose worktree still has unmerged commits or uncommitted
-  // changes silently discards real work — same guard as archiving in the design
-  // (there is no separate archive state in this app; delete is the one action).
-  // ?force=1 / body.force bypasses it, same convention as other confirm-to-proceed actions.
-  const force = req.query.force === '1' || req.body?.force === true;
-  if (sessRow && sessRow.git_root && sessRow.workdir && !force) {
-    let unmerged = false;
-    try {
-      unmerged = WM.hasUnmergedWork({ worktreeDir: sessRow.workdir, projectDir: sessRow.git_root, defaultBranch: WM.getDefaultBranch(sessRow.git_root), branch: sessRow.git_branch });
-    } catch { /* worktree already gone — nothing to lose */ }
-    if (unmerged) return res.status(409).json({ error: 'session has unmerged or uncommitted changes', code: 'UNMERGED_WORK' });
-  }
   // Abort any running Claude subprocess for this session before deleting
   const active = activeTasks.get(sid);
   if (active) {
@@ -7876,10 +7680,6 @@ app.delete('/api/sessions/:id', (req,res) => {
   archiveSessionStats([sid]);
   // Best-effort: kill the interactive tmux session tied to this studio session
   try { killInteractiveTmux(sid); } catch {}
-  // Never a bare rm -rf — always through git so .git/worktrees/<name> never goes stale.
-  if (sessRow && sessRow.git_root && sessRow.workdir) {
-    try { WM.removeWorktree({ projectDir: sessRow.git_root, worktreeDir: sessRow.workdir, branch: sessRow.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on session delete', { sid, err: e.message }); }
-  }
   // Unlink recurring tasks from session (preserve the schedule), delete the rest
   db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(sid);
   stmts.deleteTasksBySession.run(sid);
@@ -7896,15 +7696,6 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
   // parameter as a NAMED-parameter set and throws "Unknown named parameter" — a 500.
   const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).filter(x => typeof x === 'string' && x);
   if (ids.length === 0) return res.status(400).json({ error: 'no ids' });
-  const sessRows = ids.map(id => stmts.getSession.get(id)).filter(Boolean);
-  const force = req.body?.force === true;
-  if (!force) {
-    const blocked = sessRows.filter(s => {
-      if (!s.git_root || !s.workdir) return false;
-      try { return WM.hasUnmergedWork({ worktreeDir: s.workdir, projectDir: s.git_root, defaultBranch: WM.getDefaultBranch(s.git_root), branch: s.git_branch }); } catch { return false; }
-    }).map(s => s.id);
-    if (blocked.length > 0) return res.status(409).json({ error: 'some sessions have unmerged or uncommitted changes', code: 'UNMERGED_WORK', blocked });
-  }
   // Abort running subprocesses before deleting
   for (const id of ids) {
     const active = activeTasks.get(id);
@@ -7925,12 +7716,6 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
     try { termBridge.killSession(tmuxNameFor(id)); } catch {}
     try { fs.unlinkSync(path.join(os.tmpdir(), `ccsterm-sb-${id}.txt`)); } catch {}
   }
-  // Never a bare rm -rf — always through git so .git/worktrees/<name> never goes stale.
-  for (const s of sessRows) {
-    if (s.git_root && s.workdir) {
-      try { WM.removeWorktree({ projectDir: s.git_root, worktreeDir: s.workdir, branch: s.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on bulk delete', { sid: s.id, err: e.message }); }
-    }
-  }
   const del = db.transaction(() => {
     for (const id of ids) {
       // Unlink recurring tasks from session (preserve the schedule), delete the rest
@@ -7941,36 +7726,6 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
   });
   del();
   res.json({ ok: true, deleted: ids.length });
-});
-app.get('/api/sessions/:id/git-status', (req, res) => {
-  const session = stmts.getSession.get(req.params.id);
-  if (!session) return res.status(404).json({ error: 'not found' });
-  res.json({ status: getUnitGitStatus(session) });
-});
-app.post('/api/sessions/:id/git-commit', (req, res) => {
-  const session = stmts.getSession.get(req.params.id);
-  if (!session) return res.status(404).json({ error: 'not found' });
-  if (!session.git_root || !session.workdir) return res.status(400).json({ error: 'session is not worktree-isolated' });
-  const message = typeof req.body?.message === 'string' && req.body.message.trim() ? req.body.message.trim() : 'Manual commit (Claude Code Studio)';
-  try {
-    const result = WM.commitAll({ worktreeDir: session.workdir, message });
-    res.json({ ...result, status: getUnitGitStatus(session) });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-app.post('/api/sessions/:id/git-merge', async (req, res) => {
-  const session = stmts.getSession.get(req.params.id);
-  if (!session) return res.status(404).json({ error: 'not found' });
-  if (!session.git_root || !session.workdir || !session.git_branch) return res.status(400).json({ error: 'session is not worktree-isolated' });
-  try {
-    const defaultBranch = WM.getDefaultBranch(session.git_root);
-    const result = await WM.mergeBranch({ projectDir: session.git_root, defaultBranch, branch: session.git_branch });
-    stmts.setSessionGitConflict.run(result.ok ? 0 : 1, session.id);
-    res.json({ ...result, status: getUnitGitStatus(stmts.getSession.get(session.id)) });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
 });
 app.post('/api/sessions/:id/open-terminal', (req, res) => {
   const session = stmts.getSession.get(req.params.id);
@@ -9300,7 +9055,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
     try {
       const allBots = stmts.listBots.all();
       if (allBots.length) {
-        const wd = session?.git_root || session?.workdir || WORKDIR;
+        const wd = session?.workdir || WORKDIR;
         const proj = loadProjects().find(pr => pr.workdir === wd);
         tgProjectBots = proj ? stmts.listProjectBots.all(proj.id) : [];
         const available = new Set(tgProjectBots.map(b => b.id));
@@ -10871,7 +10626,7 @@ wss.on('connection', (ws) => {
       try {
         const allBots = stmts.listBots.all();
         if (allBots.length) {
-          const wd = existSess?.git_root || existSess?.workdir || msg.workdir || WORKDIR;
+          const wd = existSess?.workdir || msg.workdir || WORKDIR;
           const proj = loadProjects().find(pr => pr.workdir === wd);
           projectBots = proj ? stmts.listProjectBots.all(proj.id) : [];
           const available = new Set(projectBots.map(b => b.id));
@@ -10921,18 +10676,7 @@ wss.on('connection', (ws) => {
       let isNewSession = false;
       if (!localSessionId || !existSess) {
         localSessionId = genId();
-        let _wt = null;
-        try { _wt = setupUnitWorktree('session', localSessionId, msg.workdir || null); }
-        catch (e) {
-          if (e.code === 'GIT_UNAVAILABLE') {
-            log.warn('chat refused: git unavailable for worktree isolation', { sessionId: localSessionId });
-            try { ws.send(JSON.stringify({ type: 'error', error: e.message, ...(tabId ? { tabId } : {}) })); } catch {}
-            return;
-          }
-          throw e;
-        }
-        stmts.createSession.run(localSessionId,i18nSession(),'[]','[]',sqlVal(msg.mode)||_cd.mode,sqlVal(msg.agentMode)||_cd.agent,sqlVal(msg.model)||_cd.model,sqlVal(_wt ? _wt.workdir : msg.workdir)||null);
-        if (_wt) stmts.setSessionGit.run(_wt.workdir, _wt.git_root, _wt.git_branch, localSessionId);
+        stmts.createSession.run(localSessionId,i18nSession(),'[]','[]',sqlVal(msg.mode)||_cd.mode,sqlVal(msg.agentMode)||_cd.agent,sqlVal(msg.model)||_cd.model,sqlVal(msg.workdir)||null);
         isNewSession = true;
       } else {
         localClaudeId = sanitizeSessionId(existSess.claude_session_id) || undefined;
@@ -11293,12 +11037,7 @@ wss.on('connection', (ws) => {
       if (_forkCid) { try { db.prepare(`UPDATE sessions SET fork_from_cid=NULL WHERE id=?`).run(localSessionId); } catch {} }
 
       const _dic = proxy._deliveredInterruptCount || 0;
-      // Branch-status chip reads this off every `done` frame rather than polling
-      // GET /api/sessions/:id/git-status — a session not worktree-isolated (git
-      // unavailable when it was created, or a remote project) gets null and the
-      // UI simply doesn't render the chip.
-      const _gitStatus = getUnitGitStatus(stmts.getSession.get(localSessionId));
-      const _donePayload = { type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt, ...(resultMeta ? { resultMeta } : {}), ...(_dic ? { deliveredInterruptCount: _dic } : {}), ...(_gitStatus ? { gitStatus: _gitStatus } : {}) };
+      const _donePayload = { type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt, ...(resultMeta ? { resultMeta } : {}), ...(_dic ? { deliveredInterruptCount: _dic } : {}) };
       proxy.send(JSON.stringify(_donePayload));
       // `done` is what clears a tab's busy dot. Other sockets watching this session
       // (a second window, or a background tab subscribed with noCatchUp:true — which
@@ -11324,8 +11063,7 @@ wss.on('connection', (ws) => {
       if(err.name==='AbortError') proxy.send(JSON.stringify({ type:'agent_status', status:'Stopped', statusKey:'status.stopped', tabId: effectiveTabId }));
       else { log.error('chat error', { message: err.message, name: err.name, stack: err.stack }); proxy.send(JSON.stringify({ type:'error', error:err.message, tabId: effectiveTabId })); }
       { const _dic = proxy._deliveredInterruptCount || 0;
-        const _gitStatus = getUnitGitStatus(stmts.getSession.get(localSessionId));
-        const _donePayload = { type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt, ...(_dic ? { deliveredInterruptCount: _dic } : {}), ...(_gitStatus ? { gitStatus: _gitStatus } : {}) };
+        const _donePayload = { type:'done', tabId: effectiveTabId, duration: Date.now() - _chatStartedAt, ...(_dic ? { deliveredInterruptCount: _dic } : {}) };
         proxy.send(JSON.stringify(_donePayload));
         // Same fan-out as the success path — an aborted or failed turn must clear
         // every watcher's spinner, not just the originating socket's.

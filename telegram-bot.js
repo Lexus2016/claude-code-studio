@@ -268,7 +268,7 @@ class TelegramBot extends EventEmitter {
       deleteForumTopicsByChatId: this.db.prepare('DELETE FROM forum_topics WHERE chat_id = ?'),
       // Forum sessions
       insertSession:     this.db.prepare("INSERT INTO sessions (id, title, created_at, updated_at, workdir, model, engine) VALUES (?, ?, datetime('now'), datetime('now'), ?, 'sonnet', 'cli')"),
-      getSessionsByWorkdir: this.db.prepare('SELECT id, title, updated_at, (SELECT COUNT(*) FROM messages WHERE session_id = s.id) as msg_count FROM sessions s WHERE COALESCE(git_root, workdir) = ? ORDER BY updated_at DESC LIMIT 15'),
+      getSessionsByWorkdir: this.db.prepare('SELECT id, title, updated_at, (SELECT COUNT(*) FROM messages WHERE session_id = s.id) as msg_count FROM sessions s WHERE workdir = ? ORDER BY updated_at DESC LIMIT 15'),
       // Forum tasks
       insertTask:        this.db.prepare("INSERT INTO tasks (id, title, description, notes, status, sort_order, workdir) VALUES (?, ?, '', '', 'backlog', 0, ?)"),
       listTasksOrdered:  this.db.prepare("SELECT id, title, status FROM tasks ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 WHEN 'blocked' THEN 3 WHEN 'done' THEN 4 END, sort_order ASC LIMIT 30"),
@@ -1612,8 +1612,8 @@ class TelegramBot extends EventEmitter {
 
     // Session-project safety: ensure session belongs to current project
     if (ctx.projectWorkdir && ctx.sessionId) {
-      const sess = this.db.prepare('SELECT workdir, git_root FROM sessions WHERE id = ?').get(ctx.sessionId);
-      if (sess && sess.workdir && (sess.git_root || sess.workdir) !== ctx.projectWorkdir) {
+      const sess = this.db.prepare('SELECT workdir FROM sessions WHERE id = ?').get(ctx.sessionId);
+      if (sess && sess.workdir && sess.workdir !== ctx.projectWorkdir) {
         // Session belongs to different project — switch to correct session
         const lastForProject = this._stmts.getSessionsByWorkdir.all(ctx.projectWorkdir);
         if (lastForProject.length > 0) {
@@ -1950,7 +1950,7 @@ class TelegramBot extends EventEmitter {
       // Has project but no session — auto-select if exactly 1 chat
       try {
         const rows = this.db.prepare(
-          'SELECT id, title FROM sessions WHERE COALESCE(git_root, workdir) = ? ORDER BY updated_at DESC LIMIT 2'
+          'SELECT id, title FROM sessions WHERE workdir = ? ORDER BY updated_at DESC LIMIT 2'
         ).all(ctx.projectWorkdir);
 
         if (rows.length === 1) {
@@ -1976,7 +1976,7 @@ class TelegramBot extends EventEmitter {
     // Nothing selected — auto-select if exactly 1 project
     try {
       const rows = this.db.prepare(
-        "SELECT COALESCE(git_root, workdir) AS workdir FROM sessions WHERE workdir IS NOT NULL AND workdir != '' GROUP BY COALESCE(git_root, workdir) ORDER BY MAX(updated_at) DESC LIMIT 2"
+        "SELECT workdir FROM sessions WHERE workdir IS NOT NULL AND workdir != '' GROUP BY workdir ORDER BY MAX(updated_at) DESC LIMIT 2"
       ).all();
 
       if (rows.length === 1) {
@@ -2002,9 +2002,9 @@ class TelegramBot extends EventEmitter {
 
     try {
       const rows = this.db.prepare(`
-        SELECT COALESCE(git_root, workdir) AS workdir, COUNT(*) as chat_count, MAX(updated_at) as last_active
+        SELECT workdir, COUNT(*) as chat_count, MAX(updated_at) as last_active
         FROM sessions WHERE workdir IS NOT NULL AND workdir != ''
-        GROUP BY COALESCE(git_root, workdir) ORDER BY last_active DESC LIMIT 30
+        GROUP BY workdir ORDER BY last_active DESC LIMIT 30
       `).all();
 
       ctx.projectList = rows.map(r => r.workdir);
@@ -2125,7 +2125,7 @@ class TelegramBot extends EventEmitter {
         rows = this.db.prepare(`
           SELECT s.id, s.title, s.updated_at, COUNT(m.id) as msg_count
           FROM sessions s LEFT JOIN messages m ON m.session_id = s.id
-          WHERE COALESCE(s.git_root, s.workdir) = ? GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 50
+          WHERE s.workdir = ? GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 50
         `).all(workdir);
       } else {
         rows = this.db.prepare(`
@@ -2750,7 +2750,7 @@ class TelegramBot extends EventEmitter {
       let rows;
       if (workdir) {
         rows = this.db.prepare(`
-          SELECT title, status FROM tasks WHERE COALESCE(git_root, workdir) = ?
+          SELECT title, status FROM tasks WHERE workdir = ?
           ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 WHEN 'backlog' THEN 2 WHEN 'blocked' THEN 3 WHEN 'done' THEN 4 END, sort_order ASC LIMIT 25
         `).all(workdir);
       } else {

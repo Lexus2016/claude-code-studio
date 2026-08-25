@@ -20,11 +20,11 @@ const openDatabase = require('../db-adapter');
 const db = openDatabase(dbPath);
 db.exec(`
   CREATE TABLE sessions (id TEXT PRIMARY KEY, title TEXT, created_at TEXT, updated_at TEXT,
-    workdir TEXT, git_root TEXT, model TEXT, engine TEXT, run_engine TEXT, agent_mode TEXT, claude_session_id TEXT);
+    workdir TEXT, model TEXT, engine TEXT, run_engine TEXT, agent_mode TEXT, claude_session_id TEXT);
   CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, role TEXT, type TEXT,
     content TEXT, tool_name TEXT, agent_id TEXT, created_at TEXT DEFAULT (datetime('now')));
   CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT, description TEXT, notes TEXT, status TEXT,
-    sort_order INTEGER, session_id TEXT, workdir TEXT, git_root TEXT, model TEXT, mode TEXT, agent_mode TEXT,
+    sort_order INTEGER, session_id TEXT, workdir TEXT, model TEXT, mode TEXT, agent_mode TEXT,
     max_turns INTEGER, attachments TEXT, depends_on TEXT, chain_id TEXT, source_session_id TEXT,
     scheduled_at TEXT, recurrence TEXT, recurrence_end_at TEXT, effort TEXT, run_engine TEXT,
     created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));
