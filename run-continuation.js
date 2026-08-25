@@ -34,7 +34,15 @@
 //    file — `BashOutput` is not called at all — so the harvest side recognises that
 //    read and takes the id out of the path.
 //
-// KNOWN LIMIT: a process backgrounded with shell syntax (`cmd &`, `nohup`, `tmux
+// KNOWN LIMIT 1: a harvest is not PAIRED to a launch, because the shell id exists
+// only in the tool RESULT and `onTool` sees tool_use blocks. So a read of some other
+// `tasks/<id>.output` after a launch pays that launch's debt, and the real job goes
+// unrescued. Closing it means threading tool_result through both transports and
+// changing the stream contract for a case that needs the agent to read an unrelated
+// shell log in the same turn it abandons a real one. The mirror case — a leftover
+// read BEFORE the launch — IS closed, because a harvest never banks a surplus.
+//
+// KNOWN LIMIT 2: a process backgrounded with shell syntax (`cmd &`, `nohup`, `tmux
 // new -d`) inside a FOREGROUND Bash call is not detected, and deliberately so —
 // telling `a && b`, `2>&1` and a trailing `&` apart needs a shell parser, and the
 // false positives would land on ordinary commands. That case is covered by the

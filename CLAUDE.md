@@ -471,15 +471,19 @@ ladder, which fires only on NON-success, never saw it. Nothing else resumes a he
 - **The system prompt is the first line of defence, the harvest run the second.**
   `BACKGROUND_TASK_INSTRUCTION` says plainly that the turn does not resume, and is
   phrased as "anything that keeps running after the call returns" rather than one tool
-  field — which is what covers the KNOWN LIMIT: a process backgrounded with shell
-  syntax (`cmd &`, `nohup`, `tmux new -d`) inside a FOREGROUND `Bash` call is not
-  detected. Telling `a && b`, `2>&1` and a trailing `&` apart needs a shell parser, and
-  the false positives would land on ordinary commands.
+  field — which is what covers the two KNOWN LIMITS, both stated in the module header.
+  A process backgrounded with shell syntax (`cmd &`, `nohup`, `tmux new -d`) inside a
+  FOREGROUND `Bash` call is not detected: telling `a && b`, `2>&1` and a trailing `&`
+  apart needs a shell parser, and the false positives would land on ordinary commands.
+  And a harvest is not PAIRED to a launch — the shell id exists only in the tool
+  RESULT, while `onTool` sees tool_use blocks — so a read of some OTHER
+  `tasks/<id>.output` after a launch pays that launch's debt. The mirror case, a
+  leftover read BEFORE the launch, is closed by the no-banking rule; closing this one
+  means threading tool_result through both transports and changing the stream contract.
 - **`test/ask-user-question.test.js` extracts that `onTool` handler as source text** and
   runs it through `new Function`, so its parameter list must carry every closure the
-  handler touches — `runContinuation`, `bgLaunches`, `bgHarvestIds` and `bgAnonHarvests`
-  are passed in there deliberately rather than stubbed, to keep the real module in the
-  path.
+  handler touches — `runContinuation` and `bgState` are passed in there deliberately
+  rather than stubbed, to keep the real module in the path.
 
 **`describeTurnBudgetAnomaly()` — when "raise Max turns" is the wrong advice.** Measured
 against CLI 2.1.231, a run capped at N reports `num_turns === N + 1`, so a genuine
