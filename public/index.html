@@ -3230,41 +3230,41 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.mode">Mode</div>
         <div class="mob-sheet-chips">
-          <button class="mob-chip on" data-mob="mode" data-v="auto" onclick="setMobOpt(this,'mode')" data-i18n="mode.auto">Auto</button>
-          <button class="mob-chip" data-mob="mode" data-v="planning" onclick="setMobOpt(this,'mode')" data-i18n="mode.plan">Plan</button>
-          <button class="mob-chip" data-mob="mode" data-v="task" onclick="setMobOpt(this,'mode')" data-i18n="mode.task">Task</button>
+          <button class="mob-chip on" data-mob="mode" data-v="auto" onclick="setMobOpt(this,'mode')" data-i18n="mode.auto" data-i18n-tip="mode.auto.tip">Auto</button>
+          <button class="mob-chip" data-mob="mode" data-v="planning" onclick="setMobOpt(this,'mode')" data-i18n="mode.plan" data-i18n-tip="mode.plan.tip">Plan</button>
+          <button class="mob-chip" data-mob="mode" data-v="task" onclick="setMobOpt(this,'mode')" data-i18n="mode.task" data-i18n-tip="mode.task.tip">Task</button>
         </div>
       </div>
       <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.agent">Agent</div>
         <div class="mob-sheet-chips">
-          <button class="mob-chip on" data-mob="agent" data-v="single" onclick="setMobOpt(this,'agent')" data-i18n="agent.single">Single</button>
-          <button class="mob-chip" data-mob="agent" data-v="multi" onclick="setMobOpt(this,'agent')" data-i18n="agent.multi">Multi</button>
-          <button class="mob-chip" data-mob="agent" data-v="dispatch" onclick="setMobOpt(this,'agent')" data-i18n="agent.dispatch">Dispatch</button>
-          <button class="mob-chip" data-mob="agent" data-v="conversation" onclick="setMobOpt(this,'agent')" data-i18n="agent.conversation">Room</button>
+          <button class="mob-chip on" data-mob="agent" data-v="single" onclick="setMobOpt(this,'agent')" data-i18n="agent.single" data-i18n-tip="agent.single.tip">Single</button>
+          <button class="mob-chip" data-mob="agent" data-v="multi" onclick="setMobOpt(this,'agent')" data-i18n="agent.multi" data-i18n-tip="agent.multi.tip">Multi</button>
+          <button class="mob-chip" data-mob="agent" data-v="dispatch" onclick="setMobOpt(this,'agent')" data-i18n="agent.dispatch" data-i18n-tip="agent.dispatch.tip">Dispatch</button>
+          <button class="mob-chip" data-mob="agent" data-v="conversation" onclick="setMobOpt(this,'agent')" data-i18n="agent.conversation" data-i18n-tip="agent.conversation.tip">Room</button>
         </div>
       </div>
       <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.model">Model</div>
         <div class="mob-sheet-chips">
-          <button class="mob-chip" data-mob="model" data-v="haiku" onclick="setMobOpt(this,'model')">Haiku</button>
-          <button class="mob-chip on" data-mob="model" data-v="sonnet" onclick="setMobOpt(this,'model')">Sonnet</button>
-          <button class="mob-chip" data-mob="model" data-v="opus" onclick="setMobOpt(this,'model')">Opus</button>
-          <button class="mob-chip" data-mob="model" data-v="fable" onclick="setMobOpt(this,'model')">Fable</button>
+          <button class="mob-chip" data-mob="model" data-v="haiku" onclick="setMobOpt(this,'model')" data-i18n-tip="model.haiku.tip">Haiku</button>
+          <button class="mob-chip on" data-mob="model" data-v="sonnet" onclick="setMobOpt(this,'model')" data-i18n-tip="model.sonnet.tip">Sonnet</button>
+          <button class="mob-chip" data-mob="model" data-v="opus" onclick="setMobOpt(this,'model')" data-i18n-tip="model.opus.tip">Opus</button>
+          <button class="mob-chip" data-mob="model" data-v="fable" onclick="setMobOpt(this,'model')" data-i18n-tip="model.fable.tip">Fable</button>
         </div>
       </div>
       <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.engine">Engine</div>
         <div class="mob-sheet-chips">
-          <button class="mob-chip on" data-mob="engine" data-v="api" onclick="setMobOpt(this,'engine')">API</button>
-          <button class="mob-chip" data-mob="engine" data-v="subscription" onclick="setMobOpt(this,'engine')" data-i18n="engine.sub">Subscription</button>
+          <button class="mob-chip on" data-mob="engine" data-v="api" onclick="setMobOpt(this,'engine')" data-i18n-title="engine.api.title" title="API engine — headless claude -p, billed per token (Claude Pro / API key)">API</button>
+          <button class="mob-chip" data-mob="engine" data-v="subscription" onclick="setMobOpt(this,'engine')" data-i18n="engine.sub" data-i18n-title="engine.sub.title" title="Subscription engine — persistent tmux session, billed on the Claude Max subscription (no API credits). Requires tmux + Claude Max.">Subscription</button>
           <button class="mob-chip" data-default-star onclick="setDefaultEngine()" data-i18n-title="engine.default.title" title="Зробити поточний рушій типовим для нових чатів" data-i18n="engine.default.btn">★ Set as default</button>
         </div>
       </div>
       <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.turns">Max turns</div>
         <div class="mob-sheet-turns">
-          <input type="number" id="mobMaxTurns" value="50" min="1" max="200">
+          <input type="number" id="mobMaxTurns" value="50" min="1" max="200" data-i18n-tip="turns.tip">
         </div>
       </div>
       <div class="mob-sheet-divider"></div>
@@ -5005,8 +5005,8 @@ const TRANSLATIONS = {
     'model.haiku.tip':'Haiku — найшвидша й найдешевша модель; підходить для простих, коротких завдань.',
     'model.sonnet.tip':'Sonnet — збалансована модель за замовчуванням: хороша якість відповідей при розумній швидкості й вартості. Підходить для більшості завдань.',
     'model.opus.tip':'Opus — найпотужніша модель; вибирайте для складних завдань, де важлива глибина аналізу, а не швидкість чи вартість.',
-    'model.fable.tip':'Fable — ще одна доступна модель Claude; обирайте, якщо для завдання потрібна саме вона.',
-    'turns.tip':'Максимальна кількість кроків Claude в цьому чаті, перш ніж він автоматично зупиниться. Діапазон 1–200; захищає від нескінченного виконання.',
+    'model.fable.tip':'Fable — найтворчіша й найглибша модель у міркуваннях (контекст 1М токенів, як у Sonnet/Opus); обирайте для складного планування й глибокого аналізу.',
+    'turns.tip':'Максимальна кількість кроків Claude в одному запуску. Після ліміту Claude до 3 разів автоматично продовжує сесію («Continue where you left off») — реальна витрата може сягати ~4× заданого числа, перш ніж з\'явиться повідомлення про незавершення. Діапазон 1–200.',
     'tb.engine':'Рушій','engine.sub':'Підписка',
     'engine.api.title':'Рушій API — headless claude -p, оплата за токени (Claude Pro / ключ API)',
     'engine.sub.title':'Рушій підписки — постійна сесія tmux, оплата з підписки Claude Max (без кредитів API). Потрібні tmux і Claude Max.',
@@ -5406,8 +5406,8 @@ const TRANSLATIONS = {
     'model.haiku.tip':'Haiku — the fastest, cheapest model; good for simple, short tasks.',
     'model.sonnet.tip':'Sonnet — the balanced default model: good answer quality at a reasonable speed and cost. Fits most tasks.',
     'model.opus.tip':'Opus — the most capable model; pick it for hard tasks where depth of reasoning matters more than speed or cost.',
-    'model.fable.tip':'Fable — another available Claude model; pick it when this specific model is what the task calls for.',
-    'turns.tip':'Maximum number of steps Claude may take in this chat before it stops automatically. Range 1–200; guards against a runaway session.',
+    'model.fable.tip':'Fable — the most creative, deepest-reasoning model (1M token context, same as Sonnet/Opus); pick it for complex planning and deep analysis.',
+    'turns.tip':'Maximum steps Claude may take in one run. On hitting the limit, Claude auto-continues the session up to 3 more times ("Continue where you left off") — actual usage can reach ~4x this number before you see an incomplete-run notice. Range 1–200.',
     'tb.engine':'Engine','engine.sub':'Subscription',
     'engine.api.title':'API engine — headless claude -p, billed per token (Claude Pro / API key)',
     'engine.sub.title':'Subscription engine — persistent tmux session, billed on the Claude Max subscription (no API credits). Requires tmux + Claude Max.',
@@ -5807,8 +5807,8 @@ const TRANSLATIONS = {
     'model.haiku.tip':'Haiku — самая быстрая и дешёвая модель; хорошо подходит для простых, коротких задач.',
     'model.sonnet.tip':'Sonnet — сбалансированная модель по умолчанию: хорошее качество ответов при разумной скорости и стоимости. Подходит для большинства задач.',
     'model.opus.tip':'Opus — самая мощная модель; выбирайте для сложных задач, где важна глубина анализа, а не скорость или стоимость.',
-    'model.fable.tip':'Fable — ещё одна доступная модель Claude; выбирайте, если для задачи нужна именно она.',
-    'turns.tip':'Максимальное количество шагов Claude в этом чате, прежде чем он автоматически остановится. Диапазон 1–200; защищает от бесконечного выполнения.',
+    'model.fable.tip':'Fable — самая творческая и глубокая в рассуждениях модель (контекст 1М токенов, как у Sonnet/Opus); выбирайте для сложного планирования и глубокого анализа.',
+    'turns.tip':'Максимальное количество шагов Claude за один запуск. По достижении лимита Claude автоматически продолжает сессию до 3 раз («Continue where you left off») — реальный расход может достигать ~4× заданного числа, прежде чем появится уведомление о незавершении. Диапазон 1–200.',
     'tb.engine':'Движок','engine.sub':'Подписка',
     'engine.api.title':'Движок API — headless claude -p, оплата за токены (Claude Pro / ключ API)',
     'engine.sub.title':'Движок подписки — постоянная сессия tmux, оплата по подписке Claude Max (без кредитов API). Требуются tmux и Claude Max.',
@@ -6109,8 +6109,8 @@ const TRANSLATIONS = {
     "model.haiku.tip":"Haiku — le modèle le plus rapide et le moins cher ; adapté aux tâches simples et courtes.",
     "model.sonnet.tip":"Sonnet — le modèle par défaut équilibré : bonne qualité de réponse à une vitesse et un coût raisonnables. Convient à la plupart des tâches.",
     "model.opus.tip":"Opus — le modèle le plus performant ; à choisir pour les tâches complexes où la profondeur de raisonnement prime sur la vitesse ou le coût.",
-    "model.fable.tip":"Fable — un autre modèle Claude disponible ; à choisir lorsque ce modèle précis est nécessaire pour la tâche.",
-    "turns.tip":"Nombre maximal d'étapes que Claude peut effectuer dans ce chat avant de s'arrêter automatiquement. Plage 1-200 ; protège contre une exécution sans fin.",
+    "model.fable.tip":"Fable — le modèle le plus créatif et le plus profond en raisonnement (contexte de 1M jetons, comme Sonnet/Opus) ; à choisir pour la planification complexe et l'analyse approfondie.",
+    "turns.tip":"Nombre maximal d'étapes que Claude peut effectuer en une exécution. À la limite, Claude poursuit automatiquement la session jusqu'à 3 fois (« Continue where you left off ») — l'usage réel peut atteindre ~4x ce nombre avant qu'une notice d'exécution incomplète n'apparaisse. Plage 1-200.",
     "tb.engine":"Moteur","engine.sub":"Abonnement",
     "engine.api.title":"Moteur API — claude -p sans interface, facturé au jeton (Claude Pro / clé API)",
     "engine.sub.title":"Moteur d'abonnement — session tmux persistante, facturée sur l'abonnement Claude Max (sans crédits API). Nécessite tmux et Claude Max.",
@@ -6383,8 +6383,8 @@ const TRANSLATIONS = {
     "model.haiku.tip":"Haiku — המודל המהיר והזול ביותר; מתאים למשימות פשוטות וקצרות.",
     "model.sonnet.tip":"Sonnet — המודל המאוזן שמוגדר כברירת מחדל: איכות תשובות טובה במהירות ובעלות סבירות. מתאים לרוב המשימות.",
     "model.opus.tip":"Opus — המודל החזק ביותר; בחרו בו למשימות מורכבות שבהן עומק הניתוח חשוב יותר ממהירות או עלות.",
-    "model.fable.tip":"Fable — מודל Claude זמין נוסף; בחרו בו כשבמשימה נדרש דווקא המודל הזה.",
-    "turns.tip":"מספר הצעדים המרבי ש-Claude יכול לבצע בצ'אט הזה לפני שהוא נעצר אוטומטית. טווח 1–200; מגן מפני ריצה בלתי פוסקת.",
+    "model.fable.tip":"Fable — המודל היצירתי ביותר ובעל היכולת ההסקתית העמוקה ביותר (חלון הקשר של 1M טוקנים, כמו Sonnet/Opus); בחרו בו לתכנון מורכב וניתוח מעמיק.",
+    "turns.tip":"מספר הצעדים המרבי ש-Claude יכול לבצע בהרצה אחת. עם הגעה למגבלה, Claude ממשיך את הסשן אוטומטית עד 3 פעמים נוספות (\"Continue where you left off\") — השימוש בפועל עשוי להגיע לכ-4x מהמספר שהוגדר לפני שתופיע הודעה על הרצה לא-גמורה. טווח 1–200.",
     "tb.engine":"מנוע","engine.sub":"מנוי",
     "engine.api.title":"מנוע API — claude -p ללא ממשק, חיוב לפי טוקנים (Claude Pro / מפתח API)",
     "engine.sub.title":"מנוע מנוי — סשן tmux קבוע, חיוב במסגרת מנוי Claude Max (ללא קרדיטים של API). דורש tmux ו-Claude Max.",
