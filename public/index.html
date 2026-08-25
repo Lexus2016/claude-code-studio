@@ -3379,25 +3379,25 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   <div class="toolbar">
     <div class="tb-group" data-tbg="mode">
       <span class="label" data-i18n="tb.mode">Режим</span>
-      <button class="tb-btn on" data-v="auto" onclick="setOpt(this,'mode')" data-i18n="mode.auto">Auto</button>
-      <button class="tb-btn" data-v="planning" onclick="setOpt(this,'mode')" data-i18n="mode.plan">Plan</button>
-      <button class="tb-btn" data-v="task" onclick="setOpt(this,'mode')" data-i18n="mode.task">Task</button>
+      <button class="tb-btn on" data-v="auto" onclick="setOpt(this,'mode')" data-i18n="mode.auto" data-i18n-tip="mode.auto.tip">Auto</button>
+      <button class="tb-btn" data-v="planning" onclick="setOpt(this,'mode')" data-i18n="mode.plan" data-i18n-tip="mode.plan.tip">Plan</button>
+      <button class="tb-btn" data-v="task" onclick="setOpt(this,'mode')" data-i18n="mode.task" data-i18n-tip="mode.task.tip">Task</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group" data-tbg="agent">
       <span class="label" data-i18n="tb.agent">Агент</span>
-      <button class="tb-btn on" data-v="single" onclick="setOpt(this,'agent')" data-i18n="agent.single">Single</button>
-      <button class="tb-btn" data-v="multi" onclick="setOpt(this,'agent')" data-i18n="agent.multi">Multi</button>
-      <button class="tb-btn" data-v="dispatch" onclick="setOpt(this,'agent')" data-i18n="agent.dispatch">Dispatch</button>
+      <button class="tb-btn on" data-v="single" onclick="setOpt(this,'agent')" data-i18n="agent.single" data-i18n-tip="agent.single.tip">Single</button>
+      <button class="tb-btn" data-v="multi" onclick="setOpt(this,'agent')" data-i18n="agent.multi" data-i18n-tip="agent.multi.tip">Multi</button>
+      <button class="tb-btn" data-v="dispatch" onclick="setOpt(this,'agent')" data-i18n="agent.dispatch" data-i18n-tip="agent.dispatch.tip">Dispatch</button>
       <button class="tb-btn" data-v="conversation" onclick="setOpt(this,'agent')" data-i18n="agent.conversation" data-i18n-tip="agent.conversation.tip">Room</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group" data-tbg="model">
       <span class="label" data-i18n="tb.model">Модель</span>
-      <button class="tb-btn" data-v="haiku" onclick="setOpt(this,'model')">Haiku</button>
-      <button class="tb-btn on" data-v="sonnet" onclick="setOpt(this,'model')">Sonnet</button>
-      <button class="tb-btn" data-v="opus" onclick="setOpt(this,'model')">Opus</button>
-      <button class="tb-btn" data-v="fable" onclick="setOpt(this,'model')">Fable</button>
+      <button class="tb-btn" data-v="haiku" onclick="setOpt(this,'model')" data-i18n-tip="model.haiku.tip">Haiku</button>
+      <button class="tb-btn on" data-v="sonnet" onclick="setOpt(this,'model')" data-i18n-tip="model.sonnet.tip">Sonnet</button>
+      <button class="tb-btn" data-v="opus" onclick="setOpt(this,'model')" data-i18n-tip="model.opus.tip">Opus</button>
+      <button class="tb-btn" data-v="fable" onclick="setOpt(this,'model')" data-i18n-tip="model.fable.tip">Fable</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -3421,7 +3421,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     <div class="tb-sep"></div>
     <div class="tb-group" data-tbg="turns">
       <span class="label" data-i18n="tb.turns">Кроки</span>
-      <input type="number" class="tb-input" id="maxTurns" value="50" min="1" max="200" onchange="markDefaultOverrides()">
+      <input type="number" class="tb-input" id="maxTurns" value="50" min="1" max="200" onchange="markDefaultOverrides()" data-i18n-tip="turns.tip">
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
@@ -4995,7 +4995,18 @@ const TRANSLATIONS = {
     'sec.filter.aria.proj':'Фільтр проектів','sec.filter.aria.ssh':'Фільтр SSH хостів','sec.filter.aria.hist':'Фільтр чатів','sec.filter.aria.mcp':'Фільтр MCP-серверів','sec.filter.aria.skills':'Фільтр навичок','sec.filter.aria.cmds':'Фільтр команд',
     'skills.auto.btn':'⚡ Авто',
     'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача',
+    'mode.auto.tip':'Авто — Claude сам вирішує, чи потрібно спершу спланувати, і одразу вносить зміни у файли. Типовий режим для більшості завдань.',
+    'mode.plan.tip':'План — Claude лише аналізує та пропонує рішення, не змінюючи жодного файлу (доступні тільки інструменти читання). Використовуйте для огляду/дизайну перед реальними правками.',
+    'mode.task.tip':'Задача — Claude одразу виконує зміни (повний доступ до Bash/Write). Використовуйте, коли план уже готовий і його треба втілити в коді.',
     'agent.single':'Один','agent.multi':'Мульти','agent.dispatch':'Розподіл','agent.conversation':'Кімната','agent.conversation.tip':'2–6 ботів проєкту по черзі обговорюють ваше повідомлення',
+    'agent.single.tip':'Один агент — звичайна відповідь у чаті від одного Claude. Стандартний режим для більшості діалогів.',
+    'agent.multi.tip':'Мульти-агент — Claude-оркестратор розбиває запит на 2–5 підзадач і запускає кілька агентів хвилями прямо в цьому чаті; результат кожного агента стрімиться назад у діалог.',
+    'agent.dispatch.tip':'Розподіл — Claude розкладає запит на підзадачі та створює з них картки в Kanban (окремий ланцюжок задач); у цьому чаті нічого не виконується — відкрийте дошку Kanban, щоб побачити прогрес.',
+    'model.haiku.tip':'Haiku — найшвидша й найдешевша модель; підходить для простих, коротких завдань.',
+    'model.sonnet.tip':'Sonnet — збалансована модель за замовчуванням: хороша якість відповідей при розумній швидкості й вартості. Підходить для більшості завдань.',
+    'model.opus.tip':'Opus — найпотужніша модель; вибирайте для складних завдань, де важлива глибина аналізу, а не швидкість чи вартість.',
+    'model.fable.tip':'Fable — ще одна доступна модель Claude; обирайте, якщо для завдання потрібна саме вона.',
+    'turns.tip':'Максимальна кількість кроків Claude в цьому чаті, перш ніж він автоматично зупиниться. Діапазон 1–200; захищає від нескінченного виконання.',
     'tb.engine':'Рушій','engine.sub':'Підписка',
     'engine.api.title':'Рушій API — headless claude -p, оплата за токени (Claude Pro / ключ API)',
     'engine.sub.title':'Рушій підписки — постійна сесія tmux, оплата з підписки Claude Max (без кредитів API). Потрібні tmux і Claude Max.',
@@ -5385,7 +5396,18 @@ const TRANSLATIONS = {
     'sec.filter.aria.proj':'Filter projects','sec.filter.aria.ssh':'Filter SSH hosts','sec.filter.aria.hist':'Filter chats','sec.filter.aria.mcp':'Filter MCP servers','sec.filter.aria.skills':'Filter skills','sec.filter.aria.cmds':'Filter commands',
     'skills.auto.btn':'⚡ Auto',
     'mode.auto':'Auto','mode.plan':'Plan','mode.task':'Task',
+    'mode.auto.tip':'Auto — Claude decides on its own whether to plan first, then makes file changes directly. The default mode for most tasks.',
+    'mode.plan.tip':'Plan — Claude only analyzes and proposes a solution; no files are touched (read-only tools). Use it to review or design before making real edits.',
+    'mode.task.tip':'Task — Claude executes changes right away (full Bash/Write access). Use it once a plan already exists and you want it implemented in the code.',
     'agent.single':'Single','agent.multi':'Multi','agent.dispatch':'Dispatch','agent.conversation':'Room','agent.conversation.tip':'2–6 project bots discuss your message in turn',
+    'agent.single.tip':'Single agent — a normal chat reply from one Claude. The standard mode for most conversations.',
+    'agent.multi.tip':'Multi-agent — an orchestrator Claude splits the request into 2–5 subtasks and runs several agents in waves right in this chat; each agent\'s result streams back into the conversation.',
+    'agent.dispatch.tip':'Dispatch — Claude breaks the request into subtasks and creates them as cards on the Kanban board (a separate task chain); nothing runs in this chat — open the Kanban board to see progress.',
+    'model.haiku.tip':'Haiku — the fastest, cheapest model; good for simple, short tasks.',
+    'model.sonnet.tip':'Sonnet — the balanced default model: good answer quality at a reasonable speed and cost. Fits most tasks.',
+    'model.opus.tip':'Opus — the most capable model; pick it for hard tasks where depth of reasoning matters more than speed or cost.',
+    'model.fable.tip':'Fable — another available Claude model; pick it when this specific model is what the task calls for.',
+    'turns.tip':'Maximum number of steps Claude may take in this chat before it stops automatically. Range 1–200; guards against a runaway session.',
     'tb.engine':'Engine','engine.sub':'Subscription',
     'engine.api.title':'API engine — headless claude -p, billed per token (Claude Pro / API key)',
     'engine.sub.title':'Subscription engine — persistent tmux session, billed on the Claude Max subscription (no API credits). Requires tmux + Claude Max.',
@@ -5775,7 +5797,18 @@ const TRANSLATIONS = {
     'sec.filter.aria.proj':'Фильтр проектов','sec.filter.aria.ssh':'Фильтр SSH-хостов','sec.filter.aria.hist':'Фильтр чатов','sec.filter.aria.mcp':'Фильтр MCP-серверов','sec.filter.aria.skills':'Фильтр навыков','sec.filter.aria.cmds':'Фильтр команд',
     'skills.auto.btn':'⚡ Авто',
     'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача',
+    'mode.auto.tip':'Авто — Claude сам решает, нужно ли сначала спланировать, и сразу вносит изменения в файлы. Режим по умолчанию для большинства задач.',
+    'mode.plan.tip':'План — Claude только анализирует и предлагает решение, не меняя файлов (доступны только инструменты чтения). Используйте для обзора/дизайна перед реальными правками.',
+    'mode.task.tip':'Задача — Claude сразу выполняет изменения (полный доступ к Bash/Write). Используйте, когда план уже готов и его нужно воплотить в коде.',
     'agent.single':'Один','agent.multi':'Мульти','agent.dispatch':'Распределение','agent.conversation':'Комната','agent.conversation.tip':'2–6 ботов проекта по очереди обсуждают ваше сообщение',
+    'agent.single.tip':'Один агент — обычный ответ в чате от одного Claude. Стандартный режим для большинства диалогов.',
+    'agent.multi.tip':'Мульти-агент — Claude-оркестратор разбивает запрос на 2–5 подзадач и запускает несколько агентов волнами прямо в этом чате; результат каждого агента стримится обратно в диалог.',
+    'agent.dispatch.tip':'Распределение — Claude разбивает запрос на подзадачи и создаёт из них карточки в Kanban (отдельная цепочка задач); в этом чате ничего не выполняется — откройте доску Kanban, чтобы увидеть прогресс.',
+    'model.haiku.tip':'Haiku — самая быстрая и дешёвая модель; хорошо подходит для простых, коротких задач.',
+    'model.sonnet.tip':'Sonnet — сбалансированная модель по умолчанию: хорошее качество ответов при разумной скорости и стоимости. Подходит для большинства задач.',
+    'model.opus.tip':'Opus — самая мощная модель; выбирайте для сложных задач, где важна глубина анализа, а не скорость или стоимость.',
+    'model.fable.tip':'Fable — ещё одна доступная модель Claude; выбирайте, если для задачи нужна именно она.',
+    'turns.tip':'Максимальное количество шагов Claude в этом чате, прежде чем он автоматически остановится. Диапазон 1–200; защищает от бесконечного выполнения.',
     'tb.engine':'Движок','engine.sub':'Подписка',
     'engine.api.title':'Движок API — headless claude -p, оплата за токены (Claude Pro / ключ API)',
     'engine.sub.title':'Движок подписки — постоянная сессия tmux, оплата по подписке Claude Max (без кредитов API). Требуются tmux и Claude Max.',
@@ -6066,7 +6099,18 @@ const TRANSLATIONS = {
     "sec.filter.aria.proj":"Filtrer les projets","sec.filter.aria.ssh":"Filtrer les hôtes SSH","sec.filter.aria.hist":"Filtrer les discussions","sec.filter.aria.mcp":"Filtrer les serveurs MCP","sec.filter.aria.skills":"Filtrer les compétences","sec.filter.aria.cmds":"Filtrer les commandes",
     "skills.auto.btn":"⚡ Auto",
     "mode.auto":"Auto","mode.plan":"Plan","mode.task":"Tâche",
+    "mode.auto.tip":"Auto — Claude décide lui-même s'il faut d'abord planifier, puis modifie les fichiers directement. Mode par défaut pour la plupart des tâches.",
+    "mode.plan.tip":"Plan — Claude analyse et propose une solution sans toucher aux fichiers (outils de lecture seule). À utiliser pour la conception ou la révision avant de vraies modifications.",
+    "mode.task.tip":"Tâche — Claude exécute les modifications immédiatement (accès complet à Bash/Write). À utiliser quand un plan existe déjà et doit être mis en œuvre dans le code.",
     "agent.single":"Simple","agent.multi":"Multi","agent.dispatch":"Répartition","agent.conversation":"Salon","agent.conversation.tip":"2 à 6 bots du projet discutent de votre message à tour de rôle",
+    "agent.single.tip":"Agent unique — une réponse de chat classique d'un seul Claude. Le mode standard pour la plupart des conversations.",
+    "agent.multi.tip":"Multi-agent — un Claude orchestrateur découpe la demande en 2 à 5 sous-tâches et lance plusieurs agents par vagues directement dans ce chat ; le résultat de chaque agent revient dans la conversation.",
+    "agent.dispatch.tip":"Répartition — Claude décompose la demande en sous-tâches et les crée sous forme de cartes sur le tableau Kanban (une chaîne de tâches séparée) ; rien ne s'exécute dans ce chat — ouvrez le tableau Kanban pour suivre la progression.",
+    "model.haiku.tip":"Haiku — le modèle le plus rapide et le moins cher ; adapté aux tâches simples et courtes.",
+    "model.sonnet.tip":"Sonnet — le modèle par défaut équilibré : bonne qualité de réponse à une vitesse et un coût raisonnables. Convient à la plupart des tâches.",
+    "model.opus.tip":"Opus — le modèle le plus performant ; à choisir pour les tâches complexes où la profondeur de raisonnement prime sur la vitesse ou le coût.",
+    "model.fable.tip":"Fable — un autre modèle Claude disponible ; à choisir lorsque ce modèle précis est nécessaire pour la tâche.",
+    "turns.tip":"Nombre maximal d'étapes que Claude peut effectuer dans ce chat avant de s'arrêter automatiquement. Plage 1-200 ; protège contre une exécution sans fin.",
     "tb.engine":"Moteur","engine.sub":"Abonnement",
     "engine.api.title":"Moteur API — claude -p sans interface, facturé au jeton (Claude Pro / clé API)",
     "engine.sub.title":"Moteur d'abonnement — session tmux persistante, facturée sur l'abonnement Claude Max (sans crédits API). Nécessite tmux et Claude Max.",
@@ -6329,7 +6373,18 @@ const TRANSLATIONS = {
     "sec.filter.aria.proj":"סינון פרויקטים","sec.filter.aria.ssh":"סינון מארחי SSH","sec.filter.aria.hist":"סינון צ׳אטים","sec.filter.aria.mcp":"סינון שרתי MCP","sec.filter.aria.skills":"סינון מיומנויות","sec.filter.aria.cmds":"סינון פקודות",
     "skills.auto.btn":"⚡ אוטומטי",
     "mode.auto":"אוטומטי","mode.plan":"תכנון","mode.task":"משימה",
+    "mode.auto.tip":"אוטומטי — Claude מחליט בעצמו אם לתכנן קודם, ומבצע שינויים בקבצים ישירות. זהו מצב ברירת המחדל לרוב המשימות.",
+    "mode.plan.tip":"תכנון — Claude רק מנתח ומציע פתרון, ללא שינוי קבצים (כלי קריאה בלבד). השתמשו בו לסקירה או לתכנון לפני ביצוע שינויים אמיתיים.",
+    "mode.task.tip":"משימה — Claude מבצע את השינויים מיד (גישה מלאה ל-Bash/Write). השתמשו בו כשכבר קיימת תוכנית ורוצים להוציא אותה לפועל בקוד.",
     "agent.single":"יחיד","agent.multi":"מרובה","agent.dispatch":"הקצאה","agent.conversation":"חדר","agent.conversation.tip":"2–6 בוטים של הפרויקט דנים בהודעה שלכם בתורות",
+    "agent.single.tip":"סוכן יחיד — תגובת צ'אט רגילה מ-Claude אחד. המצב הסטנדרטי לרוב השיחות.",
+    "agent.multi.tip":"רב-סוכנים — Claude מתאם מפצל את הבקשה ל-2 עד 5 תת-משימות ומריץ מספר סוכנים בגלים ישירות בצ'אט הזה; התוצאה של כל סוכן זורמת חזרה לשיחה.",
+    "agent.dispatch.tip":"הקצאה — Claude מפרק את הבקשה למשימות משנה ויוצר מהן כרטיסים בלוח Kanban (שרשרת משימות נפרדת); שום דבר לא רץ בצ'אט הזה — פתחו את לוח ה-Kanban כדי לראות את ההתקדמות.",
+    "model.haiku.tip":"Haiku — המודל המהיר והזול ביותר; מתאים למשימות פשוטות וקצרות.",
+    "model.sonnet.tip":"Sonnet — המודל המאוזן שמוגדר כברירת מחדל: איכות תשובות טובה במהירות ובעלות סבירות. מתאים לרוב המשימות.",
+    "model.opus.tip":"Opus — המודל החזק ביותר; בחרו בו למשימות מורכבות שבהן עומק הניתוח חשוב יותר ממהירות או עלות.",
+    "model.fable.tip":"Fable — מודל Claude זמין נוסף; בחרו בו כשבמשימה נדרש דווקא המודל הזה.",
+    "turns.tip":"מספר הצעדים המרבי ש-Claude יכול לבצע בצ'אט הזה לפני שהוא נעצר אוטומטית. טווח 1–200; מגן מפני ריצה בלתי פוסקת.",
     "tb.engine":"מנוע","engine.sub":"מנוי",
     "engine.api.title":"מנוע API — claude -p ללא ממשק, חיוב לפי טוקנים (Claude Pro / מפתח API)",
     "engine.sub.title":"מנוע מנוי — סשן tmux קבוע, חיוב במסגרת מנוי Claude Max (ללא קרדיטים של API). דורש tmux ו-Claude Max.",
