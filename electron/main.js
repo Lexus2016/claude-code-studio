@@ -153,6 +153,23 @@ function stopServer() {
   if (serverProc) { try { serverProc.kill(); } catch (_) {} serverProc = null; }
 }
 
+function applyWindowOpenPolicy(webContents) {
+  webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith(`http://127.0.0.1:${serverPort}/`)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          backgroundColor: '#0d1117',
+          webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+        },
+      };
+    }
+    if (/^https?:\/\//.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  webContents.on('did-create-window', (childWindow) => applyWindowOpenPolicy(childWindow.webContents));
+}
+
 async function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
@@ -168,11 +185,15 @@ async function createWindow() {
       sandbox: true,
     },
   });
-  // External links open in the user's browser, not inside the app window.
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) shell.openExternal(url);
-    return { action: 'deny' };
-  });
+  // External links open in the user's browser, not inside the app window. A same-origin
+  // link (e.g. the Kanban↔chat cross-links via target="_blank") is not "external" — it
+  // points at this app's own server, so it stays inside Electron as a new app window
+  // instead of kicking the user out to their system browser. Applied recursively
+  // (applyWindowOpenPolicy re-attaches itself via did-create-window) — without that, a
+  // link clicked INSIDE a popup window falls back to Electron's default allow-anything
+  // handler, which would open even a genuinely external link as an ungoverned in-app
+  // window instead of routing it to shell.openExternal.
+  applyWindowOpenPolicy(win.webContents);
   mainWindow = win;
   // Closing the window does NOT quit the app — it hides to the tray so the forked
   // server.js (and its scheduler / processQueue loop) keeps running and scheduled

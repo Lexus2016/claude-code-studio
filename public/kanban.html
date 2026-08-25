@@ -304,7 +304,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 }
 
 /* ─── Chain (group) card ─── */
-.chain-card{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-md); cursor:grab; user-select:none; transition:box-shadow .15s,border-color .15s; overflow:hidden; }
+.chain-card{ background:var(--s2); border:1px solid var(--border); border-radius:var(--r-md); cursor:grab; user-select:none; transition:box-shadow .15s,border-color .15s; overflow:hidden; flex-shrink:0; }
 .chain-card:hover{ border-color:var(--muted); box-shadow:var(--shadow-md); }
 .chain-card.dragging{ opacity:.4; cursor:grabbing; }
 .chain-card.status-in_progress{ border-left:3px solid var(--orange); }
@@ -1311,7 +1311,7 @@ function makeChainCard(chain){
       const iconContent=tk.status==='done'?'✓':tk.status==='cancelled'?'✕':'';
       const titleCls=tk.status==='done'?' done-text':'';
       const canEdit=tk.status==='backlog'||tk.status==='todo';
-      return `<div class="chain-task-item" data-task-id="${tk.id}"${canEdit?` onclick="openEditChainTaskModal('${chain.id}','${tk.id}')" style="cursor:pointer"`:''}>
+      return `<div class="chain-task-item" data-task-id="${tk.id}" onclick="openEditChainTaskModal('${chain.id}','${tk.id}')" style="cursor:pointer">
         <div class="chain-task-icon ${iconCls}">${iconContent}</div>
         <span class="chain-task-title${titleCls}">${escH(tk.title)}</span>
         <div class="chain-task-actions">
@@ -1340,6 +1340,7 @@ function makeChainCard(chain){
     </div>
     <div class="chain-footer">
       ${runningBadge}${modelBadge}
+      ${chain.session_id&&(s.done>0||s.in_progress>0||s.failed>0)?`<a class="open-link" href="/?open_session=${encodeURIComponent(chain.session_id)}" target="_blank" onclick="event.stopPropagation()">💬 ${escH(t('chat.open'))}</a>`:''}
       <span class="chain-time">${relTime(chain.updated_at)}</span>
       <span class="chain-actions">
         ${chain.derived_status==='backlog'||chain.derived_status==='todo'?`<button class="cbtn" title="${escH(t('group.activate'))}" onclick="event.stopPropagation();activateChain('${chain.id}')">▶</button>`:''}
@@ -1760,19 +1761,36 @@ function openEditChainTaskModal(chainId,taskId){
   const chain=chains.find(c=>c.id===chainId);
   const tk=chain?.tasks?.find(t=>t.id===taskId);
   if(!tk)return;
-  modalMode='edit_chain_task';editingId=taskId;
+  const editable=tk.status==='backlog'||tk.status==='todo';
+  modalMode=editable?'edit_chain_task':'view_chain_task';editingId=taskId;
   $i('modalTitle').textContent=t('group.edit_task');
+  const dis=editable?'':' disabled';
   $i('modalBody').innerHTML=`
     <div><label class="lbl">${t('modal.name')}</label>
-      <input id="fChainTaskTitle" class="inp" placeholder="${t('modal.name')}" maxlength="200" value="${escH(tk.title)}">
+      <input id="fChainTaskTitle" class="inp" placeholder="${t('modal.name')}" maxlength="200" value="${escH(tk.title)}"${dis}>
     </div>
     <div><label class="lbl">${t('modal.desc')}</label>
-      <textarea id="fChainTaskDesc" class="inp" rows="3" placeholder="…" maxlength="2000">${escH(tk.description||'')}</textarea>
+      <textarea id="fChainTaskDesc" class="inp" rows="3" placeholder="…" maxlength="2000"${dis}>${escH(tk.description||'')}</textarea>
     </div>`;
-  $i('modalFt').innerHTML=`
+  $i('modalFt').innerHTML=editable?`
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
-    <button class="btn btn-primary btn-sm" onclick="saveChainTaskEdit()">${t('modal.save')}</button>`;
+    <button class="btn btn-primary btn-sm" onclick="saveChainTaskEdit()">${t('modal.save')}</button>`:`
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>`;
   openOverlay('taskOv',{initialFocus:'#fChainTaskTitle',onEscape:closeModal});
+  // The task's own conversation lives in the CHAIN's shared session, not a per-task
+  // one — every task in a chain resumes the same claude session (server.js startTask).
+  if(!editable&&chain.session_id){
+    (async()=>{
+      try{
+        const msgs=await fetchMessages(chain.session_id);
+        const chatHtml=buildChatPanel({session_id:chain.session_id,sess_title:chain.title,claude_session_id:chain.claude_session_id},msgs);
+        const body=$i('modalBody');
+        if(body&&editingId===taskId&&!$i('taskOv').classList.contains('hidden')){
+          const div=document.createElement('div');div.innerHTML=chatHtml;body.appendChild(div.firstElementChild);
+        }
+      }catch{}
+    })();
+  }
 }
 async function saveChainTaskEdit(){
   const title=($i('fChainTaskTitle')?.value||'').trim();
