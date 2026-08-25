@@ -4317,7 +4317,7 @@ let openTabs = [], activeTabId = null;
 let interruptSendMode = 'interrupt'; // 'interrupt' = clarify current task, 'queue' = new task in queue
 const tabState = {}; // per-tab: { curEl, curTxt, currentSessionId, generating, draft, agentStatus, _toolCounts, _toolLog, turnBots, turnStates }
 function getTS(id) {
-  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', _thinkingTxt: '', currentSessionId: null, generating: false, draft: '', attachments: [], replyTo: null, agentStatus: '', _toolCounts: {}, _toolLog: [], turnBots: [], turnStates: {} };
+  if (!tabState[id]) tabState[id] = { curEl: null, curTxt: '', curAgent: null, _thinkingTxt: '', currentSessionId: null, generating: false, draft: '', attachments: [], replyTo: null, agentStatus: '', _toolCounts: {}, _toolLog: [], turnBots: [], turnStates: {} };
   return tabState[id];
 }
 
@@ -4407,12 +4407,22 @@ const streaming = {
   set toolCounts(v) { getTS(activeTabId)._toolCounts = v; },
   get toolLog() { return getTS(activeTabId)._toolLog; },
   set toolLog(v) { getTS(activeTabId)._toolLog = v; },
+  // Which bot (agent_id) is speaking in the CURRENT tab's live bubble, used by
+  // _maybeFinalizeAgentSwitch to detect a change of speaker in a multi-bot
+  // "conversation room". Per-tab for the same reason el/txt/toolLog are: without
+  // this, switching tabs clobbers the one shared value, so returning to a tab where
+  // a bot is still mid-turn reads a DIFFERENT tab's last speaker and is misread as a
+  // speaker change — the live bubble is wrongly finalized/orphaned (headerless, since
+  // it never got an addAgentBadge) and a second, correctly-badged bubble is created
+  // right after for the same bot's next chunk.
+  get agent() { return getTS(activeTabId).curAgent; },
+  set agent(v) { getTS(activeTabId).curAgent = v; },
   reset() {
     const s = getTS(activeTabId);
     _cancelStreamRender(activeTabId); // no queued repaint may outlive the bubble it targets
     // Clean orphaned spinner before clearing ref (bypasses setter)
     if (s.curEl) { const f = s.curEl.querySelector('.msg-status-footer.state-streaming'); if (f) f.remove(); }
-    s.curEl = null; s.curTxt = ''; s._thinkingTxt = ''; s._toolCounts = {}; s._toolLog = []; s._hadTool = false;
+    s.curEl = null; s.curTxt = ''; s._thinkingTxt = ''; s._toolCounts = {}; s._toolLog = []; s._hadTool = false; s.curAgent = null;
   },
 };
 let config = { mcpServers: {}, skills: {} };
@@ -7425,6 +7435,7 @@ function handleWsMsg(d) {
           ts._hadTool = false;
         }
         ts.curTxt = d.catchUp ? d.text : (ts.curTxt || '') + d.text;
+        ts.curAgent = d.agent || null; // which bot is speaking — needed to restore the badge on tab switch
         break;
       }
       rmStatus();
@@ -7469,6 +7480,7 @@ function handleWsMsg(d) {
         // Background tab — accumulate tool log for restoration on tab switch
         const ts = getTS(tabId); if (!ts._toolLog) ts._toolLog = [];
         ts._toolLog.push({ tool: d.tool || 'tool', brief: _toolInputBrief(d.tool, d.input), input: d.input || '' });
+        ts.curAgent = d.agent || null; // which bot is speaking — needed to restore the badge on tab switch
       }
       break;
 
@@ -12675,6 +12687,7 @@ async function loadSess(id) {
     const _bgTxt = tabState[id]?.curTxt || '';
     const _bgToolLog = tabState[id]?._toolLog ? tabState[id]._toolLog.slice() : null;
     const _bgToolCounts = tabState[id]?._toolCounts ? {...tabState[id]._toolCounts} : null;
+    const _bgAgent = tabState[id]?.curAgent || null;
     streaming.el = null; streaming.txt = ''; streaming.toolCounts = {}; streaming.toolLog = []; // Reset streaming state — stale refs cleared
     msgsEl.removeAttribute('aria-live'); // Suppress screen reader flood during batch history load
     msgsEl.innerHTML = '';
@@ -12840,6 +12853,8 @@ async function loadSess(id) {
       _cancelStreamRender(id); // fresh bubble — drop anything queued against the old one
       streaming.el = addMsg('assistant');
       streaming.txt = _bgTxt || '';
+      streaming.agent = _bgAgent; // same bot identity the background chunks carried — keeps
+      if (_bgAgent) addAgentBadge(streaming.el, _bgAgent); // _maybeFinalizeAgentSwitch from misfiring on the next chunk
       addSpinner(streaming.el); // restored run starts a fresh 0:00 — original start time is not persisted (live "is-working" feedback, not audited duration)
       if (_bgTxt) streaming.el.querySelector('.msg').innerHTML = renderStreaming(streaming.txt);
       // Restore live tool activity panel even if there's no text yet (tools-only phase)

@@ -27,3 +27,21 @@ export function loadFn(name) {
   return new Function(`return (${signature}${body});`)();
 }
 
+// Extract a top-level `const NAME = { ... };` object literal from index.html and
+// return it as a real object. Getters/setters inside the literal close over free
+// identifiers (e.g. `getTS`, `activeTabId`) the way they do in the real page: `new
+// Function` bodies resolve unresolved names against `globalThis`, so the caller sets
+// those up (`globalThis.getTS = ...`) before calling this, exactly like loadFn.
+export function loadConst(name) {
+  const src = readFileSync(HTML, 'utf8');
+  const sig = 'const ' + name + ' = {';
+  const at = src.indexOf(sig);
+  if (at === -1) throw new Error(`const ${name} not found in index.html`);
+  const open = src.indexOf('{', at);
+  const rel = src.slice(open).search(/\n\};/);   // first column-0 closing brace + semicolon
+  if (rel === -1) throw new Error(`end of const ${name} not found in index.html`);
+  const body = src.slice(open, open + rel + 2); // include the "\n}"
+  // eslint-disable-next-line no-new-func
+  return new Function(`return (${body});`)();
+}
+
