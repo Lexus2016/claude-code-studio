@@ -1,5 +1,65 @@
 # Changelog
 
+## Unreleased
+
+A turn that walked away from a background job now finishes the work instead of
+printing "Done" over it, and an `error_max_turns` that did not come from this
+chat's budget is named as such rather than sending the user to the wrong dial.
+
+### A turn that strands a background task is not a finished turn
+
+- **The gap: `subtype:'success'` is the one rung the auto-continue ladder does not
+  cover.** A run that started something with `run_in_background` and then ended its
+  turn saying it would wait and continue reports a clean `end_turn`. Nothing resumes
+  a headless `claude -p` — the process exits and takes the background shell with it —
+  so the chat printed `✅ Done` over work that had not happened, and the promised
+  continuation could never arrive.
+- **Detection is structural, never textual.** A `Bash` call carrying
+  `run_in_background` is the same JSON on every install; user-facing prose is written
+  in the UI language, so a regex over English phrases like "I'll check back" is dead
+  on a French or Ukrainian one. The flag is read off a parsed object, so a foreground
+  `grep '"run_in_background": true'` is not mistaken for a launch.
+- **The debt is incremental and counted across the whole turn.** An agent that starts a
+  background job and collects it inside the same turn — exactly what the new
+  system-prompt rule asks for — is not charged a rescue run. The harvest side matches a
+  `Read`/`View` of the `tasks/<id>.output` file the CLI actually writes, not just a
+  `BashOutput` call: measured on 2.1.231, `BashOutput` is never called. A harvest pays
+  down only a debt that already exists, once per shell id — so reading a leftover log
+  from an earlier turn cannot pay for a launch that comes afterwards, and polling one
+  job twice cannot cancel a second job that really was abandoned.
+- **One harvest run, and an honest ending if it is not enough.** When even the rescue
+  run walks away, the turn says how many tasks were left running, as a real `---` status
+  line so the SPA does not stamp its own "Done" badge over the warning.
+- **The system prompt states the constraint up front** — collect a background job's
+  result inside the same turn, because there is no later moment in which to get it.
+  The rescue is the second line of defence, not the first.
+- **Kanban/scheduled tasks, multi-agent members and bots get that instruction too**,
+  each through the channel that actually reaches it. `--system-prompt` is dropped
+  whenever there is a session to resume, and is absent entirely for a task with no bot —
+  so for a multi-agent worker, a bot with a live session, and every Kanban task, the
+  instruction rides the user turn instead. An unattended task that walks away from a
+  background job is the worst version of this bug — nobody is reading that chat to
+  notice. Riding the user turn also covers a Kanban task on the `subscription` engine
+  for free: it passes no system prompt at all, but its prompt is typed into the tmux
+  pane like any other.
+- **Known limit:** a process backgrounded with shell syntax (`cmd &`, `nohup`) inside a
+  foreground `Bash` call is not detected — separating that from `a && b` and `2>&1`
+  needs a shell parser. The system-prompt rule covers it in words.
+
+### An `error_max_turns` that is not ours says so (#67 follow-up)
+
+- **"Raise Max turns" is wrong advice when that is not the cap being hit.** Measured
+  against CLI 2.1.231, a run capped at N reports `num_turns === N + 1`, so a genuine
+  exhaustion lands AT the cap. A stop at 3 turns against a 50-turn dial is a limit
+  imposed somewhere else — a different CLI version, a `settings.json`, a hook on the
+  machine the agent runs on — and the message now says that instead, on the FIRST
+  retry notice rather than only after all three are spent.
+- **The remote auto-continue notice names the budget and what was spent.** The local
+  CLI loop has done this since it was written; the SSH one said only "resuming on
+  remote", which is why diagnosing the report needed a round trip.
+- **The SSH auto-continue path logs.** It previously logged nothing at all, on either
+  the max-turns or the non-success branch.
+
 ## 7.9.0
 
 A remote chat can no longer get stuck for good, a broken local Claude CLI install

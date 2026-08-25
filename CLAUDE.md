@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. `npm test` chains 68 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 50 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the SSH run's termination guarantee (`ssh-termination.test.js` drives `ClaudeSSH.send()` through a fake ssh2 `Client` in `require.cache` and asserts `onDone` fires EXACTLY once on every ending — a missed one hangs the chat forever, a doubled one re-emits stderr) and the recovery contract of "Restart Session" (`session-restart.test.js` boots a real server against a fake `claude` that never exits, then pins that a restart ABORTS that turn and releases the session instead of refusing), the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does), the editor deep links (`editor-links.test.js` pins the two URI shapes literally — the browser link puts `vscode-remote` in the AUTHORITY and the CLI argument puts it in the SCHEME, and collapsing the two silently breaks one path; `editor-open-api.test.js` boots a real server with `PATH` pointed at an EMPTY directory, which both makes the `opened:'client'` fallback deterministic and guarantees the suite never launches an editor window on a developer's desktop), and the new-chat defaults chain (`chat-defaults.test.js` pins the pure resolver — the built-ins are asserted to be exactly what the SPA hardcoded before #58, and the choice lists to be exactly the toolbar's `data-v` sets and `MODEL_MAP`'s aliases; `chat-defaults-api.test.js` boots a real server in a throwaway `APP_DIR` and pins that a project writes back a SPARSE override object — a five-key snapshot passes every other assertion in that file and still breaks the feature). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
+No linting and no build step configured. `npm test` chains 69 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 51 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the SSH run's termination guarantee (`ssh-termination.test.js` drives `ClaudeSSH.send()` through a fake ssh2 `Client` in `require.cache` and asserts `onDone` fires EXACTLY once on every ending — a missed one hangs the chat forever, a doubled one re-emits stderr) and the recovery contract of "Restart Session" (`session-restart.test.js` boots a real server against a fake `claude` that never exits, then pins that a restart ABORTS that turn and releases the session instead of refusing), the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does), the editor deep links (`editor-links.test.js` pins the two URI shapes literally — the browser link puts `vscode-remote` in the AUTHORITY and the CLI argument puts it in the SCHEME, and collapsing the two silently breaks one path; `editor-open-api.test.js` boots a real server with `PATH` pointed at an EMPTY directory, which both makes the `opened:'client'` fallback deterministic and guarantees the suite never launches an editor window on a developer's desktop), and the new-chat defaults chain (`chat-defaults.test.js` pins the pure resolver — the built-ins are asserted to be exactly what the SPA hardcoded before #58, and the choice lists to be exactly the toolbar's `data-v` sets and `MODEL_MAP`'s aliases; `chat-defaults-api.test.js` boots a real server in a throwaway `APP_DIR` and pins that a project writes back a SPARSE override object — a five-key snapshot passes every other assertion in that file and still breaks the feature). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the four tmux-dependent suites do not self-skip).
 
 ## Architecture
 
@@ -407,6 +407,119 @@ always running on the machine the browser is on.
   and the settings row (`config-resolve.js`, `section: 'ui'`) reads its choices from
   there rather than restating them.
 
+### A run that strands a background task (run-continuation.js)
+
+`subtype:'success'` is the ONE rung the auto-continue ladder does not cover, and that
+is where turns were being lost. A run that started something with `run_in_background`
+and then ended saying it would wait and continue reports a clean `end_turn` — so the
+ladder, which fires only on NON-success, never saw it. Nothing else resumes a headless
+`claude -p`: the process exits and takes the background shell with it. The chat printed
+`✅ Done` over work that had not happened.
+
+- **Detection is structural, never textual.** `isBackgroundLaunch()` matches a `Bash`
+  call whose input carries `run_in_background: true` — the same JSON on every install.
+  User-facing prose is written in the UI language (`buildSystemPrompt` pins that
+  explicitly), so a regex over English phrases like "I'll check back" is dead on a
+  French or Ukrainian install.
+- **The flag is read off a PARSED object, not matched as a substring.** `grep -rn
+  '"run_in_background": true' *.js` is a real command to run in this repo, and an
+  unanchored regex counted it as a launch. The regex survives only as a fallback for
+  input that does not parse at all (a truncated object), because a missed launch
+  strands the task, which is the failure the module exists to stop.
+- **The debt is INCREMENTAL and TURN-level, and the whole rule lives in the module.**
+  Four earlier shapes were wrong, which is why the current one looks over-built — every
+  one of them shipped green:
+  a one-way `bgLaunched` latch charged an extra run to every agent that OBEYED
+  `BACKGROUND_TASK_INSTRUCTION`; PER-RUN counters made the rescue run start from zero,
+  so a second walk-away that touched no tool reported nothing owed and the turn said
+  "Done" one run later — the same bug the bound existed to close; raw CALL counts let
+  two polls of one job cancel a second, genuinely abandoned launch; and a BATCH total
+  (`max(0, launches - harvests)`) BANKED a harvest with no launch behind it, so reading
+  a leftover `tasks/<id>.output` from an earlier turn — often the first thing a resumed
+  session does — paid for a launch that came afterwards. `applyBackgroundTool()` folds
+  each tool call into `{debt, seen}`: a harvest decrements only an EXISTING debt, once
+  per shell id, and a surplus is dropped rather than banked. The loops call that one
+  function instead of open-coding it, because an open-coded copy is how the local and
+  remote paths drift apart. Verified live on all four shapes.
+- **The harvest side cannot key on `BashOutput` alone.** Measured on CLI 2.1.231, a
+  background launch answers `Output is being written to: <hash>/<uuid>/tasks/<id>.output`
+  and the agent collects by READING that file — `BashOutput` is never called.
+  `backgroundHarvestId()` therefore also matches a `Read`/`View` of a
+  `/tasks/<id>.output` path and returns the id out of it (`BG_OUTPUT_PATH_RE`), which is
+  what makes repeated polling safe. A harvest whose id cannot be read returns `null` and
+  does NOT pay the debt: `bash_id` is a required parameter, so that only happens on a
+  malformed payload, and crediting it would let two such calls cancel a real launch —
+  one extra rescue run is the cheaper mistake. Verified live: an obedient agent ends at
+  `debt=0` and is not nudged; one that launches two and collects one ends at `debt=1`
+  and is.
+- **The detector sits ABOVE the MCP early-return in `onTool`.** A background launch is a
+  fact about the run, not about how one tool is rendered.
+- **`MAX_BACKGROUND_NUDGES` is 1**, so a false positive costs one short run.
+- **A bounded nudge needs an honest ending.** When the harvest run ALSO walks away,
+  `describeStrandedBackgroundTask()` says what was left running. The notice is written
+  as a real status line (`\n\n---\n⚠️ …`) because `statusLineKind()`
+  (public/index.html:7215) requires the `---` fence — without it the SPA stamps its own
+  `✅ Done` badge on top of the warning.
+- **It does NOT flip the returned `completed` flag, and that was tried.** `completed`
+  has no consumer that would do the right thing with it: the chat path discards it, and
+  the only reader (server.js:1865) is the SUBSCRIPTION branch consuming
+  `runInteractiveSingle`. The API Kanban worker has its own `while (true)` that breaks
+  on `subtype === 'success'` and never calls these functions at all. Worse, that one
+  reader turns `completed:false` into `{subtype:'error'}` → `taskStatusForStop` →
+  `'failed'`, which auto-retries a chain and re-runs every side effect. "Not marked
+  done" is not "failed, retry the chain".
+- **Coverage is uneven, and each path takes the channel that actually reaches it.**
+  The harvest rescue lives in `runCliSingle`/`runSshSingle` only — the chat and Telegram
+  paths. `taskWorker` (Kanban/scheduled, API engine), the multi-agent DAG members and
+  the bots/dispatch path each run their own `cli.send` loop and build their own system
+  prompt, so they got neither half; duplicating the debt accounting into a third and
+  fourth loop is exactly how the local and remote paths would drift apart, so they get
+  the instruction only. An UNATTENDED task walking away from a background job is the
+  worst version of this bug — nobody is reading that chat — which is why it was worth
+  wiring even where the rescue is not.
+  **Which channel matters, and appending to the system prompt is usually the wrong
+  one.** `claude-cli.js:252` drops `--system-prompt` whenever there is a session to
+  resume. A multi-agent worker starts from the orchestrator's session id, and a bot
+  keeps a persistent session per chat — so for those two the system prompt is dead on
+  arrival, and the instruction rides the USER turn instead (`agentPrompt`, and the
+  `standing` block the bots path already re-sends its roster in). `taskWorker` is the
+  same story for two reasons at once — `taskBotSp` is `undefined` for a task with no
+  bot, and dropped outright when the task resumes a session — so there too it rides the
+  task prompt, next to `TASK_VERIFICATION_SUFFIX`, which sits in that channel for
+  exactly the same reason. Chat and Telegram get it as a system prompt through
+  `buildSystemPrompt`; a bot on a FRESH session gets it that way too, via `botSp`, and
+  falls back to the `standing` user block once it has a session to resume.
+  Putting it in the task prompt also covers a Kanban task on the `subscription`
+  engine for free: that path passes `systemPrompt: ''` (server.js:1829) but
+  `runInteractiveSingle` types the prompt itself into the tmux pane
+  (claude-interactive.js:441), so the user-turn channel reaches it like every other.
+- **The system prompt is the first line of defence, the harvest run the second.**
+  `BACKGROUND_TASK_INSTRUCTION` says plainly that the turn does not resume, and is
+  phrased as "anything that keeps running after the call returns" rather than one tool
+  field — which is what covers the two KNOWN LIMITS, both stated in the module header.
+  A process backgrounded with shell syntax (`cmd &`, `nohup`, `tmux new -d`) inside a
+  FOREGROUND `Bash` call is not detected: telling `a && b`, `2>&1` and a trailing `&`
+  apart needs a shell parser, and the false positives would land on ordinary commands.
+  And a harvest is not PAIRED to a launch — the shell id exists only in the tool
+  RESULT, while `onTool` sees tool_use blocks — so a read of some OTHER
+  `tasks/<id>.output` after a launch pays that launch's debt. The mirror case, a
+  leftover read BEFORE the launch, is closed by the no-banking rule; closing this one
+  means threading tool_result through both transports and changing the stream contract.
+- **`test/ask-user-question.test.js` extracts that `onTool` handler as source text** and
+  runs it through `new Function`, so its parameter list must carry every closure the
+  handler touches — `runContinuation` and `bgState` are passed in there deliberately
+  rather than stubbed, to keep the real module in the path.
+
+**`describeTurnBudgetAnomaly()` — when "raise Max turns" is the wrong advice.** Measured
+against CLI 2.1.231, a run capped at N reports `num_turns === N + 1`, so a genuine
+exhaustion lands AT the cap. `error_max_turns` after 3 turns against a 50-turn dial means
+the cap came from somewhere else — a different CLI version, a `settings.json`, a hook on
+the machine the agent runs on. Half the budget is the threshold, not "anything below the
+cap": a run can stop one or two turns short for ordinary reasons, and warning on those
+would be noise on every long chat. It is applied to the FIRST retry notice as well as the
+exhausted one — `hit the 50-turn limit (used 3)` contradicts itself, and a user who stops
+reading after the first retry never reaches the corrected sentence.
+
 ### Composer geometry and terminal-pane control
 
 Four reports that all reduce to "the UI moved or stopped listening". Pinned by
@@ -512,7 +625,7 @@ message replays the chat's history into a fresh Claude session rather than losin
 
 ## How to Verify Changes
 
-`npm test` runs 68 test files under `test/` (18 `test/render/*.test.mjs` + 50 `test/*.test.js`), and `.github/workflows/ci.yml` runs the same command on every push and PR to `main`. Nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 69 test files under `test/` (18 `test/render/*.test.mjs` + 51 `test/*.test.js`), and `.github/workflows/ci.yml` runs the same command on every push and PR to `main`. Nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server

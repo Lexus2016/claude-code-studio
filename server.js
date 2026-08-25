@@ -95,6 +95,9 @@ const agentsMd = require('./agents-md');
 // purpose — see the header of the module.
 const remoteFiles = require('./remote-files');
 const chatDefaults = require('./chat-defaults');
+// Post-run decisions of the single-agent loops: harvest a background task the agent
+// walked away from, and name an `error_max_turns` that did not come from our budget.
+const runContinuation = require('./run-continuation');
 // "Open in VS Code" (#63). Pure link/argv builder; the spawn half lives next to
 // the endpoint below, because only that half needs the filesystem.
 const editorLinks = require('./editor-links');
@@ -1686,7 +1689,13 @@ async function startTask(task) {
     }
     // Task manager instruction: inform Claude about available task management tools
     parts.push(TASK_MANAGER_INSTRUCTION);
-    const prompt = parts.join('\n\n') + TASK_VERIFICATION_SUFFIX;
+    // BACKGROUND_TASK_INSTRUCTION rides the task prompt, not taskBotSp, because that
+    // system prompt is `undefined` for a task with no bot AND is dropped by
+    // claude-cli.js:252 whenever the task resumes an existing session. The prompt is
+    // the only channel that reaches every task — which is also why the verification
+    // suffix lives here. Unattended is where a stranded background job hurts most:
+    // nobody is reading that chat.
+    const prompt = parts.join('\n\n') + BACKGROUND_TASK_INSTRUCTION + TASK_VERIFICATION_SUFFIX;
     _taskStartedAt = Date.now(); // reset to accurate time after prompt building
     // Check if this is a restart: only skip saving if the LAST user message
     // has the exact same prompt (crash recovery). Previously checked for ANY
@@ -1909,6 +1918,9 @@ async function startTask(task) {
         CCS_INTERRUPT_SESSION: sessionId,
         CCS_INTERRUPT_SECRET: INTERRUPT_SECRET,
       };
+      // The background rule is NOT appended here: this is undefined for a task with no
+      // bot, and dropped entirely when the task resumes a session. It rides the task
+      // prompt instead — see where `prompt` is built above.
       const taskBotSp = taskBot
         ? botsLogic.buildBotSystemPrompt(taskBot, stmts.listBots.all()) + USER_INTERRUPT_INSTRUCTION
         : undefined;
@@ -3122,6 +3134,16 @@ This status line must always be the very last thing in your response. Never skip
 
 const TOOL_CALL_INSTRUCTION = `\n\nCRITICAL: After finishing tool calls (Read, Bash, Edit, Write, Grep, etc.), you MUST write a final text response with the status line. NEVER end your turn on a tool call without a text summary. The user cannot see tool results — they only see your text. If you called tools, summarize what you found or did in 1-3 sentences, then add the "---" status line.`;
 
+// Background shells are the concrete case the status-line rule keeps losing. A run
+// that starts one and then writes "I'll wait for it and continue" ends as a clean
+// end_turn, so no auto-continue rung fires — and there is nothing to resume it:
+// this is a headless `claude -p`, the process exits and takes the background shell
+// with it. The chat printed "✅ Done" over work that had not happened.
+// The run loops now spend one extra run harvesting such a task, but a turn that
+// never strands one is strictly better than a turn that gets rescued.
+const BACKGROUND_TASK_INSTRUCTION = `\n\nBACKGROUND TASKS: if you start anything with run_in_background (or any command that keeps running after the call returns), you MUST collect its result inside this same turn — poll BashOutput, or read the log it writes, until it is done. Your turn does not resume: there is no later moment in which you get that output. Never end a turn saying you will wait for a background job, check on it later, or continue once it finishes. If a job is genuinely too long to wait for, finish the turn by telling the user it is still running and exactly how to check it.`;
+
+
 // Mandatory verification suffix — appended to every Kanban task prompt.
 // Stays in context on --resume turns because it is part of the first user message.
 const TASK_VERIFICATION_SUFFIX = `
@@ -3194,6 +3216,7 @@ function buildSystemPrompt(skillIds, config) {
   prompt += USER_INTERRUPT_INSTRUCTION;
   prompt += STATUS_LINE_INSTRUCTION;
   prompt += TOOL_CALL_INSTRUCTION;
+  prompt += BACKGROUND_TASK_INSTRUCTION;
 
   // Evict oldest if cache full
   if (_systemPromptCache.size >= MAX_PROMPT_CACHE_SIZE) {
@@ -3447,6 +3470,37 @@ function isResettableClaudeSessionError(errorText = '') {
   return /Invalid signature in thinking block|invalid session|session .* not found|could not find .*session|no conversation found|resume .*failed|failed to resume|conversation .* not found/i.test(errorText || '');
 }
 
+/** Mirror one status notice into the chat buffer (trimmed to MAX_CHAT_BUFFER) and
+ *  down the socket. The caller still does its own `fullText += notice` FIRST, so the
+ *  order of effects is exactly what the hand-rolled copies did.
+ *
+ *  Twenty-six copies of it lived in `runCliSingle` and `runSshSingle`, and each had
+ *  to get the same two details right — the buffer tail-trim and the conditional
+ *  `tabId` spread — where one that missed either grew the buffer without bound or
+ *  delivered into the wrong tab.
+ *
+ *  The `onText` handlers keep their own inline copy on purpose: that is streamed model
+ *  output, not a status notice. It also writes `stmts.setPartialText` every fifth
+ *  chunk, so folding it in here would put a SQLite write behind a "send a notice" name.
+ *  Runners outside these two loops (taskWorker, the multi-agent members, bots) are
+ *  untouched too — they buffer into `taskBuffers`, tag frames with `agent:`, or persist
+ *  only, so they are structurally similar rather than the same thing.
+ *
+ *  `restartAvailable` is a FLAG, not a free-form object. An `extra` spread would sit
+ *  between `text` and `tabId` and let a future caller silently overwrite `type` or
+ *  `text`, or leak a `tabId` the frame is not supposed to carry. The two keys the
+ *  restart affordance needs are the only ones any caller has ever attached, so they
+ *  are named here and the frame's key order is fixed by construction.
+ */
+function emitTurnNotice({ ws, sessionId, tabId, text, restartAvailable }) {
+  const cb = (chatBuffers.get(sessionId) || '') + text;
+  chatBuffers.set(sessionId, cb.length > MAX_CHAT_BUFFER ? cb.slice(-MAX_CHAT_BUFFER) : cb);
+  const frame = { type: 'text', text };
+  if (restartAvailable) { frame.session_restart_available = true; frame.sessionId = sessionId; }
+  if (tabId) frame.tabId = tabId;
+  try { ws.send(JSON.stringify(frame)); } catch {}
+}
+
 // --- CLI Single Agent ---
 async function runCliSingle(p) {
   const { prompt, userContent, systemPrompt, mcpServers, model, maxTurns, ws, sessionId, abortController, claudeSessionId, forkSession, mode, workdir, tabId, name, effort } = p;
@@ -3463,6 +3517,15 @@ async function runCliSingle(p) {
   let continueCount = 0;
   let rateLimitWaitCount = 0;
   let overloadRetryCount = 0;
+  // Background-harvest runs spent this turn (issue: "waiting for a background task"
+  // that nothing ever resumes). Capped by run-continuation.MAX_BACKGROUND_NUDGES.
+  let bgNudges = 0;
+  // TURN-level, deliberately not per-run. A rescue run that answers in text and
+  // touches no tool has no counts of its own; if the debt lived inside runOnce it
+  // would reset to zero there and the turn would claim success — the original bug,
+  // one run later. The rule itself lives in run-continuation.js so the local and
+  // remote loops cannot drift apart.
+  const bgState = runContinuation.newBackgroundState();
   // Usage of the most recent assistant turn (real context-window occupancy at the
   // end). Persists across auto-continue iterations; the last write wins.
   let lastTurnUsage = null;
@@ -3511,6 +3574,9 @@ async function runCliSingle(p) {
       })
       .onThinking(t => { fullThinking += t; log.info('[THINKING-DIAG-CLI] onThinking fired', { len: t.length, totalLen: fullThinking.length, sessionId }); ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
       .onTool((name, inp) => {
+        // Before the MCP early-return: a background launch is a fact about the run,
+        // not about how this particular tool is rendered.
+        runContinuation.applyBackgroundTool(bgState, name, inp);
         if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state' || name === 'check_user_messages') {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
           return;
@@ -3573,8 +3639,7 @@ async function runCliSingle(p) {
         if (overloadRetryCount >= MAX_OVERLOAD_RETRIES) {
           const notice = `\n\n⚠️ **Server overloaded** — still limiting after ${MAX_OVERLOAD_RETRIES} retries. Please try again shortly.\n\n`;
           fullText += notice;
-          { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-          try { ws.send(JSON.stringify({ type:'text', text: notice, session_restart_available: true, sessionId, ...(tabId ? { tabId } : {}) })); } catch {}
+          emitTurnNotice({ ws, sessionId, tabId, text: notice, restartAvailable: true });
           break;
         }
         overloadRetryCount++;
@@ -3583,8 +3648,7 @@ async function runCliSingle(p) {
         log.warn('overload-backoff', { sessionId, attempt: overloadRetryCount, maxAttempts: MAX_OVERLOAD_RETRIES, backoffMs });
         const notice = `\n\n⏳ **Server busy** — temporarily limiting requests (not your usage limit). Pausing ~${backoffSec}s and retrying (${overloadRetryCount}/${MAX_OVERLOAD_RETRIES})...\n\n`;
         fullText += notice;
-        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+        emitTurnNotice({ ws, sessionId, tabId, text: notice });
         try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'waiting', secondsLeft: backoffSec, rateLimitType: 'overloaded', attempt: overloadRetryCount, maxAttempts: MAX_OVERLOAD_RETRIES, ...(tabId ? { tabId } : {}) })); } catch {}
 
         const waitEnd = Date.now() + backoffMs;
@@ -3599,8 +3663,7 @@ async function runCliSingle(p) {
         try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'resuming', rateLimitType: 'overloaded', ...(tabId ? { tabId } : {}) })); } catch {}
         const resumeNotice = '\n✅ **Resuming**...\n\n';
         fullText += resumeNotice;
-        { const _cb = (chatBuffers.get(sessionId) || '') + resumeNotice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        try { ws.send(JSON.stringify({ type:'text', text: resumeNotice, ...(tabId ? { tabId } : {}) })); } catch {}
+        emitTurnNotice({ ws, sessionId, tabId, text: resumeNotice });
 
         // Switch to a continuation prompt only when a session exists to resume AND real
         // output streamed before the throttle. Otherwise (no session yet, or result-only
@@ -3614,8 +3677,37 @@ async function runCliSingle(p) {
       }
     }
 
-    // ✅ Success — agent finished naturally
-    if (resultData?.subtype === 'success') break;
+    // 🌱 A clean finish that stranded a background task is not a finish. The agent
+    // ended its turn with a job still running, and nothing resumes a headless run —
+    // the CLI process exits and takes the background shell with it. Spend one run
+    // collecting it instead of printing "✅ Done" over work that did not happen.
+    if (runContinuation.shouldNudgeBackgroundWait({
+      subtype: resultData?.subtype, outstanding: runContinuation.backgroundOutstanding(bgState),
+      nudges: bgNudges, aborted: !!abortController?.signal?.aborted,
+    })) {
+      bgNudges++;
+      log.info('background-harvest', { sessionId, attempt: bgNudges });
+      const notice = `\n\n---\n⏳ **Collecting background task output**...\n\n`;
+      fullText += notice;
+      emitTurnNotice({ ws, sessionId, tabId, text: notice });
+      currentPrompt = runContinuation.BACKGROUND_WAIT_PROMPT;
+      currentContentBlocks = null;
+      continue;
+    }
+
+    // ✅ Success — agent finished naturally, unless it left a background task behind
+    // that even the harvest run did not collect. Saying "Done" there is the bug.
+    if (resultData?.subtype === 'success') {
+      const _owed = runContinuation.backgroundOutstanding(bgState);
+      const _stranded = runContinuation.describeStrandedBackgroundTask({ outstanding: _owed, nudges: bgNudges });
+      if (_stranded) {
+        log.warn('background-task-stranded', { sessionId, outstanding: _owed, collected: bgState.seen.size });
+        const notice = `\n\n---\n\u26a0\ufe0f **Unfinished background work** \u2014 ${_stranded}\n`;
+        fullText += notice;
+        emitTurnNotice({ ws, sessionId, tabId, text: notice });
+      }
+      break;
+    }
 
     // 🚦 Rate limit rejected — wait for reset and auto-retry
     {
@@ -3631,8 +3723,7 @@ async function runCliSingle(p) {
           const reason = rateLimitWaitCount >= MAX_RATE_LIMIT_WAITS ? 'retries exhausted' : rateLimitType === 'seven_day' ? '7-day limit' : 'reset too far';
           const notice = `\n\n⚠️ **Rate limit** — ${reason}. Please retry manually later.\n\n`;
           fullText += notice;
-          { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-          try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+          emitTurnNotice({ ws, sessionId, tabId, text: notice });
           break;
         }
 
@@ -3642,8 +3733,7 @@ async function runCliSingle(p) {
 
         const notice = `\n\n⏳ **Rate limit** (${rateLimitType}) — auto-waiting ~${Math.ceil(waitSec / 60)} min for reset (${rateLimitWaitCount}/${MAX_RATE_LIMIT_WAITS})...\n\n`;
         fullText += notice;
-        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+        emitTurnNotice({ ws, sessionId, tabId, text: notice });
         try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'waiting', secondsLeft: waitSec, resetsAt, rateLimitType, attempt: rateLimitWaitCount, maxAttempts: MAX_RATE_LIMIT_WAITS, ...(tabId ? { tabId } : {}) })); } catch {}
 
         // Wait loop with periodic countdown updates (every 30s)
@@ -3661,8 +3751,7 @@ async function runCliSingle(p) {
         try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'resuming', ...(tabId ? { tabId } : {}) })); } catch {}
         const resumeNotice = '\n✅ **Rate limit reset** — resuming...\n\n';
         fullText += resumeNotice;
-        { const _cb = (chatBuffers.get(sessionId) || '') + resumeNotice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        try { ws.send(JSON.stringify({ type:'text', text: resumeNotice, ...(tabId ? { tabId } : {}) })); } catch {}
+        emitTurnNotice({ ws, sessionId, tabId, text: resumeNotice });
 
         // If Claude produced output before rate limit, switch to continuation prompt
         if (hadOutputBeforeRateLimit) {
@@ -3683,8 +3772,7 @@ async function runCliSingle(p) {
         ? '\n\n⚠️ **Session reset** — thinking block signature expired, starting fresh session...\n\n'
         : '\n\n⚠️ **Session reset** — previous Claude session was missing or invalid, starting fresh session...\n\n';
       fullText += notice;
-      { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+      emitTurnNotice({ ws, sessionId, tabId, text: notice });
       // Clear session ID — next iteration will start a fresh Claude session
       newCid = null;
       fullThinking = ''; // Reset thinking for fresh session — old thinking belongs to the discarded session
@@ -3701,8 +3789,7 @@ async function runCliSingle(p) {
         // affordance every other exhausted path offers.
         const notice = `\n\n⚠️ **Could not re-establish the Claude session** after ${MAX_AUTO_CONTINUES} attempts.\n\n`;
         fullText += notice;
-        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        try { ws.send(JSON.stringify({ type:'text', text: notice, session_restart_available: true, sessionId, ...(tabId ? { tabId } : {}) })); } catch {}
+        emitTurnNotice({ ws, sessionId, tabId, text: notice, restartAvailable: true });
         break;
       }
       continue;
@@ -3712,8 +3799,7 @@ async function runCliSingle(p) {
     if (resultData?.subtype === 'error_max_budget_usd') {
       const notice = '\n\n⚠️ **Budget limit reached** — agent stopped.\n\n';
       fullText += notice;
-      { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+      emitTurnNotice({ ws, sessionId, tabId, text: notice });
       break;
     }
 
@@ -3724,10 +3810,15 @@ async function runCliSingle(p) {
     if (continueCount >= MAX_AUTO_CONTINUES) {
       // Same reason as the SSH loop's copy below: "gave up" without "why" is not
       // actionable — raising Max turns and fixing a crashing tool are different fixes.
-      const notice = `\n\n⚠️ **Agent did not complete** after ${MAX_AUTO_CONTINUES} auto-continues — ${describeStopReason(resultData?.subtype, errorText)}. Send another message to continue, or use **Restart Session** to start fresh with this chat's history replayed.\n\n`;
+      // And when the CLI stopped far below the budget we asked for, "raise Max turns"
+      // is not merely unhelpful but wrong: that cap is not the one being hit.
+      const _anomaly = runContinuation.describeTurnBudgetAnomaly({
+        subtype: resultData?.subtype, numTurns: resultData?.num_turns, requestedMaxTurns: effectiveMaxTurns,
+      });
+      if (_anomaly) log.warn('turn-budget-anomaly', { sessionId, numTurns: resultData?.num_turns, requested: effectiveMaxTurns });
+      const notice = `\n\n⚠️ **Agent did not complete** after ${MAX_AUTO_CONTINUES} auto-continues — ${_anomaly || describeStopReason(resultData?.subtype, errorText)}. Send another message to continue, or use **Restart Session** to start fresh with this chat's history replayed.\n\n`;
       fullText += notice;
-      { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-      try { ws.send(JSON.stringify({ type:'text', text: notice, session_restart_available: true, sessionId, ...(tabId ? { tabId } : {}) })); } catch {}
+      emitTurnNotice({ ws, sessionId, tabId, text: notice, restartAvailable: true });
       break;
     }
 
@@ -3735,12 +3826,19 @@ async function runCliSingle(p) {
     continueCount++;
 
     if (resultData?.subtype === 'error_max_turns') {
-      // Max-turns hit — notify user explicitly
-      log.info('auto-continue (max_turns)', { sessionId, attempt: continueCount, maxAttempts: MAX_AUTO_CONTINUES, turnsUsed: resultData.num_turns });
-      const notice = `\n\n---\n⏳ **Auto-continuing** (${continueCount}/${MAX_AUTO_CONTINUES}) — hit ${effectiveMaxTurns}-turn limit, resuming...\n\n`;
+      // Max-turns hit — notify user explicitly. When the run stopped far below the
+      // budget, say THAT instead: "hit 50-turn limit" after 3 turns contradicts
+      // itself, and the user who stops reading after the first retry never reaches
+      // the corrected sentence in the exhausted branch.
+      const _anomaly = runContinuation.describeTurnBudgetAnomaly({
+        subtype: resultData?.subtype, numTurns: resultData?.num_turns, requestedMaxTurns: effectiveMaxTurns,
+      });
+      log.info('auto-continue (max_turns)', { sessionId, attempt: continueCount, maxAttempts: MAX_AUTO_CONTINUES, turnsUsed: resultData.num_turns, requested: effectiveMaxTurns, anomaly: !!_anomaly });
+      const notice = _anomaly
+        ? `\n\n---\n⏳ **Auto-continuing** (${continueCount}/${MAX_AUTO_CONTINUES}) — ${_anomaly} Resuming...\n\n`
+        : `\n\n---\n⏳ **Auto-continuing** (${continueCount}/${MAX_AUTO_CONTINUES}) — hit ${effectiveMaxTurns}-turn limit, resuming...\n\n`;
       fullText += notice;
-      { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+      emitTurnNotice({ ws, sessionId, tabId, text: notice });
     } else {
       // Any other non-success stop (error_during_execution, process crash, etc.) — auto-continue silently
       log.info('auto-continue (non-success)', { sessionId, attempt: continueCount, subtype: resultData?.subtype || 'unknown' });
@@ -3803,6 +3901,10 @@ async function runSshSingle(p) {
   let continueCount = 0;
   let rateLimitWaitCount = 0;
   let overloadRetryCount = 0;
+  // See the CLI loop: one run may be spent harvesting a stranded background task,
+  // and the debt is TURN-level so a text-only rescue run cannot reset it.
+  let bgNudges = 0;
+  const bgState = runContinuation.newBackgroundState();
   // Usage of the most recent assistant turn (real context-window occupancy at the end).
   let lastTurnUsage = null;
   let currentContentBlocks = Array.isArray(userContent) ? userContent : null;
@@ -3829,6 +3931,7 @@ async function runSshSingle(p) {
       })
       .onThinking(t => { fullThinking += t; log.info('[THINKING-DIAG-SSH] onThinking fired', { len: t.length, totalLen: fullThinking.length, sessionId }); ws.send(JSON.stringify({ type:'thinking', text:t, ...(tabId ? { tabId } : {}) })); })
       .onTool((name, inp) => {
+        runContinuation.applyBackgroundTool(bgState, name, inp);
         if (name === 'ask_user' || name === 'notify_user' || name === 'set_ui_state' || name === 'check_user_messages') {
           try { stmts.addMsg.run(sessionId,'assistant','tool',(inp||'').substring(0,500),name,null,null,null); } catch {}
           return;
@@ -3871,8 +3974,7 @@ async function runSshSingle(p) {
         if (overloadRetryCount >= MAX_OVERLOAD_RETRIES) {
           const notice = `\n\n⚠️ **Server overloaded** — still limiting after ${MAX_OVERLOAD_RETRIES} retries. Please try again shortly.\n\n`;
           fullText += notice;
-          { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-          try { ws.send(JSON.stringify({ type:'text', text: notice, session_restart_available: true, sessionId, ...(tabId ? { tabId } : {}) })); } catch {}
+          emitTurnNotice({ ws, sessionId, tabId, text: notice, restartAvailable: true });
           break;
         }
         overloadRetryCount++;
@@ -3881,8 +3983,7 @@ async function runSshSingle(p) {
         log.warn('ssh-overload-backoff', { sessionId, attempt: overloadRetryCount, maxAttempts: MAX_OVERLOAD_RETRIES, backoffMs });
         const notice = `\n\n⏳ **Server busy** — temporarily limiting requests (not your usage limit). Pausing ~${backoffSec}s and retrying (${overloadRetryCount}/${MAX_OVERLOAD_RETRIES})...\n\n`;
         fullText += notice;
-        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+        emitTurnNotice({ ws, sessionId, tabId, text: notice });
         try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'waiting', secondsLeft: backoffSec, rateLimitType: 'overloaded', attempt: overloadRetryCount, maxAttempts: MAX_OVERLOAD_RETRIES, ...(tabId ? { tabId } : {}) })); } catch {}
         const waitEnd = Date.now() + backoffMs;
         while (Date.now() < waitEnd) {
@@ -3895,8 +3996,7 @@ async function runSshSingle(p) {
         try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'resuming', rateLimitType: 'overloaded', ...(tabId ? { tabId } : {}) })); } catch {}
         const resumeNotice = '\n✅ **Resuming**...\n\n';
         fullText += resumeNotice;
-        { const _cb = (chatBuffers.get(sessionId) || '') + resumeNotice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        try { ws.send(JSON.stringify({ type:'text', text: resumeNotice, ...(tabId ? { tabId } : {}) })); } catch {}
+        emitTurnNotice({ ws, sessionId, tabId, text: resumeNotice });
         // Continue only with an established session + streamed output; else retry original (see CLI loop).
         if (newCid && hadOutputBeforeRateLimit) {
           currentPrompt = 'Continue where you left off. Complete the remaining work.';
@@ -3906,7 +4006,34 @@ async function runSshSingle(p) {
       }
     }
 
-    if (resultData?.subtype === 'success') break;
+    // 🌱 Same rule as the CLI loop: a run that stranded a background task has not
+    // finished, whatever the subtype says. Nothing on the remote host resumes it —
+    // the `claude -p` process is gone and the background shell with it.
+    if (runContinuation.shouldNudgeBackgroundWait({
+      subtype: resultData?.subtype, outstanding: runContinuation.backgroundOutstanding(bgState),
+      nudges: bgNudges, aborted: !!abortController?.signal?.aborted,
+    })) {
+      bgNudges++;
+      log.info('ssh-background-harvest', { sessionId, attempt: bgNudges });
+      const notice = `\n\n---\n⏳ **Collecting background task output** on remote...\n\n`;
+      fullText += notice;
+      emitTurnNotice({ ws, sessionId, tabId, text: notice });
+      currentPrompt = runContinuation.BACKGROUND_WAIT_PROMPT;
+      currentContentBlocks = null;
+      continue;
+    }
+
+    if (resultData?.subtype === 'success') {
+      const _owed = runContinuation.backgroundOutstanding(bgState);
+      const _stranded = runContinuation.describeStrandedBackgroundTask({ outstanding: _owed, nudges: bgNudges });
+      if (_stranded) {
+        log.warn('ssh-background-task-stranded', { sessionId, outstanding: _owed, collected: bgState.seen.size });
+        const notice = `\n\n---\n\u26a0\ufe0f **Unfinished background work** \u2014 ${_stranded}\n`;
+        fullText += notice;
+        emitTurnNotice({ ws, sessionId, tabId, text: notice });
+      }
+      break;
+    }
 
     // 🚦 Rate limit rejected — wait for reset and auto-retry
     {
@@ -3920,8 +4047,7 @@ async function runSshSingle(p) {
           const reason = rateLimitWaitCount >= MAX_RATE_LIMIT_WAITS ? 'retries exhausted' : rateLimitType === 'seven_day' ? '7-day limit' : 'reset too far';
           const notice = `\n\n⚠️ **Rate limit** — ${reason}. Please retry manually later.\n\n`;
           fullText += notice;
-          { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-          try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+          emitTurnNotice({ ws, sessionId, tabId, text: notice });
           break;
         }
         rateLimitWaitCount++;
@@ -3929,8 +4055,7 @@ async function runSshSingle(p) {
         log.warn('ssh-rate-limit-wait', { sessionId, rateLimitType, resetsAt, waitMs, attempt: rateLimitWaitCount, maxAttempts: MAX_RATE_LIMIT_WAITS });
         const notice = `\n\n⏳ **Rate limit** (${rateLimitType}) — auto-waiting ~${Math.ceil(waitSec / 60)} min for reset (${rateLimitWaitCount}/${MAX_RATE_LIMIT_WAITS})...\n\n`;
         fullText += notice;
-        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+        emitTurnNotice({ ws, sessionId, tabId, text: notice });
         try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'waiting', secondsLeft: waitSec, resetsAt, rateLimitType, attempt: rateLimitWaitCount, maxAttempts: MAX_RATE_LIMIT_WAITS, ...(tabId ? { tabId } : {}) })); } catch {}
         const waitEnd = Date.now() + waitMs;
         while (Date.now() < waitEnd) {
@@ -3943,8 +4068,7 @@ async function runSshSingle(p) {
         try { ws.send(JSON.stringify({ type: 'rate_limit_wait', status: 'resuming', ...(tabId ? { tabId } : {}) })); } catch {}
         const resumeNotice = '\n✅ **Rate limit reset** — resuming...\n\n';
         fullText += resumeNotice;
-        { const _cb = (chatBuffers.get(sessionId) || '') + resumeNotice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        try { ws.send(JSON.stringify({ type:'text', text: resumeNotice, ...(tabId ? { tabId } : {}) })); } catch {}
+        emitTurnNotice({ ws, sessionId, tabId, text: resumeNotice });
         if (hadOutputBeforeRateLimit) {
           currentPrompt = 'Continue where you left off. Complete the remaining work.';
           currentContentBlocks = null;
@@ -3960,8 +4084,7 @@ async function runSshSingle(p) {
         ? '\n\n⚠️ **Session reset** — remote thinking block signature expired, starting a fresh session...\n\n'
         : '\n\n⚠️ **Session reset** — previous remote Claude session was missing or invalid, starting a fresh session...\n\n';
       fullText += notice;
-      { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+      emitTurnNotice({ ws, sessionId, tabId, text: notice });
       newCid = null;
       fullThinking = ''; // Reset thinking for fresh session
       try { stmts.updateClaudeId.run(null, sessionId); } catch {}
@@ -3977,8 +4100,7 @@ async function runSshSingle(p) {
         // affordance every other exhausted path offers.
         const notice = `\n\n⚠️ **Could not re-establish the Claude session** after ${MAX_AUTO_CONTINUES} attempts.\n\n`;
         fullText += notice;
-        { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-        try { ws.send(JSON.stringify({ type:'text', text: notice, session_restart_available: true, sessionId, ...(tabId ? { tabId } : {}) })); } catch {}
+        emitTurnNotice({ ws, sessionId, tabId, text: notice, restartAvailable: true });
         break;
       }
       continue;
@@ -3986,8 +4108,7 @@ async function runSshSingle(p) {
     if (resultData?.subtype === 'error_max_budget_usd') {
       const notice = '\n\n⚠️ **Budget limit reached** — agent stopped.\n\n';
       fullText += notice;
-      { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+      emitTurnNotice({ ws, sessionId, tabId, text: notice });
       break;
     }
     if (abortController?.signal?.aborted) break;
@@ -3995,19 +4116,46 @@ async function runSshSingle(p) {
       // Name why it kept stopping. Without this the message said only that it gave
       // up, so "hit the turn limit three times" (raise maxTurns) was indistinguishable
       // from "the remote link died three times" (fix the connection) — issue #67.
-      const _why = describeStopReason(resultData?.subtype, errorText);
+      // The anomaly line comes FIRST when it applies: "raise Max turns" is actively
+      // wrong advice when the cap being hit is not the one we sent.
+      const _anomaly = runContinuation.describeTurnBudgetAnomaly({
+        subtype: resultData?.subtype, numTurns: resultData?.num_turns, requestedMaxTurns: effectiveMaxTurns,
+      });
+      const _why = _anomaly || describeStopReason(resultData?.subtype, errorText);
+      if (_anomaly) log.warn('ssh-turn-budget-anomaly', { sessionId, numTurns: resultData?.num_turns, requested: effectiveMaxTurns });
       const notice = `\n\n⚠️ **Agent did not complete** after ${MAX_AUTO_CONTINUES} auto-continues — ${_why}. The chat is still usable: send another message to continue, or use **Restart Session** to start a fresh remote session with this chat's history replayed.\n\n`;
       fullText += notice;
-      { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-      try { ws.send(JSON.stringify({ type:'text', text: notice, session_restart_available: true, sessionId, ...(tabId ? { tabId } : {}) })); } catch {}
+      emitTurnNotice({ ws, sessionId, tabId, text: notice, restartAvailable: true });
       break;
     }
     continueCount++;
     if (resultData?.subtype === 'error_max_turns') {
-      const notice = `\n\n---\n⏳ **Auto-continuing** (${continueCount}/${MAX_AUTO_CONTINUES}) — resuming on remote...\n\n`;
+      // Name the budget and what was actually spent. The local CLI loop has done this
+      // since it was written; the remote one said only "resuming", which is why #67
+      // needed a round trip to establish that the cap being hit was not ours.
+      log.info('ssh-auto-continue (max_turns)', {
+        sessionId, attempt: continueCount, maxAttempts: MAX_AUTO_CONTINUES,
+        turnsUsed: resultData?.num_turns, requested: effectiveMaxTurns, durationMs: resultData?.duration_ms,
+      });
+      // The anomaly wording belongs HERE too, not only in the exhausted branch:
+      // "hit the 50-turn limit (used 3)" contradicts itself, and a user who stops
+      // reading after the first retry never reaches the corrected sentence.
+      const _anomaly = runContinuation.describeTurnBudgetAnomaly({
+        subtype: resultData?.subtype, numTurns: resultData?.num_turns, requestedMaxTurns: effectiveMaxTurns,
+      });
+      const _spent = Number.isFinite(resultData?.num_turns) ? ` (used ${resultData.num_turns})` : '';
+      const notice = _anomaly
+        ? `\n\n---\n⏳ **Auto-continuing** (${continueCount}/${MAX_AUTO_CONTINUES}) — ${_anomaly} Resuming on remote...\n\n`
+        : `\n\n---\n⏳ **Auto-continuing** (${continueCount}/${MAX_AUTO_CONTINUES}) — hit the ${effectiveMaxTurns}-turn limit${_spent}, resuming on remote...\n\n`;
       fullText += notice;
-      { const _cb = (chatBuffers.get(sessionId) || '') + notice; chatBuffers.set(sessionId, _cb.length > MAX_CHAT_BUFFER ? _cb.slice(-MAX_CHAT_BUFFER) : _cb); }
-      try { ws.send(JSON.stringify({ type:'text', text: notice, ...(tabId ? { tabId } : {}) })); } catch {}
+      emitTurnNotice({ ws, sessionId, tabId, text: notice });
+    } else {
+      // Every non-max_turns stop used to auto-continue in complete silence: the user
+      // saw a gap, then a summary that named a reason no notice had mentioned.
+      log.info('ssh-auto-continue (non-success)', {
+        sessionId, attempt: continueCount, subtype: resultData?.subtype || 'unknown',
+        errorHead: (errorText || '').split('\n')[0].slice(0, 160),
+      });
     }
     currentPrompt = 'Continue where you left off. Complete the remaining work.';
     currentContentBlocks = null;
@@ -4367,6 +4515,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
     // The same standing instruction a normal turn gets: tell the bot the tool exists
     // and when to call it, or it will not think to look.
     const botSp = botsLogic.buildBotSystemPrompt(bot, rosterBots) + USER_INTERRUPT_INSTRUCTION
+      + BACKGROUND_TASK_INSTRUCTION
       + (rosterMap.size > 1 ? BOTS_DISPATCH_INSTRUCTION : '');
     const prior = stmts.getBotSession.get(sessionId, bot.id);
     let botSession = prior?.claude_session_id || null;
@@ -4379,6 +4528,7 @@ async function runBotTurns(p, { bots, prompt, rosterBots }) {
     // Re-sent in the USER turn, the one channel --resume always delivers.
     const standing = botSession
       ? '\n\n' + [botsLogic.renderRoster(rosterBots, bot.id),
+                  BACKGROUND_TASK_INSTRUCTION.trim(),
                   rosterMap.size > 1 ? BOTS_DISPATCH_INSTRUCTION.trim() : ''].filter(Boolean).join('\n\n')
       : '';
 
@@ -4680,7 +4830,14 @@ async function runMultiAgent(p) {
     const _runOne = async agent => {
       ws.send(JSON.stringify({ type:'agent_status', agent:agent.id, status:`🔄 ${agent.role}`, ...(tabId ? { tabId } : {}) }));
       const depCtx = buildDepContext(agent, results);
-      const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '');
+      // The background rule rides the USER turn, not the system prompt. A worker
+      // resumes the orchestrator's session id (agentSessionId below starts as
+      // currentSessionId), and claude-cli.js:252 drops --system-prompt whenever there
+      // is a session to resume — so anything appended to agentSp reaches a worker only
+      // in the rare case where the orchestrator never got an id. The user turn is the
+      // one channel --resume always delivers, which is the same reason the bots path
+      // re-sends its roster there.
+      const agentPrompt = agent.task + (depCtx ? '\nContext:'+depCtx : '') + BACKGROUND_TASK_INSTRUCTION;
       // Same standing instruction a single-agent turn gets: without it a worker does
       // not know user clarifications can arrive mid-run.
       const agentSp = `You are ${agent.role}. Complete your assigned task thoroughly. Be concise in output.` + USER_INTERRUPT_INSTRUCTION;
