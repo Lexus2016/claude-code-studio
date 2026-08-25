@@ -462,7 +462,7 @@ ladder, which fires only on NON-success, never saw it. Nothing else resumes a he
   `✅ Done` badge on top of the warning.
 - **It does NOT flip the returned `completed` flag, and that was tried.** `completed`
   has no consumer that would do the right thing with it: the chat path discards it, and
-  the only reader (server.js:1859) is the SUBSCRIPTION branch consuming
+  the only reader (server.js:1865) is the SUBSCRIPTION branch consuming
   `runInteractiveSingle`. The API Kanban worker has its own `while (true)` that breaks
   on `subtype === 'success'` and never calls these functions at all. Worse, that one
   reader turns `completed:false` into `{subtype:'error'}` → `taskStatusForStop` →

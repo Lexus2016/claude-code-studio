@@ -266,6 +266,10 @@ console.log('\nthe background rule reaches every runner:');
   carries('the multi-agent worker prompt carries it', 'const agentPrompt = agent.task');
   // a bot with a live session likewise never sees an updated system prompt.
   carries('the bots standing block carries it', 'const standing = botSession');
+  // …and the FRESH-session half of the same path, which takes the system prompt.
+  // Without this pin, deleting it from botSp leaves a brand-new bot with an empty
+  // `standing` and no copy anywhere, and the suite still passes.
+  carries('the fresh-session bot prompt carries it', 'const botSp = botsLogic.buildBotSystemPrompt');
 
   // And it must NOT sit where it would be silently dropped: taskBotSp is undefined for
   // a bot-less task and dropped on resume. Its presence there reads as coverage.
