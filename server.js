@@ -5437,8 +5437,10 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         }
 
         // Inherit workdir from caller task
+        // Same reason as create_task above: inherit the PROJECT, never the caller's
+        // own worktree — a child that runs inside its parent's tree races it.
         const callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
-        const workdir = callerTask?.workdir || null;
+        const workdir = callerTask?.git_root || callerTask?.workdir || null;
 
         const id = genId();
         const contextJson = context ? (typeof context === 'string' ? context : JSON.stringify(context)).substring(0, 10000) : null;
@@ -5517,8 +5519,10 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           }
         }
 
+        // Same reason as create_task above: inherit the PROJECT, never the caller's
+        // own worktree — a child that runs inside its parent's tree races it.
         const callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
-        const workdir = callerTask?.workdir || null;
+        const workdir = callerTask?.git_root || callerTask?.workdir || null;
 
         // Create chain + shared session
         const chainId = genId();
@@ -7123,8 +7127,18 @@ app.post('/api/sessions/:id/fork', (req, res) => {
   if (!source.claude_session_id) return res.status(400).json({ error: 'session has no Claude session to fork from' });
   const id = genId();
   const title = `Fork: ${(source.title || '').substring(0, 80)}`;
+  // A fork gets its OWN worktree, branched from the source's PROJECT — not a copy of
+  // the source's `workdir`. Copying it verbatim pointed two independent conversations
+  // at one isolated directory, which is the exact state isolation exists to prevent:
+  // each would commit over the other's tree on the same branch. `git_root` is the
+  // project; falling back to `workdir` covers a source that was never isolated.
+  let _wt = null;
+  try { _wt = setupUnitWorktree('session', id, source.git_root || source.workdir || null); }
+  catch (e) { if (e.code === 'GIT_UNAVAILABLE') return res.status(400).json({ error: e.message }); throw e; }
   stmts.createSession.run(id, title, source.active_mcp || '[]', source.active_skills || '[]',
-    source.mode || 'auto', source.agent_mode || 'single', source.model || 'sonnet', source.workdir || null);
+    source.mode || 'auto', source.agent_mode || 'single', source.model || 'sonnet',
+    (_wt ? _wt.workdir : source.workdir) || null);
+  if (_wt) stmts.setSessionGit.run(_wt.workdir, _wt.git_root, _wt.git_branch, id);
   // Set claude_session_id to source's so --resume picks it up, and fork_from_cid to trigger --fork-session
   db.prepare(`UPDATE sessions SET claude_session_id=?, fork_from_cid=? WHERE id=?`).run(source.claude_session_id, source.claude_session_id, id);
   res.json(stmts.getSession.get(id));
@@ -10941,8 +10955,16 @@ wss.on('connection', (ws) => {
         return;
       }
       // Validate workdir: if the session belongs to a different project, don't reuse it.
-      if (existSess && msg.workdir && existSess.workdir && existSess.workdir !== msg.workdir) {
-        log.warn('workdir mismatch — refusing to reuse session from different project', { sessionId: localSessionId, sessionWorkdir: existSess.workdir, msgWorkdir: msg.workdir });
+      //
+      // Compare against git_root, NOT workdir. Once a session is worktree-isolated its
+      // `workdir` is the WORKTREE path while the browser keeps sending the project root
+      // it was opened from — so a literal comparison declared every isolated session
+      // foreign to its own project on the SECOND message, silently started a new one,
+      // and took the history and the --resume with it. `git_root` is the project the
+      // worktree branched from, which is exactly what the client is naming.
+      const _sessProject = existSess?.git_root || existSess?.workdir;
+      if (existSess && msg.workdir && _sessProject && _sessProject !== msg.workdir) {
+        log.warn('workdir mismatch — refusing to reuse session from different project', { sessionId: localSessionId, sessionWorkdir: existSess.workdir, sessionProject: _sessProject, msgWorkdir: msg.workdir });
         localSessionId = null;
         existSess = null;
       }

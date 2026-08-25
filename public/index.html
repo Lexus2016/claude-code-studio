@@ -12887,7 +12887,12 @@ async function loadSess(id) {
     resolveEngineForView();
     updInd();
 
-    curWorkdir = d.workdir || null;
+    // git_root FIRST: a worktree-isolated session stores the WORKTREE in `workdir`,
+    // and that path is not a registered project — so taking it literally unset the
+    // project (no highlight, no project bots, no per-project chat defaults) and made
+    // the file browser answer 403, because resolveFilesWorkdir() only serves a
+    // registered project root. `git_root` is the project the worktree came from.
+    curWorkdir = d.git_root || d.workdir || null;
     curProjectId = curWorkdir ? (projects.find(p => p.workdir === curWorkdir)?.id || null) : null;
     renderProjects();
     loadBots(); // opening a chat can move the active project — the roster must follow
