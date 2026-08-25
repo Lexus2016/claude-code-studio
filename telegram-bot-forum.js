@@ -552,15 +552,31 @@ class TelegramBotForum {
         const workdir = typeof project === 'string' ? project : (project?.workdir || project?.path);
         if (!workdir) continue;
 
-        const existing = this._api.stmts.getForumTopicByWorkdir.get(chatId, 'project', workdir);
-        if (existing) continue;
-
         const name = (typeof project === 'object' && project?.name) || null;
-        await this.createProjectTopic(chatId, workdir, name);
+        await this.ensureProjectTopic(chatId, workdir, name);
       }
     } catch {
       // projects.json may not exist — that's fine
     }
+  }
+
+  /**
+   * Ensure a project topic exists in this forum chat for the given workdir,
+   * creating it if missing. No-op (returns the existing thread_id) if one
+   * already exists.
+   *
+   * Public — called both by `_syncProjectTopics` (initial /connect sweep over
+   * every project on disk) and by `TelegramBot#notifyProjectAdded` (server.js
+   * calls that right after `POST /api/projects` registers a new one). Without
+   * the second caller, a project created after the forum's initial /connect
+   * never got a topic until some session activity happened to reference it via
+   * `handleActivityCallback`'s auto-create — which for a brand-new project with
+   * no chat history yet may never happen, so its topic silently never appeared.
+   */
+  async ensureProjectTopic(chatId, workdir, name) {
+    const existing = this._api.stmts.getForumTopicByWorkdir.get(chatId, 'project', workdir);
+    if (existing) return existing.thread_id;
+    return this.createProjectTopic(chatId, workdir, name);
   }
 
   /**
