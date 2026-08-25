@@ -36,19 +36,54 @@ console.log('a background launch is recognised structurally, not from prose:');
   check('object input works too', RC.isBackgroundLaunch('Bash', { command: 'x', run_in_background: true }), true);
   check('a foreground Bash is not one', RC.isBackgroundLaunch('Bash', '{"command":"ls","run_in_background":false}'), false);
   check('a plain Bash is not one', RC.isBackgroundLaunch('Bash', '{"command":"ls"}'), false);
-  // The loops truncate tool input for display; a truncated object is not valid JSON,
-  // so this must never be implemented with JSON.parse.
-  check('a TRUNCATED input still matches',
+  // THE REGRESSION AN UNANCHORED REGEX WOULD CAUSE. This is a real command to run
+  // in this very repo, and under a substring match it registered as a launch and
+  // charged the turn a rescue run it did not need.
+  check('a FOREGROUND command that merely mentions the flag is not a launch',
+    RC.isBackgroundLaunch('Bash', JSON.stringify({ command: 'grep -rn \'"run_in_background": true\' *.js' })), false);
+  check('nor is reading a file that contains it',
+    RC.isBackgroundLaunch('Bash', JSON.stringify({ command: 'cat run-continuation.js' })), false);
+  // The parse path is primary, but a truncated object must not lose the signal:
+  // a missed launch strands the task, which is the failure this module exists for.
+  check('an UNPARSEABLE (truncated) input still matches',
     RC.isBackgroundLaunch('Bash', '{"command": "a very long command that got cut", "run_in_background": true, "descrip'), true);
   // Another tool carrying the words must not count — only Bash launches shells.
   check('only Bash launches a shell', RC.isBackgroundLaunch('Write', '{"content":"run_in_background: true"}'), false);
   check('missing input is safe', RC.isBackgroundLaunch('Bash', undefined), false);
 }
 
+console.log('\nand the harvest side recognises how the CLI actually returns output:');
+{
+  // Measured on 2.1.231: the launch answers "Output is being written to:
+  // <project-hash>/<session-uuid>/tasks/<id>.output" and the agent READS that file.
+  // BashOutput is not called at all, so keying the harvest on the tool name alone
+  // makes every obedient agent look like it stranded its task.
+  const outPath = '/private/tmp/claude-501/-Users-x-proj/8f9da46f-7b6d-44fb-8ec2-ee2089d94089/tasks/b74ztexqy.output';
+  check('reading the .output file is a harvest',
+    RC.isBackgroundHarvest('Read', JSON.stringify({ file_path: outPath })), true);
+  check('BashOutput is a harvest', RC.isBackgroundHarvest('BashOutput', '{"bash_id":"b74ztexqy"}'), true);
+  check('so is killing the shell', RC.isBackgroundHarvest('KillShell', '{"shell_id":"b74ztexqy"}'), true);
+  check('an ordinary Read is not', RC.isBackgroundHarvest('Read', JSON.stringify({ file_path: '/repo/server.js' })), false);
+  // Narrow on purpose: a source file that merely lives under some tasks/ directory
+  // must not be mistaken for a shell log.
+  check('a tasks/ file with another extension is not',
+    RC.isBackgroundHarvest('Read', JSON.stringify({ file_path: '/repo/tasks/runner.js' })), false);
+  check('missing input is safe', RC.isBackgroundHarvest('Read', undefined), false);
+}
+
 console.log('\nthe nudge fires exactly on the gap the ladder leaves open:');
 {
-  const base = { subtype: 'success', backgroundLaunched: true, nudges: 0 };
+  const base = { subtype: 'success', launches: 1, harvests: 0, nudges: 0 };
   check('clean finish + stranded background job', RC.shouldNudgeBackgroundWait(base), true);
+  // THE FALSE POSITIVE A ONE-WAY LATCH CAUSED. The system prompt tells the agent to
+  // collect the result inside the turn; charging an extra run to the agent that
+  // OBEYED is worse than the bug being fixed.
+  check('an agent that collected what it started is NOT nudged',
+    RC.shouldNudgeBackgroundWait({ ...base, launches: 1, harvests: 1 }), false);
+  check('two launched, two collected — still no nudge',
+    RC.shouldNudgeBackgroundWait({ ...base, launches: 2, harvests: 2 }), false);
+  check('two launched, one collected — nudged',
+    RC.shouldNudgeBackgroundWait({ ...base, launches: 2, harvests: 1 }), true);
   // Every non-success subtype already has its own rung. Stacking this on top would
   // spend the auto-continue budget twice for one stop.
   check('error_max_turns is the ladder\'s job, not this one',
@@ -56,7 +91,7 @@ console.log('\nthe nudge fires exactly on the gap the ladder leaves open:');
   check('error_during_execution likewise',
     RC.shouldNudgeBackgroundWait({ ...base, subtype: 'error_during_execution' }), false);
   check('no background job, no nudge',
-    RC.shouldNudgeBackgroundWait({ ...base, backgroundLaunched: false }), false);
+    RC.shouldNudgeBackgroundWait({ ...base, launches: 0 }), false);
   // Stop means stop. A nudge here would restart work the user just cancelled.
   check('Stop wins over everything', RC.shouldNudgeBackgroundWait({ ...base, aborted: true }), false);
   check('the cap is one nudge per turn',
@@ -67,11 +102,30 @@ console.log('\nthe nudge fires exactly on the gap the ladder leaves open:');
   check('no argument at all is safe', RC.shouldNudgeBackgroundWait(undefined), false);
 }
 
+console.log('\nand when the rescue run ALSO walks away, the turn says so:');
+{
+  // Without this the bounded nudge just restores the original bug one run later:
+  // a clean "✅ Done" printed over a task still running.
+  const after = { launches: 1, harvests: 0, nudges: RC.MAX_BACKGROUND_NUDGES };
+  checkMatch('names how many were left', RC.describeStrandedBackgroundTask(after), /1 background task is still running/);
+  checkMatch('says nothing will pick it up', RC.describeStrandedBackgroundTask(after), /nothing will pick it up/i);
+  checkMatch('plural reads correctly',
+    RC.describeStrandedBackgroundTask({ launches: 3, harvests: 1, nudges: 1 }), /2 background tasks are still running/);
+  // Before the nudge is spent this must stay silent — the harvest run is about to
+  // happen, and warning first would be wrong twice out of three times.
+  check('silent while a nudge is still available',
+    RC.describeStrandedBackgroundTask({ launches: 1, harvests: 0, nudges: 0 }), null);
+  check('silent when everything was collected',
+    RC.describeStrandedBackgroundTask({ launches: 2, harvests: 2, nudges: 1 }), null);
+  check('an empty call decides nothing', RC.describeStrandedBackgroundTask(), null);
+}
+
 console.log('\nthe harvest prompt names the tool, because the CLI writes to a log file:');
 {
   checkMatch('mentions BashOutput', RC.BACKGROUND_WAIT_PROMPT, /BashOutput/);
-  // Without this the agent tends to re-run the original command instead of reading it.
-  checkMatch('mentions reading the log', RC.BACKGROUND_WAIT_PROMPT, /log/i);
+  // The CLI writes to a FILE and the agent reads it back; an agent told only
+  // "use BashOutput" tends to re-run the original command instead.
+  checkMatch('names the .output file', RC.BACKGROUND_WAIT_PROMPT, /\.output/);
   checkMatch('says the turn does not resume', RC.BACKGROUND_WAIT_PROMPT, /nothing resumes a turn/i);
 }
 

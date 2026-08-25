@@ -17,14 +17,22 @@ chat's budget is named as such rather than sending the user to the wrong dial.
 - **Detection is structural, never textual.** A `Bash` call carrying
   `run_in_background` is the same JSON on every install; user-facing prose is written
   in the UI language, so a regex over English phrases like "I'll check back" is dead
-  on a French or Ukrainian one. `run-continuation.js` holds the rule, pinned by
-  `test/run-continuation.test.js`.
-- **One harvest run, and only for a launch in the LAST run.** An early launch the
-  agent went on to collect is not a stranded task, and the cap keeps a false positive
-  costing exactly one short run.
+  on a French or Ukrainian one. The flag is read off a parsed object, so a foreground
+  `grep '"run_in_background": true'` is not mistaken for a launch.
+- **Launches are counted against harvests.** An agent that starts a background job and
+  collects it inside the same turn — exactly what the new system-prompt rule asks for —
+  is not charged a rescue run. The harvest side matches a `Read` of the
+  `tasks/<id>.output` file the CLI actually writes, not just a `BashOutput` call:
+  measured on 2.1.231, `BashOutput` is never called.
+- **One harvest run, and an honest ending if it is not enough.** When even the rescue
+  run walks away, the turn says how many tasks were left running and reports
+  `completed: false`, so a Kanban task is not marked done over unfinished work.
 - **The system prompt states the constraint up front** — collect a background job's
   result inside the same turn, because there is no later moment in which to get it.
   The rescue is the second line of defence, not the first.
+- **Known limit:** a process backgrounded with shell syntax (`cmd &`, `nohup`) inside a
+  foreground `Bash` call is not detected — separating that from `a && b` and `2>&1`
+  needs a shell parser. The system-prompt rule covers it in words.
 
 ### An `error_max_turns` that is not ours says so (#67 follow-up)
 
@@ -32,7 +40,8 @@ chat's budget is named as such rather than sending the user to the wrong dial.
   against CLI 2.1.231, a run capped at N reports `num_turns === N + 1`, so a genuine
   exhaustion lands AT the cap. A stop at 3 turns against a 50-turn dial is a limit
   imposed somewhere else — a different CLI version, a `settings.json`, a hook on the
-  machine the agent runs on — and the message now says that instead.
+  machine the agent runs on — and the message now says that instead, on the FIRST
+  retry notice rather than only after all three are spent.
 - **The remote auto-continue notice names the budget and what was spent.** The local
   CLI loop has done this since it was written; the SSH one said only "resuming on
   remote", which is why diagnosing the report needed a round trip.

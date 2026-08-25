@@ -417,23 +417,45 @@ ladder, which fires only on NON-success, never saw it. Nothing else resumes a he
 `✅ Done` over work that had not happened.
 
 - **Detection is structural, never textual.** `isBackgroundLaunch()` matches a `Bash`
-  call carrying `run_in_background` — the same JSON on every install. User-facing prose
-  is written in the UI language (`buildSystemPrompt` pins that explicitly), so a regex
-  over English phrases like "I'll check back" is dead on a French or Ukrainian install.
-  It matches on a SUBSTRING, not `JSON.parse`: the loops truncate tool input for display
-  and a truncated object would throw the signal away.
+  call whose input carries `run_in_background: true` — the same JSON on every install.
+  User-facing prose is written in the UI language (`buildSystemPrompt` pins that
+  explicitly), so a regex over English phrases like "I'll check back" is dead on a
+  French or Ukrainian install.
+- **The flag is read off a PARSED object, not matched as a substring.** `grep -rn
+  '"run_in_background": true' *.js` is a real command to run in this repo, and an
+  unanchored regex counted it as a launch. The regex survives only as a fallback for
+  input that does not parse at all (a truncated object), because a missed launch
+  strands the task, which is the failure the module exists to stop.
+- **LAUNCHES ARE COUNTED AGAINST HARVESTS.** A one-way `bgLaunched` latch charged an
+  extra run to every agent that OBEYED `BACKGROUND_TASK_INSTRUCTION` — launch, collect,
+  finish — which is worse than the bug it fixes. Both loops now count
+  `bgLaunches`/`bgHarvests` per run and nudge only when `launches > harvests`.
+- **The harvest side cannot key on `BashOutput` alone.** Measured on CLI 2.1.231, a
+  background launch answers `Output is being written to: <hash>/<uuid>/tasks/<id>.output`
+  and the agent collects by READING that file — `BashOutput` is never called.
+  `isBackgroundHarvest()` therefore also matches a `Read` of a `/tasks/<id>.output` path
+  (`BG_OUTPUT_PATH_RE`). Verified live: an obedient agent shows `launches=1 harvests=1`
+  and is not nudged; one that walks away shows `launches=1 harvests=0` and is.
 - **The detector sits ABOVE the MCP early-return in `onTool`.** A background launch is a
   fact about the run, not about how one tool is rendered.
-- **`bgLaunched` resets per RUN, not per turn.** A launch the agent went on to harvest in
-  a later run is not a stranded task. `MAX_BACKGROUND_NUDGES` is 1, so a false positive
-  costs exactly one short run.
+- **Counters reset per RUN, not per turn.** A launch the agent harvested in a later run
+  is not stranded. `MAX_BACKGROUND_NUDGES` is 1, so a false positive costs one short run.
+- **A bounded nudge needs an honest ending.** When the harvest run ALSO walks away,
+  `describeStrandedBackgroundTask()` says what was left running and the loop returns
+  `completed: false`. Without it the cap simply restored the original bug one run later.
+  `completed` feeds `taskWorker` (server.js:1859), so a Kanban task is not marked done
+  over unfinished work either.
 - **The system prompt is the first line of defence, the harvest run the second.**
-  `BACKGROUND_TASK_INSTRUCTION` says plainly that the turn does not resume. Relying only
-  on the rescue means paying for an extra run on every such turn.
+  `BACKGROUND_TASK_INSTRUCTION` says plainly that the turn does not resume, and is
+  phrased as "anything that keeps running after the call returns" rather than one tool
+  field — which is what covers the KNOWN LIMIT: a process backgrounded with shell
+  syntax (`cmd &`, `nohup`, `tmux new -d`) inside a FOREGROUND `Bash` call is not
+  detected. Telling `a && b`, `2>&1` and a trailing `&` apart needs a shell parser, and
+  the false positives would land on ordinary commands.
 - **`test/ask-user-question.test.js` extracts that `onTool` handler as source text** and
   runs it through `new Function`, so its parameter list must carry every closure the
-  handler touches — `runContinuation` and `bgLaunched` are passed in there deliberately
-  rather than stubbed, to keep the real module in the path.
+  handler touches — `runContinuation`, `bgLaunches` and `bgHarvests` are passed in there
+  deliberately rather than stubbed, to keep the real module in the path.
 
 **`describeTurnBudgetAnomaly()` — when "raise Max turns" is the wrong advice.** Measured
 against CLI 2.1.231, a run capped at N reports `num_turns === N + 1`, so a genuine
@@ -441,7 +463,9 @@ exhaustion lands AT the cap. `error_max_turns` after 3 turns against a 50-turn d
 the cap came from somewhere else — a different CLI version, a `settings.json`, a hook on
 the machine the agent runs on. Half the budget is the threshold, not "anything below the
 cap": a run can stop one or two turns short for ordinary reasons, and warning on those
-would be noise on every long chat.
+would be noise on every long chat. It is applied to the FIRST retry notice as well as the
+exhausted one — `hit the 50-turn limit (used 3)` contradicts itself, and a user who stops
+reading after the first retry never reaches the corrected sentence.
 
 ### Composer geometry and terminal-pane control
 

@@ -38,17 +38,17 @@ function loadOnTool() {
   assert.notStrictEqual(close, -1, 'end of the onTool handler not found');
   const arrow = src.slice(open + 1, close + '\n      }'.length);
   assert.ok(/^\(\s*name\s*,\s*inp\s*\)\s*=>/.test(arrow), `unexpected handler signature: ${arrow.slice(0, 40)}`);
-  // `runContinuation` and `bgLaunched` are the handler's two closure references
-  // (the background-launch detector). They are passed as parameters rather than
-  // stubbed away so this test keeps exercising the real module.
-  return new Function('ws', 'stmts', 'sessionId', 'tabId', 'runContinuation', 'bgLaunched', `return (${arrow});`);
+  // `runContinuation`, `bgLaunches` and `bgHarvests` are the handler's closure
+  // references (the background-task counters). They are passed as parameters rather
+  // than stubbed away so this test keeps exercising the real module.
+  return new Function('ws', 'stmts', 'sessionId', 'tabId', 'runContinuation', 'bgLaunches', 'bgHarvests', `return (${arrow});`);
 }
 
 function run(toolName, input) {
   const sent = [], rows = [];
   const ws = { send: s => sent.push(JSON.parse(s)) };
   const stmts = { addMsg: { run: (...a) => rows.push(a) } };
-  loadOnTool()(ws, stmts, 42, null, require('../run-continuation'), false)(toolName, input);
+  loadOnTool()(ws, stmts, 42, null, require('../run-continuation'), 0, 0)(toolName, input);
   return { sent, rows };
 }
 
