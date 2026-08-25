@@ -18265,6 +18265,18 @@ function pasteToTerminal(text) {
   }
   entry.ws.send(JSON.stringify({ type: 'paste', data: text }));
   switchTab(sid);
+  // Focus the PANE, and do it here rather than leaving it to switchTab.
+  //
+  // `.term-paste-btn` is a real <button>, so it keeps DOM focus after the click, and a
+  // focused button is activated by Enter — that is the browser, not our code. The whole
+  // point of this function is that the user presses Enter next, so every one of those
+  // Enters re-fired the click handler and pasted the same text again, for as long as
+  // focus stayed on the button. Reported as "every Enter pastes it again".
+  // switchTab() does not cover this: it returns on its first line when the tab is
+  // ALREADY active (index.html: `if (activeTabId === id) return;`), which is exactly the
+  // case here — you are looking at the terminal when you click the button beside it — so
+  // showTerminalView()'s own focus() never runs.
+  try { entry.term.focus(); } catch {}
   toast(t('term.paste.done'));
 }
 

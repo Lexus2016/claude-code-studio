@@ -215,5 +215,45 @@ for (const key of ['term.refresh.title', 'term.send.ph', 'term.send.title']) {
   check(`${key} defined in 5 locales`, n >= 5, true);
 }
 
+console.log('\n— the ›_ paste button must hand focus to the pane —');
+
+// The reported symptom: click ›_ beside a saved command or skill, press Enter to submit
+// it, and the SAME text is pasted again — every Enter, until focus moves elsewhere.
+// Nothing re-sends it: `.term-paste-btn` is a real <button>, a clicked button keeps DOM
+// focus, and the browser activates a focused button on Enter. Since the whole design is
+// "pasted, never auto-submitted — the user presses Enter themselves", that Enter was
+// guaranteed to land on the button.
+check('the paste control really is a <button> (which is why Enter re-fires it)',
+  /<button class="cfg term-paste-btn"/.test(SRC), true);
+check('...activated on click, the event Enter synthesises',
+  count(`querySelector('.term-paste-btn').addEventListener('click'`), 2);
+
+// switchTab() cannot be relied on to move focus, and this is the line that says so: the
+// terminal tab is ALREADY active when you click a button sitting beside it, so
+// showTerminalView() — and its trailing term.focus() — never runs.
+check('switchTab returns early when the tab is already active',
+  /function switchTab\(id\) \{\s*\n\s*if \(activeTabId === id\) return;/.test(SRC), true);
+
+// Run the real function, rather than grepping for a focus() call that a later edit could
+// move onto an early-return path. Same technique as test/ask-user-question.test.js.
+const ptSrc = TB.slice(TB.indexOf('function pasteToTerminal(text)'));
+const ptBody = ptSrc.slice(0, ptSrc.indexOf('\n}\n') + 3);
+check('pasteToTerminal declared exactly once', count('function pasteToTerminal(text)'), 1);
+
+let focused = 0, sent = [];
+const fakeEntry = { ws: { readyState: 1, send: (s) => sent.push(JSON.parse(s)) }, term: { focus: () => { focused++; } } };
+const make = () => new Function(
+  '_terminalPasteTarget', 'toast', 't', '_terms', 'switchTab',
+  `${ptBody}; return pasteToTerminal;`
+)(() => 'sess1', () => {}, (k) => k, new Map([['sess1', fakeEntry]]), () => {});
+make()('npm test');
+check('it sends exactly one paste frame', sent.length, 1);
+check('...carrying the text', sent[0] && sent[0].type, 'paste');
+check('and it focuses the pane, so the next Enter goes to the TUI and not back into the button',
+  focused, 1);
+
+// The skills list and the commands list share this one function, so the fix covers both.
+check('pasteSkillToTerminal routes through it', /pasteSkillToTerminal[\s\S]{0,400}?pasteToTerminal\(d\.content\)/.test(TB), true);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
