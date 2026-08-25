@@ -7350,6 +7350,17 @@ function _isCatchUpNoAgent(d) {
   return !!(d.catchUp && !d.agent);
 }
 
+// Shared by the visible-tab handler and its regression test, so the test exercises
+// the real guarded sequence instead of re-typing it. `ensureBubble` runs BETWEEN the
+// finalize and the agent assignment — same position as the visible branch's own
+// bubble-creation line — so a caller with no bubble step (the test) can pass none.
+function _applyAgentSwitch(d, ensureBubble) {
+  const skip = _isCatchUpNoAgent(d);
+  if (!skip) _maybeFinalizeAgentSwitch(d);
+  if (ensureBubble) ensureBubble();
+  if (!skip) streaming.agent = d.agent || null;
+}
+
 // A turn normally streams into ONE bubble. Bots break that assumption: several
 // answer in the same turn, one after another, and merging them would leave the
 // reader unable to tell who said what. So when the speaker changes and either
@@ -7456,10 +7467,9 @@ function handleWsMsg(d) {
       // mid-turn) and never carries `agent` — treating its absence as "speaker switched
       // to none" would finalize the bubble _maybeFinalizeAgentSwitch/loadSess just
       // restored and immediately re-open a fresh, unlabeled one under it.
-      const _catchUpNoAgent = _isCatchUpNoAgent(d);
-      if (!_catchUpNoAgent) _maybeFinalizeAgentSwitch(d);
-      if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
-      if (!_catchUpNoAgent) streaming.agent = d.agent || null;
+      _applyAgentSwitch(d, () => {
+        if (!streaming.el) { rmW(); streaming.el = addMsg('assistant'); streaming.txt = ''; addSpinner(streaming.el); }
+      });
       // Ensure paragraph break between text blocks separated by tool calls
       if (!d.catchUp && streaming.txt && getTS(tabId)._hadTool) {
         if (!streaming.txt.endsWith('\n\n') && !d.text.startsWith('\n')) {
@@ -7837,6 +7847,7 @@ function handleWsMsg(d) {
       // Reset streaming state for fresh start
       streaming.el = null; streaming.txt = '';
       streaming.toolCounts = {}; streaming.toolLog = [];
+      streaming.agent = null; // the restarted turn has no speaker yet — don't carry the old one over
       isGen = false;
       setSendStop(false);
       // Clear the per-tab busy state too, the same way `done` does. Restart is reached

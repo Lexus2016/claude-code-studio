@@ -82,6 +82,7 @@ assert.strictEqual(streaming.el, null, 'a genuine same-tab speaker change must s
 // and finalizes the just-restored bubble — reproducing the exact symptom this file
 // guards against, one step later than the first scenario above.
 const _isCatchUpNoAgent = loadFn('_isCatchUpNoAgent');
+globalThis._isCatchUpNoAgent = _isCatchUpNoAgent;
 
 assert.strictEqual(_isCatchUpNoAgent({ catchUp: true, agent: undefined }), true,
   'a catchUp packet with no agent must be recognized as such');
@@ -98,9 +99,13 @@ streaming.el = elRestored;
 streaming.txt = 'restored partial answer';
 streaming.agent = 'bipa';
 
+// Exercise the actual production sequence (index.html's visible 'text' branch calls
+// _applyAgentSwitch with an ensureBubble callback; here streaming.el is already set,
+// so there's no bubble to create).
+globalThis._maybeFinalizeAgentSwitch = _maybeFinalizeAgentSwitch;
+const _applyAgentSwitch = loadFn('_applyAgentSwitch');
 const catchUpPacket = { agent: undefined, tabId: 'A', catchUp: true, text: 'restored partial answer' };
-if (!_isCatchUpNoAgent(catchUpPacket)) _maybeFinalizeAgentSwitch(catchUpPacket);
-if (!_isCatchUpNoAgent(catchUpPacket)) streaming.agent = catchUpPacket.agent || null;
+_applyAgentSwitch(catchUpPacket, null);
 
 assert.strictEqual(streaming.el, elRestored,
   'a catchUp replay with no agent must not finalize the bubble loadSess just restored');
