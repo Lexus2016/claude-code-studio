@@ -244,6 +244,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 .open-link:hover{ background:var(--abg); }
 
 /* ─── New session config (in Add modal) ─── */
+.sc-note{ font-size:11px; color:var(--muted); line-height:1.45; margin:2px 0 8px; }
 .new-sess-hdr{ font-size:11px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
 .sess-cfg{ border:1px solid var(--border); border-radius:var(--r-md); padding:12px 14px; background:var(--s2); }
 .sc-row{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
@@ -456,6 +457,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TR = {
   uk: {
+    'modal.task_cfg':'Параметри запуску','modal.task_cfg_note':'Діють на наступний запуск. Модель уже створеної сесії не змінюється — нова модель застосується до наступної сесії цієї задачі.',
     'tb.bot':'Бот','tb.bot.none':'без бота','tb.bot.tip':'Задача виконається промптом і моделлю цього бота',
     'hdr.title':'Kanban','hdr.add':'Завдання',
     'proj.label':'Проект:','proj.all':'— Всі проекти —','proj.recent':'Нещодавні','proj.search':'Пошук проекту...','search.empty':'Не знайдено',
@@ -503,6 +505,7 @@ const TR = {
     'engine.api':'API','engine.sub':'Підписка','tmux.required':'Потрібен tmux на сервері',
   },
   en: {
+    'modal.task_cfg':'Run settings','modal.task_cfg_note':'Applied on the next run. An existing session keeps its own model — a new model applies to the next session this task creates.',
     'tb.bot':'Bot','tb.bot.none':'no bot','tb.bot.tip':'The task runs with this bot\'s prompt and model',
     'hdr.title':'Kanban','hdr.add':'Task',
     'proj.label':'Project:','proj.all':'— All projects —','proj.recent':'Recent','proj.search':'Search project...','search.empty':'Not found',
@@ -550,6 +553,7 @@ const TR = {
     'engine.api':'API','engine.sub':'Subscription','tmux.required':'tmux is required on the server',
   },
   ru: {
+    'modal.task_cfg':'Параметры запуска','modal.task_cfg_note':'Применяются к следующему запуску. Модель уже созданной сессии не меняется — новая модель применится к следующей сессии этой задачи.',
     'tb.bot':'Бот','tb.bot.none':'без бота','tb.bot.tip':'Задача выполнится промптом и моделью этого бота',
     'hdr.title':'Kanban','hdr.add':'Задача',
     'proj.label':'Проект:','proj.all':'— Все проекты —','proj.recent':'Недавние','proj.search':'Поиск проекта...','search.empty':'Не найдено',
@@ -597,6 +601,7 @@ const TR = {
     'engine.api':'API','engine.sub':'Подписка','tmux.required':'Нужен tmux на сервере',
   },
   fr: {
+    'modal.task_cfg':'Paramètres d exécution','modal.task_cfg_note':'Appliqués au prochain lancement. Une session existante conserve son modèle — le nouveau modèle s appliquera à la prochaine session de cette tâche.',
     'tb.bot':'Bot','tb.bot.none':'sans bot','tb.bot.tip':"La tâche s'exécute avec le prompt et le modèle de ce bot",
     'hdr.title':'Kanban','hdr.add':'Tâche',
     'proj.label':'Projet :','proj.all':'— Tous les projets —','proj.recent':'Récents','proj.search':'Rechercher un projet…','search.empty':'Aucun résultat',
@@ -644,6 +649,7 @@ const TR = {
     'engine.api':'API','engine.sub':'Abonnement','tmux.required':'tmux est requis sur le serveur',
   },
   he: {
+    'modal.task_cfg':'הגדרות הרצה','modal.task_cfg_note':'חלות על ההרצה הבאה. סשן קיים שומר על המודל שלו — מודל חדש יחול על הסשן הבא של משימה זו.',
     'tb.bot':'בוט','tb.bot.none':'ללא בוט','tb.bot.tip':'המשימה תרוץ עם הפרומפט והמודל של הבוט הזה',
     'hdr.title':'קנבן','hdr.add':'משימה',
     'proj.label':'פרויקט:','proj.all':'— כל הפרויקטים —','proj.recent':'אחרונים','proj.search':'חיפוש פרויקט...','search.empty':'לא נמצא',
@@ -1872,7 +1878,18 @@ function buildForm(tk={}){
   const statusOpts=COLS.map(c=>`<option value="${c.id}"${tk.status===c.id?' selected':''}>${escH(t('col.'+c.id))}</option>`).join('');
   const sessOpts=`<option value="">${escH(isNew?t('modal.new_session'):t('modal.no_session'))}</option>`+
     sessions.map(s=>`<option value="${s.id}"${tk.session_id===s.id?' selected':''}>${escH((s.title||s.id).substring(0,60))}</option>`).join('');
-  const visClass=!tk.session_id?' visible':'';
+  // Shown whenever we are EDITING, not only while a session is being created.
+  //
+  // These dials are read from the TASK row on every run, not from the session:
+  // `effectiveTaskMaxTurns = task.max_turns`, `mode: task.mode`, `task.effort`,
+  // `task.run_engine` (server.js, startTask). Hiding them once a session existed
+  // meant the settings that actually drive each run became uneditable the moment
+  // the task first ran — issue #79.
+  //
+  // `model` is the one exception and the header says so: the runner resolves
+  // `session?.model || task.model`, so an existing session keeps its own model and
+  // a change here applies to the next session this task creates.
+  const visClass=(!tk.session_id||!isNew)?' visible':'';
   const schedInfoHtml=(tk.scheduled_at&&(tk.status==='todo'||tk.status==='backlog'))?`
     <div class="sched-info">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 12"/></svg>
@@ -1928,7 +1945,8 @@ function buildForm(tk={}){
       <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel" onchange="onFSessionChange()">${sessOpts}</select></div>
     </div>
     <div id="newSessCfg" class="new-sess-cfg${visClass}">
-      <div class="new-sess-hdr">${t('modal.new_sess_cfg')}</div>
+      <div class="new-sess-hdr">${isNew?t('modal.new_sess_cfg'):t('modal.task_cfg')}</div>
+      ${(isNew||!tk.session_id)?'':`<div class="sc-note">${escH(t('modal.task_cfg_note'))}</div>`}
       <div class="sc-row">
         <div class="sc-seg" data-group="mode">
           <span class="sc-lbl">${t('tb.mode')}</span>
@@ -2062,7 +2080,10 @@ function scOpt(btn){
 function onFSessionChange(){
   const hasSess=!!$i('fSession')?.value;
   const cfg=$i('newSessCfg');
-  if(cfg)cfg.classList.toggle('visible',!hasSess);
+  // While CREATING, the block is about the session that is about to be made, so it
+  // follows the session picker. While EDITING it stays: mode, turns, effort and
+  // engine are read off the task on every run regardless of which session it uses.
+  if(cfg&&modalMode!=='edit')cfg.classList.toggle('visible',!hasSess);
 }
 function getSessCfg(){
   const defaults={model:'sonnet',mode:'auto',agent:'single',engine:'cli',run_engine:kbSettings.run_engine||'api',maxTurns:30,effort:'',bot_id:null};
