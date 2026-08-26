@@ -334,8 +334,15 @@ const storedDefaults = id => {
     // …and against the SESSION's project, not whatever was open before it:
     // curProjectId is assigned further down from d.workdir, so reading it here
     // would apply the previous chat's project overrides to this one.
-    check('resolved against the session project, not the previous one',
-      /_sessProj !== curProjectId/.test(lsBody), true);
+    // Compared against what the CACHE IS FOR, not against curProjectId: both are
+    // null for a session with no workdir, and delProject() clears curProjectId while
+    // leaving the cache — so a legacy chat opened afterwards inherited the deleted
+    // project's dials.
+    check('resolved against the project the cache belongs to',
+      /_chatDefaultsProj !== _sessProj/.test(lsBody), true);
+    check('and the cache key is written wherever the cache is',
+      (SPA.match(/_chatDefaults = /g) || []).length,
+      (SPA.match(/_chatDefaultsProj = /g) || []).length);
 
     // 2. Replaying a turn must not re-dial the chat. Both replay paths call
     //    processChat, whose destructuring falls back to the configured defaults —
