@@ -1673,6 +1673,14 @@ async function startTask(task) {
       if (!sessionId) {
         sessionId = genId();
         stmts.createSession.run(sessionId, task.title.substring(0, 200), '[]', '[]', task.mode || 'auto', task.agent_mode || 'single', task.model || 'sonnet', task.workdir || null);
+        // This session is a SIDECAR of the task: it runs in the worktree the task was
+        // already given at creation time, so it inherits the metadata rather than
+        // minting a second tree. Copying `workdir` alone left git_root/git_branch NULL,
+        // which reads as "not isolated" to every consumer — the git chip, the
+        // status/commit/merge endpoints and the delete path all key off git_root.
+        if (task.git_root && task.workdir) {
+          try { stmts.setSessionGit.run(task.workdir, task.git_root, task.git_branch, sessionId); } catch {}
+        }
         stmts.setTaskSession.run(sessionId, task.id);
       }
       stmts.setTaskInProgress.run(task.id);
@@ -2167,6 +2175,14 @@ async function startTask(task) {
               // in place: removeWorktree also deletes the branch, which would strand
               // the unmerged commits with no ref pointing at them.
               if (task.git_root && task.workdir && task.git_branch) {
+                // The task's own session runs in THIS tree (startTask copies the task's
+                // workdir onto its sidecar), and a compact of that session shares it too.
+                // Merging is done, but the conversation is not: removing here left the
+                // next turn of a live chat in a cwd that no longer exists, silently,
+                // because force:true reports nothing.
+                if (_worktreeStillInUse(task.workdir, { exceptTask: task.id })) {
+                  log.info('worktree kept after auto-merge — a session still runs in it', { taskId: task.id, workdir: task.workdir });
+                } else
                 try { WM.removeWorktree({ projectDir: task.git_root, worktreeDir: task.workdir, branch: task.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed after task auto-merge', { taskId: task.id, err: e.message }); }
               }
             }
@@ -3471,6 +3487,70 @@ function setupUnitWorktree(kind, unitId, requestedWorkdir) {
     });
     throw e;
   }
+}
+
+/** Is this worktree still someone else's working directory?
+ *
+ *  A worktree is shared more often than it looks: a compact continues its origin's
+ *  tree, and startTask()'s sidecar session runs in the TASK's tree. Removing it
+ *  because one holder was deleted strands the others — and `force: true` means that
+ *  removal reports no error at all, so the check has to happen before the call.
+ *
+ *  Both tables are counted. Counting only `sessions` missed the case that actually
+ *  destroys work: a recurring task SURVIVES the deletion of its session (the row is
+ *  unlinked, not deleted) and its auto-merge is deliberately skipped, so that
+ *  worktree is its live cwd.
+ */
+function _worktreeStillInUse(workdir, { exceptSession = null, exceptTask = null } = {}) {
+  if (!workdir) return false;
+  try {
+    const s = db.prepare(`SELECT COUNT(*) c FROM sessions WHERE workdir=? AND id<>COALESCE(?, '')`).get(workdir, exceptSession).c;
+    const t = db.prepare(`SELECT COUNT(*) c FROM tasks    WHERE workdir=? AND id<>COALESCE(?, '')`).get(workdir, exceptTask).c;
+    return (s + t) > 0;
+  } catch (e) {
+    // Fail SAFE, not fail open. The caller's fallback is removeWorktree(force:true),
+    // which destroys a working tree and reports nothing — so a COUNT that failed must
+    // read as "in use". Leaving a stale worktree is recoverable; deleting a live one
+    // is not.
+    log.warn('worktree in-use check failed — keeping the tree', { workdir, err: e?.message });
+    return true;
+  }
+}
+
+/** Batch variant of _worktreeStillInUse: every id in `ids` is being deleted, so none
+ *  of them counts as a holder. Excluding only the current row lets two holders in one
+ *  batch keep each other's tree alive and then both vanish. */
+function _worktreeStillInUseExcluding(workdir, ids) {
+  if (!workdir) return false;
+  try {
+    const rows = db.prepare(`SELECT id FROM sessions WHERE workdir=?`).all(workdir).map(r => r.id);
+    if (rows.some(id => !ids.has(id))) return true;
+    const t = db.prepare(`SELECT COUNT(*) c FROM tasks WHERE workdir=?`).get(workdir).c;
+    return t > 0;
+  } catch (e) {
+    log.warn('worktree in-use check failed — keeping the tree', { workdir, err: e?.message });
+    return true;
+  }
+}
+
+/** Worktree isolation for units Telegram creates with direct SQL.
+ *
+ *  telegram-bot.js does not require server.js — it takes its dependencies through the
+ *  constructor, the way getRoster already does — so the policy is injected rather than
+ *  imported, and stays defined in one place. Without it a Telegram chat writes into
+ *  the project root while a browser chat in the same project writes into its own
+ *  worktree, and the browser's merge lands on top of Telegram's uncommitted work.
+ *
+ *  Returns null when the unit is not isolatable (no workdir, a remote project, git
+ *  unavailable); the caller treats that as "stay in the project root", which is the
+ *  behaviour that predates isolation.
+ */
+function _isolateTelegramUnit(kind, unitId, workdir) {
+  const wt = setupUnitWorktree(kind, unitId, workdir);
+  if (!wt) return null;
+  if (kind === 'task') stmts.setTaskGit.run(wt.workdir, wt.git_root, wt.git_branch, unitId);
+  else stmts.setSessionGit.run(wt.workdir, wt.git_root, wt.git_branch, unitId);
+  return wt;
 }
 
 /**
@@ -5442,6 +5522,16 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         const callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
         const workdir = callerTask?.git_root || callerTask?.workdir || null;
 
+        // NOT isolated, and that is a decision rather than an omission. Minting a
+        // worktree here writes git_root/git_branch onto the row, and those two columns
+        // are what ARM the auto-merge in startTask (server.js ~2137) — which never ran
+        // for MCP children before, because they were NULL. A unique worktree also walks
+        // straight past the chain workdir lock (~2449), so a chain created through MCP
+        // would start its members in parallel while auto-merge writes into git_root
+        // underneath them. And `get_task_result`/`cancel_task` still compare a RAW
+        // workdir (~5711) where `list_tasks` already uses COALESCE(git_root, workdir),
+        // so a parent would get 403 on the result of the task it just created.
+        // This belongs to the chain bundle, which moves as one piece or not at all.
         const id = genId();
         const contextJson = context ? (typeof context === 'string' ? context : JSON.stringify(context)).substring(0, 10000) : null;
         const depsJson = depends_on ? JSON.stringify(depends_on) : null;
@@ -6796,7 +6886,11 @@ app.delete('/api/tasks/:id', (req, res) => {
   // user asked for by deleting the task — mirrors the session delete guard's
   // ?force bypass, not a silent skip of it.
   if (task?.git_root && task?.workdir) {
-    try { WM.removeWorktree({ projectDir: task.git_root, worktreeDir: task.workdir, branch: task.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on task delete', { tid, err: e.message }); }
+    if (_worktreeStillInUse(task.workdir, { exceptTask: tid })) {
+      log.info('worktree kept on task delete — still in use', { tid, workdir: task.workdir });
+    } else {
+      try { WM.removeWorktree({ projectDir: task.git_root, worktreeDir: task.workdir, branch: task.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on task delete', { tid, err: e.message }); }
+    }
   }
   res.json({ ok: true });
 });
@@ -7743,7 +7837,13 @@ app.post('/api/sessions/import', (req, res) => {
       session.mode || 'auto',
       session.agent_mode || 'single',
       session.model || 'sonnet',
-      session.workdir || null
+      // git_root FIRST. An export taken from an isolated session carries the WORKTREE
+      // in `workdir` — a path that exists only on the machine it came from, and only
+      // until that worktree is removed. Importing it verbatim produced a session
+      // pointing at a directory that is not there, and that no project owns. The
+      // project root is the part that means something on the importing side; the
+      // import deliberately does NOT mint a worktree, because nothing has run in it yet.
+      session.git_root || session.workdir || null
     );
     const importMsg = db.prepare('INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,created_at) VALUES (?,?,?,?,?,?,?,?,COALESCE(?,CURRENT_TIMESTAMP))');
     const limit = Math.min(messages.length, 2000);
@@ -7889,6 +7989,14 @@ ${transcript}`;
     sess.model || 'sonnet',
     sess.workdir || null
   );
+  // A compact continues the SAME conversation in the SAME tree — it must not mint a
+  // second worktree, and it must not drop the metadata either. Copying `workdir`
+  // alone (which is what this did) left the new session pointing at a directory it
+  // did not know it shared: deleting the original ran removeWorktree and the compact
+  // was left with a workdir that no longer exists.
+  if (sess.git_root && sess.workdir) {
+    try { stmts.setSessionGit.run(sess.workdir, sess.git_root, sess.git_branch, newId); } catch {}
+  }
 
   // Insert the compact summary as the first user message so Claude gets context
   const contextMsg = `# 📋 Context from previous session\n\nThis is a continuation of a previous chat session. Here is the compact summary:\n\n${summaryText.trim()}`;
@@ -7926,13 +8034,20 @@ app.delete('/api/sessions/:id', (req,res) => {
   archiveSessionStats([sid]);
   // Best-effort: kill the interactive tmux session tied to this studio session
   try { killInteractiveTmux(sid); } catch {}
-  // Never a bare rm -rf — always through git so .git/worktrees/<name> never goes stale.
-  if (sessRow && sessRow.git_root && sessRow.workdir) {
-    try { WM.removeWorktree({ projectDir: sessRow.git_root, worktreeDir: sessRow.workdir, branch: sessRow.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on session delete', { sid, err: e.message }); }
-  }
   // Unlink recurring tasks from session (preserve the schedule), delete the rest
   db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(sid);
   stmts.deleteTasksBySession.run(sid);
+  // Worktree removal comes AFTER the cascade above, deliberately. Read before it, the
+  // count still saw the task rows this delete is about to remove, and answered "in use"
+  // for a tree nothing would own a line later — a leak instead of a stranding.
+  // Never a bare rm -rf: always through git, so .git/worktrees/<name> never goes stale.
+  if (sessRow && sessRow.git_root && sessRow.workdir) {
+    if (_worktreeStillInUse(sessRow.workdir, { exceptSession: sid })) {
+      log.info('worktree kept — still in use by another unit', { sid, workdir: sessRow.workdir });
+    } else {
+      try { WM.removeWorktree({ projectDir: sessRow.git_root, worktreeDir: sessRow.workdir, branch: sessRow.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on session delete', { sid, err: e.message }); }
+    }
+  }
   stmts.deleteSession.run(sid);
   // queued_messages has no FK to sessions, so the cascade never reaches it. Bulk delete
   // already does this; the single-session path did not, and boot-restore then resurrected
@@ -7975,12 +8090,6 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
     try { termBridge.killSession(tmuxNameFor(id)); } catch {}
     try { fs.unlinkSync(path.join(os.tmpdir(), `ccsterm-sb-${id}.txt`)); } catch {}
   }
-  // Never a bare rm -rf — always through git so .git/worktrees/<name> never goes stale.
-  for (const s of sessRows) {
-    if (s.git_root && s.workdir) {
-      try { WM.removeWorktree({ projectDir: s.git_root, worktreeDir: s.workdir, branch: s.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on bulk delete', { sid: s.id, err: e.message }); }
-    }
-  }
   const del = db.transaction(() => {
     for (const id of ids) {
       // Unlink recurring tasks from session (preserve the schedule), delete the rest
@@ -7990,6 +8099,32 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
     }
   });
   del();
+  // Runs AFTER the cascade above, for the same reason the single delete does: read
+  // before it, the count still sees the task rows the cascade is about to remove and
+  // keeps a tree nobody owns a moment later. Recurring tasks are UNLINKED rather than
+  // deleted there, so they still count — correctly: their auto-merge is skipped and
+  // that tree is their live cwd.
+  // Never a bare rm -rf — always through git so .git/worktrees/<name> never goes stale.
+  //
+  // Excluding only the row being processed is wrong for a BATCH: delete an origin and
+  // its compact together and each one sees the other still present, both answer "in
+  // use", and the tree survives with nobody left to own it. The whole batch is excluded
+  // instead, and a tree is removed ONCE however many of its holders are in the batch.
+  const _bulkIds = new Set(sessRows.map(r => r.id));
+  const _bulkDone = new Set();
+  for (const s of sessRows) {
+    if (s.git_root && s.workdir) {
+      if (_bulkDone.has(s.workdir)) {
+        // already handled for an earlier holder in this same batch
+      } else if (_worktreeStillInUseExcluding(s.workdir, _bulkIds)) {
+        log.info('worktree kept on bulk delete — still in use', { sid: s.id, workdir: s.workdir });
+      } else {
+        _bulkDone.add(s.workdir);
+        try { WM.removeWorktree({ projectDir: s.git_root, worktreeDir: s.workdir, branch: s.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on bulk delete', { sid: s.id, err: e.message }); }
+      }
+    }
+  }
+
   res.json({ ok: true, deleted: ids.length });
 });
 app.get('/api/sessions/:id/git-status', (req, res) => {
@@ -9708,7 +9843,7 @@ function initTelegramBot() {
   const tg = c.telegram;
   if (!tg || !tg.enabled || !tg.botToken) return;
 
-  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster });
+  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster, isolateUnit: _isolateTelegramUnit });
   telegramBot.acceptNewConnections = tg.acceptNewConnections !== false;
   _attachTelegramListeners(telegramBot);
 
@@ -9752,7 +9887,7 @@ app.post('/api/telegram/start', (req, res) => {
   }
 
   // Start new bot
-  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster });
+  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster, isolateUnit: _isolateTelegramUnit });
   telegramBot.acceptNewConnections = c.telegram.acceptNewConnections !== false;
   _attachTelegramListeners(telegramBot);
 

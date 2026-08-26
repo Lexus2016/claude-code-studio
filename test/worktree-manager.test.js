@@ -314,6 +314,157 @@ console.log('\nan existing identity is never overridden:');
   }
 }
 
+// ── Who inherits a worktree, and who must never remove one ─────────────────
+// Isolation is not "every creator gets a tree". Three sites CONTINUE work that
+// already has one, and each of them dropped the metadata that says so. Pinned as
+// source text (the technique test/render/script-scope.test.mjs uses) because the
+// property is which columns a call site carries, not what a pure function returns.
+console.log('\ncontinuation sites inherit instead of minting a second tree:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  const near = (anchor, span = 900) => { const i = SRV.indexOf(anchor); return i === -1 ? null : SRV.slice(i, i + span); };
+
+  // A compact continues the same conversation in the same tree. Copying `workdir`
+  // alone left it sharing a directory it did not know it shared.
+  const cmp = near("const compactTitle =");
+  check('compact copies git_root/git_branch, not just workdir',
+    cmp !== null && /setSessionGit\.run\(sess\.workdir, sess\.git_root, sess\.git_branch, newId\)/.test(cmp), true);
+
+  // The task already has a worktree from POST /api/tasks; its session is a sidecar.
+  const st = near("stmts.setTaskSession.run(sessionId, task.id)", 1200);
+  const stBack = SRV.slice(Math.max(0, SRV.indexOf("stmts.setTaskSession.run(sessionId, task.id)") - 900), SRV.indexOf("stmts.setTaskSession.run(sessionId, task.id)"));
+  check('startTask copies the task git columns onto its sidecar session',
+    /setSessionGit\.run\(task\.workdir, task\.git_root, task\.git_branch, sessionId\)/.test(stBack), true);
+
+  // An export from an isolated session carries a worktree path that exists only on
+  // the machine it came from — and only until that worktree is removed.
+  const imp = near("String(session.title || 'Imported session')", 1200);
+  check('JSON import stores the PROJECT root, never the exported worktree',
+    imp !== null && /session\.git_root \|\| session\.workdir \|\| null/.test(imp), true);
+  check('and it does not mint a worktree for imported history',
+    imp !== null && !/setupUnitWorktree/.test(imp), true);
+}
+
+console.log('\na shared worktree is not removed while another session uses it:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  const i = SRV.indexOf("removeWorktree failed on session delete");
+  const win = i === -1 ? '' : SRV.slice(Math.max(0, i - 1200), i);
+  // force:true means a removal that should not have happened reports no error at all,
+  // so the guard has to come BEFORE the call rather than being cleaned up after.
+  check('the delete path asks whether the worktree is still in use',
+    /_worktreeStillInUse\(sessRow\.workdir/.test(win), true);
+  check('and asks before removeWorktree, not after',
+    win.indexOf('_worktreeStillInUse(') < win.indexOf('WM.removeWorktree'), true);
+}
+
+// ── Telegram is the third write channel, and it inserts its own SQL ─────────
+// Without isolation a Telegram chat writes into the project root while a browser
+// chat in the same project writes into its own worktree — and the browser's merge
+// lands on top of Telegram's uncommitted work. telegram-bot.js does not require
+// server.js, so the policy is INJECTED; these pins are what keep the two halves
+// from drifting apart silently.
+console.log('\nTelegram creators are isolated through an injected policy:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const TB = fs2.readFileSync(path2.join(__dirname, '..', 'telegram-bot.js'), 'utf8');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+
+  // Six creators: five sessions and one task.
+  const FORUM = fs2.readFileSync(path2.join(__dirname, '..', 'telegram-bot-forum.js'), 'utf8');
+  const calls = (TB.match(/this\._isolate\(/g) || []).length;
+  check('every direct Telegram creator calls the isolation hook', calls, 6);
+  // Forum topics create through the SHARED prepared statements on the facade, so
+  // they bypass _isolate() entirely unless the hook travels with them. A count of
+  // six looked complete and hid three creators in the other file.
+  check('the facade carries the hook', /isolate: this\._isolate\.bind\(this\)/.test(TB), true);
+  check('every forum creator uses it', (FORUM.match(/_api\.isolate\?\./g) || []).length, 3);
+  check('and none of them is duplicated',
+    !/isolate\?\.\([^)]*\);\s*\n\s*this\._api\.isolate\?\./.test(FORUM), true);
+  check('sessions and tasks are told apart',
+    /_isolate\('session'/.test(TB) && /_isolate\('task'/.test(TB), true);
+
+  // A bot reply must not fail because git is missing on the host.
+  const h = TB.slice(TB.indexOf('  _isolate(kind, id, workdir) {'));
+  const hBody = h.slice(0, h.indexOf('\n  }') + 4);
+  check('the hook never throws out of a bot turn', /catch \(e\)/.test(hBody), true);
+  check('and is a no-op when no injector was provided',
+    /if \(!this\.isolateUnit/.test(hBody), true);
+
+  // Injected, not imported — and defined once, not copied per construction site.
+  check('server.js injects it at every TelegramBot construction',
+    (SRV.match(/isolateUnit: _isolateTelegramUnit/g) || []).length,
+    (SRV.match(/new TelegramBot\(db/g) || []).length);
+  check('the policy is defined once', (SRV.match(/function _isolateTelegramUnit/g) || []).length, 1);
+  // Writing the row's git columns is what makes the unit READ as isolated to the
+  // git chip, the status/commit/merge endpoints and the delete path.
+  const inj = SRV.slice(SRV.indexOf('function _isolateTelegramUnit'));
+  const injBody = inj.slice(0, inj.indexOf('\n}\n') + 3);
+  check('it records the git columns for a task', /setTaskGit\.run/.test(injBody), true);
+  check('and for a session', /setSessionGit\.run/.test(injBody), true);
+}
+
+// MCP create_task deliberately does NOT mint a worktree.
+// Review showed minting there ARMS the auto-merge in startTask (it keys on
+// git_root+git_branch, which were NULL for MCP children), walks past the chain
+// workdir lock, and breaks get_task_result/cancel_task, which still compare a raw
+// workdir where list_tasks already uses COALESCE. It belongs to the chain bundle.
+console.log('\nMCP create_task stays unisolated, on purpose:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  const i2 = SRV.indexOf("const workdir = callerTask?.git_root || callerTask?.workdir || null;");
+  const win = i2 === -1 ? '' : SRV.slice(i2, i2 + 1800);
+  check('it inherits the caller PROJECT, never the caller worktree',
+    /callerTask\?\.git_root \|\| callerTask\?\.workdir/.test(win), true);
+  check('and does not mint a worktree', /setupUnitWorktree/.test(win), false);
+  check('the reason is recorded where the next person will look',
+    /chain bundle|auto-merge/.test(win), true);
+}
+
+// Every removal site refcounts, and counts BOTH tables.
+console.log('\nno worktree is removed while another unit lives in it:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  // Two variants, deliberately: the single-unit rule and a BATCH-aware one. Excluding
+  // only the current row lets an origin and its compact, deleted together, each see
+  // the other as a holder — both keep the tree, then both vanish.
+  check('the single-unit rule exists once', (SRV.match(/function _worktreeStillInUse\(/g) || []).length, 1);
+  check('and the batch rule exists once', (SRV.match(/function _worktreeStillInUseExcluding\(/g) || []).length, 1);
+  check('bulk delete uses the batch rule', /_worktreeStillInUseExcluding\(s\.workdir, _bulkIds\)/.test(SRV), true);
+  check('and removes a shared tree only once per batch', /_bulkDone\.has\(s\.workdir\)/.test(SRV), true);
+  const h = SRV.slice(SRV.indexOf('function _worktreeStillInUse('));
+  const hBody = h.slice(0, h.indexOf('\n}\n') + 3);
+  // Counting only sessions missed the case that destroys work: a RECURRING task
+  // survives its session's deletion and its auto-merge is skipped, so the worktree
+  // is its live cwd.
+  check('it counts sessions', /FROM sessions WHERE workdir=/.test(hBody), true);
+  check('and tasks', /FROM tasks\s+WHERE workdir=/.test(hBody), true);
+  // FOUR removal sites, not three. The auto-merge in startTask was missed in the
+  // first pass and the count of 4 (1 def + 3 uses) made the gap look complete —
+  // the task's own sidecar session, and any compact of it, live in that same tree.
+  // 1 definition + 3 call sites (auto-merge, task delete, session delete). Bulk uses
+  // the batch variant, which is counted separately above.
+  check('the single-unit rule guards three sites', (SRV.match(/_worktreeStillInUse\(/g) || []).length, 4);
+  check('including the auto-merge removal', /_worktreeStillInUse\(task\.workdir, \{ exceptTask: task\.id \}\)/.test(SRV), true);
+  // A failed COUNT must not authorise removeWorktree(force:true): leaving a stale
+  // tree is recoverable, deleting a live one is not.
+  check('a failed check keeps the tree, never removes it',
+    /catch \(e\) \{[\s\S]*?return true;\s*\}/.test(hBody) && !/catch[\s\S]*?return false;/.test(hBody), true);
+  // Read before the cascade, the count still saw rows this delete is about to remove.
+  check('session delete counts AFTER its cascade',
+    SRV.indexOf('stmts.deleteTasksBySession.run(sid);') < SRV.indexOf('_worktreeStillInUse(sessRow.workdir'), true);
+  // The single delete was fixed first and the bulk one was left behind — this pin
+  // did not cover it, so the ordering bug looked closed while it was still live on
+  // the batch path. Both are pinned now.
+  check('bulk delete removes AFTER its cascade runs',
+    SRV.indexOf('del();') < SRV.indexOf('_worktreeStillInUseExcluding(s.workdir, _bulkIds)'), true);
+  check('and the cascade runs exactly once', (SRV.match(/^\s*del\(\);/gm) || []).length, 1);
+}
+
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
 }
