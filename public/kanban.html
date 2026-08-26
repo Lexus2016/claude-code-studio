@@ -457,7 +457,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TR = {
   uk: {
-    'modal.task_cfg':'Параметри запуску','modal.task_cfg_note':'Діють на наступний запуск. Модель уже створеної сесії не змінюється — нова модель застосується до наступної сесії цієї задачі.',
+    'modal.task_cfg':'Параметри запуску','modal.task_cfg_note':'Зміни зберігаються і впливають на наступний запуск, а не на поточний. Які саме дилки подіють, залежить від двигуна задачі й від того, чи вона вже має сесію.',
     'tb.bot':'Бот','tb.bot.none':'без бота','tb.bot.tip':'Задача виконається промптом і моделлю цього бота',
     'hdr.title':'Kanban','hdr.add':'Завдання',
     'proj.label':'Проект:','proj.all':'— Всі проекти —','proj.recent':'Нещодавні','proj.search':'Пошук проекту...','search.empty':'Не знайдено',
@@ -505,7 +505,7 @@ const TR = {
     'engine.api':'API','engine.sub':'Підписка','tmux.required':'Потрібен tmux на сервері',
   },
   en: {
-    'modal.task_cfg':'Run settings','modal.task_cfg_note':'Applied on the next run. An existing session keeps its own model — a new model applies to the next session this task creates.',
+    'modal.task_cfg':'Run settings','modal.task_cfg_note':'Changes are saved and affect the next run, not the one in progress. Which dials take effect depends on the task engine and on whether it already has a session.',
     'tb.bot':'Bot','tb.bot.none':'no bot','tb.bot.tip':'The task runs with this bot\'s prompt and model',
     'hdr.title':'Kanban','hdr.add':'Task',
     'proj.label':'Project:','proj.all':'— All projects —','proj.recent':'Recent','proj.search':'Search project...','search.empty':'Not found',
@@ -553,7 +553,7 @@ const TR = {
     'engine.api':'API','engine.sub':'Subscription','tmux.required':'tmux is required on the server',
   },
   ru: {
-    'modal.task_cfg':'Параметры запуска','modal.task_cfg_note':'Применяются к следующему запуску. Модель уже созданной сессии не меняется — новая модель применится к следующей сессии этой задачи.',
+    'modal.task_cfg':'Параметры запуска','modal.task_cfg_note':'Изменения сохраняются и влияют на следующий запуск, а не на текущий. Какие именно настройки подействуют, зависит от движка задачи и от того, есть ли у неё уже сессия.',
     'tb.bot':'Бот','tb.bot.none':'без бота','tb.bot.tip':'Задача выполнится промптом и моделью этого бота',
     'hdr.title':'Kanban','hdr.add':'Задача',
     'proj.label':'Проект:','proj.all':'— Все проекты —','proj.recent':'Недавние','proj.search':'Поиск проекта...','search.empty':'Не найдено',
@@ -601,7 +601,7 @@ const TR = {
     'engine.api':'API','engine.sub':'Подписка','tmux.required':'Нужен tmux на сервере',
   },
   fr: {
-    'modal.task_cfg':'Paramètres d exécution','modal.task_cfg_note':'Appliqués au prochain lancement. Une session existante conserve son modèle — le nouveau modèle s appliquera à la prochaine session de cette tâche.',
+    'modal.task_cfg':'Paramètres d exécution','modal.task_cfg_note':'Les modifications sont enregistrées et affectent le prochain lancement, pas celui en cours. Les réglages qui prennent effet dépendent du moteur de la tâche et du fait qu elle ait déjà une session.',
     'tb.bot':'Bot','tb.bot.none':'sans bot','tb.bot.tip':"La tâche s'exécute avec le prompt et le modèle de ce bot",
     'hdr.title':'Kanban','hdr.add':'Tâche',
     'proj.label':'Projet :','proj.all':'— Tous les projets —','proj.recent':'Récents','proj.search':'Rechercher un projet…','search.empty':'Aucun résultat',
@@ -649,7 +649,7 @@ const TR = {
     'engine.api':'API','engine.sub':'Abonnement','tmux.required':'tmux est requis sur le serveur',
   },
   he: {
-    'modal.task_cfg':'הגדרות הרצה','modal.task_cfg_note':'חלות על ההרצה הבאה. סשן קיים שומר על המודל שלו — מודל חדש יחול על הסשן הבא של משימה זו.',
+    'modal.task_cfg':'הגדרות הרצה','modal.task_cfg_note':'השינויים נשמרים ומשפיעים על ההרצה הבאה, לא על זו שרצה כעת. אילו הגדרות ייכנסו לתוקף תלוי במנוע המשימה ובשאלה אם כבר יש לה סשן.',
     'tb.bot':'בוט','tb.bot.none':'ללא בוט','tb.bot.tip':'המשימה תרוץ עם הפרומפט והמודל של הבוט הזה',
     'hdr.title':'קנבן','hdr.add':'משימה',
     'proj.label':'פרויקט:','proj.all':'— כל הפרויקטים —','proj.recent':'אחרונים','proj.search':'חיפוש פרויקט...','search.empty':'לא נמצא',

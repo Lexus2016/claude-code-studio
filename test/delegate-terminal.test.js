@@ -235,16 +235,52 @@ check('a hostile model name cannot break out of its quotes', () => {
 // Every flag shape a real template uses. The first rule matched exactly ONE space,
 // so `--model  {model}` left the flag behind and it swallowed the prompt as its
 // argument — the failure this whole substitution exists to prevent.
+// A regex over the whole template got three shapes wrong at once, and one of them
+// was SILENT corruption rather than a visible break:
+//   --model "{model}"        with a value -> --model "'opus'"  (quotes reach the CLI)
+//   --model "{model}"        with none    -> --model ""        (empty flag)
+//   --model={model},{model}  with none    -> claude,           (command destroyed)
+// The substitution is token-wise now; these pin every shape both ways.
 check('the flag is dropped for every shape, not just the canonical one', () => {
   for (const tpl of ['claude --model {model} {prompt}',
                      'claude --model  {model} {prompt}',
                      'claude --model={model} {prompt}',
                      'claude -m {model} {prompt}',
-                     'claude {model} {prompt}']) {
+                     'claude {model} {prompt}',
+                     'claude --model "{model}" {prompt}',
+                     "claude --model '{model}' {prompt}",
+                     'claude --model={model},{model} {prompt}']) {
     assert.strictEqual(
       buildTerminalCommand({ template: tpl }, '/w', 'hi', 'linux', {}).split('&& ')[1],
       "claude 'hi'", tpl);
   }
+});
+
+check('a quoted placeholder does not nest quotes around the value', () => {
+  // The value is shell-escaped here; quoting it again would hand the CLI a model
+  // literally named "'opus'".
+  for (const tpl of ['claude --model "{model}" {prompt}', "claude --model '{model}' {prompt}"]) {
+    assert.strictEqual(
+      buildTerminalCommand({ template: tpl }, '/w', 'hi', 'linux', { model: 'opus' }).split('&& ')[1],
+      "claude --model 'opus' 'hi'", tpl);
+  }
+});
+
+// The first token-wise version squeezed ALL whitespace after substituting, which
+// rewrites spacing a template author meant to keep. The drop path already inserts
+// exactly one space where a token was removed, so the squeeze was never needed.
+check('spacing elsewhere in the template survives', () => {
+  assert.strictEqual(
+    buildTerminalCommand({ template: 'claude --system "a  b" --model {model} {prompt}' },
+      '/w', 'hi', 'linux', { model: 'opus' }).split('&& ')[1],
+    "claude --system \"a  b\" --model 'opus' 'hi'");
+});
+
+check('dropping one placeholder leaves the others intact', () => {
+  const tpl = 'claude --model {model} --effort {effort} -p {prompt}';
+  assert.strictEqual(
+    buildTerminalCommand({ template: tpl }, '/w', 'hi', 'linux', { effort: 'high' }).split('&& ')[1],
+    "claude --effort 'high' -p 'hi'");
 });
 
 if (failed) { console.log(`\n${failed} test(s) failed`); process.exit(1); }

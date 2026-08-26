@@ -83,21 +83,51 @@ function shellEscape(s, platform) {
  */
 function buildTerminalCommand(agentConfig, workdir, prompt, platform, opts = {}) {
   const template = agentConfig.template || '';
+  // Token-wise, not regex-wise. A regex over the whole template got three shapes
+  // wrong at once, and the third was silent corruption rather than a visible break:
+  //
+  //   --model "{model}"        with a value -> --model "'opus'"   (double-quoted,
+  //                                            so the CLI receives 'opus' WITH quotes)
+  //   --model "{model}"        with none    -> --model ""         (empty flag)
+  //   --model={model},{model}  with none    -> claude,            (command destroyed)
+  //
+  // Splitting on whitespace makes each of those a local decision: a token either
+  // contains the placeholder or it does not.
   let cmd = template;
   for (const [name, value] of [['model', opts.model], ['effort', opts.effort]]) {
     const token = `{${name}}`;
     if (!cmd.includes(token)) continue;
-    if (value) {
-      cmd = cmd.split(token).join(shellEscape(String(value), platform));
-    } else {
-      // Drop the placeholder AND the flag in front of it: `--model {model}` with no
-      // model must not become `--model` with the prompt as its argument.
-      // `[= ]` matched exactly ONE space, so `--model  {model}` (two spaces, easy to
-      // type) left the flag behind and it swallowed the prompt as its argument.
-      // Covers: `--model {m}`, `--model  {m}`, `--model={m}`, `-m {m}`, and a bare
-      // `{m}` with no flag at all.
-      cmd = cmd.replace(new RegExp(`\\s*(?:--?[\\w-]+(?:=|\\s+))?\\{${name}\\}`, 'g'), '');
+    const parts = cmd.split(/(\s+)/);            // keep the separators, so spacing survives
+    const out = [];
+    for (let k = 0; k < parts.length; k++) {
+      const part = parts[k];
+      if (!part.includes(token)) { out.push(part); continue; }
+      if (value) {
+        // Strip quotes the template author wrapped around the placeholder: the value
+        // is shell-escaped here, and escaping inside quotes nests them.
+        // Unwrap quotes the template author put AROUND the placeholder before
+        // substituting: the value is shell-escaped here, so quoting it again nests
+        // the quotes and the CLI receives them as part of the value.
+        const bare = part.split(`"${token}"`).join(token).split(`'${token}'`).join(token);
+        out.push(bare.split(token).join(shellEscape(String(value), platform)));
+      } else {
+        // Drop this token, and the flag before it when that flag exists only to
+        // carry it — `--model {model}` must not leave `--model` to eat the prompt.
+        while (out.length && /^\s+$/.test(out[out.length - 1])) out.pop();
+        const prev = out[out.length - 1];
+        if (prev && /^--?[\w-]+$/.test(prev)) {
+          out.pop();
+          while (out.length && /^\s+$/.test(out[out.length - 1])) out.pop();
+        }
+        // Skip the separator that followed the dropped token.
+        if (/^\s+$/.test(parts[k + 1] || '')) k++;
+        if (out.length) out.push(' ');
+      }
     }
+    // No global whitespace squeeze: the drop path already inserts exactly one space
+    // where a token was removed, and collapsing the WHOLE command would rewrite
+    // spacing the template author meant to keep — `--system "a  b"` is a real thing.
+    cmd = out.join('').trim();
   }
   cmd = cmd.replace('{prompt}', shellEscape(prompt, platform));
   // Not every agent CLI accepts a --cwd flag, so always cd into the workdir first
