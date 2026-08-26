@@ -1137,7 +1137,10 @@ const stmts = {
   inProgressTaskSessions: db.prepare(`SELECT DISTINCT session_id FROM tasks WHERE status='in_progress' AND session_id IS NOT NULL`),
   getChainTasks:  db.prepare(`SELECT id, title, status, depends_on, chain_id FROM tasks WHERE source_session_id=? ORDER BY sort_order ASC`),
   // Task chains (groups)
-  getChains: db.prepare(`SELECT * FROM task_chains WHERE (@w IS NULL OR workdir = @w) ORDER BY sort_order ASC, created_at ASC`),
+  // COALESCE, exactly like getTasks: once a chain is isolated its `workdir` is the
+  // WORKTREE, and a Kanban filter naming the project root would stop matching it —
+  // the chain and every member would vanish from their own project's board.
+  getChains: db.prepare(`SELECT * FROM task_chains WHERE (@w IS NULL OR COALESCE(git_root, workdir) = @w) ORDER BY sort_order ASC, created_at ASC`),
   getChain: db.prepare(`SELECT * FROM task_chains WHERE id=?`),
   createChain: db.prepare(`INSERT INTO task_chains (id,title,workdir,model,mode,agent_mode,max_turns,session_id,scheduled_at,recurrence,recurrence_end_at,source_session_id,sort_order,effort) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
   setChainGit: db.prepare(`UPDATE task_chains SET workdir=?, git_root=?, git_branch=? WHERE id=?`),
@@ -2197,7 +2200,13 @@ async function startTask(task) {
                 // Merging is done, but the conversation is not: removing here left the
                 // next turn of a live chat in a cwd that no longer exists, silently,
                 // because force:true reports nothing.
-                if (_worktreeStillInUse(task.workdir, { exceptTask: task.id })) {
+                if (task.chain_id) {
+                  // Never mid-chain: the tree belongs to the chain, and its later
+                  // members are still going to run in it. The merge above is already
+                  // gated on !task.chain_id; the removal needs the same gate, or a
+                  // member that somehow acquired git columns takes the tree with it.
+                  log.info('worktree kept — a chain member finished, the chain has not', { taskId: task.id, chainId: task.chain_id });
+                } else if (_worktreeStillInUse(task.workdir, { exceptTask: task.id })) {
                   log.info('worktree kept after auto-merge — a session still runs in it', { taskId: task.id, workdir: task.workdir });
                 } else
                 try { WM.removeWorktree({ projectDir: task.git_root, worktreeDir: task.workdir, branch: task.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed after task auto-merge', { taskId: task.id, err: e.message }); }
@@ -2231,7 +2240,7 @@ async function startTask(task) {
                       const _m = await WM.mergeBranch({ projectDir: chain.git_root, defaultBranch: _dflt, branch: chain.git_branch });
                       if (!_m.ok) {
                         log.warn('chain auto-merge conflict', { chainId: task.chain_id, branch: chain.git_branch });
-                      } else if (_worktreeStillInUse(chain.workdir, {})) {
+                      } else if (_chainWorktreeStillInUse(chain, allChainTasks)) {
                         // The chain's own session lives in this tree, so it is normally
                         // kept. The refcount decides that, not this code.
                         log.info('chain worktree kept after merge — still in use', { chainId: task.chain_id, workdir: chain.workdir });
@@ -3569,6 +3578,27 @@ function _worktreeStillInUse(workdir, { exceptSession = null, exceptTask = null 
     // read as "in use". Leaving a stale worktree is recoverable; deleting a live one
     // is not.
     log.warn('worktree in-use check failed — keeping the tree', { workdir, err: e?.message });
+    return true;
+  }
+}
+
+/** Is a completed chain's tree held by anything OTHER than that chain?
+ *
+ *  The plain refcount cannot answer this: every member and the chain's own session
+ *  carry that workdir, so it always counted them and the tree was never removed —
+ *  and then the next cycle minted another one, leaking a worktree, a branch and a
+ *  session per run. Only holders that are not part of this chain count.
+ */
+function _chainWorktreeStillInUse(chain, chainTasks) {
+  if (!chain?.workdir) return false;
+  const mine = new Set((chainTasks || []).map(t => t.id));
+  try {
+    const sess = db.prepare(`SELECT id FROM sessions WHERE workdir=?`).all(chain.workdir).map(r => r.id);
+    if (sess.some(id => id !== chain.session_id)) return true;
+    const tasks = db.prepare(`SELECT id, chain_id FROM tasks WHERE workdir=?`).all(chain.workdir);
+    return tasks.some(t => t.chain_id !== chain.id && !mine.has(t.id));
+  } catch (e) {
+    log.warn('chain worktree in-use check failed — keeping the tree', { chainId: chain.id, err: e?.message });
     return true;
   }
 }
@@ -7058,6 +7088,12 @@ app.post('/api/task-chains/:id/tasks', (req, res) => {
                 // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
                 // No bot id is in scope here; passing NULL preserves the intended behaviour.
         );
+  // Members carry the chain's git columns so the project filter still finds them:
+  // getTasks resolves a project with COALESCE(git_root, workdir), and `workdir` is now
+  // the chain's WORKTREE — without git_root a member disappears from its own project's
+  // Kanban board. Safe to set: the per-task auto-merge and the per-task worktree
+  // removal are both gated on `!task.chain_id`, not on these columns being absent.
+  if (chain.git_root) { try { stmts.setTaskGit.run(chain.workdir, chain.git_root, chain.git_branch, taskId); } catch {} }
   if (taskStatus === 'todo') setImmediate(processQueue);
   res.json(stmts.getTask.get(taskId));
 });

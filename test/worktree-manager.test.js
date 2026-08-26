@@ -446,9 +446,14 @@ console.log('\nno worktree is removed while another unit lives in it:');
   // FOUR removal sites, not three. The auto-merge in startTask was missed in the
   // first pass and the count of 4 (1 def + 3 uses) made the gap look complete —
   // the task's own sidecar session, and any compact of it, live in that same tree.
-  // 1 definition + 4 call sites: task auto-merge, task delete, session delete, and
-  // the chain merge. Bulk uses the batch variant, counted separately above.
-  check('the single-unit rule guards four sites', (SRV.match(/_worktreeStillInUse\(/g) || []).length, 5);
+  // 1 definition + 3 call sites: task auto-merge, task delete, session delete. Bulk
+  // uses the batch variant, and a COMPLETED CHAIN uses its own — the plain refcount
+  // counts the chain's own members and session, so it answered "in use" forever and
+  // the tree was never removed while the next cycle minted another.
+  check('the single-unit rule guards three sites', (SRV.match(/_worktreeStillInUse\(/g) || []).length, 4);
+  check('a completed chain uses the chain-aware variant',
+    /_chainWorktreeStillInUse\(chain, allChainTasks\)/.test(SRV), true);
+  check('which exists once', (SRV.match(/function _chainWorktreeStillInUse\(/g) || []).length, 1);
   check('including the auto-merge removal', /_worktreeStillInUse\(task\.workdir, \{ exceptTask: task\.id \}\)/.test(SRV), true);
   // A failed COUNT must not authorise removeWorktree(force:true): leaving a stale
   // tree is recoverable, deleting a live one is not.
@@ -507,6 +512,35 @@ console.log('\na chain shares one worktree and merges once:');
   // Minting shells out to git; a transaction is not the place for that.
   check('the tree is minted outside the transaction',
     snBody.indexOf('setupUnitWorktree(') < snBody.indexOf('db.transaction('), true);
+}
+
+// The chain's own members must not keep its tree alive after it completes.
+console.log('\na completed chain does not hold its own tree hostage:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  const h = SRV.slice(SRV.indexOf('function _chainWorktreeStillInUse('));
+  const hBody = h.slice(0, h.indexOf('\n}\n') + 3);
+  check('the chain session does not count', /id !== chain\.session_id/.test(hBody), true);
+  check('nor do the chain members', /t\.chain_id !== chain\.id/.test(hBody), true);
+  check('and it fails safe like the others', /return true;\s*\n\s*\}/.test(hBody), true);
+}
+
+// Members must stay visible in their own project's board.
+console.log('\nchain members remain visible under their project:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  // `workdir` is the worktree once a chain is isolated, so a filter naming the
+  // project root stops matching unless git_root is present and COALESCEd.
+  check('members carry the chain git columns',
+    /setTaskGit\.run\(chain\.workdir, chain\.git_root, chain\.git_branch, taskId\)/.test(SRV), true);
+  check('the chain listing resolves the project the way the task listing does',
+    /task_chains WHERE \(@w IS NULL OR COALESCE\(git_root, workdir\) = @w\)/.test(SRV), true);
+  // Giving members git columns is only safe because BOTH the merge and the removal
+  // are gated on chain membership rather than on those columns being absent.
+  check('the per-task removal is gated on chain membership too',
+    /if \(task\.chain_id\) \{[\s\S]{0,400}?worktree kept — a chain member finished/.test(SRV), true);
 }
 
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
