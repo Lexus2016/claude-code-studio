@@ -3481,6 +3481,26 @@ function setupUnitWorktree(kind, unitId, requestedWorkdir) {
   }
 }
 
+/** Worktree isolation for units Telegram creates with direct SQL.
+ *
+ *  telegram-bot.js does not require server.js — it takes its dependencies through the
+ *  constructor, the way getRoster already does — so the policy is injected rather than
+ *  imported, and stays defined in one place. Without it a Telegram chat writes into
+ *  the project root while a browser chat in the same project writes into its own
+ *  worktree, and the browser's merge lands on top of Telegram's uncommitted work.
+ *
+ *  Returns null when the unit is not isolatable (no workdir, a remote project, git
+ *  unavailable); the caller treats that as "stay in the project root", which is the
+ *  behaviour that predates isolation.
+ */
+function _isolateTelegramUnit(kind, unitId, workdir) {
+  const wt = setupUnitWorktree(kind, unitId, workdir);
+  if (!wt) return null;
+  if (kind === 'task') stmts.setTaskGit.run(wt.workdir, wt.git_root, wt.git_branch, unitId);
+  else stmts.setSessionGit.run(wt.workdir, wt.git_root, wt.git_branch, unitId);
+  return wt;
+}
+
 /**
  * Branch-status for the chat UI chip. green/amber/red from git state; purple
  * (merge conflict) overlays the stored git_conflict flag — a conflict happens
@@ -5454,13 +5474,26 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         const contextJson = context ? (typeof context === 'string' ? context : JSON.stringify(context)).substring(0, 10000) : null;
         const depsJson = depends_on ? JSON.stringify(depends_on) : null;
 
+        // An MCP-created task is a live writer, exactly like one created through
+        // POST /api/tasks — so it gets its OWN worktree from the project root rather
+        // than running in whatever tree the caller happens to occupy. Without this it
+        // shared the caller's working copy and branch, which is the state isolation
+        // exists to prevent. GIT_UNAVAILABLE is reported rather than thrown: this is
+        // an MCP tool call, and a bare throw here answers the model with a stack.
+        let _mwt = null;
+        try { _mwt = setupUnitWorktree('task', id, workdir); }
+        catch (e) {
+          if (e.code === 'GIT_UNAVAILABLE') return res.json({ ok: false, error: e.message });
+          throw e;
+        }
+
         stmts.createTask.run(
           id, String(title).substring(0, 200), String(description).substring(0, 2000),
           '', // notes
           'todo', // status — immediately eligible for processQueue
           0,  // sort_order
           (chain_id ? callerTask?.session_id : null) || null, // session_id — only inherit for chain tasks
-          workdir,
+          _mwt ? _mwt.workdir : workdir,
           model || callerTask?.model || 'sonnet',
           mode || callerTask?.mode || 'auto',
           agent_mode || callerTask?.agent_mode || 'single',
@@ -5477,6 +5510,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         ,
           botsLogic.inheritBotId(callerTask)  // bot_id: a bot's subtask stays that bot's
         );
+        if (_mwt) stmts.setTaskGit.run(_mwt.workdir, _mwt.git_root, _mwt.git_branch, id);
 
         // Set new columns that aren't in createTask prepared statement
         stmts.setTaskContext.run(contextJson, callerTaskId || null, id);
@@ -9740,7 +9774,7 @@ function initTelegramBot() {
   const tg = c.telegram;
   if (!tg || !tg.enabled || !tg.botToken) return;
 
-  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster });
+  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster, isolateUnit: _isolateTelegramUnit });
   telegramBot.acceptNewConnections = tg.acceptNewConnections !== false;
   _attachTelegramListeners(telegramBot);
 
@@ -9784,7 +9818,7 @@ app.post('/api/telegram/start', (req, res) => {
   }
 
   // Start new bot
-  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster });
+  telegramBot = new TelegramBot(db, { log, lang: c.lang || 'uk', getRoster: telegramRoster, isolateUnit: _isolateTelegramUnit });
   telegramBot.acceptNewConnections = c.telegram.acceptNewConnections !== false;
   _attachTelegramListeners(telegramBot);
 

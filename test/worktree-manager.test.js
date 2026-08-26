@@ -360,6 +360,62 @@ console.log('\na shared worktree is not removed while another session uses it:')
     win.indexOf('FROM sessions WHERE workdir=?') < win.indexOf('WM.removeWorktree'), true);
 }
 
+// ── Telegram is the third write channel, and it inserts its own SQL ─────────
+// Without isolation a Telegram chat writes into the project root while a browser
+// chat in the same project writes into its own worktree — and the browser's merge
+// lands on top of Telegram's uncommitted work. telegram-bot.js does not require
+// server.js, so the policy is INJECTED; these pins are what keep the two halves
+// from drifting apart silently.
+console.log('\nTelegram creators are isolated through an injected policy:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const TB = fs2.readFileSync(path2.join(__dirname, '..', 'telegram-bot.js'), 'utf8');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+
+  // Six creators: five sessions and one task.
+  const calls = (TB.match(/this\._isolate\(/g) || []).length;
+  check('every Telegram creator calls the isolation hook', calls, 6);
+  check('sessions and tasks are told apart',
+    /_isolate\('session'/.test(TB) && /_isolate\('task'/.test(TB), true);
+
+  // A bot reply must not fail because git is missing on the host.
+  const h = TB.slice(TB.indexOf('  _isolate(kind, id, workdir) {'));
+  const hBody = h.slice(0, h.indexOf('\n  }') + 4);
+  check('the hook never throws out of a bot turn', /catch \(e\)/.test(hBody), true);
+  check('and is a no-op when no injector was provided',
+    /if \(!this\.isolateUnit/.test(hBody), true);
+
+  // Injected, not imported — and defined once, not copied per construction site.
+  check('server.js injects it at every TelegramBot construction',
+    (SRV.match(/isolateUnit: _isolateTelegramUnit/g) || []).length,
+    (SRV.match(/new TelegramBot\(db/g) || []).length);
+  check('the policy is defined once', (SRV.match(/function _isolateTelegramUnit/g) || []).length, 1);
+  // Writing the row's git columns is what makes the unit READ as isolated to the
+  // git chip, the status/commit/merge endpoints and the delete path.
+  const inj = SRV.slice(SRV.indexOf('function _isolateTelegramUnit'));
+  const injBody = inj.slice(0, inj.indexOf('\n}\n') + 3);
+  check('it records the git columns for a task', /setTaskGit\.run/.test(injBody), true);
+  check('and for a session', /setSessionGit\.run/.test(injBody), true);
+}
+
+// MCP-created tasks are live writers, exactly like POST /api/tasks.
+console.log('\nan MCP-created task gets its own worktree:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  const i2 = SRV.indexOf('let _mwt = null;');
+  // 1800, measured: setTaskGit lands 1377 chars in and the line itself is long.
+  // There is no second _mwt block in the file, so a wider window cannot catch a
+  // neighbouring one by accident.
+  const win = i2 === -1 ? '' : SRV.slice(i2, i2 + 1800);
+  check('it calls setupUnitWorktree', /setupUnitWorktree\('task', id, workdir\)/.test(win), true);
+  check('the row stores the worktree, not the project root', /_mwt \? _mwt\.workdir : workdir/.test(win), true);
+  check('and its git columns are recorded', /setTaskGit\.run\(_mwt\.workdir/.test(win), true);
+  // This is an MCP tool call: a bare throw answers the model with a stack trace.
+  check('GIT_UNAVAILABLE is reported as a result, not thrown',
+    /GIT_UNAVAILABLE.*\n.*res\.json\(\{ ok: false/.test(win) || /ok: false, error: e\.message/.test(win), true);
+}
+
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
 }

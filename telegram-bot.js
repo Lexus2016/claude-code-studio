@@ -114,10 +114,26 @@ class TelegramBot extends EventEmitter {
    * @param {object} opts
    * @param {object} opts.log - Logger instance { info, warn, error, debug }
    */
+  /** Give a freshly-inserted Telegram unit its own worktree. Never throws: a bot
+   *  reply must not fail because git is unavailable on this host — the unit simply
+   *  stays in the project root, which is what it did before isolation existed. */
+  _isolate(kind, id, workdir) {
+    if (!this.isolateUnit || !workdir) return;
+    try { this.isolateUnit(kind, id, workdir); }
+    catch (e) { this.log.warn?.('telegram: worktree isolation skipped', { kind, id, err: e?.message }); }
+  }
+
   constructor(db, opts = {}) {
     super();
     this.db = db;
     this.log = opts.log || console;
+    // Injected by server.js, the way getRoster is. Telegram creates sessions and tasks
+    // by direct SQL, so worktree isolation cannot reach them from the HTTP layer — and
+    // without it a Telegram chat writes into the project root while a browser chat in
+    // the same project writes into its own worktree, and the browser's merge lands on
+    // top of Telegram's uncommitted work. Optional on purpose: with no injector the
+    // behaviour is exactly what it was before isolation existed.
+    this.isolateUnit = typeof opts.isolateUnit === 'function' ? opts.isolateUnit : null;
     this.token = null;
     this.running = false;
     this._pollTimer = null;
@@ -1544,6 +1560,7 @@ class TelegramBot extends EventEmitter {
       this.db.prepare(
         "INSERT INTO tasks (id, title, description, notes, status, sort_order, workdir) VALUES (?, ?, '', '', 'backlog', 0, ?)"
       ).run(id, title, workdir);
+      this._isolate('task', id, workdir);
 
       // Move to description input
       ctx.state = FSM_STATES.AWAITING_TASK_DESCRIPTION;
@@ -1605,6 +1622,7 @@ class TelegramBot extends EventEmitter {
         this.db.prepare(
           "INSERT INTO sessions (id, title, created_at, updated_at, workdir, model, engine) VALUES (?, ?, datetime('now'), datetime('now'), ?, 'sonnet', 'cli')"
         ).run(id, 'Telegram Session', workdir);
+        this._isolate('session', id, workdir);
         ctx.sessionId = id;
         this._saveDeviceContext(userId);
       }
@@ -1623,6 +1641,7 @@ class TelegramBot extends EventEmitter {
           this.db.prepare(
             "INSERT INTO sessions (id, title, created_at, updated_at, workdir, model, engine) VALUES (?, ?, datetime('now'), datetime('now'), ?, 'sonnet', 'cli')"
           ).run(id, 'Telegram Session', ctx.projectWorkdir);
+          this._isolate('session', id, ctx.projectWorkdir);
           ctx.sessionId = id;
         }
         this._saveDeviceContext(userId);
@@ -3121,6 +3140,7 @@ class TelegramBot extends EventEmitter {
           this.db.prepare(
             "INSERT INTO sessions (id, title, created_at, updated_at, workdir, model, engine) VALUES (?, ?, datetime('now'), datetime('now'), ?, 'sonnet', 'cli')"
           ).run(id, 'Telegram Session', workdir);
+          this._isolate('session', id, workdir);
           ctx.sessionId = id;
           this._saveDeviceContext(userId);
         }
@@ -3391,6 +3411,7 @@ class TelegramBot extends EventEmitter {
     this.db.prepare(
       "INSERT INTO sessions (id, title, created_at, updated_at, workdir, model, engine) VALUES (?, ?, datetime('now'), datetime('now'), ?, 'sonnet', 'cli')"
     ).run(id, 'Telegram Session', workdir);
+    this._isolate('session', id, workdir);
 
     ctx.sessionId = id;
     ctx.state = FSM_STATES.COMPOSING;
@@ -3477,6 +3498,7 @@ class TelegramBot extends EventEmitter {
     this.db.prepare(
       "INSERT INTO sessions (id, title, created_at, updated_at, workdir, model, engine) VALUES (?, ?, datetime('now'), datetime('now'), ?, 'sonnet', 'cli')"
     ).run(id, args || 'Telegram Session', workdir);
+    this._isolate('session', id, workdir);
 
     ctx.sessionId = id;
     ctx.state = FSM_STATES.COMPOSING;
