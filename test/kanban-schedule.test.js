@@ -94,5 +94,34 @@ console.log('combined save path:');
   check("clearing the date on a 'daily' task clears the repeat", kbEffectiveRecurrence(buildRecurToken(), null), null);
 }
 
+// ── Run settings stay editable after the task has a session (#79) ──────────
+// These dials are read off the TASK row on every run — `effectiveTaskMaxTurns =
+// task.max_turns`, `mode: task.mode`, `task.effort`, `task.run_engine` in
+// startTask — but the block holding them was shown only while a session was being
+// created. The moment a task first ran, the settings that actually drive each run
+// became uneditable.
+console.log('\nKanban task run settings remain editable:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const KB = fs2.readFileSync(path2.join(__dirname, '..', 'public', 'kanban.html'), 'utf8');
+  const i2 = KB.indexOf('function buildForm(tk={}){');
+  const form = KB.slice(i2, KB.indexOf('\nfunction ', i2 + 10));
+
+  check('the settings block is visible when editing, not only for a new session',
+    /const visClass=\(!tk\.session_id\|\|!isNew\)\?' visible':''/.test(form), true);
+
+  // The session picker must stop hiding it while editing, or the toggle undoes
+  // the line above the moment the user touches the dropdown.
+  const oc = KB.slice(KB.indexOf('function onFSessionChange()'));
+  const ocBody = oc.slice(0, oc.indexOf('\n}') + 2);
+  check('the session picker does not hide it while editing',
+    /modalMode!=='edit'/.test(ocBody), true);
+
+  // model is the one dial the session wins on (`session?.model || task.model`),
+  // so the form has to say that rather than imply the change takes effect now.
+  check('the note explains what model does on an existing session',
+    /modal\.task_cfg_note/.test(form), true);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
