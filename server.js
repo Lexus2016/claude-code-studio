@@ -1673,6 +1673,14 @@ async function startTask(task) {
       if (!sessionId) {
         sessionId = genId();
         stmts.createSession.run(sessionId, task.title.substring(0, 200), '[]', '[]', task.mode || 'auto', task.agent_mode || 'single', task.model || 'sonnet', task.workdir || null);
+        // This session is a SIDECAR of the task: it runs in the worktree the task was
+        // already given at creation time, so it inherits the metadata rather than
+        // minting a second tree. Copying `workdir` alone left git_root/git_branch NULL,
+        // which reads as "not isolated" to every consumer — the git chip, the
+        // status/commit/merge endpoints and the delete path all key off git_root.
+        if (task.git_root && task.workdir) {
+          try { stmts.setSessionGit.run(task.workdir, task.git_root, task.git_branch, sessionId); } catch {}
+        }
         stmts.setTaskSession.run(sessionId, task.id);
       }
       stmts.setTaskInProgress.run(task.id);
@@ -7743,7 +7751,13 @@ app.post('/api/sessions/import', (req, res) => {
       session.mode || 'auto',
       session.agent_mode || 'single',
       session.model || 'sonnet',
-      session.workdir || null
+      // git_root FIRST. An export taken from an isolated session carries the WORKTREE
+      // in `workdir` — a path that exists only on the machine it came from, and only
+      // until that worktree is removed. Importing it verbatim produced a session
+      // pointing at a directory that is not there, and that no project owns. The
+      // project root is the part that means something on the importing side; the
+      // import deliberately does NOT mint a worktree, because nothing has run in it yet.
+      session.git_root || session.workdir || null
     );
     const importMsg = db.prepare('INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,created_at) VALUES (?,?,?,?,?,?,?,?,COALESCE(?,CURRENT_TIMESTAMP))');
     const limit = Math.min(messages.length, 2000);
@@ -7889,6 +7903,14 @@ ${transcript}`;
     sess.model || 'sonnet',
     sess.workdir || null
   );
+  // A compact continues the SAME conversation in the SAME tree — it must not mint a
+  // second worktree, and it must not drop the metadata either. Copying `workdir`
+  // alone (which is what this did) left the new session pointing at a directory it
+  // did not know it shared: deleting the original ran removeWorktree and the compact
+  // was left with a workdir that no longer exists.
+  if (sess.git_root && sess.workdir) {
+    try { stmts.setSessionGit.run(sess.workdir, sess.git_root, sess.git_branch, newId); } catch {}
+  }
 
   // Insert the compact summary as the first user message so Claude gets context
   const contextMsg = `# 📋 Context from previous session\n\nThis is a continuation of a previous chat session. Here is the compact summary:\n\n${summaryText.trim()}`;
@@ -7928,7 +7950,17 @@ app.delete('/api/sessions/:id', (req,res) => {
   try { killInteractiveTmux(sid); } catch {}
   // Never a bare rm -rf — always through git so .git/worktrees/<name> never goes stale.
   if (sessRow && sessRow.git_root && sessRow.workdir) {
-    try { WM.removeWorktree({ projectDir: sessRow.git_root, worktreeDir: sessRow.workdir, branch: sessRow.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on session delete', { sid, err: e.message }); }
+    // Refcount before removing: a compact (and anything else that continues a
+    // conversation in place) shares one worktree with the session it came from.
+    // Removing it because ONE of them was deleted strands the other in a directory
+    // that is gone — with `force: true` there is not even an error to notice.
+    let _sharers = 0;
+    try { _sharers = db.prepare(`SELECT COUNT(*) c FROM sessions WHERE workdir=? AND id<>?`).get(sessRow.workdir, sid).c; } catch {}
+    if (_sharers > 0) {
+      log.info('worktree kept — still in use by another session', { sid, workdir: sessRow.workdir, sharers: _sharers });
+    } else {
+      try { WM.removeWorktree({ projectDir: sessRow.git_root, worktreeDir: sessRow.workdir, branch: sessRow.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on session delete', { sid, err: e.message }); }
+    }
   }
   // Unlink recurring tasks from session (preserve the schedule), delete the rest
   db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(sid);

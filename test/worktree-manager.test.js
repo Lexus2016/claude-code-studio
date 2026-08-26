@@ -314,6 +314,52 @@ console.log('\nan existing identity is never overridden:');
   }
 }
 
+// ── Who inherits a worktree, and who must never remove one ─────────────────
+// Isolation is not "every creator gets a tree". Three sites CONTINUE work that
+// already has one, and each of them dropped the metadata that says so. Pinned as
+// source text (the technique test/render/script-scope.test.mjs uses) because the
+// property is which columns a call site carries, not what a pure function returns.
+console.log('\ncontinuation sites inherit instead of minting a second tree:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  const near = (anchor, span = 900) => { const i = SRV.indexOf(anchor); return i === -1 ? null : SRV.slice(i, i + span); };
+
+  // A compact continues the same conversation in the same tree. Copying `workdir`
+  // alone left it sharing a directory it did not know it shared.
+  const cmp = near("const compactTitle =");
+  check('compact copies git_root/git_branch, not just workdir',
+    cmp !== null && /setSessionGit\.run\(sess\.workdir, sess\.git_root, sess\.git_branch, newId\)/.test(cmp), true);
+
+  // The task already has a worktree from POST /api/tasks; its session is a sidecar.
+  const st = near("stmts.setTaskSession.run(sessionId, task.id)", 1200);
+  const stBack = SRV.slice(Math.max(0, SRV.indexOf("stmts.setTaskSession.run(sessionId, task.id)") - 900), SRV.indexOf("stmts.setTaskSession.run(sessionId, task.id)"));
+  check('startTask copies the task git columns onto its sidecar session',
+    /setSessionGit\.run\(task\.workdir, task\.git_root, task\.git_branch, sessionId\)/.test(stBack), true);
+
+  // An export from an isolated session carries a worktree path that exists only on
+  // the machine it came from — and only until that worktree is removed.
+  const imp = near("String(session.title || 'Imported session')", 1200);
+  check('JSON import stores the PROJECT root, never the exported worktree',
+    imp !== null && /session\.git_root \|\| session\.workdir \|\| null/.test(imp), true);
+  check('and it does not mint a worktree for imported history',
+    imp !== null && !/setupUnitWorktree/.test(imp), true);
+}
+
+console.log('\na shared worktree is not removed while another session uses it:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  const i = SRV.indexOf("removeWorktree failed on session delete");
+  const win = i === -1 ? '' : SRV.slice(Math.max(0, i - 1200), i);
+  // force:true means a removal that should not have happened reports no error at all,
+  // so the guard has to come BEFORE the call rather than being cleaned up after.
+  check('the delete path counts other sessions on the same workdir first',
+    /FROM sessions WHERE workdir=\? AND id<>\?/.test(win), true);
+  check('and the count is read before removeWorktree, not after',
+    win.indexOf('FROM sessions WHERE workdir=?') < win.indexOf('WM.removeWorktree'), true);
+}
+
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
 }
