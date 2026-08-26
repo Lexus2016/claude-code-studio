@@ -330,7 +330,12 @@ const storedDefaults = id => {
     //    first loadSess(). Reading them unawaited leaves the fallback on mt.value —
     //    the markup's 50 — and #81 reproduces exactly as reported.
     check('loadSess awaits the defaults before using them',
-      /if \(!_chatDefaults\) \{ try \{ await loadChatDefaults/.test(lsBody), true);
+      /await loadChatDefaults\(_sessProj\)/.test(lsBody), true);
+    // …and against the SESSION's project, not whatever was open before it:
+    // curProjectId is assigned further down from d.workdir, so reading it here
+    // would apply the previous chat's project overrides to this one.
+    check('resolved against the session project, not the previous one',
+      /_sessProj !== curProjectId/.test(lsBody), true);
 
     // 2. Replaying a turn must not re-dial the chat. Both replay paths call
     //    processChat, whose destructuring falls back to the configured defaults —
@@ -347,6 +352,27 @@ const storedDefaults = id => {
       /\(effort === '' \|\| effort == null\) \? 'auto'/.test(srvSrc), true);
     check('and the client honours a stored auto',
       /d\.effort === 'auto' \? '' : d\.effort/.test(lsBody), true);
+    // The client must SEND it too. An omitted key lets the server's destructuring
+    // default fill in the current global default, and the next message persists
+    // that over the chat's stored 'auto' — the same drift, one layer up.
+    check('the chat frame sends auto explicitly, never undefined',
+      /effort: curEffort \|\| 'auto'/.test(SPA), true);
+    // Stored value and CLI flag are different things: the CLI gets no flag for auto,
+    // while the row keeps 'auto' so "chose Auto" stays distinct from "never chose".
+    check('the run receives the flag, not the stored sentinel',
+      /effort: _effortFlag/.test(srvSrc), true);
+    check('and the flag is derived once, from the stored value',
+      /const _effortFlag = chatDefaults\.effortToFlag\(effort\)/.test(srvSrc), true);
+
+    // createSession copies only mode/agent/model, so a chat that CONTINUES another
+    // one had to carry these two itself or it opened on the default instead.
+    const forkBody = srvSrc.slice(srvSrc.indexOf("app.post('/api/sessions/:id/fork'"), srvSrc.indexOf("app.post('/api/sessions/:id/fork'") + 2000);
+    check('a fork inherits the dials it forked from',
+      /UPDATE sessions SET max_turns=\?, effort=\?/.test(forkBody), true);
+    const compactAt = srvSrc.indexOf('const compactTitle');
+    const compactBody = srvSrc.slice(compactAt - 600, compactAt + 1600);
+    check('a compact keeps them as well',
+      /UPDATE sessions SET max_turns=\?, effort=\?/.test(compactBody), true);
   }
 
   cleanup();

@@ -7425,6 +7425,12 @@ app.post('/api/sessions/:id/fork', (req, res) => {
     source.mode || 'auto', source.agent_mode || 'single', source.model || 'sonnet',
     (_wt ? _wt.workdir : source.workdir) || null);
   if (_wt) stmts.setSessionGit.run(_wt.workdir, _wt.git_root, _wt.git_branch, id);
+  // A fork continues the same conversation, so it inherits its dials. createSession
+  // copies only mode/agent/model, so without this a fork opened on the configured
+  // default and the user's per-chat turns/effort were lost until the first message.
+  if (source.max_turns != null || source.effort != null) {
+    try { db.prepare(`UPDATE sessions SET max_turns=?, effort=? WHERE id=?`).run(source.max_turns ?? null, source.effort ?? null, id); } catch {}
+  }
   // Set claude_session_id to source's so --resume picks it up, and fork_from_cid to trigger --fork-session
   db.prepare(`UPDATE sessions SET claude_session_id=?, fork_from_cid=? WHERE id=?`).run(source.claude_session_id, source.claude_session_id, id);
   res.json(stmts.getSession.get(id));
@@ -8188,6 +8194,10 @@ ${transcript}`;
   // was left with a workdir that no longer exists.
   if (sess.git_root && sess.workdir) {
     try { stmts.setSessionGit.run(sess.workdir, sess.git_root, sess.git_branch, newId); } catch {}
+  }
+  // Same reason as fork: a compact IS the same conversation, so it keeps its dials.
+  if (sess.max_turns != null || sess.effort != null) {
+    try { db.prepare(`UPDATE sessions SET max_turns=?, effort=? WHERE id=?`).run(sess.max_turns ?? null, sess.effort ?? null, newId); } catch {}
   }
 
   // Insert the compact summary as the first user message so Claude gets context
@@ -11366,7 +11376,13 @@ wss.on('connection', (ws) => {
         }
       }
 
-      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode=_cd.mode, agentMode=_cd.agent, model=_cd.model, maxTurns=_cd.turns, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=chatDefaults.effortToFlag(_cd.effort) || null, engine='api' } = msg;
+      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode=_cd.mode, agentMode=_cd.agent, model=_cd.model, maxTurns=_cd.turns, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=_cd.effort, engine='api' } = msg;
+      // Two different things, deliberately kept apart: `effort` is what the chat is
+      // SET to (may be the spelled-out 'auto'), `_effortFlag` is what the CLI gets
+      // (no flag at all for auto). Storing the flag would erase the difference
+      // between "chosen Auto" and "never chose", which is what the default fallback
+      // in loadSess() keys off.
+      const _effortFlag = chatDefaults.effortToFlag(effort) || null;
 
       let replyQuote = '';
       if (reply_to && reply_to.content) {
@@ -11447,7 +11463,7 @@ wss.on('connection', (ws) => {
         // configured default — so a chat deliberately run on Auto would silently
         // switch the day someone changes that default. chat-defaults.js spells the
         // no-flag state 'auto' for exactly this reason.
-        (effort === '' || effort == null) ? 'auto' : sqlVal(effort),
+        (effort === '' || effort == null) ? 'auto' : sqlVal(effort),   // '' only from an older client
         localSessionId); }
       catch (e) { log.error('updateConfig failed', { sessionId: localSessionId, mode, agentMode, model, mIdsLen: mIds.length, skillsLen: effectiveSkills.length, err: e.message, stack: e.stack }); throw e; }
       // Persist engine choice (coerce anything other than 'subscription' to 'api')
@@ -11569,7 +11585,7 @@ wss.on('connection', (ws) => {
         workdir: workdir || WORKDIR,
         tabId: effectiveTabId,
         name: _sessName,
-        effort,
+        effort: _effortFlag,   // the CLI flag, not the stored 'auto' sentinel
       };
 
       let newCid;

@@ -11956,7 +11956,12 @@ async function send() {
       mode: curMode, agentMode: curAgent,
       model: curModel,
       engine: curEngine,
-      effort: curEffort || undefined,
+      // 'auto' explicitly, never undefined. An omitted key lets the server's
+      // destructuring default fill in the CURRENT global default — so a chat
+      // deliberately on Auto would be re-dialled, and persisted, the day someone
+      // changes that default. pinProjectDefaults() next door already sends 'auto'
+      // for the same reason.
+      effort: curEffort || 'auto',
       // An empty turns box must fall back to the user's CONFIGURED budget, not to a
       // private literal: this is the value that actually goes on the wire, and 30 was
       // neither the toolbar's seed nor the server's built-in. `_chatDefaults` holds the
@@ -12926,7 +12931,13 @@ async function loadSess(id) {
       // exactly as reported. Awaiting is cheap: the response is already cached for
       // this project after the first call, and a failed fetch leaves whatever we had
       // rather than blanking the dials.
-      if (!_chatDefaults) { try { await loadChatDefaults(curProjectId); } catch {} }
+      // Resolve against the session's OWN project, not whatever was open before it.
+      // curProjectId is set further down from d.workdir, so reading it here would use
+      // the previous chat's project and hand this one that project's overrides.
+      const _sessProj = (projects.find(p => p.workdir === (d.git_root || d.workdir)) || {}).id || null;
+      if (!_chatDefaults || _sessProj !== curProjectId) {
+        try { await loadChatDefaults(_sessProj); } catch {}
+      }
       const _cd = _chatDefaults && _chatDefaults.effective;
       const mt = $i('maxTurns');
       if (mt) mt.value = (d.max_turns != null && d.max_turns !== '') ? d.max_turns : (_cd ? _cd.turns : mt.value);
