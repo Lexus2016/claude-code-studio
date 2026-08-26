@@ -2175,6 +2175,14 @@ async function startTask(task) {
               // in place: removeWorktree also deletes the branch, which would strand
               // the unmerged commits with no ref pointing at them.
               if (task.git_root && task.workdir && task.git_branch) {
+                // The task's own session runs in THIS tree (startTask copies the task's
+                // workdir onto its sidecar), and a compact of that session shares it too.
+                // Merging is done, but the conversation is not: removing here left the
+                // next turn of a live chat in a cwd that no longer exists, silently,
+                // because force:true reports nothing.
+                if (_worktreeStillInUse(task.workdir, { exceptTask: task.id })) {
+                  log.info('worktree kept after auto-merge — a session still runs in it', { taskId: task.id, workdir: task.workdir });
+                } else
                 try { WM.removeWorktree({ projectDir: task.git_root, worktreeDir: task.workdir, branch: task.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed after task auto-merge', { taskId: task.id, err: e.message }); }
               }
             }
@@ -3499,7 +3507,30 @@ function _worktreeStillInUse(workdir, { exceptSession = null, exceptTask = null 
     const s = db.prepare(`SELECT COUNT(*) c FROM sessions WHERE workdir=? AND id<>COALESCE(?, '')`).get(workdir, exceptSession).c;
     const t = db.prepare(`SELECT COUNT(*) c FROM tasks    WHERE workdir=? AND id<>COALESCE(?, '')`).get(workdir, exceptTask).c;
     return (s + t) > 0;
-  } catch { return false; }
+  } catch (e) {
+    // Fail SAFE, not fail open. The caller's fallback is removeWorktree(force:true),
+    // which destroys a working tree and reports nothing — so a COUNT that failed must
+    // read as "in use". Leaving a stale worktree is recoverable; deleting a live one
+    // is not.
+    log.warn('worktree in-use check failed — keeping the tree', { workdir, err: e?.message });
+    return true;
+  }
+}
+
+/** Batch variant of _worktreeStillInUse: every id in `ids` is being deleted, so none
+ *  of them counts as a holder. Excluding only the current row lets two holders in one
+ *  batch keep each other's tree alive and then both vanish. */
+function _worktreeStillInUseExcluding(workdir, ids) {
+  if (!workdir) return false;
+  try {
+    const rows = db.prepare(`SELECT id FROM sessions WHERE workdir=?`).all(workdir).map(r => r.id);
+    if (rows.some(id => !ids.has(id))) return true;
+    const t = db.prepare(`SELECT COUNT(*) c FROM tasks WHERE workdir=?`).get(workdir).c;
+    return t > 0;
+  } catch (e) {
+    log.warn('worktree in-use check failed — keeping the tree', { workdir, err: e?.message });
+    return true;
+  }
 }
 
 /** Worktree isolation for units Telegram creates with direct SQL.
@@ -8003,21 +8034,20 @@ app.delete('/api/sessions/:id', (req,res) => {
   archiveSessionStats([sid]);
   // Best-effort: kill the interactive tmux session tied to this studio session
   try { killInteractiveTmux(sid); } catch {}
-  // Never a bare rm -rf — always through git so .git/worktrees/<name> never goes stale.
+  // Unlink recurring tasks from session (preserve the schedule), delete the rest
+  db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(sid);
+  stmts.deleteTasksBySession.run(sid);
+  // Worktree removal comes AFTER the cascade above, deliberately. Read before it, the
+  // count still saw the task rows this delete is about to remove, and answered "in use"
+  // for a tree nothing would own a line later — a leak instead of a stranding.
+  // Never a bare rm -rf: always through git, so .git/worktrees/<name> never goes stale.
   if (sessRow && sessRow.git_root && sessRow.workdir) {
-    // Refcount before removing: a compact (and anything else that continues a
-    // conversation in place) shares one worktree with the session it came from.
-    // Removing it because ONE of them was deleted strands the other in a directory
-    // that is gone — with `force: true` there is not even an error to notice.
     if (_worktreeStillInUse(sessRow.workdir, { exceptSession: sid })) {
       log.info('worktree kept — still in use by another unit', { sid, workdir: sessRow.workdir });
     } else {
       try { WM.removeWorktree({ projectDir: sessRow.git_root, worktreeDir: sessRow.workdir, branch: sessRow.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on session delete', { sid, err: e.message }); }
     }
   }
-  // Unlink recurring tasks from session (preserve the schedule), delete the rest
-  db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(sid);
-  stmts.deleteTasksBySession.run(sid);
   stmts.deleteSession.run(sid);
   // queued_messages has no FK to sessions, so the cascade never reaches it. Bulk delete
   // already does this; the single-session path did not, and boot-restore then resurrected
@@ -8061,13 +8091,21 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
     try { fs.unlinkSync(path.join(os.tmpdir(), `ccsterm-sb-${id}.txt`)); } catch {}
   }
   // Never a bare rm -rf — always through git so .git/worktrees/<name> never goes stale.
+  //
+  // Excluding only the row being processed is wrong for a BATCH: delete an origin and
+  // its compact together and each one sees the other still present, both answer "in
+  // use", and the tree survives with nobody left to own it. The whole batch is excluded
+  // instead, and a tree is removed ONCE however many of its holders are in the batch.
+  const _bulkIds = new Set(sessRows.map(r => r.id));
+  const _bulkDone = new Set();
   for (const s of sessRows) {
     if (s.git_root && s.workdir) {
-      // Same rule as the single delete. Before compact inherited git_root a bulk
-      // delete could not reach a shared tree at all; now it can, so it needs the guard.
-      if (_worktreeStillInUse(s.workdir, { exceptSession: s.id })) {
+      if (_bulkDone.has(s.workdir)) {
+        // already handled for an earlier holder in this same batch
+      } else if (_worktreeStillInUseExcluding(s.workdir, _bulkIds)) {
         log.info('worktree kept on bulk delete — still in use', { sid: s.id, workdir: s.workdir });
       } else {
+        _bulkDone.add(s.workdir);
         try { WM.removeWorktree({ projectDir: s.git_root, worktreeDir: s.workdir, branch: s.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on bulk delete', { sid: s.id, err: e.message }); }
       }
     }

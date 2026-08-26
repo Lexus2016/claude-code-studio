@@ -429,16 +429,34 @@ console.log('\nno worktree is removed while another unit lives in it:');
 {
   const fs2 = require('fs'), path2 = require('path');
   const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
-  check('the rule exists once', (SRV.match(/function _worktreeStillInUse/g) || []).length, 1);
-  const h = SRV.slice(SRV.indexOf('function _worktreeStillInUse'));
+  // Two variants, deliberately: the single-unit rule and a BATCH-aware one. Excluding
+  // only the current row lets an origin and its compact, deleted together, each see
+  // the other as a holder — both keep the tree, then both vanish.
+  check('the single-unit rule exists once', (SRV.match(/function _worktreeStillInUse\(/g) || []).length, 1);
+  check('and the batch rule exists once', (SRV.match(/function _worktreeStillInUseExcluding\(/g) || []).length, 1);
+  check('bulk delete uses the batch rule', /_worktreeStillInUseExcluding\(s\.workdir, _bulkIds\)/.test(SRV), true);
+  check('and removes a shared tree only once per batch', /_bulkDone\.has\(s\.workdir\)/.test(SRV), true);
+  const h = SRV.slice(SRV.indexOf('function _worktreeStillInUse('));
   const hBody = h.slice(0, h.indexOf('\n}\n') + 3);
   // Counting only sessions missed the case that destroys work: a RECURRING task
   // survives its session's deletion and its auto-merge is skipped, so the worktree
   // is its live cwd.
   check('it counts sessions', /FROM sessions WHERE workdir=/.test(hBody), true);
   check('and tasks', /FROM tasks\s+WHERE workdir=/.test(hBody), true);
-  // Three removal sites: session delete, task delete, bulk session delete.
-  check('every removal site is guarded', (SRV.match(/_worktreeStillInUse\(/g) || []).length, 4);
+  // FOUR removal sites, not three. The auto-merge in startTask was missed in the
+  // first pass and the count of 4 (1 def + 3 uses) made the gap look complete —
+  // the task's own sidecar session, and any compact of it, live in that same tree.
+  // 1 definition + 3 call sites (auto-merge, task delete, session delete). Bulk uses
+  // the batch variant, which is counted separately above.
+  check('the single-unit rule guards three sites', (SRV.match(/_worktreeStillInUse\(/g) || []).length, 4);
+  check('including the auto-merge removal', /_worktreeStillInUse\(task\.workdir, \{ exceptTask: task\.id \}\)/.test(SRV), true);
+  // A failed COUNT must not authorise removeWorktree(force:true): leaving a stale
+  // tree is recoverable, deleting a live one is not.
+  check('a failed check keeps the tree, never removes it',
+    /catch \(e\) \{[\s\S]*?return true;\s*\}/.test(hBody) && !/catch[\s\S]*?return false;/.test(hBody), true);
+  // Read before the cascade, the count still saw rows this delete is about to remove.
+  check('session delete counts AFTER its cascade',
+    SRV.indexOf('stmts.deleteTasksBySession.run(sid);') < SRV.indexOf('_worktreeStillInUse(sessRow.workdir'), true);
 }
 
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
