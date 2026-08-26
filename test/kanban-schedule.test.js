@@ -148,6 +148,12 @@ console.log('\nwhich task dials each run path actually receives:');
   };
   const api = callArgs('cli.send(');
   const sub = callArgs('runInteractiveSingle(');
+  // Assert BOTH were found before asserting anything about their contents. A miss
+  // returns '' and every "does NOT receive" check then passes vacuously — the pin
+  // would go green while measuring nothing, which is the failure mode this whole
+  // file keeps running into. The 20000-char window is the likely cause if it trips.
+  check('the API call site was located', api.length > 40, true);
+  check('the subscription call site was located', sub.length > 40, true);
   const has = (call, key) => new RegExp('[\\s{,]' + key + '\\s*:').test(call);
 
   // The API path is where turns and effort live.
