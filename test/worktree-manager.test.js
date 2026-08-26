@@ -457,6 +457,12 @@ console.log('\nno worktree is removed while another unit lives in it:');
   // Read before the cascade, the count still saw rows this delete is about to remove.
   check('session delete counts AFTER its cascade',
     SRV.indexOf('stmts.deleteTasksBySession.run(sid);') < SRV.indexOf('_worktreeStillInUse(sessRow.workdir'), true);
+  // The single delete was fixed first and the bulk one was left behind — this pin
+  // did not cover it, so the ordering bug looked closed while it was still live on
+  // the batch path. Both are pinned now.
+  check('bulk delete removes AFTER its cascade runs',
+    SRV.indexOf('del();') < SRV.indexOf('_worktreeStillInUseExcluding(s.workdir, _bulkIds)'), true);
+  check('and the cascade runs exactly once', (SRV.match(/^\s*del\(\);/gm) || []).length, 1);
 }
 
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);

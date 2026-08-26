@@ -8090,6 +8090,20 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
     try { termBridge.killSession(tmuxNameFor(id)); } catch {}
     try { fs.unlinkSync(path.join(os.tmpdir(), `ccsterm-sb-${id}.txt`)); } catch {}
   }
+  const del = db.transaction(() => {
+    for (const id of ids) {
+      // Unlink recurring tasks from session (preserve the schedule), delete the rest
+      db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(id);
+      stmts.deleteTasksBySession.run(id); stmts.deleteSession.run(id); sessionQueues.delete(id);
+      try { stmts.delQueuedBySession.run(id); } catch {}
+    }
+  });
+  del();
+  // Runs AFTER the cascade above, for the same reason the single delete does: read
+  // before it, the count still sees the task rows the cascade is about to remove and
+  // keeps a tree nobody owns a moment later. Recurring tasks are UNLINKED rather than
+  // deleted there, so they still count — correctly: their auto-merge is skipped and
+  // that tree is their live cwd.
   // Never a bare rm -rf — always through git so .git/worktrees/<name> never goes stale.
   //
   // Excluding only the row being processed is wrong for a BATCH: delete an origin and
@@ -8110,15 +8124,7 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
       }
     }
   }
-  const del = db.transaction(() => {
-    for (const id of ids) {
-      // Unlink recurring tasks from session (preserve the schedule), delete the rest
-      db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(id);
-      stmts.deleteTasksBySession.run(id); stmts.deleteSession.run(id); sessionQueues.delete(id);
-      try { stmts.delQueuedBySession.run(id); } catch {}
-    }
-  });
-  del();
+
   res.json({ ok: true, deleted: ids.length });
 });
 app.get('/api/sessions/:id/git-status', (req, res) => {
