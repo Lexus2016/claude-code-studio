@@ -2253,7 +2253,12 @@ async function startTask(task) {
                         : { ok: false };
                       _chainLanded = !!_m.ok;
                       if (!_m.ok) {
-                        log.warn('chain auto-merge conflict', { chainId: task.chain_id, branch: chain.git_branch });
+                        // Distinguish the two: a real conflict, versus a merge that was
+                        // never attempted because the commit failed. Reporting both as
+                        // "conflict" sends the reader looking for a conflict that is not
+                        // there.
+                        log.warn(_committed ? 'chain auto-merge conflict' : 'chain not merged — commit failed',
+                          { chainId: task.chain_id, branch: chain.git_branch });
                       } else if (_chainWorktreeStillInUse(chain, allChainTasks)) {
                         // The chain's own session lives in this tree, so it is normally
                         // kept. The refcount decides that, not this code.
@@ -5658,8 +5663,9 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         // straight past the chain workdir lock (~2449), so a chain created through MCP
         // would start its members in parallel while auto-merge writes into git_root
         // underneath them. And `get_task_result`/`cancel_task` still compare a RAW
-        // workdir (~5711) where `list_tasks` already uses COALESCE(git_root, workdir),
-        // so a parent would get 403 on the result of the task it just created.
+        // workdir where `list_tasks` uses COALESCE(git_root, workdir). Those two guards
+        // resolve through git_root now, so that half is closed; what remains is the
+        // auto-merge and the chain lock below.
         // This belongs to the chain bundle, which moves as one piece or not at all.
         const id = genId();
         const contextJson = context ? (typeof context === 'string' ? context : JSON.stringify(context)).substring(0, 10000) : null;
@@ -12488,8 +12494,9 @@ wss.on('connection', (ws) => {
           const source = sessionId ? stmts.getSession.get(sessionId) : null;
           const chainSessionId = genId();
           // Byte-for-byte the same shape as the HTTP dispatch door; splitting the two
-          // is how they drift apart. A WS frame has no res to answer with, so a git
-          // failure degrades to the project root rather than aborting the dispatch.
+          // is how they drift apart. This frame has no `res`, so GIT_UNAVAILABLE — and
+          // only that — degrades to the project root; every other failure is reported
+          // on the error channel and the dispatch stops.
           let _wdchain;
           try { _wdchain = setupChainWorktree(chainId, workdir); }
           catch (e) {
