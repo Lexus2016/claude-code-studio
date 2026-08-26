@@ -1,5 +1,34 @@
 # Changelog
 
+## 7.13.0
+
+### Pick the model and reasoning effort when delegating (#76)
+
+- `{model}` and `{effort}` join `{prompt}` as placeholders in an agent's command
+  template, and **each agent declares its own catalogs**. That is what makes the
+  list dynamic: these are different CLIs, so a list baked into the studio would be
+  wrong for most of them and stale for the rest. Renaming a model is a config edit,
+  not a release.
+- A select appears only when the agent declares values AND its template carries the
+  matching placeholder — offering a choice the command cannot carry would be a lie.
+- The flag disappears with the value: `--model {model}` with nothing chosen would
+  otherwise become `--model ` and the CLI would read the prompt as the model name.
+  Handled for `--model {m}`, `--model  {m}`, `--model={m}`, `-m {m}` and a bare `{m}`.
+- Values are checked against the agent's catalog rather than a character set. With a
+  bare `{model}` the value becomes its own argv entry, so a well-formed string could
+  arrive as a **flag** — shell-escaping cannot help with that, only an allow-list can.
+
+### A Kanban task's run settings stay editable (#79)
+
+- Mode, agent, model, turns and effort were only shown while a NEW session was being
+  configured, so they vanished the moment a task first ran — exactly when the user
+  had learned enough to want to change them. They are read off the task row on every
+  run (`task.max_turns`, `task.mode`, `task.effort`, `task.run_engine`), so hiding
+  them hid the settings that actually drive each run.
+- `model` is the exception and the form now says so: the runner resolves
+  `session?.model || task.model`, so an existing session keeps its own model and a
+  new one applies to the next session that task creates.
+
 ## 7.12.1
 
 ### English UI no longer shows Ukrainian (#75)
