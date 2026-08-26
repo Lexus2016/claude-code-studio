@@ -4478,6 +4478,13 @@ function setEffort(v) {
 }
 let curWorkdir = null; // current working directory for the session
 let projects = [], curProjectId = null; // projects list + active project
+// The boot fetch, kept so a caller that NEEDS the list can wait for it. `projects`
+// is filled asynchronously while connect() is already restoring tabs, so the first
+// loadSess() after a hard refresh can run against an empty array — and the project
+// lookup it does there decides which chat-defaults row applies. Losing that race
+// reproduces #81's symptom (a project's pinned turns ignored) on exactly one chat
+// per page load, which is the kind of "sometimes" report that never gets diagnosed.
+let _projectsReady = null;
 
 // ─── Project switch generation counter ───────────────────────────────────
 // Incremented on every switchProject() call. Async functions (loadHist, loadFiles)
@@ -11150,13 +11157,31 @@ function applyMsgClamp(mw) {
 // for the active project plus the list of dials that project pinned, which is
 // what the group dots are drawn from.
 let _chatDefaults = null;
+// Which project _chatDefaults was fetched FOR. Comparing against curProjectId is not
+// enough: both are null for a session with no workdir, and delProject() clears
+// curProjectId while leaving the cache — so a legacy chat opened afterwards would
+// silently inherit the deleted project's dials. `undefined` means "never fetched".
+let _chatDefaultsProj = undefined;
 
+// One cache, several callers (loadSess, switchProject, newTab, boot), so responses
+// can land out of order: switch project fast enough and the SLOWER earlier request
+// wins the cache, tagging project A's dials with... project A — self-consistent, and
+// wrong for the project now open. It heals on the next loadSess (the tag mismatches,
+// so it refetches), but until then markDefaultOverrides() paints A's badges and a new
+// tab seeds from A. Last caller wins, which is the one whose answer is still wanted.
+let _cdSeq = 0;
 async function loadChatDefaults(projectId) {
   const q = projectId ? '?projectId=' + encodeURIComponent(projectId) : '';
+  const my = ++_cdSeq;
   try {
     const r = await fetch('/api/chat-defaults' + q);
-    if (r.ok) _chatDefaults = await r.json();
+    if (r.ok) {
+      const j = await r.json();
+      if (my !== _cdSeq) return _chatDefaults; // superseded — neither store nor repaint
+      _chatDefaults = j; _chatDefaultsProj = projectId || null;
+    }
   } catch { /* offline: keep whatever we already resolved, never blank the dials */ }
+  if (my !== _cdSeq) return _chatDefaults;
   markDefaultOverrides();
   return _chatDefaults;
 }
@@ -11206,7 +11231,7 @@ async function pinProjectDefaults() {
     });
     const d = await r.json();
     if (!r.ok) { toast('✗ ' + (d.error || r.status)); return; }
-    _chatDefaults = d;
+    _chatDefaults = d; _chatDefaultsProj = curProjectId;
     markDefaultOverrides();
     toast('✓ ' + t('defaults.pinned'));
   } catch (e) { toast('✗ ' + e.message); }
@@ -11218,7 +11243,7 @@ async function resetProjectDefaults() {
     const r = await fetch(`/api/projects/${curProjectId}/defaults`, { method: 'DELETE' });
     const d = await r.json();
     if (!r.ok) { toast('✗ ' + (d.error || r.status)); return; }
-    _chatDefaults = d;
+    _chatDefaults = d; _chatDefaultsProj = curProjectId;
     applyChatDefaults();
     toast('✓ ' + t('defaults.reset.done'));
   } catch (e) { toast('✗ ' + e.message); }
@@ -11956,7 +11981,12 @@ async function send() {
       mode: curMode, agentMode: curAgent,
       model: curModel,
       engine: curEngine,
-      effort: curEffort || undefined,
+      // 'auto' explicitly, never undefined. An omitted key lets the server's
+      // destructuring default fill in the CURRENT global default — so a chat
+      // deliberately on Auto would be re-dialled, and persisted, the day someone
+      // changes that default. pinProjectDefaults() next door already sends 'auto'
+      // for the same reason.
+      effort: curEffort || 'auto',
       // An empty turns box must fall back to the user's CONFIGURED budget, not to a
       // private literal: this is the value that actually goes on the wire, and 30 was
       // neither the toolbar's seed nor the server's built-in. `_chatDefaults` holds the
@@ -12874,6 +12904,31 @@ async function loadSess(id) {
       openTerminalTab(d.id, d.terminal_agent || t('term.tab'), '>_');
       return;
     }
+    // Resolve this session's chat defaults HERE — before the destructive block
+    // below. Everything past the streaming-proxy reset has already wiped the
+    // proxy-backed background state into locals, so an early return from a point
+    // past it drops a background tab's accumulated stream on the floor: the locals
+    // die with the call and only the restore block near the end puts them back.
+    // The two guards above sit before that reset, and so does this one.
+    //
+    // Awaiting at all is what fixes #81: loadChatDefaults() is a fetch, and at boot
+    // it races connect() and the first loadSess(), so the fallback below would read
+    // `mt.value` — the markup's 50 — and reproduce the report exactly. Cheap: the
+    // response is cached per project after the first call, and a failed fetch keeps
+    // whatever we had instead of blanking the dials.
+    //
+    // Resolved against the session's OWN project. curProjectId is set further down
+    // from d.workdir, so reading it would use the previously open chat's project and
+    // hand this one that project's overrides.
+    if (!projects.length) {
+      try { await _projectsReady; } catch {} // failed fetch: fall through with what we have
+      if (id !== activeTabId) return;
+    }
+    const _sessProj = (projects.find(p => p.workdir === (d.git_root || d.workdir)) || {}).id || null;
+    if (!_chatDefaults || _chatDefaultsProj !== _sessProj) {
+      try { await loadChatDefaults(_sessProj); } catch {}
+      if (id !== activeTabId) return; // tab was switched while fetching defaults
+    }
     hideTerminalView();
     // ── Save background-accumulated state BEFORE resetting the streaming proxy ──
     // BUG FIX: streaming.txt = '' writes through proxy to getTS(activeTabId).curTxt,
@@ -12910,6 +12965,28 @@ async function loadSess(id) {
     if (d.mode) { curMode = d.mode; syncBtn('mode', d.mode); }
     if (d.agent_mode) { curAgent = d.agent_mode; syncBtn('agent', d.agent_mode); }
     if (d.model) { curModel = d.model; syncBtn('model', d.model); }
+    // Turns and effort were the two dials the sessions table never stored, so opening
+    // an existing chat left the toolbar showing whatever the markup shipped (turns=50)
+    // or whatever the previously opened chat had put there. Reported as "Kanban chats
+    // ignore the default" (#81) — the Kanban part was incidental: a task's chat is
+    // simply an existing chat, and every existing chat behaved this way.
+    //
+    // A chat that has one keeps it. A chat that never stored one falls back to the
+    // configured DEFAULT rather than to the last chat's value, which is the whole
+    // point of the #58 chain — and is what the reporter expected to see.
+    {
+      // Resolved above, before the destructive block — see the comment there.
+      const _cd = _chatDefaults && _chatDefaults.effective;
+      const mt = $i('maxTurns');
+      if (mt) mt.value = (d.max_turns != null && d.max_turns !== '') ? d.max_turns : (_cd ? _cd.turns : mt.value);
+      // 'auto' stored explicitly means the user chose Auto — honour it rather than
+      // treating it as "nothing stored" and re-deriving from the default.
+      const _eff = (d.effort != null && d.effort !== '')
+                 ? (d.effort === 'auto' ? '' : d.effort)
+                 : (_cd ? (_cd.effort === 'auto' ? '' : _cd.effort) : null);
+      if (_eff != null) { setEffort(_eff); const es = $i('effortSel'); if (es) es.value = curEffort; }
+      markDefaultOverrides();
+    }
     // Explicit per-chat run_engine wins; a chat without one (null — old chats or
     // never-sent) inherits the global default instead of being forced to API.
     _curSessionRunEngine = (d.run_engine === 'subscription' || d.run_engine === 'api') ? d.run_engine : null;
@@ -17447,7 +17524,7 @@ _restoreDelegationState(); // Restore active delegation panel if server has one
 }
 renderTabs();
 loadCfg();
-loadProjectsList();
+_projectsReady = loadProjectsList();
 loadRemoteHosts();
 connect();
 checkVersion();

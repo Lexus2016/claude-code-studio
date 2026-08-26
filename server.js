@@ -713,6 +713,13 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN terminal_started INTEGER DEFAULT 
 // git_conflict is a stored flag, not derived from git state — a merge conflict
 // happens in git_root, not in the session's own worktree, so it cannot be
 // recomputed from the worktree alone. See worktree-manager.js.
+// Per-chat run dials. mode/agent_mode/model were persisted from the start; these two
+// were not, so a chat that already existed had nowhere to read them from and the
+// toolbar kept whatever the markup shipped (turns=50) or whatever the previously
+// opened chat had left there — issue #81, reported as "Kanban chats ignore the
+// default", but true of every existing chat.
+try { db.exec(`ALTER TABLE sessions ADD COLUMN max_turns INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN effort TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN git_root TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN git_branch TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN git_conflict INTEGER DEFAULT 0`); } catch {}
@@ -999,7 +1006,7 @@ const stmts = {
     };
     return _stmt;
   })(),
-  updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
+  updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,max_turns=?,effort=?,updated_at=datetime('now') WHERE id=?`),
   getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE COALESCE(git_root, workdir)=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSession: db.prepare(`SELECT * FROM sessions WHERE id=?`),
@@ -7418,6 +7425,12 @@ app.post('/api/sessions/:id/fork', (req, res) => {
     source.mode || 'auto', source.agent_mode || 'single', source.model || 'sonnet',
     (_wt ? _wt.workdir : source.workdir) || null);
   if (_wt) stmts.setSessionGit.run(_wt.workdir, _wt.git_root, _wt.git_branch, id);
+  // A fork continues the same conversation, so it inherits its dials. createSession
+  // copies only mode/agent/model, so without this a fork opened on the configured
+  // default and the user's per-chat turns/effort were lost until the first message.
+  if (source.max_turns != null || source.effort != null) {
+    try { db.prepare(`UPDATE sessions SET max_turns=?, effort=? WHERE id=?`).run(source.max_turns ?? null, source.effort ?? null, id); } catch {}
+  }
   // Set claude_session_id to source's so --resume picks it up, and fork_from_cid to trigger --fork-session
   db.prepare(`UPDATE sessions SET claude_session_id=?, fork_from_cid=? WHERE id=?`).run(source.claude_session_id, source.claude_session_id, id);
   res.json(stmts.getSession.get(id));
@@ -8030,6 +8043,19 @@ app.post('/api/sessions/import', (req, res) => {
       // import deliberately does NOT mint a worktree, because nothing has run in it yet.
       session.git_root || session.workdir || null
     );
+    // Same as fork and compact: an import carries the dials it was exported with.
+    // createSession only knows mode/agent/model, so without this an imported chat
+    // opens on the configured default and the exported values are lost.
+    // Through sanitize(), never verbatim: this JSON is a FILE the user picked, so
+    // `max_turns: 900` or `effort: "ludicrous"` arrives as easily as a real export.
+    // The first is handed straight to the engine as a turn budget the UI's own 1-200
+    // input would refuse to display; the second reaches the CLI as an --effort flag.
+    // Lenient on purpose — a bad dial drops back to the configured default and the
+    // rest of the import still lands, matching how a hand-edited config.json is read.
+    const _impDials = chatDefaults.sanitize({ turns: session.max_turns, effort: session.effort }).value;
+    if (_impDials.turns != null || _impDials.effort != null) {
+      try { db.prepare(`UPDATE sessions SET max_turns=?, effort=? WHERE id=?`).run(_impDials.turns ?? null, _impDials.effort ?? null, newId); } catch {}
+    }
     const importMsg = db.prepare('INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,created_at) VALUES (?,?,?,?,?,?,?,?,COALESCE(?,CURRENT_TIMESTAMP))');
     const limit = Math.min(messages.length, 2000);
     // reply_to_id holds row ids from the SOURCE database. Inserting them verbatim
@@ -8181,6 +8207,10 @@ ${transcript}`;
   // was left with a workdir that no longer exists.
   if (sess.git_root && sess.workdir) {
     try { stmts.setSessionGit.run(sess.workdir, sess.git_root, sess.git_branch, newId); } catch {}
+  }
+  // Same reason as fork: a compact IS the same conversation, so it keeps its dials.
+  if (sess.max_turns != null || sess.effort != null) {
+    try { db.prepare(`UPDATE sessions SET max_turns=?, effort=? WHERE id=?`).run(sess.max_turns ?? null, sess.effort ?? null, newId); } catch {}
   }
 
   // Insert the compact summary as the first user message so Claude gets context
@@ -11359,7 +11389,13 @@ wss.on('connection', (ws) => {
         }
       }
 
-      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode=_cd.mode, agentMode=_cd.agent, model=_cd.model, maxTurns=_cd.turns, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=chatDefaults.effortToFlag(_cd.effort) || null, engine='api' } = msg;
+      const { text:userMessage, attachments=[], skills:sIds=[], mcpServers:mIds=[], mode=_cd.mode, agentMode=_cd.agent, model=_cd.model, maxTurns=_cd.turns, workdir=null, reply_to=null, retry=false, autoSkill=false, effort=_cd.effort, engine='api' } = msg;
+      // Two different things, deliberately kept apart: `effort` is what the chat is
+      // SET to (may be the spelled-out 'auto'), `_effortFlag` is what the CLI gets
+      // (no flag at all for auto). Storing the flag would erase the difference
+      // between "chosen Auto" and "never chose", which is what the default fallback
+      // in loadSess() keys off.
+      const _effortFlag = chatDefaults.effortToFlag(effort) || null;
 
       let replyQuote = '';
       if (reply_to && reply_to.content) {
@@ -11434,7 +11470,14 @@ wss.on('connection', (ws) => {
       // Bail out early if user pressed Stop during classification
       if (abortController.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-      try { stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(effectiveSkills),sqlVal(mode),sqlVal(agentMode),sqlVal(model),sqlVal(workdir)||null,localSessionId); }
+      try { stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(effectiveSkills),sqlVal(mode),sqlVal(agentMode),sqlVal(model),sqlVal(workdir)||null,sqlVal(maxTurns)||null,
+        // 'auto' is stored as the spelled-out sentinel, never as NULL. NULL means
+        // "this chat never stored an effort" and loadSess() then falls back to the
+        // configured default — so a chat deliberately run on Auto would silently
+        // switch the day someone changes that default. chat-defaults.js spells the
+        // no-flag state 'auto' for exactly this reason.
+        (effort === '' || effort == null) ? 'auto' : sqlVal(effort),   // '' only from an older client
+        localSessionId); }
       catch (e) { log.error('updateConfig failed', { sessionId: localSessionId, mode, agentMode, model, mIdsLen: mIds.length, skillsLen: effectiveSkills.length, err: e.message, stack: e.stack }); throw e; }
       // Persist engine choice (coerce anything other than 'subscription' to 'api')
       try { db.prepare(`UPDATE sessions SET run_engine=? WHERE id=?`).run(engine === 'subscription' ? 'subscription' : 'api', localSessionId); } catch {}
@@ -11555,7 +11598,7 @@ wss.on('connection', (ws) => {
         workdir: workdir || WORKDIR,
         tabId: effectiveTabId,
         name: _sessName,
-        effort,
+        effort: _effortFlag,   // the CLI flag, not the stored 'auto' sentinel
       };
 
       let newCid;
@@ -12021,6 +12064,11 @@ wss.on('connection', (ws) => {
         processChat({
           type: 'chat',
           text,
+          // Carry the chat's OWN dials. Omitting them makes processChat fall back to
+          // the configured defaults, and updateConfig then writes those over what
+          // this chat was set to — a replay would silently re-dial the chat.
+          ...( _isess?.max_turns != null ? { maxTurns: _isess.max_turns } : {} ),
+          ...( _isess?.effort != null ? { effort: _isess.effort } : {} ),
           tabId,
           sessionId: tabId,
           attachments: Array.isArray(msg.attachments) ? msg.attachments : undefined,
@@ -12676,6 +12724,10 @@ wss.on('connection', (ws) => {
       // processChat's retry branch skips addMsg and does the incrementRetry for us.
       processChat({
         type: 'chat', text: sess.last_user_msg,
+        // Same reason as the idle-interrupt replay: without these the recovery run
+        // uses the configured defaults AND persists them over this chat's values.
+        ...( sess.max_turns != null ? { maxTurns: sess.max_turns } : {} ),
+        ...( sess.effort != null ? { effort: sess.effort } : {} ),
         tabId: sessionId, sessionId, retry: true,
         skills: _rskills, mcpServers: _rmcp,
         mode: sess.mode || 'auto', agentMode: sess.agent_mode || 'single',

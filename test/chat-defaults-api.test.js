@@ -282,6 +282,152 @@ const storedDefaults = id => {
     srvSrc.indexOf('const _cd = chatDefaultsForWorkdir(msg.workdir')
       < srvSrc.indexOf('stmts.createSession.run(localSessionId'), true);
 
+  // ── An existing chat must not show the markup's turns (#81) ──────────────
+  // Reported as "Kanban chats ignore the default Max Turns", but the Kanban part
+  // was incidental: a task's chat is just an existing chat, and the sessions table
+  // stored neither `max_turns` nor `effort`. Opening ANY existing chat therefore
+  // left the toolbar on whatever the markup shipped (value="50") or on whatever the
+  // previously opened chat had put there — never on the configured default.
+  console.log('\nper-chat turns and effort are stored, and default when absent:');
+  {
+    const SPA = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+
+    check('the sessions table stores max_turns',
+      /ALTER TABLE sessions ADD COLUMN max_turns/.test(srvSrc), true);
+    check('and effort', /ALTER TABLE sessions ADD COLUMN effort/.test(srvSrc), true);
+
+    // They ride the same statement the other dials do — written on every turn.
+    const stmt = /updateConfig: db\.prepare\(`([^`]+)`/.exec(srvSrc);
+    check('updateConfig writes them', !!stmt && /max_turns=\?,effort=\?/.test(stmt[1]), true);
+    // A placeholder/argument mismatch here throws on every chat message, so it is
+    // worth counting — but count ARGUMENTS, not commas: the call spans lines and
+    // carries comments, and a comma inside one made this pin fail on itself.
+    const call = /stmts\.updateConfig\.run\(([\s\S]*?)\);/.exec(srvSrc)[1]
+      .replace(/\/\/[^\n]*/g, '')      // line comments
+      .replace(/\/\*[\s\S]*?\*\//g, ''); // block comments
+    let depth = 0, args = 1;
+    for (const ch of call) {
+      if ('([{'.includes(ch)) depth++;
+      else if (')]}'.includes(ch)) depth--;
+      else if (ch === ',' && depth === 0) args++;
+    }
+    check('its placeholders and arguments still match', (stmt[1].match(/\?/g) || []).length, args);
+
+    // The client half: restore what was stored, otherwise fall back to the DEFAULT
+    // rather than to whatever the previously opened chat left in the field.
+    const lsBody = SPA.slice(SPA.indexOf('async function loadSess'), SPA.indexOf('async function loadSess') + 9000);
+    check('loadSess restores a stored max_turns', /d\.max_turns != null/.test(lsBody), true);
+    check('and falls back to the configured default, not the field value',
+      /_cd \? _cd\.turns : mt\.value/.test(lsBody), true);
+    check('effort follows the same rule', /d\.effort != null/.test(lsBody), true);
+    // 'auto' is the spelled-out no-flag sentinel; the toolbar spells it ''.
+    check('the effort sentinel is translated for the toolbar',
+      /_cd\.effort === 'auto' \? '' : _cd\.effort/.test(lsBody), true);
+
+    // Review found three ways the first cut still failed. Each is pinned.
+    //
+    // 1. The defaults are fetched, and at boot that fetch races connect() and the
+    //    first loadSess(). Reading them unawaited leaves the fallback on mt.value —
+    //    the markup's 50 — and #81 reproduces exactly as reported.
+    check('loadSess awaits the defaults before using them',
+      /await loadChatDefaults\(_sessProj\)/.test(lsBody), true);
+    // …and against the SESSION's project, not whatever was open before it:
+    // curProjectId is assigned further down from d.workdir, so reading it here
+    // would apply the previous chat's project overrides to this one.
+    // Compared against what the CACHE IS FOR, not against curProjectId: both are
+    // null for a session with no workdir, and delProject() clears curProjectId while
+    // leaving the cache — so a legacy chat opened afterwards inherited the deleted
+    // project's dials.
+    check('resolved against the project the cache belongs to',
+      /_chatDefaultsProj !== _sessProj/.test(lsBody), true);
+    check('and the cache key is written wherever the cache is',
+      (SPA.match(/_chatDefaults = /g) || []).length,
+      (SPA.match(/_chatDefaultsProj = /g) || []).length);
+
+    // 2. Replaying a turn must not re-dial the chat. Both replay paths call
+    //    processChat, whose destructuring falls back to the configured defaults —
+    //    and updateConfig then writes those over what the chat was set to.
+    check('the idle-interrupt replay carries the stored dials',
+      /_isess\?\.max_turns != null \? \{ maxTurns/.test(srvSrc), true);
+    check('the interrupted-recovery replay carries them too',
+      /sess\.max_turns != null \? \{ maxTurns/.test(srvSrc), true);
+
+    // 3. NULL means "never stored", which is what makes the default fallback work —
+    //    so an explicit Auto has to be stored as the spelled-out sentinel, or a chat
+    //    deliberately on Auto silently changes when the default does.
+    check('an explicit Auto effort is stored as a sentinel, not NULL',
+      /\(effort === '' \|\| effort == null\) \? 'auto'/.test(srvSrc), true);
+    check('and the client honours a stored auto',
+      /d\.effort === 'auto' \? '' : d\.effort/.test(lsBody), true);
+    // The client must SEND it too. An omitted key lets the server's destructuring
+    // default fill in the current global default, and the next message persists
+    // that over the chat's stored 'auto' — the same drift, one layer up.
+    check('the chat frame sends auto explicitly, never undefined',
+      /effort: curEffort \|\| 'auto'/.test(SPA), true);
+    // Stored value and CLI flag are different things: the CLI gets no flag for auto,
+    // while the row keeps 'auto' so "chose Auto" stays distinct from "never chose".
+    check('the run receives the flag, not the stored sentinel',
+      /effort: _effortFlag/.test(srvSrc), true);
+    check('and the flag is derived once, from the stored value',
+      /const _effortFlag = chatDefaults\.effortToFlag\(effort\)/.test(srvSrc), true);
+
+    // createSession copies only mode/agent/model, so a chat that CONTINUES another
+    // one had to carry these two itself or it opened on the default instead.
+    const forkBody = srvSrc.slice(srvSrc.indexOf("app.post('/api/sessions/:id/fork'"), srvSrc.indexOf("app.post('/api/sessions/:id/fork'") + 2000);
+    check('a fork inherits the dials it forked from',
+      /UPDATE sessions SET max_turns=\?, effort=\?/.test(forkBody), true);
+    // Every await added inside loadSess needs its own tab re-check: the two guards
+    // near the top ran BEFORE it, so a switch during the fetch would let the rest —
+    // toolbar, curProjectId, the transcript render, and the resume_task frame — run
+    // for a session that is no longer active.
+    // Index comparisons, not windows: the explanation between these lines is longer
+    // than any window worth hard-coding, and a window that is too small fails on the
+    // comment rather than on the code.
+    // The project lookup decides WHICH defaults row applies, so an empty list is not
+    // a neutral starting point — it silently resolves to the global row. `projects` is
+    // filled by a boot fetch that races the first loadSess after a hard refresh.
+    check('an empty projects list is waited on, not read as "no project"',
+      /if \(!projects\.length\) \{[\s\S]{0,200}?await _projectsReady/.test(lsBody), true);
+    check('and that wait re-checks the tab too',
+      /await _projectsReady;[\s\S]{0,120}?if \(id !== activeTabId\) return;/.test(lsBody), true);
+    check('the boot call is what _projectsReady holds',
+      /_projectsReady = loadProjectsList\(\);/.test(SPA), true);
+
+    const awaitAt = lsBody.indexOf('await loadChatDefaults(_sessProj)');
+    const recheckAt = lsBody.indexOf('if (id !== activeTabId) return;', awaitAt);
+    check('the added await re-checks the tab afterwards',
+      awaitAt !== -1 && recheckAt > awaitAt, true);
+    // And it must sit BEFORE the streaming reset. loadSess copies a background tab's
+    // accumulated text into locals and then wipes the proxy-backed state; returning
+    // early from any point past that wipe destroys the stream, because only the
+    // restore block at the end of the function puts the locals back. The two original
+    // guards are before it — an await added after it turns a tab switch into data loss.
+    // The STATEMENT, not the substring: a comment mentioning the reset would match a
+    // looser needle and the pin would pass on prose while the code sat on the wrong side.
+    const resetAt = lsBody.indexOf("streaming.el = null; streaming.txt = ''");
+    check('and the await sits before the destructive streaming reset',
+      resetAt !== -1 && awaitAt < resetAt, true);
+    // Several callers share one defaults cache, so a slow earlier response must not
+    // overwrite a newer one — it would tag the cache with a project that is no longer open.
+    const lcdAt = SPA.indexOf('async function loadChatDefaults');
+    const lcdBody = SPA.slice(lcdAt, lcdAt + 1600);
+    check('a superseded defaults response neither stores nor repaints',
+      /my !== _cdSeq/.test(lcdBody) && /const my = \+\+_cdSeq/.test(lcdBody), true);
+
+    const compactAt = srvSrc.indexOf('const compactTitle');
+    const compactBody = srvSrc.slice(compactAt - 600, compactAt + 1600);
+    check('a compact keeps them as well',
+      /UPDATE sessions SET max_turns=\?, effort=\?/.test(compactBody), true);
+    const importAt = srvSrc.indexOf("String(session.title || 'Imported session')");
+    const importBody = srvSrc.slice(importAt, importAt + 3000);
+    check('and an import carries what it was exported with',
+      /UPDATE sessions SET max_turns=\?, effort=\?/.test(importBody), true);
+    // The import file is user-supplied, so its dials are validated like any other
+    // untrusted input — a 900-turn budget would otherwise reach the engine verbatim.
+    check('imported dials are sanitised, not trusted',
+      /chatDefaults\.sanitize\(\{ turns: session\.max_turns, effort: session\.effort \}\)/.test(importBody), true);
+  }
+
   cleanup();
   console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);
