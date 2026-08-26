@@ -859,6 +859,13 @@ db.exec(`
     ON bot_inbox(session_id, bot_id) WHERE delivered_at IS NULL;
 `);
 try { db.exec(`ALTER TABLE task_chains ADD COLUMN effort TEXT`); } catch {}      // claude --effort dial; chain-level default for new tasks
+// A chain owns ONE worktree, shared by every task in it. Per-task trees would need to
+// be created at startTask() — after the previous member's merge — so that member N+1
+// branches from a default that already contains member N; that is a different helper
+// contract than the create-time one, and it still fights the single --resume session a
+// chain runs on. Shared tree, merged once at the end.
+try { db.exec(`ALTER TABLE task_chains ADD COLUMN git_root TEXT`); } catch {}
+try { db.exec(`ALTER TABLE task_chains ADD COLUMN git_branch TEXT`); } catch {}
 // bots.deleted_at was added after the table shipped, so CREATE TABLE IF NOT EXISTS is a
 // no-op on an existing install and every /api/bots query would fail with
 // "no such column: deleted_at". Same pattern as every other schema change here.
@@ -1130,9 +1137,13 @@ const stmts = {
   inProgressTaskSessions: db.prepare(`SELECT DISTINCT session_id FROM tasks WHERE status='in_progress' AND session_id IS NOT NULL`),
   getChainTasks:  db.prepare(`SELECT id, title, status, depends_on, chain_id FROM tasks WHERE source_session_id=? ORDER BY sort_order ASC`),
   // Task chains (groups)
-  getChains: db.prepare(`SELECT * FROM task_chains WHERE (@w IS NULL OR workdir = @w) ORDER BY sort_order ASC, created_at ASC`),
+  // COALESCE, exactly like getTasks: once a chain is isolated its `workdir` is the
+  // WORKTREE, and a Kanban filter naming the project root would stop matching it —
+  // the chain and every member would vanish from their own project's board.
+  getChains: db.prepare(`SELECT * FROM task_chains WHERE (@w IS NULL OR COALESCE(git_root, workdir) = @w) ORDER BY sort_order ASC, created_at ASC`),
   getChain: db.prepare(`SELECT * FROM task_chains WHERE id=?`),
   createChain: db.prepare(`INSERT INTO task_chains (id,title,workdir,model,mode,agent_mode,max_turns,session_id,scheduled_at,recurrence,recurrence_end_at,source_session_id,sort_order,effort) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+  setChainGit: db.prepare(`UPDATE task_chains SET workdir=?, git_root=?, git_branch=? WHERE id=?`),
   updateChain: db.prepare(`UPDATE task_chains SET title=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,sort_order=?,effort=?,updated_at=datetime('now') WHERE id=?`),
   deleteChain: db.prepare(`DELETE FROM task_chains WHERE id=?`),
   deleteChainTasks: db.prepare(`DELETE FROM tasks WHERE chain_id=?`),
@@ -2134,7 +2145,16 @@ async function startTask(task) {
             // branches below already use) with git_conflict set so the branch
             // status chip can show 'purple' and failure_reason naming the cause.
             let _mergeConflict = false;
-            if (task.git_root && task.git_branch) {
+            // A CHAIN MEMBER NEVER MERGES ON ITS OWN. Members share one tree and one
+            // branch; merging after member N and removing that tree would leave member
+            // N+1 starting in a directory that is gone. The chain merges once, in the
+            // allDone block below. Independent tasks are unaffected — they own their
+            // tree and merge when they finish, exactly as before.
+            //   Belt and braces: members are not given git_root/git_branch either, so
+            // this condition is already false for them. The explicit test is here so
+            // that granting a member those columns later cannot silently re-enable a
+            // mid-chain merge.
+            if (!task.chain_id && task.git_root && task.git_branch) {
               try {
                 // Auto-commit any edits the task left uncommitted before merging.
                 // mergeBranch() only merges already-committed history, and nothing
@@ -2180,7 +2200,13 @@ async function startTask(task) {
                 // Merging is done, but the conversation is not: removing here left the
                 // next turn of a live chat in a cwd that no longer exists, silently,
                 // because force:true reports nothing.
-                if (_worktreeStillInUse(task.workdir, { exceptTask: task.id })) {
+                if (task.chain_id) {
+                  // Never mid-chain: the tree belongs to the chain, and its later
+                  // members are still going to run in it. The merge above is already
+                  // gated on !task.chain_id; the removal needs the same gate, or a
+                  // member that somehow acquired git columns takes the tree with it.
+                  log.info('worktree kept — a chain member finished, the chain has not', { taskId: task.id, chainId: task.chain_id });
+                } else if (_worktreeStillInUse(task.workdir, { exceptTask: task.id })) {
                   log.info('worktree kept after auto-merge — a session still runs in it', { taskId: task.id, workdir: task.workdir });
                 } else
                 try { WM.removeWorktree({ projectDir: task.git_root, worktreeDir: task.workdir, branch: task.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed after task auto-merge', { taskId: task.id, err: e.message }); }
@@ -2199,8 +2225,53 @@ async function startTask(task) {
                 if (allDone) {
                   db.prepare(`UPDATE task_chains SET updated_at=datetime('now') WHERE id=?`).run(task.chain_id);
                   log.info(`[taskWorker] chain ${task.chain_id} completed: all ${allChainTasks.length} tasks done`);
-                  if (chain.recurrence) {
+                  // THE CHAIN MERGES HERE, ONCE — the counterpart of the `!task.chain_id`
+                  // gate on the per-task merge above. Every member worked in this one
+                  // tree on this one branch, and the whole of it lands in the project's
+                  // default branch now that the last member is done. A conflict is
+                  // recorded rather than retried: the members are already done, and
+                  // re-running them is not a resolution.
+                  // Did this cycle's work actually reach the default branch? Only then
+                  // may a recurring chain re-arm — re-arming over a conflict abandons a
+                  // branch whose commits are real work, and the next cycle would start
+                  // from a default that does not contain it.
+                  let _chainLanded = !(chain.git_root && chain.git_branch && chain.workdir);
+                  if (chain.git_root && chain.git_branch && chain.workdir) {
+                    try {
+                      const _dflt = WM.getDefaultBranch(chain.git_root);
+                      // Commit first, or work a member left uncommitted is destroyed by
+                      // the removal below — mergeBranch only merges committed history.
+                      // A SWALLOWED failure here is data loss on the happy path: the
+                      // merge would carry only what was already committed, the removal
+                      // below would delete the rest, and force:true reports nothing.
+                      // If the commit cannot be made, stop. A kept tree is recoverable.
+                      let _committed = true;
+                      try { WM.commitAll({ worktreeDir: chain.workdir, message: `chain: ${chain.title || task.chain_id}` }); }
+                      catch (e) { _committed = false; log.error('chain commit failed — not merging, not removing', { chainId: task.chain_id, err: e?.message }); }
+                      const _m = _committed
+                        ? await WM.mergeBranch({ projectDir: chain.git_root, defaultBranch: _dflt, branch: chain.git_branch })
+                        : { ok: false };
+                      _chainLanded = !!_m.ok;
+                      if (!_m.ok) {
+                        // Distinguish the two: a real conflict, versus a merge that was
+                        // never attempted because the commit failed. Reporting both as
+                        // "conflict" sends the reader looking for a conflict that is not
+                        // there.
+                        log.warn(_committed ? 'chain auto-merge conflict' : 'chain not merged — commit failed',
+                          { chainId: task.chain_id, branch: chain.git_branch });
+                      } else if (_chainWorktreeStillInUse(chain, allChainTasks)) {
+                        // The chain's own session lives in this tree, so it is normally
+                        // kept. The refcount decides that, not this code.
+                        log.info('chain worktree kept after merge — still in use', { chainId: task.chain_id, workdir: chain.workdir });
+                      } else {
+                        try { WM.removeWorktree({ projectDir: chain.git_root, worktreeDir: chain.workdir, branch: chain.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed after chain merge', { chainId: task.chain_id, err: e.message }); }
+                      }
+                    } catch (e) { log.error('chain auto-merge failed', { chainId: task.chain_id, error: e.message }); }
+                  }
+                  if (chain.recurrence && _chainLanded) {
                     scheduleNextChainRun(chain, allChainTasks);
+                  } else if (chain.recurrence) {
+                    log.warn('chain recurrence NOT re-armed — this cycle did not merge', { chainId: task.chain_id, branch: chain.git_branch });
                   }
                 } else {
                   db.prepare(`UPDATE task_chains SET updated_at=datetime('now') WHERE id=?`).run(task.chain_id);
@@ -2386,18 +2457,36 @@ function scheduleNextChainRun(chain, oldTasks) {
     log.info(`[schedule] Chain recurrence ended: "${chain.title}"`); return;
   }
   const newSessionId = genId();
+  // A NEW worktree for the next cycle. The previous one was merged and removed when
+  // the chain completed, so re-arming the members against `chain.workdir` would point
+  // the whole next run at a directory that is gone. Minted OUTSIDE the transaction:
+  // it shells out to git, and a transaction is not the place for that.
+  //   The unit id carries the run, not just the chain, or the second cycle would try
+  // to reuse a branch name whose worktree git still has registered.
+  let _nwt = null;
+  if (chain.git_root || chain.workdir) {
+    try { _nwt = setupUnitWorktree('chain', `${chain.id}-${next}`, chain.git_root || chain.workdir); }
+    catch (e) { log.warn('chain re-arm could not mint a worktree — next run uses the project root', { chainId: chain.id, err: e?.message }); }
+  }
+  const _nextWd = _nwt ? _nwt.workdir : (chain.git_root || chain.workdir || null);
   db.transaction(() => {
     // Fresh shared session for next chain run
     stmts.createSession.run(newSessionId, chain.title, '[]', '[]',
       chain.mode || 'auto', chain.agent_mode || 'single', chain.model || 'sonnet',
-      chain.workdir || null);
+      _nextWd);
+    if (_nwt) stmts.setSessionGit.run(_nwt.workdir, _nwt.git_root, _nwt.git_branch, newSessionId);
     // Re-arm chain with next scheduled_at + new session
     db.prepare(`UPDATE task_chains SET scheduled_at=?, session_id=?, updated_at=datetime('now') WHERE id=?`)
       .run(next, newSessionId, chain.id);
-    // Re-arm all tasks back to 'todo' with shared session
+    if (_nwt) stmts.setChainGit.run(_nwt.workdir, _nwt.git_root, _nwt.git_branch, chain.id);
+    // Re-arm all tasks back to 'todo' with shared session — and into the NEW tree,
+    // since the one they ran in last cycle no longer exists.
     for (const t of oldTasks) {
-      db.prepare(`UPDATE tasks SET status='todo', scheduled_at=?, session_id=?, failure_reason=NULL, worker_pid=NULL, task_retry_count=0, updated_at=datetime('now') WHERE id=?`)
-        .run(next, newSessionId, t.id);
+      // git_branch too, not just workdir: the members still carried the PREVIOUS
+      // cycle's branch name, so hasUnmergedWork() on a member delete looked at a
+      // branch that no longer belongs to the tree it is checking.
+      db.prepare(`UPDATE tasks SET status='todo', scheduled_at=?, session_id=?, workdir=?, git_root=?, git_branch=?, failure_reason=NULL, worker_pid=NULL, task_retry_count=0, updated_at=datetime('now') WHERE id=?`)
+        .run(next, newSessionId, _nextWd, _nwt ? _nwt.git_root : null, _nwt ? _nwt.git_branch : null, t.id);
     }
   })();
   log.info(`[schedule] Chain re-armed: "${chain.title}" → ${new Date(next * 1000).toISOString()}, ${oldTasks.length} tasks reset`);
@@ -3513,6 +3602,51 @@ function _worktreeStillInUse(workdir, { exceptSession = null, exceptTask = null 
     // read as "in use". Leaving a stale worktree is recoverable; deleting a live one
     // is not.
     log.warn('worktree in-use check failed — keeping the tree', { workdir, err: e?.message });
+    return true;
+  }
+}
+
+/** Mint the ONE worktree a chain runs in, and hand back the pieces every door needs.
+ *
+ *  Four doors create chains — REST, MCP create_chain, and both dispatch paths — and
+ *  each used to write its own `workdir` straight into the rows. Open-coding the
+ *  isolation at four sites is exactly how three of them end up isolated and the
+ *  fourth does not; this is the single place that decides.
+ *
+ *  Returns `workdir` even when nothing was minted (no workdir, remote project, git
+ *  unavailable), so a caller can always use it: it is then the project root, which is
+ *  the behaviour that predates isolation.
+ */
+function setupChainWorktree(chainId, requestedWorkdir) {
+  const wt = setupUnitWorktree('chain', chainId, requestedWorkdir);
+  return {
+    workdir: wt ? wt.workdir : (requestedWorkdir || null),
+    applyChain() { if (wt) stmts.setChainGit.run(wt.workdir, wt.git_root, wt.git_branch, chainId); },
+    applySession(sessionId) { if (wt) stmts.setSessionGit.run(wt.workdir, wt.git_root, wt.git_branch, sessionId); },
+    // Members carry the columns so the project filter still finds them — getTasks
+    // resolves a project with COALESCE(git_root, workdir). Safe because the per-task
+    // merge and removal are both gated on `!task.chain_id`.
+    applyTask(taskId) { if (wt) stmts.setTaskGit.run(wt.workdir, wt.git_root, wt.git_branch, taskId); },
+  };
+}
+
+/** Is a completed chain's tree held by anything OTHER than that chain?
+ *
+ *  The plain refcount cannot answer this: every member and the chain's own session
+ *  carry that workdir, so it always counted them and the tree was never removed —
+ *  and then the next cycle minted another one, leaking a worktree, a branch and a
+ *  session per run. Only holders that are not part of this chain count.
+ */
+function _chainWorktreeStillInUse(chain, chainTasks) {
+  if (!chain?.workdir) return false;
+  const mine = new Set((chainTasks || []).map(t => t.id));
+  try {
+    const sess = db.prepare(`SELECT id FROM sessions WHERE workdir=?`).all(chain.workdir).map(r => r.id);
+    if (sess.some(id => id !== chain.session_id)) return true;
+    const tasks = db.prepare(`SELECT id, chain_id FROM tasks WHERE workdir=?`).all(chain.workdir);
+    return tasks.some(t => t.chain_id !== chain.id && !mine.has(t.id));
+  } catch (e) {
+    log.warn('chain worktree in-use check failed — keeping the tree', { chainId: chain.id, err: e?.message });
     return true;
   }
 }
@@ -5529,8 +5663,9 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         // straight past the chain workdir lock (~2449), so a chain created through MCP
         // would start its members in parallel while auto-merge writes into git_root
         // underneath them. And `get_task_result`/`cancel_task` still compare a RAW
-        // workdir (~5711) where `list_tasks` already uses COALESCE(git_root, workdir),
-        // so a parent would get 403 on the result of the task it just created.
+        // workdir where `list_tasks` uses COALESCE(git_root, workdir). Those two guards
+        // resolve through git_root now, so that half is closed; what remains is the
+        // auto-merge and the chain lock below.
         // This belongs to the chain bundle, which moves as one piece or not at all.
         const id = genId();
         const contextJson = context ? (typeof context === 'string' ? context : JSON.stringify(context)).substring(0, 10000) : null;
@@ -5619,14 +5754,25 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         const chainSessionId = genId();
         const effectiveModel = chainModel || callerTask?.model || 'sonnet';
 
+        // One tree for the chain, same as the REST door. GIT_UNAVAILABLE is a 400, not
+        // a throw and not a 200 body: mcp-task-manager.js only rejects on
+        // statusCode >= 400, so a 200 with {ok:false} resolves as success and the model
+        // is told a chain was created that does not exist.
+        let _mchain = null;
+        try { _mchain = setupChainWorktree(chainId, workdir); }
+        catch (e) { if (e.code === 'GIT_UNAVAILABLE') return res.status(400).json({ error: e.message }); throw e; }
+        const _mchainWd = _mchain.workdir;
+
         stmts.createSession.run(chainSessionId, String(title).substring(0, 200), '[]', '[]',
-          'auto', 'single', effectiveModel, workdir);
+          'auto', 'single', effectiveModel, _mchainWd);
+        _mchain.applySession(chainSessionId);
         const effectiveEffort = chainEffort || callerTask?.effort || null;
-        stmts.createChain.run(chainId, String(title).substring(0, 200), workdir,
+        stmts.createChain.run(chainId, String(title).substring(0, 200), _mchainWd,
           effectiveModel, 'auto', 'single', UNATTENDED_MAX_TURNS,
           chainSessionId, toUnixTs(chainScheduledAt), recurrence || null,
           toUnixTs(recurrence_end_at), callerTask?.source_session_id || null, 0,
           effectiveEffort);
+        _mchain.applyChain();
 
         // Create tasks with auto-linked depends_on
         const taskIds = [];
@@ -5657,7 +5803,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
             'todo',
             i * 1000, // sort_order
             chainSessionId,
-            workdir,
+            _mchainWd,
             td.model || effectiveModel,
             'auto', 'single',
             td.max_turns || UNATTENDED_MAX_TURNS,
@@ -5672,6 +5818,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           ,
           botsLogic.inheritBotId(callerTask)  // bot_id: a bot's chain stays that bot's
         );
+          _mchain.applyTask(taskId);
 
           stmts.setTaskContext.run(contextJson, callerTaskId || null, taskId);
         }
@@ -5756,7 +5903,10 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
 
         // Workdir scoping: only allow reading results from same project
         const _callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
-        if (_callerTask && ((_callerTask.workdir || null) !== (task.workdir || null))) {
+        // COALESCE, like list_tasks: once either side is isolated `workdir` is a
+        // WORKTREE, so two units of the same project stop comparing equal — a parent
+        // got 403 on the result of the very task it had just created.
+        if (_callerTask && ((_callerTask.git_root || _callerTask.workdir || null) !== (task.git_root || task.workdir || null))) {
           return res.status(403).json({ error: 'Cannot read task results outside your project' });
         }
 
@@ -5783,7 +5933,8 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
 
         // Workdir scoping: only allow cancelling tasks in same project
         const _callerTask2 = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
-        if (_callerTask2 && ((_callerTask2.workdir || null) !== (task.workdir || null))) {
+        // Same rule as the read guard above — see the comment there.
+        if (_callerTask2 && ((_callerTask2.git_root || _callerTask2.workdir || null) !== (task.git_root || task.workdir || null))) {
           return res.status(403).json({ error: 'Cannot cancel tasks outside your project' });
         }
 
@@ -6917,14 +7068,27 @@ app.post('/api/task-chains', (req, res) => {
           agent_mode = 'single', max_turns = UNATTENDED_MAX_TURNS, scheduled_at = null,
           recurrence = null, recurrence_end_at = null, effort = null } = req.body;
   const id = genId();
+  // ONE worktree for the whole chain, minted here and inherited by every member:
+  // POST /api/task-chains/:id/tasks copies `chain.workdir` onto each task, so members
+  // share a tree and a branch and run in sequence inside it. The merge happens once,
+  // when the last member finishes (see the allDone block in startTask). Members
+  // deliberately do NOT get git_root/git_branch of their own — those two columns are
+  // what ARM the per-task auto-merge, and a chain whose second member merged and
+  // removed the tree would leave its third member starting in a directory that is gone.
+  let _chain = null;
+  try { _chain = setupChainWorktree(id, workdir); }
+  catch (e) { if (e.code === 'GIT_UNAVAILABLE') return res.status(400).json({ error: e.message }); throw e; }
+  const _chainWd = _chain.workdir;
   // Create shared session for the chain
   const sessionId = genId();
   stmts.createSession.run(sessionId, String(title).substring(0, 200), '[]', '[]',
-    sqlVal(mode), sqlVal(agent_mode), sqlVal(model), sqlVal(workdir) || null);
-  stmts.createChain.run(id, String(title).substring(0, 200), sqlVal(workdir) || null,
+    sqlVal(mode), sqlVal(agent_mode), sqlVal(model), _chainWd);
+  _chain.applySession(sessionId);
+  stmts.createChain.run(id, String(title).substring(0, 200), _chainWd,
     sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns),
     sessionId, sqlVal(scheduled_at) || null, sqlVal(recurrence) || null,
     sqlVal(recurrence_end_at) || null, null, 0, sqlVal(effort) || null);
+  _chain.applyChain();
   res.json(chainWithSummary(stmts.getChain.get(id)));
 });
 app.put('/api/task-chains/:id', (req, res) => {
@@ -6989,6 +7153,12 @@ app.post('/api/task-chains/:id/tasks', (req, res) => {
                 // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
                 // No bot id is in scope here; passing NULL preserves the intended behaviour.
         );
+  // Members carry the chain's git columns so the project filter still finds them:
+  // getTasks resolves a project with COALESCE(git_root, workdir), and `workdir` is now
+  // the chain's WORKTREE — without git_root a member disappears from its own project's
+  // Kanban board. Safe to set: the per-task auto-merge and the per-task worktree
+  // removal are both gated on `!task.chain_id`, not on these columns being absent.
+  if (chain.git_root) { try { stmts.setTaskGit.run(chain.workdir, chain.git_root, chain.git_branch, taskId); } catch {} }
   if (taskStatus === 'todo') setImmediate(processQueue);
   res.json(stmts.getTask.get(taskId));
 });
@@ -7101,19 +7271,27 @@ app.post('/api/tasks/dispatch', (req, res) => {
   // Inherit MCP + skills from source session
   const source = source_session_id ? stmts.getSession.get(source_session_id) : null;
   const chainSessionId = genId();
+  // The dispatch doors create chains too, and were the two that stayed unisolated
+  // while REST did not — the exact split this feature exists to remove.
+  let _dchain = null;
+  try { _dchain = setupChainWorktree(chainId, workdir); }
+  catch (e) { if (e.code === 'GIT_UNAVAILABLE') return res.status(400).json({ error: e.message }); throw e; }
+  const _dchainWd = _dchain.workdir;
   stmts.createSession.run(
     chainSessionId,
     (plan_description || 'Task chain').substring(0, 200),
     source?.active_mcp || '[]',
     source?.active_skills || '[]',
     'auto', 'single', sqlVal(model) || 'sonnet',
-    sqlVal(workdir) || null
+    _dchainWd
   );
+  _dchain.applySession(chainSessionId);
 
   // Register chain in task_chains table (gives it a title, session, and metadata)
   stmts.createChain.run(chainId, (plan_description || 'Task chain').substring(0, 200),
-    sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS,
+    _dchainWd, sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS,
     chainSessionId, null, null, null, source_session_id || null, 0, sqlVal(effort) || null);
+  _dchain.applyChain();
 
   // Chain gets its OWN Claude session — first task starts fresh,
   // subsequent tasks --resume from the chain's session (NOT the source chat's).
@@ -7137,7 +7315,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
         'todo',
         i,             // sort_order preserves plan ordering
         chainSessionId,
-        sqlVal(workdir) || null,
+        _dchainWd,
         sqlVal(model) || 'sonnet',
         'auto', 'single', UNATTENDED_MAX_TURNS,
         null,          // attachments
@@ -7153,6 +7331,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
                 // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
                 // No bot id is in scope here; passing NULL preserves the intended behaviour.
         );
+    _dchain.applyTask(taskId);
       createdTasks.push(stmts.getTask.get(taskId));
     }
   })();
@@ -12314,18 +12493,41 @@ wss.on('connection', (ws) => {
           const chainId = genId();
           const source = sessionId ? stmts.getSession.get(sessionId) : null;
           const chainSessionId = genId();
+          // Byte-for-byte the same shape as the HTTP dispatch door; splitting the two
+          // is how they drift apart. This frame has no `res`, so GIT_UNAVAILABLE — and
+          // only that — degrades to the project root; every other failure is reported
+          // on the error channel and the dispatch stops.
+          let _wdchain;
+          try { _wdchain = setupChainWorktree(chainId, workdir); }
+          catch (e) {
+            // Degrade ONLY for the one condition that means "this deployment has no
+            // git" — the same condition the other three doors answer 400 for. Any
+            // other failure (a lock, a read-only mount, a broken identity) would
+            // silently create the chain in the project root and report success, and
+            // this frame has an error channel of its own.
+            if (e?.code !== 'GIT_UNAVAILABLE') {
+              log.error('dispatch chain worktree failed', { chainId, err: e?.message });
+              try { ws.send(JSON.stringify({ type: 'error', error: `Could not prepare an isolated worktree: ${e?.message || 'git failed'}`, tabId })); } catch {}
+              return;
+            }
+            log.warn('dispatch chain not isolated — git unavailable', { chainId });
+            _wdchain = { workdir: sqlVal(workdir) || null, applyChain() {}, applySession() {}, applyTask() {} };
+          }
+          const _wdchainWd = _wdchain.workdir;
           stmts.createSession.run(
             chainSessionId,
             (finalPlan || 'Task chain').substring(0, 200),
             source?.active_mcp || '[]',
             source?.active_skills || '[]',
             'auto', 'single', sqlVal(model) || 'sonnet',
-            sqlVal(workdir) || null
+            _wdchainWd
           );
+          _wdchain.applySession(chainSessionId);
           // Register chain in task_chains table
           stmts.createChain.run(chainId, (finalPlan || 'Task chain').substring(0, 200),
-            sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS,
+            _wdchainWd, sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS,
             chainSessionId, null, null, null, sessionId || null, 0, sqlVal(effort) || null);
+          _wdchain.applyChain();
           // Chain gets its OWN Claude session — first task starts fresh,
           // subsequent tasks --resume from the chain's session (NOT the source chat's).
           // Sharing claude_session_id with source chat causes context mixing chaos.
@@ -12344,7 +12546,7 @@ wss.on('connection', (ws) => {
                 taskId,
                 (a.role || 'Subtask').substring(0, 200),
                 (a.task || '').substring(0, 2000),
-                '', 'todo', i, chainSessionId, sqlVal(workdir) || null,
+                '', 'todo', i, chainSessionId, _wdchainWd,
                 sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS, null,
                 realDeps.length ? JSON.stringify(realDeps) : null,
                 chainId, sessionId || null,
@@ -12361,6 +12563,7 @@ wss.on('connection', (ws) => {
                 // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
                 // No bot id is in scope here; passing NULL preserves the intended behaviour.
         );
+              _wdchain.applyTask(taskId);
               created.push(stmts.getTask.get(taskId));
             }
           })();

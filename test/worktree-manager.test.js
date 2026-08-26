@@ -446,9 +446,14 @@ console.log('\nno worktree is removed while another unit lives in it:');
   // FOUR removal sites, not three. The auto-merge in startTask was missed in the
   // first pass and the count of 4 (1 def + 3 uses) made the gap look complete —
   // the task's own sidecar session, and any compact of it, live in that same tree.
-  // 1 definition + 3 call sites (auto-merge, task delete, session delete). Bulk uses
-  // the batch variant, which is counted separately above.
+  // 1 definition + 3 call sites: task auto-merge, task delete, session delete. Bulk
+  // uses the batch variant, and a COMPLETED CHAIN uses its own — the plain refcount
+  // counts the chain's own members and session, so it answered "in use" forever and
+  // the tree was never removed while the next cycle minted another.
   check('the single-unit rule guards three sites', (SRV.match(/_worktreeStillInUse\(/g) || []).length, 4);
+  check('a completed chain uses the chain-aware variant',
+    /_chainWorktreeStillInUse\(chain, allChainTasks\)/.test(SRV), true);
+  check('which exists once', (SRV.match(/function _chainWorktreeStillInUse\(/g) || []).length, 1);
   check('including the auto-merge removal', /_worktreeStillInUse\(task\.workdir, \{ exceptTask: task\.id \}\)/.test(SRV), true);
   // A failed COUNT must not authorise removeWorktree(force:true): leaving a stale
   // tree is recoverable, deleting a live one is not.
@@ -463,6 +468,124 @@ console.log('\nno worktree is removed while another unit lives in it:');
   check('bulk delete removes AFTER its cascade runs',
     SRV.indexOf('del();') < SRV.indexOf('_worktreeStillInUseExcluding(s.workdir, _bulkIds)'), true);
   check('and the cascade runs exactly once', (SRV.match(/^\s*del\(\);/gm) || []).length, 1);
+}
+
+// ── A chain shares ONE tree and merges ONCE ────────────────────────────────
+// Per-task trees inside a chain would have to be minted at startTask(), after the
+// previous member's merge, so member N+1 branches from a default that already
+// contains member N. That is a different helper contract, and it fights the single
+// --resume session a chain runs on. Shared tree, one merge at the end.
+console.log('\na chain shares one worktree and merges once:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+
+  check('the chain owns git columns of its own',
+    /ALTER TABLE task_chains ADD COLUMN git_root/.test(SRV) && /ADD COLUMN git_branch/.test(SRV), true);
+  check('and a statement to set them', /setChainGit: db\.prepare/.test(SRV), true);
+  // ALL FOUR doors that create a chain go through one helper: REST, MCP create_chain,
+  // and both dispatch paths. Three of them were unisolated while REST was not — the
+  // exact split this feature exists to remove, and open-coding it four times is how
+  // that happens again.
+  check('the chain-tree helper exists once', (SRV.match(/function setupChainWorktree\(/g) || []).length, 1);
+  check('and every chain door uses it', (SRV.match(/setupChainWorktree\(/g) || []).length, 5);
+  check('every door records the columns on the chain', (SRV.match(/\.applyChain\(\)/g) || []).length, 4);
+  check('and on its session', (SRV.match(/\.applySession\(/g) || []).length, 4);
+  // Members must inherit too, or they vanish from the project board — getTasks
+  // resolves a project with COALESCE(git_root, workdir). Three doors create their
+  // members inline; the REST door adds them through a separate endpoint, which
+  // carries the columns itself (pinned below).
+  check('members of the three inline doors inherit the tree',
+    (SRV.match(/_(m|d|wd)chain\.applyTask\(taskId\)/g) || []).length, 3);
+
+  // THE INVARIANT THIS BUNDLE EXISTS FOR. Without the !chain_id gate, member N
+  // merges and removes the tree, and member N+1 starts in a directory that is gone.
+  check('a chain member never merges on its own',
+    /if \(!task\.chain_id && task\.git_root && task\.git_branch\)/.test(SRV), true);
+  check('the chain merges in the allDone block instead',
+    /mergeBranch\(\{ projectDir: chain\.git_root/.test(SRV), true);
+  check('and commits first, or uncommitted member work is lost on removal',
+    SRV.indexOf('commitAll({ worktreeDir: chain.workdir') < SRV.indexOf('mergeBranch({ projectDir: chain.git_root'), true);
+
+  // The previous cycle's tree was merged and removed, so re-arming into it would
+  // point the whole next run at a directory that no longer exists.
+  // The function contains early-return guards at two-space indent, so slicing on the
+  // first "\n  }" cuts it off before the part being pinned. Slice to the NEXT
+  // top-level declaration instead.
+  const snStart = SRV.indexOf('function scheduleNextChainRun');
+  const snEnd = SRV.indexOf('\n  function processQueue(', snStart);
+  const snBody = SRV.slice(snStart, snEnd > snStart ? snEnd : snStart + 4000);
+  check('a recurring chain mints a NEW tree for the next cycle',
+    /setupUnitWorktree\('chain', `\$\{chain\.id\}-\$\{next\}`/.test(snBody), true);
+  check('the unit id carries the run, not just the chain id',
+    /\$\{chain\.id\}-\$\{next\}/.test(snBody), true);
+  check('and the members are re-armed into that tree, not the old one',
+    /UPDATE tasks SET status='todo'[^`]*workdir=\?/.test(snBody), true);
+  // Minting shells out to git; a transaction is not the place for that.
+  check('the tree is minted outside the transaction',
+    snBody.indexOf('setupUnitWorktree(') < snBody.indexOf('db.transaction('), true);
+}
+
+// The chain's own members must not keep its tree alive after it completes.
+console.log('\na completed chain does not hold its own tree hostage:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  const h = SRV.slice(SRV.indexOf('function _chainWorktreeStillInUse('));
+  const hBody = h.slice(0, h.indexOf('\n}\n') + 3);
+  check('the chain session does not count', /id !== chain\.session_id/.test(hBody), true);
+  check('nor do the chain members', /t\.chain_id !== chain\.id/.test(hBody), true);
+  check('and it fails safe like the others', /return true;\s*\n\s*\}/.test(hBody), true);
+}
+
+// Members must stay visible in their own project's board.
+console.log('\nchain members remain visible under their project:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  // `workdir` is the worktree once a chain is isolated, so a filter naming the
+  // project root stops matching unless git_root is present and COALESCEd.
+  check('members carry the chain git columns',
+    /setTaskGit\.run\(chain\.workdir, chain\.git_root, chain\.git_branch, taskId\)/.test(SRV), true);
+  check('the chain listing resolves the project the way the task listing does',
+    /task_chains WHERE \(@w IS NULL OR COALESCE\(git_root, workdir\) = @w\)/.test(SRV), true);
+  // Giving members git columns is only safe because BOTH the merge and the removal
+  // are gated on chain membership rather than on those columns being absent.
+  check('the per-task removal is gated on chain membership too',
+    /if \(task\.chain_id\) \{[\s\S]{0,400}?worktree kept — a chain member finished/.test(SRV), true);
+}
+
+// ── The chain merge must never destroy uncommitted member work ─────────────
+// The worst defect review found on this branch, and it was on the HAPPY path: a
+// swallowed commitAll failure meant the merge carried only what was already
+// committed and the removal deleted the rest, with force:true reporting nothing.
+console.log('\na failed commit stops the merge and the removal:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  const i2 = SRV.indexOf('let _committed = true;');
+  const win = i2 === -1 ? '' : SRV.slice(i2, i2 + 900);
+  check('the commit failure is captured, not swallowed', /catch \(e\) \{ _committed = false;/.test(win), true);
+  check('and the merge does not run without it', /_committed\s*\n?\s*\? await WM\.mergeBranch/.test(win), true);
+  check('a failed commit leaves the merge not-ok, so nothing is removed', /: \{ ok: false \}/.test(win), true);
+
+  // Re-arming over a conflict abandons a branch whose commits are real work.
+  check('recurrence re-arms only when the cycle landed', /chain\.recurrence && _chainLanded/.test(SRV), true);
+  check('and says so when it does not', /recurrence NOT re-armed/.test(SRV), true);
+
+  // The members carried the PREVIOUS cycle's branch name, so hasUnmergedWork()
+  // on a member delete inspected a branch that no longer owned that tree.
+  check('re-arm moves members onto the new branch, not just the new path',
+    /UPDATE tasks SET status='todo'[^`]*git_root=\?, git_branch=\?/.test(SRV), true);
+
+  // Degrading to the project root is only defensible for "no git here".
+  check('the WS door degrades only on GIT_UNAVAILABLE', /e\?\.code !== 'GIT_UNAVAILABLE'/.test(SRV), true);
+  check('and reports anything else instead of claiming success',
+    /Could not prepare an isolated worktree/.test(SRV), true);
+
+  // A parent got 403 on the result of the task it had just created.
+  check('both MCP project guards resolve through git_root',
+    (SRV.match(/git_root \|\| \w+\.workdir \|\| null\) !== \(task\.git_root/g) || []).length, 2);
 }
 
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
