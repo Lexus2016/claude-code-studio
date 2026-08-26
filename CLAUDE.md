@@ -412,6 +412,46 @@ is testable without booting anything:
   they fire only when a caller passes nothing at all, which is a different concern from
   a channel policy. Pinned by `test/chat-defaults-api.test.js`.
 
+### A chat's own dials (issue #81)
+
+`sessions` persisted `mode`/`agent_mode`/`model` and **not** `max_turns`/`effort`, so
+`loadSess()` had nothing to restore for those two: the turn budget fell back to the
+markup's `value="50"` and effort carried over from the previously open tab. Reported as
+"Kanban chats ignore the default" — incidental: a task's chat is an ordinary chat.
+Two columns (`ALTER TABLE`), with the #58 chain as the fallback when a chat stored none.
+
+- **The stored value and the CLI flag are different things.** `effort: 'auto'` means
+  "pass no `--effort`" and must survive a round trip through SQLite as the literal word;
+  `_effortFlag = chatDefaults.effortToFlag(effort) || null` is the single translation
+  point into the run options. Store the flag instead and Auto becomes indistinguishable
+  from unset, which is also what the client did until it started sending the sentinel.
+- **Every door that creates or copies a chat carries both.** New chat, fork, compact,
+  JSON import — plus the two REPLAY paths (idle-interrupt, `resume_interrupted`), which
+  rebuild run options from scratch and clobbered the dials the chat had just stored.
+- **Import sanitises; the others do not need to.** That JSON is a file the user picks,
+  so `max_turns: 900` arrives as easily as a real export and would reach the engine
+  verbatim. `chatDefaults.sanitize()`, lenient: a bad dial falls back to the default and
+  the rest of the import still lands.
+- **`loadSess()` has a safe zone, and it ends at the streaming-proxy reset.** The
+  function copies a background tab's accumulated stream into locals and *then* wipes the
+  proxy-backed state; only the restore block at the end puts it back. So an `await` added
+  past that point turns a tab switch into data loss — the early return drops the locals
+  on the floor. Both awaits (`_projectsReady`, `loadChatDefaults`) sit above it, each with
+  its own `if (id !== activeTabId) return`, next to the two original guards.
+- **An empty `projects` array is not "no project".** The boot fetch is fired without
+  await, so the first `loadSess()` after a hard refresh could `find` nothing, resolve
+  `_sessProj` to `null` and take the GLOBAL defaults row for a project-pinned chat —
+  the reported symptom, once per page load. `_projectsReady` holds that promise.
+- **One defaults cache, several callers → last caller wins.** `loadSess`,
+  `switchProject`, `newTab` and boot all write `_chatDefaults`. Without `_cdSeq` a slow
+  earlier response overwrites a newer one and tags the cache with a project that is no
+  longer open — self-consistent and wrong, and it repaints the badges to match.
+
+Pinned by `test/chat-defaults-api.test.js`. Two of those pins first passed **on a
+comment**: a needle like `streaming.txt = ''` matched the prose explaining the rule
+before it reached the statement. Structural pins there compare indices of the real
+statement, and the comments no longer spell it.
+
 ### Open in VS Code (issue #63)
 
 `editor-links.js` builds the links; `POST /api/editor/open` decides which of the two
