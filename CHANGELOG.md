@@ -1,5 +1,25 @@
 # Changelog
 
+## 7.12.1
+
+### English UI no longer shows Ukrainian (#75)
+
+- **The static markup was the untranslated default.** The SPA shipped Ukrainian as
+  the literal content of its HTML, with `data-i18n` attributes meant to replace it,
+  and `setLang()` runs at the very end of the file. Anything that stopped the script
+  before that — an error above it, a slow load — left every static string in
+  Ukrainian while the parts rendered through `t()` were already English. That is the
+  mixed-language UI in the report. 145 text nodes and 77 attributes now ship English.
+- **Ten inline fallbacks read `t('key') || '<Ukrainian>'`** — a fallback that fires
+  exactly when the key is missing, which is when the user is least likely to read
+  that language.
+- **Fallback is now English-first, per key.** `t()` resolved per LANGUAGE: a key
+  missing from a *known* language rendered the raw key (`proj.empty`) into the UI.
+  Both `t()` and `setLang()` now go language → English → key.
+- `i18n-completeness` gains the check that would have caught this — no Cyrillic text
+  nodes, UI attributes or inline fallbacks outside the dictionaries. No dictionary
+  check could see it: every key was present in all five languages.
+
 ## 7.12.0
 
 Worktree isolation reaches every door that creates a unit of work, and a worktree
