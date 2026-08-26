@@ -8043,6 +8043,12 @@ app.post('/api/sessions/import', (req, res) => {
       // import deliberately does NOT mint a worktree, because nothing has run in it yet.
       session.git_root || session.workdir || null
     );
+    // Same as fork and compact: an import carries the dials it was exported with.
+    // createSession only knows mode/agent/model, so without this an imported chat
+    // opens on the configured default and the exported values are lost.
+    if (session.max_turns != null || session.effort != null) {
+      try { db.prepare(`UPDATE sessions SET max_turns=?, effort=? WHERE id=?`).run(session.max_turns ?? null, session.effort ?? null, newId); } catch {}
+    }
     const importMsg = db.prepare('INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,created_at) VALUES (?,?,?,?,?,?,?,?,COALESCE(?,CURRENT_TIMESTAMP))');
     const limit = Math.min(messages.length, 2000);
     // reply_to_id holds row ids from the SOURCE database. Inserting them verbatim

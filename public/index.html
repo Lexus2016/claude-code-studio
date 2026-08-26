@@ -12942,6 +12942,12 @@ async function loadSess(id) {
       const _sessProj = (projects.find(p => p.workdir === (d.git_root || d.workdir)) || {}).id || null;
       if (!_chatDefaults || _chatDefaultsProj !== _sessProj) {
         try { await loadChatDefaults(_sessProj); } catch {}
+        // Re-check the tab. This await was added after the two guards above, so
+        // without it a switch during the fetch lets the REST of loadSess run for a
+        // session that is no longer active — the toolbar, curProjectId, the
+        // transcript render, and worst of all the `resume_task` frame at the end.
+        // A cache hit skips the await entirely, so this only matters on a miss.
+        if (id !== activeTabId) return;
       }
       const _cd = _chatDefaults && _chatDefaults.effective;
       const mt = $i('maxTurns');
