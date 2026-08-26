@@ -4257,6 +4257,22 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <label data-i18n="dlg.agent">Agent</label>
         <div class="dlg-agent-cards" id="dlgAgentCards"></div>
       </div>
+      <!-- Shown only when the SELECTED agent declares a catalog. These are different
+           CLIs — "opus" means nothing to codex — so the options come from
+           config.externalAgents[<id>].models / .efforts, never from a list baked in
+           here that would go stale the moment a model is renamed. -->
+      <div class="form-row hidden" id="dlgTuningRow">
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="hidden" id="dlgModelWrap" style="flex:1;min-width:150px">
+            <label data-i18n="dlg.model">Model</label>
+            <select id="dlgModel" class="inp"></select>
+          </div>
+          <div class="hidden" id="dlgEffortWrap" style="flex:1;min-width:150px">
+            <label data-i18n="dlg.effort">Reasoning effort</label>
+            <select id="dlgEffort" class="inp"></select>
+          </div>
+        </div>
+      </div>
       <div class="cmd-field">
         <label data-i18n="dlg.mode">Mode</label>
         <div class="dlg-mode-cards">
@@ -4664,6 +4680,7 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    'dlg.model':'Модель','dlg.effort':'Рівень міркування','dlg.tuning.default':'За замовчуванням',
     /* settings form (issue #40) */
     'cfg.tab.form':'⚙ Параметри',
     'cfg.search.ph':'Пошук параметра…',
@@ -5066,6 +5083,7 @@ const TRANSLATIONS = {
     'upd.available':'Доступне оновлення','upd.btn':'Оновити','upd.updating':'Оновлення… {time}','upd.copy_cmd':'Копіювати команду','upd.via_terminal':'Оновлення через термінал:','upd.copied':'Скопійовано ✓','upd.retry':'Повторити','upd.failed':'Оновлення не вдалося','upd.new_version':'Доступна нова версія {version}',
   },
   en: {
+    'dlg.model':'Model','dlg.effort':'Reasoning effort','dlg.tuning.default':'Default',
     /* settings form (issue #40) */
     'cfg.tab.form':'⚙ Settings',
     'cfg.search.ph':'Search settings…',
@@ -5468,6 +5486,7 @@ const TRANSLATIONS = {
     'upd.available':'Update available','upd.btn':'Update','upd.updating':'Updating… {time}','upd.copy_cmd':'Copy command','upd.via_terminal':'Update via Terminal:','upd.copied':'Copied ✓','upd.retry':'Retry','upd.failed':'Update failed','upd.new_version':'New version {version} available',
   },
   ru: {
+    'dlg.model':'Модель','dlg.effort':'Уровень рассуждений','dlg.tuning.default':'По умолчанию',
     /* settings form (issue #40) */
     'cfg.tab.form':'⚙ Параметры',
     'cfg.search.ph':'Поиск параметра…',
@@ -5870,6 +5889,7 @@ const TRANSLATIONS = {
     'upd.available':'Доступно обновление','upd.btn':'Обновить','upd.updating':'Обновление… {time}','upd.copy_cmd':'Копировать команду','upd.via_terminal':'Обновление через терминал:','upd.copied':'Скопировано ✓','upd.retry':'Повторить','upd.failed':'Обновление не удалось','upd.new_version':'Доступна новая версия {version}',
   },
   fr: {
+    'dlg.model':'Modèle','dlg.effort':'Niveau de raisonnement','dlg.tuning.default':'Par défaut',
     /* settings form (issue #40) */
     'cfg.tab.form':'⚙ Paramètres',
     'cfg.search.ph':'Rechercher un paramètre…',
@@ -6172,6 +6192,7 @@ const TRANSLATIONS = {
     "upd.available":"Mise à jour disponible","upd.btn":"Mettre à jour","upd.updating":"Mise à jour… {time}","upd.copy_cmd":"Copier la commande","upd.via_terminal":"Mise à jour via le terminal :","upd.copied":"Copié ✓","upd.retry":"Réessayer","upd.failed":"Échec de la mise à jour","upd.new_version":"Nouvelle version {version} disponible",
   },
   he: {
+    'dlg.model':'מודל','dlg.effort':'רמת חשיבה','dlg.tuning.default':'ברירת מחדל',
     /* settings form (issue #40) */
     'cfg.tab.form':'⚙ הגדרות',
     'cfg.search.ph':'חיפוש הגדרה…',
@@ -17114,6 +17135,7 @@ function openDelegateModal() {
         card.onclick = () => {
           container.querySelectorAll('.dlg-agent-card').forEach(c => c.classList.remove('selected'));
           card.classList.add('selected');
+          _dlgFillTuning(cfg);
         };
         const icon = document.createElement('span');
         icon.className = 'dlg-agent-icon';
@@ -17127,8 +17149,44 @@ function openDelegateModal() {
       }
     }
     $i('dlgTask').value = '';
+    _dlgFillTuning(null); // nothing picked yet — no catalog to show
     openModalOverlay('delegateModal', { onEscape: closeDelegateModal });
   });
+}
+
+/** Populate Model / Reasoning-effort for the agent just picked.
+ *
+ *  Options come from that agent's own config (`models`, `efforts`) — never a list
+ *  hardcoded here. These are different CLIs: "opus" means nothing to codex, and a
+ *  baked-in list goes stale the moment a model is renamed. An agent that declares
+ *  nothing shows no select, which is honest — the studio does not know what that CLI
+ *  accepts. The template decides too: without a `{model}` placeholder the value has
+ *  nowhere to go, so offering the choice would be a lie.
+ */
+function _dlgFillTuning(cfg) {
+  const tpl = String(cfg?.template || '');
+  const fill = (selId, wrapId, values, placeholder) => {
+    const sel = $i(selId), wrap = $i(wrapId);
+    if (!sel || !wrap) return false;
+    const list = Array.isArray(values) ? values.filter(v => typeof v === 'string' && v.trim()) : [];
+    const usable = list.length > 0 && tpl.includes('{' + placeholder + '}');
+    sel.textContent = '';
+    if (usable) {
+      const auto = document.createElement('option');
+      auto.value = ''; auto.textContent = t('dlg.tuning.default');
+      sel.appendChild(auto);
+      for (const v of list) {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v;
+        sel.appendChild(o);
+      }
+    }
+    wrap.classList.toggle('hidden', !usable);
+    return usable;
+  };
+  const m = fill('dlgModel', 'dlgModelWrap', cfg?.models, 'model');
+  const e = fill('dlgEffort', 'dlgEffortWrap', cfg?.efforts, 'effort');
+  $i('dlgTuningRow')?.classList.toggle('hidden', !(m || e));
 }
 
 function closeDelegateModal() {
@@ -17147,7 +17205,7 @@ async function submitDelegation() {
     const r = await fetch('/api/delegate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentId, mode, task, sessionId: currentSessionId }),
+      body: JSON.stringify({ agentId, mode, task, sessionId: currentSessionId, model: $i('dlgModel')?.value || undefined, effort: $i('dlgEffort')?.value || undefined }),
     });
     const d = await r.json();
     if (!r.ok) { toast(d.error || t('dlg.toast.fail').replace('{err}', ''), true); return; }

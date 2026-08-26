@@ -195,5 +195,42 @@ check('missing template degrades to a bare cd', () => {
   });
 }
 
+// ── {model} / {effort}: present when chosen, GONE when not (#76) ───────────
+// A template that writes `--model {model}` must not become `--model ` when the
+// user picked nothing — the CLI would read the next token (the prompt) as the
+// model name. The flag has to disappear together with the value.
+const TPL76 = { template: 'claude --model {model} --effort {effort} {prompt}' };
+const body76 = (c) => c.split('&& ')[1];
+
+check('{model}/{effort} are substituted and shell-escaped', () => {
+  assert.strictEqual(body76(buildTerminalCommand(TPL76, '/w', 'hi', 'linux', { model: 'opus', effort: 'high' })),
+    "claude --model 'opus' --effort 'high' 'hi'");
+});
+
+check('nothing chosen — the FLAGS disappear, not just the placeholders', () => {
+  assert.strictEqual(body76(buildTerminalCommand(TPL76, '/w', 'hi', 'linux', {})), "claude 'hi'");
+});
+
+check('one chosen — only the other flag disappears', () => {
+  assert.strictEqual(body76(buildTerminalCommand(TPL76, '/w', 'hi', 'linux', { model: 'opus' })), "claude --model 'opus' 'hi'");
+});
+
+check('a template without placeholders is untouched', () => {
+  assert.strictEqual(body76(buildTerminalCommand({ template: 'codex {prompt}' }, '/w', 'hi', 'linux', { model: 'opus' })), "codex 'hi'");
+});
+
+// Every caller written before #76 passes no opts at all.
+check('no opts behaves exactly like nothing chosen', () => {
+  assert.strictEqual(body76(buildTerminalCommand(TPL76, '/w', 'hi', 'linux')), "claude 'hi'");
+});
+
+// Same rule as {prompt}: these arrive in an HTTP body.
+check('a hostile model name cannot break out of its quotes', () => {
+  const q = String.fromCharCode(39);
+  const out = body76(buildTerminalCommand(TPL76, '/w', 'hi', 'linux', { model: q + '; rm -rf /; ' + q }));
+  assert.ok(out.includes('rm -rf'), 'the value survives');
+  assert.ok(!/^[^']*; rm/.test(out), 'but never as an unquoted command');
+});
+
 if (failed) { console.log(`\n${failed} test(s) failed`); process.exit(1); }
 console.log('\nAll delegate-terminal tests passed');

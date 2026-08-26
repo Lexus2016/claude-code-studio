@@ -10350,8 +10350,8 @@ function readDialog(delegationDir) {
   try { return fs.readFileSync(dialogPath, 'utf-8'); } catch { return ''; }
 }
 
-function buildTerminalCommand(agentConfig, workdir, prompt) {
-  return buildDelegateCommand(agentConfig, workdir, prompt, os.platform());
+function buildTerminalCommand(agentConfig, workdir, prompt, opts = {}) {
+  return buildDelegateCommand(agentConfig, workdir, prompt, os.platform(), opts);
 }
 
 function openTerminal(shellCommand) {
@@ -10729,9 +10729,18 @@ app.delete('/api/external-agents/:id', (req, res) => {
 // --- Delegation API ---
 
 app.post('/api/delegate', express.json(), (req, res) => {
-  const { agentId, mode, task, sessionId } = req.body;
+  const { agentId, mode, task, sessionId, model, effort } = req.body;
   if (!agentId || !task) return res.status(400).json({ error: 'agentId and task required' });
   if (!/^[a-zA-Z0-9_-]+$/.test(agentId)) return res.status(400).json({ error: 'Invalid agentId' });
+  // model/effort end up inside a shell command, so they are validated at the door
+  // rather than left to shellEscape alone — the same reason agentId is. The catalog
+  // is per-agent (config.externalAgents[id].models / .efforts): these are different
+  // CLIs, and what Claude calls "opus" means nothing to codex.
+  for (const [name, val] of [['model', model], ['effort', effort]]) {
+    if (val !== undefined && val !== null && val !== '' && !/^[a-zA-Z0-9._-]{1,40}$/.test(String(val))) {
+      return res.status(400).json({ error: `Invalid ${name}` });
+    }
+  }
 
   const config = loadConfig();
   const agentConfig = config.externalAgents[agentId];
@@ -10796,7 +10805,7 @@ app.post('/api/delegate', express.json(), (req, res) => {
   }
 
   // 5. Open terminal with the agent
-  const shellCommand = buildTerminalCommand(agentConfig, workdir, agentPrompt);
+  const shellCommand = buildTerminalCommand(agentConfig, workdir, agentPrompt, { model, effort });
   const termResult = openTerminal(shellCommand);
 
   if (!termResult.ok) {
