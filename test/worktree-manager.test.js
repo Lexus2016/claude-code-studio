@@ -354,10 +354,10 @@ console.log('\na shared worktree is not removed while another session uses it:')
   const win = i === -1 ? '' : SRV.slice(Math.max(0, i - 1200), i);
   // force:true means a removal that should not have happened reports no error at all,
   // so the guard has to come BEFORE the call rather than being cleaned up after.
-  check('the delete path counts other sessions on the same workdir first',
-    /FROM sessions WHERE workdir=\? AND id<>\?/.test(win), true);
-  check('and the count is read before removeWorktree, not after',
-    win.indexOf('FROM sessions WHERE workdir=?') < win.indexOf('WM.removeWorktree'), true);
+  check('the delete path asks whether the worktree is still in use',
+    /_worktreeStillInUse\(sessRow\.workdir/.test(win), true);
+  check('and asks before removeWorktree, not after',
+    win.indexOf('_worktreeStillInUse(') < win.indexOf('WM.removeWorktree'), true);
 }
 
 // ── Telegram is the third write channel, and it inserts its own SQL ─────────
@@ -373,8 +373,16 @@ console.log('\nTelegram creators are isolated through an injected policy:');
   const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
 
   // Six creators: five sessions and one task.
+  const FORUM = fs2.readFileSync(path2.join(__dirname, '..', 'telegram-bot-forum.js'), 'utf8');
   const calls = (TB.match(/this\._isolate\(/g) || []).length;
-  check('every Telegram creator calls the isolation hook', calls, 6);
+  check('every direct Telegram creator calls the isolation hook', calls, 6);
+  // Forum topics create through the SHARED prepared statements on the facade, so
+  // they bypass _isolate() entirely unless the hook travels with them. A count of
+  // six looked complete and hid three creators in the other file.
+  check('the facade carries the hook', /isolate: this\._isolate\.bind\(this\)/.test(TB), true);
+  check('every forum creator uses it', (FORUM.match(/_api\.isolate\?\./g) || []).length, 3);
+  check('and none of them is duplicated',
+    !/isolate\?\.\([^)]*\);\s*\n\s*this\._api\.isolate\?\./.test(FORUM), true);
   check('sessions and tasks are told apart',
     /_isolate\('session'/.test(TB) && /_isolate\('task'/.test(TB), true);
 
@@ -398,22 +406,39 @@ console.log('\nTelegram creators are isolated through an injected policy:');
   check('and for a session', /setSessionGit\.run/.test(injBody), true);
 }
 
-// MCP-created tasks are live writers, exactly like POST /api/tasks.
-console.log('\nan MCP-created task gets its own worktree:');
+// MCP create_task deliberately does NOT mint a worktree.
+// Review showed minting there ARMS the auto-merge in startTask (it keys on
+// git_root+git_branch, which were NULL for MCP children), walks past the chain
+// workdir lock, and breaks get_task_result/cancel_task, which still compare a raw
+// workdir where list_tasks already uses COALESCE. It belongs to the chain bundle.
+console.log('\nMCP create_task stays unisolated, on purpose:');
 {
   const fs2 = require('fs'), path2 = require('path');
   const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
-  const i2 = SRV.indexOf('let _mwt = null;');
-  // 1800, measured: setTaskGit lands 1377 chars in and the line itself is long.
-  // There is no second _mwt block in the file, so a wider window cannot catch a
-  // neighbouring one by accident.
+  const i2 = SRV.indexOf("const workdir = callerTask?.git_root || callerTask?.workdir || null;");
   const win = i2 === -1 ? '' : SRV.slice(i2, i2 + 1800);
-  check('it calls setupUnitWorktree', /setupUnitWorktree\('task', id, workdir\)/.test(win), true);
-  check('the row stores the worktree, not the project root', /_mwt \? _mwt\.workdir : workdir/.test(win), true);
-  check('and its git columns are recorded', /setTaskGit\.run\(_mwt\.workdir/.test(win), true);
-  // This is an MCP tool call: a bare throw answers the model with a stack trace.
-  check('GIT_UNAVAILABLE is reported as a result, not thrown',
-    /GIT_UNAVAILABLE.*\n.*res\.json\(\{ ok: false/.test(win) || /ok: false, error: e\.message/.test(win), true);
+  check('it inherits the caller PROJECT, never the caller worktree',
+    /callerTask\?\.git_root \|\| callerTask\?\.workdir/.test(win), true);
+  check('and does not mint a worktree', /setupUnitWorktree/.test(win), false);
+  check('the reason is recorded where the next person will look',
+    /chain bundle|auto-merge/.test(win), true);
+}
+
+// Every removal site refcounts, and counts BOTH tables.
+console.log('\nno worktree is removed while another unit lives in it:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  check('the rule exists once', (SRV.match(/function _worktreeStillInUse/g) || []).length, 1);
+  const h = SRV.slice(SRV.indexOf('function _worktreeStillInUse'));
+  const hBody = h.slice(0, h.indexOf('\n}\n') + 3);
+  // Counting only sessions missed the case that destroys work: a RECURRING task
+  // survives its session's deletion and its auto-merge is skipped, so the worktree
+  // is its live cwd.
+  check('it counts sessions', /FROM sessions WHERE workdir=/.test(hBody), true);
+  check('and tasks', /FROM tasks\s+WHERE workdir=/.test(hBody), true);
+  // Three removal sites: session delete, task delete, bulk session delete.
+  check('every removal site is guarded', (SRV.match(/_worktreeStillInUse\(/g) || []).length, 4);
 }
 
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);

@@ -3481,6 +3481,27 @@ function setupUnitWorktree(kind, unitId, requestedWorkdir) {
   }
 }
 
+/** Is this worktree still someone else's working directory?
+ *
+ *  A worktree is shared more often than it looks: a compact continues its origin's
+ *  tree, and startTask()'s sidecar session runs in the TASK's tree. Removing it
+ *  because one holder was deleted strands the others — and `force: true` means that
+ *  removal reports no error at all, so the check has to happen before the call.
+ *
+ *  Both tables are counted. Counting only `sessions` missed the case that actually
+ *  destroys work: a recurring task SURVIVES the deletion of its session (the row is
+ *  unlinked, not deleted) and its auto-merge is deliberately skipped, so that
+ *  worktree is its live cwd.
+ */
+function _worktreeStillInUse(workdir, { exceptSession = null, exceptTask = null } = {}) {
+  if (!workdir) return false;
+  try {
+    const s = db.prepare(`SELECT COUNT(*) c FROM sessions WHERE workdir=? AND id<>COALESCE(?, '')`).get(workdir, exceptSession).c;
+    const t = db.prepare(`SELECT COUNT(*) c FROM tasks    WHERE workdir=? AND id<>COALESCE(?, '')`).get(workdir, exceptTask).c;
+    return (s + t) > 0;
+  } catch { return false; }
+}
+
 /** Worktree isolation for units Telegram creates with direct SQL.
  *
  *  telegram-bot.js does not require server.js — it takes its dependencies through the
@@ -5470,22 +5491,19 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         const callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
         const workdir = callerTask?.git_root || callerTask?.workdir || null;
 
+        // NOT isolated, and that is a decision rather than an omission. Minting a
+        // worktree here writes git_root/git_branch onto the row, and those two columns
+        // are what ARM the auto-merge in startTask (server.js ~2137) — which never ran
+        // for MCP children before, because they were NULL. A unique worktree also walks
+        // straight past the chain workdir lock (~2449), so a chain created through MCP
+        // would start its members in parallel while auto-merge writes into git_root
+        // underneath them. And `get_task_result`/`cancel_task` still compare a RAW
+        // workdir (~5711) where `list_tasks` already uses COALESCE(git_root, workdir),
+        // so a parent would get 403 on the result of the task it just created.
+        // This belongs to the chain bundle, which moves as one piece or not at all.
         const id = genId();
         const contextJson = context ? (typeof context === 'string' ? context : JSON.stringify(context)).substring(0, 10000) : null;
         const depsJson = depends_on ? JSON.stringify(depends_on) : null;
-
-        // An MCP-created task is a live writer, exactly like one created through
-        // POST /api/tasks — so it gets its OWN worktree from the project root rather
-        // than running in whatever tree the caller happens to occupy. Without this it
-        // shared the caller's working copy and branch, which is the state isolation
-        // exists to prevent. GIT_UNAVAILABLE is reported rather than thrown: this is
-        // an MCP tool call, and a bare throw here answers the model with a stack.
-        let _mwt = null;
-        try { _mwt = setupUnitWorktree('task', id, workdir); }
-        catch (e) {
-          if (e.code === 'GIT_UNAVAILABLE') return res.json({ ok: false, error: e.message });
-          throw e;
-        }
 
         stmts.createTask.run(
           id, String(title).substring(0, 200), String(description).substring(0, 2000),
@@ -5493,7 +5511,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           'todo', // status — immediately eligible for processQueue
           0,  // sort_order
           (chain_id ? callerTask?.session_id : null) || null, // session_id — only inherit for chain tasks
-          _mwt ? _mwt.workdir : workdir,
+          workdir,
           model || callerTask?.model || 'sonnet',
           mode || callerTask?.mode || 'auto',
           agent_mode || callerTask?.agent_mode || 'single',
@@ -5510,7 +5528,6 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         ,
           botsLogic.inheritBotId(callerTask)  // bot_id: a bot's subtask stays that bot's
         );
-        if (_mwt) stmts.setTaskGit.run(_mwt.workdir, _mwt.git_root, _mwt.git_branch, id);
 
         // Set new columns that aren't in createTask prepared statement
         stmts.setTaskContext.run(contextJson, callerTaskId || null, id);
@@ -6838,7 +6855,11 @@ app.delete('/api/tasks/:id', (req, res) => {
   // user asked for by deleting the task — mirrors the session delete guard's
   // ?force bypass, not a silent skip of it.
   if (task?.git_root && task?.workdir) {
-    try { WM.removeWorktree({ projectDir: task.git_root, worktreeDir: task.workdir, branch: task.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on task delete', { tid, err: e.message }); }
+    if (_worktreeStillInUse(task.workdir, { exceptTask: tid })) {
+      log.info('worktree kept on task delete — still in use', { tid, workdir: task.workdir });
+    } else {
+      try { WM.removeWorktree({ projectDir: task.git_root, worktreeDir: task.workdir, branch: task.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on task delete', { tid, err: e.message }); }
+    }
   }
   res.json({ ok: true });
 });
@@ -7988,10 +8009,8 @@ app.delete('/api/sessions/:id', (req,res) => {
     // conversation in place) shares one worktree with the session it came from.
     // Removing it because ONE of them was deleted strands the other in a directory
     // that is gone — with `force: true` there is not even an error to notice.
-    let _sharers = 0;
-    try { _sharers = db.prepare(`SELECT COUNT(*) c FROM sessions WHERE workdir=? AND id<>?`).get(sessRow.workdir, sid).c; } catch {}
-    if (_sharers > 0) {
-      log.info('worktree kept — still in use by another session', { sid, workdir: sessRow.workdir, sharers: _sharers });
+    if (_worktreeStillInUse(sessRow.workdir, { exceptSession: sid })) {
+      log.info('worktree kept — still in use by another unit', { sid, workdir: sessRow.workdir });
     } else {
       try { WM.removeWorktree({ projectDir: sessRow.git_root, worktreeDir: sessRow.workdir, branch: sessRow.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on session delete', { sid, err: e.message }); }
     }
@@ -8044,7 +8063,13 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
   // Never a bare rm -rf — always through git so .git/worktrees/<name> never goes stale.
   for (const s of sessRows) {
     if (s.git_root && s.workdir) {
-      try { WM.removeWorktree({ projectDir: s.git_root, worktreeDir: s.workdir, branch: s.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on bulk delete', { sid: s.id, err: e.message }); }
+      // Same rule as the single delete. Before compact inherited git_root a bulk
+      // delete could not reach a shared tree at all; now it can, so it needs the guard.
+      if (_worktreeStillInUse(s.workdir, { exceptSession: s.id })) {
+        log.info('worktree kept on bulk delete — still in use', { sid: s.id, workdir: s.workdir });
+      } else {
+        try { WM.removeWorktree({ projectDir: s.git_root, worktreeDir: s.workdir, branch: s.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on bulk delete', { sid: s.id, err: e.message }); }
+      }
     }
   }
   const del = db.transaction(() => {

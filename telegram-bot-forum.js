@@ -783,6 +783,8 @@ class TelegramBotForum {
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
     this._api.stmts.insertSession.run(id, 'Telegram Session', workdir);
+    // Same write channel as a plain Telegram chat — see telegram-bot.js:_isolate.
+    this._api.isolate?.('session', id, workdir);
 
     ctx.sessionId = id;
     ctx.projectWorkdir = workdir;
@@ -1436,6 +1438,7 @@ class TelegramBotForum {
       const workdir = ctx.projectWorkdir || null;
 
       this._api.stmts.insertTask.run(id, title, workdir);
+      this._api.isolate?.('task', id, workdir);
 
       const workdirLine = workdir ? `\n📁 ${this._api.escHtml(workdir.split('/').filter(Boolean).pop())}` : '';
       const newTask = { id, title, status: 'backlog' };
@@ -1462,6 +1465,7 @@ class TelegramBotForum {
         const workdir = ctx.projectWorkdir || null;
 
         this._api.stmts.insertTask.run(id, title, workdir);
+        this._api.isolate?.('task', id, workdir);
 
         const workdirLine = workdir ? `\n📁 ${this._api.escHtml(workdir.split('/').filter(Boolean).pop())}` : '';
         const newTask = { id, title, status: 'backlog' };

@@ -173,6 +173,9 @@ class TelegramBot extends EventEmitter {
       chunkForTelegram: this._chunkForTelegram.bind(this),
       timeAgo: this._timeAgo.bind(this),
       stmts: this._stmts,
+      // Forum topics create sessions and tasks through the shared prepared statements
+      // above, so they bypass _isolate() entirely unless the hook travels with them.
+      isolate: this._isolate.bind(this),
       emit: this.emit.bind(this),
       getDirectContext: this._getContext.bind(this),
       saveDeviceContext: this._saveDeviceContext.bind(this),
