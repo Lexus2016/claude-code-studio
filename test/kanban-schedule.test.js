@@ -119,8 +119,47 @@ console.log('\nKanban task run settings remain editable:');
 
   // model is the one dial the session wins on (`session?.model || task.model`),
   // so the form has to say that rather than imply the change takes effect now.
-  check('the note explains what model does on an existing session',
+  check('the form carries a note about when the settings take effect',
     /modal\.task_cfg_note/.test(form), true);
+}
+
+// ── Which dial reaches which engine — read from the code, not guessed ──────
+// Three attempts at wording this note were each factually wrong, because the two
+// engines take DIFFERENT subsets and no single sentence covered both. The note now
+// says only what is always true; this pins the underlying matrix so the next person
+// reads it instead of guessing, and notices if a run path starts or stops
+// forwarding one of these.
+console.log('\nwhich task dials each run path actually receives:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  const i2 = SRV.indexOf('async function startTask(task)');
+  const seg = SRV.slice(i2, i2 + 20000);
+  const callArgs = (needle) => {
+    const k = seg.indexOf(needle);
+    if (k === -1) return '';
+    let d = 0, j = k + needle.length;
+    for (; j < seg.length; j++) {
+      const c = seg[j];
+      if (c === '(') d++;
+      else if (c === ')') { if (d === 0) break; d--; }
+    }
+    return seg.slice(k, j);
+  };
+  const api = callArgs('cli.send(');
+  const sub = callArgs('runInteractiveSingle(');
+  const has = (call, key) => new RegExp('[\\s{,]' + key + '\\s*:').test(call);
+
+  // The API path is where turns and effort live.
+  check('API run receives maxTurns', has(api, 'maxTurns'), true);
+  check('API run receives effort', has(api, 'effort'), true);
+  check('API run does NOT receive mode', has(api, 'mode'), false);
+  // The subscription path is the mirror image.
+  check('subscription run receives mode', has(sub, 'mode'), true);
+  check('subscription run does NOT receive maxTurns', has(sub, 'maxTurns'), false);
+  check('subscription run does NOT receive effort', has(sub, 'effort'), false);
+  // agent_mode reaches neither: it is read only when the session is first created.
+  check('neither run path receives agentMode', has(api, 'agentMode') || has(sub, 'agentMode'), false);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
