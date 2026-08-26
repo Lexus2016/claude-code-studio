@@ -322,5 +322,50 @@ console.log('\nno hardcoded user-facing strings:');
   }
 }
 
+// ── The SPA's own markup must be ENGLISH ───────────────────────────────────
+// Issue #75: the static HTML shipped Ukrainian, and setLang() runs at the very end
+// of the file. Anything that stopped the script before it — an error, a slow load,
+// a browser that ran the tail late — left the interface in a language nobody had
+// chosen, while the parts rendered through t() were already English. That is the
+// "mixed language" in the report, and no dictionary check could see it: every key
+// was present in all five languages. The markup itself was the bug.
+console.log('\nthe SPA markup ships English, not a translation:');
+{
+  const CYR = /[\u0400-\u04FF]/;
+  // Everything except the TRANSLATIONS object, which is Cyrillic by definition.
+  const tStart = html.indexOf('const TRANSLATIONS = {');
+  const heStart = html.indexOf('\n  he: {', tStart);
+  const tEnd = html.indexOf('\n  };', heStart);
+  const outside = html.slice(0, tStart) + html.slice(tEnd);
+
+  const textNodes = [...outside.matchAll(/>([^<>]{2,120})</g)]
+    .map(m => m[1]).filter(v => CYR.test(v)).map(v => v.trim().slice(0, 50));
+  check('no Cyrillic text nodes in the markup', textNodes, []);
+
+  const attrs = [...outside.matchAll(/(?:data-tip|title|placeholder|aria-label)="([^"]{2,120})"/g)]
+    .map(m => m[1]).filter(v => CYR.test(v)).map(v => v.slice(0, 50));
+  check('no Cyrillic UI attributes in the markup', attrs, []);
+
+  // `t('k') || 'Не знайдено'` — a fallback that fires exactly when the key is
+  // missing, i.e. precisely when the user is most likely not to read that language.
+  const fallbacks = [...outside.matchAll(/t\([^)]*\)\s*\|\|\s*'([^']{2,60})'/g)]
+    .map(m => m[1]).filter(v => CYR.test(v));
+  check('no Cyrillic inline fallbacks', fallbacks, []);
+}
+
+console.log('\nboth translation paths fall back to English:');
+{
+  // A key missing from a KNOWN language used to return the raw key, so the UI showed
+  // "proj.empty" instead of the English string.
+  const tFn = html.slice(html.indexOf('function t(key) {'));
+  const tBody = tFn.slice(0, tFn.indexOf('\n}') + 2);
+  check('t() prefers the language, then English, then the key',
+    /TRANSLATIONS\[lang\]\?\.\[key\] \?\? TRANSLATIONS\.en\?\.\[key\] \?\? key/.test(tBody), true);
+  const sl = html.slice(html.indexOf('function setLang(lang, persist = true) {'));
+  const slBody = sl.slice(0, sl.indexOf('\n}') + 2);
+  check('setLang() falls back per KEY, not per language',
+    /TRANSLATIONS\.en\?\.\[k\]/.test(slBody), true);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
