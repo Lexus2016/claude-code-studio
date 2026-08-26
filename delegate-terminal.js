@@ -124,7 +124,10 @@ function buildTerminalCommand(agentConfig, workdir, prompt, platform, opts = {})
         if (out.length) out.push(' ');
       }
     }
-    cmd = out.join('').replace(/\s+/g, ' ').trim();
+    // No global whitespace squeeze: the drop path already inserts exactly one space
+    // where a token was removed, and collapsing the WHOLE command would rewrite
+    // spacing the template author meant to keep — `--system "a  b"` is a real thing.
+    cmd = out.join('').trim();
   }
   cmd = cmd.replace('{prompt}', shellEscape(prompt, platform));
   // Not every agent CLI accepts a --cwd flag, so always cd into the workdir first

@@ -266,6 +266,16 @@ check('a quoted placeholder does not nest quotes around the value', () => {
   }
 });
 
+// The first token-wise version squeezed ALL whitespace after substituting, which
+// rewrites spacing a template author meant to keep. The drop path already inserts
+// exactly one space where a token was removed, so the squeeze was never needed.
+check('spacing elsewhere in the template survives', () => {
+  assert.strictEqual(
+    buildTerminalCommand({ template: 'claude --system "a  b" --model {model} {prompt}' },
+      '/w', 'hi', 'linux', { model: 'opus' }).split('&& ')[1],
+    "claude --system \"a  b\" --model 'opus' 'hi'");
+});
+
 check('dropping one placeholder leaves the others intact', () => {
   const tpl = 'claude --model {model} --effort {effort} -p {prompt}';
   assert.strictEqual(
