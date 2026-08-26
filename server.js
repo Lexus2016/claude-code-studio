@@ -2937,7 +2937,13 @@ function buildSessionReplayContent(sessionId) {
 // has no --session-id / --resume: it uses the `codex resume <id>` subcommand). A
 // user whose CLI version differs edits these in the agent settings.
 const DEFAULT_EXTERNAL_AGENTS = {
-  claude:       { label: 'Claude Code',    interactive: 'claude',       newIdFlag: '--session-id {sid}', resume: 'claude --resume {sid}',       resumeLast: 'claude --continue' },
+  // `models` / `efforts` are the catalogs the delegate modal offers, and the ONLY
+  // values the endpoint will accept — the check is an allow-list, not a charset,
+  // because with a bare `{model}` in a template any well-formed string arrives as
+  // its own argv entry and could be a flag. A CLI with no catalog here simply
+  // offers no choice, which is honest: the studio does not know what it takes.
+  claude:       { label: 'Claude Code',    template: 'claude --model {model} --effort {effort} -p {prompt}', interactive: 'claude', newIdFlag: '--session-id {sid}', resume: 'claude --resume {sid}', resumeLast: 'claude --continue',
+                  models: ['haiku', 'sonnet', 'opus', 'fable'], efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
   codex:        { label: 'OpenAI Codex',   template: 'codex {prompt}',        interactive: 'codex',        resume: 'codex resume {sid}',        resumeLast: 'codex resume --last' },
   grok:         { label: 'Grok CLI',       interactive: 'grok',         newIdFlag: '-s {sid}',          resume: 'grok --resume {sid}',         resumeLast: 'grok --continue' },
   agy:          { label: 'Antigravity CLI', template: 'agy -i {prompt}',      interactive: 'agy',          resume: 'agy --conversation {sid}',  resumeLast: 'agy --continue' },
@@ -10350,8 +10356,8 @@ function readDialog(delegationDir) {
   try { return fs.readFileSync(dialogPath, 'utf-8'); } catch { return ''; }
 }
 
-function buildTerminalCommand(agentConfig, workdir, prompt) {
-  return buildDelegateCommand(agentConfig, workdir, prompt, os.platform());
+function buildTerminalCommand(agentConfig, workdir, prompt, opts = {}) {
+  return buildDelegateCommand(agentConfig, workdir, prompt, os.platform(), opts);
 }
 
 function openTerminal(shellCommand) {
@@ -10678,6 +10684,8 @@ app.post('/api/external-agents', express.json(), (req, res) => {
   // never wipes the other half.
   const prev = config.externalAgents[id] || {};
   const next = { ...prev, label };
+  // Arrays are preserved by the `...prev` spread above; they have no form field yet,
+  // so editing an agent in the UI must not silently drop the catalogs it shipped with.
   for (const [k, v] of Object.entries({ template, interactive, newIdFlag, resume, resumeLast })) {
     if (v === undefined) continue;              // not submitted — keep whatever is stored
     const s = String(v).trim();
@@ -10729,13 +10737,30 @@ app.delete('/api/external-agents/:id', (req, res) => {
 // --- Delegation API ---
 
 app.post('/api/delegate', express.json(), (req, res) => {
-  const { agentId, mode, task, sessionId } = req.body;
+  const { agentId, mode, task, sessionId, model, effort } = req.body;
   if (!agentId || !task) return res.status(400).json({ error: 'agentId and task required' });
   if (!/^[a-zA-Z0-9_-]+$/.test(agentId)) return res.status(400).json({ error: 'Invalid agentId' });
+  // Deliberately an ALLOW-LIST against the agent's own catalog, not a charset.
+  //
+  // A charset check is not enough here and the reason is not shell quoting: with a
+  // bare `{model}` in the template the value becomes its own argv entry, so
+  // "--dangerously-skip-permissions" passes any sane character rule and arrives as a
+  // FLAG. shellEscape cannot help — the string is a perfectly valid single argument.
+  // Only "is this one of the values this agent declared" closes that.
+  //
+  // The catalog is per-agent because these are different CLIs: what Claude calls
+  // "opus" means nothing to codex.
 
   const config = loadConfig();
   const agentConfig = config.externalAgents[agentId];
   if (!agentConfig) return res.status(404).json({ error: `Agent "${agentId}" not configured` });
+  for (const [name, val, catalog] of [['model', model, agentConfig.models], ['effort', effort, agentConfig.efforts]]) {
+    if (val === undefined || val === null || val === '') continue;   // "" is "let the agent decide"
+    const allowed = Array.isArray(catalog) ? catalog.map(String) : [];
+    if (!allowed.includes(String(val))) {
+      return res.status(400).json({ error: `Unknown ${name} for agent "${agentId}"` });
+    }
+  }
   // Delegation needs a one-shot `template`. Terminal-only agents (interactive but
   // no template, e.g. the built-in `claude` entry) would otherwise sail through:
   // buildTerminalCommand yields a bare `cd <workdir> && `, a terminal window opens
@@ -10796,7 +10821,7 @@ app.post('/api/delegate', express.json(), (req, res) => {
   }
 
   // 5. Open terminal with the agent
-  const shellCommand = buildTerminalCommand(agentConfig, workdir, agentPrompt);
+  const shellCommand = buildTerminalCommand(agentConfig, workdir, agentPrompt, { model, effort });
   const termResult = openTerminal(shellCommand);
 
   if (!termResult.ok) {

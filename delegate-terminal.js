@@ -67,11 +67,39 @@ function shellEscape(s, platform) {
 
 /**
  * Build the shell command that cd's into the workdir and launches the agent CLI.
+ *
+ * `{model}` and `{effort}` are optional placeholders an agent template may use, e.g.
+ * `claude --model {model} {prompt}`. They are OMITTED, not blanked, when the caller
+ * chose nothing: a template that writes `--model {model}` would otherwise become
+ * `--model ` and the CLI would read the next token as the model name. The whole flag
+ * has to disappear with the value, so the substitution eats the surrounding run of
+ * spaces and leaves one.
+ *
+ * Every substituted value goes through shellEscape for the same reason `{prompt}`
+ * does: these come from an HTTP body, and a model name is a string like any other.
+ *
  * @param {{template?: string}} agentConfig
+ * @param {{model?: string, effort?: string}} [opts]
  */
-function buildTerminalCommand(agentConfig, workdir, prompt, platform) {
+function buildTerminalCommand(agentConfig, workdir, prompt, platform, opts = {}) {
   const template = agentConfig.template || '';
-  const cmd = template.replace('{prompt}', shellEscape(prompt, platform));
+  let cmd = template;
+  for (const [name, value] of [['model', opts.model], ['effort', opts.effort]]) {
+    const token = `{${name}}`;
+    if (!cmd.includes(token)) continue;
+    if (value) {
+      cmd = cmd.split(token).join(shellEscape(String(value), platform));
+    } else {
+      // Drop the placeholder AND the flag in front of it: `--model {model}` with no
+      // model must not become `--model` with the prompt as its argument.
+      // `[= ]` matched exactly ONE space, so `--model  {model}` (two spaces, easy to
+      // type) left the flag behind and it swallowed the prompt as its argument.
+      // Covers: `--model {m}`, `--model  {m}`, `--model={m}`, `-m {m}`, and a bare
+      // `{m}` with no flag at all.
+      cmd = cmd.replace(new RegExp(`\\s*(?:--?[\\w-]+(?:=|\\s+))?\\{${name}\\}`, 'g'), '');
+    }
+  }
+  cmd = cmd.replace('{prompt}', shellEscape(prompt, platform));
   // Not every agent CLI accepts a --cwd flag, so always cd into the workdir first
   return `cd ${shellEscape(workdir, platform)} && ${cmd}`;
 }

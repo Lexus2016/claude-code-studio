@@ -271,23 +271,66 @@
     "qa-verification": {
       "label": "✅ QA Verification",
       "description": "Mandatory post-task verification loop — proves every requirement is met, fixes issues found",
-      "keywords": ["test", "verify", "qa", "check", "validation", "acceptance"],
+      "keywords": [
+        "test",
+        "verify",
+        "qa",
+        "check",
+        "validation",
+        "acceptance"
+      ],
       "file": "skills/qa-verification.md",
       "category": "quality"
     },
     "interview": {
       "label": "🎤 Interview First",
       "description": "Ask targeted questions before writing code — prevents wasted work on misunderstood requirements",
-      "keywords": ["requirements", "clarify", "questions", "scope", "ambiguous", "spec"],
+      "keywords": [
+        "requirements",
+        "clarify",
+        "questions",
+        "scope",
+        "ambiguous",
+        "spec"
+      ],
       "file": "skills/interview.md",
       "category": "workflow"
     },
     "plan-execute": {
       "label": "📐 Plan & Execute",
       "description": "Structure non-trivial tasks as plan → approve → step-by-step execution",
-      "keywords": ["plan", "steps", "refactor", "migration", "multi-file", "roadmap"],
+      "keywords": [
+        "plan",
+        "steps",
+        "refactor",
+        "migration",
+        "multi-file",
+        "roadmap"
+      ],
       "file": "skills/plan-execute.md",
       "category": "workflow"
+    }
+  },
+  "externalAgents": {
+    "claude": {
+      "label": "Claude Code",
+      "template": "claude --model {model} --effort {effort} {prompt}",
+      "interactive": "claude",
+      "resume": "claude --resume {sid}",
+      "resumeLast": "claude --continue",
+      "models": [
+        "haiku",
+        "sonnet",
+        "opus",
+        "fable"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
     }
   }
 }
