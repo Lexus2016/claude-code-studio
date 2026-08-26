@@ -1,5 +1,55 @@
 # Changelog
 
+## 7.12.0
+
+Worktree isolation reaches every door that creates a unit of work, and a worktree
+is no longer removed while something still lives in it.
+
+### Every creator is isolated, or deliberately is not
+
+- **Telegram was invisible to isolation.** It creates sessions and tasks with direct
+  SQL, so a Telegram chat wrote into the project root while a browser chat in the
+  same project wrote into its own worktree — and the browser's merge landed on top
+  of Telegram's uncommitted work. Nine creators now isolate, including three in the
+  forum module that reach the database through shared prepared statements.
+- **Chains: all four doors.** REST, MCP `create_chain`, and both dispatch paths mint
+  through one helper, so a project can no longer hold isolated and unisolated chains
+  side by side. A chain shares ONE worktree across its members and merges once, when
+  the last member finishes; a recurring chain gets a fresh tree per cycle.
+- **Three sites that CONTINUE work inherit rather than mint.** A compact, the sidecar
+  session a task runs under, and a JSON import were each dropping the metadata that
+  says which tree they belong to — so they read as unisolated while living inside an
+  isolated tree, and the file browser answered 403 for them.
+
+### A worktree is not removed while a unit still lives in it
+
+- Four removal sites are now guarded: the post-merge cleanup, task delete, session
+  delete and bulk delete. Previously each of them could delete the tree a live
+  session was still working in, and `force: true` reported nothing when it did.
+- **A failed commit stops the merge and the removal.** The chain merge swallowed a
+  `commitAll` failure, so the merge carried only what was already committed and the
+  removal deleted the rest — data loss on a path where nothing had gone wrong.
+- The in-use check fails SAFE: an error keeps the tree. A stale worktree is
+  recoverable; a deleted live one is not.
+- A recurring chain no longer re-arms over a conflict, which would abandon a branch
+  whose commits are real work.
+
+### Fixed along the way
+
+- Chain members stayed visible under their own project: the chain listing resolves a
+  project with `COALESCE(git_root, workdir)` the way the task listing already did.
+- An isolated parent no longer gets 403 on the result of the task it just created —
+  `get_task_result` and `cancel_task` compared a raw workdir.
+- The WS dispatch door degrades to the project root only when the host has no git;
+  every other failure is reported instead of silently creating an unisolated chain.
+
+### Known limit
+
+A chain whose member is cancelled or fails never reaches "all done", so its tree and
+branch persist and its recurrence does not re-arm. The work is committed on the
+branch — this is a leak and a stalled schedule, not lost work — and it needs a
+terminal-state policy rather than a patch.
+
 ## 7.11.0
 
 Desktop builds get their MCP helpers back — every `_ccs_*` tool was silently
