@@ -713,6 +713,13 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN terminal_started INTEGER DEFAULT 
 // git_conflict is a stored flag, not derived from git state — a merge conflict
 // happens in git_root, not in the session's own worktree, so it cannot be
 // recomputed from the worktree alone. See worktree-manager.js.
+// Per-chat run dials. mode/agent_mode/model were persisted from the start; these two
+// were not, so a chat that already existed had nowhere to read them from and the
+// toolbar kept whatever the markup shipped (turns=50) or whatever the previously
+// opened chat had left there — issue #81, reported as "Kanban chats ignore the
+// default", but true of every existing chat.
+try { db.exec(`ALTER TABLE sessions ADD COLUMN max_turns INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN effort TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN git_root TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN git_branch TEXT`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN git_conflict INTEGER DEFAULT 0`); } catch {}
@@ -999,7 +1006,7 @@ const stmts = {
     };
     return _stmt;
   })(),
-  updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,updated_at=datetime('now') WHERE id=?`),
+  updateConfig: db.prepare(`UPDATE sessions SET active_mcp=?,active_skills=?,mode=?,agent_mode=?,model=?,workdir=?,max_turns=?,effort=?,updated_at=datetime('now') WHERE id=?`),
   getSessions: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSessionsByWorkdir: db.prepare(`SELECT id,title,created_at,updated_at,mode,agent_mode,model,workdir,claude_session_id FROM sessions WHERE COALESCE(git_root, workdir)=? ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END ASC, sort_order ASC, updated_at DESC LIMIT 100`),
   getSession: db.prepare(`SELECT * FROM sessions WHERE id=?`),
@@ -11434,7 +11441,7 @@ wss.on('connection', (ws) => {
       // Bail out early if user pressed Stop during classification
       if (abortController.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-      try { stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(effectiveSkills),sqlVal(mode),sqlVal(agentMode),sqlVal(model),sqlVal(workdir)||null,localSessionId); }
+      try { stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(effectiveSkills),sqlVal(mode),sqlVal(agentMode),sqlVal(model),sqlVal(workdir)||null,sqlVal(maxTurns)||null,sqlVal(effort)||null,localSessionId); }
       catch (e) { log.error('updateConfig failed', { sessionId: localSessionId, mode, agentMode, model, mIdsLen: mIds.length, skillsLen: effectiveSkills.length, err: e.message, stack: e.stack }); throw e; }
       // Persist engine choice (coerce anything other than 'subscription' to 'api')
       try { db.prepare(`UPDATE sessions SET run_engine=? WHERE id=?`).run(engine === 'subscription' ? 'subscription' : 'api', localSessionId); } catch {}

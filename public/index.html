@@ -12910,6 +12910,24 @@ async function loadSess(id) {
     if (d.mode) { curMode = d.mode; syncBtn('mode', d.mode); }
     if (d.agent_mode) { curAgent = d.agent_mode; syncBtn('agent', d.agent_mode); }
     if (d.model) { curModel = d.model; syncBtn('model', d.model); }
+    // Turns and effort were the two dials the sessions table never stored, so opening
+    // an existing chat left the toolbar showing whatever the markup shipped (turns=50)
+    // or whatever the previously opened chat had put there. Reported as "Kanban chats
+    // ignore the default" (#81) — the Kanban part was incidental: a task's chat is
+    // simply an existing chat, and every existing chat behaved this way.
+    //
+    // A chat that has one keeps it. A chat that never stored one falls back to the
+    // configured DEFAULT rather than to the last chat's value, which is the whole
+    // point of the #58 chain — and is what the reporter expected to see.
+    {
+      const _cd = _chatDefaults && _chatDefaults.effective;
+      const mt = $i('maxTurns');
+      if (mt) mt.value = (d.max_turns != null && d.max_turns !== '') ? d.max_turns : (_cd ? _cd.turns : mt.value);
+      const _eff = (d.effort != null && d.effort !== '') ? d.effort
+                 : (_cd ? (_cd.effort === 'auto' ? '' : _cd.effort) : null);
+      if (_eff != null) { setEffort(_eff); const es = $i('effortSel'); if (es) es.value = curEffort; }
+      markDefaultOverrides();
+    }
     // Explicit per-chat run_engine wins; a chat without one (null — old chats or
     // never-sent) inherits the global default instead of being forced to API.
     _curSessionRunEngine = (d.run_engine === 'subscription' || d.run_engine === 'api') ? d.run_engine : null;

@@ -282,6 +282,40 @@ const storedDefaults = id => {
     srvSrc.indexOf('const _cd = chatDefaultsForWorkdir(msg.workdir')
       < srvSrc.indexOf('stmts.createSession.run(localSessionId'), true);
 
+  // ── An existing chat must not show the markup's turns (#81) ──────────────
+  // Reported as "Kanban chats ignore the default Max Turns", but the Kanban part
+  // was incidental: a task's chat is just an existing chat, and the sessions table
+  // stored neither `max_turns` nor `effort`. Opening ANY existing chat therefore
+  // left the toolbar on whatever the markup shipped (value="50") or on whatever the
+  // previously opened chat had put there — never on the configured default.
+  console.log('\nper-chat turns and effort are stored, and default when absent:');
+  {
+    const SPA = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+
+    check('the sessions table stores max_turns',
+      /ALTER TABLE sessions ADD COLUMN max_turns/.test(srvSrc), true);
+    check('and effort', /ALTER TABLE sessions ADD COLUMN effort/.test(srvSrc), true);
+
+    // They ride the same statement the other dials do — written on every turn.
+    const stmt = /updateConfig: db\.prepare\(`([^`]+)`/.exec(srvSrc);
+    check('updateConfig writes them', !!stmt && /max_turns=\?,effort=\?/.test(stmt[1]), true);
+    // A placeholder/argument mismatch here throws on every chat message.
+    const call = /stmts\.updateConfig\.run\(([^;]+)\);/.exec(srvSrc);
+    check('its placeholders and arguments still match',
+      (stmt[1].match(/\?/g) || []).length, call[1].split(',').length);
+
+    // The client half: restore what was stored, otherwise fall back to the DEFAULT
+    // rather than to whatever the previously opened chat left in the field.
+    const lsBody = SPA.slice(SPA.indexOf('async function loadSess'), SPA.indexOf('async function loadSess') + 9000);
+    check('loadSess restores a stored max_turns', /d\.max_turns != null/.test(lsBody), true);
+    check('and falls back to the configured default, not the field value',
+      /_cd \? _cd\.turns : mt\.value/.test(lsBody), true);
+    check('effort follows the same rule', /d\.effort != null/.test(lsBody), true);
+    // 'auto' is the spelled-out no-flag sentinel; the toolbar spells it ''.
+    check('the effort sentinel is translated for the toolbar',
+      /_cd\.effort === 'auto' \? '' : _cd\.effort/.test(lsBody), true);
+  }
+
   cleanup();
   console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);
