@@ -2933,27 +2933,27 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     <!-- Activity: live runs + scheduled + recent, across ALL projects -->
     <div class="sec" id="activitySec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('activity')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('activity')}">
-        <span>⚡ <span data-i18n="act.title">Активність</span></span>
+        <span>⚡ <span data-i18n="act.title">Activity</span></span>
         <span style="display:flex;align-items:center;gap:6px;">
-          <button class="sec-filter-btn" id="actGroupBtn" onclick="event.stopPropagation();toggleActivityGroup()" data-i18n-title="act.group" title="Групувати за проєктами ↔ плоский список">⊞</button>
+          <button class="sec-filter-btn" id="actGroupBtn" onclick="event.stopPropagation();toggleActivityGroup()" data-i18n-title="act.group" title="Group by project ↔ flat list">⊞</button>
           <span class="badge" id="actLiveCount">0</span>
         </span>
       </div>
       <div class="sec-body" id="activityBody">
-        <div class="act-list" id="activityList"><div class="act-empty" data-i18n="act.empty">Немає активності</div></div>
+        <div class="act-list" id="activityList"><div class="act-empty" data-i18n="act.empty">No activity</div></div>
       </div>
     </div>
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('proj')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('proj')}">
-        <span data-i18n="sec.projects">Проекти</span>
+        <span data-i18n="sec.projects">Projects</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="projFilterBtn" onclick="event.stopPropagation();toggleSecFilter('proj')" data-i18n-title="sec.filter" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();openAddProject()" title="Додати проект" data-i18n-title="proj.add">＋</button>
+          <button class="sec-filter-btn" id="projFilterBtn" onclick="event.stopPropagation();toggleSecFilter('proj')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openAddProject()" title="＋ Add project" data-i18n-title="proj.add">＋</button>
           <span class="badge" id="projCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="projBody">
-        <div class="sec-filter-row" id="projFilterRow"><input type="text" id="projFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Фільтр..." data-i18n-aria="sec.filter.aria.proj" aria-label="Фільтр проектів" oninput="applySecFilter('proj',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('proj');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('proj')">×</button></div>
+        <div class="sec-filter-row" id="projFilterRow"><input type="text" id="projFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.proj" aria-label="Filter projects" oninput="applySecFilter('proj',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('proj');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('proj')">×</button></div>
         <div class="sec-list"><div id="projList"></div></div>
       </div>
     </div>
@@ -2961,35 +2961,35 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     <!-- SSH Hosts section -->
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('sshHosts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('sshHosts')}">
-        <span data-i18n="sec.sshHosts">SSH Хости</span>
+        <span data-i18n="sec.sshHosts">SSH Hosts</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="sshHostsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('sshHosts')" data-i18n-title="sec.filter" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();openAddHostModal()" title="Додати SSH хост" data-i18n-title="ssh.add">＋</button>
+          <button class="sec-filter-btn" id="sshHostsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('sshHosts')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openAddHostModal()" title="＋ Add SSH host" data-i18n-title="ssh.add">＋</button>
           <span class="badge" id="sshHostCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="sshHostsBody">
-        <div class="sec-filter-row" id="sshHostsFilterRow"><input type="text" id="sshHostsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Фільтр..." data-i18n-aria="sec.filter.aria.ssh" aria-label="Фільтр SSH хостів" oninput="applySecFilter('sshHosts',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('sshHosts');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('sshHosts')">×</button></div>
+        <div class="sec-filter-row" id="sshHostsFilterRow"><input type="text" id="sshHostsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.ssh" aria-label="Filter SSH hosts" oninput="applySecFilter('sshHosts',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('sshHosts');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('sshHosts')">×</button></div>
         <div class="sec-list"><div id="sshHostList"></div></div>
       </div>
     </div>
 
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('hist')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('hist')}">
-        <span data-i18n="sec.chats">Чати</span>
+        <span data-i18n="sec.chats">Chats</span>
         <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
-          <button class="sec-filter-btn" id="histFilterBtn" onclick="event.stopPropagation();toggleSecFilter('hist')" data-i18n-title="sec.filter" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
-          <button class="hist-select-btn" id="histSelBtn" onclick="event.stopPropagation();toggleHistSelect()" data-i18n-title="hist.sel.title" title="Вибрати кілька">☑</button>
+          <button class="sec-filter-btn" id="histFilterBtn" onclick="event.stopPropagation();toggleSecFilter('hist')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="hist-select-btn" id="histSelBtn" onclick="event.stopPropagation();toggleHistSelect()" data-i18n-title="hist.sel.title" title="Select multiple">☑</button>
           <span class="badge" id="histCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="histBody">
-        <div class="sec-filter-row" id="histFilterRow"><input type="text" id="histFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Фільтр..." data-i18n-aria="sec.filter.aria.hist" aria-label="Фільтр чатів" oninput="applySecFilter('hist',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('hist');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('hist')">×</button></div>
+        <div class="sec-filter-row" id="histFilterRow"><input type="text" id="histFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.hist" aria-label="Filter chats" oninput="applySecFilter('hist',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('hist');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('hist')">×</button></div>
         <div class="sec-list"><div class="hist-list" id="histList"></div></div>
         <div class="hist-bulk-bar" id="histBulkBar">
           <span class="bulk-info" id="histBulkInfo"></span>
-          <button class="bulk-all" onclick="selectAllHist()" data-i18n="bulk.all">Всі</button>
-          <button class="bulk-del" id="histBulkDel" onclick="delSelectedHist()" disabled data-i18n="bulk.del">Видалити</button>
+          <button class="bulk-all" onclick="selectAllHist()" data-i18n="bulk.all">All</button>
+          <button class="bulk-del" id="histBulkDel" onclick="delSelectedHist()" disabled data-i18n="bulk.del">Delete</button>
         </div>
       </div>
     </div>
@@ -2998,34 +2998,34 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('mcp')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('mcp')}">
         <span data-i18n="sec.mcp">MCP</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="mcpFilterBtn" onclick="event.stopPropagation();toggleSecFilter('mcp')" data-i18n-title="sec.filter" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();openMcpImport()" title="Імпортувати MCP з JSON файлу" data-i18n-title="mcp.import.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();exportMcp()" title="Експортувати MCP у JSON файл" data-i18n-title="mcp.export.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();openMcpModal('add')" title="Додати MCP-сервер" data-i18n-title="mcp.add">＋</button>
+          <button class="sec-filter-btn" id="mcpFilterBtn" onclick="event.stopPropagation();toggleSecFilter('mcp')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openMcpImport()" title="Import MCP from JSON file (Claude Desktop format)" data-i18n-title="mcp.import.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();exportMcp()" title="Export all MCP to JSON file" data-i18n-title="mcp.export.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openMcpModal('add')" title="＋ Add MCP server" data-i18n-title="mcp.add">＋</button>
           <span class="badge" id="mcpCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="mcpBody">
-        <div class="sec-filter-row" id="mcpFilterRow"><input type="text" id="mcpFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Фільтр..." data-i18n-aria="sec.filter.aria.mcp" aria-label="Фільтр MCP-серверів" oninput="applySecFilter('mcp',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('mcp');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('mcp')">×</button></div>
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="mcp.hint">Увімкніть інструменти, які Claude може використовувати в цьому чаті.</div>
+        <div class="sec-filter-row" id="mcpFilterRow"><input type="text" id="mcpFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.mcp" aria-label="Filter MCP servers" oninput="applySecFilter('mcp',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('mcp');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('mcp')">×</button></div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="mcp.hint">Enable tools that Claude can use in this chat.</div>
         <div class="sec-list"><div id="mcpList"></div></div>
       </div>
     </div>
 
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('skills')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('skills')}">
-        <span data-i18n="sec.skills">Навички</span>
+        <span data-i18n="sec.skills">Skills</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="skillsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('skills')" data-i18n-title="sec.filter" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-filter-btn" id="skillsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('skills')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
           <button id="autoSkillsBtn" class="auto-skills-btn" onclick="event.stopPropagation();toggleAutoSkills()" data-i18n="skills.auto.btn">⚡ Auto</button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();$i('skillUpload').click()" title="Завантажити .md файл" data-i18n-title="skills.upload">＋</button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();$i('skillUpload').click()" title="＋ Upload .md file" data-i18n-title="skills.upload">＋</button>
           <span class="badge" id="skillsCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="skillsBody">
-        <div class="sec-filter-row" id="skillsFilterRow"><input type="text" id="skillsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Фільтр..." data-i18n-aria="sec.filter.aria.skills" aria-label="Фільтр навичок" oninput="applySecFilter('skills',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('skills');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('skills')">×</button></div>
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="skills.hint">Навички — файли інструкцій, що додаються до системного промпту.</div>
-        <div id="autoSkillsHint" class="auto-notif" style="display:none" data-i18n="skills.auto_hint">⚡ Навички обираються автоматично по тексту завдання</div>
+        <div class="sec-filter-row" id="skillsFilterRow"><input type="text" id="skillsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.skills" aria-label="Filter skills" oninput="applySecFilter('skills',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('skills');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('skills')">×</button></div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="skills.hint">Skills are instruction files added to the system prompt.</div>
+        <div id="autoSkillsHint" class="auto-notif" style="display:none" data-i18n="skills.auto_hint">⚡ Skills are auto-selected based on task text</div>
         <div class="sec-list"><div id="skillsList"></div></div>
         <input type="file" id="skillUpload" accept=".md,.txt" style="display:none" onchange="uploadSkill(this)">
       </div>
@@ -3033,46 +3033,46 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('cmds')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('cmds')}">
-        <span data-i18n="sec.cmds">/ Команди</span>
+        <span data-i18n="sec.cmds">/ Commands</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="cmdsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('cmds')" data-i18n-title="sec.filter" title="Фільтр"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();openCmdForm()" title="Додати команду" data-i18n-title="cmd.add.new">＋</button>
+          <button class="sec-filter-btn" id="cmdsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('cmds')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openCmdForm()" title="＋ Add command" data-i18n-title="cmd.add.new">＋</button>
           <span class="badge" id="cmdsCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="cmdsBody">
-        <div class="sec-filter-row" id="cmdsFilterRow"><input type="text" id="cmdsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Фільтр..." data-i18n-aria="sec.filter.aria.cmds" aria-label="Фільтр команд" oninput="applySecFilter('cmds',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('cmds');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('cmds')">×</button></div>
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="cmds.hint">Слеш-команди — шорткати до промптів. Набирайте / в чаті.</div>
+        <div class="sec-filter-row" id="cmdsFilterRow"><input type="text" id="cmdsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.cmds" aria-label="Filter commands" oninput="applySecFilter('cmds',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('cmds');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('cmds')">×</button></div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="cmds.hint">Slash commands — shortcuts to prompts. Type / in chat.</div>
         <div class="sec-list"><div id="cmdsList"></div></div>
       </div>
     </div>
 
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('bots')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('bots')}">
-        <span data-i18n="sec.bots">Боти</span>
+        <span data-i18n="sec.bots">Bots</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-add-btn" onclick="event.stopPropagation();openBotsImport()" title="Імпортувати ботів з JSON файлу" data-i18n-title="bots.import.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();exportBots()" title="Експортувати ботів у JSON файл" data-i18n-title="bots.export.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();openBotForm()" title="Створити бота" data-i18n-title="bot.add.new">＋</button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openBotsImport()" title="Import bots from a JSON file" data-i18n-title="bots.import.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();exportBots()" title="Export bots to a JSON file" data-i18n-title="bots.export.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openBotForm()" title="Create bot" data-i18n-title="bot.add.new">＋</button>
           <span class="badge" id="botsCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="botsBody">
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="bots.hint">Учасники цього проєкту. Згадайте бота через @@ у повідомленні.</div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="bots.hint">Participants in this project. Mention one with @@ in a message.</div>
         <div class="sec-list"><div id="botsList"></div></div>
       </div>
     </div>
 
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('agents')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('agents')}">
-        <span data-i18n="sec.agents">Агенти</span>
+        <span data-i18n="sec.agents">Agents</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-add-btn" onclick="event.stopPropagation();openAgentForm()" title="Додати агента" data-i18n-title="agent.add.new">＋</button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openAgentForm()" title="Add agent" data-i18n-title="agent.add.new">＋</button>
           <span class="badge" id="agentsCount">0</span>
         </div>
       </div>
       <div class="sec-body" id="agentsBody">
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="agents.hint">Зовнішні агенти для делегування завдань.</div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="agents.hint">External agents for task delegation.</div>
         <div class="sec-list"><div id="agentsList"></div></div>
       </div>
     </div>
@@ -3088,28 +3088,28 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         </div>
       </div>
       <div class="sec-body collapsed" id="tunnelBody">
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="tn.hint">Відкрийте доступ до Studio через інтернет.</div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="tn.hint">Expose Studio to the internet.</div>
 
         <!-- Provider selector -->
         <div class="tg-section">
-          <label style="font-size:11px;color:var(--muted)" data-i18n="tn.provider">Провайдер:</label>
+          <label style="font-size:11px;color:var(--muted)" data-i18n="tn.provider">Provider:</label>
           <div style="display:flex;gap:6px;margin-top:5px">
             <label class="tn-provider-card" id="tnCardCf">
               <input type="radio" name="tunnelProvider" value="cloudflared" checked style="position:absolute;opacity:0;width:0;height:0">
               <span class="tn-provider-name">cloudflared</span>
-              <span class="tn-provider-desc" data-i18n="tn.cf.desc">Без реєстрації</span>
+              <span class="tn-provider-desc" data-i18n="tn.cf.desc">No signup needed</span>
             </label>
             <label class="tn-provider-card" id="tnCardNg">
               <input type="radio" name="tunnelProvider" value="ngrok" style="position:absolute;opacity:0;width:0;height:0">
               <span class="tn-provider-name">ngrok</span>
-              <span class="tn-provider-desc" data-i18n="tn.ng.desc">Потрібен токен</span>
+              <span class="tn-provider-desc" data-i18n="tn.ng.desc">Token required</span>
             </label>
           </div>
         </div>
 
         <!-- Ngrok authtoken (shown only for ngrok) -->
         <div class="tg-section" id="tunnelNgrokAuth" style="display:none;margin-top:8px">
-          <label style="font-size:11px;color:var(--muted)"><span data-i18n="tn.ng.authtoken">Authtoken:</span> <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener" style="color:var(--accent2);text-decoration:none;opacity:.8" data-i18n="tn.ng.get_token">↗ отримати</a></label>
+          <label style="font-size:11px;color:var(--muted)"><span data-i18n="tn.ng.authtoken">Authtoken:</span> <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener" style="color:var(--accent2);text-decoration:none;opacity:.8" data-i18n="tn.ng.get_token">↗ get token</a></label>
           <div style="display:flex;gap:4px;margin-top:4px">
             <input id="tunnelNgrokToken" type="password" placeholder="ngrok authtoken..." style="flex:1;font-size:11px;padding:5px 8px;background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:monospace">
             <button class="bg" onclick="tunnelToggleNgrokPwd(this)" data-i18n-title="tn.token.toggle" title="Show/hide" style="padding:5px 7px;font-size:12px;flex-shrink:0" data-i18n-aria="tn.token.aria" aria-label="Show token">👁</button>
@@ -3119,7 +3119,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <!-- Start/Stop button -->
         <div style="margin-top:8px">
           <button class="bp" id="tunnelToggleBtn" onclick="tunnelToggle()" style="width:100%;padding:7px 10px;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px">
-            <span data-i18n="tn.start">▶ Запустити</span>
+            <span data-i18n="tn.start">▶ Start</span>
           </button>
         </div>
 
@@ -3128,7 +3128,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 
         <!-- Public URL display -->
         <div id="tunnelUrlBox" style="display:none;margin-top:8px">
-          <label style="font-size:11px;color:var(--muted)" data-i18n="tn.url">Публічний URL:</label>
+          <label style="font-size:11px;color:var(--muted)" data-i18n="tn.url">Public URL:</label>
           <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
             <input id="tunnelUrlDisplay" readonly style="flex:1;font-size:11px;padding:5px 8px;background:var(--s1);border:1px solid var(--accent);border-radius:6px;color:var(--text);font-family:monospace;cursor:copy" onclick="this.select()">
             <button class="bg" id="tunnelCopyBtn" onclick="tunnelCopyUrl()" data-i18n-title="tn.copy.url" title="Copy URL" data-i18n-aria="tn.copy.aria" aria-label="Copy tunnel URL" style="padding:5px 8px;font-size:13px;transition:color .15s">📋</button>
@@ -3150,22 +3150,22 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         </div>
       </div>
       <div class="sec-body" id="tgBody">
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="tg.hint">Керуйте Studio віддалено через Telegram-бота.</div>
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 8px;line-height:1.5" data-i18n="tg.hint">Control Studio remotely via Telegram bot.</div>
 
         <!-- Bot Token -->
         <div class="tg-section">
-          <label style="font-size:11px;color:var(--muted)" data-i18n="tg.token">Bot Token (від @BotFather):</label>
+          <label style="font-size:11px;color:var(--muted)" data-i18n="tg.token">Bot Token (from @BotFather):</label>
           <div style="display:flex;gap:4px;margin-top:4px">
             <input id="tgBotToken" type="password" placeholder="123456:ABC-DEF..." style="flex:1;font-size:11px;padding:5px 8px;background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:monospace">
-            <button class="bp" id="tgStartBtn" onclick="tgStartBot()" style="padding:5px 10px;font-size:11px;white-space:nowrap" data-i18n="tg.start">▶ Запустити</button>
+            <button class="bp" id="tgStartBtn" onclick="tgStartBot()" style="padding:5px 10px;font-size:11px;white-space:nowrap" data-i18n="tg.start">▶ Start</button>
           </div>
           <div class="tg-bot-info" id="tgBotInfo" style="display:none;font-size:11px;color:var(--accent2);margin-top:4px"></div>
         </div>
 
         <!-- Lock Mode Toggle -->
         <div class="tg-section" style="margin-top:8px;display:flex;align-items:center;justify-content:space-between">
-          <span style="font-size:12px" data-i18n="tg.accept_new">Нові підключення:</span>
-          <label class="tg-toggle" title="Дозволити/заборонити нові підключення" data-i18n-title="tg.toggle.title">
+          <span style="font-size:12px" data-i18n="tg.accept_new">New connections:</span>
+          <label class="tg-toggle" title="Allow/deny new connections" data-i18n-title="tg.toggle.title">
             <input type="checkbox" id="tgAcceptNew" onchange="tgToggleAccept(this.checked)" checked>
             <span class="tg-toggle-slider"></span>
           </label>
@@ -3173,18 +3173,18 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 
         <!-- Pairing -->
         <div id="tgPairingSection" style="margin-top:8px">
-          <button class="add-btn" id="tgPairBtn" onclick="tgGenerateCode()" data-i18n="tg.pair">🔗 Підключити Telegram</button>
+          <button class="add-btn" id="tgPairBtn" onclick="tgGenerateCode()" data-i18n="tg.pair">🔗 Connect Telegram</button>
           <div id="tgPairingCode" style="display:none;text-align:center;margin-top:10px">
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px" data-i18n="tg.pair.hint">Введіть цей код у Telegram-боті:</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px" data-i18n="tg.pair.hint">Enter this code in the Telegram bot:</div>
             <div id="tgCodeDisplay" style="font-size:28px;font-weight:800;letter-spacing:4px;color:var(--accent);font-family:monospace;padding:12px;background:var(--s1);border-radius:8px;border:2px dashed var(--accent)"></div>
             <div style="font-size:11px;color:var(--muted);margin-top:6px">⏱ <span id="tgCodeTimer">5:00</span></div>
-            <button class="bg" onclick="tgCancelPairing()" style="margin-top:6px;font-size:11px;padding:4px 10px" data-i18n="tg.pair.cancel">Скасувати</button>
+            <button class="bg" onclick="tgCancelPairing()" style="margin-top:6px;font-size:11px;padding:4px 10px" data-i18n="tg.pair.cancel">Cancel</button>
           </div>
         </div>
 
         <!-- Connected Devices -->
         <div style="margin-top:10px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px" data-i18n="tg.devices">Підключені пристрої:</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px" data-i18n="tg.devices">Connected devices:</div>
           <div id="tgDeviceList" style="font-size:12px;color:var(--muted)">—</div>
         </div>
       </div>
@@ -3194,7 +3194,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 </div>
 
 <!-- LEFT PANEL TAB -->
-<div class="panel-tab panel-tab-left active" role="button" tabindex="0" data-i18n-aria="tip.panels.left" aria-label="Toggle left panel" onclick="toggle('leftPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('leftPanel')}" data-tip="Сховати/показати ліву панель" data-i18n-tip="tip.panels.left">
+<div class="panel-tab panel-tab-left active" role="button" tabindex="0" data-i18n-aria="tip.panels.left" aria-label="Toggle left panel" onclick="toggle('leftPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('leftPanel')}" data-tip="Toggle left panel" data-i18n-tip="tip.panels.left">
   <div class="panel-tab-inner">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
   </div>
@@ -3264,7 +3264,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <div class="mob-sheet-chips">
           <button class="mob-chip on" data-mob="engine" data-v="api" onclick="setMobOpt(this,'engine')" data-i18n-title="engine.api.title" title="API engine — headless claude -p, billed per token (Claude Pro / API key)">API</button>
           <button class="mob-chip" data-mob="engine" data-v="subscription" onclick="setMobOpt(this,'engine')" data-i18n="engine.sub" data-i18n-title="engine.sub.title" title="Subscription engine — persistent tmux session, billed on the Claude Max subscription (no API credits). Requires tmux + Claude Max.">Subscription</button>
-          <button class="mob-chip" data-default-star onclick="setDefaultEngine()" data-i18n-title="engine.default.title" title="Зробити поточний рушій типовим для нових чатів" data-i18n="engine.default.btn">★ Set as default</button>
+          <button class="mob-chip" data-default-star onclick="setDefaultEngine()" data-i18n-title="engine.default.title" title="Make the current engine the default for new chats" data-i18n="engine.default.btn">★ Set as default</button>
         </div>
       </div>
       <div class="mob-sheet-section">
@@ -3312,20 +3312,20 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   <div class="hdr">
     <div class="hdr-l">
       <div class="logo">CCS</div>
-      <nav class="nav-sw" aria-label="Навігація між розділами" data-i18n-aria="nav.aria">
-        <button class="nav-sw-btn" type="button" id="gwNavBtn" onclick="openGlobalHome()" data-tip="Усе по всіх проєктах" data-i18n-tip="gw.tip">
+      <nav class="nav-sw" aria-label="Navigation" data-i18n-aria="nav.aria">
+        <button class="nav-sw-btn" type="button" id="gwNavBtn" onclick="openGlobalHome()" data-tip="Everything across all projects" data-i18n-tip="gw.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18a15 15 0 010-18"/></svg>
           <span data-i18n="gw.nav">Global</span>
         </button>
-        <a class="nav-sw-btn active" href="/" data-tip="Чат" data-i18n-tip="nav.chat.tip">
+        <a class="nav-sw-btn active" href="/" data-tip="Chat" data-i18n-tip="nav.chat.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
           <span data-i18n="nav.chat">Chat</span>
         </a>
-        <a class="nav-sw-btn" href="/kanban" data-tip="Kanban дошка" data-i18n-tip="nav.kanban.tip">
+        <a class="nav-sw-btn" href="/kanban" data-tip="Kanban board" data-i18n-tip="nav.kanban.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
           <span data-i18n="nav.kanban">Kanban</span>
         </a>
-        <a class="nav-sw-btn" href="/schedule" data-tip="Розклад завдань" data-i18n-tip="nav.schedule.tip">
+        <a class="nav-sw-btn" href="/schedule" data-tip="Schedule" data-i18n-tip="nav.schedule.tip">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span data-i18n="nav.schedule">Schedule</span>
         </a>
@@ -3338,39 +3338,39 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <div class="proj-dd-wrap" id="projDdWrap">
           <button class="proj-dd-btn" id="projDdBtn" onclick="toggleProjDropdown()">
             <span class="proj-dd-icon">📁</span>
-            <span class="proj-dd-name" id="projDdName" data-i18n="hdr.project">Проект</span>
+            <span class="proj-dd-name" id="projDdName" data-i18n="hdr.project">Project</span>
             <span class="proj-dd-arrow">▼</span>
           </button>
           <div class="proj-dd-menu" id="projDdMenu">
             <div class="proj-dd-search">
-              <input type="text" id="projDdSearch" data-i18n-ph="proj.search" placeholder="Пошук проекту..." oninput="filterProjDropdown(this.value)">
+              <input type="text" id="projDdSearch" data-i18n-ph="proj.search" placeholder="Search project..." oninput="filterProjDropdown(this.value)">
             </div>
             <div class="proj-dd-list" id="projDdList"></div>
           </div>
         </div>
-        <span id="versionBadge" data-i18n-title="ver.checking" title="Перевірка версії..."></span>
+        <span id="versionBadge" data-i18n-title="ver.checking" title="Checking version..."></span>
       </div>
     </div>
     <div class="hdr-btns">
-      <span class="status-dot err" id="statusEl" data-i18n-title="status.connecting" title="Підключення..."></span>
+      <span class="status-dot err" id="statusEl" data-i18n-title="status.connecting" title="Connecting..."></span>
       <div id="rlBadge">
         <span class="rl-dot"></span>
         <span class="rl-label" id="rlBadgeLabel">Max ⚠</span>
-        <button class="rl-dismiss" onclick="event.stopPropagation();_rlClear()" title="Закрити" data-i18n-title="cfg.close">×</button>
+        <button class="rl-dismiss" onclick="event.stopPropagation();_rlClear()" title="Close" data-i18n-title="cfg.close">×</button>
         <div id="rlTooltip">
-          <div class="rl-tt-title"><span id="rl-tt-icon">⚠️</span> <span id="rl-tt-title-text" data-i18n="rl.title.warn">Наближається ліміт</span></div>
+          <div class="rl-tt-title"><span id="rl-tt-icon">⚠️</span> <span id="rl-tt-title-text" data-i18n="rl.title.warn">Limit approaching</span></div>
           <div class="rl-bar"><div class="rl-bar-fill" id="rl-bar-fill"></div></div>
-          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.type">Тип</span><span class="rl-tt-val" id="rl-tt-type">—</span></div>
-          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.used">Використано</span><span class="rl-tt-val" id="rl-tt-used">—</span></div>
-          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.left">Залишилось</span><span class="rl-tt-val" id="rl-tt-left">—</span></div>
-          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.reset">Скидання</span><span class="rl-tt-val" id="rl-tt-reset">—</span></div>
-          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.via">Через</span><span class="rl-tt-val" id="rl-tt-countdown">—</span></div>
+          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.type">Type</span><span class="rl-tt-val" id="rl-tt-type">—</span></div>
+          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.used">Used</span><span class="rl-tt-val" id="rl-tt-used">—</span></div>
+          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.left">Left</span><span class="rl-tt-val" id="rl-tt-left">—</span></div>
+          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.reset">Resets</span><span class="rl-tt-val" id="rl-tt-reset">—</span></div>
+          <div class="rl-tt-row"><span class="rl-tt-key" data-i18n="rl.key.via">In</span><span class="rl-tt-val" id="rl-tt-countdown">—</span></div>
         </div>
       </div>
-      <button class="hb" onclick="newSession()" data-tip="Новий чат" data-i18n-tip="tip.new">&#xFF0B; <span data-i18n="btn.new">Чат</span></button>
-      <button class="hb" onclick="openCliImport()" data-tip="Імпорт сесій Claude CLI" data-i18n-tip="cli.import.tip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-      <button class="hb" onclick="openCfgEditor()" data-tip="Налаштування" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
-      <select class="lang-sel" id="langSel" onchange="setLang(this.value)" data-i18n-aria="tip.lang" aria-label="Interface language" data-tip="Мова інтерфейсу" data-i18n-tip="tip.lang">
+      <button class="hb" onclick="newSession()" data-tip="New chat" data-i18n-tip="tip.new">&#xFF0B; <span data-i18n="btn.new">Chat</span></button>
+      <button class="hb" onclick="openCliImport()" data-tip="Import Claude CLI sessions" data-i18n-tip="cli.import.tip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+      <button class="hb" onclick="openCfgEditor()" data-tip="Configuration" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
+      <select class="lang-sel" id="langSel" onchange="setLang(this.value)" data-i18n-aria="tip.lang" aria-label="Interface language" data-tip="Interface language" data-i18n-tip="tip.lang">
         <option value="en">EN</option>
         <option value="uk">UK</option>
         <option value="ru">RU</option>
@@ -3378,20 +3378,20 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <option value="he">HE</option>
       </select>
       <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener" data-tip="GitHub" style="text-decoration:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg></a>
-      <button class="hb" onclick="logout()" data-tip="Вийти" data-i18n-tip="tip.logout"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+      <button class="hb" onclick="logout()" data-tip="Logout" data-i18n-tip="tip.logout"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
   </div>
 
   <div class="toolbar">
     <div class="tb-group" data-tbg="mode">
-      <span class="label" data-i18n="tb.mode">Режим</span>
+      <span class="label" data-i18n="tb.mode">Mode</span>
       <button class="tb-btn on" data-v="auto" onclick="setOpt(this,'mode')" data-i18n="mode.auto" data-i18n-tip="mode.auto.tip">Auto</button>
       <button class="tb-btn" data-v="planning" onclick="setOpt(this,'mode')" data-i18n="mode.plan" data-i18n-tip="mode.plan.tip">Plan</button>
       <button class="tb-btn" data-v="task" onclick="setOpt(this,'mode')" data-i18n="mode.task" data-i18n-tip="mode.task.tip">Task</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group" data-tbg="agent">
-      <span class="label" data-i18n="tb.agent">Агент</span>
+      <span class="label" data-i18n="tb.agent">Agent</span>
       <button class="tb-btn on" data-v="single" onclick="setOpt(this,'agent')" data-i18n="agent.single" data-i18n-tip="agent.single.tip">Single</button>
       <button class="tb-btn" data-v="multi" onclick="setOpt(this,'agent')" data-i18n="agent.multi" data-i18n-tip="agent.multi.tip">Multi</button>
       <button class="tb-btn" data-v="dispatch" onclick="setOpt(this,'agent')" data-i18n="agent.dispatch" data-i18n-tip="agent.dispatch.tip">Dispatch</button>
@@ -3399,7 +3399,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group" data-tbg="model">
-      <span class="label" data-i18n="tb.model">Модель</span>
+      <span class="label" data-i18n="tb.model">Model</span>
       <button class="tb-btn" data-v="haiku" onclick="setOpt(this,'model')" data-i18n-tip="model.haiku.tip">Haiku</button>
       <button class="tb-btn on" data-v="sonnet" onclick="setOpt(this,'model')" data-i18n-tip="model.sonnet.tip">Sonnet</button>
       <button class="tb-btn" data-v="opus" onclick="setOpt(this,'model')" data-i18n-tip="model.opus.tip">Opus</button>
@@ -3410,7 +3410,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <span class="label" data-i18n="tb.engine">Engine</span>
       <button class="tb-btn on" data-v="api" onclick="setOpt(this,'engine')" data-i18n-title="engine.api.title" title="API engine — headless claude -p, billed per token (Claude Pro / API key)">API</button>
       <button class="tb-btn" data-v="subscription" onclick="setOpt(this,'engine')" data-i18n-title="engine.sub.title" title="Subscription engine — persistent tmux session, billed on Claude Max subscription (no API credits). Requires: tmux + Claude Max." data-i18n="engine.sub">Subscription</button>
-      <button class="tb-btn" data-default-star onclick="setDefaultEngine()" data-i18n-title="engine.default.title" title="Зробити поточний рушій типовим для нових чатів" style="padding:0 8px">★</button>
+      <button class="tb-btn" data-default-star onclick="setDefaultEngine()" data-i18n-title="engine.default.title" title="Make the current engine the default for new chats" style="padding:0 8px">★</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group" data-tbg="effort">
@@ -3426,12 +3426,12 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group" data-tbg="turns">
-      <span class="label" data-i18n="tb.turns">Кроки</span>
+      <span class="label" data-i18n="tb.turns">Turns</span>
       <input type="number" class="tb-input" id="maxTurns" value="50" min="1" max="200" onchange="markDefaultOverrides()" data-i18n-tip="turns.tip">
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
-      <span class="label" data-i18n="tb.defaults">Типове</span>
+      <span class="label" data-i18n="tb.defaults">Defaults</span>
       <button class="tb-btn" id="pinDefaultsBtn" onclick="pinProjectDefaults()"
         data-i18n-title="defaults.pin.title" title="Save the five dials above as this project's defaults">★</button>
       <button class="tb-btn" id="resetDefaultsBtn" onclick="resetProjectDefaults()" style="display:none"
@@ -3451,10 +3451,10 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     <span id="sessBarClaudeId" style="display:none;font-family:monospace;font-size:10px;color:var(--muted);background:var(--s3,#1f2637);padding:1px 6px;border-radius:4px;border:1px solid var(--border);cursor:pointer;flex-shrink:0;" title="" onclick="copySessId()"></span>
     <a id="sessBarOpenBtn" style="display:none;font-size:11px;color:var(--accent2);text-decoration:none;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openInClaude()">⚡ Claude Code</a>
     <button id="sessBarPaneBtn" style="display:none;font-size:11px;color:var(--accent2);background:transparent;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="openEnginePane()">▣ <span data-i18n="term.pane.btn">Live pane</span></button>
-    <button id="sessBarCatchupBtn" style="display:none;font-size:11px;color:var(--accent2);background:transparent;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="catchUpFromTerminal()" data-i18n-title="catchup.title" title="Дочитати у чат повідомлення, набрані напряму в терміналі (claude --resume)" data-i18n="catchup.btn">⤵ Дочитати</button>
-    <button id="sessBarRestartBtn" style="display:none;font-size:11px;color:var(--warn,#f59e0b);background:transparent;padding:1px 7px;border-radius:4px;border:1px solid rgba(245,158,11,.3);flex-shrink:0;cursor:pointer;" onclick="restartSessionFromBar()" data-i18n-title="restart.title" title="">🔄 <span data-i18n="restart.short">Перезапуск</span></button>
+    <button id="sessBarCatchupBtn" style="display:none;font-size:11px;color:var(--accent2);background:transparent;padding:1px 7px;border-radius:4px;border:1px solid rgba(124,106,239,.25);flex-shrink:0;cursor:pointer;" onclick="catchUpFromTerminal()" data-i18n-title="catchup.title" title="Pull messages typed directly in the terminal into this chat (claude --resume)" data-i18n="catchup.btn">⤵ Catch up</button>
+    <button id="sessBarRestartBtn" style="display:none;font-size:11px;color:var(--warn,#f59e0b);background:transparent;padding:1px 7px;border-radius:4px;border:1px solid rgba(245,158,11,.3);flex-shrink:0;cursor:pointer;" onclick="restartSessionFromBar()" data-i18n-title="restart.title" title="">🔄 <span data-i18n="restart.short">Restart</span></button>
     <button id="sessBarCompactBtn" class="sess-compact-btn" style="display:none;" onclick="compactSession()" data-i18n-title="compact.title" title="Compact chat and start new session">📋 <span data-i18n="compact.btn">Compact & New</span></button>
-    <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Делегувати зовнішньому агенту">⇗ <span data-i18n="dlg.btn">Делегувати</span></button>
+    <button id="sessBarDelegateBtn" class="sess-compact-btn" style="display:none;" onclick="openDelegateModal()" data-i18n-title="dlg.btn.title" title="Delegate to external agent">⇗ <span data-i18n="dlg.btn">Delegate</span></button>
     <div id="sessBarExportWrap" class="sess-export-wrap" style="display:none;">
       <button id="sessBarExportBtn" class="sess-export-btn" onclick="toggleExportMenu(event)" data-i18n-title="export.title" title="Export conversation">↓ <span data-i18n="export.btn">Export</span> ▾</button>
       <div id="sessBarExportMenu" class="export-menu" style="display:none;">
@@ -3491,17 +3491,17 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <span class="dlg-panel-last-update" id="dlgPanelLastUpdate"></span>
     </div>
     <div class="dlg-panel-actions">
-      <button class="dlg-btn" onclick="checkDelegationBtn()" data-i18n="dlg.check">Перевірити</button>
-      <button class="dlg-btn dlg-sync-only" onclick="toggleDelegateDialog()" data-i18n="dlg.dialog">Діалог</button>
-      <button class="dlg-btn dlg-sync-only" onclick="sendDelegateMsg()" data-i18n="dlg.message">Повідомлення</button>
-      <button class="dlg-btn danger" onclick="stopDelegation()" data-i18n="dlg.stop">Стоп</button>
+      <button class="dlg-btn" onclick="checkDelegationBtn()" data-i18n="dlg.check">Check</button>
+      <button class="dlg-btn dlg-sync-only" onclick="toggleDelegateDialog()" data-i18n="dlg.dialog">Dialog</button>
+      <button class="dlg-btn dlg-sync-only" onclick="sendDelegateMsg()" data-i18n="dlg.message">Message</button>
+      <button class="dlg-btn danger" onclick="stopDelegation()" data-i18n="dlg.stop">Stop</button>
     </div>
   </div>
   <div id="dlgDialogContainer" style="display:none;padding:0 14px 8px;background:var(--s1);border-bottom:1px solid var(--border);">
     <div class="dlg-dialog-view" id="dlgDialogView"></div>
     <div class="dlg-msg-input" id="dlgMsgInput">
-      <input id="dlgMsgText" data-i18n-ph="dlg.msg.ph" placeholder="Надіслати повідомлення агенту..." onkeydown="if(event.key==='Enter')sendDelegateMsgSubmit()">
-      <button onclick="sendDelegateMsgSubmit()" data-i18n="dlg.send">Надіслати</button>
+      <input id="dlgMsgText" data-i18n-ph="dlg.msg.ph" placeholder="Send message to agent..." onkeydown="if(event.key==='Enter')sendDelegateMsgSubmit()">
+      <button onclick="sendDelegateMsgSubmit()" data-i18n="dlg.send">Send</button>
     </div>
   </div>
 
@@ -3541,12 +3541,12 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     <div class="welcome">
       <div class="wi">CCS</div>
       <h2>Claude Code Studio</h2>
-      <p data-i18n="welcome.desc">Виберіть MCP та Навички зліва, файли — справа.</p>
+      <p data-i18n="welcome.desc">Choose MCP and Skills on the left, files on the right.</p>
       <div class="welcome-prompts">
-        <div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; <span data-i18n="welcome.prompt.1">Поясни цей код крок за кроком</span></div>
-        <div class="wp-card" onclick="setPrompt(this)">&#x1F41B; <span data-i18n="welcome.prompt.2">Знайди та виправ помилки</span></div>
-        <div class="wp-card" onclick="setPrompt(this)">&#x2728; <span data-i18n="welcome.prompt.3">Напиши unit-тести</span></div>
-        <div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; <span data-i18n="welcome.prompt.4">Спроектуй архітектуру</span></div>
+        <div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; <span data-i18n="welcome.prompt.1">Explain this code step by step</span></div>
+        <div class="wp-card" onclick="setPrompt(this)">&#x1F41B; <span data-i18n="welcome.prompt.2">Find and fix bugs</span></div>
+        <div class="wp-card" onclick="setPrompt(this)">&#x2728; <span data-i18n="welcome.prompt.3">Write unit tests</span></div>
+        <div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; <span data-i18n="welcome.prompt.4">Design the architecture</span></div>
       </div>
       <button class="welcome-import-btn" onclick="$i('sessImportInput').click()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="welcome.import">Import session from JSON</span></button>
     </div>
@@ -3578,7 +3578,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
     <!-- Slash commands popup -->
     <div class="at-popup hidden" id="slashPopup">
-      <div class="at-popup-hdr"><span>⚡</span><span data-i18n="cmds.popup.hdr" style="flex:1;font-size:12px;color:var(--text)">Команди</span></div>
+      <div class="at-popup-hdr"><span>⚡</span><span data-i18n="cmds.popup.hdr" style="flex:1;font-size:12px;color:var(--text)">Commands</span></div>
       <div class="at-popup-list" id="slashList"></div>
     </div>
     <!-- Attachment chips (files + screenshots) -->
@@ -3593,12 +3593,12 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
     <div class="bots-strip" id="botsStrip"></div>
     <div class="iw">
-      <button class="attach-btn" type="button" onclick="$i('filePickerInput').click()" data-i18n-title="attach.file" title="Додати файл" data-i18n-aria="attach.file" aria-label="Attach file">
+      <button class="attach-btn" type="button" onclick="$i('filePickerInput').click()" data-i18n-title="attach.file" title="Attach file (📎)" data-i18n-aria="attach.file" aria-label="Attach file">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
         </svg>
       </button>
-      <textarea id="input" rows="1" dir="auto" data-i18n-ph="input.ph" placeholder="Напишіть завдання... Ctrl+V — скріншот · @@ — бот · @ — файл · # — SSH · 📎 — будь-який файл" autofocus data-i18n-aria="aria.input" aria-label="Message input" aria-multiline="true"></textarea>
+      <textarea id="input" rows="1" dir="auto" data-i18n-ph="input.ph" placeholder="Write a task... Ctrl+V — screenshot · @@ — bot · @ — file · # — SSH · 📎 — any file" autofocus data-i18n-aria="aria.input" aria-label="Message input" aria-multiline="true"></textarea>
       <!-- The pill lives DOWNSTREAM of the textarea. In a flex row every earlier
            sibling owns the text's left edge, so showing it upstream shoved the
            placeholder ~70px to the right the instant a turn started — and narrowed
@@ -3608,7 +3608,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <button class="interrupt-pill-btn" id="interruptPillBtn" data-mode="interrupt" onclick="cycleInterruptMode()"></button>
       </div>
       <span id="charCounter" style="display:none;" aria-live="polite" data-i18n-aria="aria.charcount" aria-label="Character count"></span>
-      <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Завдань у черзі"></span>
+      <span class="queue-badge" id="queueBadge" data-i18n-title="queue.title" title="Tasks waiting in queue"></span>
       <button class="sb stop-btn hidden" id="stopBtn" onclick="confirmStop()" data-i18n-title="stop.agent" title="Stop agent">
         <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
       </button>
@@ -3626,7 +3626,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 </div>
 
 <!-- RIGHT PANEL TAB (left side of right panel) -->
-<div class="panel-tab panel-tab-right active" role="button" tabindex="0" data-i18n-aria="tip.panels.right" aria-label="Toggle right panel" onclick="toggle('rightPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('rightPanel')}" data-tip="Сховати/показати праву панель" data-i18n-tip="tip.panels.right">
+<div class="panel-tab panel-tab-right active" role="button" tabindex="0" data-i18n-aria="tip.panels.right" aria-label="Toggle right panel" onclick="toggle('rightPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('rightPanel')}" data-tip="Toggle right panel" data-i18n-tip="tip.panels.right">
   <div class="panel-tab-inner">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
   </div>
@@ -3635,8 +3635,8 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <!-- RIGHT PANEL: File Browser -->
 <div class="right" id="rightPanel">
   <div class="fh">
-    <span data-i18n="files.title">Робоча директорія</span>
-    <button onclick="loadFiles()" data-i18n-title="files.refresh" title="Оновити">↻</button>
+    <span data-i18n="files.title">Workspace</span>
+    <button onclick="loadFiles()" data-i18n-title="files.refresh" title="Refresh">↻</button>
   </div>
   <div class="ft" id="filesTree"></div>
 </div>
@@ -3670,17 +3670,17 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <div class="modal-overlay hidden" id="cfgModal" aria-hidden="true" onclick="if(event.target===this)closeCfg()">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cfgTitle" tabindex="-1">
     <div class="modal-hdr">
-      <h2 id="cfgTitle" data-i18n="cfg.title">Налаштування</h2>
+      <h2 id="cfgTitle" data-i18n="cfg.title">Configuration</h2>
       <button class="modal-close" onclick="closeCfg()">✕</button>
     </div>
     <div class="modal-tabs" id="cfgTabs"></div>
     <div class="cfg-toolbar hidden" id="cfgToolbar">
       <input type="search" id="cfgSearch" spellcheck="false" autocomplete="off"
-             data-i18n-ph="cfg.search.ph" placeholder="Пошук параметра…"
-             data-i18n-aria="cfg.search.aria" aria-label="Пошук параметрів"
+             data-i18n-ph="cfg.search.ph" placeholder="Search settings…"
+             data-i18n-aria="cfg.search.aria" aria-label="Search settings"
              oninput="renderCfgForm()"
              onkeydown="if(event.key==='Escape'){this.value='';renderCfgForm();event.stopPropagation()}">
-      <button class="cfg-toggle-all" id="cfgToggleAll" onclick="cfgToggleAllSections()" data-i18n="cfg.collapse_all">Згорнути все</button>
+      <button class="cfg-toggle-all" id="cfgToggleAll" onclick="cfgToggleAllSections()" data-i18n="cfg.collapse_all">Collapse all</button>
     </div>
     <div class="modal-body">
       <div class="cfg-path hidden" id="cfgPathInfo"></div>
@@ -3688,10 +3688,10 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <textarea id="cfgEditor" spellcheck="false"></textarea>
     </div>
     <div class="modal-footer">
-      <span class="save-notice hidden" id="saveNotice" data-i18n="cfg.saved">✓ Збережено</span>
+      <span class="save-notice hidden" id="saveNotice" data-i18n="cfg.saved">✓ Saved</span>
       <div style="display:flex;gap:8px">
-        <button class="bg" onclick="closeCfg()" data-i18n="cfg.close">Закрити</button>
-        <button class="bp" id="cfgSaveBtn" onclick="saveCfg()" data-i18n="cfg.save">Зберегти</button>
+        <button class="bg" onclick="closeCfg()" data-i18n="cfg.close">Close</button>
+        <button class="bp" id="cfgSaveBtn" onclick="saveCfg()" data-i18n="cfg.save">Save</button>
       </div>
     </div>
   </div>
@@ -3706,8 +3706,8 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
     <div class="modal-body" id="mcpSettingsBody" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;overflow-y:auto"></div>
     <div class="modal-footer">
-      <button class="bg" onclick="closeMcpSettings()" data-i18n="mcp.cfg.cancel">Скасувати</button>
-      <button class="bp" onclick="saveMcpSettings()" data-i18n="mcp.cfg.save">Зберегти</button>
+      <button class="bg" onclick="closeMcpSettings()" data-i18n="mcp.cfg.cancel">Cancel</button>
+      <button class="bp" onclick="saveMcpSettings()" data-i18n="mcp.cfg.save">Save</button>
     </div>
   </div>
 </div>
@@ -3716,12 +3716,12 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <div class="modal-overlay hidden" id="mcpImportModal" aria-hidden="true" onclick="if(event.target===this)closeMcpImport()">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mcpImportTitle" tabindex="-1" style="width:500px;max-height:82vh;max-height:82dvh">
     <div class="modal-hdr">
-      <h2 id="mcpImportTitle" style="font-size:14px;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="mcp.import.modal.title">Імпорт MCP серверів</span></h2>
+      <h2 id="mcpImportTitle" style="font-size:14px;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="mcp.import.modal.title">Import MCP servers</span></h2>
       <button class="modal-close" onclick="closeMcpImport()">✕</button>
     </div>
     <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto">
       <div style="font-size:12px;color:var(--muted);line-height:1.6">
-        <span data-i18n-html="mcp.import.formats">Підтримується формат <strong>Claude Desktop</strong> (<code>claude_desktop_config.json</code>) та будь-який JSON вигляду <code style='font-size:11px'>{"mcpServers":{...}}</code></span>
+        <span data-i18n-html="mcp.import.formats">Supported: the <strong>Claude Desktop</strong> format (<code>claude_desktop_config.json</code>) and any JSON shaped like <code style='font-size:11px'>{"mcpServers":{...}}</code></span>
       </div>
       <div id="mcpImportDrop"
            style="border:2px dashed var(--border);border-radius:8px;padding:18px 12px;text-align:center;cursor:pointer;transition:border-color .15s"
@@ -3729,10 +3729,10 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
            ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
            ondragleave="this.style.borderColor='var(--border)'"
            ondrop="event.preventDefault();this.style.borderColor='var(--border)';handleMcpImportDrop(event)">
-        <div style="font-size:13px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:8px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg><span data-i18n="mcp.import.drop">Перетягніть .json файл або натисніть для вибору</span></div>
+        <div style="font-size:13px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:8px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg><span data-i18n="mcp.import.drop">Drag .json file or click to browse</span></div>
         <input type="file" id="mcpImportFile" accept=".json" style="display:none" onchange="handleMcpImportFile(this)">
       </div>
-      <div style="text-align:center;font-size:11px;color:var(--muted);margin:-2px 0" data-i18n="mcp.import.or">— або вставте JSON вручну —</div>
+      <div style="text-align:center;font-size:11px;color:var(--muted);margin:-2px 0" data-i18n="mcp.import.or">— or paste JSON manually —</div>
       <textarea id="mcpImportJson"
                 placeholder='{"mcpServers":{"my-server":{"command":"npx","args":["my-mcp"],"env":{"API_KEY":"value"}}}}'
                 style="background:var(--s2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:11px;outline:none;width:100%;font-family:monospace;min-height:90px;resize:vertical;transition:border .15s"
@@ -3740,19 +3740,19 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <div id="mcpImportError" style="display:none;font-size:12px;color:var(--orange);padding:7px 10px;background:var(--s2);border-radius:6px;border:1px solid var(--orange)"></div>
       <div id="mcpImportPreview" style="display:none;flex-direction:column;gap:6px">
         <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">
-          <span data-i18n="mcp.import.found">Знайдено серверів:</span> <span id="mcpImportCount" style="color:var(--text)">0</span>
+          <span data-i18n="mcp.import.found">Servers found:</span> <span id="mcpImportCount" style="color:var(--text)">0</span>
         </div>
         <div id="mcpImportList" style="display:flex;flex-direction:column;gap:3px;max-height:200px;overflow-y:auto"></div>
       </div>
       <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px 10px;background:var(--s2);border-radius:6px">
         <input type="checkbox" id="mcpImportReplace">
-        <span data-i18n="mcp.import.replace">Замінити існуючі кастомні сервери (інакше — злиття)</span>
+        <span data-i18n="mcp.import.replace">Replace existing custom servers (otherwise — merge)</span>
       </label>
     </div>
     <div class="modal-footer">
-      <button class="bg" onclick="closeMcpImport()" data-i18n="mcp.cfg.cancel">Скасувати</button>
-      <button class="bg" onclick="previewMcpImport()" style="margin-left:auto" data-i18n="mcp.import.preview.btn">👁 Перегляд</button>
-      <button class="bp" onclick="doMcpImport()" id="mcpImportBtn" disabled data-i18n="mcp.import.do">Імпортувати</button>
+      <button class="bg" onclick="closeMcpImport()" data-i18n="mcp.cfg.cancel">Cancel</button>
+      <button class="bg" onclick="previewMcpImport()" style="margin-left:auto" data-i18n="mcp.import.preview.btn">👁 Preview</button>
+      <button class="bp" onclick="doMcpImport()" id="mcpImportBtn" disabled data-i18n="mcp.import.do">Import</button>
     </div>
   </div>
 </div>
@@ -3858,21 +3858,21 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
     <div class="fpv-toolbar">
       <span class="fpv-ext" id="fpvExt"></span>
-      <button class="fpv-btn" id="fpvCopyImgBtn" onclick="fpvCopyImage()" style="display:none" data-i18n-title="fpv.copy_img.title" title="Скопіювати зображення">
+      <button class="fpv-btn" id="fpvCopyImgBtn" onclick="fpvCopyImage()" style="display:none" data-i18n-title="fpv.copy_img.title" title="Copy image to clipboard">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-        <span data-i18n="fpv.copy_img">Копіювати</span>
+        <span data-i18n="fpv.copy_img">Copy</span>
       </button>
-      <button class="fpv-btn" id="fpvDownloadBtn" onclick="fpvDownload()" data-i18n-title="fpv.download.title" title="Завантажити файл">
+      <button class="fpv-btn" id="fpvDownloadBtn" onclick="fpvDownload()" data-i18n-title="fpv.download.title" title="Download file">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span data-i18n="fpv.download">Завантажити</span>
+        <span data-i18n="fpv.download">Download</span>
       </button>
-      <button class="fpv-btn" id="fpvEditorBtn" data-editor-btn onclick="fpvOpenInEditor()" data-i18n-title="editor.open.file.title" title="Відкрити у редакторі">
+      <button class="fpv-btn" id="fpvEditorBtn" data-editor-btn onclick="fpvOpenInEditor()" data-i18n-title="editor.open.file.title" title="Open this file in {{editor}}">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-        <span data-i18n="editor.open">Відкрити</span>
+        <span data-i18n="editor.open">Open</span>
       </button>
-      <button class="fpv-btn" onclick="fpvShare()" id="fpvShareBtn" data-i18n-title="fpv.share.title" title="Поділитись / Скопіювати посилання">
+      <button class="fpv-btn" onclick="fpvShare()" id="fpvShareBtn" data-i18n-title="fpv.share.title" title="Share / Copy link">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-        <span data-i18n="fpv.share">Поділитись</span>
+        <span data-i18n="fpv.share">Share</span>
       </button>
     </div>
     <div class="fpv-body" id="fpvBody"></div>
@@ -3883,27 +3883,27 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <div class="modal-overlay hidden" id="dirModal" aria-hidden="true" onclick="if(event.target===this)closeDirModal()">
   <div class="modal dir-modal" role="dialog" aria-modal="true" aria-labelledby="dirModalTitle" tabindex="-1">
     <div class="modal-hdr">
-      <h2 id="dirModalTitle" data-i18n="dir.title">Новий проект</h2>
+      <h2 id="dirModalTitle" data-i18n="dir.title">New project</h2>
       <button class="modal-close" onclick="closeDirModal()">✕</button>
     </div>
 
     <!-- Local / Remote toggle -->
     <div class="proj-type-toggle">
-      <button class="proj-type-btn active" id="projTypeLocal" onclick="setProjType('local')" data-i18n="proj.type.local">📁 Локальний</button>
-      <button class="proj-type-btn" id="projTypeRemote" onclick="setProjType('remote')" data-i18n="proj.type.remote">🌐 Віддалений SSH</button>
+      <button class="proj-type-btn active" id="projTypeLocal" onclick="setProjType('local')" data-i18n="proj.type.local">📁 Local</button>
+      <button class="proj-type-btn" id="projTypeRemote" onclick="setProjType('remote')" data-i18n="proj.type.remote">🌐 Remote SSH</button>
     </div>
 
     <!-- LOCAL section -->
     <div id="projLocalSection">
       <div class="dir-path-bar">
-        <input type="text" class="dir-path-input" id="dirPathInput" data-i18n-ph="dir.path.ph" placeholder="Введіть шлях, напр. /Users/you/projects" spellcheck="false">
-        <button class="dir-path-go" onclick="navigateToPath()" data-i18n="dir.path.go">Перейти</button>
+        <input type="text" class="dir-path-input" id="dirPathInput" data-i18n-ph="dir.path.ph" placeholder="Enter path, e.g. /Users/you/projects" spellcheck="false">
+        <button class="dir-path-go" onclick="navigateToPath()" data-i18n="dir.path.go">Go</button>
       </div>
       <div class="dir-filter-bar">
-        <input type="text" class="dir-filter-input" id="dirFilterInput" data-i18n-ph="dir.filter.ph" placeholder="Фільтрувати папки..." spellcheck="false">
+        <input type="text" class="dir-filter-input" id="dirFilterInput" data-i18n-ph="dir.filter.ph" placeholder="Filter folders..." spellcheck="false">
       </div>
       <div class="dir-list" id="dirList">
-        <div style="padding:14px;color:var(--muted);text-align:center;font-size:12px" data-i18n="toast.loading">Завантаження...</div>
+        <div style="padding:14px;color:var(--muted);text-align:center;font-size:12px" data-i18n="toast.loading">Loading...</div>
       </div>
     </div>
 
@@ -3911,36 +3911,36 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     <div id="projRemoteSection" style="display:none">
       <div class="remote-form">
         <div class="rh-form-row">
-          <span class="rh-label" data-i18n="dir.ssh_host">SSH Хост:</span>
+          <span class="rh-label" data-i18n="dir.ssh_host">SSH Host:</span>
           <select id="remoteHostSelect" style="flex:1">
-            <option value="" data-i18n="dir.pick_host">— оберіть хост —</option>
+            <option value="" data-i18n="dir.pick_host">— pick a host —</option>
           </select>
-          <button class="bg" onclick="openAddHostModal()" style="padding:5px 10px;font-size:12px;flex-shrink:0" data-i18n="dir.remote.add_new">＋ Новий</button>
+          <button class="bg" onclick="openAddHostModal()" style="padding:5px 10px;font-size:12px;flex-shrink:0" data-i18n="dir.remote.add_new">＋ New</button>
         </div>
         <div class="rh-form-row">
-          <span class="rh-label" data-i18n="dir.remote.path">Шлях на сервері:</span>
+          <span class="rh-label" data-i18n="dir.remote.path">Server path:</span>
           <input id="remoteWorkdirInput" placeholder="/home/user/myproject" style="flex:1">
         </div>
         <div class="rh-form-row">
           <span class="rh-label"></span>
-          <button class="bg" onclick="testSelectedHost()" style="padding:5px 12px;font-size:12px" data-i18n="dir.remote.test">🔌 Тест з'єднання</button>
+          <button class="bg" onclick="testSelectedHost()" style="padding:5px 12px;font-size:12px" data-i18n="dir.remote.test">🔌 Test connection</button>
           <div class="rh-test-result" id="remoteTestResult"></div>
         </div>
       </div>
     </div>
 
     <div class="proj-name-row">
-      <span style="font-size:12px;color:var(--muted);white-space:nowrap" data-i18n="dir.name.label">Назва:</span>
-      <input id="projNameInput" data-i18n-ph="dir.proj_name" placeholder="Назва проекту (авто якщо порожньо)">
+      <span style="font-size:12px;color:var(--muted);white-space:nowrap" data-i18n="dir.name.label">Name:</span>
+      <input id="projNameInput" data-i18n-ph="dir.proj_name" placeholder="Project name (auto if empty)">
     </div>
     <div class="dir-footer">
       <label id="gitInitLabel">
         <input type="checkbox" id="gitInitChk">
-        <span data-i18n="dir.git.init">git init (якщо ще не репозиторій)</span>
+        <span data-i18n="dir.git.init">git init (if not already a repository)</span>
       </label>
       <div style="flex:1"></div>
       <button class="bg" onclick="closeDirModal()" style="padding:6px 14px" data-i18n="dir.cancel">Cancel</button>
-      <button class="bp" onclick="selectDir()" style="padding:6px 14px" data-i18n="proj.add">＋ Додати проект</button>
+      <button class="bp" onclick="selectDir()" style="padding:6px 14px" data-i18n="proj.add">＋ Add project</button>
     </div>
   </div>
 </div>
@@ -3989,7 +3989,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <select id="cliImportSource" onchange="cliImportSourceChanged()" style="flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-size:12px;outline:none">
         <option value="" data-i18n="cli.import.source_local">This machine</option>
       </select>
-      <button class="cfg" onclick="openAddHostModal()" data-i18n-title="ssh.add" title="Додати SSH хост" style="flex-shrink:0">＋</button>
+      <button class="cfg" onclick="openAddHostModal()" data-i18n-title="ssh.add" title="＋ Add SSH host" style="flex-shrink:0">＋</button>
     </div>
     <div style="padding:10px 16px 6px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0">
       <span style="font-size:12px;color:var(--muted);white-space:nowrap" data-i18n="cli.import.project">Project:</span>
@@ -4017,49 +4017,47 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <div class="modal-overlay hidden" id="sshHostModal" aria-hidden="true" onclick="if(event.target===this)closeSshHostModal()">
   <div class="modal ssh-host-modal" role="dialog" aria-modal="true" aria-labelledby="sshHostModalTitle" tabindex="-1">
     <div class="modal-hdr">
-      <h2 id="sshHostModalTitle" data-i18n="ssh.modal.add.title">🌐 Додати SSH хост</h2>
+      <h2 id="sshHostModalTitle" data-i18n="ssh.modal.add.title">🌐 Add SSH host</h2>
       <button class="modal-close" onclick="closeSshHostModal()">✕</button>
     </div>
     <div class="ssh-host-form">
       <div>
-        <label data-i18n="ssh.modal.label">Назва хоста *</label>
-        <input id="sshHostLabel" data-i18n-ph="ssh.modal.label.ph" placeholder="Мій продакшн сервер">
+        <label data-i18n="ssh.modal.label">Host name *</label>
+        <input id="sshHostLabel" data-i18n-ph="ssh.modal.label.ph" placeholder="My production server">
       </div>
       <div>
-        <label data-i18n="ssh.modal.host">Хост (user@host або host) *</label>
+        <label data-i18n="ssh.modal.host">Host (user@host or host) *</label>
         <input id="sshHostHost" placeholder="deploy@eu.myserver.com">
       </div>
       <div class="rh-form-row" style="gap:12px">
         <div style="flex:1">
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" data-i18n="ssh.modal.port">Порт</label>
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" data-i18n="ssh.modal.port">Port</label>
           <input id="sshHostPort" type="number" placeholder="22" value="22" style="width:100%;box-sizing:border-box">
         </div>
         <div style="flex:3">
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" data-i18n="ssh.modal.auth">Метод автентифікації</label>
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" data-i18n="ssh.modal.auth">Authentication method</label>
           <div style="display:flex;gap:6px">
-            <button class="proj-type-btn active" id="sshAuthBtnKey" onclick="setAuthType('key')" style="flex:1;padding:5px 0;font-size:11px" data-i18n="ssh.modal.auth.key">🔑 SSH ключ</button>
-            <button class="proj-type-btn" id="sshAuthBtnPwd" onclick="setAuthType('pwd')" style="flex:1;padding:5px 0;font-size:11px" data-i18n="ssh.modal.auth.pwd">🔐 Пароль</button>
+            <button class="proj-type-btn active" id="sshAuthBtnKey" onclick="setAuthType('key')" style="flex:1;padding:5px 0;font-size:11px" data-i18n="ssh.modal.auth.key">🔑 SSH key</button>
+            <button class="proj-type-btn" id="sshAuthBtnPwd" onclick="setAuthType('pwd')" style="flex:1;padding:5px 0;font-size:11px" data-i18n="ssh.modal.auth.pwd">🔐 Password</button>
           </div>
         </div>
       </div>
       <div id="sshHostKeyRow">
-        <label data-i18n="ssh.modal.keypath">Шлях до SSH ключа (необов'язково)</label>
+        <label data-i18n="ssh.modal.keypath">SSH key path (optional)</label>
         <input id="sshHostKey" placeholder="~/.ssh/id_rsa">
       </div>
       <div id="sshHostPasswordRow" class="hidden">
-        <label data-i18n="ssh.modal.password">Пароль</label>
+        <label data-i18n="ssh.modal.password">Password</label>
         <input id="sshHostPassword" type="password" placeholder="••••••••" autocomplete="current-password">
       </div>
-      <div style="font-size:11px;color:var(--muted);line-height:1.5;padding:2px 0" data-i18n="ssh.modal.tip">
-        💡 SSH ключ: без пароля або доданий у ssh-agent. Перше підключення автоматично підтвердить fingerprint. Пароль зберігається у відкритому вигляді — рекомендуємо використовувати ключ.
-      </div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;padding:2px 0" data-i18n="ssh.modal.tip">💡 SSH key: no passphrase or added to ssh-agent. First connection will auto-confirm the fingerprint. Password is stored in plain text — we recommend using a key.</div>
       <div class="rh-test-result" id="sshHostTestResult"></div>
     </div>
     <div class="dir-footer">
-      <button class="bg" onclick="testNewSshHost()" style="padding:6px 14px" data-i18n="ssh.modal.test">🔌 Тест</button>
+      <button class="bg" onclick="testNewSshHost()" style="padding:6px 14px" data-i18n="ssh.modal.test">🔌 Test</button>
       <div style="flex:1"></div>
-      <button class="bg" onclick="closeSshHostModal()" style="padding:6px 14px" data-i18n="ssh.modal.cancel">Скасувати</button>
-      <button class="bp" id="sshHostSaveBtn" onclick="saveNewSshHost()" style="padding:6px 14px" data-i18n="ssh.modal.save">＋ Зберегти хост</button>
+      <button class="bg" onclick="closeSshHostModal()" style="padding:6px 14px" data-i18n="ssh.modal.cancel">Cancel</button>
+      <button class="bp" id="sshHostSaveBtn" onclick="saveNewSshHost()" style="padding:6px 14px" data-i18n="ssh.modal.save">＋ Save host</button>
     </div>
   </div>
 </div>
@@ -4068,23 +4066,23 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <div class="modal-overlay hidden" id="cmdModal" aria-hidden="true" onclick="if(event.target===this)cancelCmdForm()">
   <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="cmdModalTitle" tabindex="-1">
     <div class="modal-hdr">
-      <h2 id="cmdModalTitle" data-i18n="cmd.modal.add.title">＋ Додати команду</h2>
+      <h2 id="cmdModalTitle" data-i18n="cmd.modal.add.title">＋ Add command</h2>
       <button class="modal-close" onclick="cancelCmdForm()">✕</button>
     </div>
     <div class="modal-body">
       <div class="cmd-field">
         <label for="cmdName" data-i18n="cmd.modal.name.label">Slash command</label>
-        <input id="cmdName" data-i18n-ph="cmd.name.ph" placeholder="/назва (напр. /check)" autocomplete="off">
+        <input id="cmdName" data-i18n-ph="cmd.name.ph" placeholder="/name (e.g. /check)" autocomplete="off">
         <div class="cmd-name-hint" data-i18n-html="cmd.modal.name.hint">Use a short trigger like <code>/check</code> or <code>/review</code>.</div>
       </div>
       <div class="cmd-field">
         <label for="cmdText" data-i18n="cmd.modal.text.label">Prompt</label>
-        <textarea id="cmdText" data-i18n-ph="cmd.text.ph" placeholder="Повний текст промпту..."></textarea>
+        <textarea id="cmdText" data-i18n-ph="cmd.text.ph" placeholder="Full prompt text..."></textarea>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="bg" onclick="cancelCmdForm()" data-i18n="cmd.modal.cancel">Скасувати</button>
-      <button class="bp" id="cmdSaveBtn" onclick="saveCommand()" data-i18n="cmd.add.btn">Додати</button>
+      <button class="bg" onclick="cancelCmdForm()" data-i18n="cmd.modal.cancel">Cancel</button>
+      <button class="bp" id="cmdSaveBtn" onclick="saveCommand()" data-i18n="cmd.add.btn">Add</button>
     </div>
   </div>
 </div>
@@ -4093,8 +4091,8 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <div class="modal-overlay hidden" id="newTabModal" onclick="if(event.target===this)closeModalOverlay('newTabModal')">
   <div class="modal nt-modal" style="max-width:640px">
     <div class="modal-hdr">
-      <h2 id="newTabTitle" data-i18n="newtab.title">Що відкрити?</h2>
-      <button class="modal-close" onclick="closeModalOverlay('newTabModal')" data-i18n-title="btn.close" title="Закрити" data-i18n-aria="btn.close" aria-label="Close">✕</button>
+      <h2 id="newTabTitle" data-i18n="newtab.title">What would you like to open?</h2>
+      <button class="modal-close" onclick="closeModalOverlay('newTabModal')" data-i18n-title="btn.close" title="Close" data-i18n-aria="btn.close" aria-label="Close">✕</button>
     </div>
     <div class="modal-body">
       <div class="nt-choices" id="ntChoices"></div>
@@ -4105,36 +4103,36 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <div class="modal-overlay hidden" id="botModal">
   <div class="modal bot-modal" style="max-width:560px">
     <div class="modal-hdr">
-      <h2 id="botModalTitle" data-i18n="bot.modal.add.title">Новий бот</h2>
-      <button class="modal-close" onclick="cancelBotForm()" data-i18n-title="btn.close" title="Закрити" data-i18n-aria="btn.close" aria-label="Close">✕</button>
+      <h2 id="botModalTitle" data-i18n="bot.modal.add.title">New bot</h2>
+      <button class="modal-close" onclick="cancelBotForm()" data-i18n-title="btn.close" title="Close" data-i18n-aria="btn.close" aria-label="Close">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="botId">
       <div class="cmd-field">
-        <label for="botLabel" data-i18n="bot.modal.label.label">Ім'я</label>
-        <input id="botLabel" data-i18n-ph="bot.modal.label.ph" placeholder="Крипто-аналітик" autocomplete="off" oninput="_botHandlePreview()">
-        <div class="cmd-name-hint"><span data-i18n="bot.modal.handle.hint">Звертання у чаті:</span> <b id="botHandlePreview">@@—</b></div>
+        <label for="botLabel" data-i18n="bot.modal.label.label">Name</label>
+        <input id="botLabel" data-i18n-ph="bot.modal.label.ph" placeholder="Crypto Analyst" autocomplete="off" oninput="_botHandlePreview()">
+        <div class="cmd-name-hint"><span data-i18n="bot.modal.handle.hint">Addressed in chat as:</span> <b id="botHandlePreview">@@—</b></div>
       </div>
       <div class="cmd-field">
-        <label for="botAvatar" data-i18n="bot.modal.avatar.label">Емодзі</label>
+        <label for="botAvatar" data-i18n="bot.modal.avatar.label">Emoji</label>
         <div class="emoji-field">
           <input id="botAvatar" placeholder="📈" autocomplete="off">
           <button type="button" class="emoji-open" id="emojiOpenBtn" onclick="toggleEmojiPicker(event)"
-                  data-i18n-title="bot.modal.avatar.pick" title="Обрати емодзі" aria-haspopup="true" aria-expanded="false">
-            <span data-i18n="bot.modal.avatar.pick.btn">Обрати</span>
+                  data-i18n-title="bot.modal.avatar.pick" title="Pick an emoji" aria-haspopup="true" aria-expanded="false">
+            <span data-i18n="bot.modal.avatar.pick.btn">Pick</span>
           </button>
           <div class="emoji-pop hidden" id="emojiPop" role="dialog" data-i18n-aria="aria.emoji" aria-label="Emoji"></div>
         </div>
       </div>
       <div class="cmd-field">
-        <label for="botDesc" data-i18n="bot.modal.desc.label">Призначення</label>
-        <input id="botDesc" data-i18n-ph="bot.modal.desc.ph" placeholder="аналіз ринку криптовалют" autocomplete="off">
-        <div class="cmd-name-hint" data-i18n="bot.modal.desc.hint">Одним рядком. Це бачать інші боти, щоб знати, кому передати роботу.</div>
+        <label for="botDesc" data-i18n="bot.modal.desc.label">Purpose</label>
+        <input id="botDesc" data-i18n-ph="bot.modal.desc.ph" placeholder="crypto market analysis" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="bot.modal.desc.hint">One line. Other bots see this, so they know who to hand work to.</div>
       </div>
       <div class="cmd-field">
-        <label for="botModel" data-i18n="bot.modal.model.label">Модель</label>
+        <label for="botModel" data-i18n="bot.modal.model.label">Model</label>
         <select id="botModel">
-          <option value="" data-i18n="bot.model.inherit">Як у чаті</option>
+          <option value="" data-i18n="bot.model.inherit">Same as chat</option>
           <option value="haiku">haiku</option>
           <option value="sonnet">sonnet</option>
           <option value="opus">opus</option>
@@ -4145,24 +4143,24 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <label class="bot-global-row" for="botGlobal">
           <input type="checkbox" id="botGlobal">
           <span>
-            <b data-i18n="bot.modal.global.label">Доступний у всіх проєктах</b>
-            <span class="cmd-name-hint" data-i18n="bot.modal.global.hint">Роль на кшталт програміста потрібна скрізь. Увімкніть — і бот зʼявиться в кожному проєкті без окремого додавання.</span>
+            <b data-i18n="bot.modal.global.label">Available in every project</b>
+            <span class="cmd-name-hint" data-i18n="bot.modal.global.hint">A role like a programmer is wanted everywhere. Turn this on and the bot shows up in every project without being added to each one.</span>
           </span>
         </label>
         <div class="cmd-name-hint" id="botAlsoIn" style="display:none"></div>
       </div>
       <div class="cmd-field">
-        <label for="botPrompt" data-i18n="bot.modal.prompt.label">Системний промпт</label>
+        <label for="botPrompt" data-i18n="bot.modal.prompt.label">System prompt</label>
         <div id="botTemplates" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:2px"></div>
-        <textarea id="botPrompt" rows="7" data-i18n-ph="bot.modal.prompt.ph" placeholder="Ти аналітик крипторинку..."></textarea>
-        <div class="cmd-name-hint" data-i18n="bot.modal.prompt.hint">Хто цей бот і як він працює. До 8000 символів.</div>
+        <textarea id="botPrompt" rows="7" data-i18n-ph="bot.modal.prompt.ph" placeholder="You are a crypto market analyst..."></textarea>
+        <div class="cmd-name-hint" data-i18n="bot.modal.prompt.hint">Who this bot is and how it works. Up to 8000 characters.</div>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="bot-danger" id="botDeleteBtn" onclick="deleteBotGlobally()" style="display:none" data-i18n="bot.modal.delete">Видалити бота</button>
+      <button class="bot-danger" id="botDeleteBtn" onclick="deleteBotGlobally()" style="display:none" data-i18n="bot.modal.delete">Delete bot</button>
       <span style="flex:1"></span>
-      <button class="bg" onclick="cancelBotForm()" data-i18n="agent.modal.cancel">Скасувати</button>
-      <button class="bp" id="botSaveBtn" onclick="saveBot()" data-i18n="bot.add.btn">Створити</button>
+      <button class="bg" onclick="cancelBotForm()" data-i18n="agent.modal.cancel">Cancel</button>
+      <button class="bp" id="botSaveBtn" onclick="saveBot()" data-i18n="bot.add.btn">Create</button>
     </div>
   </div>
 </div>
@@ -4170,7 +4168,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <div class="modal-overlay hidden" id="agentModal" aria-hidden="true" onclick="if(event.target===this)cancelAgentForm()">
   <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="agentModalTitle" tabindex="-1">
     <div class="modal-hdr">
-      <h2 id="agentModalTitle" data-i18n="agent.modal.add.title">＋ Додати агента</h2>
+      <h2 id="agentModalTitle" data-i18n="agent.modal.add.title">＋ Add agent</h2>
       <button class="modal-close" onclick="cancelAgentForm()">✕</button>
     </div>
     <div class="modal-body">
@@ -4211,8 +4209,8 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       </div>
     </div>
     <div class="modal-footer">
-      <button class="bg" onclick="cancelAgentForm()" data-i18n="agent.modal.cancel">Скасувати</button>
-      <button class="bp" id="agentSaveBtn" onclick="saveAgent()" data-i18n="agent.add.btn">Додати</button>
+      <button class="bg" onclick="cancelAgentForm()" data-i18n="agent.modal.cancel">Cancel</button>
+      <button class="bp" id="agentSaveBtn" onclick="saveAgent()" data-i18n="agent.add.btn">Add</button>
     </div>
   </div>
 </div>
@@ -4222,7 +4220,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmStopTitle">
     <div class="cd-icon">⏹</div>
     <h3 id="confirmStopTitle" data-i18n="confirm.stop.h">Stop task?</h3>
-    <p data-i18n="confirm.stop.desc">Виконання агента буде перервано.</p>
+    <p data-i18n="confirm.stop.desc">Agent execution will be interrupted.</p>
     <div class="confirm-actions">
       <button class="cd-btn-cancel" onclick="cancelStop()" data-i18n="confirm.stop.cancel">Cancel</button>
       <button class="cd-btn-stop" id="confirmStopBtn" onclick="doStop()" data-i18n="confirm.stop.yes">Yes, stop</button>
@@ -4235,14 +4233,14 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="rlModalTitle">
     <div class="cd-icon">🚫</div>
     <div class="rl-modal-type" id="rlModalType">—</div>
-    <h3 id="rlModalTitle" data-i18n="rl.modal.title">Ліміт вичерпано</h3>
+    <h3 id="rlModalTitle" data-i18n="rl.modal.title">Limit exhausted</h3>
     <p id="rlModalDesc"></p>
     <div class="rl-modal-countdown">
-      <span class="rl-cd-label" data-i18n="rl.modal.reset">Скидання через:</span>
+      <span class="rl-cd-label" data-i18n="rl.modal.reset">Resets in:</span>
       <span id="rlModalTimer">—</span>
     </div>
     <div class="confirm-actions" style="margin-top:18px">
-      <button class="cd-btn-ok" onclick="closeRlModal()" data-i18n="rl.modal.ok">Зрозуміло</button>
+      <button class="cd-btn-ok" onclick="closeRlModal()" data-i18n="rl.modal.ok">Got it</button>
     </div>
   </div>
 </div>
@@ -4251,37 +4249,37 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <div class="modal-overlay hidden" id="delegateModal" aria-hidden="true" onclick="if(event.target===this)closeDelegateModal()">
   <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="dlgModalTitle">
     <div class="modal-hdr">
-      <h2 id="dlgModalTitle" data-i18n="dlg.title">Делегувати агенту</h2>
+      <h2 id="dlgModalTitle" data-i18n="dlg.title">Delegate to Agent</h2>
       <button class="modal-close" onclick="closeDelegateModal()">&times;</button>
     </div>
     <div class="modal-body" style="gap:16px;display:flex;flex-direction:column;">
       <div class="cmd-field">
-        <label data-i18n="dlg.agent">Агент</label>
+        <label data-i18n="dlg.agent">Agent</label>
         <div class="dlg-agent-cards" id="dlgAgentCards"></div>
       </div>
       <div class="cmd-field">
-        <label data-i18n="dlg.mode">Режим</label>
+        <label data-i18n="dlg.mode">Mode</label>
         <div class="dlg-mode-cards">
           <label class="dlg-mode-card selected" onclick="this.parentElement.querySelectorAll('.dlg-mode-card').forEach(c=>c.classList.remove('selected'));this.classList.add('selected')">
             <input type="radio" name="dlgMode" value="handoff" checked style="display:none">
-            <span class="dlg-mode-title" data-i18n="dlg.mode.handoff">Передача</span>
-            <span class="dlg-mode-desc" data-i18n="dlg.mode.handoff.desc">Повна передача. Відкриє термінал, ви продовжите роботу там.</span>
+            <span class="dlg-mode-title" data-i18n="dlg.mode.handoff">Handoff</span>
+            <span class="dlg-mode-desc" data-i18n="dlg.mode.handoff.desc">Full transfer. Opens terminal, you continue working there.</span>
           </label>
           <label class="dlg-mode-card" onclick="this.parentElement.querySelectorAll('.dlg-mode-card').forEach(c=>c.classList.remove('selected'));this.classList.add('selected')">
             <input type="radio" name="dlgMode" value="sync" style="display:none">
-            <span class="dlg-mode-title" data-i18n="dlg.mode.sync">Синхронізація</span>
-            <span class="dlg-mode-desc" data-i18n="dlg.mode.sync.desc">Паралельна робота. Обидва агенти активні, спілкуються через файл діалогу.</span>
+            <span class="dlg-mode-title" data-i18n="dlg.mode.sync">Sync</span>
+            <span class="dlg-mode-desc" data-i18n="dlg.mode.sync.desc">Parallel work. Both agents active, communicate via dialog file.</span>
           </label>
         </div>
       </div>
       <div class="cmd-field">
-        <label data-i18n="dlg.task">Завдання</label>
-        <textarea id="dlgTask" rows="3" class="dlg-textarea" data-i18n-ph="dlg.task.ph" placeholder="Що має зробити агент..."></textarea>
+        <label data-i18n="dlg.task">Task</label>
+        <textarea id="dlgTask" rows="3" class="dlg-textarea" data-i18n-ph="dlg.task.ph" placeholder="What should the agent do..."></textarea>
       </div>
     </div>
     <div class="modal-footer">
-      <button onclick="closeDelegateModal()" style="background:var(--s2);color:var(--muted);" data-i18n="dlg.cancel">Скасувати</button>
-      <button onclick="submitDelegation()" style="background:var(--accent);color:#fff;" data-i18n="dlg.submit">Делегувати</button>
+      <button onclick="closeDelegateModal()" style="background:var(--s2);color:var(--muted);" data-i18n="dlg.cancel">Cancel</button>
+      <button onclick="submitDelegation()" style="background:var(--accent);color:#fff;" data-i18n="dlg.submit">Delegate</button>
     </div>
   </div>
 </div>
@@ -4293,8 +4291,8 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 <div id="dropOverlay" class="drop-overlay" aria-hidden="true">
   <div class="drop-overlay-inner">
     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    <p data-i18n="drop.title">Відпустіть, щоб прикріпити</p>
-    <span data-i18n="drop.hint">Зображення та файли буде додано до повідомлення</span>
+    <p data-i18n="drop.title">Drop to attach</p>
+    <span data-i18n="drop.hint">Images and files will be added to your message</span>
   </div>
 </div>
 
@@ -6451,7 +6449,12 @@ const TRANSLATIONS = {
 };
 function t(key) {
   const lang = localStorage.getItem('lang') || 'en';
-  return (TRANSLATIONS[lang] || TRANSLATIONS.en)[key] || key;
+  // English-first fallback, in this order: the chosen language, then English, then the
+  // key itself. `(TRANSLATIONS[lang] || TRANSLATIONS.en)[key]` only fell back when the
+  // whole LANGUAGE was unknown — a key missing from a known language returned the raw
+  // key ("proj.empty") in the UI. English is the right fallback because it is the
+  // language the documentation, the issues and the code comments are already in.
+  return TRANSLATIONS[lang]?.[key] ?? TRANSLATIONS.en?.[key] ?? key;
 }
 // Dynamic lists are built in JS (not via data-i18n attributes), so a language
 // switch has to re-run their renderers — otherwise their strings stay in the old
@@ -6475,7 +6478,12 @@ function rerenderI18nDynamic() {
 // language the owner set in Settings, for everyone including the Telegram bot.
 // Only a deliberate user choice writes to the server.
 function setLang(lang, persist = true) {
-  const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
+  // Same English-first rule as t(): a key missing from the chosen language must show
+  // English, not stay at whatever the markup happened to ship with. The markup itself
+  // is English now — the SPA used to ship Ukrainian in its static HTML, so any failure
+  // before this ran left the interface in a language nobody had chosen (issue #75).
+  const base = TRANSLATIONS[lang] || TRANSLATIONS.en;
+  const t = new Proxy({}, { get: (_, k) => (base[k] !== undefined ? base[k] : TRANSLATIONS.en?.[k]) });
   localStorage.setItem('lang', lang);
   if (persist) fetch('/api/lang', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang }) }).catch(() => {});
   const sel = $i('langSel'); if (sel) sel.value = lang;
@@ -15240,7 +15248,7 @@ function renderProjDropdownList(filter = '') {
     : projects;
 
   if (!filtered.length) {
-    list.innerHTML = `<div class="proj-dd-empty">${filter ? t('search.empty') || 'Не знайдено' : t('proj.empty')}</div>`;
+    list.innerHTML = `<div class="proj-dd-empty">${filter ? t('search.empty') || 'Nothing found' : t('proj.empty')}</div>`;
     return;
   }
 
@@ -16156,8 +16164,8 @@ function tunnelSetError(msg, opts) {
       const safeUrl = /^https?:\/\//.test(opts.installUrl) ? _esc(opts.installUrl) : '#';
       el.innerHTML =
         `<div style="margin-bottom:4px">${_esc(msg)}</div>` +
-        (cmdText ? `<div style="margin-bottom:4px">${t('tn.install.or')||'або'}: ${cmdText}</div>` : '') +
-        `<a href="${safeUrl}" target="_blank" rel="noopener" style="color:var(--accent2);font-size:11px;text-decoration:underline">${t('tn.install.link')||'📥 Інструкція з встановлення'} ↗</a>`;
+        (cmdText ? `<div style="margin-bottom:4px">${t('tn.install.or')||'or'}: ${cmdText}</div>` : '') +
+        `<a href="${safeUrl}" target="_blank" rel="noopener" style="color:var(--accent2);font-size:11px;text-decoration:underline">${t('tn.install.link')||'📥 Installation guide'} ↗</a>`;
     } else {
       el.textContent = msg;
     }
@@ -16178,18 +16186,18 @@ function tunnelSetBtnState(state) {
   if (state === 'start') {
     btn.disabled = false;
     btn.classList.remove('tn-btn-stop');
-    if (span) span.textContent = t('tn.start') || '▶ Запустити';
+    if (span) span.textContent = t('tn.start') || '▶ Start';
   } else if (state === 'stop') {
     btn.disabled = false;
     btn.classList.add('tn-btn-stop');
-    if (span) span.textContent = t('tn.stop') || '⏹ Зупинити';
+    if (span) span.textContent = t('tn.stop') || '⏹ Stop';
   } else if (state === 'starting') {
     btn.disabled = true;
     btn.classList.remove('tn-btn-stop');
     const sp = document.createElement('span');
     sp.className = 'tn-spinner';
     btn.insertBefore(sp, btn.firstChild);
-    if (span) span.textContent = t('tn.starting') || 'Запуск...';
+    if (span) span.textContent = t('tn.starting') || 'Starting...';
   } else if (state === 'stopping') {
     btn.disabled = true;
     btn.classList.add('tn-btn-stop');
@@ -16197,7 +16205,7 @@ function tunnelSetBtnState(state) {
     sp.className = 'tn-spinner';
     sp.style.borderTopColor = 'var(--muted)';
     btn.insertBefore(sp, btn.firstChild);
-    if (span) span.textContent = t('tn.stopping') || 'Зупинка...';
+    if (span) span.textContent = t('tn.stopping') || 'Stopping...';
   }
 }
 
@@ -16308,7 +16316,7 @@ function tunnelCopyUrl() {
       copyBtn.style.color = 'var(--green, #4ade80)';
       setTimeout(() => { copyBtn.textContent = orig; copyBtn.style.color = ''; }, 1500);
     }
-    toast(t('tn.copy') || '📋 Скопійовано!');
+    toast(t('tn.copy') || 'Copied!');
   }).catch(() => {
     // Clipboard API unavailable (insecure context) — select text for manual copy
     $i('tunnelUrlDisplay')?.select();
@@ -16327,7 +16335,7 @@ async function tunnelSendToTelegram() {
     if (d.ok === false) {
       toast(d.error || t('tn.err.tg') || 'Failed to send', true);
     } else {
-      toast(t('tn.sent_tg') || '📤 URL надіслано в Telegram');
+      toast(t('tn.sent_tg') || 'URL sent to Telegram');
     }
   } catch (e) {
     toast(`❌ ${e.message}`, true);
@@ -16356,7 +16364,7 @@ async function tgLoadStatus() {
     if (d.running) {
       dot.classList.add('online');
       dot.textContent = '●';
-      $i('tgStartBtn').textContent = t('tg.stop') || '⏹ Зупинити';
+      $i('tgStartBtn').textContent = t('tg.stop') || '⏹ Stop';
       $i('tgStartBtn').onclick = tgStopBot;
       if (d.botInfo) {
         $i('tgBotInfo').style.display = '';
@@ -16365,7 +16373,7 @@ async function tgLoadStatus() {
       if (d.hasToken) $i('tgBotToken').value = '••••••••••••••••';
     } else {
       dot.classList.remove('online');
-      $i('tgStartBtn').textContent = t('tg.start') || '▶ Запустити';
+      $i('tgStartBtn').textContent = t('tg.start') || '▶ Start';
       $i('tgStartBtn').onclick = tgStartBot;
       $i('tgBotInfo').style.display = 'none';
     }
@@ -16387,7 +16395,7 @@ async function tgLoadStatus() {
 async function tgStartBot() {
   const token = $i('tgBotToken').value.trim();
   if (!token || token === '••••••••••••••••') {
-    toast(t('tg.err.no_token') || 'Введіть Bot Token від @BotFather', true);
+    toast(t('tg.err.no_token') || 'Enter Bot Token from @BotFather', true);
     return;
   }
   $i('tgStartBtn').disabled = true;
@@ -16414,7 +16422,7 @@ async function tgStartBot() {
 async function tgStopBot() {
   try {
     await fetch('/api/telegram/stop', { method: 'POST' });
-    toast(t('tg.stopped') || '⏹ Telegram-бот зупинено');
+    toast(t('tg.stopped') || '⏹ Telegram bot stopped');
     $i('tgBotToken').value = '';
     tgLoadStatus();
   } catch {}
