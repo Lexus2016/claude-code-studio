@@ -380,21 +380,42 @@ const storedDefaults = id => {
     // near the top ran BEFORE it, so a switch during the fetch would let the rest —
     // toolbar, curProjectId, the transcript render, and the resume_task frame — run
     // for a session that is no longer active.
-    // Index comparison, not a window: the explanation between the two lines is
-    // longer than any window worth hard-coding, and a window that is too small
-    // fails on the comment rather than on the code.
+    // Index comparisons, not windows: the explanation between these lines is longer
+    // than any window worth hard-coding, and a window that is too small fails on the
+    // comment rather than on the code.
     const awaitAt = lsBody.indexOf('await loadChatDefaults(_sessProj)');
     const recheckAt = lsBody.indexOf('if (id !== activeTabId) return;', awaitAt);
     check('the added await re-checks the tab afterwards',
       awaitAt !== -1 && recheckAt > awaitAt, true);
+    // And it must sit BEFORE the streaming reset. loadSess copies a background tab's
+    // accumulated text into locals and then wipes the proxy-backed state; returning
+    // early from any point past that wipe destroys the stream, because only the
+    // restore block at the end of the function puts the locals back. The two original
+    // guards are before it — an await added after it turns a tab switch into data loss.
+    // The STATEMENT, not the substring: a comment mentioning the reset would match a
+    // looser needle and the pin would pass on prose while the code sat on the wrong side.
+    const resetAt = lsBody.indexOf("streaming.el = null; streaming.txt = ''");
+    check('and the await sits before the destructive streaming reset',
+      resetAt !== -1 && awaitAt < resetAt, true);
+    // Several callers share one defaults cache, so a slow earlier response must not
+    // overwrite a newer one — it would tag the cache with a project that is no longer open.
+    const lcdAt = SPA.indexOf('async function loadChatDefaults');
+    const lcdBody = SPA.slice(lcdAt, lcdAt + 1600);
+    check('a superseded defaults response neither stores nor repaints',
+      /my !== _cdSeq/.test(lcdBody) && /const my = \+\+_cdSeq/.test(lcdBody), true);
 
     const compactAt = srvSrc.indexOf('const compactTitle');
     const compactBody = srvSrc.slice(compactAt - 600, compactAt + 1600);
     check('a compact keeps them as well',
       /UPDATE sessions SET max_turns=\?, effort=\?/.test(compactBody), true);
     const importAt = srvSrc.indexOf("String(session.title || 'Imported session')");
+    const importBody = srvSrc.slice(importAt, importAt + 3000);
     check('and an import carries what it was exported with',
-      /UPDATE sessions SET max_turns=\?, effort=\?/.test(srvSrc.slice(importAt, importAt + 1200)), true);
+      /UPDATE sessions SET max_turns=\?, effort=\?/.test(importBody), true);
+    // The import file is user-supplied, so its dials are validated like any other
+    // untrusted input — a 900-turn budget would otherwise reach the engine verbatim.
+    check('imported dials are sanitised, not trusted',
+      /chatDefaults\.sanitize\(\{ turns: session\.max_turns, effort: session\.effort \}\)/.test(importBody), true);
   }
 
   cleanup();

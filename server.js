@@ -8046,8 +8046,15 @@ app.post('/api/sessions/import', (req, res) => {
     // Same as fork and compact: an import carries the dials it was exported with.
     // createSession only knows mode/agent/model, so without this an imported chat
     // opens on the configured default and the exported values are lost.
-    if (session.max_turns != null || session.effort != null) {
-      try { db.prepare(`UPDATE sessions SET max_turns=?, effort=? WHERE id=?`).run(session.max_turns ?? null, session.effort ?? null, newId); } catch {}
+    // Through sanitize(), never verbatim: this JSON is a FILE the user picked, so
+    // `max_turns: 900` or `effort: "ludicrous"` arrives as easily as a real export.
+    // The first is handed straight to the engine as a turn budget the UI's own 1-200
+    // input would refuse to display; the second reaches the CLI as an --effort flag.
+    // Lenient on purpose — a bad dial drops back to the configured default and the
+    // rest of the import still lands, matching how a hand-edited config.json is read.
+    const _impDials = chatDefaults.sanitize({ turns: session.max_turns, effort: session.effort }).value;
+    if (_impDials.turns != null || _impDials.effort != null) {
+      try { db.prepare(`UPDATE sessions SET max_turns=?, effort=? WHERE id=?`).run(_impDials.turns ?? null, _impDials.effort ?? null, newId); } catch {}
     }
     const importMsg = db.prepare('INSERT INTO messages (session_id,role,type,content,tool_name,agent_id,reply_to_id,attachments,created_at) VALUES (?,?,?,?,?,?,?,?,COALESCE(?,CURRENT_TIMESTAMP))');
     const limit = Math.min(messages.length, 2000);

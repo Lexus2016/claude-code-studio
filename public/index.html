@@ -11156,12 +11156,25 @@ let _chatDefaults = null;
 // silently inherit the deleted project's dials. `undefined` means "never fetched".
 let _chatDefaultsProj = undefined;
 
+// One cache, several callers (loadSess, switchProject, newTab, boot), so responses
+// can land out of order: switch project fast enough and the SLOWER earlier request
+// wins the cache, tagging project A's dials with... project A — self-consistent, and
+// wrong for the project now open. It heals on the next loadSess (the tag mismatches,
+// so it refetches), but until then markDefaultOverrides() paints A's badges and a new
+// tab seeds from A. Last caller wins, which is the one whose answer is still wanted.
+let _cdSeq = 0;
 async function loadChatDefaults(projectId) {
   const q = projectId ? '?projectId=' + encodeURIComponent(projectId) : '';
+  const my = ++_cdSeq;
   try {
     const r = await fetch('/api/chat-defaults' + q);
-    if (r.ok) { _chatDefaults = await r.json(); _chatDefaultsProj = projectId || null; }
+    if (r.ok) {
+      const j = await r.json();
+      if (my !== _cdSeq) return _chatDefaults; // superseded — neither store nor repaint
+      _chatDefaults = j; _chatDefaultsProj = projectId || null;
+    }
   } catch { /* offline: keep whatever we already resolved, never blank the dials */ }
+  if (my !== _cdSeq) return _chatDefaults;
   markDefaultOverrides();
   return _chatDefaults;
 }
@@ -12884,6 +12897,27 @@ async function loadSess(id) {
       openTerminalTab(d.id, d.terminal_agent || t('term.tab'), '>_');
       return;
     }
+    // Resolve this session's chat defaults HERE — before the destructive block
+    // below. Everything past the streaming-proxy reset has already wiped the
+    // proxy-backed background state into locals, so an early return from a point
+    // past it drops a background tab's accumulated stream on the floor: the locals
+    // die with the call and only the restore block near the end puts them back.
+    // The two guards above sit before that reset, and so does this one.
+    //
+    // Awaiting at all is what fixes #81: loadChatDefaults() is a fetch, and at boot
+    // it races connect() and the first loadSess(), so the fallback below would read
+    // `mt.value` — the markup's 50 — and reproduce the report exactly. Cheap: the
+    // response is cached per project after the first call, and a failed fetch keeps
+    // whatever we had instead of blanking the dials.
+    //
+    // Resolved against the session's OWN project. curProjectId is set further down
+    // from d.workdir, so reading it would use the previously open chat's project and
+    // hand this one that project's overrides.
+    const _sessProj = (projects.find(p => p.workdir === (d.git_root || d.workdir)) || {}).id || null;
+    if (!_chatDefaults || _chatDefaultsProj !== _sessProj) {
+      try { await loadChatDefaults(_sessProj); } catch {}
+      if (id !== activeTabId) return; // tab was switched while fetching defaults
+    }
     hideTerminalView();
     // ── Save background-accumulated state BEFORE resetting the streaming proxy ──
     // BUG FIX: streaming.txt = '' writes through proxy to getTS(activeTabId).curTxt,
@@ -12930,25 +12964,7 @@ async function loadSess(id) {
     // configured DEFAULT rather than to the last chat's value, which is the whole
     // point of the #58 chain — and is what the reporter expected to see.
     {
-      // The defaults may not have landed yet: loadChatDefaults() is a fetch, and at
-      // boot it races connect() and the first loadSess(). Without awaiting it here
-      // the fallback below reads `mt.value` — the markup's 50 — and #81 reproduces
-      // exactly as reported. Awaiting is cheap: the response is already cached for
-      // this project after the first call, and a failed fetch leaves whatever we had
-      // rather than blanking the dials.
-      // Resolve against the session's OWN project, not whatever was open before it.
-      // curProjectId is set further down from d.workdir, so reading it here would use
-      // the previous chat's project and hand this one that project's overrides.
-      const _sessProj = (projects.find(p => p.workdir === (d.git_root || d.workdir)) || {}).id || null;
-      if (!_chatDefaults || _chatDefaultsProj !== _sessProj) {
-        try { await loadChatDefaults(_sessProj); } catch {}
-        // Re-check the tab. This await was added after the two guards above, so
-        // without it a switch during the fetch lets the REST of loadSess run for a
-        // session that is no longer active — the toolbar, curProjectId, the
-        // transcript render, and worst of all the `resume_task` frame at the end.
-        // A cache hit skips the await entirely, so this only matters on a miss.
-        if (id !== activeTabId) return;
-      }
+      // Resolved above, before the destructive block — see the comment there.
       const _cd = _chatDefaults && _chatDefaults.effective;
       const mt = $i('maxTurns');
       if (mt) mt.value = (d.max_turns != null && d.max_turns !== '') ? d.max_turns : (_cd ? _cd.turns : mt.value);
