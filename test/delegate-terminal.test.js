@@ -232,5 +232,20 @@ check('a hostile model name cannot break out of its quotes', () => {
   assert.ok(!/^[^']*; rm/.test(out), 'but never as an unquoted command');
 });
 
+// Every flag shape a real template uses. The first rule matched exactly ONE space,
+// so `--model  {model}` left the flag behind and it swallowed the prompt as its
+// argument — the failure this whole substitution exists to prevent.
+check('the flag is dropped for every shape, not just the canonical one', () => {
+  for (const tpl of ['claude --model {model} {prompt}',
+                     'claude --model  {model} {prompt}',
+                     'claude --model={model} {prompt}',
+                     'claude -m {model} {prompt}',
+                     'claude {model} {prompt}']) {
+    assert.strictEqual(
+      buildTerminalCommand({ template: tpl }, '/w', 'hi', 'linux', {}).split('&& ')[1],
+      "claude 'hi'", tpl);
+  }
+});
+
 if (failed) { console.log(`\n${failed} test(s) failed`); process.exit(1); }
 console.log('\nAll delegate-terminal tests passed');

@@ -92,7 +92,11 @@ function buildTerminalCommand(agentConfig, workdir, prompt, platform, opts = {})
     } else {
       // Drop the placeholder AND the flag in front of it: `--model {model}` with no
       // model must not become `--model` with the prompt as its argument.
-      cmd = cmd.replace(new RegExp(`\\s*(?:--?[\\w-]+[= ])?\\{${name}\\}`, 'g'), '');
+      // `[= ]` matched exactly ONE space, so `--model  {model}` (two spaces, easy to
+      // type) left the flag behind and it swallowed the prompt as its argument.
+      // Covers: `--model {m}`, `--model  {m}`, `--model={m}`, `-m {m}`, and a bare
+      // `{m}` with no flag at all.
+      cmd = cmd.replace(new RegExp(`\\s*(?:--?[\\w-]+(?:=|\\s+))?\\{${name}\\}`, 'g'), '');
     }
   }
   cmd = cmd.replace('{prompt}', shellEscape(prompt, platform));
