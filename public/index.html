@@ -4478,6 +4478,13 @@ function setEffort(v) {
 }
 let curWorkdir = null; // current working directory for the session
 let projects = [], curProjectId = null; // projects list + active project
+// The boot fetch, kept so a caller that NEEDS the list can wait for it. `projects`
+// is filled asynchronously while connect() is already restoring tabs, so the first
+// loadSess() after a hard refresh can run against an empty array — and the project
+// lookup it does there decides which chat-defaults row applies. Losing that race
+// reproduces #81's symptom (a project's pinned turns ignored) on exactly one chat
+// per page load, which is the kind of "sometimes" report that never gets diagnosed.
+let _projectsReady = null;
 
 // ─── Project switch generation counter ───────────────────────────────────
 // Incremented on every switchProject() call. Async functions (loadHist, loadFiles)
@@ -12913,6 +12920,10 @@ async function loadSess(id) {
     // Resolved against the session's OWN project. curProjectId is set further down
     // from d.workdir, so reading it would use the previously open chat's project and
     // hand this one that project's overrides.
+    if (!projects.length) {
+      try { await _projectsReady; } catch {} // failed fetch: fall through with what we have
+      if (id !== activeTabId) return;
+    }
     const _sessProj = (projects.find(p => p.workdir === (d.git_root || d.workdir)) || {}).id || null;
     if (!_chatDefaults || _chatDefaultsProj !== _sessProj) {
       try { await loadChatDefaults(_sessProj); } catch {}
@@ -17513,7 +17524,7 @@ _restoreDelegationState(); // Restore active delegation panel if server has one
 }
 renderTabs();
 loadCfg();
-loadProjectsList();
+_projectsReady = loadProjectsList();
 loadRemoteHosts();
 connect();
 checkVersion();

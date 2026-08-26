@@ -383,6 +383,16 @@ const storedDefaults = id => {
     // Index comparisons, not windows: the explanation between these lines is longer
     // than any window worth hard-coding, and a window that is too small fails on the
     // comment rather than on the code.
+    // The project lookup decides WHICH defaults row applies, so an empty list is not
+    // a neutral starting point — it silently resolves to the global row. `projects` is
+    // filled by a boot fetch that races the first loadSess after a hard refresh.
+    check('an empty projects list is waited on, not read as "no project"',
+      /if \(!projects\.length\) \{[\s\S]{0,200}?await _projectsReady/.test(lsBody), true);
+    check('and that wait re-checks the tab too',
+      /await _projectsReady;[\s\S]{0,120}?if \(id !== activeTabId\) return;/.test(lsBody), true);
+    check('the boot call is what _projectsReady holds',
+      /_projectsReady = loadProjectsList\(\);/.test(SPA), true);
+
     const awaitAt = lsBody.indexOf('await loadChatDefaults(_sessProj)');
     const recheckAt = lsBody.indexOf('if (id !== activeTabId) return;', awaitAt);
     check('the added await re-checks the tab afterwards',
