@@ -1,5 +1,26 @@
 # Changelog
 
+## 7.13.1
+
+Post-release review of 7.13.0 found five defects, two of them silent.
+
+- **A quoted placeholder corrupted the value it carried.** `--model "{model}"` with
+  a model chosen produced `--model "'opus'"` — the value is shell-escaped, so
+  quoting it again nests the quotes and the CLI receives a model literally named
+  `'opus'`. No error, wrong model.
+- **A repeated placeholder destroyed the command.** `--model={model},{model}` with
+  nothing chosen left `claude,`, and the comma became part of the executable name.
+  Both had one cause: a regex cannot reason about token boundaries. Substitution now
+  walks whitespace-separated tokens.
+- **The Kanban settings note was wrong three times over.** It tried to describe which
+  dials take effect, and no dial behaves the same on both engines except `model`:
+  the API run forwards turns and effort but not mode, the subscription run forwards
+  mode but not turns or effort, and agent applies only when a session is first
+  created. The note now states only what holds in every combination, and the matrix
+  is pinned in the test suite rather than restated in prose.
+- Template spacing outside the placeholder is preserved — an earlier fix squeezed all
+  whitespace, which rewrites `--system "a  b"`.
+
 ## 7.13.0
 
 ### Pick the model and reasoning effort when delegating (#76)
