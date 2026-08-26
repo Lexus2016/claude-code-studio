@@ -446,9 +446,9 @@ console.log('\nno worktree is removed while another unit lives in it:');
   // FOUR removal sites, not three. The auto-merge in startTask was missed in the
   // first pass and the count of 4 (1 def + 3 uses) made the gap look complete —
   // the task's own sidecar session, and any compact of it, live in that same tree.
-  // 1 definition + 3 call sites (auto-merge, task delete, session delete). Bulk uses
-  // the batch variant, which is counted separately above.
-  check('the single-unit rule guards three sites', (SRV.match(/_worktreeStillInUse\(/g) || []).length, 4);
+  // 1 definition + 4 call sites: task auto-merge, task delete, session delete, and
+  // the chain merge. Bulk uses the batch variant, counted separately above.
+  check('the single-unit rule guards four sites', (SRV.match(/_worktreeStillInUse\(/g) || []).length, 5);
   check('including the auto-merge removal', /_worktreeStillInUse\(task\.workdir, \{ exceptTask: task\.id \}\)/.test(SRV), true);
   // A failed COUNT must not authorise removeWorktree(force:true): leaving a stale
   // tree is recoverable, deleting a live one is not.
@@ -463,6 +463,50 @@ console.log('\nno worktree is removed while another unit lives in it:');
   check('bulk delete removes AFTER its cascade runs',
     SRV.indexOf('del();') < SRV.indexOf('_worktreeStillInUseExcluding(s.workdir, _bulkIds)'), true);
   check('and the cascade runs exactly once', (SRV.match(/^\s*del\(\);/gm) || []).length, 1);
+}
+
+// ── A chain shares ONE tree and merges ONCE ────────────────────────────────
+// Per-task trees inside a chain would have to be minted at startTask(), after the
+// previous member's merge, so member N+1 branches from a default that already
+// contains member N. That is a different helper contract, and it fights the single
+// --resume session a chain runs on. Shared tree, one merge at the end.
+console.log('\na chain shares one worktree and merges once:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+
+  check('the chain owns git columns of its own',
+    /ALTER TABLE task_chains ADD COLUMN git_root/.test(SRV) && /ADD COLUMN git_branch/.test(SRV), true);
+  check('and a statement to set them', /setChainGit: db\.prepare/.test(SRV), true);
+  check('chain creation mints exactly one tree',
+    /setupUnitWorktree\('chain', id, workdir\)/.test(SRV), true);
+
+  // THE INVARIANT THIS BUNDLE EXISTS FOR. Without the !chain_id gate, member N
+  // merges and removes the tree, and member N+1 starts in a directory that is gone.
+  check('a chain member never merges on its own',
+    /if \(!task\.chain_id && task\.git_root && task\.git_branch\)/.test(SRV), true);
+  check('the chain merges in the allDone block instead',
+    /mergeBranch\(\{ projectDir: chain\.git_root/.test(SRV), true);
+  check('and commits first, or uncommitted member work is lost on removal',
+    SRV.indexOf('commitAll({ worktreeDir: chain.workdir') < SRV.indexOf('mergeBranch({ projectDir: chain.git_root'), true);
+
+  // The previous cycle's tree was merged and removed, so re-arming into it would
+  // point the whole next run at a directory that no longer exists.
+  // The function contains early-return guards at two-space indent, so slicing on the
+  // first "\n  }" cuts it off before the part being pinned. Slice to the NEXT
+  // top-level declaration instead.
+  const snStart = SRV.indexOf('function scheduleNextChainRun');
+  const snEnd = SRV.indexOf('\n  function processQueue(', snStart);
+  const snBody = SRV.slice(snStart, snEnd > snStart ? snEnd : snStart + 4000);
+  check('a recurring chain mints a NEW tree for the next cycle',
+    /setupUnitWorktree\('chain', `\$\{chain\.id\}-\$\{next\}`/.test(snBody), true);
+  check('the unit id carries the run, not just the chain id',
+    /\$\{chain\.id\}-\$\{next\}/.test(snBody), true);
+  check('and the members are re-armed into that tree, not the old one',
+    /UPDATE tasks SET status='todo'[^`]*workdir=\?/.test(snBody), true);
+  // Minting shells out to git; a transaction is not the place for that.
+  check('the tree is minted outside the transaction',
+    snBody.indexOf('setupUnitWorktree(') < snBody.indexOf('db.transaction('), true);
 }
 
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
