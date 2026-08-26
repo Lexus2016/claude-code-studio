@@ -3582,6 +3582,30 @@ function _worktreeStillInUse(workdir, { exceptSession = null, exceptTask = null 
   }
 }
 
+/** Mint the ONE worktree a chain runs in, and hand back the pieces every door needs.
+ *
+ *  Four doors create chains — REST, MCP create_chain, and both dispatch paths — and
+ *  each used to write its own `workdir` straight into the rows. Open-coding the
+ *  isolation at four sites is exactly how three of them end up isolated and the
+ *  fourth does not; this is the single place that decides.
+ *
+ *  Returns `workdir` even when nothing was minted (no workdir, remote project, git
+ *  unavailable), so a caller can always use it: it is then the project root, which is
+ *  the behaviour that predates isolation.
+ */
+function setupChainWorktree(chainId, requestedWorkdir) {
+  const wt = setupUnitWorktree('chain', chainId, requestedWorkdir);
+  return {
+    workdir: wt ? wt.workdir : (requestedWorkdir || null),
+    applyChain() { if (wt) stmts.setChainGit.run(wt.workdir, wt.git_root, wt.git_branch, chainId); },
+    applySession(sessionId) { if (wt) stmts.setSessionGit.run(wt.workdir, wt.git_root, wt.git_branch, sessionId); },
+    // Members carry the columns so the project filter still finds them — getTasks
+    // resolves a project with COALESCE(git_root, workdir). Safe because the per-task
+    // merge and removal are both gated on `!task.chain_id`.
+    applyTask(taskId) { if (wt) stmts.setTaskGit.run(wt.workdir, wt.git_root, wt.git_branch, taskId); },
+  };
+}
+
 /** Is a completed chain's tree held by anything OTHER than that chain?
  *
  *  The plain refcount cannot answer this: every member and the chain's own session
@@ -5705,14 +5729,25 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         const chainSessionId = genId();
         const effectiveModel = chainModel || callerTask?.model || 'sonnet';
 
+        // One tree for the chain, same as the REST door. GIT_UNAVAILABLE is a 400, not
+        // a throw and not a 200 body: mcp-task-manager.js only rejects on
+        // statusCode >= 400, so a 200 with {ok:false} resolves as success and the model
+        // is told a chain was created that does not exist.
+        let _mchain = null;
+        try { _mchain = setupChainWorktree(chainId, workdir); }
+        catch (e) { if (e.code === 'GIT_UNAVAILABLE') return res.status(400).json({ error: e.message }); throw e; }
+        const _mchainWd = _mchain.workdir;
+
         stmts.createSession.run(chainSessionId, String(title).substring(0, 200), '[]', '[]',
-          'auto', 'single', effectiveModel, workdir);
+          'auto', 'single', effectiveModel, _mchainWd);
+        _mchain.applySession(chainSessionId);
         const effectiveEffort = chainEffort || callerTask?.effort || null;
-        stmts.createChain.run(chainId, String(title).substring(0, 200), workdir,
+        stmts.createChain.run(chainId, String(title).substring(0, 200), _mchainWd,
           effectiveModel, 'auto', 'single', UNATTENDED_MAX_TURNS,
           chainSessionId, toUnixTs(chainScheduledAt), recurrence || null,
           toUnixTs(recurrence_end_at), callerTask?.source_session_id || null, 0,
           effectiveEffort);
+        _mchain.applyChain();
 
         // Create tasks with auto-linked depends_on
         const taskIds = [];
@@ -5743,7 +5778,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
             'todo',
             i * 1000, // sort_order
             chainSessionId,
-            workdir,
+            _mchainWd,
             td.model || effectiveModel,
             'auto', 'single',
             td.max_turns || UNATTENDED_MAX_TURNS,
@@ -5758,6 +5793,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
           ,
           botsLogic.inheritBotId(callerTask)  // bot_id: a bot's chain stays that bot's
         );
+          _mchain.applyTask(taskId);
 
           stmts.setTaskContext.run(contextJson, callerTaskId || null, taskId);
         }
@@ -7010,20 +7046,20 @@ app.post('/api/task-chains', (req, res) => {
   // deliberately do NOT get git_root/git_branch of their own — those two columns are
   // what ARM the per-task auto-merge, and a chain whose second member merged and
   // removed the tree would leave its third member starting in a directory that is gone.
-  let _cwt = null;
-  try { _cwt = setupUnitWorktree('chain', id, workdir); }
+  let _chain = null;
+  try { _chain = setupChainWorktree(id, workdir); }
   catch (e) { if (e.code === 'GIT_UNAVAILABLE') return res.status(400).json({ error: e.message }); throw e; }
-  const _chainWd = _cwt ? _cwt.workdir : (sqlVal(workdir) || null);
+  const _chainWd = _chain.workdir;
   // Create shared session for the chain
   const sessionId = genId();
   stmts.createSession.run(sessionId, String(title).substring(0, 200), '[]', '[]',
     sqlVal(mode), sqlVal(agent_mode), sqlVal(model), _chainWd);
-  if (_cwt) stmts.setSessionGit.run(_cwt.workdir, _cwt.git_root, _cwt.git_branch, sessionId);
+  _chain.applySession(sessionId);
   stmts.createChain.run(id, String(title).substring(0, 200), _chainWd,
     sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns),
     sessionId, sqlVal(scheduled_at) || null, sqlVal(recurrence) || null,
     sqlVal(recurrence_end_at) || null, null, 0, sqlVal(effort) || null);
-  if (_cwt) stmts.setChainGit.run(_cwt.workdir, _cwt.git_root, _cwt.git_branch, id);
+  _chain.applyChain();
   res.json(chainWithSummary(stmts.getChain.get(id)));
 });
 app.put('/api/task-chains/:id', (req, res) => {
@@ -7206,19 +7242,27 @@ app.post('/api/tasks/dispatch', (req, res) => {
   // Inherit MCP + skills from source session
   const source = source_session_id ? stmts.getSession.get(source_session_id) : null;
   const chainSessionId = genId();
+  // The dispatch doors create chains too, and were the two that stayed unisolated
+  // while REST did not — the exact split this feature exists to remove.
+  let _dchain = null;
+  try { _dchain = setupChainWorktree(chainId, workdir); }
+  catch (e) { if (e.code === 'GIT_UNAVAILABLE') return res.status(400).json({ error: e.message }); throw e; }
+  const _dchainWd = _dchain.workdir;
   stmts.createSession.run(
     chainSessionId,
     (plan_description || 'Task chain').substring(0, 200),
     source?.active_mcp || '[]',
     source?.active_skills || '[]',
     'auto', 'single', sqlVal(model) || 'sonnet',
-    sqlVal(workdir) || null
+    _dchainWd
   );
+  _dchain.applySession(chainSessionId);
 
   // Register chain in task_chains table (gives it a title, session, and metadata)
   stmts.createChain.run(chainId, (plan_description || 'Task chain').substring(0, 200),
-    sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS,
+    _dchainWd, sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS,
     chainSessionId, null, null, null, source_session_id || null, 0, sqlVal(effort) || null);
+  _dchain.applyChain();
 
   // Chain gets its OWN Claude session — first task starts fresh,
   // subsequent tasks --resume from the chain's session (NOT the source chat's).
@@ -7242,7 +7286,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
         'todo',
         i,             // sort_order preserves plan ordering
         chainSessionId,
-        sqlVal(workdir) || null,
+        _dchainWd,
         sqlVal(model) || 'sonnet',
         'auto', 'single', UNATTENDED_MAX_TURNS,
         null,          // attachments
@@ -7258,6 +7302,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
                 // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
                 // No bot id is in scope here; passing NULL preserves the intended behaviour.
         );
+    _dchain.applyTask(taskId);
       createdTasks.push(stmts.getTask.get(taskId));
     }
   })();
@@ -12419,18 +12464,30 @@ wss.on('connection', (ws) => {
           const chainId = genId();
           const source = sessionId ? stmts.getSession.get(sessionId) : null;
           const chainSessionId = genId();
+          // Byte-for-byte the same shape as the HTTP dispatch door; splitting the two
+          // is how they drift apart. A WS frame has no res to answer with, so a git
+          // failure degrades to the project root rather than aborting the dispatch.
+          let _wdchain;
+          try { _wdchain = setupChainWorktree(chainId, workdir); }
+          catch (e) {
+            log.warn('dispatch chain not isolated — git unavailable', { chainId, err: e?.message });
+            _wdchain = { workdir: sqlVal(workdir) || null, applyChain() {}, applySession() {}, applyTask() {} };
+          }
+          const _wdchainWd = _wdchain.workdir;
           stmts.createSession.run(
             chainSessionId,
             (finalPlan || 'Task chain').substring(0, 200),
             source?.active_mcp || '[]',
             source?.active_skills || '[]',
             'auto', 'single', sqlVal(model) || 'sonnet',
-            sqlVal(workdir) || null
+            _wdchainWd
           );
+          _wdchain.applySession(chainSessionId);
           // Register chain in task_chains table
           stmts.createChain.run(chainId, (finalPlan || 'Task chain').substring(0, 200),
-            sqlVal(workdir) || null, sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS,
+            _wdchainWd, sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS,
             chainSessionId, null, null, null, sessionId || null, 0, sqlVal(effort) || null);
+          _wdchain.applyChain();
           // Chain gets its OWN Claude session — first task starts fresh,
           // subsequent tasks --resume from the chain's session (NOT the source chat's).
           // Sharing claude_session_id with source chat causes context mixing chaos.
@@ -12449,7 +12506,7 @@ wss.on('connection', (ws) => {
                 taskId,
                 (a.role || 'Subtask').substring(0, 200),
                 (a.task || '').substring(0, 2000),
-                '', 'todo', i, chainSessionId, sqlVal(workdir) || null,
+                '', 'todo', i, chainSessionId, _wdchainWd,
                 sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS, null,
                 realDeps.length ? JSON.stringify(realDeps) : null,
                 chainId, sessionId || null,
@@ -12466,6 +12523,7 @@ wss.on('connection', (ws) => {
                 // on better-sqlite3 (HTTP 500) and silently bound NULL on node:sqlite.
                 // No bot id is in scope here; passing NULL preserves the intended behaviour.
         );
+              _wdchain.applyTask(taskId);
               created.push(stmts.getTask.get(taskId));
             }
           })();

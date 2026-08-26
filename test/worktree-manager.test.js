@@ -483,8 +483,20 @@ console.log('\na chain shares one worktree and merges once:');
   check('the chain owns git columns of its own',
     /ALTER TABLE task_chains ADD COLUMN git_root/.test(SRV) && /ADD COLUMN git_branch/.test(SRV), true);
   check('and a statement to set them', /setChainGit: db\.prepare/.test(SRV), true);
-  check('chain creation mints exactly one tree',
-    /setupUnitWorktree\('chain', id, workdir\)/.test(SRV), true);
+  // ALL FOUR doors that create a chain go through one helper: REST, MCP create_chain,
+  // and both dispatch paths. Three of them were unisolated while REST was not — the
+  // exact split this feature exists to remove, and open-coding it four times is how
+  // that happens again.
+  check('the chain-tree helper exists once', (SRV.match(/function setupChainWorktree\(/g) || []).length, 1);
+  check('and every chain door uses it', (SRV.match(/setupChainWorktree\(/g) || []).length, 5);
+  check('every door records the columns on the chain', (SRV.match(/\.applyChain\(\)/g) || []).length, 4);
+  check('and on its session', (SRV.match(/\.applySession\(/g) || []).length, 4);
+  // Members must inherit too, or they vanish from the project board — getTasks
+  // resolves a project with COALESCE(git_root, workdir). Three doors create their
+  // members inline; the REST door adds them through a separate endpoint, which
+  // carries the columns itself (pinned below).
+  check('members of the three inline doors inherit the tree',
+    (SRV.match(/_(m|d|wd)chain\.applyTask\(taskId\)/g) || []).length, 3);
 
   // THE INVARIANT THIS BUNDLE EXISTS FOR. Without the !chain_id gate, member N
   // merges and removes the tree, and member N+1 starts in a directory that is gone.
