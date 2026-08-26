@@ -299,10 +299,19 @@ const storedDefaults = id => {
     // They ride the same statement the other dials do — written on every turn.
     const stmt = /updateConfig: db\.prepare\(`([^`]+)`/.exec(srvSrc);
     check('updateConfig writes them', !!stmt && /max_turns=\?,effort=\?/.test(stmt[1]), true);
-    // A placeholder/argument mismatch here throws on every chat message.
-    const call = /stmts\.updateConfig\.run\(([^;]+)\);/.exec(srvSrc);
-    check('its placeholders and arguments still match',
-      (stmt[1].match(/\?/g) || []).length, call[1].split(',').length);
+    // A placeholder/argument mismatch here throws on every chat message, so it is
+    // worth counting — but count ARGUMENTS, not commas: the call spans lines and
+    // carries comments, and a comma inside one made this pin fail on itself.
+    const call = /stmts\.updateConfig\.run\(([\s\S]*?)\);/.exec(srvSrc)[1]
+      .replace(/\/\/[^\n]*/g, '')      // line comments
+      .replace(/\/\*[\s\S]*?\*\//g, ''); // block comments
+    let depth = 0, args = 1;
+    for (const ch of call) {
+      if ('([{'.includes(ch)) depth++;
+      else if (')]}'.includes(ch)) depth--;
+      else if (ch === ',' && depth === 0) args++;
+    }
+    check('its placeholders and arguments still match', (stmt[1].match(/\?/g) || []).length, args);
 
     // The client half: restore what was stored, otherwise fall back to the DEFAULT
     // rather than to whatever the previously opened chat left in the field.
@@ -314,6 +323,30 @@ const storedDefaults = id => {
     // 'auto' is the spelled-out no-flag sentinel; the toolbar spells it ''.
     check('the effort sentinel is translated for the toolbar',
       /_cd\.effort === 'auto' \? '' : _cd\.effort/.test(lsBody), true);
+
+    // Review found three ways the first cut still failed. Each is pinned.
+    //
+    // 1. The defaults are fetched, and at boot that fetch races connect() and the
+    //    first loadSess(). Reading them unawaited leaves the fallback on mt.value —
+    //    the markup's 50 — and #81 reproduces exactly as reported.
+    check('loadSess awaits the defaults before using them',
+      /if \(!_chatDefaults\) \{ try \{ await loadChatDefaults/.test(lsBody), true);
+
+    // 2. Replaying a turn must not re-dial the chat. Both replay paths call
+    //    processChat, whose destructuring falls back to the configured defaults —
+    //    and updateConfig then writes those over what the chat was set to.
+    check('the idle-interrupt replay carries the stored dials',
+      /_isess\?\.max_turns != null \? \{ maxTurns/.test(srvSrc), true);
+    check('the interrupted-recovery replay carries them too',
+      /sess\.max_turns != null \? \{ maxTurns/.test(srvSrc), true);
+
+    // 3. NULL means "never stored", which is what makes the default fallback work —
+    //    so an explicit Auto has to be stored as the spelled-out sentinel, or a chat
+    //    deliberately on Auto silently changes when the default does.
+    check('an explicit Auto effort is stored as a sentinel, not NULL',
+      /\(effort === '' \|\| effort == null\) \? 'auto'/.test(srvSrc), true);
+    check('and the client honours a stored auto',
+      /d\.effort === 'auto' \? '' : d\.effort/.test(lsBody), true);
   }
 
   cleanup();

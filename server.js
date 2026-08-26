@@ -11441,7 +11441,14 @@ wss.on('connection', (ws) => {
       // Bail out early if user pressed Stop during classification
       if (abortController.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-      try { stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(effectiveSkills),sqlVal(mode),sqlVal(agentMode),sqlVal(model),sqlVal(workdir)||null,sqlVal(maxTurns)||null,sqlVal(effort)||null,localSessionId); }
+      try { stmts.updateConfig.run(JSON.stringify(mIds),JSON.stringify(effectiveSkills),sqlVal(mode),sqlVal(agentMode),sqlVal(model),sqlVal(workdir)||null,sqlVal(maxTurns)||null,
+        // 'auto' is stored as the spelled-out sentinel, never as NULL. NULL means
+        // "this chat never stored an effort" and loadSess() then falls back to the
+        // configured default — so a chat deliberately run on Auto would silently
+        // switch the day someone changes that default. chat-defaults.js spells the
+        // no-flag state 'auto' for exactly this reason.
+        (effort === '' || effort == null) ? 'auto' : sqlVal(effort),
+        localSessionId); }
       catch (e) { log.error('updateConfig failed', { sessionId: localSessionId, mode, agentMode, model, mIdsLen: mIds.length, skillsLen: effectiveSkills.length, err: e.message, stack: e.stack }); throw e; }
       // Persist engine choice (coerce anything other than 'subscription' to 'api')
       try { db.prepare(`UPDATE sessions SET run_engine=? WHERE id=?`).run(engine === 'subscription' ? 'subscription' : 'api', localSessionId); } catch {}
@@ -12028,6 +12035,11 @@ wss.on('connection', (ws) => {
         processChat({
           type: 'chat',
           text,
+          // Carry the chat's OWN dials. Omitting them makes processChat fall back to
+          // the configured defaults, and updateConfig then writes those over what
+          // this chat was set to — a replay would silently re-dial the chat.
+          ...( _isess?.max_turns != null ? { maxTurns: _isess.max_turns } : {} ),
+          ...( _isess?.effort != null ? { effort: _isess.effort } : {} ),
           tabId,
           sessionId: tabId,
           attachments: Array.isArray(msg.attachments) ? msg.attachments : undefined,
@@ -12683,6 +12695,10 @@ wss.on('connection', (ws) => {
       // processChat's retry branch skips addMsg and does the incrementRetry for us.
       processChat({
         type: 'chat', text: sess.last_user_msg,
+        // Same reason as the idle-interrupt replay: without these the recovery run
+        // uses the configured defaults AND persists them over this chat's values.
+        ...( sess.max_turns != null ? { maxTurns: sess.max_turns } : {} ),
+        ...( sess.effort != null ? { effort: sess.effort } : {} ),
         tabId: sessionId, sessionId, retry: true,
         skills: _rskills, mcpServers: _rmcp,
         mode: sess.mode || 'auto', agentMode: sess.agent_mode || 'single',
