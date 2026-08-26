@@ -555,6 +555,39 @@ console.log('\nchain members remain visible under their project:');
     /if \(task\.chain_id\) \{[\s\S]{0,400}?worktree kept — a chain member finished/.test(SRV), true);
 }
 
+// ── The chain merge must never destroy uncommitted member work ─────────────
+// The worst defect review found on this branch, and it was on the HAPPY path: a
+// swallowed commitAll failure meant the merge carried only what was already
+// committed and the removal deleted the rest, with force:true reporting nothing.
+console.log('\na failed commit stops the merge and the removal:');
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const SRV = fs2.readFileSync(path2.join(__dirname, '..', 'server.js'), 'utf8');
+  const i2 = SRV.indexOf('let _committed = true;');
+  const win = i2 === -1 ? '' : SRV.slice(i2, i2 + 900);
+  check('the commit failure is captured, not swallowed', /catch \(e\) \{ _committed = false;/.test(win), true);
+  check('and the merge does not run without it', /_committed\s*\n?\s*\? await WM\.mergeBranch/.test(win), true);
+  check('a failed commit leaves the merge not-ok, so nothing is removed', /: \{ ok: false \}/.test(win), true);
+
+  // Re-arming over a conflict abandons a branch whose commits are real work.
+  check('recurrence re-arms only when the cycle landed', /chain\.recurrence && _chainLanded/.test(SRV), true);
+  check('and says so when it does not', /recurrence NOT re-armed/.test(SRV), true);
+
+  // The members carried the PREVIOUS cycle's branch name, so hasUnmergedWork()
+  // on a member delete inspected a branch that no longer owned that tree.
+  check('re-arm moves members onto the new branch, not just the new path',
+    /UPDATE tasks SET status='todo'[^`]*git_root=\?, git_branch=\?/.test(SRV), true);
+
+  // Degrading to the project root is only defensible for "no git here".
+  check('the WS door degrades only on GIT_UNAVAILABLE', /e\?\.code !== 'GIT_UNAVAILABLE'/.test(SRV), true);
+  check('and reports anything else instead of claiming success',
+    /Could not prepare an isolated worktree/.test(SRV), true);
+
+  // A parent got 403 on the result of the task it had just created.
+  check('both MCP project guards resolve through git_root',
+    (SRV.match(/git_root \|\| \w+\.workdir \|\| null\) !== \(task\.git_root/g) || []).length, 2);
+}
+
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
 }

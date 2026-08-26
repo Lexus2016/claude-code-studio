@@ -2231,13 +2231,27 @@ async function startTask(task) {
                   // default branch now that the last member is done. A conflict is
                   // recorded rather than retried: the members are already done, and
                   // re-running them is not a resolution.
+                  // Did this cycle's work actually reach the default branch? Only then
+                  // may a recurring chain re-arm — re-arming over a conflict abandons a
+                  // branch whose commits are real work, and the next cycle would start
+                  // from a default that does not contain it.
+                  let _chainLanded = !(chain.git_root && chain.git_branch && chain.workdir);
                   if (chain.git_root && chain.git_branch && chain.workdir) {
                     try {
                       const _dflt = WM.getDefaultBranch(chain.git_root);
                       // Commit first, or work a member left uncommitted is destroyed by
                       // the removal below — mergeBranch only merges committed history.
-                      try { WM.commitAll({ worktreeDir: chain.workdir, message: `chain: ${chain.title || task.chain_id}` }); } catch {}
-                      const _m = await WM.mergeBranch({ projectDir: chain.git_root, defaultBranch: _dflt, branch: chain.git_branch });
+                      // A SWALLOWED failure here is data loss on the happy path: the
+                      // merge would carry only what was already committed, the removal
+                      // below would delete the rest, and force:true reports nothing.
+                      // If the commit cannot be made, stop. A kept tree is recoverable.
+                      let _committed = true;
+                      try { WM.commitAll({ worktreeDir: chain.workdir, message: `chain: ${chain.title || task.chain_id}` }); }
+                      catch (e) { _committed = false; log.error('chain commit failed — not merging, not removing', { chainId: task.chain_id, err: e?.message }); }
+                      const _m = _committed
+                        ? await WM.mergeBranch({ projectDir: chain.git_root, defaultBranch: _dflt, branch: chain.git_branch })
+                        : { ok: false };
+                      _chainLanded = !!_m.ok;
                       if (!_m.ok) {
                         log.warn('chain auto-merge conflict', { chainId: task.chain_id, branch: chain.git_branch });
                       } else if (_chainWorktreeStillInUse(chain, allChainTasks)) {
@@ -2249,8 +2263,10 @@ async function startTask(task) {
                       }
                     } catch (e) { log.error('chain auto-merge failed', { chainId: task.chain_id, error: e.message }); }
                   }
-                  if (chain.recurrence) {
+                  if (chain.recurrence && _chainLanded) {
                     scheduleNextChainRun(chain, allChainTasks);
+                  } else if (chain.recurrence) {
+                    log.warn('chain recurrence NOT re-armed — this cycle did not merge', { chainId: task.chain_id, branch: chain.git_branch });
                   }
                 } else {
                   db.prepare(`UPDATE task_chains SET updated_at=datetime('now') WHERE id=?`).run(task.chain_id);
@@ -2461,8 +2477,11 @@ function scheduleNextChainRun(chain, oldTasks) {
     // Re-arm all tasks back to 'todo' with shared session — and into the NEW tree,
     // since the one they ran in last cycle no longer exists.
     for (const t of oldTasks) {
-      db.prepare(`UPDATE tasks SET status='todo', scheduled_at=?, session_id=?, workdir=?, failure_reason=NULL, worker_pid=NULL, task_retry_count=0, updated_at=datetime('now') WHERE id=?`)
-        .run(next, newSessionId, _nextWd, t.id);
+      // git_branch too, not just workdir: the members still carried the PREVIOUS
+      // cycle's branch name, so hasUnmergedWork() on a member delete looked at a
+      // branch that no longer belongs to the tree it is checking.
+      db.prepare(`UPDATE tasks SET status='todo', scheduled_at=?, session_id=?, workdir=?, git_root=?, git_branch=?, failure_reason=NULL, worker_pid=NULL, task_retry_count=0, updated_at=datetime('now') WHERE id=?`)
+        .run(next, newSessionId, _nextWd, _nwt ? _nwt.git_root : null, _nwt ? _nwt.git_branch : null, t.id);
     }
   })();
   log.info(`[schedule] Chain re-armed: "${chain.title}" → ${new Date(next * 1000).toISOString()}, ${oldTasks.length} tasks reset`);
@@ -5878,7 +5897,10 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
 
         // Workdir scoping: only allow reading results from same project
         const _callerTask = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
-        if (_callerTask && ((_callerTask.workdir || null) !== (task.workdir || null))) {
+        // COALESCE, like list_tasks: once either side is isolated `workdir` is a
+        // WORKTREE, so two units of the same project stop comparing equal — a parent
+        // got 403 on the result of the very task it had just created.
+        if (_callerTask && ((_callerTask.git_root || _callerTask.workdir || null) !== (task.git_root || task.workdir || null))) {
           return res.status(403).json({ error: 'Cannot read task results outside your project' });
         }
 
@@ -5905,7 +5927,8 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
 
         // Workdir scoping: only allow cancelling tasks in same project
         const _callerTask2 = callerTaskId ? stmts.getTask.get(callerTaskId) : null;
-        if (_callerTask2 && ((_callerTask2.workdir || null) !== (task.workdir || null))) {
+        // Same rule as the read guard above — see the comment there.
+        if (_callerTask2 && ((_callerTask2.git_root || _callerTask2.workdir || null) !== (task.git_root || task.workdir || null))) {
           return res.status(403).json({ error: 'Cannot cancel tasks outside your project' });
         }
 
@@ -12470,7 +12493,17 @@ wss.on('connection', (ws) => {
           let _wdchain;
           try { _wdchain = setupChainWorktree(chainId, workdir); }
           catch (e) {
-            log.warn('dispatch chain not isolated — git unavailable', { chainId, err: e?.message });
+            // Degrade ONLY for the one condition that means "this deployment has no
+            // git" — the same condition the other three doors answer 400 for. Any
+            // other failure (a lock, a read-only mount, a broken identity) would
+            // silently create the chain in the project root and report success, and
+            // this frame has an error channel of its own.
+            if (e?.code !== 'GIT_UNAVAILABLE') {
+              log.error('dispatch chain worktree failed', { chainId, err: e?.message });
+              try { ws.send(JSON.stringify({ type: 'error', error: `Could not prepare an isolated worktree: ${e?.message || 'git failed'}`, tabId })); } catch {}
+              return;
+            }
+            log.warn('dispatch chain not isolated — git unavailable', { chainId });
             _wdchain = { workdir: sqlVal(workdir) || null, applyChain() {}, applySession() {}, applyTask() {} };
           }
           const _wdchainWd = _wdchain.workdir;
