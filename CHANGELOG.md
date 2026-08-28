@@ -1,5 +1,30 @@
 # Changelog
 
+## 7.15.2
+
+### The task-manager secret carve-out is scoped to the posture, not the bind
+
+7.15.1 honoured a short `CCS_TASK_MANAGER_SECRET` whenever `HOST` was loopback. An
+independent review found that premise does not hold on its own, and it was right on
+three counts:
+
+- **The studio publishes its own loopback port.** `tunnel-manager.js` runs cloudflared
+  against `http://localhost:PORT`, so a public tunnel started from the UI makes the
+  endpoint reachable from the internet long after the boot-time decision was made. The
+  check now runs PER REQUEST and refuses a short secret while a tunnel is active, or
+  when `TRUST_PROXY` says something was put in front on purpose.
+- **DNS rebinding reaches a loopback port from a web page.** The cross-origin guard
+  compares Origin against the request's own Host, which a rebound page satisfies by
+  construction. A short secret is now spendable only by a client that sends no `Origin`
+  at all — a CLI, a test, the MCP child — or a loopback one, so no page can spend it.
+- **`HOST` is a config string, not an address.** The bind test is now a numeric loopback
+  literal; `auth.isLoopbackAddress` would have accepted `127.attacker.example` and
+  `localhost`, both resolved by something outside this process.
+
+A 32-char-or-longer secret is unaffected: none of these gates apply to it. The
+loopback-honours-a-short-secret behaviour from 7.15.1 is unchanged for the case it was
+added for — a developer driving the endpoint from a local test.
+
 ## 7.15.1
 
 ### The task-manager secret floor now matches the binding

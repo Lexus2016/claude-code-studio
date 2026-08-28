@@ -35,6 +35,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const http = require('http');
 
 let pass = 0, fail = 0;
 function check(label, actual, expected) {
@@ -192,9 +193,24 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
   // test the value was exported for. On a non-loopback HOST the endpoint really is
   // pre-auth on a reachable interface, so a value under 32 chars is refused and a random
   // one is used instead.
+  const iLit  = SRC.indexOf("const _tmHostIsLoopbackLiteral =");
+  check('the bind check is a NUMERIC literal, not the request-address helper',
+    /_tmHostIsLoopbackLiteral =\s*\n\s*\/\^127\\\.\\d\{1,3\}/.test(SRC) && iLit >= 0, true);
+  check('...so a hostname the resolver controls cannot buy the carve-out',
+    SRC.includes("const _tmSecretRefused = _tmSecretWeak && !_tmHostIsLoopbackLiteral;"), true);
+  // A loopback BIND is not unreachability: this app publishes its own loopback port
+  // through cloudflared, and a page can reach one through DNS rebinding. So a weak
+  // secret is re-checked per request, and the endpoint consults that check.
+  check('a weak secret is re-checked per request, not only at boot',
+    /if \(TM_SECRET_IS_WEAK && !taskManagerWeakSecretAllowed\(req\)\) \{/.test(SRC), true);
+  for (const [what, needle] of [
+    ['an active public tunnel revokes it', 'if (tunnelManager?.isRunning?.()) return false;'],
+    ['TRUST_PROXY revokes it', 'if (TRUST_PROXY_ENV) return false;'],
+    ['a non-loopback peer revokes it', "if (!auth.isLoopbackAddress(req.socket?.remoteAddress)) return false;"],
+  ]) check(`...and ${what}`, SRC.includes(needle), true);
   const iEnv  = SRC.indexOf("const _tmSecretEnv = process.env.CCS_TASK_MANAGER_SECRET");
   const iWeak = SRC.indexOf("_tmSecretEnv.length < 32", iEnv);
-  const iRef  = SRC.indexOf("const _tmSecretRefused = _tmSecretWeak && !HOST_IS_LOOPBACK;", iWeak);
+  const iRef  = SRC.indexOf("const _tmSecretRefused = _tmSecretWeak && !_tmHostIsLoopbackLiteral;", iWeak);
   const iRand = SRC.indexOf("randomBytes(16).toString('hex')", iRef);
   check('the secret override is length-checked before it is used', iEnv >= 0 && iWeak > iEnv && iRand > iWeak, true);
   check('and the refusal is gated on the BINDING, not on the length alone', iRef > iWeak && iRand > iRef, true);
@@ -207,10 +223,10 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
   // server on 0.0.0.0: a test suite must not open a port on every interface of the
   // machine it runs on (and on macOS that is also a firewall prompt mid-run).
   const _auth = require(path.join(__dirname, '..', 'auth.js'));
-  check('isLoopbackAddress agrees with the branch the floor is gated on',
+  check('isLoopbackAddress classifies the PEER addresses the per-request gate sees',
     [_auth.isLoopbackAddress('127.0.0.1'), _auth.isLoopbackAddress('::1'),
-     _auth.isLoopbackAddress('0.0.0.0'), _auth.isLoopbackAddress('192.168.1.10')].join(),
-    'true,true,false,false');
+     _auth.isLoopbackAddress('::ffff:127.0.0.1'), _auth.isLoopbackAddress('192.168.1.10')].join(),
+    'true,true,true,false');
 
   // …and behaviourally on the branch that IS the default: a second server booted in
   // desktop mode (loopback, forced) with a 12-char override must ACCEPT it. This is the
@@ -250,7 +266,69 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
     body: JSON.stringify({ action: 'list_tasks' }),
   });
   check('...and the endpoint is still closed to anything else', wrongRes.status, 401);
+
+  // DNS rebinding is what makes "loopback = only this machine" false for a BROWSER:
+  // the cross-origin guard compares Origin against the request's own Host, and after a
+  // rebind both are the attacker's name, so it passes by construction. A short secret
+  // must therefore be unspendable from any page, and spendable by a CLI/MCP client
+  // (which sends no Origin at all) and from a loopback page.
+  // Sent through http.request, not fetch: a rebind arrives with Origin host EQUAL to
+  // Host (both are the attacker's name), which is precisely why the cross-origin guard
+  // passes it. Set them differently and that guard 403s first and the gate under test
+  // never runs — undici refuses to let fetch set Host.
+  const rebindStatus = await new Promise((resolve, reject) => {
+    const body = JSON.stringify({ action: 'list_tasks' });
+    const rq = http.request({
+      host: '127.0.0.1', port: PORT2, method: 'POST', path: '/api/internal/task-manager',
+      headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body),
+                 authorization: 'Bearer short-secret',
+                 host: `rebind.attacker.example:${PORT2}`,
+                 origin: `http://rebind.attacker.example:${PORT2}` },
+    }, r => { r.resume(); resolve(r.statusCode); });
+    rq.on('error', reject); rq.end(body);
+  });
+  check('a rebound page passes the cross-origin guard and is still refused the secret', rebindStatus, 401);
+  const localOriginRes = await fetch(`http://127.0.0.1:${PORT2}/api/internal/task-manager`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer short-secret',
+               origin: `http://127.0.0.1:${PORT2}` },
+    body: JSON.stringify({ action: 'list_tasks' }),
+  });
+  check('...and honoured from a genuinely loopback origin', localOriginRes.status, 200);
   try { weak.kill('SIGTERM'); } catch {}
+
+  // The REFUSAL branch, behaviourally. HOST=localhost binds loopback — so this opens no
+  // port on any interface — while failing the numeric-literal test, which is exactly the
+  // case a resolver-controlled name must not buy. CCS_DESKTOP is deliberately unset here
+  // (it would force HOST back to 127.0.0.1).
+  const PORT3 = PORT + 2;
+  const APP3 = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-bl83-refuse-'));
+  fs.mkdirSync(path.join(APP3, 'data'), { recursive: true });
+  fs.writeFileSync(path.join(APP3, 'config.json'), JSON.stringify({ mcpServers: {}, skills: {} }, null, 2));
+  const refuse = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
+    env: { ...process.env, PORT: String(PORT3), HOST: 'localhost', APP_DIR: APP3,
+           WORKDIR, HOME: HOME_DIR, CCS_TASK_MANAGER_SECRET: 'short-secret', CCS_DESKTOP: '' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let refuseLog = '';
+  refuse.stdout.on('data', d => { refuseLog += d; });
+  refuse.stderr.on('data', d => { refuseLog += d; });
+  process.on('exit', () => { try { refuse.kill('SIGTERM'); } catch {} try { fs.rmSync(APP3, { recursive: true, force: true }); } catch {} });
+  let refuseUp = false;
+  for (let i = 0; i < 80; i++) {
+    try { const r = await fetch(`http://localhost:${PORT3}/api/health`); if (r.ok) { refuseUp = true; break; } } catch {}
+    await sleep(250);
+  }
+  if (!refuseUp) die(`the refusing server on port ${PORT3} did not start\n${refuseLog}`);
+  const refuseRes = await fetch(`http://localhost:${PORT3}/api/internal/task-manager`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer short-secret' },
+    body: JSON.stringify({ action: 'list_tasks' }),
+  });
+  check('HOST=localhost is not a loopback LITERAL, so the short secret is refused', refuseRes.status, 401);
+  check('...and the operator is told it was ignored, not honoured',
+    /not a loopback literal\) . ignored/.test(refuseLog.replace(/\u2014/g, '.')), true);
+  try { refuse.kill('SIGTERM'); } catch {}
 
   // The queue wake was guarded for a board row; the UI toast was not, so an 80-card
   // import stacked 80 notifications. Both halves must sit inside the willRun branch.

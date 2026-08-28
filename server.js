@@ -1516,16 +1516,55 @@ const SET_UI_STATE_SECRET = require('crypto').randomBytes(16).toString('hex');
 // `'a'.repeat(32)` passes. It cannot be one — no cheap test tells a weak 32-char string
 // from a strong one — so it closes the plausible-typo case and nothing more. The
 // supported configuration remains to leave the var unset.
+//
+// "Loopback" here is a NUMERIC LITERAL, not auth.isLoopbackAddress(). That helper
+// classifies a REQUEST's remote address, which is always an IP; HOST is a config
+// string that server.listen() will resolve, so its `/^127\./` would accept
+// `127.attacker.example` and its `localhost` accepts whatever the resolver says
+// today. A carve-out may not rest on a name someone else controls.
+const _tmHostIsLoopbackLiteral =
+  /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(HOST) || HOST === '::1' || HOST === '[::1]';
 const _tmSecretEnv = process.env.CCS_TASK_MANAGER_SECRET || '';
 const _tmSecretWeak = !!_tmSecretEnv && _tmSecretEnv.length < 32;
-const _tmSecretRefused = _tmSecretWeak && !HOST_IS_LOOPBACK;
+const _tmSecretRefused = _tmSecretWeak && !_tmHostIsLoopbackLiteral;
 const TASK_MANAGER_SECRET = (_tmSecretEnv && !_tmSecretRefused)
   ? _tmSecretEnv
   : require('crypto').randomBytes(16).toString('hex');
+// True only while the secret actually in use is the short one. When the override was
+// refused, TASK_MANAGER_SECRET is a fresh 16-byte random and none of the extra gates
+// below apply — there is nothing weak left to protect.
+const TM_SECRET_IS_WEAK = _tmSecretWeak && !_tmSecretRefused;
+
+// A loopback BIND is not the same thing as being unreachable, and two things this app
+// does itself break that equivalence. So a weak secret is re-checked PER REQUEST:
+//
+//   * `tunnel-manager.js` starts cloudflared against `http://localhost:PORT` — the
+//     studio publishes its own loopback port to the internet on a button press, long
+//     after this constant was computed. A tunnel (or TRUST_PROXY, which says an
+//     operator put something in front on purpose) means remote traffic arrives from
+//     127.0.0.1 and the premise no longer holds.
+//   * A page on the internet can reach a loopback port through DNS rebinding. The
+//     cross-origin guard compares Origin against the request's own Host, and after a
+//     rebind both are the attacker's name, so it passes by construction. A weak secret
+//     is therefore spendable only by a client that sends NO Origin at all — a CLI, a
+//     test, the MCP child — or a loopback one. A browser always sends Origin on a
+//     JSON POST, so no page can spend it, rebound or not.
+//
+// A 32-char-or-longer secret is unaffected by all of this: it is guessed, not reached.
+function taskManagerWeakSecretAllowed(req) {
+  if (tunnelManager?.isRunning?.()) return false;
+  if (TRUST_PROXY_ENV) return false;
+  if (!auth.isLoopbackAddress(req.socket?.remoteAddress)) return false;
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  let h;
+  try { h = new URL(origin).hostname; } catch { return false; }
+  return auth.isLoopbackAddress(h);
+}
 if (_tmSecretRefused) {
-  console.warn(`[task-manager] CCS_TASK_MANAGER_SECRET is shorter than 32 chars and HOST is ${HOST} (not loopback) — ignored, using a random per-process secret`);
+  console.warn(`[task-manager] CCS_TASK_MANAGER_SECRET is shorter than 32 chars and HOST is ${HOST} (not a loopback literal) — ignored, using a random per-process secret`);
 } else if (_tmSecretWeak) {
-  console.warn('[task-manager] CCS_TASK_MANAGER_SECRET is shorter than 32 chars — honoured because the server is bound to loopback; do not carry this value onto a non-loopback HOST');
+  console.warn('[task-manager] CCS_TASK_MANAGER_SECRET is shorter than 32 chars — honoured because the server is bound to loopback; it stops working if a public tunnel is started, and never authorises a request from a browser');
 }
 
 // ─── Bot-to-bot dispatch (Internal MCP) ─────────────────────────────────
@@ -5760,6 +5799,12 @@ function queueBoardCardNotice(callerTask, title, status) {
 app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res) => {
   const authHeader = req.headers.authorization || '';
   if (!timingSafeStrEq(authHeader, `Bearer ${TASK_MANAGER_SECRET}`)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  // The token matched, but a SHORT one is only spendable from a purely local posture
+  // (see taskManagerWeakSecretAllowed — no tunnel, no proxy, no browser).
+  if (TM_SECRET_IS_WEAK && !taskManagerWeakSecretAllowed(req)) {
+    log.warn('[task-manager] short CCS_TASK_MANAGER_SECRET refused — the request did not come from a purely local client', { origin: req.headers.origin || null });
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

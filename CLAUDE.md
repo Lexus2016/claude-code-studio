@@ -504,34 +504,50 @@ import. `create_task` now takes an optional `status` of `todo`, `backlog` or `do
   so the pass that decides it owns the set. The shape predates #83 through the REST/Kanban door; what
   #83 changed is that one `create_task` call now reaches it, because an imported plan
   lands as backlog cards already carrying `depends_on`.
-- **The `CCS_TASK_MANAGER_SECRET` strength floor is conditional on the BINDING.** The
+- **The `CCS_TASK_MANAGER_SECRET` strength floor is conditional on the POSTURE.** The
   endpoint sits ABOVE `auth.authMiddleware` and mints tasks that run `claude` with an
   arbitrary prompt, so a short value there is an unauthenticated execution primitive on
   any host whose port is *reachable* — and that qualifier is the whole rule. This app is
   a local desktop tool first and a server second, and the two deserve different answers:
-  - **loopback** (the default, and forced by `CCS_DESKTOP=1`) — the value is HONOURED
-    whatever its length, with a warning. Nothing on `127.0.0.1` is reachable by anyone
-    who is not already executing code on this machine, and the product itself spawns
-    `claude --dangerously-skip-permissions`: a local attacker who can hit this port
-    already has everything the endpoint would give them. A developer exporting a short
-    secret to drive a test is deciding about their own machine, and silently ignoring it
-    just hands them a 401 with no explanation — which is what shipped in 7.15.0 and was
-    wrong. Server-grade policy applied to a desktop binding buys no security and costs
-    the feature.
-  - **non-loopback** (`HOST=0.0.0.0`, docker-compose, a homelab box behind a tunnel) —
-    under 32 chars is REFUSED, warned about, and replaced with the random per-process
-    default. Here the endpoint really is pre-auth on an interface someone else can
-    reach.
-  `HOST_IS_LOOPBACK` (server.js, via the exported `auth.isLoopbackAddress`) is the one
-  predicate, so the decision cannot drift from the bind address it describes. The header
-  comparison goes through `timingSafeStrEq`, which already existed in the same file for
-  `/api/internal/ask-user`. **The floor is not an entropy check and the comment says
-  so**: `'a'.repeat(32)` passes, and no cheap test distinguishes a weak 32-char string
-  from a strong one. It closes the plausible-typo case (`secret`, `test123`) on the one
-  binding where a typo is exposed; the supported configuration is still to leave the var
-  unset. The non-loopback half is pinned through the predicate rather than by booting a
-  test server on `0.0.0.0` — a suite must not open a port on every interface of the
-  machine it runs on.
+  a value under 32 chars is honoured when the studio is purely local, and refused
+  otherwise. A 32-char-or-longer value is unaffected by all of it; it is guessed, not
+  reached.
+- **"Local" is four conditions, because a loopback BIND is not unreachability.** The
+  first is decided at boot, the other three PER REQUEST — the posture changes while the
+  process runs:
+  - **HOST is a numeric loopback LITERAL** (`/^127\.\d+\.\d+\.\d+$/` or `::1`), NOT
+    `auth.isLoopbackAddress(HOST)`. That helper classifies a REQUEST's remote address,
+    which is always an IP; `HOST` is a config string `server.listen()` will resolve, so
+    its `/^127\./` accepts `127.attacker.example` and its `localhost` accepts whatever
+    the resolver says today. A carve-out may not rest on a name someone else controls.
+    Refusal warns and falls back to the random per-process default, so the MCP child
+    still gets a working secret.
+  - **No public tunnel is running.** `tunnel-manager.js` starts cloudflared against
+    `http://localhost:PORT` — the studio publishes its own loopback port to the internet
+    on a button press, long after the secret constant was computed. This is why the
+    check is per-request and not a boot-time constant.
+  - **`TRUST_PROXY` is unset.** It is an operator saying they put something in front on
+    purpose; remote traffic then arrives from `127.0.0.1` like everything else.
+  - **The request carries no `Origin`, or a loopback one.** A page on the internet
+    reaches a loopback port through DNS rebinding, and `isCrossOrigin()` compares Origin
+    against the request's own Host — after a rebind both are the attacker's name, so it
+    passes BY CONSTRUCTION. A browser always sends `Origin` on a JSON POST, so requiring
+    its absence makes a weak secret spendable by a CLI, a test or the MCP child and by
+    nothing that renders HTML. `test/task-backlog.test.js` drives that case through
+    `http.request` rather than `fetch`, with Host and Origin set to the SAME attacker
+    name; set them differently and the cross-origin guard 403s first and the gate under
+    test never runs.
+  Refusing on loopback bought no security and cost the feature: a developer exporting a
+  short secret to drive the endpoint from a test got a silent 401, on a machine where an
+  attacker who could reach the port already had everything the endpoint would give them
+  — the product's own job is to spawn `claude --dangerously-skip-permissions`.
+  The header comparison goes through `timingSafeStrEq`, which already existed in the
+  same file for `/api/internal/ask-user`. **The floor is not an entropy check and the
+  comment says so**: `'a'.repeat(32)` passes, and no cheap test distinguishes a weak
+  32-char string from a strong one. It closes the plausible-typo case (`secret`,
+  `test123`); the supported configuration is still to leave the var unset. The refusal
+  branch is tested by booting with `HOST=localhost` — loopback in fact, so the suite
+  opens no port on any interface, and not a literal, so the boot check refuses.
 - **`list_tasks` caps at `MAX_BOARD_CHILDREN_PER_RUN`, not at 50.** One run may write
   100 board rows; a 50-row answer hides the older half from exactly the dedup check
   `create_task`'s description tells an agent to run first. The cap is TWO statements of
