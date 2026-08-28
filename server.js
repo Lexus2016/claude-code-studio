@@ -1493,21 +1493,39 @@ const SET_UI_STATE_SECRET = require('crypto').randomBytes(16).toString('hex');
 // The env override exists so a test can drive /api/internal/task-manager the way the
 // MCP helper does — same class of hook as CCS_REMOTE_EXEC_HOOK. It is opt-in and the
 // default stays a fresh 16-byte random per process; nothing reads it from disk.
-// A SHORT override is refused. This endpoint is registered before auth.authMiddleware
-// and creates tasks that run `claude` with an arbitrary prompt, so a value like
-// `secret` or `test123` there is an unauthenticated code-execution primitive on any box
-// whose port is reachable. 32 chars is the width of the random default.
 //
-// A length floor is not an entropy check and does not pretend to be one: `'a'.repeat(32)`
-// passes. It cannot be one — no cheap test tells a weak 32-char string from a strong one
-// — so the floor closes the plausible-typo case and the documentation is what covers the
-// rest. This var is a test hook; the supported configuration is to leave it unset.
+// The strength floor is CONDITIONAL ON THE BINDING, because this app is a local
+// desktop tool first and a server second, and the two deserve different answers:
+//
+//   loopback (the default, and forced in desktop mode) — the value is HONOURED
+//     whatever it is, with a warning if it is short. Nothing on 127.0.0.1 is reachable
+//     by anyone who is not already executing code on this machine, and the product
+//     itself spawns `claude --dangerously-skip-permissions`: a local attacker who
+//     could hit this port already has everything the endpoint would give them. A
+//     developer who exports a short secret to drive a test is making a decision about
+//     their own machine, and silently ignoring it just breaks their test with a 401.
+//
+//   non-loopback (HOST=0.0.0.0, docker-compose, a homelab box behind a tunnel) — a
+//     value under 32 chars is REFUSED and a random one is used instead. Here the
+//     endpoint really is pre-auth on a reachable interface: it is registered before
+//     auth.authMiddleware and mints tasks that run `claude` with an arbitrary prompt,
+//     so `secret` or `test123` would be an unauthenticated execution primitive. The
+//     server posture is the one that has something to defend.
+//
+// The floor is not an entropy check either way and does not pretend to be one:
+// `'a'.repeat(32)` passes. It cannot be one — no cheap test tells a weak 32-char string
+// from a strong one — so it closes the plausible-typo case and nothing more. The
+// supported configuration remains to leave the var unset.
 const _tmSecretEnv = process.env.CCS_TASK_MANAGER_SECRET || '';
-const TASK_MANAGER_SECRET = _tmSecretEnv.length >= 32
+const _tmSecretWeak = !!_tmSecretEnv && _tmSecretEnv.length < 32;
+const _tmSecretRefused = _tmSecretWeak && !HOST_IS_LOOPBACK;
+const TASK_MANAGER_SECRET = (_tmSecretEnv && !_tmSecretRefused)
   ? _tmSecretEnv
   : require('crypto').randomBytes(16).toString('hex');
-if (_tmSecretEnv && _tmSecretEnv.length < 32) {
-  console.warn('[task-manager] CCS_TASK_MANAGER_SECRET is shorter than 32 chars — ignored, using a random per-process secret');
+if (_tmSecretRefused) {
+  console.warn(`[task-manager] CCS_TASK_MANAGER_SECRET is shorter than 32 chars and HOST is ${HOST} (not loopback) — ignored, using a random per-process secret`);
+} else if (_tmSecretWeak) {
+  console.warn('[task-manager] CCS_TASK_MANAGER_SECRET is shorter than 32 chars — honoured because the server is bound to loopback; do not carry this value onto a non-loopback HOST');
 }
 
 // ─── Bot-to-bot dispatch (Internal MCP) ─────────────────────────────────

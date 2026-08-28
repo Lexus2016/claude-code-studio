@@ -504,16 +504,34 @@ import. `create_task` now takes an optional `status` of `todo`, `backlog` or `do
   so the pass that decides it owns the set. The shape predates #83 through the REST/Kanban door; what
   #83 changed is that one `create_task` call now reaches it, because an imported plan
   lands as backlog cards already carrying `depends_on`.
-- **`CCS_TASK_MANAGER_SECRET` is refused below 32 chars, not honoured.** The endpoint
-  sits ABOVE `auth.authMiddleware` and mints tasks that run `claude` with an arbitrary
-  prompt, so a short value there is an unauthenticated execution primitive on any host
-  whose port is reachable. A rejected override warns and falls back to the random
-  per-process default — silently accepting it is what would make the hook dangerous.
-  The header comparison goes through `timingSafeStrEq`, which already existed in the
-  same file for `/api/internal/ask-user`. **The floor is not an entropy check and the
-  comment says so**: `'a'.repeat(32)` passes, and no cheap test distinguishes a weak
-  32-char string from a strong one. It closes the plausible-typo case (`secret`,
-  `test123`); the supported configuration is to leave the var unset.
+- **The `CCS_TASK_MANAGER_SECRET` strength floor is conditional on the BINDING.** The
+  endpoint sits ABOVE `auth.authMiddleware` and mints tasks that run `claude` with an
+  arbitrary prompt, so a short value there is an unauthenticated execution primitive on
+  any host whose port is *reachable* — and that qualifier is the whole rule. This app is
+  a local desktop tool first and a server second, and the two deserve different answers:
+  - **loopback** (the default, and forced by `CCS_DESKTOP=1`) — the value is HONOURED
+    whatever its length, with a warning. Nothing on `127.0.0.1` is reachable by anyone
+    who is not already executing code on this machine, and the product itself spawns
+    `claude --dangerously-skip-permissions`: a local attacker who can hit this port
+    already has everything the endpoint would give them. A developer exporting a short
+    secret to drive a test is deciding about their own machine, and silently ignoring it
+    just hands them a 401 with no explanation — which is what shipped in 7.15.0 and was
+    wrong. Server-grade policy applied to a desktop binding buys no security and costs
+    the feature.
+  - **non-loopback** (`HOST=0.0.0.0`, docker-compose, a homelab box behind a tunnel) —
+    under 32 chars is REFUSED, warned about, and replaced with the random per-process
+    default. Here the endpoint really is pre-auth on an interface someone else can
+    reach.
+  `HOST_IS_LOOPBACK` (server.js, via the exported `auth.isLoopbackAddress`) is the one
+  predicate, so the decision cannot drift from the bind address it describes. The header
+  comparison goes through `timingSafeStrEq`, which already existed in the same file for
+  `/api/internal/ask-user`. **The floor is not an entropy check and the comment says
+  so**: `'a'.repeat(32)` passes, and no cheap test distinguishes a weak 32-char string
+  from a strong one. It closes the plausible-typo case (`secret`, `test123`) on the one
+  binding where a typo is exposed; the supported configuration is still to leave the var
+  unset. The non-loopback half is pinned through the predicate rather than by booting a
+  test server on `0.0.0.0` — a suite must not open a port on every interface of the
+  machine it runs on.
 - **`list_tasks` caps at `MAX_BOARD_CHILDREN_PER_RUN`, not at 50.** One run may write
   100 board rows; a 50-row answer hides the older half from exactly the dedup check
   `create_task`'s description tells an agent to run first. The cap is TWO statements of

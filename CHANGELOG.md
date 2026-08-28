@@ -1,5 +1,26 @@
 # Changelog
 
+## 7.15.1
+
+### The task-manager secret floor now matches the binding
+
+- **A short `CCS_TASK_MANAGER_SECRET` is honoured on loopback again.** 7.15.0 refused
+  anything under 32 characters unconditionally, which is server policy applied to a
+  desktop app. Claude Code Studio binds `127.0.0.1` by default (and is forced there by
+  `CCS_DESKTOP=1`), where the endpoint is reachable only by someone already executing
+  code on the machine — and the product's own job is to spawn
+  `claude --dangerously-skip-permissions`. So the refusal bought no security and cost a
+  real workflow: a developer exporting a short secret to drive the endpoint from a test
+  got a silent 401.
+- **On a non-loopback `HOST` the floor still applies.** `HOST=0.0.0.0`,
+  docker-compose or a homelab box behind a tunnel puts a pre-auth endpoint on an
+  interface someone else can reach; there a value under 32 characters is ignored with a
+  warning and the random per-process secret is used instead. Both branches warn, with
+  different wording, so the operator can tell which one they got.
+- The decision reads the existing `HOST_IS_LOOPBACK` (via the exported
+  `auth.isLoopbackAddress`), so it cannot drift from the address the server actually
+  binds. `timingSafeStrEq` on the bearer comparison is unchanged.
+
 ## 7.15.0
 
 ### Populate the Kanban board without running it (#83)

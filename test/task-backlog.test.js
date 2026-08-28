@@ -184,18 +184,38 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
   console.log('\n— hardening —');
   const SRC = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
 
-  // A short CCS_TASK_MANAGER_SECRET must be refused, not honoured: this endpoint is
-  // registered before auth.authMiddleware and creates tasks that run `claude` with an
-  // arbitrary prompt, so a guessable value is an unauthenticated execution primitive.
+  // The CCS_TASK_MANAGER_SECRET floor is CONDITIONAL ON THE BINDING, and that is the
+  // whole point: this is a local desktop tool first and a server second. On loopback a
+  // short value is HONOURED with a warning — nothing on 127.0.0.1 is reachable by anyone
+  // who is not already running code on this machine, and the product itself spawns
+  // `claude --dangerously-skip-permissions`, so refusing there only breaks the developer
+  // test the value was exported for. On a non-loopback HOST the endpoint really is
+  // pre-auth on a reachable interface, so a value under 32 chars is refused and a random
+  // one is used instead.
   const iEnv  = SRC.indexOf("const _tmSecretEnv = process.env.CCS_TASK_MANAGER_SECRET");
-  const iLen  = SRC.indexOf("_tmSecretEnv.length >= 32", iEnv);
-  const iRand = SRC.indexOf("randomBytes(16).toString('hex')", iLen);
-  check('the secret override is length-checked before it is used', iEnv >= 0 && iLen > iEnv && iRand > iLen, true);
+  const iWeak = SRC.indexOf("_tmSecretEnv.length < 32", iEnv);
+  const iRef  = SRC.indexOf("const _tmSecretRefused = _tmSecretWeak && !HOST_IS_LOOPBACK;", iWeak);
+  const iRand = SRC.indexOf("randomBytes(16).toString('hex')", iRef);
+  check('the secret override is length-checked before it is used', iEnv >= 0 && iWeak > iEnv && iRand > iWeak, true);
+  check('and the refusal is gated on the BINDING, not on the length alone', iRef > iWeak && iRand > iRef, true);
+  check('a weak secret is only dropped when it is refused, never merely because it is weak',
+    /const TASK_MANAGER_SECRET = \(_tmSecretEnv && !_tmSecretRefused\)/.test(SRC), true);
   check('the bearer comparison goes through timingSafeStrEq',
     /if \(!timingSafeStrEq\(authHeader, `Bearer \$\{TASK_MANAGER_SECRET\}`\)\)/.test(SRC), true);
 
-  // …and behaviourally: a second server booted with a 12-char override must NOT accept
-  // it — it falls back to a random per-process secret, so the short one 401s.
+  // The non-loopback half is pinned through the predicate rather than by booting a
+  // server on 0.0.0.0: a test suite must not open a port on every interface of the
+  // machine it runs on (and on macOS that is also a firewall prompt mid-run).
+  const _auth = require(path.join(__dirname, '..', 'auth.js'));
+  check('isLoopbackAddress agrees with the branch the floor is gated on',
+    [_auth.isLoopbackAddress('127.0.0.1'), _auth.isLoopbackAddress('::1'),
+     _auth.isLoopbackAddress('0.0.0.0'), _auth.isLoopbackAddress('192.168.1.10')].join(),
+    'true,true,false,false');
+
+  // …and behaviourally on the branch that IS the default: a second server booted in
+  // desktop mode (loopback, forced) with a 12-char override must ACCEPT it. This is the
+  // regression that matters — the value exists so a local test can drive the endpoint,
+  // and silently ignoring it hands the developer a 401 with no explanation.
   const PORT2 = PORT + 1;
   const APP2 = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-bl83-weak-'));
   fs.mkdirSync(path.join(APP2, 'data'), { recursive: true });
@@ -220,8 +240,16 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
     headers: { 'content-type': 'application/json', authorization: 'Bearer short-secret' },
     body: JSON.stringify({ action: 'list_tasks' }),
   });
-  check('a 12-char CCS_TASK_MANAGER_SECRET is ignored, so it cannot authorise', weakRes.status, 401);
-  check('...and the operator is told, rather than left thinking it took', /shorter than 32 chars/.test(weakLog), true);
+  check('a 12-char CCS_TASK_MANAGER_SECRET authorises on loopback', weakRes.status, 200);
+  check('...and the operator is warned rather than surprised later', /shorter than 32 chars/.test(weakLog), true);
+  check('...with the warning that says it was HONOURED, not the one that says ignored',
+    /honoured because the server is bound to loopback/.test(weakLog), true);
+  const wrongRes = await fetch(`http://127.0.0.1:${PORT2}/api/internal/task-manager`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer not-the-secret' },
+    body: JSON.stringify({ action: 'list_tasks' }),
+  });
+  check('...and the endpoint is still closed to anything else', wrongRes.status, 401);
   try { weak.kill('SIGTERM'); } catch {}
 
   // The queue wake was guarded for a board row; the UI toast was not, so an 80-card
