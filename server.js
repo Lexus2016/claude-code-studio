@@ -1534,6 +1534,7 @@ const TASK_MANAGER_SECRET = (_tmSecretEnv && !_tmSecretRefused)
 // refused, TASK_MANAGER_SECRET is a fresh 16-byte random and none of the extra gates
 // below apply — there is nothing weak left to protect.
 const TM_SECRET_IS_WEAK = _tmSecretWeak && !_tmSecretRefused;
+let _tmWeakRevokedByTunnel = false;
 
 // A loopback BIND is not the same thing as being unreachable, and two things this app
 // does itself break that equivalence. So a weak secret is re-checked PER REQUEST:
@@ -1552,14 +1553,30 @@ const TM_SECRET_IS_WEAK = _tmSecretWeak && !_tmSecretRefused;
 //
 // A 32-char-or-longer secret is unaffected by all of this: it is guessed, not reached.
 function taskManagerWeakSecretAllowed(req) {
-  if (tunnelManager?.isRunning?.()) return false;
+  // A LATCH, not a live read. tunnelManager.isRunning() only turns true when cloudflared
+  // prints its URL, which lags the spawn by up to 30s — and during that window the proxy
+  // is already accepting connections. It is also two doors (HTTP and Telegram), only one
+  // of which holds _tunnelStartLock. Once a tunnel has been ASKED FOR in this process the
+  // weak secret is gone until restart: monotonic, so there is no window to race.
+  if (_tmWeakRevokedByTunnel || tunnelManager?.isRunning?.()) return false;
   if (TRUST_PROXY_ENV) return false;
+  // The mere PRESENCE of a forwarding header is proof a hop happened, whatever
+  // TRUST_PROXY says — the same rule setupCallerIsLocal() already applies, and for the
+  // same reason: an nginx/Caddy/ssh -L in front makes every visitor look like 127.0.0.1.
+  // A genuinely local CLI or MCP child sends none of them, so this only fails closed.
+  if (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.headers.forwarded) return false;
   if (!auth.isLoopbackAddress(req.socket?.remoteAddress)) return false;
   const origin = req.headers.origin;
   if (!origin) return true;
   let h;
   try { h = new URL(origin).hostname; } catch { return false; }
-  return auth.isLoopbackAddress(h);
+  // NOT auth.isLoopbackAddress(): an Origin hostname is a NAME, and that helper's
+  // `/^127\./` would accept `127.attacker.example` — a name anyone can register with an
+  // A record of 127.0.0.1, which is exactly how a rebinding page is built. Literals only.
+  // `localhost` is safe to allow because a page cannot be served from a name it does not
+  // control, and nobody controls `localhost`.
+  return h === 'localhost' || h === '[::1]' || h === '::1' ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h);
 }
 if (_tmSecretRefused) {
   console.warn(`[task-manager] CCS_TASK_MANAGER_SECRET is shorter than 32 chars and HOST is ${HOST} (not a loopback literal) — ignored, using a random per-process secret`);
@@ -10195,6 +10212,7 @@ function _attachTelegramListeners(bot) {
       const provider = c.tunnel?.provider || 'cloudflared';
       const config = { ngrokAuthtoken: c.tunnel?.ngrokAuthtoken };
       await bot.sendMessage(chatId, `⏳ Starting ${bot.escHtml(provider)}...`);
+      _tmWeakRevokedByTunnel = true;
       const { publicUrl } = await tunnelManager.start(provider, config);
       await bot.sendMessage(chatId, `🟢 Remote Access active!\n\n🔗 ${bot.escHtml(publicUrl)}`);
     } catch (err) {
@@ -10442,6 +10460,7 @@ app.post('/api/tunnel/start', async (req, res) => {
   if (!tunnelManager) initTunnelManager();
 
   _tunnelStartLock = true;
+  _tmWeakRevokedByTunnel = true;
   try {
     const { publicUrl } = await tunnelManager.start(prov, {
       ngrokAuthtoken: ngrokAuthtoken || c.tunnel.ngrokAuthtoken,

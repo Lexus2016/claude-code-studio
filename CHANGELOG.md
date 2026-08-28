@@ -1,5 +1,27 @@
 # Changelog
 
+## 7.15.3
+
+### Third pass on the task-manager secret carve-out
+
+A second independent review found three bypasses in 7.15.2. All are closed; a
+32-char-or-longer secret was never affected by any of them.
+
+- **The Origin check reproduced the very bug it was added to fix.** It called
+  `auth.isLoopbackAddress()` on an Origin HOSTNAME, and that helper tests `/^127\./`
+  against a string — so `http://127.attacker.example`, a name anyone can register with
+  an A record of `127.0.0.1`, satisfied it. A rebound page served from that name passes
+  the cross-origin guard (its Host and Origin match) and would have spent a short
+  secret. The Origin hostname is now matched as a literal.
+- **`isRunning()` lags the tunnel spawn by up to 30 seconds**, and only one of the two
+  start doors (HTTP, not Telegram) held a lock over that window. A weak secret is now
+  revoked by a monotonic latch set before each `tunnelManager.start()`, so there is no
+  window to race. Stopping the tunnel does not give it back until the process restarts.
+- **A local reverse proxy needed no `TRUST_PROXY` to launder a remote request.** The
+  presence of `X-Forwarded-For` / `X-Real-IP` / `Forwarded` now refuses a short secret
+  outright, whatever `TRUST_PROXY` says — the same rule `setupCallerIsLocal()` already
+  applied to the first-run setup gate, for the same reason.
+
 ## 7.15.2
 
 ### The task-manager secret carve-out is scoped to the posture, not the bind

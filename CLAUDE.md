@@ -522,21 +522,36 @@ import. `create_task` now takes an optional `status` of `todo`, `backlog` or `do
     the resolver says today. A carve-out may not rest on a name someone else controls.
     Refusal warns and falls back to the random per-process default, so the MCP child
     still gets a working secret.
-  - **No public tunnel is running.** `tunnel-manager.js` starts cloudflared against
-    `http://localhost:PORT` — the studio publishes its own loopback port to the internet
-    on a button press, long after the secret constant was computed. This is why the
-    check is per-request and not a boot-time constant.
-  - **`TRUST_PROXY` is unset.** It is an operator saying they put something in front on
-    purpose; remote traffic then arrives from `127.0.0.1` like everything else.
-  - **The request carries no `Origin`, or a loopback one.** A page on the internet
-    reaches a loopback port through DNS rebinding, and `isCrossOrigin()` compares Origin
-    against the request's own Host — after a rebind both are the attacker's name, so it
-    passes BY CONSTRUCTION. A browser always sends `Origin` on a JSON POST, so requiring
-    its absence makes a weak secret spendable by a CLI, a test or the MCP child and by
-    nothing that renders HTML. `test/task-backlog.test.js` drives that case through
-    `http.request` rather than `fetch`, with Host and Origin set to the SAME attacker
-    name; set them differently and the cross-origin guard 403s first and the gate under
-    test never runs.
+  - **No tunnel has been ASKED FOR in this process** — `_tmWeakRevokedByTunnel`, a
+    monotonic latch, not a live `isRunning()`. `tunnel-manager.js` starts cloudflared
+    against `http://localhost:PORT`, so the studio publishes its own loopback port to
+    the internet on a button press, long after the secret constant was computed. But
+    `isRunning()` only turns true when cloudflared PRINTS its URL, up to 30s after the
+    proxy began accepting connections, and there are two start doors (HTTP and Telegram)
+    of which only one holds `_tunnelStartLock`. A latch set before each `start()` has no
+    window to race; stopping the tunnel does not give the secret back, which is the safe
+    direction for a dev convenience.
+  - **`TRUST_PROXY` is unset AND no forwarding header is present.** The env var only
+    helps an operator who remembered to set it; an nginx/Caddy/`ssh -L` in front makes
+    every visitor arrive from `127.0.0.1` either way. So the mere PRESENCE of
+    `X-Forwarded-For` / `X-Real-IP` / `Forwarded` is proof a hop happened — the identical
+    rule `setupCallerIsLocal()` already applies a few thousand lines down, for the
+    identical reason. A genuinely local CLI or MCP child sends none of them, so a forged
+    header can only fail closed.
+  - **The request carries no `Origin`, or a LITERAL loopback one.** A page on the
+    internet reaches a loopback port through DNS rebinding, and `isCrossOrigin()`
+    compares Origin against the request's own Host — after a rebind both are the
+    attacker's name, so it passes BY CONSTRUCTION. A browser always sends `Origin` on a
+    JSON POST, so requiring its absence makes a weak secret spendable by a CLI, a test
+    or the MCP child and by nothing that renders HTML.
+    **This check may not use `auth.isLoopbackAddress()` either, and that mistake shipped
+    once.** An Origin hostname is a NAME: `/^127\./` accepts `127.attacker.example`,
+    which anyone can register with an A record of `127.0.0.1` and then serve the page
+    from — the exact bypass the rule exists to stop. Literals only, plus `localhost`,
+    which is safe because a page cannot be served from a name nobody controls.
+    `test/task-backlog.test.js` drives these through `http.request` rather than `fetch`,
+    with Host and Origin set to the SAME attacker name; set them differently and the
+    cross-origin guard 403s first and the gate under test never runs.
   Refusing on loopback bought no security and cost the feature: a developer exporting a
   short secret to drive the endpoint from a test got a silent 401, on a machine where an
   attacker who could reach the port already had everything the endpoint would give them
