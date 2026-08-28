@@ -10,9 +10,11 @@
 //
 //   - a `status:'backlog'` card is stored as 'backlog' and stays there. If the literal
 //     'todo' creeps back into the INSERT, every imported card fires.
+//   - `status:'done'` round-trips, because "- [x]" is half of what "preserve status
+//     from the checkboxes" means and the alternative is running a finished item.
 //   - the DEFAULT is still 'todo'. Every existing caller omits the key; flipping the
 //     default would silently stop spawning the follow-up work they asked for.
-//   - status is whitelisted against two literals. 'in_progress' from a model would
+//   - status is whitelisted against three literals. 'in_progress' from a model would
 //     hand the board a row no worker owns and no queue will ever pick up.
 //   - the two child budgets are SEPARATE. A backlog card cannot recurse (processQueue
 //     never selects it), so it must not eat the runnable budget — otherwise an import
@@ -128,10 +130,15 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
   const def = await tm({ action: 'create_task', taskId: P, title: 'follow-up', description: 'x', scheduled_at: NEVER });
   check('omitting status still queues the task — the pre-#83 default', def.json?.status, 'todo');
 
+  // "- [x] Task C" in an imported plan is a finished item. Without this the import
+  // has to lie about it (backlog) or run it (todo).
+  const dn = await tm({ action: 'create_task', taskId: P, title: 'Logout flow', description: 'from tasks/auth/Logout.md', status: 'done' });
+  check('an already-finished checklist item can be imported as done', dn.json?.status, 'done');
+
   const bad = await tm({ action: 'create_task', taskId: P, title: 'nope', description: 'x', status: 'in_progress' });
-  check('a status outside {backlog,todo} is a 400, not a silently coerced row', bad.status, 400);
-  const bad2 = await tm({ action: 'create_task', taskId: P, title: 'nope', description: 'x', status: 'done' });
-  check('"done" is refused too', bad2.status, 400);
+  check('in_progress is a 400 — it would be a row no worker owns', bad.status, 400);
+  const bad2 = await tm({ action: 'create_task', taskId: P, title: 'nope', description: 'x', status: 'cancelled' });
+  check('a status outside the three literals is refused, not silently coerced', bad2.status, 400);
 
   console.log('\n— the two child budgets are separate —');
 
@@ -147,6 +154,8 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
   // budget is spent, because a backlog card starts no process.
   const stillBl = await tm({ action: 'create_task', taskId: P, title: 'MFA support', description: 'x', status: 'backlog' });
   check('a backlog card is still accepted with the runnable budget exhausted', stillBl.status, 200);
+  const stillDn = await tm({ action: 'create_task', taskId: P, title: 'Payment', description: 'x', status: 'done' });
+  check('...and so is a done card — neither spends the runnable budget', stillDn.status, 200);
 
   // And the reverse direction: 20 backlog cards (well past the runnable cap of 10)
   // all land, which is what "import a tasks/ folder" actually needs.
@@ -164,6 +173,8 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
     list.filter(t => t.status === 'in_progress').length, 0);
   check('the board holds every backlog card that was created',
     list.filter(t => t.status === 'backlog' && t.id !== P).length, 22);
+  check('and the imported done items, which nothing ran',
+    list.filter(t => t.status === 'done').length, 2);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   cleanup();

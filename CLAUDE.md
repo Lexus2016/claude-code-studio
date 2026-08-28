@@ -458,25 +458,37 @@ statement, and the comments no longer spell it.
 could do to the Kanban board was START work on it. Turning an existing plan — a
 `tasks/` folder, `.planning/`, a roadmap, a checklist — into cards therefore launched
 one unattended `claude` per card at the moment of import, which is the opposite of an
-import. `create_task` now takes an optional `status` of `backlog` or `todo`.
+import. `create_task` now takes an optional `status` of `todo`, `backlog` or `done`.
 
 - **`todo` stays the default.** Every existing caller omits the key and expects the
   follow-up work it asked for to actually start; flipping the default would silence
   all of them.
-- **The value is whitelisted against two literals, never taken verbatim.**
-  `in_progress` or `done` from a model would put a row on the board that no worker
-  owns and `getTodoTasks` will never select — a card that looks live and is not.
+- **`done` is in the list because `- [x]` is.** Half of "preserve the status from the
+  checkboxes" is items the plan already marks finished; without it an import has to
+  either lie about them (`backlog`) or RUN them (`todo`). A `done` row satisfies a
+  `depends_on`, which is not an escalation: the run that creates the dependency also
+  creates the dependant.
+- **`in_progress` is the one deliberately missing.** It would put a row on the board
+  that no worker owns and `getTodoTasks` will never select — a card that looks live
+  and is not. A run that wants work started asks for `todo` and lets the queue own it.
 - **The two child budgets are separate, and that is the point.**
   `MAX_TASK_CHILDREN_PER_RUN` (10) bounds RUNAWAY EXECUTION: a child that runs can
-  create children of its own. A backlog card runs nothing, so it cannot recurse, and
+  create children of its own. A board row runs nothing, so it cannot recurse, and
   counting it against that budget is what made a ten-card import consume the run's
-  entire ability to create real follow-up work. `MAX_BACKLOG_CHILDREN_PER_RUN` (100)
-  bounds the rows instead. `countChildTasksRunnable` / `countChildTasksBacklog` are
-  two statements for that reason; the old catch-all `countChildTasks` is gone rather
-  than left as a third answer to the same question.
-- **A backlog card does not wake `processQueue`.** The queue does not select
-  `backlog`, so the `setImmediate` would walk it for nothing — eighty times for an
-  eighty-card import.
+  entire ability to create real follow-up work. `MAX_BOARD_CHILDREN_PER_RUN` (100)
+  bounds the rows instead. `countChildTasksRunnable` / `countChildTasksBoard` are two
+  statements for that reason; the old catch-all `countChildTasks` is gone rather than
+  left as a third answer to the same question. Both predicates read a status AFTER the
+  fact, so a real child that COMPLETED moves between them and frees a runnable slot —
+  a known, bounded leak, not worth a column: the child has to finish while its parent
+  is still running and the parent's own `max_turns` is the backstop.
+- **A board card does not wake `processQueue`.** The queue selects only `todo`, so the
+  `setImmediate` would walk it for nothing — eighty times for an eighty-card import.
+- **`CCS_TASK_MANAGER_SECRET` exists so the internal endpoint is drivable from a
+  test** — same class of hook as `CCS_REMOTE_EXEC_HOOK`. Opt-in; the default is still
+  a fresh 16-byte random per process. `test/task-backlog.test.js` schedules every
+  `todo` child a year out (`getTodoTasks` filters on `scheduled_at <= unixepoch()`) so
+  the suite cannot spawn a real `claude`.
 - **The deterministic folder→board importer in that issue was deliberately NOT
   built.** `tasks` is flat (`chain_id` + `depends_on`, no `parent_id`), so the epic →
   subtask tree it asks for is not representable without a schema and Kanban-UI change;

@@ -37,13 +37,13 @@ function sendError(id, code, message) {
 const TOOLS = [
   {
     name: 'create_task',
-    description: 'Create a new task in the system. By default the task is queued for execution; pass status="backlog" to add it to the Kanban board WITHOUT running it (use that when importing an existing plan, roadmap or tasks/ folder into the board). The workdir is automatically inherited from your current task — you cannot change it. Use this to spawn follow-up work, bug fixes, or any action that should run as a separate task.',
+    description: 'Create a new task in the system. By default the task is queued for execution; pass status="backlog" (or "done" for an already-completed item) to add it to the Kanban board WITHOUT running it — use that when importing an existing plan, roadmap, tasks/ folder or checklist into the board. The workdir is automatically inherited from your current task — you cannot change it. Use this to spawn follow-up work, bug fixes, or any action that should run as a separate task.',
     inputSchema: {
       type: 'object',
       properties: {
         title: { type: 'string', description: 'Short task title (max 200 chars)' },
         description: { type: 'string', description: 'Detailed task description (max 2000 chars)' },
-        status: { type: 'string', enum: ['backlog', 'todo'], description: 'backlog = add to the board only, nothing runs. todo = queue it for execution now (default).' },
+        status: { type: 'string', enum: ['backlog', 'todo', 'done'], description: 'todo = queue it for execution now (default). backlog = add to the board only, nothing runs. done = an already-finished item, e.g. a "- [x]" line from a plan you are importing.' },
         context: {
           description: 'Curated context to pass to the child task. Include ONLY what the child needs — issue details, code snippets, error messages, etc. Can be a string or a JSON object. The child reads this via get_current_task.',
         },
