@@ -1178,7 +1178,11 @@ const stmts = {
   archHourlyDist: db.prepare(`SELECT CAST(key AS INTEGER) AS hour, count FROM stats_archived_detail WHERE category='hourly' ORDER BY hour`),
   archWeeklyTrend: db.prepare(`SELECT key AS week, count, tool_count FROM stats_archived_detail WHERE category='weekly' AND key >= strftime('%Y-W%W', date('now', '-84 days')) ORDER BY key ASC`),
   // Task Manager MCP prepared statements
-  countChildTasks: db.prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE parent_task_id=?`),
+  // Backlog children are counted separately: a backlog card never runs, so it cannot
+  // recurse, and the runaway-execution budget MAX_TASK_CHILDREN_PER_RUN is guarding
+  // against something a board row does not do (see the create_task case).
+  countChildTasksRunnable: db.prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE parent_task_id=? AND status<>'backlog'`),
+  countChildTasksBacklog: db.prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE parent_task_id=? AND status='backlog'`),
   getParentTaskId: db.prepare(`SELECT parent_task_id FROM tasks WHERE id=?`),
   setTaskContext: db.prepare(`UPDATE tasks SET context=?, parent_task_id=?, updated_at=datetime('now') WHERE id=?`),
   setTaskOutput: db.prepare(`UPDATE tasks SET task_output=?, updated_at=datetime('now') WHERE id=?`),
@@ -1476,7 +1480,10 @@ const NOTIFY_SECRET = require('crypto').randomBytes(16).toString('hex');
 const SET_UI_STATE_SECRET = require('crypto').randomBytes(16).toString('hex');
 
 // ─── Task Manager (Internal MCP) ─────────────────────────────────────────
-const TASK_MANAGER_SECRET = require('crypto').randomBytes(16).toString('hex');
+// The env override exists so a test can drive /api/internal/task-manager the way the
+// MCP helper does — same class of hook as CCS_REMOTE_EXEC_HOOK. It is opt-in and the
+// default stays a fresh 16-byte random per process; nothing reads it from disk.
+const TASK_MANAGER_SECRET = process.env.CCS_TASK_MANAGER_SECRET || require('crypto').randomBytes(16).toString('hex');
 
 // ─── Bot-to-bot dispatch (Internal MCP) ─────────────────────────────────
 const BOTS_SECRET = require('crypto').randomBytes(16).toString('hex');
@@ -3317,7 +3324,7 @@ const SET_UI_STATE_INSTRUCTION = `\n\nYou have access to a "set_ui_state" tool (
 This is REQUIRED behavior, not optional. The tool is fire-and-forget — execution continues immediately.`;
 
 const TASK_MANAGER_INSTRUCTION = `\n\nYou have access to task management tools (via MCP server "_ccs_task_manager"):
-- **create_task**: Create a new task for follow-up work. Pass curated context so the child task knows what to do.
+- **create_task**: Create a new task for follow-up work. Pass curated context so the child task knows what to do. It is QUEUED AND RUNS by default; pass status:"backlog" to add a card to the Kanban board without starting anything — that is the right call when you are turning an existing plan, roadmap, tasks/ folder or checklist into board cards for a human to triage.
 - **create_chain**: Create multiple sequential tasks in one call. Tasks run in order with shared session.
 - **list_tasks**: Check existing tasks (useful to avoid duplicates before creating new ones).
 - **get_current_task**: Read YOUR task details including context passed by the parent. Call this FIRST if you were created by another task.
@@ -5613,6 +5620,13 @@ app.post('/api/internal/set-ui-state', express.json(), (req, res) => {
 // ─── Task Manager endpoint (internal MCP — autonomous task creation) ─────────
 // Safety limits: prevent runaway task creation by a single task execution
 const MAX_TASK_CHILDREN_PER_RUN = 10;
+// A BACKLOG child is a board row, not a queued run: processQueue never picks it up, so
+// it cannot create children of its own and the recursion the cap above exists to bound
+// does not start. Populating a board from an existing plan (`tasks/`, `.planning/`,
+// a roadmap) is the case that needs more than ten, and ten runnable tasks is still the
+// budget for anything that will actually spawn a `claude`. The separate bound is what
+// keeps a confused agent from writing rows without end.
+const MAX_BACKLOG_CHILDREN_PER_RUN = 100;
 const MAX_CHAIN_DEPTH = 5;
 
 app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res) => {
@@ -5638,14 +5652,32 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
       // ── create_task ────────────────────────────────────────────────────
       case 'create_task': {
         const { title, description = '', context = null, model, mode, agent_mode,
-                depends_on, chain_id, scheduled_at, max_turns } = req.body;
+                depends_on, chain_id, scheduled_at, max_turns, status: reqStatus } = req.body;
         if (!title) return res.status(400).json({ error: 'Missing title' });
 
-        // Safety: count how many children this task has already created
+        // 'todo' is the default because that is what this tool has always done — every
+        // caller that omits the key still queues a run. 'backlog' is the opt-in for
+        // "put this on the board, do not start it": the whole point of a plan import.
+        // Whitelisted against two literals, never taken verbatim: 'in_progress' from a
+        // model would hand the board a row no worker owns.
+        if (reqStatus !== undefined && reqStatus !== 'backlog' && reqStatus !== 'todo') {
+          return res.status(400).json({ error: `Invalid status: ${reqStatus}. Use "backlog" (board only) or "todo" (queue it).` });
+        }
+        const newStatus = reqStatus === 'backlog' ? 'backlog' : 'todo';
+
+        // Safety: count how many children this task has already created.
+        // The two budgets are separate — see MAX_BACKLOG_CHILDREN_PER_RUN.
         if (callerTaskId) {
-          const childCount = stmts.countChildTasks.get(callerTaskId);
-          if (childCount.cnt >= MAX_TASK_CHILDREN_PER_RUN) {
-            return res.status(429).json({ error: `Child task limit reached (${MAX_TASK_CHILDREN_PER_RUN}). Cannot create more tasks in this run.` });
+          if (newStatus === 'backlog') {
+            const backlogCount = stmts.countChildTasksBacklog.get(callerTaskId);
+            if (backlogCount.cnt >= MAX_BACKLOG_CHILDREN_PER_RUN) {
+              return res.status(429).json({ error: `Backlog card limit reached (${MAX_BACKLOG_CHILDREN_PER_RUN}). Cannot create more cards in this run.` });
+            }
+          } else {
+            const childCount = stmts.countChildTasksRunnable.get(callerTaskId);
+            if (childCount.cnt >= MAX_TASK_CHILDREN_PER_RUN) {
+              return res.status(429).json({ error: `Child task limit reached (${MAX_TASK_CHILDREN_PER_RUN}). Cannot create more tasks in this run.` });
+            }
           }
         }
 
@@ -5687,7 +5719,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         stmts.createTask.run(
           id, String(title).substring(0, 200), String(description).substring(0, 2000),
           '', // notes
-          'todo', // status — immediately eligible for processQueue
+          newStatus, // 'todo' → immediately eligible for processQueue; 'backlog' → board only
           0,  // sort_order
           (chain_id ? callerTask?.session_id : null) || null, // session_id — only inherit for chain tasks
           workdir,
@@ -5711,15 +5743,19 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         // Set new columns that aren't in createTask prepared statement
         stmts.setTaskContext.run(contextJson, callerTaskId || null, id);
 
-        // Trigger queue to pick up new task
-        setImmediate(processQueue);
+        // Trigger queue to pick up new task. Skipped for a backlog card: processQueue
+        // does not select 'backlog', so waking it would only walk the queue for nothing
+        // — and an import writing 80 rows would wake it 80 times.
+        if (newStatus !== 'backlog') setImmediate(processQueue);
 
         // Notify UI
         if (callerTask?.source_session_id) {
           const _ctx = getNotificationContext(callerTask.source_session_id);
           broadcastToSession(callerTask.source_session_id, {
             type: 'notification', level: 'info',
-            title: `New task created: "${String(title).substring(0, 60)}"`,
+            title: newStatus === 'backlog'
+              ? `Backlog card added: "${String(title).substring(0, 60)}"`
+              : `New task created: "${String(title).substring(0, 60)}"`,
             detail: `Created by task "${callerTask.title}"`,
             tabId: callerTask.source_session_id,
             sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
@@ -5727,7 +5763,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         }
 
         const task = stmts.getTask.get(id);
-        log.info('[task-manager] create_task', { id, title, parentId: callerTaskId });
+        log.info('[task-manager] create_task', { id, title, status: newStatus, parentId: callerTaskId });
         return res.json({ task_id: id, status: task.status, title: task.title });
       }
 
