@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.9.0** — **A stuck remote chat is no longer stuck for good.** A remote SSH chat could lock up permanently when the connection dropped mid-run — every new message refused, and even **Restart Session** answered "Task is still running." The fix reworks how a remote run ends so nothing is left half-finished, and Restart Session now recovers a wedged chat instead of refusing to touch it. Also in this release: a broken or missing local Claude CLI install is now caught and shown in the UI **before** it fails a chat mid-send, and two small Telegram gaps are closed — `/cancel` works, and a project added after the initial connect gets its forum topic right away.
+> **v7.15.0** — **Turn an existing plan into a board without running it.** An agent can now add Kanban cards that simply *sit* there: `create_task` takes a `status`, so importing a `tasks/` folder, a roadmap or a checklist puts every item on the board — **Backlog** for what is still open, **Done** for what the plan already ticks off — instead of launching one unattended run per line at the moment of import. You triage by dragging a card to **To Do**. Also in this release: **every chat now remembers its own turn budget and thinking effort.** Both are stored per chat, so a reopened tab, a fork, or the chat behind a Kanban card comes back on the dials it was created with, rather than on whatever the last open tab happened to be using.
 >
 > **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
 > `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)
@@ -305,7 +305,7 @@ During task execution, Claude has access to a built-in MCP server for autonomous
 
 | Tool | What it does |
 |------|-------------|
-| `create_task` | Spawn a follow-up task. Found 5 bugs? Create 5 fix tasks automatically |
+| `create_task` | Spawn a follow-up task. Found 5 bugs? Create 5 fix tasks automatically — or pass `status` to add a board card that does **not** run |
 | `create_chain` | Create sequential pipelines (Build → Test → Deploy) in one call |
 | `list_tasks` | Check existing tasks — avoid duplicates, monitor progress |
 | `get_current_task` | Read your mission and context from the parent task |
@@ -316,6 +316,8 @@ During task execution, Claude has access to a built-in MCP server for autonomous
 **Example:** Schedule a nightly "check GitHub issues" task. It reads open issues, creates a fix task for each bug, chains a verification task after each fix, and reports a summary. No human in the loop.
 
 Tasks inherit the project directory. Context is passed explicitly — children know exactly what to do. Chain depth is limited to prevent runaway recursion.
+
+**Populate the board without starting it.** `create_task` queues work by default, but an optional `status` of `backlog` or `done` adds a card to the Kanban board and stops there — nothing is scheduled and no worker is woken. That is what makes *"import my `tasks/` folder onto the board"* a safe thing to ask for: open items land in **Backlog**, items the plan already ticks off land in **Done**, and you decide what actually runs by dragging a card to **To Do**. `in_progress` is deliberately not accepted — it would put a live-looking card on the board that no worker owns. The two budgets are separate as well: one run may create 10 tasks that actually execute and up to 100 board rows, so a large import never consumes the run's ability to create real follow-up work. A card left in Backlog blocks any task that depends on it until you move it — and the chat tells you, instead of leaving the dependent waiting in silence.
 
 ### 📱 Telegram Bot — Control from Your Phone
 
@@ -340,21 +342,22 @@ Forum Mode is now powered by a **dedicated standalone module** (`telegram-bot-fo
 
 ### 👥 Agent Modes
 
-| | Single | Multi | Dispatch |
-|---|---|---|---|
-| Where | Chat | Chat | Kanban board |
-| Agents | 1 | 2–5 parallel | 2–5 as task cards |
-| Dependencies | — | Basic | Full DAG |
-| Auto-retry | No | No | Yes (with backoff) |
-| Survives restart | No | No | Yes (SQLite) |
-| Best for | Focused work | Complex tasks to watch | Background batch work |
+| | Single | Multi | Dispatch | Room |
+|---|---|---|---|---|
+| Where | Chat | Chat | Kanban board | Chat |
+| Agents | 1 | 2–5 parallel | 2–5 as task cards | 2–6 project bots |
+| Dependencies | — | Basic | Full DAG | Serial turns |
+| Auto-retry | No | No | Yes (with backoff) | No |
+| Survives restart | No | No | Yes (SQLite) | No |
+| Best for | Focused work | Complex tasks to watch | Background batch work | One question from several angles |
 
 **Multi** — orchestrator decomposes into 2–5 subtasks with real-time streaming. The planning step uses `--json-schema` structured output — the plan JSON is guaranteed to parse without regex extraction, even with complex prompts. Send plan to Kanban with 📋 button.
 **Dispatch** — subtasks go to Kanban as persistent cards with dependency graphs, auto-retry, and cascade cancellation. Effort level set in chat flows to all dispatched tasks automatically.
+**Room** — 2–6 of the project's bots take serial turns on a single message, for at most 3 rounds, and the room then closes with one artifact. No bot can dispatch another from inside a room, and any of them can escalate to you with `@user`.
 
 ### ⇗ Cross-Agent Delegation
 
-Send tasks to external AI CLIs — OpenAI Codex, Grok CLI, Antigravity CLI, opencode, Hermes, Kimi — directly from the chat interface. Two modes:
+Send tasks to external AI CLIs — OpenAI Codex, Grok CLI, Antigravity CLI, opencode, Hermes, Cursor Agent, Kimi — directly from the chat interface. Two modes:
 
 | | Handoff | Sync |
 |---|---|---|
@@ -365,7 +368,7 @@ Send tasks to external AI CLIs — OpenAI Codex, Grok CLI, Antigravity CLI, open
 
 How it works: click **Delegate** in the session bar, pick an agent and mode, describe the task. Studio generates a `CONTEXT.md` with conversation history and opens a terminal with the external agent. In Sync mode, both agents communicate through a shared `DIALOG.md` — responses appear directly in the main chat with real-time notifications.
 
-**Agents sidebar** — managing external agents is now effortless. A dedicated **Agents** section in the sidebar lets you add, edit, and delete agents without touching `config.json`. Seven agents — Claude Code, Codex, Grok, Antigravity CLI, opencode, Hermes and Kimi — come **pre-configured out of the box**, seeded automatically on first run. Hit the **Test** button next to any agent to verify connectivity before delegating. Agent IDs auto-generate from the label (with Cyrillic transliteration), and the full UI is localized in EN/UA/RU/FR/HE. Works on **Windows** too — delegation now routes through `cmd.exe` with proper shell escaping. Delegations survive server restarts via persistent state files.
+**Agents sidebar** — managing external agents is now effortless. A dedicated **Agents** section in the sidebar lets you add, edit, and delete agents without touching `config.json`. Eight agents — Claude Code, Codex, Grok, Antigravity CLI, opencode, Hermes, Cursor Agent and Kimi — come **pre-configured out of the box**, seeded automatically on first run. Hit the **Test** button next to any agent to verify connectivity before delegating. Agent IDs auto-generate from the label (with Cyrillic transliteration), and the full UI is localized in EN/UA/RU/FR/HE. Works on **Windows** too — delegation now routes through `cmd.exe` with proper shell escaping. Delegations survive server restarts via persistent state files.
 
 ### 🎛 Chat Modes
 
@@ -407,7 +410,9 @@ Sonnet, Opus and Fable run with a **1 million token context window** — entire 
 
 Turn budget: 1–200 (default 50). Auto-continues up to 3x — so 50 turns effectively means up to 200 steps.
 
-**Thinking effort dial** — a new `Effort` dropdown in the chat toolbar (and task/chain forms) lets you tune how hard Claude thinks before responding: `Auto` (CLI default), `Low`, `Med`, `High`, `X-High`, or `Max`. Your selection persists across reloads via localStorage. The effort level flows automatically to every subtask and chain — set it once, runs everywhere.
+**Thinking effort dial** — a new `Effort` dropdown in the chat toolbar (and task/chain forms) lets you tune how hard Claude thinks before responding: `Auto` (CLI default), `Low`, `Med`, `High`, `X-High`, or `Max`. The effort level flows automatically to every subtask and chain — set it once, runs everywhere.
+
+**Every chat keeps its own dials.** Turn budget and thinking effort are stored *with the chat*, next to its mode, agent mode and model. Reopen a tab, fork a conversation, compact it, import an exported JSON, or open the chat behind a Kanban card — it comes back on the settings it was created with, not on whatever the previously open tab happened to be using. A chat that stored none of its own (created before this shipped, or through the API) falls back to the new-chat defaults chain below.
 
 **Execution engines** — two billing modes, selectable from the chat toolbar:
 
@@ -481,13 +486,13 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 
 | Category | Features |
 |----------|----------|
-| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, terminal catch-up (import a `claude --resume` conversation into the web chat), extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse + Stop hooks + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom, `I` focus input, character counter, `T` scroll-to-top, `N` new session, font size adjust (`=`/`-`/`0`), draft auto-save, remote CLI session import over SSH |
+| **Chat** | Real-time streaming, screenshot paste, file attach (`@file`), conversation fork, auto-continue (3x), session compact, sidebar quick-filter, CLI session import, terminal catch-up (import a `claude --resume` conversation into the web chat), extended thinking display, session export/import (JSON + Markdown), mid-task interrupt (PreToolUse + Stop hooks + attachments), session fork, rate limit auto-wait, effort dial, session name in `/resume` picker, session notes, in-chat search (Ctrl+F / ⌘F), ⚡ Max badge, keyboard shortcuts help (`?`), session message counter, `G` jump-to-bottom, `I` focus input, character counter, `T` scroll-to-top, `N` new session, font size adjust (`=`/`-`/`0`), draft auto-save, remote CLI session import over SSH, per-chat turn budget + effort memory |
 | **Bots** | Named AI specialists with own prompt/model/memory, several per chat via `@@handle`, sequential turns with context hand-off, mid-turn hand-off to a named bot with a delivery inbox for missed turns, `@@` autocomplete palette, built-in templates (Analyst / Editor / Reviewer / Explainer), per-project availability with a global library, teammate roster, evidence clause, per-bot chat bubbles with name + avatar + colour, assignable to Kanban cards and Scheduler tasks, works from Telegram with per-bot headers |
 | **Terminal agents** | Any CLI agent live in a workspace tab (Claude Code, Codex, Grok, opencode, Antigravity, Kimi, Cursor Agent, shell), full TUI over tmux control mode, several tabs side by side with chat, survives browser/server restart, exact conversation restore by id, idle reaping with revive on reopen, shared font-size control, capability-checked (tmux) on macOS/Linux/Docker/WSL |
 | **Engines** | API (headless `claude -p`, per-token billing) + Subscription (Claude Max tmux, no API credits), engine tooltips, ⚡ Max badge, global default (★ set-as-default for new chats/tasks), per-item override, available in Chat + Kanban + Scheduler, tmux-aware (auto-disabled without tmux), Opus / Sonnet / Haiku / Fable model selector, answer a blocked permission / plan prompt from the browser |
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, engine + model + effort per task/chain |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, engine + model + effort per task, watchdog auto-recovery |
-| **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation (MCP) |
+| **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation, board-only cards (import a plan without running it) (MCP) |
 | **Telegram** | Bot control, push notifications, ask_user forwarding (+ file answers), session bridge, Forum Mode, inline stop, deep-link navigation, rich action buttons (localized EN/UA/RU/FR/HE), Write button, file attachments, interrupt queue while busy |
 | **Delegation** | Cross-agent handoff/sync (Codex, Antigravity, opencode), CONTEXT.md + DIALOG.md protocol, fs.watch + polling, persistent across restarts, Windows support, sidebar agents manager, auto-seeded defaults, test button |
 | **Agents** | Single, Multi (2–5 in-chat, schema-validated planning), Dispatch (Kanban), Room (project bots take serial turns on one message), auto-retry, cascade cancellation, effort propagation |

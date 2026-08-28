@@ -95,7 +95,7 @@ const TOOLS = [
       properties: {
         status: { type: 'string', enum: ['backlog', 'todo', 'in_progress', 'done', 'cancelled'], description: 'Filter by status' },
         chain_id: { type: 'string', description: 'Filter by chain ID' },
-        limit: { type: 'number', description: 'Max results (default 20, max 50)' },
+        limit: { type: 'number', description: 'Max results (default 20, max 100). One run may add up to 100 board cards, so raise this before relying on the list for a duplicate check.' },
       },
     },
   },

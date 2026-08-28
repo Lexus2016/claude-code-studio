@@ -20,7 +20,7 @@ docker compose up -d
 docker compose logs -f claude-chat
 ```
 
-No linting and no build step configured. `npm test` chains 71 test files under `test/`: 18 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 53 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, the board-only `create_task` status (`task-backlog.test.js`), i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the SSH run's termination guarantee (`ssh-termination.test.js` drives `ClaudeSSH.send()` through a fake ssh2 `Client` in `require.cache` and asserts `onDone` fires EXACTLY once on every ending — a missed one hangs the chat forever, a doubled one re-emits stderr) and the recovery contract of "Restart Session" (`session-restart.test.js` boots a real server against a fake `claude` that never exits, then pins that a restart ABORTS that turn and releases the session instead of refusing), the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does), the editor deep links (`editor-links.test.js` pins the two URI shapes literally — the browser link puts `vscode-remote` in the AUTHORITY and the CLI argument puts it in the SCHEME, and collapsing the two silently breaks one path; `editor-open-api.test.js` boots a real server with `PATH` pointed at an EMPTY directory, which both makes the `opened:'client'` fallback deterministic and guarantees the suite never launches an editor window on a developer's desktop), and the new-chat defaults chain (`chat-defaults.test.js` pins the pure resolver — the built-ins are asserted to be exactly what the SPA hardcoded before #58, and the choice lists to be exactly the toolbar's `data-v` sets and `MODEL_MAP`'s aliases; `chat-defaults-api.test.js` boots a real server in a throwaway `APP_DIR` and pins that a project writes back a SPARSE override object — a five-key snapshot passes every other assertion in that file and still breaks the feature). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the five tmux-dependent suites do not self-skip).
+No linting and no build step configured. `npm test` chains 75 test files under `test/`: 19 DOM-less render/UI-logic tests (`test/render/*.test.mjs`, run through `node --test`) plus 56 plain-`node` suites in `test/` covering the overload detector, env load order, multi-agent results, terminals, bots, telegram, updates, kanban scheduling, the board-only `create_task` status (`task-backlog.test.js`), i18n completeness, the config precedence resolver plus its secret masking, usage-limit detection, the filesystem path guard (including the SVG sandbox header and the symlink rule on the `@`-mention search endpoints) plus the tunnel-blocks-terminal rule, WS session re-subscription, the SSH remote CLI-session import, the live engine pane / interactive-prompt watchdog, the cross-project global workspace aggregation, the rule that an SSH credential never leaves the server process, the Windows command-quoting oracle, the auth token lifecycle, the multi-agent dependency scheduler (waves, plan sanitising, and the rule that a failure warning must survive dep-context truncation), the SSH stream parser's three guards, the SSH run's termination guarantee (`ssh-termination.test.js` drives `ClaudeSSH.send()` through a fake ssh2 `Client` in `require.cache` and asserts `onDone` fires EXACTLY once on every ending — a missed one hangs the chat forever, a doubled one re-emits stderr) and the recovery contract of "Restart Session" (`session-restart.test.js` boots a real server against a fake `claude` that never exits, then pins that a restart ABORTS that turn and releases the session instead of refusing), the remote non-interactive shell environment (`remote-env.test.js`, which runs the generated prelude through real `bash -lc`: it must parse, print nothing on stdout, and never end on a false test — the caller chains `&& claude …` behind it), the remote CLI-list framing parser, the bot inbox's SQL seam (`bot-inbox.test.js` pins that `from_bot AS "from"` keeps the exact key `planInboxDelivery` reads — rename one without the other and every letter is silently retired as malformed), the one-time config/.env migration onto CCS_CONFIG_PATH and the mid-task clarification delivery contract on the subscription engine (`interrupt-delivery.test.js` — pins that the tmux injection block sits BEFORE the poll loop's completion `break`, that draining does not imply delivery, that a failed paste is re-queued and warns non-terminally, and that the task runner passes the same callbacks the chat path does), the CLAUDE.md / AGENTS.md discovery rules (`agents-md.test.js`, which also pins that AGENTS.md reaches the subprocess as `--append-system-prompt` and never as `--system-prompt`), and the remote file browser's three guard layers (`remote-files.test.js` runs the generated POSIX script through a real `/bin/sh` against a temp tree that contains symlinks OUT of the project; `remote-files-api.test.js` boots a server against a fake remote via `CCS_REMOTE_EXEC_HOOK` and drives `/api/files` the way the SPA does), the editor deep links (`editor-links.test.js` pins the two URI shapes literally — the browser link puts `vscode-remote` in the AUTHORITY and the CLI argument puts it in the SCHEME, and collapsing the two silently breaks one path; `editor-open-api.test.js` boots a real server with `PATH` pointed at an EMPTY directory, which both makes the `opened:'client'` fallback deterministic and guarantees the suite never launches an editor window on a developer's desktop), and the new-chat defaults chain (`chat-defaults.test.js` pins the pure resolver — the built-ins are asserted to be exactly what the SPA hardcoded before #58, and the choice lists to be exactly the toolbar's `data-v` sets and `MODEL_MAP`'s aliases; `chat-defaults-api.test.js` boots a real server in a throwaway `APP_DIR` and pins that a project writes back a SPARSE override object — a five-key snapshot passes every other assertion in that file and still breaks the feature). On the render side, `tables.test.mjs` also pins the ReDoS bound in renderMd step 3.4, `xss.test.mjs` runs 24 adversarial payloads end-to-end, and `forged-tokens.test.mjs` covers the case where user text contains the renderer's own placeholder control bytes, and `pane-font.test.mjs` pins the clamp DIRECTION of `_fitEnginePaneFont` (a wide engine pane may only shrink; a narrow split pane must be allowed to grow). `script-scope.test.mjs` pins which `<script>` block a helper is declared in — declarations hoist only within their own block, so a helper used by `loadSess()` must not live in the terminal block at the bottom of the file. Note the glob: a file under `test/render/` whose name does not end in `.test.mjs` is NEVER run — `_load.selftest.mjs` sat there unexecuted until it was renamed to `loader.test.mjs`. It runs serially and aborts on the first failing file. `.github/workflows/ci.yml` runs it on every push and PR to `main` (tmux installed, so the five tmux-dependent suites do not self-skip).
 
 ## Architecture
 
@@ -484,18 +484,64 @@ import. `create_task` now takes an optional `status` of `todo`, `backlog` or `do
   is still running and the parent's own `max_turns` is the backstop.
 - **A board card does not wake `processQueue`.** The queue selects only `todo`, so the
   `setImmediate` would walk it for nothing — eighty times for an eighty-card import.
+  The UI toast needed the SAME guard and did not have it: an import stacked one
+  notification per card. Board rows are coalesced through `queueBoardCardNotice()`
+  instead — one debounced notice per CALLER task carrying the total, timer `unref`'d so
+  a pending notice cannot hold the process open. A queued task is still announced
+  immediately: it is an event, where a board row is an artifact.
+- **A `backlog` dependency BLOCKS, and blocking silently was the defect.**
+  `processQueue`'s gate releases a task only when every dep is `done`, and
+  cascade-cancels only on `cancelled` — a `backlog` dep is neither, so the dependent was
+  `continue`d on every tick forever with no log and no notification. Cancelling it would
+  be wrong (the card may be triaged tomorrow) and auto-promoting the dep to `todo` would
+  run work the import deliberately did not start, so the fix is observability only: one
+  `log.warn` + one UI notice per task, latched in `blockedOnBoardWarned`. That latch is
+  RECONCILED from the queue on every pass, never deleted from at each exit: a point
+  delete would have to be repeated at cancel, cascade-cancel, task delete, session
+  delete, chain delete and a `PUT` that rewrites `depends_on`, and each site missed
+  leaks an id AND silences the next warning for that task, which would find its own id
+  already latched. `processQueue` is the one place that knows what is blocked right now,
+  so the pass that decides it owns the set. The shape predates #83 through the REST/Kanban door; what
+  #83 changed is that one `create_task` call now reaches it, because an imported plan
+  lands as backlog cards already carrying `depends_on`.
+- **`CCS_TASK_MANAGER_SECRET` is refused below 32 chars, not honoured.** The endpoint
+  sits ABOVE `auth.authMiddleware` and mints tasks that run `claude` with an arbitrary
+  prompt, so a short value there is an unauthenticated execution primitive on any host
+  whose port is reachable. A rejected override warns and falls back to the random
+  per-process default — silently accepting it is what would make the hook dangerous.
+  The header comparison goes through `timingSafeStrEq`, which already existed in the
+  same file for `/api/internal/ask-user`. **The floor is not an entropy check and the
+  comment says so**: `'a'.repeat(32)` passes, and no cheap test distinguishes a weak
+  32-char string from a strong one. It closes the plausible-typo case (`secret`,
+  `test123`); the supported configuration is to leave the var unset.
+- **`list_tasks` caps at `MAX_BOARD_CHILDREN_PER_RUN`, not at 50.** One run may write
+  100 board rows; a 50-row answer hides the older half from exactly the dedup check
+  `create_task`'s description tells an agent to run first. The cap is TWO statements of
+  one number — the server's `Math.min` and the `limit` description in
+  `mcp-task-manager.js`, which is the only one the agent ever reads. Raising the server
+  alone leaves an agent obeying its own tool docs and never asking for the rows the fix
+  exists to expose; `task-backlog.test.js` pins both. And `Math.min` alone is not a
+  maximum: SQLite reads a NEGATIVE `LIMIT` as unbounded, so `limit: -1` walked the whole
+  table through a cap that looked applied. The value is clamped into `[1, MAX]`, and a
+  non-number falls back to the documented default instead of reaching the driver as NaN
+  — it arrives from a model filling in a JSON schema, where a nonsense value is ordinary
+  input rather than an attack.
 - **`CCS_TASK_MANAGER_SECRET` exists so the internal endpoint is drivable from a
   test** — same class of hook as `CCS_REMOTE_EXEC_HOOK`. Opt-in; the default is still
   a fresh 16-byte random per process. `test/task-backlog.test.js` schedules every
   `todo` child a year out (`getTodoTasks` filters on `scheduled_at <= unixepoch()`) so
   the suite cannot spawn a real `claude`.
 - **The deterministic folder→board importer in that issue was deliberately NOT
-  built.** `tasks` is flat (`chain_id` + `depends_on`, no `parent_id`), so the epic →
-  subtask tree it asks for is not representable without a schema and Kanban-UI change;
-  `POST /api/tasks` mints a git worktree per card (`setupUnitWorktree`), so bulk import
-  through the REST door would be N `git worktree add` calls; and a regex over
-  "common markdown formats" is wrong more often than an agent reading the same files
-  is. The agent path covers it, and this status flag is the one thing it was missing.
+  built.** The parent link exists in the DATA — `tasks.parent_task_id`, written by
+  this very endpoint and walked to `MAX_CHAIN_DEPTH` — but nothing DRAWS it:
+  `public/kanban.html` never reads the field, the board is columns-by-status, and
+  `list_tasks` returns the id without grouping on it. So the epic → subtask tree the
+  issue asks for is a Kanban-UI change, not an import feature, and it would also have
+  to answer to that depth cap. `POST /api/tasks` mints a git worktree per card
+  (`setupUnitWorktree`), so bulk import through the REST door would be N
+  `git worktree add` calls; and a regex over "common markdown formats" is wrong more
+  often than an agent reading the same files is. The agent path covers it, and this
+  status flag is the one thing it was missing.
 
 ### Open in VS Code (issue #63)
 
@@ -776,7 +822,7 @@ message replays the chat's history into a fresh Claude session rather than losin
 
 ## How to Verify Changes
 
-`npm test` runs 71 test files under `test/` (18 `test/render/*.test.mjs` + 53 `test/*.test.js`), and `.github/workflows/ci.yml` runs the same command on every push and PR to `main`. Nothing covers the live browser/WebSocket path, so also verify that manually:
+`npm test` runs 75 test files under `test/` (19 `test/render/*.test.mjs` + 56 `test/*.test.js`), and `.github/workflows/ci.yml` runs the same command on every push and PR to `main`. Nothing covers the live browser/WebSocket path, so also verify that manually:
 
 ```bash
 # 1. Start server

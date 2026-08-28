@@ -1,5 +1,91 @@
 # Changelog
 
+## 7.15.0
+
+### Populate the Kanban board without running it (#83)
+
+- `_ccs_task_manager.create_task` hardcoded `status: 'todo'`, so the only thing an
+  agent could do to the board was START work on it. Turning an existing plan — a
+  `tasks/` folder, `.planning/`, a roadmap, a checklist — into cards therefore
+  launched one unattended `claude` per card at the moment of import, which is the
+  opposite of an import. `status` is now optional and accepts `todo` (queued and run,
+  the unchanged default), `backlog` (a card on the board, nothing runs) and `done`.
+- **`done` is in the list because `- [x]` is.** Half of "preserve the status from the
+  checkboxes" is items the plan already marks finished; without it an import has to
+  either lie about them or run them.
+- **`in_progress` is deliberately missing.** It would put a row on the board that no
+  worker owns and `getTodoTasks` will never select — a card that looks live and is not.
+  A run that wants work started asks for `todo` and lets the queue own it.
+- **The two child budgets are separate now.** `MAX_TASK_CHILDREN_PER_RUN` (10) bounds
+  runaway *execution* — a child that runs can create children of its own. A board row
+  runs nothing, so counting it there is what made a ten-card import consume the run's
+  entire ability to create real follow-up work. Board cards are bounded by
+  `MAX_BOARD_CHILDREN_PER_RUN` (100) instead.
+- A board card no longer wakes `processQueue`. The queue selects only `todo`, so an
+  eighty-card import used to walk the whole queue eighty times for nothing.
+
+### Hardening found while reviewing the above
+
+- **A dependency parked in Backlog no longer strands its dependent in silence.**
+  `processQueue`'s `depends_on` gate advances a task only when every dependency is
+  `done`; a `backlog` dependency is neither `done` nor `cancelled`, so the dependent was
+  skipped on every tick forever, with no log line and no notification. Waiting is still
+  the correct behaviour — the card may be triaged tomorrow, and cancelling would throw
+  away real work — so the fix makes the state observable: one warning and one UI notice
+  per blocked task, naming how many cards are still in Backlog. The latch that keeps it
+  to one notice is rebuilt from the queue on every pass rather than cleaned up at each
+  exit, so a task that is cancelled, deleted or has its dependencies rewritten drops out
+  on its own instead of leaking an id and silencing its own next warning. The shape was reachable
+  before through the REST/Kanban door; `status` made it reachable in a single call,
+  because an imported plan lands as backlog cards that already carry `depends_on`.
+- **Board-card notifications are coalesced per caller.** The queue wake was guarded for
+  a board row but the UI toast was not, so an eighty-card import stacked eighty
+  notifications. They now collapse into one notice carrying the total.
+- **A short `CCS_TASK_MANAGER_SECRET` override is refused rather than honoured.** The
+  endpoint is registered before `auth.authMiddleware` and creates tasks that run
+  `claude` with an arbitrary prompt, so a guessable value there is an unauthenticated
+  execution primitive. Anything under 32 characters is now ignored with a warning and a
+  random per-process secret is used instead. The comparison also goes through the
+  existing `timingSafeStrEq` rather than `!==`. A length floor is not an entropy check
+  and is not documented as one — it closes the plausible-typo case; the supported
+  configuration is to leave the variable unset.
+- **`list_tasks` caps at 100, not 50.** One run may write 100 board rows, and a 50-row
+  answer hid the older half from the duplicate check `create_task`'s own description
+  tells an agent to make first. The `limit` description in the MCP schema — the only
+  statement of the cap an agent actually reads — was raised to match. The limit is now
+  clamped from below as well: SQLite reads a negative `LIMIT` as unbounded, so `limit: -1`
+  returned the whole table through a cap that looked like it was applied.
+
+Not built, deliberately: the deterministic folder→board importer the issue also asked
+for. The parent link exists in the data (`tasks.parent_task_id`, capped at
+`MAX_CHAIN_DEPTH`) but nothing draws it — `public/kanban.html` never reads the field
+and the board is columns-by-status — so the epic → subtask tree is a Kanban-UI change,
+not an import feature. `POST /api/tasks` also mints a git worktree per card, so bulk
+import through the REST door would be N `git worktree add` calls, and a regex over
+"common markdown formats" is wrong more often than an agent reading the same files is.
+The agent path covers it, and this status flag is the one thing it was missing.
+
+## 7.14.0
+
+### A chat remembers its turn budget and reasoning effort (#81)
+
+- `sessions` persisted mode, agent and model but **not** `max_turns`/`effort`, so
+  reopening a chat fell back to the markup's `value="50"` and effort carried over from
+  whichever tab happened to be open last. Reported as "Kanban chats ignore the default"
+  — incidental: a task's chat is an ordinary chat. Two columns, with the #58 defaults
+  chain as the fallback when a chat stored none.
+- **The stored value and the CLI flag are different things.** `effort: 'auto'` means
+  "pass no `--effort`" and survives the round trip through SQLite as that literal word.
+  Store the flag instead and Auto becomes indistinguishable from unset.
+- **Every door that creates or copies a chat carries both dials** — new chat, fork,
+  compact, JSON import, plus the two replay paths, which rebuild run options from
+  scratch and were clobbering the dials the chat had just stored. Import sanitises,
+  because that JSON is a file the user picks and `max_turns: 900` arrives as easily as
+  a real export.
+- **An empty `projects` array is not "no project".** The boot fetch is fired without
+  await, so the first chat opened after a hard refresh could resolve to the GLOBAL
+  defaults row even for a project-pinned chat — once per page load.
+
 ## 7.13.1
 
 Post-release review of 7.13.0 found five defects, two of them silent.

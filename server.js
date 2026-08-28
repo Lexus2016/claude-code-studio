@@ -1183,11 +1183,14 @@ const stmts = {
   // runaway-execution budget MAX_TASK_CHILDREN_PER_RUN is guarding against something
   // it does not do (see the create_task case).
   //
-  // The predicate is a status read after the fact, so a real child that COMPLETED
-  // moves from the first count to the second and frees a runnable slot. That is a
-  // known, bounded leak and not worth a column: the child has to finish while its
-  // parent is still running, the parent has to spend a turn on each extra call, and
-  // its own max_turns is the backstop.
+  // The predicate is a status read after the fact, so a real child that reached
+  // 'done' moves from the first count to the second and frees a runnable slot. A
+  // 'cancelled' child does NOT — it is in neither list, so it stays charged against
+  // the runnable budget for the rest of the parent's run. That asymmetry is
+  // deliberate: a child that failed is the case where a parent is most likely to
+  // retry in a loop. The 'done' leak is known and bounded, and not worth a column:
+  // the child has to finish while its parent is still running, the parent has to
+  // spend a turn on each extra call, and its own max_turns is the backstop.
   countChildTasksRunnable: db.prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE parent_task_id=? AND status NOT IN ('backlog','done')`),
   countChildTasksBoard: db.prepare(`SELECT COUNT(*) AS cnt FROM tasks WHERE parent_task_id=? AND status IN ('backlog','done')`),
   getParentTaskId: db.prepare(`SELECT parent_task_id FROM tasks WHERE id=?`),
@@ -1490,7 +1493,22 @@ const SET_UI_STATE_SECRET = require('crypto').randomBytes(16).toString('hex');
 // The env override exists so a test can drive /api/internal/task-manager the way the
 // MCP helper does — same class of hook as CCS_REMOTE_EXEC_HOOK. It is opt-in and the
 // default stays a fresh 16-byte random per process; nothing reads it from disk.
-const TASK_MANAGER_SECRET = process.env.CCS_TASK_MANAGER_SECRET || require('crypto').randomBytes(16).toString('hex');
+// A SHORT override is refused. This endpoint is registered before auth.authMiddleware
+// and creates tasks that run `claude` with an arbitrary prompt, so a value like
+// `secret` or `test123` there is an unauthenticated code-execution primitive on any box
+// whose port is reachable. 32 chars is the width of the random default.
+//
+// A length floor is not an entropy check and does not pretend to be one: `'a'.repeat(32)`
+// passes. It cannot be one — no cheap test tells a weak 32-char string from a strong one
+// — so the floor closes the plausible-typo case and the documentation is what covers the
+// rest. This var is a test hook; the supported configuration is to leave it unset.
+const _tmSecretEnv = process.env.CCS_TASK_MANAGER_SECRET || '';
+const TASK_MANAGER_SECRET = _tmSecretEnv.length >= 32
+  ? _tmSecretEnv
+  : require('crypto').randomBytes(16).toString('hex');
+if (_tmSecretEnv && _tmSecretEnv.length < 32) {
+  console.warn('[task-manager] CCS_TASK_MANAGER_SECRET is shorter than 32 chars — ignored, using a random per-process secret');
+}
 
 // ─── Bot-to-bot dispatch (Internal MCP) ─────────────────────────────────
 const BOTS_SECRET = require('crypto').randomBytes(16).toString('hex');
@@ -1690,6 +1708,18 @@ const stoppingTasks = new Set();      // task IDs being manually stopped (onDone
 // `session_id IS NULL` count on the very next processQueue tick (the old bug let
 // the cap reset each tick → unbounded parallel `claude` subprocesses).
 const independentRunning = new Set();
+// Tasks already reported as waiting on a BOARD dependency — see the depends_on gate
+// in processQueue. The gate runs on every tick; without this the same task would warn
+// on every pass for as long as it stays parked.
+//
+// It is rebuilt from the queue on EVERY pass rather than deleted from at each exit.
+// Clearing it at the deletion sites instead would mean finding all of them — cancel,
+// cascade-cancel, task delete, session delete, chain delete, a PUT that rewrites
+// depends_on — and each one missed is both a leaked id AND a suppressed warning, because
+// a task that returns to the blocked state would find its own id already latched. The
+// queue is the single place that knows which tasks are blocked RIGHT NOW, so the pass
+// that decides that is the pass that owns the set.
+const blockedOnBoardWarned = new Set();
 
 async function startTask(task) {
   if (taskRunning.has(task.id)) return;
@@ -2514,8 +2544,14 @@ function scheduleNextChainRun(chain, oldTasks) {
 }
 
 function processQueue() {
+  // Every task found blocked on a backlog dependency during THIS pass. Swapped into
+  // blockedOnBoardWarned at the end, so an id survives only while it is still blocked:
+  // a task that is cancelled, deleted, unblocked or has its depends_on rewritten simply
+  // stops appearing here and drops out on the next tick.
+  const blockedStillParked = new Set();
   const todo = stmts.getTodoTasks.all();
-  if (!todo.length) return;
+  // No queue means nothing is blocked on anything.
+  if (!todo.length) { blockedOnBoardWarned.clear(); return; }
   const inProg = stmts.getInProgressTasks.all();
   // Sessions currently occupied (in_progress or just started by taskRunning)
   const occupiedSids = new Set(inProg.filter(t => t.session_id).map(t => t.session_id));
@@ -2558,7 +2594,34 @@ function processQueue() {
             const dep = stmts.getTask.get(depId);
             return !dep || dep.status === 'done'; // deleted dep = satisfied
           });
-          if (!allDone) continue; // deps not ready yet
+          if (!allDone) {
+            // A dependency sitting on the BOARD will never satisfy this gate on its
+            // own: processQueue selects only 'todo', so nothing advances a 'backlog'
+            // card and the dependent waits for an event that cannot happen until a
+            // human triages it. Waiting is still the right behaviour — the card may
+            // be moved tomorrow, and cancelling it would throw away real work — so
+            // this only makes the state OBSERVABLE. Silence was the whole defect:
+            // the row was skipped on every tick with no log and no notification.
+            // #83 made the shape easy to reach in one call, where before it needed
+            // the REST/Kanban door: an imported plan lands as backlog cards that
+            // already carry depends_on.
+            const parked = deps.filter(depId => stmts.getTask.get(depId)?.status === 'backlog');
+            if (parked.length) blockedStillParked.add(task.id);
+            if (parked.length && !blockedOnBoardWarned.has(task.id)) {
+              log.warn('Task blocked by a dependency parked on the board', { taskId: task.id, parked });
+              if (task.source_session_id) {
+                const _ctx = getNotificationContext(task.source_session_id);
+                broadcastToSession(task.source_session_id, {
+                  type: 'notification', level: 'warn',
+                  title: `Task waiting: "${task.title}"`,
+                  detail: `Depends on ${parked.length} card(s) still in Backlog — move them to To Do to start`,
+                  tabId: task.source_session_id,
+                  sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
+                });
+              }
+            }
+            continue; // deps not ready yet
+          }
         }
       } catch (e) { log.error('depends_on parse error', { taskId: task.id, error: e.message }); }
     }
@@ -2583,6 +2646,11 @@ function processQueue() {
       }
     }
   }
+  // Reconcile the latch with what this pass actually saw. Note the loop `continue`s
+  // above this line for reasons other than deps (a workdir lock, a busy session), which
+  // is exactly why the set is filled at the GATE and not here.
+  blockedOnBoardWarned.clear();
+  for (const id of blockedStillParked) blockedOnBoardWarned.add(id);
 }
 // Run every 15s (fast enough to pick up unblocked tasks promptly,
 // light enough to be negligible — just two SELECT queries on SQLite)
@@ -5636,9 +5704,44 @@ const MAX_TASK_CHILDREN_PER_RUN = 10;
 const MAX_BOARD_CHILDREN_PER_RUN = 100;
 const MAX_CHAIN_DEPTH = 5;
 
+// Board-card notifications are coalesced per CALLER task. An import writes one card
+// per plan item in a tight burst, so the timer is restarted by each new card and fires
+// once the burst stops, carrying the total. One pending timer per caller, deleted when
+// it fires, and unref'd — a pending notice must never hold the process open.
+const BOARD_NOTICE_DEBOUNCE_MS = 1500;
+const boardCardNotices = new Map();
+
+function queueBoardCardNotice(callerTask, title, status) {
+  const key = callerTask.id;
+  let n = boardCardNotices.get(key);
+  if (!n) {
+    n = { timer: null, count: 0, first: title, firstStatus: status,
+          sid: callerTask.source_session_id, callerTitle: callerTask.title };
+    boardCardNotices.set(key, n);
+  }
+  n.count++;
+  if (n.timer) clearTimeout(n.timer);
+  n.timer = setTimeout(() => {
+    boardCardNotices.delete(key);
+    try {
+      const _ctx = getNotificationContext(n.sid);
+      broadcastToSession(n.sid, {
+        type: 'notification', level: 'info',
+        title: n.count === 1
+          ? `Board card added (${n.firstStatus}): "${n.first.substring(0, 60)}"`
+          : `${n.count} board cards added`,
+        detail: `Created by task "${n.callerTitle}"`,
+        tabId: n.sid,
+        sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
+      });
+    } catch (e) { log.warn('board card notice failed', { error: e.message }); }
+  }, BOARD_NOTICE_DEBOUNCE_MS);
+  if (typeof n.timer.unref === 'function') n.timer.unref();
+}
+
 app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res) => {
   const authHeader = req.headers.authorization || '';
-  if (authHeader !== `Bearer ${TASK_MANAGER_SECRET}`) {
+  if (!timingSafeStrEq(authHeader, `Bearer ${TASK_MANAGER_SECRET}`)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -5762,18 +5865,24 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         // import writing 80 cards would wake it 80 times.
         if (willRun) setImmediate(processQueue);
 
-        // Notify UI
+        // Notify UI. A queued task is an EVENT and is announced immediately; a board
+        // row is a passive artifact and an import writes them in a burst, so they are
+        // coalesced into one toast per caller. Announcing each one turned an 80-card
+        // import into 80 stacked notifications — the same burst the queue wake above
+        // is already guarded against.
         if (callerTask?.source_session_id) {
-          const _ctx = getNotificationContext(callerTask.source_session_id);
-          broadcastToSession(callerTask.source_session_id, {
-            type: 'notification', level: 'info',
-            title: willRun
-              ? `New task created: "${String(title).substring(0, 60)}"`
-              : `Board card added (${newStatus}): "${String(title).substring(0, 60)}"`,
-            detail: `Created by task "${callerTask.title}"`,
-            tabId: callerTask.source_session_id,
-            sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
-          });
+          if (willRun) {
+            const _ctx = getNotificationContext(callerTask.source_session_id);
+            broadcastToSession(callerTask.source_session_id, {
+              type: 'notification', level: 'info',
+              title: `New task created: "${String(title).substring(0, 60)}"`,
+              detail: `Created by task "${callerTask.title}"`,
+              tabId: callerTask.source_session_id,
+              sessionTitle: _ctx.sessionTitle, projectName: _ctx.projectName,
+            });
+          } else {
+            queueBoardCardNotice(callerTask, String(title), newStatus);
+          }
         }
 
         const task = stmts.getTask.get(id);
@@ -5911,8 +6020,21 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         if (filterStatus) { query += ' AND status=?'; params.push(filterStatus); }
         if (filterChain) { query += ' AND chain_id=?'; params.push(filterChain); }
 
+        // Capped at the BOARD budget, not below it: MAX_BOARD_CHILDREN_PER_RUN lets one
+        // run write 100 cards, and a 50-row answer would hide the older half from the
+        // dedup check create_task's own description tells an agent to make first.
+        //
+        // Math.min ALONE is not a maximum, which is the trap here: SQLite reads a
+        // negative LIMIT as unbounded, so `limit: -1` would return the whole table
+        // through a cap that looks like it is doing its job. The value arrives from a
+        // model filling in a JSON schema, so a nonsense one is ordinary input, not an
+        // attack — it is clamped into [1, MAX] and a non-number falls back to the
+        // documented default rather than reaching the driver as NaN.
+        const _lim = Number(limit);
         query += ' ORDER BY created_at DESC LIMIT ?';
-        params.push(Math.min(limit, 50));
+        params.push(Number.isFinite(_lim)
+          ? Math.max(1, Math.min(Math.trunc(_lim), MAX_BOARD_CHILDREN_PER_RUN))
+          : 20);
 
         const tasks = db.prepare(query).all(...params);
         return res.json({ tasks });
