@@ -1551,6 +1551,16 @@ let _tmWeakRevokedByTunnel = false;
 //     test, the MCP child — or a loopback one. A browser always sends Origin on a
 //     JSON POST, so no page can spend it, rebound or not.
 //
+// KNOWN LIMIT, stated rather than papered over: a raw TCP relay — `ssh -R`, `socat`,
+// any port forwarder — carries an internet client to this loopback listener with no HTTP
+// headers at all, a loopback peer address and no Origin. Nothing at the HTTP layer can
+// tell that apart from a local curl, so a SHORT secret is spendable through one. This is
+// the ceiling of loopback trust in general, not something this gate introduced:
+// `setupCallerIsLocal()` guards account claim on a fresh install — which hands out a
+// shell — on exactly the same evidence. Setting up such a relay AND choosing a guessable
+// secret are two deliberate acts; the supported configuration is to leave the var unset,
+// and a 32-char value is immune because it is guessed rather than reached.
+//
 // A 32-char-or-longer secret is unaffected by all of this: it is guessed, not reached.
 function taskManagerWeakSecretAllowed(req) {
   // A LATCH, not a live read. tunnelManager.isRunning() only turns true when cloudflared
@@ -1564,7 +1574,7 @@ function taskManagerWeakSecretAllowed(req) {
   // TRUST_PROXY says — the same rule setupCallerIsLocal() already applies, and for the
   // same reason: an nginx/Caddy/ssh -L in front makes every visitor look like 127.0.0.1.
   // A genuinely local CLI or MCP child sends none of them, so this only fails closed.
-  if (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.headers.forwarded) return false;
+  if ('x-forwarded-for' in req.headers || 'x-real-ip' in req.headers || 'forwarded' in req.headers) return false;
   if (!auth.isLoopbackAddress(req.socket?.remoteAddress)) return false;
   const origin = req.headers.origin;
   if (!origin) return true;

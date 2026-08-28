@@ -217,7 +217,7 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
   check('the Origin hostname is matched as a LITERAL, never through isLoopbackAddress',
     /return h === 'localhost' \|\| h === '\[::1\]' \|\| h === '::1' \|\|/.test(SRC), true);
   for (const [what, needle] of [
-    ['a forwarding header revokes it', "if (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.headers.forwarded) return false;"],
+    ['a forwarding header revokes it', "if ('x-forwarded-for' in req.headers || 'x-real-ip' in req.headers || 'forwarded' in req.headers) return false;"],
     ['TRUST_PROXY revokes it', 'if (TRUST_PROXY_ENV) return false;'],
     ['a non-loopback peer revokes it', "if (!auth.isLoopbackAddress(req.socket?.remoteAddress)) return false;"],
   ]) check(`...and ${what}`, SRC.includes(needle), true);
@@ -312,6 +312,10 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
     await probe({ 'x-forwarded-for': '203.0.113.9' }), 401);
   check('...for x-real-ip too', await probe({ 'x-real-ip': '203.0.113.9' }), 401);
   check('...and for the RFC 7239 header', await probe({ forwarded: 'for=203.0.113.9' }), 401);
+  // PRESENCE, not truthiness: an empty header value is falsy, and a gate that reads it
+  // as absence answers the wrong question about whether a hop happened.
+  check('...and an EMPTY forwarding header is presence, not absence',
+    await probe({ 'x-forwarded-for': '' }), 401);
   check('a plain local client with no Origin still works', await probe({}), 200);
   const localOriginRes = await fetch(`http://127.0.0.1:${PORT2}/api/internal/task-manager`, {
     method: 'POST',

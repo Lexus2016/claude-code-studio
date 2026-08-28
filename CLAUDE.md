@@ -552,6 +552,16 @@ import. `create_task` now takes an optional `status` of `todo`, `backlog` or `do
     `test/task-backlog.test.js` drives these through `http.request` rather than `fetch`,
     with Host and Origin set to the SAME attacker name; set them differently and the
     cross-origin guard 403s first and the gate under test never runs.
+- **The residual is a raw TCP relay, and it is stated, not closed.** `ssh -R`, `socat`
+  or any port forwarder carries an internet client to this listener with a loopback peer
+  address, no forwarding header and no `Origin`. Nothing at the HTTP layer distinguishes
+  that from a local `curl`, so a SHORT secret is spendable through one. That is the
+  ceiling of loopback trust in this app rather than something this gate introduced —
+  `setupCallerIsLocal()` guards account claim on a fresh install, which hands out a
+  shell, on exactly the same evidence. Standing up such a relay AND choosing a guessable
+  secret are two deliberate acts. Note also that the forwarding-header test is
+  `'x-forwarded-for' in req.headers`, not a truthiness test: an empty header value is
+  falsy and would otherwise read as absence.
   Refusing on loopback bought no security and cost the feature: a developer exporting a
   short secret to drive the endpoint from a test got a silent 401, on a machine where an
   attacker who could reach the port already had everything the endpoint would give them

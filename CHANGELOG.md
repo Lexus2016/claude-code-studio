@@ -1,5 +1,22 @@
 # Changelog
 
+## 7.15.4
+
+### The weak-secret gate states its residual
+
+- **The forwarding-header test reads PRESENCE, not truthiness.** `X-Forwarded-For:`
+  with an empty value is falsy and was read as absence, which is the wrong answer to
+  "did a hop happen".
+- **A raw TCP relay is a documented limit, not a closed hole.** `ssh -R`, `socat` or any
+  port forwarder carries an internet client to the loopback listener with no HTTP
+  headers, a loopback peer and no `Origin`; nothing at the HTTP layer distinguishes that
+  from a local `curl`, so a SHORT secret is spendable through one. That is the ceiling
+  of loopback trust in this app rather than anything this gate introduced —
+  `setupCallerIsLocal()` guards account claim on a fresh install, which hands out a
+  shell, on exactly the same evidence. It is now written down next to the gate and in
+  CLAUDE.md instead of being implied away. A 32-char-or-longer secret is immune: it is
+  guessed, not reached.
+
 ## 7.15.3
 
 ### Third pass on the task-manager secret carve-out
