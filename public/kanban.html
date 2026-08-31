@@ -1259,6 +1259,35 @@ function kbUsageLimit(tk){
   if(!m)return null;
   return {resumeAt:m[1]?+m[1]:(tk.scheduled_at||null),message:(m[2]||'').trim().substring(0,160)};
 }
+// The dials the next run will ACTUALLY use, as card badges (#84, "Kanban Visibility").
+//
+// Pure on purpose — `test/kanban-run-badges.test.js` lifts it out of this file, so the
+// chain below is pinned against the runner instead of being re-derived by eye.
+//
+// It mirrors server.js/startTask exactly:
+//   model  = taskBot?.model || session?.model || task.model || 'sonnet'
+//   effort = task.effort || null
+//   engine = task.run_engine === 'subscription' ? 'subscription' : 'api'
+// `sess_model` alone — what the card showed before — was wrong twice over: blank on a
+// task that has never run (so a board of unstarted cards said nothing about settings
+// the user had already chosen), and silent about a bot's model, which OVERRIDES the
+// session's. `bot_model` therefore rides the /api/tasks row rather than being looked
+// up in `kbBots`, which is only fetched when a modal opens and is `[]` at first paint.
+//
+// Effort and engine render only when they are NOT the default. 'auto' effort and the
+// 'api' engine are what nearly every card carries; a badge repeated on all of them is
+// noise, and this footer already competes for width with the project, schedule,
+// session and retry badges.
+const KB_EFFORT_KEY={low:'low',medium:'med',high:'high',xhigh:'xhigh',max:'max'};
+function kbRunBadges(tk){
+  const out=[{text:tk.bot_model||tk.sess_model||tk.model||'sonnet',title:t('tb.model')}];
+  const eff=String(tk.effort||'').trim();
+  // An unknown value is shown verbatim rather than dropped: it is what the run will be
+  // given, and a silently missing badge is how a bad stored dial stays invisible.
+  if(eff)out.push({text:KB_EFFORT_KEY[eff]?t('effort.'+KB_EFFORT_KEY[eff]):eff,title:t('tb.effort')});
+  if(tk.run_engine==='subscription')out.push({text:t('engine.sub'),title:t('tb.engine')});
+  return out;
+}
 function makeCard(tk){
   const el=document.createElement('div');el.className='card';el.dataset.id=tk.id;el.draggable=true;
   let sessBadge='';
@@ -1267,7 +1296,7 @@ function makeCard(tk){
   }else if(tk.session_id){
     sessBadge=`<span class="badge badge-accent">💬 ${escH(tk.sess_title||t('card.sess_fallback'))}</span>`;
   }
-  const modelBadge=tk.sess_model?`<span class="badge badge-muted">${escH(tk.sess_model)}</span>`:'';
+  const cfgBadges=kbRunBadges(tk).map(b=>`<span class="badge badge-muted" title="${escH(b.title)}">${escH(b.text)}</span>`).join('');
   const retryBadge=tk.retry_count>0?`<span class="badge badge-muted" title="${tk.retry_count} ${t('card.retry_tooltip')}">${escH(t('card.retry'))} ×${tk.retry_count}</span>`:'';
   const pausedInfo=kbUsageLimit(tk);
   const pausedBadge=pausedInfo?`<span class="badge badge-paused" title="${escH(t('card.paused_tip'))} ${escH(pausedInfo.resumeAt?fmtScheduledAt(pausedInfo.resumeAt):'')}${pausedInfo.message?' — '+escH(pausedInfo.message):''}">⏸ ${escH(t('card.paused'))}${pausedInfo.resumeAt?' · '+escH(fmtScheduledAt(pausedInfo.resumeAt)):''}</span>`:'';
@@ -1279,7 +1308,7 @@ function makeCard(tk){
     <div class="card-title">${escH(tk.title)}</div>
     ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
     <div class="card-foot">
-      ${projBadge}${pausedBadge}${schedBadge}${sessBadge}${modelBadge}${retryBadge}
+      ${projBadge}${pausedBadge}${schedBadge}${sessBadge}${cfgBadges}${retryBadge}
       <span class="card-time">${relTime(tk.updated_at)}</span>
       <span class="card-actions">
         <button class="cbtn" title="${t('modal.edit')}" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
