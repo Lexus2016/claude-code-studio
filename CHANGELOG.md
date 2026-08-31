@@ -1,5 +1,36 @@
 # Changelog
 
+## 7.16.0
+
+### A Kanban card names the dials its next run will use (#84)
+
+The board rendered one badge, `tk.sess_model`, and it was wrong twice over: blank on
+a task that had never run — so a board of freshly created cards said nothing about
+settings the user had just picked in the modal — and silent about a bot's model,
+which OVERRIDES the session's inside the runner.
+
+- **The card mirrors `startTask`, it does not re-derive.** Model is
+  `bot.model || session.model || task.model || 'sonnet'`; effort and engine come off
+  the TASK row, which is the #79 rule that those dials drive every run regardless of
+  which session the task uses. A card now reads e.g. `haiku · High · Subscription`.
+- **`bot_model` is joined in `getTasks`, not looked up client-side.** The board
+  fetches its bot roster only when a modal opens, so `kbBots` is `[]` at first paint
+  and a client lookup would render one model before the user touched anything and a
+  different one afterwards. The join carries `AND b.deleted_at IS NULL` because
+  `stmts.getBot` does.
+- **Effort and engine render only when they are NOT the default.** `auto` effort and
+  the `api` engine are what nearly every card carries; a badge on all of them is
+  noise in a footer already holding the project, schedule, session and retry badges.
+  An unknown effort is shown verbatim rather than dropped.
+- No new i18n keys, no schema change: one additive `LEFT JOIN` and one extra column
+  on an existing `SELECT`. `test/kanban-run-badges.test.js` pins the runner's own
+  expression as source text, because the card and the runner live in different files.
+
+Choosing a non-Claude **provider** per task, the other half of #84, is deliberately
+not here: the Kanban worker parses `claude`'s `stream-json` for streaming, turn
+budget, retry, usage-limit pause and session resume, so an external agent is a new
+execution backend rather than a dropdown.
+
 ## 7.15.4
 
 ### The weak-secret gate states its residual
