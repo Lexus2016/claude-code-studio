@@ -1032,10 +1032,18 @@ const stmts = {
   getInterrupted: db.prepare(`SELECT id, title, last_user_msg FROM sessions WHERE last_user_msg IS NOT NULL`),
   incrementRetry: db.prepare(`UPDATE sessions SET retry_count = COALESCE(retry_count, 0) + 1 WHERE id=?`),
   // Tasks (Kanban)
+  // `bot_model` is joined for the board's run-settings badge (#84): the runner
+  // resolves a task's model as `taskBot?.model || session?.model || task.model`
+  // (see startTask), so a card that reports only `sess_model` names the wrong model
+  // on every task assigned to a bot. The `deleted_at IS NULL` filter is not
+  // cosmetic — it is the same filter `stmts.getBot` applies, and without it a card
+  // would advertise the model of a bot the runner will refuse to load.
   getTasks: db.prepare(`
     SELECT t.*, s.title as sess_title, s.claude_session_id, s.model as sess_model,
-           s.updated_at as sess_updated_at, COALESCE(s.retry_count, 0) as retry_count
+           s.updated_at as sess_updated_at, COALESCE(s.retry_count, 0) as retry_count,
+           b.model as bot_model
     FROM tasks t LEFT JOIN sessions s ON t.session_id = s.id
+                 LEFT JOIN bots b ON t.bot_id = b.id AND b.deleted_at IS NULL
     WHERE (@w IS NULL OR COALESCE(t.git_root, t.workdir) = @w)
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
