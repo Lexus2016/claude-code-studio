@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.15.0** — **Turn an existing plan into a board without running it.** An agent can now add Kanban cards that simply *sit* there: `create_task` takes a `status`, so importing a `tasks/` folder, a roadmap or a checklist puts every item on the board — **Backlog** for what is still open, **Done** for what the plan already ticks off — instead of launching one unattended run per line at the moment of import. You triage by dragging a card to **To Do**. Also in this release: **every chat now remembers its own turn budget and thinking effort.** Both are stored per chat, so a reopened tab, a fork, or the chat behind a Kanban card comes back on the dials it was created with, rather than on whatever the last open tab happened to be using.
+> **v7.16.1** — **A stopped run now tells you why instead of retrying blind.** When your Claude CLI login expires mid-turn, the chat used to retry the same unrecoverable "OAuth session expired" error until its whole retry budget was gone, then end with a generic, unhelpful failure message. It now recognizes that exact failure, stops the turn on the first try, and puts a 🔐 badge on the chat and the Kanban card — so you know to log the CLI back in instead of waiting on a run that was never going to finish. Also in this release: **a Kanban card now shows the model, effort and engine its next run will actually use** (e.g. `haiku · High · Subscription`), read straight from the same fields the runner reads — no more blank or stale badges.
 >
 > **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
 > `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)

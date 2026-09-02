@@ -1,5 +1,32 @@
 # Changelog
 
+## 7.16.1
+
+### A stop that retrying cannot fix (#86)
+
+"Failed to authenticate: OAuth session expired and could not be refreshed" stopped
+the work and said nothing about why. The visible symptom hid a worse defect: an auth
+failure is not `subtype:'success'`, so all three agent loops auto-continued it. Each
+retry failed instantly against the identical error, the whole `MAX_AUTO_CONTINUES`
+budget emptied in seconds, and the run ended as a generic `agent_incomplete` that
+named nothing. A chain task then retried twice more on top of that.
+
+- `auth-errors.js` is the third class of "the turn stopped and it was not the agent's
+  fault", alongside the two in `rate-limit-utils.js` — and the only one that never
+  passes on its own. It refreshes nothing and cannot: the OAuth tokens belong to the
+  `claude` CLI's own credentials store, and the refresh exchange needs client
+  credentials this server has never held and must not hold. Detecting it precisely
+  and refusing to retry is the fix, not a lesser version of one.
+- Detection is anchored to CLI/API-internal wording, disjoint from the rate-limit
+  anchors, and a clean success is never classified as an auth failure.
+- A bare `/login` or `unauthorized` is deliberately not matched: the studio serves
+  its own `/login` route and answers `{error:'unauthorized'}` from its own
+  middleware.
+- The detector runs before the success break and before the auto-continue in all
+  three loops (chat, SSH, `taskWorker`); the chain retry excludes it.
+- The card shows a 🔐 badge instead of a generic failure, so an auth stop reads
+  differently from an ordinary one on the board.
+
 ## 7.16.0
 
 ### A Kanban card names the dials its next run will use (#84)
