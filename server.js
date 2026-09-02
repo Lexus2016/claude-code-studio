@@ -112,6 +112,7 @@ const editorLinks = require('./editor-links');
 const UNATTENDED_MAX_TURNS = 30;
 
 const { isTransientOverload, shouldRetryOverload, detectUsageLimit, taskStatusForStop } = require('./rate-limit-utils');
+const { detectAuthError, authErrorNotice } = require('./auth-errors');
 const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs } = require('./delegate-terminal');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
 const {
@@ -1972,6 +1973,9 @@ async function startTask(task) {
     // Auto-continue loop: keep resuming until agent completes or budget exhausted
     let taskContinueCount = 0;
     let taskOverloadRetryCount = 0;
+    // #86 — set when a turn stopped on an authentication failure. Survives the loop so
+    // the card is failed with a reason that names the cause instead of a generic stop.
+    let taskAuthStop = null;
     let clarifyTurns = 0; // follow-up turns spent on undelivered clarifications — see MAX_CLARIFY_TURNS
     let currentTaskPrompt = prompt;
     let currentTaskCid = claudeSessionId;
@@ -2199,6 +2203,22 @@ async function startTask(task) {
             continue; // retry; do not increment taskContinueCount
           }
           // Retries exhausted — fall through to normal handling (will be classified rate_limited).
+        }
+      }
+
+      // 🔐 Authentication failure (#86) — never auto-continued. An expired OAuth session
+      // needs a human, so the remaining budget would buy nothing but identical failures.
+      {
+        const _lastTurn = fullText.slice(_ftBefore);
+        const _resultText = typeof lastTaskResult?.result === 'string' ? lastTaskResult.result : '';
+        taskAuthStop = detectAuthError({ texts: [_lastTurn, _resultText], subtype: lastTaskResult?.subtype, isError: lastTaskResult?.is_error });
+        if (taskAuthStop) {
+          log.error('[taskWorker] auth failure', { taskId: task.id, kind: taskAuthStop.kind, message: taskAuthStop.message });
+          const _n = authErrorNotice(taskAuthStop);
+          fullText += _n;
+          { const _tb = (taskBuffers.get(task.id) || '') + _n; taskBuffers.set(task.id, _tb.length > MAX_CHAT_BUFFER ? _tb.slice(-MAX_CHAT_BUFFER) : _tb); }
+          broadcastToSession(sessionId, { type: 'text', text: _n, tabId: sessionId });
+          break;
         }
       }
 
@@ -2432,7 +2452,7 @@ async function startTask(task) {
               botId: task.bot_id || null,
             }).catch(() => {});
           }
-        } else if (task.chain_id && !usageLimitExhausted && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
+        } else if (task.chain_id && !usageLimitExhausted && !taskAuthStop && (task.task_retry_count || 0) < MAX_CHAIN_RETRIES) {
           // 🔄 Auto-retry for chain tasks — don't give up on first failure
           const reason = isRateLimited ? 'rate_limited' : 'agent_incomplete';
           _retryBackoffMs = isRateLimited ? Math.min(60000 * ((task.task_retry_count || 0) + 1), 300000) : 3000;
@@ -2452,7 +2472,13 @@ async function startTask(task) {
           }
         } else {
           // ❌ Failed — retries exhausted or not a chain task
-          const reason = usageLimitExhausted ? 'usage_limit_exhausted' : isRateLimited ? 'rate_limited' : 'agent_incomplete';
+          // #86: an auth stop is reported as itself. It is neither "incomplete work" nor
+          // a rate limit, and naming it is the whole point — the card is the only place a
+          // user sees WHY unattended work stopped. Format "auth_error:<kind> <line>"
+          // mirrors the parseable "usage_limit:<unix> …" prefix above.
+          const reason = taskAuthStop
+            ? `auth_error:${taskAuthStop.kind} ${taskAuthStop.message || ''}`.trim().substring(0, 300)
+            : usageLimitExhausted ? 'usage_limit_exhausted' : isRateLimited ? 'rate_limited' : 'agent_incomplete';
           db.prepare(`UPDATE tasks SET status='cancelled', failure_reason=?, worker_pid=NULL, updated_at=datetime('now') WHERE id=?`)
             .run(reason, task.id);
           log.error(`[taskWorker] task ${task.id}: cancelled (${reason}, subtype: ${lastTaskResult?.subtype || 'unknown'})`);
@@ -4273,6 +4299,23 @@ async function runCliSingle(p) {
       continue;
     }
 
+    // 🔐 Authentication failure (#86) — stop NOW, before the auto-continue below.
+    // Unlike an overload or a quota stop, this one never clears by itself: the CLI's
+    // OAuth session cannot be refreshed without a human. Auto-continuing just repeats
+    // the same instant failure until the budget is gone, which is what hid the cause.
+    {
+      const lastTurnText = fullText.slice(fullTextBefore);
+      const resultText = typeof resultData?.result === 'string' ? resultData.result : '';
+      const authStop = detectAuthError({ texts: [errorText, resultText, lastTurnText], subtype: resultData?.subtype, isError: resultData?.is_error });
+      if (authStop) {
+        log.error('auth-failure', { sessionId, kind: authStop.kind, message: authStop.message });
+        const notice = authErrorNotice(authStop);
+        fullText += notice;
+        emitTurnNotice({ ws, sessionId, tabId, text: notice });
+        break;
+      }
+    }
+
     // ✅ Success — agent finished naturally, unless it left a background task behind
     // that even the harvest run did not collect. Saying "Done" there is the bug.
     if (resultData?.subtype === 'success') {
@@ -4599,6 +4642,21 @@ async function runSshSingle(p) {
       currentPrompt = runContinuation.BACKGROUND_WAIT_PROMPT;
       currentContentBlocks = null;
       continue;
+    }
+
+    // 🔐 Authentication failure (#86) — see the CLI loop above; mirrored for SSH.
+    // The credentials live on the REMOTE host, so the fix is `claude login` there.
+    {
+      const lastTurnText = fullText.slice(fullTextBefore);
+      const resultText = typeof resultData?.result === 'string' ? resultData.result : '';
+      const authStop = detectAuthError({ texts: [errorText, resultText, lastTurnText], subtype: resultData?.subtype, isError: resultData?.is_error });
+      if (authStop) {
+        log.error('ssh-auth-failure', { sessionId, kind: authStop.kind, message: authStop.message });
+        const notice = authErrorNotice(authStop);
+        fullText += notice;
+        emitTurnNotice({ ws, sessionId, tabId, text: notice });
+        break;
+      }
     }
 
     if (resultData?.subtype === 'success') {
