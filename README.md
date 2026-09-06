@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.16.1** — **A stopped run now tells you why instead of retrying blind.** When your Claude CLI login expires mid-turn, the chat used to retry the same unrecoverable "OAuth session expired" error until its whole retry budget was gone, then end with a generic, unhelpful failure message. It now recognizes that exact failure, stops the turn on the first try, and puts a 🔐 badge on the chat and the Kanban card — so you know to log the CLI back in instead of waiting on a run that was never going to finish. Also in this release: **a Kanban card now shows the model, effort and engine its next run will actually use** (e.g. `haiku · High · Subscription`), read straight from the same fields the runner reads — no more blank or stale badges.
+> **v7.16.2** — **Enforce `MAX_TASK_WORKERS` as a strict global concurrency cap.** When setting `MAX_TASK_WORKERS=1` (or any custom limit), Kanban tasks previously bypassed the cap if they were assigned to an existing chat or ran as part of a chain — allowing multiple `claude` subprocesses to execute in parallel. Concurrency limits are now strictly enforced globally across all task types. The resolved worker limit is also logged at server startup (`taskWorkers: MAX_TASK_WORKERS`), and verified with a 12-test regression suite. Also includes the recent **auth-failure stop (🔐 badge)** and **live Kanban run-setting badges**.
 >
 > **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
 > `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)

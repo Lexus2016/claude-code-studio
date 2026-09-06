@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.16.2
+
+### Enforce MAX_TASK_WORKERS as a global concurrency limit (#90)
+
+`MAX_TASK_WORKERS` was previously only enforced for independent tasks. Tasks carrying an assigned `session_id` — including chain members and tasks created attached to existing chats — bypassed the cap, constrained only by per-session and per-workdir locks. As a result, configuring `MAX_TASK_WORKERS=1` still allowed multiple tasks to run in parallel when multiple chains or session-bound tasks were queued.
+
+- **Global Subprocess Cap**: Moved the concurrency check in `processQueue()` before the session branching logic. `running >= MAX_TASK_WORKERS` now serves as a strict global ceiling on active `claude` subprocesses across all task types.
+- **Startup Visibility**: The resolved `taskWorkers` count is now logged in the server's startup banner (`taskWorkers: MAX_TASK_WORKERS`), making effective settings immediately verifiable and alerting operators to any fallback parsing.
+- **Regression Suite**: Added `test/task-workers.test.js` (12 tests) verifying global cap behavior across independent, chain, and mixed queues, and wired it into `npm test`.
+
 ## 7.16.1
 
 ### A stop that retrying cannot fix (#86)
