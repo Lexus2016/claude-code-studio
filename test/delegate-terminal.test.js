@@ -283,5 +283,61 @@ check('dropping one placeholder leaves the others intact', () => {
     "claude --effort 'high' -p 'hi'");
 });
 
+// ── Issue #108: Safe terminal spawning in Docker / headless Linux ──────────────
+console.log('terminal availability & headless checks (#108)');
+
+const { hasCommand, isHeadless, getLinuxTerminalCandidates } = require('../delegate-terminal');
+
+check('isHeadless identifies headless Linux without DISPLAY or WAYLAND_DISPLAY', () => {
+  assert.strictEqual(isHeadless({}, 'linux'), true);
+  assert.strictEqual(isHeadless({ DISPLAY: '' }, 'linux'), true);
+  assert.strictEqual(isHeadless({ DISPLAY: ':0' }, 'linux'), false);
+  assert.strictEqual(isHeadless({ WAYLAND_DISPLAY: 'wayland-0' }, 'linux'), false);
+  assert.strictEqual(isHeadless({}, 'darwin'), false);
+  assert.strictEqual(isHeadless({}, 'win32'), false);
+});
+
+check('hasCommand finds standard commands and rejects non-existent/invalid ones', () => {
+  assert.strictEqual(hasCommand('node'), true);
+  assert.strictEqual(hasCommand('non_existent_binary_xyz_12345'), false);
+  assert.strictEqual(hasCommand('; rm -rf /'), false);
+  assert.strictEqual(hasCommand(''), false);
+  assert.strictEqual(hasCommand(null), false);
+});
+
+check('getLinuxTerminalCandidates provides valid arguments for standard emulators', () => {
+  const cands = getLinuxTerminalCandidates('echo hello');
+  assert.strictEqual(cands.length, 3);
+  const gnome = cands.find(c => c.name === 'gnome-terminal');
+  const xterm = cands.find(c => c.name === 'xterm');
+  const konsole = cands.find(c => c.name === 'konsole');
+  assert.ok(gnome && gnome.args.includes('--'));
+  assert.ok(xterm && xterm.args.includes('-e'), 'xterm requires -e');
+  assert.ok(konsole && konsole.args.includes('-e'));
+});
+
+// Guard in server.js: openTerminal & /api/sessions/:id/open-terminal must check isHeadless and hasCommand
+{
+  const fs = require('fs');
+  const path = require('path');
+  const SRV = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+
+  check('openTerminal in server.js has headless guard', () => {
+    const fnStart = SRV.indexOf('function openTerminal(');
+    const fnBody = SRV.slice(fnStart, SRV.indexOf('\nfunction startDelegationWatcher'));
+    assert.ok(/isHeadless\(\)/.test(fnBody), 'openTerminal must check isHeadless()');
+    assert.ok(/hasCommand\(term\)/.test(fnBody), 'openTerminal must check hasCommand() before spawn');
+    assert.ok(/p\.on\('error'/.test(fnBody), 'openTerminal must catch spawn error event');
+  });
+
+  check('/api/sessions/:id/open-terminal in server.js has headless guard', () => {
+    const epStart = SRV.indexOf("app.post('/api/sessions/:id/open-terminal'");
+    const epBody = SRV.slice(epStart, SRV.indexOf("app.post('/api/sessions/:id/catch-up'"));
+    assert.ok(/isHeadless\(\)/.test(epBody), 'open-terminal endpoint must check isHeadless()');
+    assert.ok(/hasCommand\(cmd\)/.test(epBody), 'open-terminal endpoint must check hasCommand() before spawn');
+    assert.ok(/p\.on\('error'/.test(epBody), 'open-terminal endpoint must catch spawn error event');
+  });
+}
+
 if (failed) { console.log(`\n${failed} test(s) failed`); process.exit(1); }
 console.log('\nAll delegate-terminal tests passed');
