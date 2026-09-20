@@ -1071,6 +1071,22 @@ function startAutoRefresh(){
   refreshTimer=setTimeout(async()=>{await refresh(false);startAutoRefresh();},delay);
 }
 
+// Self-heal on tab focus, visibility change, and network reconnection (#107)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    refresh(true);
+    startAutoRefresh();
+  }
+});
+window.addEventListener('focus', () => {
+  refresh(true);
+  startAutoRefresh();
+});
+window.addEventListener('online', () => {
+  refresh(true);
+  startAutoRefresh();
+});
+
 // ─── Stats ─────────────────────────────────────────────────────────────────
 function updateStats(){
   const el=$i('kbStats');
