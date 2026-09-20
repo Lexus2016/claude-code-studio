@@ -313,7 +313,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
   .ov { padding: 8px; }
   .modal { max-width: calc(100vw - 16px) !important; max-height: 92vh; max-height: 92dvh; box-sizing: border-box !important; }
   .grid2 { grid-template-columns: 1fr; }
-  .card-actions { opacity: 1; flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
+  .card-actions { display: flex !important; opacity: 1; flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
   /* Prevent iOS auto-zoom on focus (requires ≥ 16px) */
   .inp, .sel, .proj-dd-search input { font-size: 16px; }
 }
@@ -1213,20 +1213,19 @@ function startAutoRefresh(){
 }
 
 // Self-heal on tab focus, visibility change, and network reconnection (#107)
+let _lastKbResync = 0;
+function triggerKbResync() {
+  const now = Date.now();
+  if (now - _lastKbResync < 1500) return;
+  _lastKbResync = now;
+  refresh(true);
+  startAutoRefresh();
+}
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    refresh(true);
-    startAutoRefresh();
-  }
+  if (document.visibilityState === 'visible') triggerKbResync();
 });
-window.addEventListener('focus', () => {
-  refresh(true);
-  startAutoRefresh();
-});
-window.addEventListener('online', () => {
-  refresh(true);
-  startAutoRefresh();
-});
+window.addEventListener('focus', triggerKbResync);
+window.addEventListener('online', triggerKbResync);
 
 // ─── Stats ─────────────────────────────────────────────────────────────────
 function updateStats(){
@@ -2533,6 +2532,8 @@ async function openDelegateModalForTask(taskId) {
   const taskPrompt = (tk.title + (tk.description ? '\n\n' + tk.description : '')).trim();
   const taskInput = $i('dlgTask');
   if (taskInput) taskInput.value = taskPrompt;
+  const handoffRadio = document.querySelector('input[name="dlgMode"][value="handoff"]');
+  if (handoffRadio) handoffRadio.checked = true;
   closeModal();
   openOverlay('delegateOv', { initialFocus: '#dlgTask', onEscape: closeDelegateModal });
 }
@@ -2551,7 +2552,7 @@ async function submitDelegation() {
   const effort = $i('dlgEffort')?.value || undefined;
 
   if (!agentId) { toast(t('dlg.no_agents'), true); return; }
-  if (!task) { toast(t('modal.name'), true); return; }
+  if (!task) { toast(t('dlg.task.ph'), true); return; }
 
   try {
     const r = await apiFetch('/api/delegate', {
@@ -2580,6 +2581,7 @@ async function submitDelegation() {
   }
 }
 
+let _dlgDetailPollTimer = null;
 async function openDelegationDetail(delegationId) {
   const del = _activeDelegations.find(d => d.id === delegationId);
   if (!del) return;
@@ -2595,13 +2597,21 @@ async function openDelegationDetail(delegationId) {
   }
   await updateDelegationDialogView(delegationId);
   openOverlay('delegationDetailOv', { initialFocus: '#dlgMsgInp', onEscape: closeDelegationDetail });
+  clearInterval(_dlgDetailPollTimer);
+  _dlgDetailPollTimer = setInterval(() => {
+    if (!_activeDelegationDetailId) {
+      clearInterval(_dlgDetailPollTimer);
+      return;
+    }
+    updateDelegationDialogView(_activeDelegationDetailId);
+  }, 2500);
 }
 
 async function updateDelegationDialogView(delegationId) {
   try {
     const res = await apiFetch(`/api/delegate/${delegationId}/dialog`).then(r => r.json());
     const box = $i('dlgDetailBox');
-    if (box) {
+    if (box && res && res.dialog !== undefined) {
       box.textContent = res.dialog || '...';
       box.scrollTop = box.scrollHeight;
     }
@@ -2609,6 +2619,8 @@ async function updateDelegationDialogView(delegationId) {
 }
 
 function closeDelegationDetail() {
+  clearInterval(_dlgDetailPollTimer);
+  _dlgDetailPollTimer = null;
   closeOverlay('delegationDetailOv');
   _activeDelegationDetailId = null;
 }
@@ -2619,11 +2631,16 @@ async function sendDelegationMsg() {
   const msg = inp?.value?.trim();
   if (!msg) return;
   try {
-    await apiFetch(`/api/delegate/${_activeDelegationDetailId}/message`, {
+    const r = await apiFetch(`/api/delegate/${_activeDelegationDetailId}/message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: msg }),
     });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      toast(err.error || t('toast.err'), true);
+      return;
+    }
     if (inp) inp.value = '';
     await updateDelegationDialogView(_activeDelegationDetailId);
   } catch (e) {
@@ -2634,7 +2651,12 @@ async function sendDelegationMsg() {
 async function stopActiveDelegation() {
   if (!_activeDelegationDetailId) return;
   try {
-    await apiFetch(`/api/delegate/${_activeDelegationDetailId}`, { method: 'DELETE' });
+    const r = await apiFetch(`/api/delegate/${_activeDelegationDetailId}`, { method: 'DELETE' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      toast(err.error || t('toast.err'), true);
+      return;
+    }
     toast(t('dlg.toast.stopped'));
     closeDelegationDetail();
     await refresh(true);

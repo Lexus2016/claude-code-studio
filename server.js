@@ -1814,6 +1814,7 @@ const MAX_TASK_WORKERS = Math.max(1, parseInt(process.env.MAX_TASK_WORKERS || '5
 const taskRunning = new Set();        // task IDs currently executing
 const runningTaskAborts = new Map();  // taskId → AbortController
 const stoppingTasks = new Set();      // task IDs being manually stopped (onDone must not overwrite status)
+const activeDelegations = new Map();  // delegationId -> { id, agentId, mode, workdir, delegationDir, startedAt, watcher, taskId }
 // task IDs started via the independent-worker path. Not a cap counter — the cap is
 // global (see processQueue) — this only tells /api/running-sessions whether a task row
 // still has a worker behind it.
@@ -2892,6 +2893,17 @@ setInterval(() => {
       } else {
         continue; // worker is alive
       }
+    }
+    // Check if task is actively delegated to an external agent
+    let isDelegated = false;
+    for (const d of activeDelegations.values()) {
+      if (d.taskId === task.id) {
+        isDelegated = true;
+        break;
+      }
+    }
+    if (isDelegated) {
+      continue; // actively being handled by external agent, do not evict
     }
     // Worker is dead — recover
     log.warn(`[watchdog] task "${task.title}" (${task.id}) stuck in_progress with no live worker, recovering`);
@@ -10705,7 +10717,6 @@ app.post('/api/tunnel/stop', (_, res) => {
 // CROSS-AGENT DELEGATION
 // ============================================
 
-const activeDelegations = new Map(); // delegationId -> { id, agentId, mode, workdir, delegationDir, startedAt, watcher }
 const CROSSWORK_DIR = '.crosswork';
 
 function getDelegationDir(workdir, delegationId) {
@@ -11263,6 +11274,19 @@ app.post('/api/delegate', express.json(), (req, res) => {
 
   let session = sessionId ? stmts.getSession.get(sessionId) : null;
   const taskRow = taskId ? stmts.getTask.get(taskId) : null;
+  if (taskId && !taskRow) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+  if (taskRow && (taskRow.status === 'done' || taskRow.status === 'cancelled')) {
+    return res.status(409).json({ error: `Cannot delegate a task that is already ${taskRow.status}` });
+  }
+  if (taskId) {
+    for (const d of activeDelegations.values()) {
+      if (d.taskId === taskId) {
+        return res.status(409).json({ error: `Task is already being delegated to ${d.agentLabel || d.agentId}` });
+      }
+    }
+  }
   if (!session && taskRow?.session_id) {
     session = stmts.getSession.get(taskRow.session_id);
   }
@@ -11429,6 +11453,14 @@ app.delete('/api/delegate/:id', (req, res) => {
   if (delegation.watcher) { try { delegation.watcher.close(); } catch {} }
   // Remove state file so it won't be restored on next restart
   try { fs.unlinkSync(path.join(delegation.delegationDir, 'state.json')); } catch {}
+  if (delegation.taskId) {
+    try {
+      const task = stmts.getTask.get(delegation.taskId);
+      if (task && task.status === 'in_progress') {
+        db.prepare(`UPDATE tasks SET status='todo', updated_at=datetime('now') WHERE id=?`).run(delegation.taskId);
+      }
+    } catch {}
+  }
   activeDelegations.delete(req.params.id);
   log.info('Delegation stopped', { delegationId: req.params.id });
   res.json({ ok: true });
