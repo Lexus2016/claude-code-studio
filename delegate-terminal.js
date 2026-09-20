@@ -150,4 +150,50 @@ function winTerminalArgs(tmpBat) {
   return ['/c', 'start', '"Delegate"', 'cmd.exe', '/k', `"${tmpBat}"`];
 }
 
-module.exports = { shellEscape, buildTerminalCommand, winTerminalArgs };
+/**
+ * Check whether a command-line executable exists in $PATH.
+ * Uses POSIX `command -v` via /bin/sh.
+ */
+function hasCommand(cmd) {
+  if (typeof cmd !== 'string' || !/^[a-zA-Z0-9._-]+$/.test(cmd)) return false;
+  try {
+    const { spawnSync } = require('node:child_process');
+    const r = spawnSync('/bin/sh', ['-c', `command -v ${cmd}`], { stdio: 'ignore' });
+    return !r.error && r.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check whether the current environment lacks a graphical desktop display.
+ * On Linux, absence of both $DISPLAY and $WAYLAND_DISPLAY indicates a headless
+ * server, SSH session without X forwarding, or Docker container.
+ */
+function isHeadless(env = process.env, platform = process.platform) {
+  if (platform === 'linux') {
+    return !env.DISPLAY && !env.WAYLAND_DISPLAY;
+  }
+  return false;
+}
+
+/**
+ * Terminal candidate configurations for Linux.
+ * Each entry specifies the executable name and its argument structure.
+ */
+function getLinuxTerminalCandidates(shellCommand) {
+  return [
+    { name: 'gnome-terminal', args: ['--', 'bash', '-c', shellCommand] },
+    { name: 'xterm',          args: ['-e', 'bash', '-c', shellCommand] },
+    { name: 'konsole',        args: ['-e', 'bash', '-c', shellCommand] },
+  ];
+}
+
+module.exports = {
+  shellEscape,
+  buildTerminalCommand,
+  winTerminalArgs,
+  hasCommand,
+  isHeadless,
+  getLinuxTerminalCandidates,
+};

@@ -114,7 +114,7 @@ const UNATTENDED_MAX_TURNS = 30;
 
 const { isTransientOverload, shouldRetryOverload, detectUsageLimit, taskStatusForStop } = require('./rate-limit-utils');
 const { detectAuthError, authErrorNotice } = require('./auth-errors');
-const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs } = require('./delegate-terminal');
+const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs, hasCommand, isHeadless, getLinuxTerminalCandidates } = require('./delegate-terminal');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
 const {
   resolveAgentCommands, supportsTerminal, mergeAgentDefaults, parseNewIdOutput,
@@ -8760,17 +8760,21 @@ app.post('/api/sessions/:id/open-terminal', (req, res) => {
       // execSync would kill xterm after the timeout; spawnProc+unref lets it live.
       const safeWorkdir = workdir.replace(/'/g, "'\\''");
       fullCmd = `cd '${safeWorkdir}' && unset CLAUDECODE; claude --resume ${safeSid}`;
-      const termCandidates = [
-        ['gnome-terminal', ['--', 'bash', '-c', `${fullCmd}; exec bash`]],
-        ['xterm',          ['-e', 'bash', '-c', `${fullCmd}; exec bash`]],
-        ['konsole',        ['-e', 'bash', '-c', fullCmd]],
-      ];
-      for (const [cmd, args] of termCandidates) {
-        try {
-          const p = spawnProc(cmd, args, { detached: true, stdio: 'ignore' });
-          p.unref();
-          ok = true; break;
-        } catch {}
+      if (!isHeadless()) {
+        const termCandidates = [
+          ['gnome-terminal', ['--', 'bash', '-c', `${fullCmd}; exec bash`]],
+          ['xterm',          ['-e', 'bash', '-c', `${fullCmd}; exec bash`]],
+          ['konsole',        ['-e', 'bash', '-c', fullCmd]],
+        ];
+        for (const [cmd, args] of termCandidates) {
+          if (!hasCommand(cmd)) continue;
+          try {
+            const p = spawnProc(cmd, args, { detached: true, stdio: 'ignore' });
+            p.on('error', () => {});
+            p.unref();
+            ok = true; break;
+          } catch {}
+        }
       }
     }
   } catch {}
@@ -10859,14 +10863,20 @@ function openTerminal(shellCommand) {
     }
   } else {
     // Linux — try common terminal emulators
-    const terminals = ['gnome-terminal', 'xterm', 'konsole'];
-    for (const term of terminals) {
+    if (isHeadless()) {
+      return { ok: false, error: 'Cannot open graphical terminal: running in headless/Docker environment with no display ($DISPLAY or $WAYLAND_DISPLAY).' };
+    }
+    const candidates = getLinuxTerminalCandidates(shellCommand);
+    for (const { name: term, args } of candidates) {
+      if (!hasCommand(term)) continue;
       try {
-        spawnProc(term, ['--', 'bash', '-c', shellCommand], { detached: true, stdio: 'ignore' }).unref();
+        const p = spawnProc(term, args, { detached: true, stdio: 'ignore' });
+        p.on('error', () => {});
+        p.unref();
         return { ok: true };
       } catch { continue; }
     }
-    return { ok: false, error: 'No supported terminal emulator found' };
+    return { ok: false, error: 'No supported graphical terminal emulator found (tried gnome-terminal, xterm, konsole)' };
   }
 }
 
