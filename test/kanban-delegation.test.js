@@ -76,5 +76,32 @@ check('kanban.html defines delegation lifecycle functions', () => {
   assert.ok(kbSrc.includes('async function sendDelegationMsg()'), 'missing sendDelegationMsg');
 });
 
+check('server.js watchdog spares active delegated tasks from eviction', () => {
+  const wdBlock = srvSrc.slice(srvSrc.indexOf('// Watchdog: detect tasks stuck'));
+  assert.ok(wdBlock.includes('d.taskId === task.id'), 'watchdog does not check activeDelegations for taskId');
+  assert.ok(wdBlock.includes('if (isDelegated)'), 'watchdog does not skip recovering delegated tasks');
+});
+
+check('server.js /api/delegate validates task status and blocks double delegation', () => {
+  assert.ok(srvSrc.includes("taskRow.status === 'done' || taskRow.status === 'cancelled'"), 'missing done/cancelled task check');
+  assert.ok(srvSrc.includes('Task is already being delegated to'), 'missing already-delegated task check');
+});
+
+check('server.js DELETE /api/delegate/:id reverts in_progress task to todo', () => {
+  const delBlock = srvSrc.slice(srvSrc.indexOf("app.delete('/api/delegate/:id'"));
+  assert.ok(delBlock.includes("status='todo'"), 'DELETE /api/delegate does not revert task status');
+});
+
+check('kanban.html delegation dialog viewer polls for updates and verifies response ok', () => {
+  assert.ok(kbSrc.includes('_dlgDetailPollTimer = setInterval'), 'missing interval polling in openDelegationDetail');
+  assert.ok(kbSrc.includes('clearInterval(_dlgDetailPollTimer)'), 'missing clearInterval in closeDelegationDetail');
+  assert.ok(kbSrc.includes('if (!r.ok)'), 'missing r.ok check in delegation actions');
+});
+
+check('kanban.html debounces self-heal reconnect events', () => {
+  assert.ok(kbSrc.includes('function triggerKbResync()'), 'missing triggerKbResync function');
+  assert.ok(kbSrc.includes('now - _lastKbResync < 1500'), 'missing debounce timing check');
+});
+
 if (failed) { console.log(`\n${failed} test(s) failed`); process.exit(1); }
 console.log('\nAll kanban-delegation tests passed');

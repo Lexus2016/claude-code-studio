@@ -47,5 +47,10 @@ check('project dropdown buttons set title attribute for full name tooltips', () 
   assert.ok(/ddName\.title\s*=\s*fullName/.test(kbSrc), 'kanban.html should set title on project name');
 });
 
+check('kanban.html mobile media query forces card-actions display on touch screens', () => {
+  const media800 = kbSrc.slice(kbSrc.indexOf('@media (max-width: 800px)'));
+  assert.ok(/\.card-actions\s*\{[^}]*display:\s*flex\s*!important/.test(media800), 'missing display: flex !important for card-actions in mobile query');
+});
+
 if (failed) { console.log(`\n${failed} test(s) failed`); process.exit(1); }
 console.log('\nAll responsive-ui tests passed');
