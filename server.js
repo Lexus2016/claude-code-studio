@@ -10722,6 +10722,7 @@ function saveDelegationState(delegation) {
     workdir: delegation.workdir,
     delegationDir: delegation.delegationDir,
     sessionId: delegation.sessionId,
+    taskId: delegation.taskId || null,
     task: delegation.task,
     startedAt: delegation.startedAt,
   };
@@ -11227,7 +11228,7 @@ app.delete('/api/external-agents/:id', (req, res) => {
 // --- Delegation API ---
 
 app.post('/api/delegate', express.json(), (req, res) => {
-  const { agentId, mode, task, sessionId, model, effort } = req.body;
+  const { agentId, mode, task, sessionId, model, effort, taskId, workdir: customWorkdir } = req.body;
   if (!agentId || !task) return res.status(400).json({ error: 'agentId and task required' });
   if (!/^[a-zA-Z0-9_-]+$/.test(agentId)) return res.status(400).json({ error: 'Invalid agentId' });
   // Deliberately an ALLOW-LIST against the agent's own catalog, not a charset.
@@ -11260,8 +11261,12 @@ app.post('/api/delegate', express.json(), (req, res) => {
     return res.status(400).json({ error: `Agent "${agentId}" does not support delegation (no template configured)` });
   }
 
-  const session = sessionId ? stmts.getSession.get(sessionId) : null;
-  const workdir = session?.workdir || WORKDIR;
+  let session = sessionId ? stmts.getSession.get(sessionId) : null;
+  const taskRow = taskId ? stmts.getTask.get(taskId) : null;
+  if (!session && taskRow?.session_id) {
+    session = stmts.getSession.get(taskRow.session_id);
+  }
+  const workdir = customWorkdir || taskRow?.workdir || session?.workdir || WORKDIR;
 
   // Delegation is LOCAL-ONLY, and on a remote project every step below silently
   // targets the wrong machine (issue #55). `workdir` is then a path on the SSH host,
@@ -11295,8 +11300,9 @@ app.post('/api/delegate', express.json(), (req, res) => {
   const relPath = `.crosswork/${delegationId}`;
 
   // 2. Build context from session messages
-  const messages = sessionId ? stmts.getMsgs.all(sessionId) : [];
-  const contextMd = buildContextMd(session || { title: 'New delegation', workdir }, messages, task, relPath, delegationMode);
+  const messages = session ? stmts.getMsgs.all(session.id) : [];
+  const contextTitle = taskRow ? `Task: ${taskRow.title}` : (session?.title || 'New delegation');
+  const contextMd = buildContextMd({ title: contextTitle, workdir }, messages, task, relPath, delegationMode);
   fs.writeFileSync(path.join(delegationDir, 'CONTEXT.md'), contextMd);
 
   // 3. Initialize DIALOG.md with delegation message
@@ -11328,7 +11334,8 @@ app.post('/api/delegate', express.json(), (req, res) => {
     mode: delegationMode,
     workdir,
     delegationDir,
-    sessionId: sessionId || null,
+    sessionId: session?.id || null,
+    taskId: taskId || null,
     task,
     startedAt: Date.now(),
     lastUpdate: Date.now(),
@@ -11337,7 +11344,10 @@ app.post('/api/delegate', express.json(), (req, res) => {
   });
 
   saveDelegationState(activeDelegations.get(delegationId));
-  log.info('Delegation created', { delegationId, agentId, mode: delegationMode, workdir });
+  if (taskId && taskRow && (taskRow.status === 'backlog' || taskRow.status === 'todo')) {
+    try { stmts.setTaskInProgress.run(taskId); } catch {}
+  }
+  log.info('Delegation created', { delegationId, agentId, mode: delegationMode, workdir, taskId: taskId || undefined });
 
   res.json({
     ok: true,
@@ -11345,6 +11355,7 @@ app.post('/api/delegate', express.json(), (req, res) => {
     mode: delegationMode,
     agent: agentConfig.label,
     crossworkPath: delegationDir,
+    taskId: taskId || null,
   });
 });
 
@@ -11358,6 +11369,7 @@ app.get('/api/delegate/status', (_, res) => {
       mode: d.mode,
       workdir: d.workdir,
       sessionId: d.sessionId,
+      taskId: d.taskId || null,
       task: d.task,
       startedAt: d.startedAt,
       lastUpdate: d.lastUpdate,

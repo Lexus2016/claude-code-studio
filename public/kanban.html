@@ -163,6 +163,26 @@ button:focus-visible,a:focus-visible{ border-radius:5px; }
 .col-add:hover{ background:var(--s2); color:var(--text); border-color:var(--muted); }
 .col-empty{ text-align:center; padding:24px 10px; color:var(--muted); font-size:12px; border:1px dashed var(--border); border-radius:var(--r-md); user-select:none; }
 
+.badge-purple{ background:rgba(188,140,255,.15); color:#d2a8ff; border:1px solid rgba(188,140,255,.3); }
+.dlg-agent-cards { display: flex; gap: 8px; flex-wrap: wrap; }
+.dlg-agent-card { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--r-sm); background: var(--s2); cursor: pointer; transition: border-color .15s, background .15s, box-shadow .15s; }
+.dlg-agent-card:hover { border-color: rgba(124,106,239,.4); background: rgba(124,106,239,.06); }
+.dlg-agent-card.selected { border-color: var(--accent); background: rgba(124,106,239,.12); box-shadow: 0 0 0 2px rgba(124,106,239,.2); }
+.dlg-agent-icon { font-size: 16px; flex-shrink: 0; }
+.dlg-agent-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.dlg-agent-card.selected .dlg-agent-label { color: var(--accent); }
+.dlg-agent-empty { padding: 10px 14px; border: 1.5px dashed var(--border); border-radius: var(--r-sm); color: var(--muted); font-size: 12px; text-align: center; }
+.dlg-mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dlg-mode-card { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--r-sm); background: var(--s2); cursor: pointer; transition: border-color .15s, background .15s, box-shadow .15s; }
+.dlg-mode-card:hover { border-color: rgba(124,106,239,.4); background: rgba(124,106,239,.06); }
+.dlg-mode-card.selected { border-color: var(--accent); background: rgba(124,106,239,.12); box-shadow: 0 0 0 2px rgba(124,106,239,.2); }
+.dlg-mode-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.dlg-mode-card.selected .dlg-mode-title { color: var(--accent); }
+.dlg-mode-desc { font-size: 11px; line-height: 1.4; color: var(--muted); }
+.dlg-dialog-box { background: var(--s3); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5; color: var(--text); max-height: 280px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+.dlg-top-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: var(--r-sm); background: rgba(188,140,255,.15); color: #d2a8ff; border: 1px solid rgba(188,140,255,.3); cursor: pointer; }
+.dlg-top-badge:hover { background: rgba(188,140,255,.25); }
+
 /* Status colours */
 .dot-backlog{ background:var(--muted); }
 .dot-todo{ background:var(--blue); }
@@ -454,6 +474,82 @@ textarea.inp{ resize:vertical; min-height:80px; }
   </div>
 </div>
 
+<!-- Delegate modal -->
+<div class="ov hidden" id="delegateOv" aria-hidden="true" onclick="if(event.target===this)closeDelegateModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dlgModalTitle" tabindex="-1" style="max-width:560px">
+    <div class="modal-hd">
+      <span class="modal-hd-title" id="dlgModalTitle" data-i18n="dlg.title">Delegate to Agent</span>
+      <button class="modal-close" onclick="closeDelegateModal()">×</button>
+    </div>
+    <div class="modal-body" style="gap:14px">
+      <div>
+        <label class="lbl" data-i18n="dlg.agent">Agent</label>
+        <div class="dlg-agent-cards" id="dlgAgentCards"></div>
+      </div>
+      <div class="grid2 hidden" id="dlgTuningRow">
+        <div class="hidden" id="dlgModelWrap">
+          <label class="lbl" data-i18n="tb.model">Model</label>
+          <select id="dlgModel" class="sel"></select>
+        </div>
+        <div class="hidden" id="dlgEffortWrap">
+          <label class="lbl" data-i18n="tb.effort">Effort</label>
+          <select id="dlgEffort" class="sel"></select>
+        </div>
+      </div>
+      <div>
+        <label class="lbl" data-i18n="dlg.mode">Mode</label>
+        <div class="dlg-mode-cards">
+          <label class="dlg-mode-card selected" onclick="selectDlgMode(this, 'handoff')">
+            <input type="radio" name="dlgMode" value="handoff" checked style="display:none">
+            <span class="dlg-mode-title" data-i18n="dlg.mode.handoff">Handoff</span>
+            <span class="dlg-mode-desc" data-i18n="dlg.mode.handoff.desc">Full transfer. Opens terminal, you continue working there.</span>
+          </label>
+          <label class="dlg-mode-card" onclick="selectDlgMode(this, 'sync')">
+            <input type="radio" name="dlgMode" value="sync" style="display:none">
+            <span class="dlg-mode-title" data-i18n="dlg.mode.sync">Sync</span>
+            <span class="dlg-mode-desc" data-i18n="dlg.mode.sync.desc">Parallel work. Both agents active, communicate via dialog file.</span>
+          </label>
+        </div>
+      </div>
+      <div>
+        <label class="lbl" data-i18n="dlg.task">Task</label>
+        <textarea id="dlgTask" class="inp" rows="3" placeholder="What should the agent do..." data-i18n-ph="dlg.task.ph"></textarea>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost btn-sm" onclick="closeDelegateModal()" data-i18n="dlg.cancel">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="submitDelegation()" data-i18n="dlg.submit">Delegate</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delegation Detail modal -->
+<div class="ov hidden" id="delegationDetailOv" aria-hidden="true" onclick="if(event.target===this)closeDelegationDetail()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dlgDetailTitle" tabindex="-1" style="max-width:620px">
+    <div class="modal-hd">
+      <span class="modal-hd-title" id="dlgDetailTitle" data-i18n="dlg.status.title">Delegation Status</span>
+      <button class="modal-close" onclick="closeDelegationDetail()">×</button>
+    </div>
+    <div class="modal-body" style="gap:12px">
+      <div id="dlgDetailMeta" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>
+      <label class="lbl" data-i18n="dlg.dialog">Dialog</label>
+      <div class="dlg-dialog-box" id="dlgDetailBox"></div>
+      <div>
+        <label class="lbl" data-i18n="dlg.msg.ph">Send message to agent...</label>
+        <div style="display:flex;gap:8px">
+          <input id="dlgMsgInp" class="inp" placeholder="Send message to agent..." data-i18n-ph="dlg.msg.ph" onkeydown="if(event.key==='Enter')sendDelegationMsg()">
+          <button class="btn btn-primary btn-sm" onclick="sendDelegationMsg()" data-i18n="dlg.send">Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-danger btn-sm" onclick="stopActiveDelegation()" data-i18n="dlg.stop">Stop</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-sm" onclick="closeDelegationDetail()" data-i18n="modal.cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -506,6 +602,12 @@ const TR = {
     'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача','agent.single':'Один','agent.multi':'Мульти',
     'effort.auto':'Авто','effort.low':'Низьке','effort.med':'Середнє','effort.high':'Високе','effort.xhigh':'Дуже високе','effort.max':'Максимальне',
     'engine.api':'API','engine.sub':'Підписка','tmux.required':'Потрібен tmux на сервері',
+    'dlg.title':'Делегувати агенту','dlg.btn':'Делегувати','dlg.btn.title':'Делегувати зовнішньому агенту',
+    'dlg.agent':'Агент','dlg.mode':'Режим','dlg.mode.handoff':'Передача','dlg.mode.handoff.desc':'Відкриває термінал, ви продовжуєте роботу там.',
+    'dlg.mode.sync':'Синхронізація','dlg.mode.sync.desc':'Паралельна робота. Агенти спілкуються через DIALOG.md.','dlg.task':'Завдання',
+    'dlg.task.ph':'Що має зробити агент...','dlg.cancel':'Скасувати','dlg.submit':'Делегувати','dlg.no_agents':'Немає налаштованих агентів',
+    'dlg.status.title':'Стан делегування','dlg.dialog':'Діалог','dlg.msg.ph':'Надіслати повідомлення агенту...','dlg.send':'Надіслати','dlg.stop':'Зупинити',
+    'dlg.toast.delegated':'Делеговано {agent}','dlg.toast.stopped':'Делегування зупинено',
   },
   en: {
     'modal.task_cfg':'Run settings','modal.task_cfg_note':'Changes are saved and affect the next run, not the one in progress. Which dials take effect depends on the task engine and on whether it already has a session.',
@@ -553,7 +655,13 @@ const TR = {
     'nav.schedule':'Schedule','nav.dashboard':'Dashboard','hdr.project':'Project','hdr.refresh':'Refresh',
     'mode.auto':'Auto','mode.plan':'Plan','mode.task':'Task','agent.single':'Single','agent.multi':'Multi',
     'effort.auto':'Auto','effort.low':'Low','effort.med':'Medium','effort.high':'High','effort.xhigh':'XHigh','effort.max':'Max',
-    'engine.api':'API','engine.sub':'Subscription','tmux.required':'tmux is required on the server',
+    'engine.api':'API','engine.sub':'Subscription','tmux.required':'tmux is required on server',
+    'dlg.title':'Delegate to Agent','dlg.btn':'Delegate','dlg.btn.title':'Delegate to external agent',
+    'dlg.agent':'Agent','dlg.mode':'Mode','dlg.mode.handoff':'Handoff','dlg.mode.handoff.desc':'Full transfer. Opens terminal, you continue working there.',
+    'dlg.mode.sync':'Sync','dlg.mode.sync.desc':'Parallel work. Both agents active, communicate via dialog file.','dlg.task':'Task',
+    'dlg.task.ph':'What should the agent do...','dlg.cancel':'Cancel','dlg.submit':'Delegate','dlg.no_agents':'No agents configured (add via Settings)',
+    'dlg.status.title':'Delegation Status','dlg.dialog':'Dialog','dlg.msg.ph':'Send message to agent...','dlg.send':'Send','dlg.stop':'Stop',
+    'dlg.toast.delegated':'Delegated to {agent}','dlg.toast.stopped':'Delegation stopped',
   },
   ru: {
     'modal.task_cfg':'Параметры запуска','modal.task_cfg_note':'Изменения сохраняются и влияют на следующий запуск, а не на текущий. Какие именно настройки подействуют, зависит от движка задачи и от того, есть ли у неё уже сессия.',
@@ -602,6 +710,12 @@ const TR = {
     'mode.auto':'Авто','mode.plan':'План','mode.task':'Задача','agent.single':'Один','agent.multi':'Мульти',
     'effort.auto':'Авто','effort.low':'Низкое','effort.med':'Среднее','effort.high':'Высокое','effort.xhigh':'Очень высокое','effort.max':'Максимальное',
     'engine.api':'API','engine.sub':'Подписка','tmux.required':'Нужен tmux на сервере',
+    'dlg.title':'Делегировать агенту','dlg.btn':'Делегировать','dlg.btn.title':'Делегировать внешнему агенту',
+    'dlg.agent':'Агент','dlg.mode':'Режим','dlg.mode.handoff':'Передача','dlg.mode.handoff.desc':'Полная передача. Откроет терминал, вы продолжите работу там.',
+    'dlg.mode.sync':'Синхронизация','dlg.mode.sync.desc':'Параллельная работа. Оба агента активны, общаются через файл диалога.','dlg.task':'Задача',
+    'dlg.task.ph':'Что должен сделать агент...','dlg.cancel':'Отмена','dlg.submit':'Делегировать','dlg.no_agents':'Нет настроенных агентов',
+    'dlg.status.title':'Состояние делегирования','dlg.dialog':'Диалог','dlg.msg.ph':'Отправить сообщение агенту...','dlg.send':'Отправить','dlg.stop':'Остановить',
+    'dlg.toast.delegated':'Делегировано {agent}','dlg.toast.stopped':'Делегирование остановлено',
   },
   fr: {
     'modal.task_cfg':'Paramètres d exécution','modal.task_cfg_note':'Les modifications sont enregistrées et affectent le prochain lancement, pas celui en cours. Les réglages qui prennent effet dépendent du moteur de la tâche et du fait qu elle ait déjà une session.',
@@ -650,6 +764,12 @@ const TR = {
     'mode.auto':'Auto','mode.plan':'Plan','mode.task':'Tâche','agent.single':'Simple','agent.multi':'Multi',
     'effort.auto':'Auto','effort.low':'Faible','effort.med':'Moyen','effort.high':'Élevé','effort.xhigh':'Très élevé','effort.max':'Maximal',
     'engine.api':'API','engine.sub':'Abonnement','tmux.required':'tmux est requis sur le serveur',
+    'dlg.title':'Déléguer à un agent','dlg.btn':'Déléguer','dlg.btn.title':'Déléguer à un agent externe',
+    'dlg.agent':'Agent','dlg.mode':'Mode','dlg.mode.handoff':'Transfert','dlg.mode.handoff.desc':'Transfert complet. Ouvre un terminal, vous continuez le travail là-bas.',
+    'dlg.mode.sync':'Synchro','dlg.mode.sync.desc':'Travail en parallèle. Communication via fichier de dialogue.','dlg.task':'Tâche',
+    'dlg.task.ph':"Que doit faire l'agent...",'dlg.cancel':'Annuler','dlg.submit':'Déléguer','dlg.no_agents':'Aucun agent configuré',
+    'dlg.status.title':'Statut de la délégation','dlg.dialog':'Dialogue','dlg.msg.ph':"Envoyer un message à l'agent...",'dlg.send':'Envoyer','dlg.stop':'Arrêter',
+    'dlg.toast.delegated':'Délégué à {agent}','dlg.toast.stopped':'Délégation arrêtée',
   },
   he: {
     'modal.task_cfg':'הגדרות הרצה','modal.task_cfg_note':'השינויים נשמרים ומשפיעים על ההרצה הבאה, לא על זו שרצה כעת. אילו הגדרות ייכנסו לתוקף תלוי במנוע המשימה ובשאלה אם כבר יש לה סשן.',
@@ -698,6 +818,12 @@ const TR = {
     'mode.auto':'אוטומטי','mode.plan':'תכנון','mode.task':'משימה','agent.single':'יחיד','agent.multi':'מרובה',
     'effort.auto':'אוטומטי','effort.low':'נמוך','effort.med':'בינוני','effort.high':'גבוה','effort.xhigh':'גבוה מאוד','effort.max':'מרבי',
     'engine.api':'API','engine.sub':'מנוי','tmux.required':'נדרש tmux בשרת',
+    'dlg.title':'האצלה ל-Agent','dlg.btn':'האצלה','dlg.btn.title':'האצלה ל-agent חיצוני',
+    'dlg.agent':'Agent','dlg.mode':'מצב','dlg.mode.handoff':'העברה','dlg.mode.handoff.desc':'העברה מלאה. פותח טרמינל, אתם ממשיכים לעבוד שם.',
+    'dlg.mode.sync':'סנכרון','dlg.mode.sync.desc':'עבודה מקבילה. שני ה-agents פעילים.','dlg.task':'משימה',
+    'dlg.task.ph':'מה ה-agent צריך לעשות...','dlg.cancel':'ביטול','dlg.submit':'האצלה','dlg.no_agents':'לא הוגדרו agents',
+    'dlg.status.title':'סטטוס האצלה','dlg.dialog':'דיאלוג','dlg.msg.ph':'שליחת הודעה ל-agent...','dlg.send':'שליחה','dlg.stop':'עצירה',
+    'dlg.toast.delegated':'הואצל ל-{agent}','dlg.toast.stopped':'ההאצלה נעצרה',
   },
 };
 // `let`, not `const`: this page is reachable directly (/kanban, /schedule) in a
@@ -1064,6 +1190,11 @@ async function refresh(force=false){
         chains=await apiFetch(url).then(r=>r.json());
       }
     }catch(e){console.warn('chains fetch:',e);chains=[];}
+    // Fetch active delegations
+    try{
+      const delRes=await apiFetch('/api/delegate/status').then(r=>r.json());
+      _activeDelegations=delRes.delegations||[];
+    }catch{_activeDelegations=[];}
     renderBoard();
     // fr and he were missing from this chain and fell through to en-GB.
     const ts=new Date().toLocaleTimeString(UI_LOCALES[lang]||UI_LOCALES.en,{hour:'2-digit',minute:'2-digit'});
@@ -1075,7 +1206,8 @@ async function refresh(force=false){
 function startAutoRefresh(){
   clearTimeout(refreshTimer);
   const hasActive=tasks.some(t=>t.status==='in_progress'||t.status==='todo')
-    ||chains.some(c=>c.derived_status==='in_progress'||c.derived_status==='todo');
+    ||chains.some(c=>c.derived_status==='in_progress'||c.derived_status==='todo')
+    ||_activeDelegations.length>0;
   const delay=hasActive?5000:30000;
   refreshTimer=setTimeout(async()=>{await refresh(false);startAutoRefresh();},delay);
 }
@@ -1323,6 +1455,10 @@ function kbRunBadges(tk){
   if(tk.run_engine==='subscription')out.push({text:t('engine.sub'),title:t('tb.engine')});
   return out;
 }
+function kbDelBadge(tk){
+  const d=_activeDelegations.find(x=>x.taskId===tk.id);
+  return d?`<span class="badge badge-purple" style="cursor:pointer;display:inline-flex;align-items:center;gap:3px;" title="${escH(t('dlg.status.title'))}: ${escH(d.agentLabel)}" onclick="event.stopPropagation();openDelegationDetail('${escArg(d.id)}')"><span class="spinning" style="width:8px;height:8px;border-width:1.5px"></span> ⇗ ${escH(d.agentLabel)}</span>`:'';
+}
 function makeCard(tk){
   const el=document.createElement('div');el.className='card';el.dataset.id=tk.id;el.draggable=true;
   let sessBadge='';
@@ -1341,13 +1477,15 @@ function makeCard(tk){
   // Only while the board shows every project: inside one project the badge would repeat
   // the same name on every card and say nothing.
   const projBadge=(!curWorkdir&&tk.workdir)?`<span class="badge badge-proj" title="${escH(tk.workdir)}">${escH(projName(tk.workdir))}</span>`:'';
+  const delBadge=kbDelBadge(tk);
   el.innerHTML=`
     <div class="card-title">${escH(tk.title)}</div>
     ${tk.description?`<div class="card-desc">${escH(tk.description)}</div>`:''}
     <div class="card-foot">
-      ${projBadge}${pausedBadge}${authBadge}${schedBadge}${sessBadge}${cfgBadges}${retryBadge}
+      ${projBadge}${pausedBadge}${authBadge}${delBadge}${schedBadge}${sessBadge}${cfgBadges}${retryBadge}
       <span class="card-time">${relTime(tk.updated_at)}</span>
       <span class="card-actions">
+        <button class="cbtn" title="${t('dlg.btn.title')}" onclick="event.stopPropagation();openDelegateModalForTask('${tk.id}')">⇗</button>
         <button class="cbtn" title="${t('modal.edit')}" onclick="event.stopPropagation();openEditModal('${tk.id}')">✎</button>
         <button class="cbtn" title="${t('modal.delete')}" onclick="event.stopPropagation();confirmDelete('${tk.id}')">✕</button>
       </span>
@@ -1906,6 +2044,7 @@ async function openEditModal(id){
   setTimeout(()=>renderAttPreviews(),0);
   $i('modalFt').innerHTML=`
     <button class="btn btn-danger btn-sm" onclick="confirmDelete('${id}');closeModal()">${t('modal.delete')}</button>
+    <button class="btn btn-ghost btn-sm" onclick="openDelegateModalForTask('${id}')" title="${escH(t('dlg.btn.title'))}">⇗ ${t('dlg.btn')}</button>
     <div style="flex:1"></div>
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
     <button class="btn btn-primary btn-sm" onclick="saveTask()">${t('modal.save')}</button>`;
@@ -2296,6 +2435,213 @@ function confirmDelete(id){
 }
 function closeConfirm(){closeOverlay('confirmOv');}
 function closeModal(){closeOverlay('taskOv');}
+
+// ─── Delegation ───────────────────────────────────────────────────────────
+let _activeDelegations = [];
+let _externalAgents = {};
+const _agentIcons = { codex: '⚡', claude: '🟠', gemini: '🔷', openclaw: '🦞', pi: '🥧', hermes: '📨', 'cursor-agent': '▶', kimi: '🌙', aider: '🔧' };
+let _dlgTargetTaskId = null;
+let _dlgTargetWorkdir = null;
+let _activeDelegationDetailId = null;
+
+async function loadExternalAgents() {
+  try {
+    const res = await apiFetch('/api/external-agents').then(r => r.json());
+    _externalAgents = res.agents || {};
+  } catch {
+    _externalAgents = {};
+  }
+}
+
+function selectDlgMode(el, mode) {
+  el.parentElement.querySelectorAll('.dlg-mode-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  const radio = el.querySelector('input[type="radio"]');
+  if (radio) radio.checked = true;
+}
+
+function _dlgFillTuning(cfg) {
+  const tpl = String(cfg?.template || '');
+  const fill = (selId, wrapId, values) => {
+    const sel = $i(selId), wrap = $i(wrapId);
+    if (!sel || !wrap) return false;
+    const list = Array.isArray(values) ? values.filter(v => typeof v === 'string' && v.trim()) : [];
+    const placeholder = selId === 'dlgModel' ? 'model' : 'effort';
+    const usable = list.length > 0 && tpl.includes('{' + placeholder + '}');
+    sel.textContent = '';
+    if (usable) {
+      const auto = document.createElement('option');
+      auto.value = '';
+      auto.textContent = '— ' + (selId === 'dlgModel' ? t('tb.model') : t('tb.effort')) + ' —';
+      sel.appendChild(auto);
+      for (const v of list) {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v;
+        sel.appendChild(o);
+      }
+    }
+    wrap.classList.toggle('hidden', !usable);
+    return usable;
+  };
+  const m = fill('dlgModel', 'dlgModelWrap', cfg?.models);
+  const e = fill('dlgEffort', 'dlgEffortWrap', cfg?.efforts);
+  $i('dlgTuningRow')?.classList.toggle('hidden', !(m || e));
+}
+
+async function openDelegateModalForTask(taskId) {
+  const tk = tasks.find(t => t.id === taskId);
+  if (!tk) return;
+  _dlgTargetTaskId = taskId;
+  _dlgTargetWorkdir = tk.workdir || curWorkdir || '';
+  await loadExternalAgents();
+  const container = $i('dlgAgentCards');
+  if (container) {
+    container.textContent = '';
+    const agents = Object.entries(_externalAgents).filter(([, cfg]) => !!String(cfg?.template || '').trim());
+    if (agents.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'dlg-agent-empty';
+      empty.textContent = t('dlg.no_agents');
+      container.appendChild(empty);
+    } else {
+      let first = true;
+      for (const [id, cfg] of agents) {
+        const card = document.createElement('div');
+        card.className = 'dlg-agent-card' + (first ? ' selected' : '');
+        card.dataset.agentId = id;
+        card.onclick = () => {
+          container.querySelectorAll('.dlg-agent-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          _dlgFillTuning(cfg);
+        };
+        const icon = document.createElement('span');
+        icon.className = 'dlg-agent-icon';
+        icon.textContent = _agentIcons[id] || '🤖';
+        const label = document.createElement('span');
+        label.className = 'dlg-agent-label';
+        label.textContent = cfg.label || id;
+        card.appendChild(icon);
+        card.appendChild(label);
+        container.appendChild(card);
+        if (first) {
+          _dlgFillTuning(cfg);
+          first = false;
+        }
+      }
+    }
+  }
+  const taskPrompt = (tk.title + (tk.description ? '\n\n' + tk.description : '')).trim();
+  const taskInput = $i('dlgTask');
+  if (taskInput) taskInput.value = taskPrompt;
+  closeModal();
+  openOverlay('delegateOv', { initialFocus: '#dlgTask', onEscape: closeDelegateModal });
+}
+
+function closeDelegateModal() {
+  closeOverlay('delegateOv');
+  _dlgTargetTaskId = null;
+  _dlgTargetWorkdir = null;
+}
+
+async function submitDelegation() {
+  const agentId = $i('dlgAgentCards')?.querySelector('.dlg-agent-card.selected')?.dataset?.agentId;
+  const task = $i('dlgTask')?.value?.trim();
+  const mode = document.querySelector('input[name="dlgMode"]:checked')?.value || 'handoff';
+  const model = $i('dlgModel')?.value || undefined;
+  const effort = $i('dlgEffort')?.value || undefined;
+
+  if (!agentId) { toast(t('dlg.no_agents'), true); return; }
+  if (!task) { toast(t('modal.name'), true); return; }
+
+  try {
+    const r = await apiFetch('/api/delegate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agentId,
+        mode,
+        task,
+        taskId: _dlgTargetTaskId || undefined,
+        workdir: _dlgTargetWorkdir || undefined,
+        model,
+        effort,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      toast(d.error || t('toast.err'), true);
+      return;
+    }
+    toast(t('dlg.toast.delegated').replace('{agent}', d.agent || agentId));
+    closeDelegateModal();
+    await refresh(true);
+  } catch (err) {
+    toast(t('toast.err') + err.message, true);
+  }
+}
+
+async function openDelegationDetail(delegationId) {
+  const del = _activeDelegations.find(d => d.id === delegationId);
+  if (!del) return;
+  _activeDelegationDetailId = delegationId;
+  $i('dlgDetailTitle').textContent = `${t('dlg.status.title')}: ${del.agentLabel}`;
+  const metaEl = $i('dlgDetailMeta');
+  if (metaEl) {
+    metaEl.innerHTML = `
+      <span class="badge badge-purple">${escH(del.agentLabel)}</span>
+      <span class="badge badge-muted">${escH(del.mode)}</span>
+      <span class="card-time">${relTime(new Date(del.startedAt).toISOString())}</span>
+    `;
+  }
+  await updateDelegationDialogView(delegationId);
+  openOverlay('delegationDetailOv', { initialFocus: '#dlgMsgInp', onEscape: closeDelegationDetail });
+}
+
+async function updateDelegationDialogView(delegationId) {
+  try {
+    const res = await apiFetch(`/api/delegate/${delegationId}/dialog`).then(r => r.json());
+    const box = $i('dlgDetailBox');
+    if (box) {
+      box.textContent = res.dialog || '...';
+      box.scrollTop = box.scrollHeight;
+    }
+  } catch {}
+}
+
+function closeDelegationDetail() {
+  closeOverlay('delegationDetailOv');
+  _activeDelegationDetailId = null;
+}
+
+async function sendDelegationMsg() {
+  if (!_activeDelegationDetailId) return;
+  const inp = $i('dlgMsgInp');
+  const msg = inp?.value?.trim();
+  if (!msg) return;
+  try {
+    await apiFetch(`/api/delegate/${_activeDelegationDetailId}/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg }),
+    });
+    if (inp) inp.value = '';
+    await updateDelegationDialogView(_activeDelegationDetailId);
+  } catch (e) {
+    toast(t('toast.err') + e.message, true);
+  }
+}
+
+async function stopActiveDelegation() {
+  if (!_activeDelegationDetailId) return;
+  try {
+    await apiFetch(`/api/delegate/${_activeDelegationDetailId}`, { method: 'DELETE' });
+    toast(t('dlg.toast.stopped'));
+    closeDelegationDetail();
+    await refresh(true);
+  } catch (e) {
+    toast(t('toast.err') + e.message, true);
+  }
+}
 
 (async()=>{
   // Update project search placeholder with translation
