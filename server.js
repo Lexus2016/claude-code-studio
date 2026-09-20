@@ -445,6 +445,18 @@ function killByPid(pid) {
   } catch {} // Process may already be dead (ESRCH)
 }
 
+// Test whether a process with the given PID is currently running.
+function isPidAlive(pid) {
+  const n = Number(pid);
+  if (!Number.isInteger(n) || n <= 0) return false;
+  try {
+    process.kill(n, 0);
+    return true;
+  } catch (e) {
+    return e.code === 'EPERM'; // Process exists but owned by different user
+  }
+}
+
 [WORKDIR, SKILLS_DIR].forEach(d => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 });
@@ -2869,11 +2881,18 @@ setTimeout(() => {
 
 // Watchdog: detect tasks stuck in 'in_progress' with no live worker process.
 // Runs every 60s. If a task is in_progress in DB but not in taskRunning (memory),
-// the worker died without cleanup — recover the task.
+// or if its worker_pid died, recover the task.
 setInterval(() => {
   const inProg = stmts.getInProgressTasks.all();
   for (const task of inProg) {
-    if (taskRunning.has(task.id)) continue; // worker is alive
+    if (taskRunning.has(task.id)) {
+      if (task.worker_pid && !isPidAlive(task.worker_pid)) {
+        log.warn(`[watchdog] task "${task.title}" (${task.id}) worker_pid ${task.worker_pid} died, evicting from taskRunning`);
+        taskRunning.delete(task.id);
+      } else {
+        continue; // worker is alive
+      }
+    }
     // Worker is dead — recover
     log.warn(`[watchdog] task "${task.title}" (${task.id}) stuck in_progress with no live worker, recovering`);
     if (task.worker_pid) killByPid(task.worker_pid);

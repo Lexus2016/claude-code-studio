@@ -7382,10 +7382,10 @@ function connect() {
     loadFiles();
     loadHist();
     loadActivity();
-    // On page refresh: currentSessionId is null (restoreUIState doesn't call loadSess),
-    // but activeTabId may point to a real session — load it now so history appears.
-    if (!currentSessionId && activeTabId && openTabs.find(t => t.id === activeTabId && !t.isNew)) {
-      loadSess(activeTabId); // loadSess sets currentSessionId and sends start_session at the end
+    // On page refresh or reconnect after sleep/drop:
+    // loadSess syncs any tasks or final messages that finished while away (#107)
+    if (activeTabId && openTabs.find(t => t.id === activeTabId && !t.isNew)) {
+      loadSess(activeTabId);
     } else if (currentSessionId && ws.readyState === 1) {
       // Re-attach to active session after a reconnect
       ws.send(JSON.stringify({ type: 'start_session', sessionId: currentSessionId, mode: curMode, agentMode: curAgent, model: curModel}));
@@ -7420,6 +7420,12 @@ function connect() {
 
 // Stop reconnect loop on page unload to avoid pointless connections
 window.addEventListener('beforeunload', () => { _intentionalClose = true; if (_reconnectTimer) clearTimeout(_reconnectTimer); });
+window.addEventListener('online', () => {
+  if (!ws || ws.readyState !== 1) {
+    if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+    if (!_intentionalClose) connect();
+  }
+});
 
 // Self-heal on refocus. While a tab/window is hidden, the browser throttles or
 // suspends it: a queued task that dequeues and starts streaming in the background
@@ -7447,8 +7453,16 @@ document.addEventListener('visibilitychange', () => {
     if (!_intentionalClose) connect();
     return;
   }
-  // Socket alive — replay any buffered stream we may have missed while throttled.
-  if (currentSessionId) ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: currentSessionId }));
+  // Socket alive — replay any buffered stream we may have missed while throttled,
+  // and resync session state if a background task completed while hidden (#107).
+  if (currentSessionId) {
+    ws.send(JSON.stringify({ type: 'subscribe_session', sessionId: currentSessionId }));
+    fetch(`/api/sessions/${currentSessionId}`).then(r => r.json()).then(d => {
+      if (!d.isChatRunning && !d.hasRunningTask && openTabs.find(t => t.id === currentSessionId)?.generating) {
+        loadSess(currentSessionId);
+      }
+    }).catch(() => {});
+  }
   subscribeAllTabs();
   // Same recovery for the visible terminal tab, if any — its own WebSocket is
   // independent of the chat socket above and dies the same way while backgrounded.

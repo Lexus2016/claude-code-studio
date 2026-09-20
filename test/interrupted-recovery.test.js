@@ -356,5 +356,35 @@ check('setLastUserMsg is armed from processChat', /stmts\.setLastUserMsg\.run\(u
 try { db.close(); } catch {}
 for (const suffix of ['', '-wal', '-shm']) { try { fs.unlinkSync(dbPath + suffix); } catch {} }
 
+// ─── 6. Watchdog and Reconnect State Synchronization (#107) ─────────────────
+console.log('\nwatchdog and reconnect state synchronization (#107):');
+{
+  const srvPath = path.join(__dirname, '..', 'server.js');
+  const srvSrc = fs.readFileSync(srvPath, 'utf8');
+  check('server.js defines isPidAlive helper', /function isPidAlive\(pid\)/.test(srvSrc), true);
+  check('watchdog checks isPidAlive before treating in_progress task as alive',
+    /taskRunning\.has\(task\.id\)[\s\S]{0,200}isPidAlive\(task\.worker_pid\)/.test(srvSrc), true);
+  check('watchdog evicts dead worker_pid from taskRunning',
+    /taskRunning\.delete\(task\.id\)/.test(srvSrc), true);
+
+  const kbPath = path.join(__dirname, '..', 'public', 'kanban.html');
+  const kbSrc = fs.readFileSync(kbPath, 'utf8');
+  check('kanban.html listens to visibilitychange for self-healing after sleep',
+    /document\.addEventListener\('visibilitychange'/.test(kbSrc), true);
+  check('kanban.html listens to window focus',
+    /window\.addEventListener\('focus'/.test(kbSrc), true);
+  check('kanban.html listens to window online',
+    /window\.addEventListener\('online'/.test(kbSrc), true);
+
+  const idxPath = path.join(__dirname, '..', 'public', 'index.html');
+  const idxSrc = fs.readFileSync(idxPath, 'utf8');
+  check('index.html calls loadSess on activeTabId on reconnect',
+    /loadSess\(activeTabId\)/.test(idxSrc), true);
+  check('index.html listens to window online for reconnect',
+    /window\.addEventListener\('online'/.test(idxSrc), true);
+  check('index.html resyncs session if task finished while hidden',
+    /!d\.isChatRunning && !d\.hasRunningTask[\s\S]{0,100}loadSess\(currentSessionId\)/.test(idxSrc), true);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
