@@ -498,6 +498,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
           <label class="lbl" data-i18n="tb.effort">Effort</label>
           <select id="dlgEffort" class="sel"></select>
         </div>
+        <div class="dlg-hint" style="grid-column:1/-1;font-size:11px;color:var(--muted)" data-i18n="dlg.tuning.hint">Options come from this agent's own catalog (models / efforts in its config). “—” leaves the choice to the agent.</div>
       </div>
       <div>
         <label class="lbl" data-i18n="dlg.mode">Mode</label>
@@ -608,9 +609,9 @@ const TR = {
     'dlg.title':'Делегувати агенту','dlg.btn':'Делегувати','dlg.btn.title':'Делегувати зовнішньому агенту',
     'dlg.agent':'Агент','dlg.mode':'Режим','dlg.mode.handoff':'Передача','dlg.mode.handoff.desc':'Відкриває термінал, ви продовжуєте роботу там.',
     'dlg.mode.sync':'Синхронізація','dlg.mode.sync.desc':'Паралельна робота. Агенти спілкуються через DIALOG.md.','dlg.task':'Завдання',
-    'dlg.task.ph':'Що має зробити агент...','dlg.cancel':'Скасувати','dlg.submit':'Делегувати','dlg.no_agents':'Немає налаштованих агентів',
+    'dlg.task.ph':'Що має зробити агент...','dlg.cancel':'Скасувати','dlg.submit':'Делегувати','dlg.no_agents':'Немає агентів, яким можна делегувати. На головній сторінці відкрийте розділ «Агенти» в бічній панелі й додайте CLI-агента (Codex, Gemini…) з шаблоном команди.',
     'dlg.status.title':'Стан делегування','dlg.dialog':'Діалог','dlg.msg.ph':'Надіслати повідомлення агенту...','dlg.send':'Надіслати','dlg.stop':'Зупинити',
-    'dlg.toast.delegated':'Делеговано {agent}','dlg.toast.stopped':'Делегування зупинено',
+    'dlg.tuning.hint':'Варіанти — з каталогу самого агента (models / efforts у його конфігу). «—» лишає вибір агенту.','dlg.toast.delegated':'Делеговано {agent} — стежте за ходом через значок ⇗ на картці','dlg.toast.stopped':'Делегування зупинено',
   },
   en: {
     'modal.task_cfg':'Run settings','modal.task_cfg_note':'Changes are saved and affect the next run, not the one in progress. Which dials take effect depends on the task engine and on whether it already has a session.',
@@ -662,9 +663,9 @@ const TR = {
     'dlg.title':'Delegate to Agent','dlg.btn':'Delegate','dlg.btn.title':'Delegate to external agent',
     'dlg.agent':'Agent','dlg.mode':'Mode','dlg.mode.handoff':'Handoff','dlg.mode.handoff.desc':'Full transfer. Opens terminal, you continue working there.',
     'dlg.mode.sync':'Sync','dlg.mode.sync.desc':'Parallel work. Both agents active, communicate via dialog file.','dlg.task':'Task',
-    'dlg.task.ph':'What should the agent do...','dlg.cancel':'Cancel','dlg.submit':'Delegate','dlg.no_agents':'No agents configured (add via Settings)',
+    'dlg.task.ph':'What should the agent do...','dlg.cancel':'Cancel','dlg.submit':'Delegate','dlg.no_agents':'No agent can take a task yet. On the main page, open the Agents section in the sidebar and add a CLI agent (Codex, Gemini…) with a command template.',
     'dlg.status.title':'Delegation Status','dlg.dialog':'Dialog','dlg.msg.ph':'Send message to agent...','dlg.send':'Send','dlg.stop':'Stop',
-    'dlg.toast.delegated':'Delegated to {agent}','dlg.toast.stopped':'Delegation stopped',
+    'dlg.tuning.hint':'Options come from this agent\'s own catalog (models / efforts in its config). “—” leaves the choice to the agent.','dlg.toast.delegated':'Delegated to {agent} — follow it via the ⇗ badge on the card','dlg.toast.stopped':'Delegation stopped',
   },
   ru: {
     'modal.task_cfg':'Параметры запуска','modal.task_cfg_note':'Изменения сохраняются и влияют на следующий запуск, а не на текущий. Какие именно настройки подействуют, зависит от движка задачи и от того, есть ли у неё уже сессия.',
@@ -716,9 +717,9 @@ const TR = {
     'dlg.title':'Делегировать агенту','dlg.btn':'Делегировать','dlg.btn.title':'Делегировать внешнему агенту',
     'dlg.agent':'Агент','dlg.mode':'Режим','dlg.mode.handoff':'Передача','dlg.mode.handoff.desc':'Полная передача. Откроет терминал, вы продолжите работу там.',
     'dlg.mode.sync':'Синхронизация','dlg.mode.sync.desc':'Параллельная работа. Оба агента активны, общаются через файл диалога.','dlg.task':'Задача',
-    'dlg.task.ph':'Что должен сделать агент...','dlg.cancel':'Отмена','dlg.submit':'Делегировать','dlg.no_agents':'Нет настроенных агентов',
+    'dlg.task.ph':'Что должен сделать агент...','dlg.cancel':'Отмена','dlg.submit':'Делегировать','dlg.no_agents':'Нет агентов, которым можно делегировать. На главной странице откройте раздел «Агенты» в боковой панели и добавьте CLI-агента (Codex, Gemini…) с шаблоном команды.',
     'dlg.status.title':'Состояние делегирования','dlg.dialog':'Диалог','dlg.msg.ph':'Отправить сообщение агенту...','dlg.send':'Отправить','dlg.stop':'Остановить',
-    'dlg.toast.delegated':'Делегировано {agent}','dlg.toast.stopped':'Делегирование остановлено',
+    'dlg.tuning.hint':'Варианты — из каталога самого агента (models / efforts в его конфиге). «—» оставляет выбор агенту.','dlg.toast.delegated':'Делегировано {agent} — следите за ходом через значок ⇗ на карточке','dlg.toast.stopped':'Делегирование остановлено',
   },
   fr: {
     'modal.task_cfg':'Paramètres d exécution','modal.task_cfg_note':'Les modifications sont enregistrées et affectent le prochain lancement, pas celui en cours. Les réglages qui prennent effet dépendent du moteur de la tâche et du fait qu elle ait déjà une session.',
@@ -770,9 +771,9 @@ const TR = {
     'dlg.title':'Déléguer à un agent','dlg.btn':'Déléguer','dlg.btn.title':'Déléguer à un agent externe',
     'dlg.agent':'Agent','dlg.mode':'Mode','dlg.mode.handoff':'Transfert','dlg.mode.handoff.desc':'Transfert complet. Ouvre un terminal, vous continuez le travail là-bas.',
     'dlg.mode.sync':'Synchro','dlg.mode.sync.desc':'Travail en parallèle. Communication via fichier de dialogue.','dlg.task':'Tâche',
-    'dlg.task.ph':"Que doit faire l'agent...",'dlg.cancel':'Annuler','dlg.submit':'Déléguer','dlg.no_agents':'Aucun agent configuré',
+    'dlg.task.ph':"Que doit faire l'agent...",'dlg.cancel':'Annuler','dlg.submit':'Déléguer','dlg.no_agents':'Aucun agent ne peut encore recevoir de tâche. Sur la page principale, ouvrez la section Agents de la barre latérale et ajoutez un agent CLI (Codex, Gemini…) avec un modèle de commande.',
     'dlg.status.title':'Statut de la délégation','dlg.dialog':'Dialogue','dlg.msg.ph':"Envoyer un message à l'agent...",'dlg.send':'Envoyer','dlg.stop':'Arrêter',
-    'dlg.toast.delegated':'Délégué à {agent}','dlg.toast.stopped':'Délégation arrêtée',
+    'dlg.tuning.hint':'Les options viennent du catalogue de cet agent (models / efforts dans sa config). « — » laisse le choix à l\'agent.','dlg.toast.delegated':'Délégué à {agent} — suivez-le via le badge ⇗ de la carte','dlg.toast.stopped':'Délégation arrêtée',
   },
   he: {
     'modal.task_cfg':'הגדרות הרצה','modal.task_cfg_note':'השינויים נשמרים ומשפיעים על ההרצה הבאה, לא על זו שרצה כעת. אילו הגדרות ייכנסו לתוקף תלוי במנוע המשימה ובשאלה אם כבר יש לה סשן.',
@@ -824,9 +825,9 @@ const TR = {
     'dlg.title':'האצלה ל-Agent','dlg.btn':'האצלה','dlg.btn.title':'האצלה ל-agent חיצוני',
     'dlg.agent':'Agent','dlg.mode':'מצב','dlg.mode.handoff':'העברה','dlg.mode.handoff.desc':'העברה מלאה. פותח טרמינל, אתם ממשיכים לעבוד שם.',
     'dlg.mode.sync':'סנכרון','dlg.mode.sync.desc':'עבודה מקבילה. שני ה-agents פעילים.','dlg.task':'משימה',
-    'dlg.task.ph':'מה ה-agent צריך לעשות...','dlg.cancel':'ביטול','dlg.submit':'האצלה','dlg.no_agents':'לא הוגדרו agents',
+    'dlg.task.ph':'מה ה-agent צריך לעשות...','dlg.cancel':'ביטול','dlg.submit':'האצלה','dlg.no_agents':'אין עדיין סוכן שיכול לקבל משימה. בדף הראשי פתחו את אזור הסוכנים בסרגל הצד והוסיפו סוכן CLI (Codex, Gemini…) עם תבנית פקודה.',
     'dlg.status.title':'סטטוס האצלה','dlg.dialog':'דיאלוג','dlg.msg.ph':'שליחת הודעה ל-agent...','dlg.send':'שליחה','dlg.stop':'עצירה',
-    'dlg.toast.delegated':'הואצל ל-{agent}','dlg.toast.stopped':'ההאצלה נעצרה',
+    'dlg.tuning.hint':'האפשרויות מגיעות מהקטלוג של הסוכן עצמו (models / efforts בהגדרות שלו). „—” משאיר את הבחירה לסוכן.','dlg.toast.delegated':'הואצל ל-{agent} — עקבו דרך התג ⇗ בכרטיס','dlg.toast.stopped':'ההאצלה נעצרה',
   },
 };
 // `let`, not `const`: this page is reachable directly (/kanban, /schedule) in a
@@ -2448,8 +2449,10 @@ let _activeDelegationDetailId = null;
 
 async function loadExternalAgents() {
   try {
+    // GET /api/external-agents answers the agent MAP itself (the SPA reads it the same
+    // way). Reading `.agents` off it made the list permanently empty here (#116).
     const res = await apiFetch('/api/external-agents').then(r => r.json());
-    _externalAgents = res.agents || {};
+    _externalAgents = (res && typeof res === 'object' && !Array.isArray(res) && !res.error) ? res : {};
   } catch {
     _externalAgents = {};
   }
