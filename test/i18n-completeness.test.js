@@ -226,7 +226,7 @@ console.log('\nno hardcoded user-facing strings:');
     '{"mcpServers":{...}}',                  // JSON snippet shown as sample config
     '/check', '/review',                     // literal slash-command names
     'EN', 'UK', 'RU', 'FR', 'HE',            // ISO language codes in the language picker
-    'Ctrl', 'Shift', 'Enter', 'Esc',         // keyboard key caps, printed on the hardware
+    'Ctrl', 'Shift', 'Enter', 'Esc', 'Tab',  // keyboard key caps, printed on the hardware
     // Sample values inside placeholders — they illustrate a format, they are not prose.
     'my-server',                             // example MCP server id
     'My Server',                             // example MCP server display name
