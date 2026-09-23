@@ -103,5 +103,34 @@ check('kanban.html debounces self-heal reconnect events', () => {
   assert.ok(kbSrc.includes('now - _lastKbResync < 1500'), 'missing debounce timing check');
 });
 
-if (failed) { console.log(`\n${failed} test(s) failed`); process.exit(1); }
-console.log('\nAll kanban-delegation tests passed');
+// #116 — the board read `res.agents` off a response that IS the agent map, so the
+// delegate dialog said "no agents" on every install. Run the real function against
+// the exact shape the server sends, rather than matching its source text.
+async function checkAgentListShape() {
+  const vm = require('node:vm');
+  assert.ok(srvSrc.includes("res.json(config.externalAgents || {});"),
+    'GET /api/external-agents no longer answers the bare map — update the board reader with it');
+  const start = kbSrc.indexOf('async function loadExternalAgents(');
+  const end = kbSrc.indexOf('\n}\n', start) + 3;
+  assert.ok(start >= 0, 'loadExternalAgents() not found');
+  const run = async (payload) => {
+    const ctx = { apiFetch: async () => ({ json: async () => payload }), _externalAgents: null };
+    vm.createContext(ctx);
+    vm.runInContext(kbSrc.slice(start, end) + '\nthis.__p = loadExternalAgents();', ctx);
+    await ctx.__p;
+    // JSON round trip: an object built in another vm realm fails deepStrictEqual on prototype alone.
+    return JSON.parse(vm.runInContext('JSON.stringify(_externalAgents)', ctx));
+  };
+  const map = { codex: { label: 'Codex', template: 'codex exec {prompt}' } };
+  assert.deepStrictEqual(Object.keys(await run(map)), ['codex'], 'a configured agent is not listed');
+  assert.deepStrictEqual(await run({ error: 'boom' }), {}, 'an error body is read as an agent map');
+  assert.deepStrictEqual(await run([]), {}, 'an array is read as an agent map');
+}
+
+checkAgentListShape()
+  .then(() => console.log('  ✓ kanban.html reads GET /api/external-agents as the agent map (#116)'))
+  .catch(e => { failed++; console.log(`  ✗ kanban.html reads GET /api/external-agents as the agent map (#116)\n    ${e.message}`); })
+  .finally(() => {
+    if (failed) { console.log(`\n${failed} test(s) failed`); process.exit(1); }
+    console.log('\nAll kanban-delegation tests passed');
+  });
