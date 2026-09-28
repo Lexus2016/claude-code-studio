@@ -27,6 +27,8 @@ data/uploads/
 
 # Environment
 .env
+# Local macOS signing/notarization settings (docs/electron-desktop/MAC-SIGNING.md)
+electron-builder.env
 
 # Workspace (user files, Claude working dir)
 workspace/

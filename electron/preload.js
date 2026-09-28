@@ -16,5 +16,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     check: () => ipcRenderer.invoke('update:check'),
     start: () => ipcRenderer.invoke('update:start'),
     onLog: (cb) => ipcRenderer.on('update:log', (_e, line) => cb(line)),
+    // A failure after start() has already answered (Squirrel.Mac verifies the signature
+    // of the downloaded update only then).
+    onFailed: (cb) => ipcRenderer.on('update:failed', (_e, message) => cb(message)),
   },
 });

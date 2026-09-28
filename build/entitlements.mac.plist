@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!-- The three keys electron-builder's own template carries — the set it signs with
+         when no entitlements file exists. V8 needs JIT under the hardened runtime. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <!-- The reason this file exists. server.js drives Terminal.app through osascript
+         (`tell application "Terminal" to do script …`). Under the hardened runtime the
+         Automation check is made against THIS app, the responsible process, not against
+         osascript — without the key the event is refused (-1743) with no prompt at all.
+         Used for both the app and its helpers (entitlementsInherit): the server runs in
+         a utilityProcess, i.e. inside a Helper bundle. -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+  </dict>
+</plist>

@@ -84,7 +84,7 @@ window); a separate Electron fork of the app (duplicates ~17k LOC).
   bridge (`checkUpdate / startUpdate / onUpdateLog / getVersion`) consumed by the SPA's update banner.
 - `electron/update-macos.js` — **non-security-critical** helper: locate `brew`, spawn a detached
   `brew upgrade --cask` + relaunch (§6). No crypto, no bundle-swapping of our own.
-- `electron-builder.yml` — targets: macOS dmg + zip (x64 + arm64), Windows nsis, Linux
+- `electron-builder.yml` — targets: macOS dmg + zip (arm64 only since 2026-09 — see `MAC-SIGNING.md`), Windows nsis, Linux
   AppImage + deb; `asarUnpack` for spawned helpers; `publish: github`.
 - `homebrew-tap/Casks/claude-code-studio.rb` — Cask (§7), with `xattr -cr` postflight.
 - `package.json` additions — `devDependencies`: `electron`, `electron-builder`,
@@ -115,6 +115,10 @@ This is additive UI, not a change to existing web behavior.
 ---
 
 ## 6. Update Experience — in-app, GUI-driven (unsigned, tiered, zero custom crypto)
+
+> **Superseded for macOS (2026-09).** The app is now Developer ID signed and notarized, and
+> macOS updates through `electron-updater` (Squirrel.Mac) like Windows/Linux. The brew-driven
+> flow below is history. See [`MAC-SIGNING.md`](MAC-SIGNING.md).
 
 Updating is a **first-class GUI feature**: the desktop user always sees their version and whether
 a newer one exists, and updates without leaving the app. No Apple signing, no custom crypto.
@@ -171,10 +175,10 @@ bundle-swapping. Homebrew's `xattr -cr` postflight handles Gatekeeper on macOS.
 | 6 | Disabled on desktop | telegram bot, tunnel-manager, remote SSH — off by default |
 | 7 | `claude` CLI | **Require + friendly auto-prompt**: detect at startup; if missing, show a friendly window with install instructions/link. No bundling. |
 | 8 | **Framework** | **Electron** (not Tauri — §2; our backend is a multi-process Node app, not a single binary). |
-| 9 | **Code signing** | **None.** Unsigned on all 3 OSes. Door open to Apple cert later. |
-| 10 | **Auto-update** | **Tiered, unsigned, no custom crypto: Win/Linux = `electron-updater`; macOS = app-triggered `brew upgrade --cask` (detached) + relaunch** (§6). Not brew-managed → "install via Homebrew" guidance (no direct-dmg update path). |
-| 11 | macOS distribution channels | **Homebrew Cask — the only supported macOS channel.** dmg/zip is built solely as the cask's source artifact, not a promoted direct install. Cask mirrors `homebrew-tap/Casks/localguard.rb`: `xattr -cr` postflight, **`auto_updates false`** (brew *is* the macOS updater). |
-| 12 | Update UX | **In-app GUI: version banner + [Update] button + live report; [Copy] + [Open Terminal] command fallback; opt-in auto-update (default OFF).** Driven by preload `window.electronAPI`; absent (and invisible) in web mode. |
+| 9 | **Code signing** | **macOS: Developer ID + notarization, arm64 only** (2026-09, [`MAC-SIGNING.md`](MAC-SIGNING.md)). Windows/Linux: unsigned. |
+| 10 | **Auto-update** | **`electron-updater` on every OS** (macOS = Squirrel.Mac, signed updates only). Replaced the app-triggered `brew upgrade --cask` in 2026-09 — [`MAC-SIGNING.md`](MAC-SIGNING.md). |
+| 11 | macOS distribution channels | **The signed, notarized `.dmg` from GitHub Releases.** The Homebrew cask is kept only as a transition path for installs that still update through brew, then retired (§9). |
+| 12 | Update UX | **In-app GUI: version banner + [Update] button + live download progress; "move the app to Applications" when macOS cannot replace the bundle in place.** Driven by preload `window.electronAPI`; absent (and invisible) in web mode. |
 
 ---
 
@@ -195,6 +199,10 @@ bundle-swapping. Homebrew's `xattr -cr` postflight handles Gatekeeper on macOS.
 ---
 
 ## 9. macOS Distribution via Homebrew Tap (Cask) — the only supported macOS channel
+
+> **Transitional since 2026-09.** Kept only so installs from before the signed release can reach
+> it through their built-in `brew upgrade`; retired about a month later. See
+> [`MAC-SIGNING.md`](MAC-SIGNING.md).
 
 Tap repo `homebrew-claude-code-studio`, file `Casks/claude-code-studio.rb`:
 `brew tap <owner>/claude-code-studio && brew install --cask claude-code-studio`. Thin wrapper
@@ -234,7 +242,6 @@ After all phases, the web version behaves exactly as today.
 - Switching the desktop build to Tauri (§2 — wrong fit for a multi-process Node backend).
 - A custom in-app macOS self-updater with own-key signing (replaced by brew-triggered upgrade).
 - A supported direct-`.dmg` install/update channel on macOS (the dmg is a cask source artifact only).
-- Apple code signing / notarization (revisit only if first-launch friction proves unacceptable).
 - Rewriting any backend logic; splitting `public/index.html` (stays single-file).
 - Bundling the `claude` CLI.
 - Desktop variants of telegram/tunnel/SSH server features.
