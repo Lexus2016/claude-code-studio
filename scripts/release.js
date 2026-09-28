@@ -13,6 +13,12 @@
  *   2. Commits: "chore: release v5.19.0"
  *   3. Tags: v5.19.0
  *   4. Pushes commit + tag → GitHub Actions creates the Release automatically
+ *      and builds the Windows/Linux desktop apps (release-desktop.yml)
+ *
+ * Before it: commit the CHANGELOG.md section and the README announcement line —
+ * the tree must be clean apart from package.json.
+ * After it: `npm run release:mac` on the Mac that holds the Developer ID
+ * certificate. macOS is never built in CI (docs/electron-desktop/MAC-SIGNING.md).
  */
 
 'use strict';
