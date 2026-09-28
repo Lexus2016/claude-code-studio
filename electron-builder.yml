@@ -54,15 +54,35 @@ files:
   - "!tasks/**"
   - "!test-snapshot*"
   - "!test-*.sh"
+  # Local signing/notarization settings (docs/electron-desktop/MAC-SIGNING.md). Read
+  # by the electron-builder CLI from the working directory; never part of the app.
+  - "!electron-builder.env"
 
 directories:
   output: dist-desktop
   buildResources: build
 
 mac:
-  target: [dmg, zip]
+  # Apple Silicon only. macOS 27 no longer runs on Intel, and Homebrew — the only
+  # supported macOS channel — moved Intel to Tier 3 in September 2026. The arch is
+  # pinned here, not just on the CI command line, so a local `npm run dist:mac` on
+  # any host produces the same artefact the release does.
+  target:
+    - target: dmg
+      arch: arm64
+    - target: zip
+      arch: arm64
   category: public.app-category.developer-tools
   artifactName: "claude-code-studio-${version}-${arch}.${ext}"
+  # Developer ID signing + notarization — docs/electron-desktop/MAC-SIGNING.md.
+  # The identity is auto-discovered from the keychain (CSC_LINK in CI); notarization
+  # runs only after a successful signature and only when APPLE_* credentials are set.
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    # Shown by the Automation prompt the first time the app opens a command in Terminal.
+    NSAppleEventsUsageDescription: "Claude Code Studio opens commands in Terminal on your request."
 
 win:
   target: [nsis]

@@ -1,43 +1,55 @@
-// Regression guard for the macOS in-app update (electron/main.js).
+// The desktop app's in-app update (electron/main.js + the banner in public/index.html).
 //
-// History: on 2026-08-20 v7.2.2 shipped and the desktop app went into an update loop —
-// it announced 7.2.2, quit, relaunched at 7.2.1 and announced 7.2.2 again. update.log
-// recorded four attempts (15:50–15:53) all ending in "Not upgrading …, the latest
-// version is already installed" followed by OK. Two independent defects:
+// Every OS now updates through electron-updater. On macOS that is Squirrel.Mac, which
+// needs a Developer ID signed app (docs/electron-desktop/MAC-SIGNING.md) and replaced
+// the app-triggered `brew upgrade --cask`. What this file pins is where Squirrel fails
+// quietly, and where the brew flow it replaced used to loop:
 //
-//   1. checkUpdate() read the GitHub release, which is published the moment the tag
-//      lands; the Homebrew cask — the only macOS install path — is bumped ~8 minutes
-//      later, when the mac build finishes. The app offered what brew could not install.
-//   2. The upgrade shell decided success from `brew upgrade`'s exit code, but brew
-//      exits 0 when it has nothing to do. A no-op was reported as OK, so the failure
-//      notification never fired and the app silently reopened at the same version.
-//
-// This test EXECUTES the real shell that main.js builds, against a fake brew, rather
-// than pattern-matching its source — so it also catches a rewritten condition, a
-// dropped notification or a lost relaunch, not just a literal restore of the old line.
+//   1. Squirrel.Mac closes every window BEFORE it quits. The close-to-tray handler
+//      hides a window unless app.isQuiting is set, which cancels that quit: the
+//      update is staged, the app never restarts, and the banner spins forever.
+//   2. Squirrel replaces the bundle in place. It cannot do that from a mounted dmg or
+//      from a Gatekeeper-translocated copy (both read-only), so it has to be caught
+//      before the download and turned into "move the app to Applications".
+//   3. electron-updater's `error` event fires for a failed CHECK too (latest-mac.yml
+//      is uploaded ~8 min after the release is published). Only an error during an
+//      install the user started may turn the banner into "Update failed".
+//   4. Listeners are registered once. Registering them per click stacked a new set on
+//      every Retry, so the second attempt logged and installed twice.
 //
 // Run: node test/update-flow.test.js
+'use strict';
 const assert = require('assert');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { EventEmitter } = require('events');
 
 let pass = 0, fail = 0;
+const pending = [];
 function check(label, fn) {
-  try { fn(); pass++; console.log(`  ok   ${label}`); }
-  catch (e) { fail++; console.error(`  FAIL ${label} — ${e.message}`); }
+  const done = (e) => {
+    if (e) { fail++; console.error(`  FAIL ${label} — ${e.message}`); }
+    else { pass++; console.log(`  ok   ${label}`); }
+  };
+  try {
+    const r = fn();
+    if (r && typeof r.then === 'function') pending.push(r.then(() => done(), done));
+    else done();
+  } catch (e) { done(e); }
 }
 
-const MAIN = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+const ROOT = path.join(__dirname, '..');
+const MAIN = fs.readFileSync(path.join(ROOT, 'electron', 'main.js'), 'utf8');
+const PRELOAD = fs.readFileSync(path.join(ROOT, 'electron', 'preload.js'), 'utf8');
+const HTML = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+// Code only: the comments explain what was removed and would match its names.
+const MAIN_CODE = MAIN.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
 
-// ─── Extract a top-level function by name and make it callable ──────────────
+// ─── Extract a top-level function by name ────────────────────────────────────
 // A guard that cannot find its target must fail loudly, never quietly pass.
-function extract(name) {
-  const at = MAIN.indexOf(`function ${name}(`);
+function source(name) {
+  const at = MAIN.search(new RegExp(`(?:async )?function ${name}\\(`));
   assert.notStrictEqual(at, -1, `function ${name} is gone — update this test`);
-  // Skip the parameter list first: buildUpgradeShell destructures its argument, so
-  // the first `{` after the name opens the parameters, not the body.
   let i = MAIN.indexOf('(', at), paren = 0;
   for (; i < MAIN.length; i++) {
     if (MAIN[i] === '(') paren++;
@@ -50,125 +62,244 @@ function extract(name) {
     else if (MAIN[j] === '}' && --depth === 0) { end = j + 1; break; }
   }
   assert.notStrictEqual(end, -1, `unbalanced braces in ${name}`);
-  // CASK_NAME is the only module constant these two functions close over.
-  return new Function('CASK_NAME', `${MAIN.slice(at, end)}; return ${name};`)('claude-code-studio');
+  return MAIN.slice(at, end);
+}
+// Build `name` with the given closure variables bound to the values passed.
+function extract(name, env = {}) {
+  const keys = Object.keys(env);
+  return new Function(...keys, `${source(name)}; return ${name};`)(...keys.map(k => env[k]));
 }
 
-const parseCaskVersion = extract('parseCaskVersion');
-const buildUpgradeShell = extract('buildUpgradeShell');
-
-console.log('\ncask version parsing:');
-check('reads the version out of a real cask body', () => {
-  const rb = 'cask "claude-code-studio" do\n  version "7.2.2"\n  sha256 arm: "dead"\nend\n';
-  assert.strictEqual(parseCaskVersion(rb), '7.2.2');
-});
-check('returns null when there is no version field', () => {
-  assert.strictEqual(parseCaskVersion('cask "x" do\nend'), null);
-});
-check('returns null on empty input instead of throwing', () => {
-  assert.strictEqual(parseCaskVersion(''), null);
-  assert.strictEqual(parseCaskVersion(null), null);
-});
-
-console.log('\nthe darwin check asks the cask, not the GitHub release:');
-check('no /releases/latest call is left in main.js', () => {
-  assert.ok(!MAIN.includes('releases/latest'),
-    'the release API is back — it is ~8 min ahead of the cask and reopens the update loop');
-});
-check('checkUpdate awaits the cask version on darwin', () => {
-  const at = MAIN.indexOf("if (process.platform === 'darwin')", MAIN.indexOf('async function checkUpdate'));
-  assert.notStrictEqual(at, -1, 'darwin branch of checkUpdate not found');
-  // Window widened from 300: the brewManagedPath guard now runs first (a build outside
-  // /Applications cannot be upgraded by brew and must not be offered a cask update).
-  // The invariant this test exists for — cask, never the release API — is asserted
-  // independently above and is unaffected.
-  assert.ok(MAIN.slice(at, at + 900).includes('fetchTapCaskVersion'), 'darwin branch no longer reads the cask');
-});
-
-// ─── Run the generated shell against a fake brew ────────────────────────────
-function runShell(installedAfterUpgrade, fromVersion) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-update-'));
-  const bin = path.join(dir, 'bin');
-  fs.mkdirSync(bin);
-  const brew = path.join(bin, 'brew');
-  // Mirrors real brew: `upgrade` exits 0 even when it has nothing to do.
-  fs.writeFileSync(brew, `#!/bin/sh
-case "$1" in
-  upgrade) echo "Warning: Not upgrading claude-code-studio, the latest version is already installed"; exit 0;;
-  list) echo "claude-code-studio ${installedAfterUpgrade}"; exit 0;;
-esac
-exit 0
-`);
-  for (const [name, marker] of [['open', 'relaunched'], ['osascript', 'notified']]) {
-    fs.writeFileSync(path.join(bin, name), `#!/bin/sh\necho "${marker} $*" >> '${dir}/markers'\n`);
-    fs.chmodSync(path.join(bin, name), 0o755);
-  }
-  fs.chmodSync(brew, 0o755);
-  const logPath = path.join(dir, 'update.log');
-  const sh = buildUpgradeShell({ brew, logPath, fromVersion });
-  try {
-    execFileSync('/bin/sh', ['-c', sh], { env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
-    const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '');
-    return { log: read(logPath), markers: read(path.join(dir, 'markers')) };
-  } finally {
-    // Every other suite cleans its temp dir; this one used to leak one per call.
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-  }
+// ── 1. brew is gone ──────────────────────────────────────────────────────────
+console.log('\nno Homebrew in the update path:');
+for (const gone of ['brew', 'fetchTapCaskVersion', 'parseCaskVersion', 'buildUpgradeShell', 'CASK_NAME', 'brewManagedPath']) {
+  check(`main.js no longer references ${gone}`, () => assert.ok(!new RegExp(`\\b${gone}\\b`).test(MAIN_CODE)));
 }
-
-console.log('\na brew no-op must be reported as a failure, not as OK:');
-const noop = runShell('7.2.1', '7.2.1');
-check('log says FAILED when the version did not move', () => {
-  assert.ok(/FAILED/.test(noop.log), `expected FAILED, log was:\n${noop.log}`);
-  assert.ok(!/\bOK\b/.test(noop.log), `a no-op was still reported as OK:\n${noop.log}`);
-});
-check('the user is notified', () => {
-  assert.ok(/notified/.test(noop.markers), 'no notification fired on a failed update');
-});
-check('the app is relaunched anyway — it must never just vanish', () => {
-  assert.ok(/relaunched/.test(noop.markers), 'the app was not reopened after a failed update');
+check('checkUpdate and startUpdate both go through getUpdater() on every OS', () => {
+  for (const fn of ['checkUpdate', 'startUpdate']) {
+    const src = source(fn);
+    assert.ok(/getUpdater\(\)/.test(src), `${fn} does not use getUpdater()`);
+    assert.ok(!/require\('electron-updater'\)/.test(src), `${fn} requires electron-updater itself`);
+  }
 });
 
-console.log('\na real upgrade is reported as success:');
-const real = runShell('7.2.2', '7.2.1');
-check('log records the version move', () => {
-  assert.ok(/OK 7\.2\.1 -> 7\.2\.2/.test(real.log), `expected an OK line, log was:\n${real.log}`);
-});
-check('no failure notification on success', () => {
-  assert.ok(!/notified/.test(real.markers), 'a successful update still nagged the user');
-});
-check('the app is relaunched', () => {
-  assert.ok(/relaunched/.test(real.markers), 'the app was not reopened after a successful update');
-});
-
-
-// ── an .app brew does not manage must not be offered a cask upgrade ──────────
-// The loop this prevents, observed live: a 7.1.1 build left in dist-desktop/ from
-// `npm run dist` was what actually got launched. It read the tap cask (7.5.0),
-// offered the update, ran `brew upgrade --cask` — which correctly upgraded the
-// bundle in /Applications — then relaunched ITSELF, still 7.1.1, saw 7.5.0 again,
-// and repeated. update.log showed one clean `OK 7.4.0 -> 7.5.0`; nothing was broken
-// except that the running process was never the one brew was updating.
-console.log('\na build outside /Applications is not offered a cask update:');
+// ── 2. installBlocker ────────────────────────────────────────────────────────
+console.log('\nwhere Squirrel can replace the bundle:');
 {
-  check('checkUpdate consults brewManagedPath before reading the cask',
-    () => assert.ok(/if \(!brewManagedPath\(\)\) \{/.test(MAIN)));
-  check('...and the guard sits BEFORE the cask fetch',
-    () => assert.ok(MAIN.indexOf('brewManagedPath()') < MAIN.indexOf('await fetchTapCaskVersion()')));
-  check('the unmanaged reply is available:false, not a version comparison',
-    () => assert.ok(/available: false,\s*\n\s*unmanaged: true/.test(MAIN)));
-
-  // The predicate itself, on the paths that actually occur.
-  const brewManaged = (exe) => exe.includes('/Applications/');
-  check('an installed app is managed',
-    () => assert.strictEqual(brewManaged('/Applications/Claude Code Studio.app/Contents/MacOS/Claude Code Studio'), true));
-  check('a dist-desktop build is NOT',
-    () => assert.strictEqual(brewManaged('/Users/me/proj/dist-desktop/mac-arm64/Claude Code Studio.app/Contents/MacOS/Claude Code Studio'), false));
-  check('nor is one run from Downloads',
-    () => assert.strictEqual(brewManaged('/Users/me/Downloads/Claude Code Studio.app/Contents/MacOS/Claude Code Studio'), false));
-  check('a user-local Applications install still counts',
-    () => assert.strictEqual(brewManaged('/Users/me/Applications/Claude Code Studio.app/Contents/MacOS/Claude Code Studio'), true));
+  const installBlocker = extract('installBlocker', { path });
+  const exe = (dir) => `${dir}/Claude Code Studio.app/Contents/MacOS/Claude Code Studio`;
+  const writable = () => true, readOnly = () => false;
+  check('/Applications is fine', () => assert.strictEqual(installBlocker(exe('/Applications'), writable), null));
+  check('~/Applications is fine', () => assert.strictEqual(installBlocker(exe('/Users/me/Applications'), writable), null));
+  check('a dist-desktop build is fine — Squirrel updates it in place',
+    () => assert.strictEqual(installBlocker(exe('/Users/me/proj/dist-desktop/mac-arm64'), writable), null));
+  check('a Gatekeeper-translocated copy is blocked, whatever the write probe says',
+    () => assert.strictEqual(installBlocker(exe('/private/var/folders/ab/xy/T/AppTranslocation/0F1E-22/d'), writable), 'translocated'));
+  check('a read-only location (a mounted dmg) is blocked',
+    () => assert.strictEqual(installBlocker(exe('/Volumes/Claude Code Studio 7.18.0-arm64'), readOnly), 'read-only'));
+  check('the write probe is asked about the folder that HOLDS the .app', () => {
+    let asked = null;
+    installBlocker(exe('/Applications'), (dir) => { asked = dir; return true; });
+    assert.strictEqual(asked, '/Applications');
+  });
+  check('an unbundled dev run (electron .) is not blocked',
+    () => assert.strictEqual(installBlocker('/Users/me/proj/node_modules/electron/dist/Electron', readOnly), null));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+// ── 3–4. getUpdater: listeners once, errors only during an install ───────────
+console.log('\ngetUpdater():');
+function harness() {
+  const fake = Object.assign(new EventEmitter(), {
+    autoDownload: true, autoInstallOnAppQuit: true, quitCalls: 0,
+    quitAndInstall() { this.quitCalls++; },
+  });
+  const upd = { updater: null, inFlight: false };
+  const logs = [], failures = [];
+  const getUpdater = extract('getUpdater', {
+    require: (m) => { assert.strictEqual(m, 'electron-updater'); return { autoUpdater: fake }; },
+    upd,
+    sendUpdateLog: (l) => logs.push(l),
+    sendUpdateFailed: (m) => failures.push(m),
+  });
+  return { fake, upd, logs, failures, getUpdater };
+}
+{
+  const h = harness();
+  const a = h.getUpdater(), b = h.getUpdater();
+  check('returns one instance', () => assert.strictEqual(a, b));
+  check('registers each listener exactly once', () => {
+    for (const ev of ['error', 'download-progress', 'update-downloaded']) {
+      assert.strictEqual(h.fake.listenerCount(ev), 1, `${ev}: ${h.fake.listenerCount(ev)} listeners`);
+    }
+  });
+  check('never downloads or installs on its own', () => {
+    assert.strictEqual(h.fake.autoDownload, false);
+    assert.strictEqual(h.fake.autoInstallOnAppQuit, false);
+  });
+  check('an error while only CHECKING is not reported as a failed update', () => {
+    h.upd.inFlight = false;
+    h.fake.emit('error', new Error('Cannot find latest-mac.yml'));
+    assert.deepStrictEqual(h.failures, []);
+  });
+  check('an error during an install is reported, and ends the install', () => {
+    h.upd.inFlight = true;
+    h.fake.emit('error', new Error('Code signature did not match'));
+    assert.deepStrictEqual(h.failures, ['Code signature did not match']);
+    assert.strictEqual(h.upd.inFlight, false);
+  });
+  check('a downloaded update is installed', () => new Promise((resolve, reject) => {
+    h.fake.emit('update-downloaded', { version: '9.9.9' });
+    setTimeout(() => {
+      try { assert.strictEqual(h.fake.quitCalls, 1); resolve(); } catch (e) { reject(e); }
+    }, 1200);
+  }));
+}
+
+// ── 1 (again). the quit must not be eaten by close-to-tray ───────────────────
+console.log('\nSquirrel.Mac can quit the app:');
+check('before-quit-for-update sets app.isQuiting before the windows close', () => {
+  const m = /autoUpdater\.on\('before-quit-for-update',[^\n]*\n?[^\n]*app\.isQuiting = true/.exec(MAIN_CODE);
+  assert.ok(m, 'no before-quit-for-update → app.isQuiting = true');
+  assert.ok(/require\('electron'\)/.test(MAIN_CODE), 'must be Electron\'s own autoUpdater — that is the one Squirrel drives');
+});
+check('the close-to-tray handler still honours app.isQuiting', () => {
+  assert.ok(/if \(!app\.isQuiting && trayReady\) \{ e\.preventDefault\(\);/.test(MAIN_CODE));
+});
+
+// ── startUpdate ──────────────────────────────────────────────────────────────
+console.log('\nstartUpdate():');
+function start({ platform = 'darwin', blocker = null, download = () => Promise.resolve() } = {}) {
+  const upd = { updater: null, inFlight: false };
+  let downloads = 0;
+  const startUpdate = extract('startUpdate', {
+    process: { platform },
+    installBlocker: () => blocker,
+    appExePath: () => '/x/Claude Code Studio.app/Contents/MacOS/Claude Code Studio',
+    canWriteDir: () => true,
+    getUpdater: () => ({ downloadUpdate: () => { downloads++; return download(); } }),
+    upd,
+  });
+  return { startUpdate, upd, downloads: () => downloads };
+}
+check('a blocked macOS install is refused before anything is downloaded', async () => {
+  const s = start({ blocker: 'translocated' });
+  const r = await s.startUpdate();
+  assert.strictEqual(r.installBlocked, 'translocated');
+  assert.strictEqual(s.downloads(), 0);
+  assert.strictEqual(s.upd.inFlight, false);
+});
+check('the macOS blocker is not consulted on Windows/Linux', async () => {
+  const s = start({ platform: 'win32', blocker: 'read-only' });
+  const r = await s.startUpdate();
+  assert.strictEqual(r.started, true);
+  assert.strictEqual(s.downloads(), 1);
+});
+check('an install in progress is marked in flight', async () => {
+  const s = start();
+  const r = await s.startUpdate();
+  assert.strictEqual(r.started, true);
+  assert.strictEqual(s.upd.inFlight, true);
+});
+check('a failed download is thrown to the IPC handler and ends the install', async () => {
+  const s = start({ download: () => Promise.reject(new Error('net::ERR_CONNECTION_RESET')) });
+  await assert.rejects(s.startUpdate(), /ERR_CONNECTION_RESET/);
+  assert.strictEqual(s.upd.inFlight, false);
+});
+
+// ── the banner ───────────────────────────────────────────────────────────────
+console.log('\nthe update banner (index.html) and its bridge (preload.js):');
+const BANNER = (/<!-- ccs-desktop-update-ui[\s\S]*?<\/script>/.exec(HTML) || [''])[0];
+check('the banner block exists', () => assert.ok(BANNER.length > 500));
+check('the brew "copy this command" fallback is gone', () => {
+  assert.ok(!/res\.fallback|upd\.copy_cmd|upd\.via_terminal|upd\.copied/.test(BANNER));
+});
+check('a blocked install shows "move to Applications" and no button', () => {
+  const body = (/function showBlocked\(\)\{([\s\S]*?)\n  \}/.exec(BANNER) || [])[1];
+  assert.ok(body, 'no showBlocked()');
+  assert.ok(/btn\.style\.display\s*=\s*'none'/.test(body), 'showBlocked leaves the button up');
+  assert.ok(/upd\.move_to_apps/.test(body), 'showBlocked does not say what to do');
+  // Both the periodic check and the click route a blocked install there.
+  assert.ok(/r\.installBlocked\) showBlocked\(\)/.test(BANNER), 'check() ignores installBlocked');
+  assert.ok(/res\.installBlocked\) showBlocked\(\)/.test(BANNER), 'onUpdate() ignores installBlocked');
+});
+check('main → preload carry a failure that happens after start() has answered', () => {
+  assert.ok(/onFailed:\s*\(cb\)\s*=>\s*ipcRenderer\.on\('update:failed'/.test(PRELOAD));
+  assert.ok(/webContents\.send\('update:failed'/.test(MAIN_CODE));
+});
+
+// The banner itself, RUN in a vm against a minimal DOM — the same technique as
+// test/terminal-keys.test.js. Source checks cannot tell a wired handler from a dead one.
+function runBanner({ check: checkRes, start: startRes }) {
+  const vm = require('vm');
+  const els = [];
+  const mk = () => {
+    const e = { style: {}, textContent: '', disabled: false, onclick: null, children: [],
+      appendChild(c) { this.children.push(c); } };
+    els.push(e);
+    return e;
+  };
+  const handlers = { log: [], failed: [] };
+  const api = {
+    check: () => Promise.resolve(checkRes),
+    start: () => Promise.resolve(startRes),
+    onLog: (cb) => handlers.log.push(cb),
+    onFailed: (cb) => handlers.failed.push(cb),
+  };
+  const doc = { body: mk(), head: mk(), createElement: mk, getElementById: () => null };
+  const js = BANNER.replace(/^[\s\S]*?<script>/, '').replace(/<\/script>$/, '');
+  vm.runInNewContext(js, {
+    window: { electronAPI: { update: api } }, document: doc,
+    setInterval: () => 0, clearInterval: () => {}, Date, Math, Promise,
+  });
+  // build() creates, in order: bar, msg, btn, log, close, spinner.
+  const [bar, msgEl, btn, logEl] = els.slice(2);
+  return { bar, msgEl, btn, logEl, handlers };
+}
+const tick = () => new Promise((r) => setImmediate(r));
+
+check('banner: a blocked install says "move to Applications" and offers no button', async () => {
+  const b = runBanner({ check: { available: true, version: '9.0.0', installBlocked: 'translocated' } });
+  await tick();
+  assert.strictEqual(b.bar.style.display, 'flex');
+  assert.strictEqual(b.btn.style.display, 'none');
+  assert.strictEqual(b.logEl.textContent, 'upd.move_to_apps');
+});
+check('banner: a failure reported after the download turns it into Retry', async () => {
+  const b = runBanner({ check: { available: true, version: '9.0.0' }, start: { started: true } });
+  await tick();
+  assert.notStrictEqual(b.btn.style.display, 'none', 'no Update button');
+  b.btn.onclick();
+  await tick();
+  assert.strictEqual(b.handlers.failed.length, 1, 'onFailed subscribed once, at init');
+  b.handlers.failed[0]('code signature did not match');
+  assert.strictEqual(b.msgEl.textContent, 'upd.failed');
+  assert.strictEqual(b.btn.textContent, 'upd.retry');
+  assert.strictEqual(b.btn.style.display, '');
+  assert.strictEqual(b.logEl.textContent, 'code signature did not match');
+});
+check('banner: a stray failure while idle changes nothing', async () => {
+  const b = runBanner({ check: { available: true, version: '9.0.0' } });
+  await tick();
+  const before = b.msgEl.textContent;
+  b.handlers.failed[0]('late error');
+  assert.strictEqual(b.msgEl.textContent, before);
+});
+check('banner: clicking twice does not stack log handlers', async () => {
+  const b = runBanner({ check: { available: true, version: '9.0.0' }, start: { error: 'x' } });
+  await tick();
+  b.btn.onclick(); await tick();
+  b.btn.onclick(); await tick();
+  assert.strictEqual(b.handlers.log.length, 1);
+});
+check('every language has the new string and none keeps the removed ones', () => {
+  const langs = HTML.match(/['"]upd\.available['"]\s*:/g) || [];
+  const moves = HTML.match(/['"]upd\.move_to_apps['"]\s*:/g) || [];
+  assert.ok(langs.length >= 5, `found ${langs.length} languages`);
+  assert.strictEqual(moves.length, langs.length, `upd.move_to_apps in ${moves.length} of ${langs.length}`);
+  assert.ok(!/['"]upd\.(copy_cmd|via_terminal|copied)['"]\s*:/.test(HTML), 'removed keys still translated');
+});
+
+Promise.all(pending).then(() => {
+  console.log(`\n${pass} passed, ${fail} failed`);
+  process.exit(fail ? 1 : 0);
+});

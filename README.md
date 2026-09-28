@@ -49,13 +49,13 @@ Prefer a native window over a browser tab? Claude Code Studio also ships as a **
 
 **Install** (from the [latest release](https://github.com/Lexus2016/claude-code-studio/releases/latest)):
 
-- **macOS** — `brew install --cask Lexus2016/claude-code-studio/claude-code-studio`, or download the `.dmg`
+- **macOS** (Apple Silicon) — download the `.dmg` (signed and notarized), open it and drag the app to Applications
 - **Windows** — download the `…-Setup-….exe` installer
 - **Linux** — download the `.AppImage` (portable) or `.deb`
 
 **Prerequisite:** same as the web version — the [Claude Code CLI](https://docs.anthropic.com/en/claude-code) installed and logged in. The app detects it on launch and shows an install hint if it's missing.
 
-**Built-in updates:** the app tells you when a new version ships and updates in one click — Windows/Linux update in place, macOS updates via Homebrew. Auto-update is opt-in (default: notify + one click).
+**Built-in updates:** the app tells you when a new version ships and updates itself in one click on every OS. On macOS it has to run from Applications — started straight from the `.dmg` or from Downloads, it cannot replace itself and says so.
 
 **Coming from the CLI/web version?** The desktop app keeps its own data folder, so you can pull your existing history and settings across in one step — no manual file copying:
 

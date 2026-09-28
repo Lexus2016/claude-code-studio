@@ -11,8 +11,7 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const fs = require('fs');
-const https = require('https');
-const { execFileSync, spawn } = require('child_process');
+const { execFileSync } = require('child_process');
 
 let serverProc = null;
 let serverPort = null;
@@ -272,11 +271,12 @@ async function boot() {
 }
 
 // ─── Updates ────────────────────────────────────────────────────────────────
-// Windows/Linux: electron-updater (GitHub feed). macOS: app-triggered
-// `brew upgrade --cask` (we never use Squirrel.Mac, so no Apple signing needed).
+// Every OS updates through electron-updater from the GitHub release feed. On macOS
+// that is Squirrel.Mac: it installs only an update signed by the same Developer ID
+// as the running app (docs/electron-desktop/MAC-SIGNING.md), so the signature is
+// also what stops a substituted download. Pinned by test/update-flow.test.js.
 const GH_OWNER = 'Lexus2016';
 const GH_REPO = 'claude-code-studio';
-const CASK_NAME = 'claude-code-studio';
 
 function semverGt(a, b) {
   const pa = String(a).replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
@@ -285,187 +285,91 @@ function semverGt(a, b) {
   return false;
 }
 
-// `version "7.2.2"` — the only quoted value on the cask's version line.
-function parseCaskVersion(rb) {
-  const m = /^\s*version\s+"([^"]+)"/m.exec(String(rb || ''));
-  return m ? m[1] : null;
-}
-
-// The macOS install path is the Homebrew cask, NOT the GitHub release. The release
-// is published the instant the tag lands; the cask is only bumped ~8 minutes later,
-// once the mac build has uploaded its dmg. Reading the release here meant that for
-// those 8 minutes the app offered a version brew could not yet install: `brew
-// upgrade --cask` found nothing to do, exited 0, and the app quit, relaunched at the
-// SAME version and offered the update again — the "restarts but never updates" loop
-// in update.log on 2026-08-20 (four attempts, 15:50–15:53, cask landed 15:55).
-// The cask is the honest source: it says yes exactly when an upgrade is installable.
-function fetchTapCaskVersion() {
-  return new Promise((resolve, reject) => {
-    const req = https.get({
-      host: 'raw.githubusercontent.com',
-      path: `/${GH_OWNER}/homebrew-${GH_REPO}/main/Casks/${CASK_NAME}.rb`,
-      headers: { 'User-Agent': 'claude-code-studio' },
-      timeout: 8000,
-    }, (res) => {
-      if (res.statusCode !== 200) { res.resume(); return reject(new Error('cask HTTP ' + res.statusCode)); }
-      let buf = '';
-      res.on('data', (d) => (buf += d));
-      res.on('end', () => {
-        const v = parseCaskVersion(buf);
-        if (v) resolve(v); else reject(new Error('no version field in cask'));
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('cask request timeout')); });
-  });
-}
-
-function findBrew() {
-  for (const b of ['/opt/homebrew/bin/brew', '/usr/local/bin/brew']) {
-    try { if (fs.existsSync(b)) return b; } catch (_) {}
-  }
-  try { return String(execFileSync('which', ['brew'], { encoding: 'utf8' })).trim() || null; } catch (_) { return null; }
-}
-
 function sendUpdateLog(line) {
   const w = BrowserWindow.getAllWindows()[0];
   if (w && !w.isDestroyed()) w.webContents.send('update:log', String(line));
 }
-
-// brew owns /Applications and nothing else. A build running from anywhere else — a
-// dist-desktop/ artefact left over from `npm run dist`, or an .app copied elsewhere —
-// cannot be upgraded by `brew upgrade --cask`: brew happily updates the bundle in
-// /Applications, this process relaunches ITSELF at its own old version, sees the cask
-// is newer again and offers the same update forever. Observed as 7.1.1 offering 7.5.0
-// on repeat while /Applications was already 7.5.0 and update.log showed one clean
-// `OK 7.4.0 -> 7.5.0`. Report it instead of looping.
-function brewManagedPath() {
-  try { return app.getPath('exe').includes('/Applications/'); } catch (_) { return true; }
+// A failure AFTER startUpdate() has returned — Squirrel verifies the signature only
+// once the download is handed over — has no IPC reply left to ride on.
+function sendUpdateFailed(message) {
+  const w = BrowserWindow.getAllWindows()[0];
+  if (w && !w.isDestroyed()) w.webContents.send('update:failed', String(message));
 }
 
-async function checkUpdate() {
-  const currentVersion = app.getVersion();
-  if (process.platform === 'darwin') {
-    if (!brewManagedPath()) {
-      return { platform: 'darwin', currentVersion, version: null, available: false,
-               unmanaged: true, exePath: (() => { try { return app.getPath('exe'); } catch (_) { return ''; } })() };
-    }
-    const version = await fetchTapCaskVersion();
-    return { platform: 'darwin', currentVersion, version, available: !!(version && semverGt(version, currentVersion)) };
-  }
+function appExePath() {
+  try { return app.getPath('exe'); } catch (_) { return ''; }
+}
+function canWriteDir(dir) {
+  try { fs.accessSync(dir, fs.constants.W_OK); return true; } catch (_) { return false; }
+}
+
+// Squirrel.Mac swaps the bundle in place, so the folder holding the .app must be
+// writable. Two places a freshly downloaded app runs from are not: the mounted dmg,
+// and the read-only copy Gatekeeper makes when a quarantined app is opened straight
+// from Downloads (App Translocation). Squirrel's own error there names neither, so
+// it is caught before the download and the banner says what to do instead.
+function installBlocker(exePath, canWrite) {
+  const m = /^(.*?\.app)\/Contents\/MacOS\//.exec(String(exePath || ''));
+  if (!m) return null;                                   // `electron .` — not a bundle
+  if (m[1].includes('/AppTranslocation/')) return 'translocated';
+  return canWrite(path.dirname(m[1])) ? null : 'read-only';
+}
+
+// `inFlight` is true only between the user's click and the restart. electron-updater
+// emits `error` for a failed CHECK as well (latest-mac.yml reaches the release ~8 min
+// after the release itself), and that must not turn an idle banner into "failed".
+const upd = { updater: null, inFlight: false };
+
+// One updater, one set of listeners. Registering them per click stacked another set on
+// every Retry, and the next attempt logged and installed once per stacked set.
+function getUpdater() {
+  if (upd.updater) return upd.updater;
   const { autoUpdater } = require('electron-updater');
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
-  const r = await autoUpdater.checkForUpdates();
-  const version = r && r.updateInfo && r.updateInfo.version;
-  return { platform: process.platform, currentVersion, version, available: !!(version && semverGt(version, currentVersion)) };
-}
-
-// Run one brew step with the app still OPEN, streaming its output to the update
-// bar. Resolves { ok } — a step is never allowed to reject and strand the UI.
-// `optional` marks a step whose failure is expected on older Homebrew (`trust`).
-function runBrewStep(brew, args, label, { optional = false, timeoutMs = 900000 } = {}) {
-  return new Promise((resolve) => {
-    sendUpdateLog(label);
-    const child = spawn(brew, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let last = '';
-    let timer = setTimeout(() => { try { child.kill('SIGTERM'); } catch (_) {} }, timeoutMs);
-    const onData = (buf) => {
-      // brew redraws download progress with \r; keep only the newest fragment so
-      // the one-line bar shows a live percentage instead of a growing wall.
-      const parts = String(buf).split(/[\r\n]+/).filter((x) => x.trim());
-      if (parts.length) { last = parts[parts.length - 1].trim(); sendUpdateLog(label + ' ' + last); }
-    };
-    child.stdout.on('data', onData);
-    child.stderr.on('data', onData);
-    child.on('error', () => { clearTimeout(timer); resolve({ ok: optional, err: 'spawn failed' }); });
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      resolve({ ok: optional || code === 0, code, last });
-    });
+  autoUpdater.on('download-progress', (p) => sendUpdateLog(`Downloading… ${Math.round(p.percent)}%`));
+  autoUpdater.on('error', (e) => {
+    if (!upd.inFlight) return;
+    upd.inFlight = false;
+    sendUpdateFailed((e && e.message) || String(e));
   });
+  autoUpdater.on('update-downloaded', () => {
+    sendUpdateLog('Installing — the app will restart…');
+    setTimeout(() => autoUpdater.quitAndInstall(), 1000);
+  });
+  upd.updater = autoUpdater;
+  return autoUpdater;
 }
 
-// Build the detached upgrade shell. Success is decided by the version brew reports
-// AFTERWARDS, never by its exit code: `brew upgrade --cask` also exits 0 when it has
-// nothing to do ("Not upgrading …, the latest version is already installed"). The old
-// `if brew upgrade; then echo OK` therefore called a no-op a success — no notification,
-// app reopened at the SAME version, and the one branch written to explain a failed
-// update never ran. Compare versions instead; that is true regardless of brew's wording
-// or exit code. Relaunch unconditionally — the app must never just vanish.
-function buildUpgradeShell({ brew, logPath, fromVersion, appName = 'Claude Code Studio' }) {
-  const q = (x) => String(x).replace(/'/g, `'\\''`);
-  const note = `Update failed — see update.log, or run: brew upgrade --cask ${CASK_NAME}`;
-  return `exec >> '${q(logPath)}' 2>&1; `
-    + `echo "=== $(date) upgrading ${CASK_NAME} from ${q(fromVersion)} ==="; `
-    + `'${q(brew)}' upgrade --cask ${CASK_NAME}; `
-    + `new=$('${q(brew)}' list --cask --versions ${CASK_NAME} 2>/dev/null | awk '{print $NF}'); `
-    + `if [ -n "$new" ] && [ "$new" != '${q(fromVersion)}' ]; then echo "OK ${q(fromVersion)} -> $new"; `
-    + `else echo "FAILED still ${q(fromVersion)}"; `
-    + `osascript -e 'display notification "${q(note)}" with title "${q(appName)}"'; fi; `
-    + `open -a '${q(appName)}'`;
+// Squirrel.Mac closes every window BEFORE it quits. The close-to-tray handler hides a
+// window instead of closing it unless app.isQuiting is set — which cancels the quit:
+// the update stays staged, the app never restarts, and the banner spins forever. This
+// is Electron's own autoUpdater (the one Squirrel drives); electron-updater emits the
+// same event on Windows/Linux before its app.quit(). `before-quit` stops the server.
+require('electron').autoUpdater.on('before-quit-for-update', () => { app.isQuiting = true; });
+
+async function checkUpdate() {
+  const currentVersion = app.getVersion();
+  const r = await getUpdater().checkForUpdates();   // null when not packaged (`electron .`)
+  const version = r && r.updateInfo && r.updateInfo.version;
+  const res = { platform: process.platform, currentVersion, version, available: !!(version && semverGt(version, currentVersion)) };
+  const blocked = process.platform === 'darwin' ? installBlocker(appExePath(), canWriteDir) : null;
+  if (blocked) res.installBlocked = blocked;
+  return res;
 }
 
 async function startUpdate() {
   if (process.platform === 'darwin') {
-    const brew = findBrew();
-    if (!brew) return { fallback: true, command: `brew install --cask ${CASK_NAME}`, reason: 'brew-not-found' };
-    let managed = false;
-    try { execFileSync(brew, ['list', '--cask', CASK_NAME], { stdio: 'ignore' }); managed = true; } catch (_) {}
-    if (!managed) return { fallback: true, command: `brew install --cask ${CASK_NAME}`, reason: 'not-brew-managed' };
-    const tap = `${GH_OWNER.toLowerCase()}/${GH_REPO}`;
-
-    // ── Phase A: everything that does NOT touch the app bundle ──────────────
-    // Runs with the window still open so the user watches real progress. This is
-    // the slow part — a tap refresh plus a ~150MB download — and it used to happen
-    // after the app had already vanished, which is why a working update was
-    // indistinguishable from a broken button.
-    //
-    // Homebrew 6.0+ refuses to load a cask from a third-party tap until it is
-    // trusted. On older Homebrew there is no `trust` subcommand, so the step is
-    // optional: its failure must not abort the update.
-    await runBrewStep(brew, ['trust', tap], 'Trusting tap…', { optional: true, timeoutMs: 60000 });
-    // `brew update` FIRST: a stale local tap clone otherwise keeps brew pinned to
-    // the installed version, so `brew upgrade` is a no-op while the in-app check
-    // (which reads the GitHub release) keeps re-offering the same version — an
-    // endless update loop. Do NOT set HOMEBREW_NO_AUTO_UPDATE: it suppresses
-    // exactly that tap refresh.
-    const upd = await runBrewStep(brew, ['update'], 'Refreshing Homebrew…', { timeoutMs: 300000 });
-    if (!upd.ok) return { error: 'brew update failed' + (upd.last ? ': ' + upd.last : '') };
-    // Download into brew's cache while we are still alive. `brew upgrade` below
-    // then finds it cached and only has to verify, swap and relaunch.
-    const fetched = await runBrewStep(brew, ['fetch', '--cask', CASK_NAME], 'Downloading update…');
-    if (!fetched.ok) return { error: 'download failed' + (fetched.last ? ': ' + fetched.last : '') };
-
-    // ── Phase B: the swap ──────────────────────────────────────────────────
-    // This one cannot keep the app open: the cask carries `uninstall quit:`, and
-    // brew must quit us to replace our own bundle. It therefore has to outlive
-    // this process — a detached shell in its own process group (verified: it
-    // survives app.quit(), see the comment on unref below).
-    // Relaunch whether the upgrade succeeds or fails — the app must never just
-    // vanish; on failure show a notification instead of silently reopening the
-    // SAME version, which is what makes a failed update look like a broken button.
-    // Output goes to a log file: without it a failed upgrade leaves no trace at
-    // all, and "it didn't update" cannot be diagnosed afterwards.
-    const logPath = path.join(app.getPath('userData'), 'update.log');
-    const sh = buildUpgradeShell({ brew, logPath, fromVersion: app.getVersion() });
-    sendUpdateLog('Installing — the app will restart…');
-    const child = spawn('/bin/sh', ['-c', sh], { detached: true, stdio: 'ignore' });
-    child.unref();
-    // detached + unref puts the shell in its own process group, so it keeps
-    // running once this process exits; stopServer() only kills the server child
-    // by pid and cannot reach it.
-    setTimeout(() => { app.isQuiting = true; stopServer(); app.quit(); }, 1500);
-    return { started: true, via: 'brew', log: logPath };
+    const blocked = installBlocker(appExePath(), canWriteDir);
+    if (blocked) return { error: 'move the app to Applications to update', installBlocked: blocked };
   }
-  const { autoUpdater } = require('electron-updater');
-  autoUpdater.on('download-progress', (p) => sendUpdateLog(`Downloading… ${Math.round(p.percent)}%`));
-  autoUpdater.on('error', (e) => sendUpdateLog('Update error: ' + e.message));
-  autoUpdater.on('update-downloaded', () => {
-    sendUpdateLog('Downloaded — restarting to install…');
-    setTimeout(() => { app.isQuiting = true; stopServer(); autoUpdater.quitAndInstall(); }, 1000);
-  });
-  await autoUpdater.downloadUpdate();
+  upd.inFlight = true;
+  try {
+    await getUpdater().downloadUpdate();
+  } catch (e) {
+    upd.inFlight = false;
+    throw e;
+  }
   return { started: true, via: 'electron-updater' };
 }
 
