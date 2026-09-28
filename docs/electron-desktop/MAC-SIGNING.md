@@ -130,7 +130,17 @@ swapped, relaunched, signature valid).
 - **A read-only location is refused up front.** From the mounted dmg, or from the copy
   Gatekeeper makes when a quarantined app is opened straight out of Downloads (App
   Translocation), the bundle cannot be replaced. The banner says "move the app to
-  Applications" and shows no button.
+  Applications" and shows no button. Only `EROFS` counts: a folder the user merely
+  lacks permission for (`EACCES`, e.g. `/Applications` on a standard account) is left
+  to Squirrel, because that advice would be wrong for an app already in Applications.
+- **electron-updater's verdict decides what is offered** (`isUpdateAvailable`), not a
+  version comparison: it also returns `updateInfo` for a release it has rejected, and
+  offering that one fails with "Please check update first" on every Retry.
+- **A failed Squirrel attempt is cleaned up.** `MacUpdater.quitAndInstall()` adds a
+  listener on Electron's `autoUpdater` and never removes it when Squirrel fails; the
+  app takes it back off, or each Retry would stack another install.
+- **Progress and failures go to every window**, not `getAllWindows()[0]`: a same-origin
+  child window carries the banner too.
 - **Only an install the user started can fail.** `electron-updater` emits `error` for a
   failed check as well, and the mac artefacts reach the release ~8 min after the
   release itself is published. An error while idle changes nothing; an error during an

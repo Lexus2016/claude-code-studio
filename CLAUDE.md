@@ -1047,7 +1047,8 @@ Developer ID signed, notarized, **arm64 only**. Pinned by `test/mac-signing.test
   Squirrel closes every window BEFORE quitting, so `before-quit-for-update` must set
   `app.isQuiting` or close-to-tray cancels the quit and the update never lands. The
   bundle is swapped in place, so a dmg mount or an App-Translocated copy is refused up
-  front (`installBlocker`) with "move the app to Applications". And `electron-updater`
+  front (`installBlocker`) with "move the app to Applications" — on `EROFS` only; a
+  permission denial (`EACCES`) belongs to Squirrel. And `electron-updater`
   emits `error` for a failed CHECK too (`latest-mac.yml` lands ~8 min after the
   release), so only an error while `upd.inFlight` may show "Update failed".
 - **The Homebrew cask is transitional** — it exists only so pre-signing installs, whose

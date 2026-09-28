@@ -278,64 +278,86 @@ async function boot() {
 const GH_OWNER = 'Lexus2016';
 const GH_REPO = 'claude-code-studio';
 
-function semverGt(a, b) {
-  const pa = String(a).replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
-  const pb = String(b).replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
-  for (let i = 0; i < 3; i++) { if (pa[i] > pb[i]) return true; if (pa[i] < pb[i]) return false; }
-  return false;
+// Every window runs the banner — a same-origin child window gets the preload too — and
+// the one that started the install need not be getAllWindows()[0].
+function broadcastUpdate(channel, payload) {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send(channel, String(payload));
+  }
 }
-
-function sendUpdateLog(line) {
-  const w = BrowserWindow.getAllWindows()[0];
-  if (w && !w.isDestroyed()) w.webContents.send('update:log', String(line));
-}
+function sendUpdateLog(line) { broadcastUpdate('update:log', line); }
 // A failure AFTER startUpdate() has returned — Squirrel verifies the signature only
 // once the download is handed over — has no IPC reply left to ride on.
-function sendUpdateFailed(message) {
-  const w = BrowserWindow.getAllWindows()[0];
-  if (w && !w.isDestroyed()) w.webContents.send('update:failed', String(message));
-}
+function sendUpdateFailed(message) { broadcastUpdate('update:failed', message); }
 
 function appExePath() {
   try { return app.getPath('exe'); } catch (_) { return ''; }
 }
-function canWriteDir(dir) {
-  try { fs.accessSync(dir, fs.constants.W_OK); return true; } catch (_) { return false; }
+// EROFS only. A mounted dmg and a translocated copy are read-only VOLUMES. A folder the
+// user merely lacks permission for (/Applications on a standard account: EACCES) is
+// Squirrel's to handle, and "move the app to Applications" would be wrong advice there.
+function isReadOnlyDir(dir) {
+  try { fs.accessSync(dir, fs.constants.W_OK); return false; } catch (e) { return !!e && e.code === 'EROFS'; }
 }
 
-// Squirrel.Mac swaps the bundle in place, so the folder holding the .app must be
-// writable. Two places a freshly downloaded app runs from are not: the mounted dmg,
-// and the read-only copy Gatekeeper makes when a quarantined app is opened straight
-// from Downloads (App Translocation). Squirrel's own error there names neither, so
-// it is caught before the download and the banner says what to do instead.
-function installBlocker(exePath, canWrite) {
+// Squirrel.Mac swaps the bundle in place. Two places a freshly downloaded app runs from
+// cannot be written at all: the mounted dmg, and the read-only copy Gatekeeper makes
+// when a quarantined app is opened straight from Downloads (App Translocation).
+// Squirrel's own error there names neither, so it is caught before the download and the
+// banner says what to do instead.
+function installBlocker(exePath, isReadOnly) {
   const m = /^(.*?\.app)\/Contents\/MacOS\//.exec(String(exePath || ''));
   if (!m) return null;                                   // `electron .` — not a bundle
   if (m[1].includes('/AppTranslocation/')) return 'translocated';
-  return canWrite(path.dirname(m[1])) ? null : 'read-only';
+  return isReadOnly(path.dirname(m[1])) ? 'read-only' : null;
 }
 
 // `inFlight` is true only between the user's click and the restart. electron-updater
 // emits `error` for a failed CHECK as well (latest-mac.yml reaches the release ~8 min
 // after the release itself), and that must not turn an idle banner into "failed".
-const upd = { updater: null, inFlight: false };
+// `installing` and `nativeListeners`: see the update-downloaded handler below.
+const upd = { updater: null, inFlight: false, installing: false, nativeListeners: [] };
 
 // One updater, one set of listeners. Registering them per click stacked another set on
 // every Retry, and the next attempt logged and installed once per stacked set.
 function getUpdater() {
   if (upd.updater) return upd.updater;
   const { autoUpdater } = require('electron-updater');
+  const native = require('electron').autoUpdater;
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.on('download-progress', (p) => sendUpdateLog(`Downloading… ${Math.round(p.percent)}%`));
-  autoUpdater.on('error', (e) => {
+  const failInstall = (e) => {
+    upd.installing = false;
+    for (const l of upd.nativeListeners) native.removeListener('update-downloaded', l);
+    upd.nativeListeners = [];
     if (!upd.inFlight) return;
     upd.inFlight = false;
     sendUpdateFailed((e && e.message) || String(e));
-  });
+  };
+  autoUpdater.on('error', failInstall);
   autoUpdater.on('update-downloaded', () => {
+    // Once per attempt. A second download of the same update fired this twice in an
+    // end-to-end run, and the second quitAndInstall() threw Squirrel's "The command is
+    // disabled" out of the timer — an uncaught main-process exception, i.e. a crash dialog.
+    if (upd.installing) return;
+    upd.installing = true;
     sendUpdateLog('Installing — the app will restart…');
-    setTimeout(() => autoUpdater.quitAndInstall(), 1000);
+    setTimeout(() => {
+      // MacUpdater.quitAndInstall() hands the update to Squirrel and adds its own listener
+      // on Electron's autoUpdater to quit once Squirrel has it. It never removes that
+      // listener when Squirrel fails, so each Retry would stack another and a later
+      // success would run the install once per stacked listener. Remember what this
+      // attempt added; failInstall() takes it back off.
+      const before = native.listeners('update-downloaded');
+      try {
+        autoUpdater.quitAndInstall();
+      } catch (e) {
+        failInstall(e);
+        return;
+      }
+      upd.nativeListeners = native.listeners('update-downloaded').filter((l) => !before.includes(l));
+    }, 1000);
   });
   upd.updater = autoUpdater;
   return autoUpdater;
@@ -352,15 +374,18 @@ async function checkUpdate() {
   const currentVersion = app.getVersion();
   const r = await getUpdater().checkForUpdates();   // null when not packaged (`electron .`)
   const version = r && r.updateInfo && r.updateInfo.version;
-  const res = { platform: process.platform, currentVersion, version, available: !!(version && semverGt(version, currentVersion)) };
-  const blocked = process.platform === 'darwin' ? installBlocker(appExePath(), canWriteDir) : null;
+  // electron-updater's verdict, not a version comparison: it returns updateInfo for a
+  // release it has REJECTED too (staged rollout, minimumSystemVersion), and offering
+  // that one ends in "Please check update first" from downloadUpdate() on every Retry.
+  const res = { platform: process.platform, currentVersion, version, available: !!(r && r.isUpdateAvailable) };
+  const blocked = process.platform === 'darwin' ? installBlocker(appExePath(), isReadOnlyDir) : null;
   if (blocked) res.installBlocked = blocked;
   return res;
 }
 
 async function startUpdate() {
   if (process.platform === 'darwin') {
-    const blocked = installBlocker(appExePath(), canWriteDir);
+    const blocked = installBlocker(appExePath(), isReadOnlyDir);
     if (blocked) return { error: 'move the app to Applications to update', installBlocked: blocked };
   }
   upd.inFlight = true;

@@ -17879,7 +17879,7 @@ document.addEventListener('keydown', e => {
 (function(){
   var api = window.electronAPI && window.electronAPI.update;
   if (!api) return;
-  var bar, msgEl, logEl, btn, spin, updating = false, startedAt = 0, tick = null;
+  var bar, msgEl, logEl, btn, spin, updating = false, startedAt = 0, tick = null, offered = '';
   function TT(k){ return (typeof window.t === 'function') ? window.t(k) : k; }
   function el(tag, css, txt){ var e=document.createElement(tag); if(css)e.style.cssText=css; if(txt!=null)e.textContent=txt; return e; }
   // Spinner + elapsed time in the title; the download percentage and the install step
@@ -17925,6 +17925,8 @@ document.addEventListener('keydown', e => {
   // copy (both read-only). Say what to do instead of offering a button that fails.
   function showBlocked(){
     updating = false; stopSpinner();
+    // A click refused as blocked has already had its title overwritten by the spinner.
+    msgEl.textContent = TT('upd.new_version').replace('{version}', offered);
     btn.style.display = 'none';
     logEl.textContent = TT('upd.move_to_apps');
   }
@@ -17938,11 +17940,12 @@ document.addEventListener('keydown', e => {
       else if (res && res.error) showFailed(res.error);
       // res.started: downloaded and handed to the installer; the app restarts itself.
       // A failure from here on arrives through onFailed.
-    });
+    }).catch(function(e){ showFailed(e && e.message); });
   }
   function check(){
     Promise.resolve(api.check()).then(function(r){
       if (!r || !r.available) return;
+      offered = r.version;
       msgEl.textContent=TT('upd.new_version').replace('{version}', r.version);
       if (r.installBlocked) showBlocked();
       else { btn.style.display=''; logEl.textContent=''; }

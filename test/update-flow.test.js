@@ -88,41 +88,86 @@ console.log('\nwhere Squirrel can replace the bundle:');
 {
   const installBlocker = extract('installBlocker', { path });
   const exe = (dir) => `${dir}/Claude Code Studio.app/Contents/MacOS/Claude Code Studio`;
-  const writable = () => true, readOnly = () => false;
-  check('/Applications is fine', () => assert.strictEqual(installBlocker(exe('/Applications'), writable), null));
-  check('~/Applications is fine', () => assert.strictEqual(installBlocker(exe('/Users/me/Applications'), writable), null));
+  const rw = () => false, ro = () => true;          // isReadOnly(dir)
+  check('/Applications is fine', () => assert.strictEqual(installBlocker(exe('/Applications'), rw), null));
+  check('~/Applications is fine', () => assert.strictEqual(installBlocker(exe('/Users/me/Applications'), rw), null));
   check('a dist-desktop build is fine — Squirrel updates it in place',
-    () => assert.strictEqual(installBlocker(exe('/Users/me/proj/dist-desktop/mac-arm64'), writable), null));
-  check('a Gatekeeper-translocated copy is blocked, whatever the write probe says',
-    () => assert.strictEqual(installBlocker(exe('/private/var/folders/ab/xy/T/AppTranslocation/0F1E-22/d'), writable), 'translocated'));
-  check('a read-only location (a mounted dmg) is blocked',
-    () => assert.strictEqual(installBlocker(exe('/Volumes/Claude Code Studio 7.18.0-arm64'), readOnly), 'read-only'));
-  check('the write probe is asked about the folder that HOLDS the .app', () => {
+    () => assert.strictEqual(installBlocker(exe('/Users/me/proj/dist-desktop/mac-arm64'), rw), null));
+  check('a Gatekeeper-translocated copy is blocked, whatever the probe says',
+    () => assert.strictEqual(installBlocker(exe('/private/var/folders/ab/xy/T/AppTranslocation/0F1E-22/d'), rw), 'translocated'));
+  check('a read-only volume (a mounted dmg) is blocked',
+    () => assert.strictEqual(installBlocker(exe('/Volumes/Claude Code Studio 7.18.0-arm64'), ro), 'read-only'));
+  check('the probe is asked about the folder that HOLDS the .app', () => {
     let asked = null;
-    installBlocker(exe('/Applications'), (dir) => { asked = dir; return true; });
+    installBlocker(exe('/Applications'), (dir) => { asked = dir; return false; });
     assert.strictEqual(asked, '/Applications');
   });
   check('an unbundled dev run (electron .) is not blocked',
-    () => assert.strictEqual(installBlocker('/Users/me/proj/node_modules/electron/dist/Electron', readOnly), null));
+    () => assert.strictEqual(installBlocker('/Users/me/proj/node_modules/electron/dist/Electron', ro), null));
+
+  // Measured on this machine: access(W_OK) on a mounted dmg → EROFS; on /private/var/root
+  // → EACCES; on /System → EPERM. Only the first is a place the app cannot be updated
+  // from. A folder the user lacks permission for — /Applications on a standard account —
+  // is Squirrel's to deal with; "move the app to Applications" would be wrong advice
+  // for an app that is already there.
+  const fsWith = (code) => ({ constants: { W_OK: 2 }, accessSync() { if (code) { const e = new Error(code); e.code = code; throw e; } } });
+  check('isReadOnlyDir: a read-only volume (EROFS) is read-only',
+    () => assert.strictEqual(extract('isReadOnlyDir', { fs: fsWith('EROFS') })('/Volumes/x'), true));
+  check('isReadOnlyDir: a permission denial (EACCES) is NOT',
+    () => assert.strictEqual(extract('isReadOnlyDir', { fs: fsWith('EACCES') })('/Applications'), false));
+  check('isReadOnlyDir: nor is EPERM',
+    () => assert.strictEqual(extract('isReadOnlyDir', { fs: fsWith('EPERM') })('/Applications'), false));
+  check('isReadOnlyDir: a writable folder is not',
+    () => assert.strictEqual(extract('isReadOnlyDir', { fs: fsWith(null) })('/Applications'), false));
+}
+
+// ── progress and failures reach every window ─────────────────────────────────
+// Same-origin child windows get the preload and the banner too, and the one that
+// started the install need not be getAllWindows()[0].
+console.log('\nupdate messages are broadcast:');
+{
+  const win = (destroyed) => ({ got: [], isDestroyed: () => destroyed, webContents: { send(ch, m) { this.owner.got.push([ch, m]); } } });
+  const a = win(false), b = win(false), dead = win(true);
+  for (const w of [a, b, dead]) w.webContents.owner = w;
+  const broadcastUpdate = extract('broadcastUpdate', { BrowserWindow: { getAllWindows: () => [a, b, dead] } });
+  broadcastUpdate('update:failed', 'boom');
+  check('every live window receives it', () => {
+    assert.deepStrictEqual(a.got, [['update:failed', 'boom']]);
+    assert.deepStrictEqual(b.got, [['update:failed', 'boom']]);
+  });
+  check('a destroyed window is skipped', () => assert.deepStrictEqual(dead.got, []));
+  check('sendUpdateLog and sendUpdateFailed both go through it', () => {
+    assert.ok(/broadcastUpdate\('update:log'/.test(source('sendUpdateLog')));
+    assert.ok(/broadcastUpdate\('update:failed'/.test(source('sendUpdateFailed')));
+  });
 }
 
 // ── 3–4. getUpdater: listeners once, errors only during an install ───────────
 console.log('\ngetUpdater():');
 function harness() {
+  // Electron's own autoUpdater — the one Squirrel drives.
+  const native = new EventEmitter();
   const fake = Object.assign(new EventEmitter(), {
     autoDownload: true, autoInstallOnAppQuit: true, quitCalls: 0,
-    quitAndInstall() { this.quitCalls++; },
+    // What MacUpdater.quitAndInstall() does before Squirrel has the update: it adds
+    // its own native listener, and nothing removes it if Squirrel then fails.
+    quitAndInstall() { this.quitCalls++; native.on('update-downloaded', () => {}); },
   });
-  const upd = { updater: null, inFlight: false };
+  const upd = { updater: null, inFlight: false, installing: false, nativeListeners: [] };
   const logs = [], failures = [];
   const getUpdater = extract('getUpdater', {
-    require: (m) => { assert.strictEqual(m, 'electron-updater'); return { autoUpdater: fake }; },
+    require: (m) => {
+      if (m === 'electron-updater') return { autoUpdater: fake };
+      if (m === 'electron') return { autoUpdater: native };
+      throw new Error('unexpected require ' + m);
+    },
     upd,
     sendUpdateLog: (l) => logs.push(l),
     sendUpdateFailed: (m) => failures.push(m),
   });
-  return { fake, upd, logs, failures, getUpdater };
+  return { fake, native, upd, logs, failures, getUpdater };
 }
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 {
   const h = harness();
   const a = h.getUpdater(), b = h.getUpdater();
@@ -147,13 +192,84 @@ function harness() {
     assert.deepStrictEqual(h.failures, ['Code signature did not match']);
     assert.strictEqual(h.upd.inFlight, false);
   });
-  check('a downloaded update is installed', () => new Promise((resolve, reject) => {
-    h.fake.emit('update-downloaded', { version: '9.9.9' });
-    setTimeout(() => {
-      try { assert.strictEqual(h.fake.quitCalls, 1); resolve(); } catch (e) { reject(e); }
-    }, 1200);
-  }));
 }
+check('a downloaded update is installed', async () => {
+  const h = harness(); h.getUpdater();
+  h.upd.inFlight = true;
+  h.fake.emit('update-downloaded', { version: '9.9.9' });
+  await wait(1200);
+  assert.strictEqual(h.fake.quitCalls, 1);
+});
+// Seen in an end-to-end run: the same update downloaded twice fired update-downloaded
+// twice, and the second quitAndInstall() threw Squirrel's "The command is disabled and
+// cannot be executed" out of a timer — an uncaught exception in the main process, which
+// Electron shows the user as a crash dialog.
+check('a second update-downloaded does not install twice', async () => {
+  const h = harness(); h.getUpdater();
+  h.upd.inFlight = true;
+  h.fake.emit('update-downloaded', { version: '9.9.9' });
+  h.fake.emit('update-downloaded', { version: '9.9.9' });
+  await wait(1200);
+  assert.strictEqual(h.fake.quitCalls, 1);
+});
+check('quitAndInstall() throwing becomes a reported failure, not a crash', async () => {
+  const h = harness(); h.getUpdater();
+  h.fake.quitAndInstall = () => { throw new Error('The command is disabled and cannot be executed'); };
+  h.upd.inFlight = true;
+  h.fake.emit('update-downloaded', { version: '9.9.9' });
+  await wait(1200);                      // an escaping throw would crash this process here
+  assert.deepStrictEqual(h.failures, ['The command is disabled and cannot be executed']);
+  assert.strictEqual(h.upd.inFlight, false);
+});
+check('after a failed install the next attempt installs again', async () => {
+  const h = harness(); h.getUpdater();
+  h.upd.inFlight = true;
+  h.fake.emit('update-downloaded', { version: '9.9.9' });
+  await wait(1100);
+  h.fake.emit('error', new Error('Squirrel: code signature did not match'));
+  h.upd.inFlight = true;                 // the user pressed Retry
+  h.fake.emit('update-downloaded', { version: '9.9.9' });
+  await wait(1100);
+  assert.strictEqual(h.fake.quitCalls, 2);
+});
+check('a failed Squirrel attempt leaves no library listener behind for the Retry', async () => {
+  const h = harness(); h.getUpdater();
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    h.upd.inFlight = true;
+    h.fake.emit('update-downloaded', { version: '9.9.9' });
+    await wait(1100);
+    assert.strictEqual(h.native.listenerCount('update-downloaded'), 1, `attempt ${attempt}: before the failure`);
+    h.fake.emit('error', new Error('Squirrel: code signature did not match'));
+    assert.strictEqual(h.native.listenerCount('update-downloaded'), 0, `attempt ${attempt}: after the failure`);
+  }
+});
+
+// ── checkUpdate trusts electron-updater's verdict ────────────────────────────
+// It returns updateInfo for a release it has REJECTED too (staged rollout,
+// minimumSystemVersion); comparing versions here offered an update whose
+// downloadUpdate() then failed with "Please check update first" on every Retry.
+console.log('\ncheckUpdate():');
+function checkWith(result) {
+  return extract('checkUpdate', {
+    app: { getVersion: () => '7.18.0' },
+    process: { platform: 'darwin' },
+    getUpdater: () => ({ checkForUpdates: async () => result }),
+    installBlocker: () => null, appExePath: () => '', isReadOnlyDir: () => false,
+  })();
+}
+check('a newer release electron-updater rejected is not offered', async () => {
+  const r = await checkWith({ isUpdateAvailable: false, updateInfo: { version: '99.0.0' } });
+  assert.strictEqual(r.available, false);
+});
+check('an accepted release is offered', async () => {
+  const r = await checkWith({ isUpdateAvailable: true, updateInfo: { version: '7.19.0' } });
+  assert.strictEqual(r.available, true);
+  assert.strictEqual(r.version, '7.19.0');
+});
+check('an unpackaged run (null result) offers nothing', async () => {
+  const r = await checkWith(null);
+  assert.strictEqual(r.available, false);
+});
 
 // ── 1 (again). the quit must not be eaten by close-to-tray ───────────────────
 console.log('\nSquirrel.Mac can quit the app:');
@@ -169,13 +285,13 @@ check('the close-to-tray handler still honours app.isQuiting', () => {
 // ── startUpdate ──────────────────────────────────────────────────────────────
 console.log('\nstartUpdate():');
 function start({ platform = 'darwin', blocker = null, download = () => Promise.resolve() } = {}) {
-  const upd = { updater: null, inFlight: false };
+  const upd = { updater: null, inFlight: false, installing: false, nativeListeners: [] };
   let downloads = 0;
   const startUpdate = extract('startUpdate', {
     process: { platform },
     installBlocker: () => blocker,
     appExePath: () => '/x/Claude Code Studio.app/Contents/MacOS/Claude Code Studio',
-    canWriteDir: () => true,
+    isReadOnlyDir: () => false,
     getUpdater: () => ({ downloadUpdate: () => { downloads++; return download(); } }),
     upd,
   });
@@ -224,12 +340,12 @@ check('a blocked install shows "move to Applications" and no button', () => {
 });
 check('main → preload carry a failure that happens after start() has answered', () => {
   assert.ok(/onFailed:\s*\(cb\)\s*=>\s*ipcRenderer\.on\('update:failed'/.test(PRELOAD));
-  assert.ok(/webContents\.send\('update:failed'/.test(MAIN_CODE));
+  assert.ok(/broadcastUpdate\('update:failed'/.test(MAIN_CODE));
 });
 
 // The banner itself, RUN in a vm against a minimal DOM — the same technique as
 // test/terminal-keys.test.js. Source checks cannot tell a wired handler from a dead one.
-function runBanner({ check: checkRes, start: startRes }) {
+function runBanner({ check: checkRes, start: startRes, tickSpinner = false }) {
   const vm = require('vm');
   const els = [];
   const mk = () => {
@@ -241,7 +357,7 @@ function runBanner({ check: checkRes, start: startRes }) {
   const handlers = { log: [], failed: [] };
   const api = {
     check: () => Promise.resolve(checkRes),
-    start: () => Promise.resolve(startRes),
+    start: () => (startRes instanceof Error ? Promise.reject(startRes) : Promise.resolve(startRes)),
     onLog: (cb) => handlers.log.push(cb),
     onFailed: (cb) => handlers.failed.push(cb),
   };
@@ -249,7 +365,9 @@ function runBanner({ check: checkRes, start: startRes }) {
   const js = BANNER.replace(/^[\s\S]*?<script>/, '').replace(/<\/script>$/, '');
   vm.runInNewContext(js, {
     window: { electronAPI: { update: api } }, document: doc,
-    setInterval: () => 0, clearInterval: () => {}, Date, Math, Promise,
+    // tickSpinner fires each interval once, at once: the spinner's first tick
+    // is what overwrites the title with "Updating… 0s".
+    setInterval: (fn) => { if (tickSpinner) fn(); return 1; }, clearInterval: () => {}, Date, Math, Promise,
   });
   // build() creates, in order: bar, msg, btn, log, close, spinner.
   const [bar, msgEl, btn, logEl] = els.slice(2);
@@ -290,6 +408,24 @@ check('banner: clicking twice does not stack log handlers', async () => {
   b.btn.onclick(); await tick();
   b.btn.onclick(); await tick();
   assert.strictEqual(b.handlers.log.length, 1);
+});
+check('banner: a click refused as blocked puts the title back (no frozen "Updating…")', async () => {
+  const b = runBanner({ check: { available: true, version: '9.0.0' }, start: { installBlocked: 'read-only' }, tickSpinner: true });
+  await tick();
+  b.btn.onclick();
+  assert.strictEqual(b.msgEl.textContent, 'upd.updating', 'harness: the spinner tick did not run');
+  await tick();
+  assert.strictEqual(b.msgEl.textContent, 'upd.new_version');
+  assert.strictEqual(b.logEl.textContent, 'upd.move_to_apps');
+});
+check('banner: a rejected start() turns into Retry instead of spinning forever', async () => {
+  const b = runBanner({ check: { available: true, version: '9.0.0' }, start: new Error('IPC channel closed') });
+  await tick();
+  b.btn.onclick();
+  await tick(); await tick();
+  assert.strictEqual(b.msgEl.textContent, 'upd.failed');
+  assert.strictEqual(b.btn.textContent, 'upd.retry');
+  assert.strictEqual(b.logEl.textContent, 'IPC channel closed');
 });
 check('every language has the new string and none keeps the removed ones', () => {
   const langs = HTML.match(/['"]upd\.available['"]\s*:/g) || [];
