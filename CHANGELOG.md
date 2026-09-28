@@ -1,5 +1,65 @@
 # Changelog
 
+## 7.18.0
+
+### macOS: a signed, notarized app that updates itself (#121)
+
+The macOS desktop app is now signed with a Developer ID certificate and notarized by
+Apple, so a `.dmg` downloaded from the release page opens without a Gatekeeper
+warning. With a signature in place it updates itself the way the Windows and Linux
+builds already did: click **Update** in the banner, watch the download percentage, and
+the app restarts on the new version. The app no longer runs `brew upgrade --cask`.
+
+- **Apple Silicon only.** macOS 27 no longer runs on Intel, and Homebrew moved Intel to
+  Tier 3 in September 2026. An Intel Mac keeps the version it already has. The minimum
+  is macOS 12, which is what Electron 42 itself requires.
+- **"Open in Terminal" keeps working under the hardened runtime.** The app carries the
+  Apple Events entitlement; without it macOS refuses the event to Terminal and never
+  asks the user.
+- **An update cannot get stuck in the tray.** Squirrel.Mac closes every window before
+  it quits, and the close-to-tray handler used to cancel that quit: the update stayed
+  staged and the app never restarted. Caught with two signed builds on a local feed.
+- **Started straight from the `.dmg` or from Downloads**, the app cannot replace itself
+  and says so ("move the app to Applications") instead of offering a button that fails.
+- **A failed update turns into Retry**, including a signature rejection that arrives
+  after the download. A failed *check* never turns the banner into an error.
+- **Homebrew stays for about a month**, only so installs from before this release,
+  whose update button still runs brew, can reach it.
+
+### macOS releases are built on the Mac, not in CI (#122)
+
+The certificate and the notarization profile live in one Mac's keychain, so
+`npm run release:mac` builds there and uploads nothing until `spctl` reports
+`Notarized Developer ID` for the app and for the app inside the `.dmg`, and
+`latest-mac.yml` carries the real checksums of the files going up. CI builds Windows
+and Linux.
+
+### Kanban: hand a task to an external agent (#109, #114, #116)
+
+A card can go to one of the configured CLI agents (OpenAI Codex, Grok, opencode,
+Cursor Agent and the rest) from its **Delegate** dialog, with the model and effort
+picked there. The card moves to In progress and the agent gets the task together with
+its chat history. The watchdog no longer evicts a task an external agent is still
+working on (#114), and the dialog lists the configured agents again: since #109 it had
+said "No agents configured" on every install (#116).
+
+### Terminal
+
+- **Esc, Tab, Ctrl and arrow keys on phones (#117).** Gboard has none of them. A row of
+  seven keys under the pane sends them, and Ctrl applies to the next key typed.
+- **Selected text is copied to the clipboard on mouse-up (#101).**
+- **No crash on a Linux host without a display (#108).** On a server, over SSH or in
+  Docker, delegating to a graphical terminal now answers with a clear error.
+
+### Other fixes
+
+- **The UI catches up after a reconnect or sleep (#107).** Tasks and replies that
+  finished while the laptop slept or the connection dropped are there on return, and a
+  task whose worker process died is recovered instead of hanging as "running".
+- **The "+ Group" button on the Kanban board opens its form again (#115).**
+- **Modals, dropdowns and cards fit small screens (#106, #114).**
+- **The analytics dashboard is translated (#100).**
+
 ## 7.17.0
 
 ### Add project from a Git URL (#94)
