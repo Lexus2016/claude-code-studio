@@ -75,45 +75,44 @@ spctl -a -vvv -t exec "$APP"          # after notarization: source=Notarized Dev
 xcrun stapler validate "$APP"
 ```
 
-## CI (`.github/workflows/release-desktop.yml`, job `build-mac`)
+## Releasing macOS (`npm run release:mac`)
 
-Repository secrets:
+macOS is **not built in CI**. The Developer ID certificate and the notarytool
+profile live only in the release Mac's keychain, and a runner has neither — while an
+unsigned mac build would break every installed copy, because Squirrel.Mac refuses an
+update not signed by the same Developer ID. `release-desktop.yml` builds Windows and
+Linux only.
 
-| Secret | Value |
-|---|---|
-| `MAC_CSC_LINK` | the certificate **with its private key**, exported as `.p12` and base64-encoded |
-| `MAC_CSC_KEY_PASSWORD` | the password set on that `.p12` export |
-| `APPLE_ID` | the Apple ID email |
-| `APPLE_APP_SPECIFIC_PASSWORD` | the app-specific password |
-| `APPLE_TEAM_ID` | `BKZ6Y9W9MF` |
-
-Export the `.p12`: Keychain Access → login → My Certificates → "Developer ID
-Application: Ievgenii Muran (BKZ6Y9W9MF)" → right-click → Export → `.p12`, with a
-password. Then:
+A release is two commands:
 
 ```bash
-base64 -i DeveloperID.p12 | gh secret set MAC_CSC_LINK
-gh secret set MAC_CSC_KEY_PASSWORD
-gh secret set APPLE_ID
-gh secret set APPLE_APP_SPECIFIC_PASSWORD
-gh secret set APPLE_TEAM_ID --body BKZ6Y9W9MF
-rm DeveloperID.p12
+npm run release patch     # tag + push → release.yml creates the GitHub Release,
+                          #   release-desktop.yml builds Windows/Linux
+npm run release:mac       # on this Mac: build, verify, upload, bump the cask
 ```
 
-The secrets are `MAC_`-prefixed because electron-builder reads `CSC_LINK` on Windows
-too. The job maps them onto the names electron-builder expects.
+`scripts/release-mac.js`, in this order (pinned by `test/release-mac.test.js`):
 
-The job has three outcomes, and only one of them publishes:
-
-- **No `MAC_CSC_LINK`** → the job **fails**. There is no unsigned fallback any more:
-  every installed copy updates through Squirrel.Mac, which refuses an update not
-  signed by the same Developer ID, and Gatekeeper blocks an unsigned dmg for every
-  new user. An unsigned release is a broken release.
-- **`MAC_CSC_LINK` but an incomplete `APPLE_*` set** → the job **fails**. Publishing a
-  signed but un-notarized dmg would look like success and behave like an unsigned
-  one.
-- **All five** → signed, notarized, stapled, published, together with the
-  `latest-mac.yml` the in-app updater reads.
+1. **Preflight.** HEAD is the tag `v<package.json version>`, the tree is clean, and
+   origin's tag points at the same commit (a moved local tag would build one commit and
+   publish it under another); the notarytool profile named by `APPLE_KEYCHAIN_PROFILE`
+   works; the GitHub Release exists and is not a draft (it waits up to 3 min for
+   `release.yml`).
+2. **`electron-builder --mac --publish never`.** Never `--publish always`: electron-builder
+   SKIPS notarization with one log line and exit 0 when the credentials are missing,
+   and that dmg would already be on the release.
+3. **Verify.** `codesign --verify --deep --strict`; `spctl` must exit 0 and say
+   `Notarized Developer ID` for the app AND for the app inside the mounted dmg, and both
+   must carry the tag's version; `stapler validate`; `latest-mac.yml` must name this
+   version's zip in `path:` and carry the actual sha512 of the zip and the dmg —
+   electron-updater checks the download against it, so a stale file breaks every
+   update.
+4. **Upload** with `gh release upload`: the dmg, the zip, both blockmaps and
+   `latest-mac.yml`. Mac assets already on the release are refused unless `--force`. If
+   the upload stops part-way, it says which files are on the release and which are not.
+5. **Bump the Homebrew cask** (transitional, below) — with the dmg's sha256 only after
+   it matches the `digest` GitHub reports for the uploaded asset. If only this step
+   fails, `npm run release:mac -- --cask-only` redoes it.
 
 ## In-app updates
 
@@ -158,11 +157,11 @@ exists now only so installs from before the signed release can reach it: their u
 button runs `brew upgrade --cask claude-code-studio`. Once they are on the new version
 the app updates itself and brew plays no part.
 
-- **One checksum line**, `sha256 "<hex>"`, plus `depends_on arch: :arm64`. The
-  `bump-cask` job rewrites `version` and that line, then **checks that both rewrites
-  happened**. `sed` exits 0 when its pattern matches nothing, so a cask still in the
-  old per-arch shape (`sha256 arm: …, intel: …`) would otherwise be pushed with the new
-  version and the old checksum, and every `brew install` would fail its sha check.
+- **One checksum line**, `sha256 "<hex>"`, plus `depends_on arch: :arm64`.
+  `release-mac.js` (`rewriteCask`) rewrites `version` and that line and **refuses** a
+  cask in any other shape: a regex that matches nothing leaves the old checksum in
+  place, and a cask with the new version and the old checksum fails every
+  `brew install`.
 - **`auto_updates false` stays for the transition.** With `true`, a plain `brew upgrade`
   skips the cask, and some of the installs this cask exists for update exactly that
   way. (An explicitly named `brew upgrade --cask claude-code-studio`, which is what the
@@ -177,8 +176,9 @@ the app updates itself and brew plays no part.
 
 1. In the tap, add `disable! date: "<today>", because: "is distributed as a signed .dmg that updates itself"`
    to the cask. brew then prints that reason instead of a missing-tap error.
-2. Remove the `bump-cask` job from `release-desktop.yml` and `homebrew-tap/README.md`
-   from this repo, and drop the bump-cask check from `test/mac-signing.test.js`.
+2. Remove `bumpCask()` and `--cask-only` from `scripts/release-mac.js` (and their checks
+   in `test/release-mac.test.js`), and `homebrew-tap/README.md` from this repo. The
+   `HOMEBREW_TAP_TOKEN` repo secret is already unused and can be deleted.
 
 ## Intel users already installed
 

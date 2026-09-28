@@ -1,19 +1,17 @@
 name: Release Desktop
 
 # Runs on the same version tags as the web release workflow. release.yml creates
-# the GitHub Release + changelog; this workflow builds the desktop apps for all
-# three OSes and uploads them to that release, then bumps the Homebrew Cask.
+# the GitHub Release + changelog; this workflow builds the Windows and Linux apps
+# and uploads them to that release. Both stay unsigned
+# (CSC_IDENTITY_AUTO_DISCOVERY=false).
 #
-# The cask bump depends on the macOS build ONLY (build-mac) — never on the
-# Windows/Linux legs. A slow Windows build no longer delays macOS auto-updates,
-# and a failing Windows/Linux build can no longer block the cask bump entirely
-# (previously `bump-cask: needs: build` waited for the whole matrix and was
-# skipped if any leg failed, so macOS users were stranded on the old version).
-#
-# macOS: Apple Silicon only, signed with the Developer ID certificate and notarized
-# (docs/electron-desktop/MAC-SIGNING.md). Without the MAC_CSC_* / APPLE_* secrets
-# the mac leg FAILS — the app self-updates via Squirrel.Mac, which refuses unsigned
-# updates. Windows/Linux stay unsigned (CSC_IDENTITY_AUTO_DISCOVERY=false).
+# macOS is NOT built here. It is signed with the Developer ID certificate and
+# notarized with a notarytool keychain profile, and both live only in the release
+# Mac's keychain — `npm run release:mac` builds, verifies and uploads it from there
+# (scripts/release-mac.js, docs/electron-desktop/MAC-SIGNING.md). A runner has
+# neither, and an unsigned mac build would break every installed copy: the app
+# updates itself through Squirrel.Mac, which refuses an update not signed by the
+# same Developer ID.
 on:
   push:
     tags: ['v*.*.*']
@@ -23,45 +21,7 @@ permissions:
   contents: write
 
 jobs:
-  build-mac:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-      - run: npm ci
-      - name: Build & publish desktop app (macOS)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # MAC_-prefixed secrets: electron-builder reads CSC_LINK on Windows too, so the
-          # name has to say which platform this certificate belongs to.
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          # No unsigned fallback. The app updates itself through Squirrel.Mac, which
-          # installs only an update signed by the same Developer ID — an unsigned
-          # release would be refused by every installed copy, and its dmg blocked by
-          # Gatekeeper for every new one.
-          if [ -z "${CSC_LINK:-}" ]; then
-            echo "::error::MAC_CSC_LINK is not set — refusing to publish an unsigned macOS build. See docs/electron-desktop/MAC-SIGNING.md."
-            exit 1
-          fi
-          if [ -z "${APPLE_ID:-}" ] || [ -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
-            # electron-builder would sign, log "skipped macOS notarization" and publish.
-            # Gatekeeper refuses a signed-but-unnotarized download exactly like an
-            # unsigned one, so that build is a failure that looks like a success.
-            echo "::error::MAC_CSC_LINK is set but APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID are not — refusing to publish a signed but un-notarized dmg."
-            exit 1
-          fi
-          npx electron-builder --mac --arm64 --publish always
-
-  build-others:
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -83,39 +43,3 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npx electron-builder ${{ matrix.args }} --publish always
-
-  bump-cask:
-    needs: build-mac
-    runs-on: ubuntu-latest
-    steps:
-      - name: Update Homebrew tap cask (skips if HOMEBREW_TAP_TOKEN not set)
-        env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "${TAP_TOKEN:-}" ]; then
-            echo "HOMEBREW_TAP_TOKEN not set — skipping cask bump. See homebrew-tap/README.md to enable the tap."
-            exit 0
-          fi
-          VERSION="${GITHUB_REF_NAME#v}"
-          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
-          curl -fL "$BASE/claude-code-studio-${VERSION}-arm64.dmg" -o arm64.dmg
-          ARM_SHA="$(shasum -a 256 arm64.dmg | awk '{print $1}')"
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/${GITHUB_REPOSITORY_OWNER}/homebrew-claude-code-studio.git" tap
-          CASK="tap/Casks/claude-code-studio.rb"
-          sed -i -E "s/^  version \".*\"/  version \"${VERSION}\"/" "$CASK"
-          sed -i -E "s/^  sha256 \"[a-f0-9]{64}\"/  sha256 \"${ARM_SHA}\"/" "$CASK"
-          # sed exits 0 when its pattern matches nothing. A cask in any other shape
-          # (the old per-arch `sha256 arm:/intel:` stanza) would be pushed with the
-          # NEW version and the OLD checksum — every install then fails brew's sha
-          # check. Refuse instead of publishing that.
-          grep -q "^  version \"${VERSION}\"$" "$CASK" && grep -q "^  sha256 \"${ARM_SHA}\"$" "$CASK" || {
-            echo "::error::$CASK was not updated to ${VERSION} / ${ARM_SHA} — it must carry a single-arch \`sha256 \"…\"\` line."
-            exit 1
-          }
-          cd tap
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/claude-code-studio.rb
-          git commit -m "chore: claude-code-studio ${VERSION}" || echo "cask unchanged"
-          git push

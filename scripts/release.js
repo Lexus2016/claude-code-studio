@@ -98,3 +98,7 @@ run(`git push origin ${tag}`);
 
 console.log(`\n✅ Done! GitHub Actions will create the release automatically.`);
 console.log(`   https://github.com/Lexus2016/claude-code-studio/releases/tag/${tag}\n`);
+// CI builds Windows/Linux only; macOS needs the Developer ID certificate and the
+// notarytool profile from this Mac's keychain (docs/electron-desktop/MAC-SIGNING.md).
+console.log(`🍎 macOS is not built by CI. On the Mac with the Developer ID certificate run:`);
+console.log(`   npm run release:mac\n`);
