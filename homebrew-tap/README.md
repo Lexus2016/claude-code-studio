@@ -16,11 +16,9 @@ Apple Silicon only (Intel dropped in September 2026). Signing and notarization:
 [Claude Code CLI](https://docs.anthropic.com/en/claude-code) installed and logged in.
 
 - **Tap repo (cask source of truth):** https://github.com/Lexus2016/homebrew-claude-code-studio
-- **Auto-bump:** the `bump-cask` job in
-  [`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml) updates the
-  tap's cask `version` + `sha256` (arm64 dmg) on every release, using the repo secret
-  `HOMEBREW_TAP_TOKEN`. If that secret is removed, the job skips cleanly (the release never fails)
-  and you bump the cask manually in the tap repo.
+- **Bump:** `npm run release:mac` (`scripts/release-mac.js`) rewrites the tap's cask
+  `version` + `sha256` from the dmg it has just verified and uploaded. The macOS build is
+  not made in CI, so neither is the bump.
 
 Versions before the signed release update by running `brew upgrade --cask claude-code-studio`; later ones update themselves.
 

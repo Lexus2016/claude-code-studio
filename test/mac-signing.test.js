@@ -8,11 +8,11 @@
 //   responsible process) under the hardened runtime. Without
 //   `com.apple.security.automation.apple-events` they are refused (-1743) with no
 //   prompt — "Open in Terminal" silently does nothing.
-// - electron-builder signs, logs "skipped macOS notarization" and publishes when
-//   the certificate is present but the APPLE_* credentials are not. Gatekeeper
-//   rejects that dmg exactly like an unsigned one.
-// - The tap bump rewrites the cask with `sed`, which exits 0 when nothing matched:
-//   a new version with the old checksum, and every `brew install` fails.
+// - A CI runner has neither the Developer ID certificate nor the notarytool
+//   profile. A mac leg there published an UNSIGNED build, and the app updates itself
+//   through Squirrel.Mac, which refuses an update not signed by the same Developer
+//   ID. macOS is released from the Mac that holds both (scripts/release-mac.js,
+//   pinned by test/release-mac.test.js), so CI must not build it at all.
 //
 // See docs/electron-desktop/MAC-SIGNING.md. Run: node test/mac-signing.test.js
 'use strict';
@@ -35,12 +35,6 @@ function check(label, fn) {
 function yamlBlock(src, name) {
   const m = new RegExp(`^${name}:\\n((?:(?:[ #].*)?\\n)*)`, 'm').exec(src);
   assert.ok(m, `no top-level "${name}:" block`);
-  return m[1];
-}
-// A job inside the workflow: from `  <job>:` to the next job at the same indent.
-function job(name) {
-  const m = new RegExp(`^  ${name}:\\n([\\s\\S]*?)(?=^  [a-z][\\w-]*:\\n|(?![\\s\\S]))`, 'm').exec(WF);
-  assert.ok(m, `no job "${name}" in release-desktop.yml`);
   return m[1];
 }
 const MAC = yamlBlock(YML, 'mac');
@@ -80,51 +74,32 @@ check('mac targets are arm64 only', () => {
   assert.ok(arches.length >= 2, `expected an arch on every mac target, got ${JSON.stringify(arches)}`);
   assert.deepStrictEqual([...new Set(arches)], ['arm64']);
 });
-check('the CI mac build asks for arm64 and nothing else', () => {
-  const run = /npx electron-builder --mac[^\n]*/.exec(job('build-mac'));
-  assert.ok(run, 'no electron-builder --mac invocation in build-mac');
-  assert.ok(/--arm64\b/.test(run[0]) && !/--x64\b|--universal\b/.test(run[0]), run[0]);
+check('npm run release:mac builds the mac target this config pins', () => {
+  const pkg = JSON.parse(read('package.json'));
+  assert.strictEqual(pkg.scripts['release:mac'], 'node scripts/release-mac.js');
+  assert.ok(/\['electron-builder', '--mac', '--publish', 'never'\]/.test(read('scripts/release-mac.js')));
 });
 
-// ── 3. CI signing: credentials in, half-configured refused ───────────────────
-check('build-mac maps the MAC_CSC_* and APPLE_* secrets into electron-builder\'s env', () => {
-  const j = job('build-mac');
-  for (const [env, secret] of [
-    ['CSC_LINK', 'MAC_CSC_LINK'], ['CSC_KEY_PASSWORD', 'MAC_CSC_KEY_PASSWORD'],
-    ['APPLE_ID', 'APPLE_ID'], ['APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_APP_SPECIFIC_PASSWORD'],
-    ['APPLE_TEAM_ID', 'APPLE_TEAM_ID'],
-  ]) {
-    assert.ok(new RegExp(`^\\s+${env}: \\$\\{\\{ secrets\\.${secret} \\}\\}$`, 'm').test(j), `${env} ← secrets.${secret}`);
-  }
+// ── 3. CI does not build macOS ───────────────────────────────────────────────
+// Code only: the header comment explains why, and names what it does not do.
+const WF_CODE = WF.split('\n').filter(l => !/^\s*#/.test(l)).join('\n');
+check('release-desktop.yml has no macOS leg', () => {
+  assert.ok(!/macos-/.test(WF_CODE), 'a macOS runner is still used');
+  assert.ok(!/--mac\b/.test(WF_CODE), 'electron-builder --mac is still run');
 });
-check('build-mac never switches signing off', () => {
-  // Squirrel.Mac (the in-app updater) refuses an update not signed by the same
-  // Developer ID, so an unsigned mac release is a broken release, not a fallback.
-  assert.ok(!/CSC_IDENTITY_AUTO_DISCOVERY/.test(job('build-mac')));
+check('...and carries no Apple signing secrets', () => {
+  assert.ok(!/MAC_CSC|APPLE_ID|APPLE_APP_SPECIFIC_PASSWORD|APPLE_TEAM_ID|CSC_LINK/.test(WF_CODE));
 });
-// The two guards, as the job's own shell runs them — before the build, both exit 1.
-function guard(re, what) {
-  const j = job('build-mac');
-  const g = re.exec(j);
-  assert.ok(g, `no ${what} guard`);
-  assert.ok(/exit 1/.test(g[0]), `${what} guard does not fail the job`);
-  assert.ok(j.indexOf(g[0]) < j.indexOf('npx electron-builder --mac'), `${what} guard must run before the build`);
-}
-check('no certificate fails the job', () =>
-  guard(/if \[ -z "\$\{CSC_LINK:-\}" \]; then[\s\S]*?\n\s*fi\n/, 'missing-certificate'));
-check('a certificate without notarization credentials fails the job', () =>
-  guard(/if[^\n]*APPLE_ID[^\n]*APPLE_APP_SPECIFIC_PASSWORD[^\n]*APPLE_TEAM_ID[\s\S]*?\n\s*fi\n/, 'partial-credentials'));
-
-// ── 4. tap bump ──────────────────────────────────────────────────────────────
-check('bump-cask fetches only the arm64 dmg and verifies what sed wrote', () => {
-  // Comment lines dropped: the one explaining the check names the old `intel:` stanza.
-  const j = job('bump-cask').split('\n').filter(l => !/^\s*#/.test(l)).join('\n');
-  assert.ok(/-arm64\.dmg/.test(j), 'arm64 dmg not fetched');
-  assert.ok(!/x64\.dmg|intel:/.test(j), 'still references the Intel build');
-  assert.ok(/grep -q "\^  sha256 \\"\$\{ARM_SHA\}\\"\$"/.test(j), 'no post-sed checksum verification');
+check('...and no cask bump (release-mac.js does it from the verified dmg)', () => {
+  assert.ok(!/bump-cask|HOMEBREW_TAP_TOKEN|homebrew-claude-code-studio/.test(WF_CODE));
+});
+check('Windows and Linux are still built and published there', () => {
+  assert.ok(/os: windows-latest[\s\S]*?args: "--win"/.test(WF_CODE));
+  assert.ok(/os: ubuntu-latest[\s\S]*?args: "--linux"/.test(WF_CODE));
+  assert.ok(/electron-builder \$\{\{ matrix\.args \}\} --publish always/.test(WF_CODE));
 });
 
-// ── 5. local settings never ship or get committed ────────────────────────────
+// ── 4. local settings never ship or get committed ────────────────────────────
 check('electron-builder.env is excluded from the bundle and from git', () => {
   assert.ok(/^\s+- "!electron-builder\.env"$/m.test(YML), 'not in the files: exclusions');
   assert.ok(/^electron-builder\.env$/m.test(read('.gitignore')), 'not in .gitignore');
