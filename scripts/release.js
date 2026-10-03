@@ -9,7 +9,7 @@
  *   npm run release major     (5.18.1 → 6.0.0)
  *
  * What it does:
- *   1. Bumps version in package.json
+ *   1. Bumps version in package.json and package-lock.json
  *   2. Commits: "chore: release v5.19.0"
  *   3. Tags: v5.19.0
  *   4. Pushes commit + tag → GitHub Actions creates the Release automatically
@@ -29,6 +29,7 @@ const fs   = require('fs');
 
 const ROOT = path.resolve(__dirname, '..');
 const PKG  = path.join(ROOT, 'package.json');
+const LOCK = path.join(ROOT, 'package-lock.json');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,13 +88,19 @@ try {
   }
 } catch {}
 
-// 2. Update package.json
+// 2. Update package.json, and the lockfile's two copies of the same number — v7.18.1
+//    shipped with the lockfile still saying 7.18.0 and needed a follow-up commit.
 pkg.version = version;
 fs.writeFileSync(PKG, JSON.stringify(pkg, null, 2) + '\n');
 console.log(`✓ package.json → ${version}`);
+const lock = JSON.parse(fs.readFileSync(LOCK, 'utf8'));
+lock.version = version;
+if (lock.packages && lock.packages['']) lock.packages[''].version = version;
+fs.writeFileSync(LOCK, JSON.stringify(lock, null, 2) + '\n');
+console.log(`✓ package-lock.json → ${version}`);
 
 // 3. Commit + tag
-run(`git add package.json`);
+run(`git add package.json package-lock.json`);
 run(`git commit -m "chore: release ${tag}"`);
 run(`git tag ${tag}`);
 console.log(`✓ Committed and tagged ${tag}`);
