@@ -1,5 +1,39 @@
 # Changelog
 
+## 7.18.3
+
+### The Subscription engine starts on a machine where `claude` was never opened (#126)
+
+On a fresh install, every new Docker container among them, an interactive `claude`
+stops on up to three screens before it accepts a message: the theme picker, "do you
+trust this folder?" and the Bypass Permissions warning. The Subscription engine did not
+recognise any of them and pasted your message into whichever was showing. Two of them
+start with **"No, exit"** selected, so the paste closed `claude`: the message was lost
+and the chat said only "failed to start" or "went idle".
+
+- **The screens no longer appear.** The engine answers them the way the default (API)
+  engine already does: `claude -p` never shows the trust question or the warning. The
+  warning is skipped with a command-line setting and no file is written. The theme and
+  trust answers have no flag, so they are written into the CLI's own config
+  (`~/.claude.json`, or `$CLAUDE_CONFIG_DIR/.claude.json`), and only when they are
+  missing. Only the folder the session runs in is trusted. A config file that cannot be
+  parsed is left as it is. Set `CCS_CLAUDE_FIRSTRUN_SEED=0` to turn this off.
+- **A screen the engine cannot answer is shown to you, not typed into.** These
+  unnumbered menus are now recognised, and the browser shows the "Claude is waiting
+  for your answer" banner for them. If the screen is still up when the wait ends, the
+  message is **not** sent: the chat shows the screen and asks you to answer it in the
+  engine pane, then send again.
+- **Your CLI config is handled with care.** A symlinked `~/.claude.json` keeps its
+  link, its permissions and owner are preserved, and if a running `claude` saves the
+  file at the same moment, the studio starts over from what it saved instead of
+  overwriting it.
+- **A numbered list you type is not mistaken for a question.** The detector tells the
+  input box from a real menu (including Claude's own AskUserQuestion menu), so a
+  draft such as `1. fix tests` is never held back.
+- Verified on Claude Code 2.1.288 with an empty home directory: the session opens
+  straight on its input box. The real screens are kept as test fixtures captured from
+  that CLI version.
+
 ## 7.18.2
 
 ### Expired sessions no longer leave their worktrees behind (#125)

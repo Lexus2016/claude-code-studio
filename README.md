@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.18.2** — **Expired chats clean up after themselves.** A session that expires (`SESSION_TTL_DAYS`, 30 days by default) now removes its git worktree, branch, terminal and queued messages, exactly like the delete button, so `data/worktrees` stops growing. Nothing that holds work is touched: a running session, an open terminal and a worktree with uncommitted or unmerged changes are kept, and so are the chat's Kanban cards. Worktrees left behind by earlier versions are cleaned up on start under the same rules. Also recent: in **v7.18.1** the Delegate dialog offers a model and an effort for every agent, and since **v7.18.0** the macOS app is signed, notarized and updates itself (Apple Silicon only).
+> **v7.18.3** — **The Subscription engine works on a fresh install.** On a machine where `claude` was never opened (any new Docker container, for one), the engine used to stop on Claude's first-run screens, close `claude` and lose the message. It now answers them the way the default engine already does, trusts only the folder the session runs in, and touches your `~/.claude.json` only when something is missing. A screen it cannot answer is shown to you instead of being typed into. Also recent: in **v7.18.2** expired chats remove their worktrees, and since **v7.18.0** the macOS app is signed, notarized and updates itself (Apple Silicon only).
 >
 > **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
 > `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)
