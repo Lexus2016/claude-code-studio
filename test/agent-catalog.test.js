@@ -85,8 +85,8 @@ check('a cleared catalog survives the defaults merge', () => {
   const { config } = mergeAgentDefaults(stored, defaults);
   assert.deepStrictEqual(config.externalAgents.claude.models, [], 'a cleared models catalog was re-seeded');
   assert.deepStrictEqual(config.externalAgents.claude.efforts, [], 'a cleared efforts catalog was re-seeded');
-  assert.ok(!/delete next\[k\][^\n]*\n[^\n]*\n?\s*\}\s*\n\s*config\.externalAgents\[id\] = next/.test(srvSrc) || srvSrc.includes('next[k] = sanitizeAgentCatalog(v);'),
-    'the endpoint deletes a cleared catalog instead of storing []');
+  const loop = srvSrc.slice(srvSrc.indexOf("for (const [k, v] of [['models', models]"), srvSrc.indexOf('config.externalAgents[id] = next;'));
+  assert.ok(loop.length > 0 && !loop.includes('delete next[k]'), 'the endpoint deletes a cleared catalog instead of storing []');
 });
 check('the endpoint imports the shared module', () => {
   assert.ok(srvSrc.includes("require('./agent-catalog')"),
