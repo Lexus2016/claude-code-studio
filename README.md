@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.18.0** — **The macOS app is signed and updates itself.** The Mac desktop app is now signed with a Developer ID certificate and notarized by Apple: the `.dmg` from the release page opens without a Gatekeeper warning, and a new version installs from the in-app banner in one click, with no Homebrew involved. It is built for Apple Silicon only. Also in this release: a **Kanban task can be handed to an external agent** (Codex, Grok, opencode and others) straight from its card, the terminal on a phone gets **Esc, Tab, Ctrl and arrow keys**, and the UI **catches up after a reconnect or sleep**: tasks that finished while you were away are there when you come back.
+> **v7.18.1** — **Model and effort for every delegated agent.** The Delegate dialog now offers a model and a reasoning effort for Codex, opencode and any other configured agent, not just Claude: list them in **Settings → Agents** (new Models and Reasoning efforts fields) and use `{model}` / `{effort}` in the agent's command template. Values that look like command-line flags are refused. Builds on **v7.18.0**: the macOS app is signed, notarized and updates itself from the in-app banner (Apple Silicon only).
 >
 > **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
 > `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)

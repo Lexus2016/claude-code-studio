@@ -1,5 +1,29 @@
 # Changelog
 
+## 7.18.1
+
+### Delegate dialog: model and effort for every agent, not only Claude (#123)
+
+The **Delegate** dialog offered Model and Effort choices for Claude Code and showed
+nothing for any other agent. The dialog reads those choices from the agent's own
+catalog, but the agent editor had no field to enter one, and
+`POST /api/external-agents` dropped whatever the client sent — so only the built-in
+`claude` entry, which ships with both catalogs, ever had them.
+
+- **Settings → Agents has two new fields, Models and Reasoning efforts**, as
+  comma-separated lists. They are what the Delegate dialog offers for the `{model}` /
+  `{effort}` placeholders, and the allow-list `/api/delegate` checks a chosen value
+  against. A choice appears only when the agent's command template actually contains
+  that placeholder (for example `codex -m {model} {prompt}`).
+- **An emptied field clears the catalog, and stays cleared.** The cleared list is
+  stored as `[]`: deleting the key let the defaults merge re-seed the built-in Claude
+  catalog on the very next config read.
+- **An entry that looks like an option (`-c`, `--dangerously-skip-permissions`) is
+  refused.** A catalog value becomes its own argv word, so it could otherwise arrive as
+  a flag. Entries are trimmed, de-duplicated, capped at 64 characters and 50 per list;
+  the browser applies the same rules as the server, and a test runs both on the same
+  inputs.
+
 ## 7.18.0
 
 ### macOS: a signed, notarized app that updates itself (#121)
