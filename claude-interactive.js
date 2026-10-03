@@ -31,6 +31,7 @@ const crypto = require('node:crypto');
 
 const { findClaudeBin } = require('./claude-cli');
 const { agentsMdPreamble } = require('./agents-md');
+const { seedClaudeFirstRun, SKIP_BYPASS_WARNING_SETTINGS } = require('./claude-firstrun');
 // ONE definition of the socket name, imported — never a second copy of the string.
 const { TMUX_SOCKET } = require('./terminal-bridge');
 
@@ -65,8 +66,9 @@ const AWAIT_CONFIRM_POLLS = 2;
 // 0 disables the hold and the turn completes exactly as it did before. The idle
 // watchdog above is untouched and stays the backstop for a prompt nobody answers.
 const AWAIT_GRACE_MS = parseInt(process.env.CLAUDE_PROMPT_GRACE_MS || '300000', 10) || 0;
-// How long a FRESHLY SPAWNED TUI is given to get past a startup dialog before the
-// prompt is pasted anyway. 0 restores the old behaviour (paste immediately).
+// How long a pane on a blocking dialog is given to be answered by a human before the
+// turn gives up WITHOUT pasting (see the block before the paste). 0 skips the check
+// and pastes immediately — the pre-#20 behaviour, kept as an explicit opt-out.
 const SPAWN_PROMPT_WAIT_MS = parseInt(process.env.CLAUDE_STARTUP_PROMPT_WAIT_MS || '90000', 10) || 0;
 // How many consecutive failed clarification pastes are attempted before the engine
 // gives up for the rest of the turn. A dead or unreachable pane fails on every
@@ -192,19 +194,72 @@ function paneBusy(pane, prevPane) {
 //     the turn ends on the idle watchdog. The live pane is still reachable by hand.
 // Both are why the caller ALSO requires the spinner to be stopped before believing it.
 const AWAIT_TAIL_LINES = 24;
+const CARET_RE = /^([❯➤►▶›»>])?\s*(\d{1,2})[.)]\s+\S/;
 function paneAwaitingInput(pane) {
   if (typeof pane !== 'string' || !pane) return false;
-  const lines = pane.split('\n').map(l => l.trim()).filter(Boolean);
-  let numbered = 0, caret = false;
-  for (const raw of lines.slice(-AWAIT_TAIL_LINES)) {
-    // Strip a leading box border so "│ ❯ 1. Yes" reads the same as "❯ 1. Yes".
-    const line = raw.replace(/^[│┃|╎╏┆┊╷╵]+\s*/, '');
-    const m = /^([❯➤►▶›»>])?\s*(\d{1,2})[.)]\s+\S/.exec(line);
+  const lines = _paneLines(pane);
+  const from = Math.max(0, lines.length - AWAIT_TAIL_LINES);
+  let numbered = 0, caretAt = -1;
+  for (let i = from; i < lines.length; i++) {
+    const m = CARET_RE.exec(lines[i].trim());
     if (!m) continue;
     numbered++;
-    if (m[1]) caret = true;
+    if (m[1]) caretAt = i;
   }
-  return numbered >= 2 && caret;
+  // A numbered list the user TYPED into the input box ("1. fix the tests") is not a
+  // widget, however much it looks like one.
+  if (numbered >= 2 && caretAt >= 0 && !_inInputBox(lines, caretAt)) return true;
+  return paneAwaitingSelection(pane);
+}
+
+// Non-blank lines, trailing space dropped, a leading box border turned into indent so
+// "│ ❯ 1. Yes" reads like "  ❯ 1. Yes" and keeps its column.
+function _paneLines(pane) {
+  return pane.split('\n').map(l => l.replace(/\s+$/, '').replace(/^([│┃|╎╏┆┊╷╵]\s?)/, '  ')).filter(l => l.trim());
+}
+
+// Is line `i` inside the TUI's input box? The box is a region between two horizontal
+// rules whose FIRST line is the prompt caret. Measured on CLI 2.1.288, the
+// AskUserQuestion widget is ALSO framed by two rules — so "between two rules" alone
+// would hide it — but its first framed line is a header ("☐ Color"), never the caret.
+// Searched over the WHOLE capture, not the tail: a long draft pushes the box's top
+// rule out of any fixed window.
+const RULE_RE = /^[\s─━═╌╍┄┅-]{10,}$/;
+function _inInputBox(lines, i) {
+  let above = -1, below = -1;
+  for (let k = i; k >= 0; k--) if (RULE_RE.test(lines[k])) { above = k; break; }
+  for (let k = i + 1; k < lines.length; k++) if (RULE_RE.test(lines[k])) { below = k; break; }
+  return above >= 0 && below >= 0 && /^\s?[❯➤►▶›»>](\s|$)/.test(lines[above + 1] || '');
+}
+
+// The OTHER widget: an unnumbered select. Measured on CLI 2.1.288, all three first-run
+// screens are this shape — the theme picker, the trust-this-folder question and the
+// Bypass Permissions warning — and the last two open with the caret on "No, exit":
+//
+//      Quick safety check: Is this a project you created or one you trust? …
+//    ❯ No, exit
+//      Yes, I trust this folder
+//    Enter to confirm · Esc to cancel
+//
+// Still structural, still no wording: the LAST caret line in the tail, when it is not
+// in the input box (_inInputBox), carries text and has at least one sibling option — an
+// adjacent line indented deeper than the caret. History cannot trip it: past prompts
+// render as "❯ text" too (measured), but the input box is below them while the pane is
+// usable, so they are never the last caret line.
+function paneAwaitingSelection(pane) {
+  if (typeof pane !== 'string' || !pane) return false;
+  const lines = _paneLines(pane);
+  const from = Math.max(0, lines.length - AWAIT_TAIL_LINES);
+  let at = -1, col = -1;
+  for (let i = lines.length - 1; i >= from; i--) {
+    const m = /^(\s*)[❯➤►▶›»]\s?/.exec(lines[i]);
+    if (m) { at = i; col = m[1].length; break; }
+  }
+  if (at < 0 || _inInputBox(lines, at)) return false;
+  if (!lines[at].slice(col + 1).trim()) return false;
+  const indent = (l) => l.length - l.trimStart().length;
+  const sibling = (l) => l !== undefined && !RULE_RE.test(l) && indent(l) > col;
+  return sibling(lines[at - 1]) || sibling(lines[at + 1]);
 }
 
 // The pane tail the browser banner shows, so the user can recognise the question
@@ -279,8 +334,21 @@ function spawnScriptDir() {
 
 // Full `claude` invocation for the interactive engine. Pure — the prompt is inline
 // here on purpose: this string becomes the script body, i.e. the child's argv.
-function buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath }) {
-  let cmd = `env -u CLAUDECODE ${shq(claudeBin)} ${idFlag} --model ${shq(modelAlias)} --dangerously-skip-permissions`;
+//
+// `configEnv` pins HOME and CLAUDE_CONFIG_DIR to the values claude-firstrun.js seeded:
+// the pane inherits the TMUX SERVER's environment, which survives a studio restart, so
+// a studio relaunched with a different CLAUDE_CONFIG_DIR would otherwise seed one config
+// and start `claude` on another.
+function buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath, configEnv = null }) {
+  let pin = '';
+  if (configEnv) {
+    if (!configEnv.CLAUDE_CONFIG_DIR) pin += ' -u CLAUDE_CONFIG_DIR';
+    if (configEnv.HOME) pin += ` HOME=${shq(configEnv.HOME)}`;
+    if (configEnv.CLAUDE_CONFIG_DIR) pin += ` CLAUDE_CONFIG_DIR=${shq(configEnv.CLAUDE_CONFIG_DIR)}`;
+  }
+  // --settings answers the Bypass Permissions warning the TUI shows for the flag
+  // before it — the same consent `claude -p` never asks for (claude-firstrun.js).
+  let cmd = `env -u CLAUDECODE${pin} ${shq(claudeBin)} ${idFlag} --model ${shq(modelAlias)} --dangerously-skip-permissions --settings ${shq(SKIP_BYPASS_WARNING_SETTINGS)}`;
   if (sp) cmd += ` --append-system-prompt ${shq(sp)}`;
   if (mcpPath) cmd += ` --mcp-config ${shq(mcpPath)}`;
   return cmd;
@@ -384,6 +452,7 @@ async function runInteractiveSingle(params) {
   // used to leave the browser showing "waiting for your answer" over a dead turn,
   // because the client clears it only on input_resolved or on the next send.
   let awaitAnnounced = false;       // 'input_needed' already sent for the prompt now on screen
+  let firstRunSeed = null;          // what claude-firstrun.js did before this spawn, for the error text
 
   try {
     // ── Resolve per-session config (system prompt, MCP, model) ─────────────
@@ -420,8 +489,13 @@ async function runInteractiveSingle(params) {
       if (!cid) cid = crypto.randomUUID();
       const idFlag = resuming ? `--resume ${shq(cid)}` : `--session-id ${shq(cid)}`;
 
+      // The theme picker and the trust question have no flag; seed the two keys that
+      // skip them before the TUI reads its config (claude-firstrun.js).
+      firstRunSeed = seedClaudeFirstRun({ workdir: workdir || process.cwd() });
+
       const claudeBin = findClaudeBin();
-      const innerCmd = buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath });
+      const innerCmd = buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath,
+        configEnv: { HOME: process.env.HOME || os.homedir(), CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR ? path.resolve(process.env.CLAUDE_CONFIG_DIR) : '' } });
 
       const env = utf8Env();
       delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses the child
@@ -458,8 +532,8 @@ async function runInteractiveSingle(params) {
       // question both look "settled" because they are static. Pasting the user's
       // message into one answers it with whichever option the text lands on. Tell
       // the browser and give a human a bounded window to clear it in the live pane
-      // (GitHub #20). On timeout we fall through and paste anyway — the pre-#20
-      // behaviour — so a false positive costs a delay, never a lost message.
+      // (GitHub #20). Most of them never appear now — claude-firstrun.js answers the
+      // three first-run screens before the spawn — and the check below catches the rest.
     }
 
     // A pane can be sitting on a blocking widget for either reason: a fresh TUI that
@@ -468,8 +542,9 @@ async function runInteractiveSingle(params) {
     // while its dialog was still up. Both fail the same way — the paste-buffer below
     // answers the widget with whatever option the caret sits on, which can be a
     // permission grant. So the check runs before EVERY paste, not only after a spawn.
-    // On timeout we fall through and paste anyway (the pre-#20 behaviour): a false
-    // positive costs a delay, never a lost message.
+    // On timeout the turn ends with the screen in the error instead of pasting: a
+    // false positive costs a delay and a resend, a true one no longer costs the
+    // message AND the session.
     if (SPAWN_PROMPT_WAIT_MS > 0 && paneAwaitingInput(capturePane(name))) {
       awaitAnnounced = true;
       wsSendAll({ type: 'input_needed', sessionId, engine: 'subscription', phase: spawned ? 'startup' : 'resume', prompt: promptExcerpt(capturePane(name)) });
@@ -481,6 +556,22 @@ async function runInteractiveSingle(params) {
       }
       awaitAnnounced = false;
       wsSendAll({ type: 'input_resolved', sessionId });
+      // Stop pressed while we waited: end here, before the paste. Falling through sent
+      // the message and Enter into the very dialog the wait was holding off.
+      if (abortController?.signal?.aborted) {
+        return { cid, completed: false, resultMeta: { durationMs: Date.now() - start }, fullText: '', fullThinking: '', toolEvents: [] };
+      }
+      // Still up after the whole window: do NOT paste. The old fall-through answered the
+      // widget with whatever the caret sat on — and two of the three startup screens
+      // open on "No, exit", so the paste quit `claude` and the message was lost anyway.
+      // Saying so, with the screen, is the only outcome that leaves anything to act on.
+      const still = capturePane(name);
+      if (paneAwaitingInput(still)) {
+        const why = firstRunSeed && firstRunSeed.reason && firstRunSeed.reason !== 'disabled'
+          ? ` (could not pre-answer the first-run screens in ${firstRunSeed.path}: ${firstRunSeed.reason})` : '';
+        wsSend({ type: 'error', error: `Claude is waiting on a screen in its terminal pane, so your message was not sent${why}. Answer it in the engine pane, then send again:\n\n${promptExcerpt(still, 10)}` });
+        return { cid, completed: false, resultMeta: null, fullText: '', fullThinking: '', toolEvents: [] };
+      }
     }
 
     // ── Record transcript offset BEFORE sending ────────────────────────────
@@ -900,4 +991,4 @@ function catchUpFromTranscript({ cid, startOffset = 0 } = {}) {
   return out;
 }
 
-module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, promptExcerpt, buildInteractiveCommand, tmuxLaunchCommand };
+module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, paneAwaitingSelection, promptExcerpt, buildInteractiveCommand, tmuxLaunchCommand };

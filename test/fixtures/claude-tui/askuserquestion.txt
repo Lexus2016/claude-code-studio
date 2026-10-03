@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.288
+▝▜██████▀  Haiku 4.5 · Claude Max
+ ▝▝   ▝▝   /srv/project
+
+⚠ CLAUDE.md is over the 40.0k-char limit (91.5k chars) · /memory to free up context
+
+❯ Use the AskUserQuestion tool exactly once to ask me which color I prefer, with the two options red and blue. Do not
+  do anything else.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Color
+
+Which color do you prefer?
+
+❯ 1. Red
+     A warm, vibrant color
+  2. Blue
+     A cool, calming color
+  3. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
