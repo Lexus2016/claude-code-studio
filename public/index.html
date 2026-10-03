@@ -4224,6 +4224,20 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <input id="agentTemplate" data-i18n-ph="agent.template.ph" placeholder="codex {prompt}" autocomplete="off">
         <div class="cmd-name-hint" data-i18n="agent.modal.template.hint">{prompt} — placeholder for task text</div>
       </div>
+      <!-- Catalogs for the {model} / {effort} placeholders. These are what the Delegate
+           dialog offers for this agent, and the allow-list the server validates a chosen
+           value against — never a list baked into the UI, which would go stale for every
+           CLI but Claude. -->
+      <div class="cmd-field">
+        <label for="agentModels" data-i18n="agent.modal.models.label">Models (comma-separated)</label>
+        <input id="agentModels" data-i18n-ph="agent.models.ph" placeholder="haiku, sonnet, opus" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="agent.modal.models.hint">Shown in the Delegate dialog for the {model} placeholder. Leave empty if this CLI takes no model choice.</div>
+      </div>
+      <div class="cmd-field">
+        <label for="agentEfforts" data-i18n="agent.modal.efforts.label">Reasoning efforts (comma-separated)</label>
+        <input id="agentEfforts" data-i18n-ph="agent.efforts.ph" placeholder="low, medium, high" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="agent.modal.efforts.hint">Shown in the Delegate dialog for the {effort} placeholder. Leave empty if this CLI takes no effort choice.</div>
+      </div>
       <div class="cmd-field">
         <label for="agentInteractive" data-i18n="agent.modal.interactive.label">Interactive command</label>
         <input id="agentInteractive" placeholder="codex" autocomplete="off">
@@ -4972,6 +4986,8 @@ const TRANSLATIONS = {
     'agent.modal.id.label':'ID','agent.id.ph':'codex, agy, aider...','agent.modal.id.hint':'Латинські букви, цифри, - та _',
     'agent.modal.label.label':'Назва','agent.label.ph':'OpenAI Codex',
     'agent.modal.template.label':'Шаблон команди','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — підставиться текст завдання',
+    'agent.modal.models.label':'Моделі (через кому)','agent.models.ph':'haiku, sonnet, opus','agent.modal.models.hint':'Показуються в діалозі делегування для плейсхолдера {model}. Порожньо, якщо CLI не приймає вибір моделі.',
+    'agent.modal.efforts.label':'Рівні міркування (через кому)','agent.efforts.ph':'low, medium, high','agent.modal.efforts.hint':'Показуються в діалозі делегування для плейсхолдера {effort}. Порожньо, якщо CLI не приймає вибір рівня.',
     'agent.add.btn':'Додати','agent.save.btn':'Зберегти',
     'agent.test.title':'Перевірити наявність','agent.test.fail':'Команду не знайдено в системі',
     'agent.err.empty':'Заповніть всі поля','agent.err.id':'ID: тільки латинські букви, цифри, - та _',
@@ -5375,6 +5391,8 @@ const TRANSLATIONS = {
     'agent.modal.id.label':'ID','agent.id.ph':'codex, agy, aider...','agent.modal.id.hint':'Letters, digits, - and _ only',
     'agent.modal.label.label':'Label','agent.label.ph':'OpenAI Codex',
     'agent.modal.template.label':'Command template','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — replaced with task text',
+    'agent.modal.models.label':'Models (comma-separated)','agent.models.ph':'haiku, sonnet, opus','agent.modal.models.hint':'Offered in the Delegate dialog for the {model} placeholder. Leave empty if this CLI takes no model choice.',
+    'agent.modal.efforts.label':'Reasoning efforts (comma-separated)','agent.efforts.ph':'low, medium, high','agent.modal.efforts.hint':'Offered in the Delegate dialog for the {effort} placeholder. Leave empty if this CLI takes no effort choice.',
     'agent.add.btn':'Add','agent.save.btn':'Save',
     'agent.test.title':'Test availability','agent.test.fail':'Command not found on system',
     'agent.err.empty':'Fill in all fields','agent.err.id':'ID: letters, digits, - and _ only',
@@ -5778,6 +5796,8 @@ const TRANSLATIONS = {
     'agent.modal.id.label':'ID','agent.id.ph':'codex, agy, aider...','agent.modal.id.hint':'Латинские буквы, цифры, - и _',
     'agent.modal.label.label':'Название','agent.label.ph':'OpenAI Codex',
     'agent.modal.template.label':'Шаблон команды','agent.template.ph':'codex {prompt}','agent.modal.template.hint':'{prompt} — подставится текст задачи',
+    'agent.modal.models.label':'Модели (через запятую)','agent.models.ph':'haiku, sonnet, opus','agent.modal.models.hint':'Показываются в диалоге делегирования для плейсхолдера {model}. Пусто, если CLI не принимает выбор модели.',
+    'agent.modal.efforts.label':'Уровни рассуждений (через запятую)','agent.efforts.ph':'low, medium, high','agent.modal.efforts.hint':'Показываются в диалоге делегирования для плейсхолдера {effort}. Пусто, если CLI не принимает выбор уровня.',
     'agent.add.btn':'Добавить','agent.save.btn':'Сохранить',
     'agent.test.title':'Проверить наличие','agent.test.fail':'Команда не найдена в системе',
     'agent.err.empty':'Заполните все поля','agent.err.id':'ID: только латинские буквы, цифры, - и _',
@@ -6121,7 +6141,10 @@ const TRANSLATIONS = {
     "agents.hint":"Agents externes pour la délégation de tâches.","agent.add.new":"Ajouter un agent","agent.edit.title":"Modifier","agent.del.title":"Supprimer","agent.del.confirm":"Supprimer l'agent",
     "agent.modal.add.title":"＋ Ajouter un agent","agent.modal.edit.title":"✏️ Modifier l'agent","agent.modal.cancel":"Annuler","agent.modal.id.label":"ID","agent.id.ph":"codex, agy, aider...",
     "agent.modal.id.hint":"Lettres, chiffres, - et _ uniquement","agent.modal.label.label":"Libellé","agent.label.ph":"OpenAI Codex","agent.modal.template.label":"Modèle de commande",
-    "agent.template.ph":"codex {prompt}","agent.modal.template.hint":"{prompt} — remplacé par le texte de la tâche","agent.add.btn":"Ajouter","agent.save.btn":"Enregistrer",
+    "agent.template.ph":"codex {prompt}","agent.modal.template.hint":"{prompt} — remplacé par le texte de la tâche",
+    "agent.modal.models.label":"Modèles (séparés par des virgules)","agent.models.ph":"haiku, sonnet, opus","agent.modal.models.hint":"Proposés dans la boîte de délégation pour le paramètre {model}. Laissez vide si ce CLI n'accepte aucun choix de modèle.",
+    "agent.modal.efforts.label":"Niveaux de raisonnement (séparés par des virgules)","agent.efforts.ph":"low, medium, high","agent.modal.efforts.hint":"Proposés dans la boîte de délégation pour le paramètre {effort}. Laissez vide si ce CLI n'accepte aucun choix de niveau.",
+    "agent.add.btn":"Ajouter","agent.save.btn":"Enregistrer",
     "agent.test.title":"Tester la disponibilité","agent.test.fail":"Commande introuvable sur le système","agent.err.empty":"Remplissez tous les champs",
     "agent.err.id":"ID : lettres, chiffres, - et _ uniquement","toast.agent_added":"✓ Agent ajouté","toast.agent_updated":"✓ Agent mis à jour","sec.sshHosts":"Hôtes SSH","ssh.add":"＋ Ajouter un hôte SSH",
     "ssh.del.title":"Supprimer","ssh.edit.title":"Modifier","ssh.test.title":"Tester la connexion","ssh.del.confirm":"Supprimer l'hôte « {name} » ?","ssh.deleted":"✓ Hôte supprimé",
@@ -6408,7 +6431,10 @@ const TRANSLATIONS = {
     "toast.cmd_added":"✓ הפקודה נוספה","toast.cmd_updated":"✓ הפקודה עודכנה","cmds.popup.hdr":"פקודות","sec.agents":"Agents","agents.hint":"Agents חיצוניים להאצלת משימות.","agent.add.new":"הוספת agent",
     "agent.edit.title":"עריכה","agent.del.title":"מחיקה","agent.del.confirm":"מחיקת agent","agent.modal.add.title":"＋ הוספת agent","agent.modal.edit.title":"✏️ עריכת agent","agent.modal.cancel":"ביטול",
     "agent.modal.id.label":"ID","agent.id.ph":"codex, agy, aider...","agent.modal.id.hint":"אותיות, ספרות, - ו-_ בלבד","agent.modal.label.label":"תווית","agent.label.ph":"OpenAI Codex",
-    "agent.modal.template.label":"תבנית פקודה","agent.template.ph":"codex {prompt}","agent.modal.template.hint":"{prompt} — יוחלף בטקסט המשימה","agent.add.btn":"הוספה","agent.save.btn":"שמירה",
+    "agent.modal.template.label":"תבנית פקודה","agent.template.ph":"codex {prompt}","agent.modal.template.hint":"{prompt} — יוחלף בטקסט המשימה",
+    "agent.modal.models.label":"מודלים (מופרדים בפסיק)","agent.models.ph":"haiku, sonnet, opus","agent.modal.models.hint":"מוצעים בתיבת ההאצלה עבור מציין המקום {model}. השאירו ריק אם ה-CLI אינו מקבל בחירת מודל.",
+    "agent.modal.efforts.label":"רמות חשיבה (מופרדות בפסיק)","agent.efforts.ph":"low, medium, high","agent.modal.efforts.hint":"מוצעות בתיבת ההאצלה עבור מציין המקום {effort}. השאירו ריק אם ה-CLI אינו מקבל בחירת רמה.",
+    "agent.add.btn":"הוספה","agent.save.btn":"שמירה",
     "agent.test.title":"בדיקת זמינות","agent.test.fail":"הפקודה לא נמצאה במערכת","agent.err.empty":"מלאו את כל השדות","agent.err.id":"ID: אותיות, ספרות, - ו-_ בלבד","toast.agent_added":"✓ ה-agent נוסף",
     "toast.agent_updated":"✓ ה-agent עודכן","sec.sshHosts":"SSH Hosts","ssh.add":"＋ הוספת host של SSH","ssh.del.title":"מחיקה","ssh.edit.title":"עריכה","ssh.test.title":"בדיקת חיבור",
     "ssh.del.confirm":"למחוק את ה-host \"{name}\"?","ssh.deleted":"✓ ה-host הוסר","ssh.modal.add.title":"🌐 הוספת host של SSH","ssh.modal.edit.title":"✏️ עריכת host של SSH",
@@ -14485,6 +14511,8 @@ function openAgentForm(id) {
   $i('agentResumeLast').value = cfg?.resumeLast || '';
   $i('agentNewIdFlag').value = cfg?.newIdFlag || '';
   $i('agentNewIdCommand').value = cfg?.newIdCommand || '';
+  $i('agentModels').value = Array.isArray(cfg?.models) ? cfg.models.join(', ') : '';
+  $i('agentEfforts').value = Array.isArray(cfg?.efforts) ? cfg.efforts.join(', ') : '';
   if (id) {
     btn.textContent = t('agent.save.btn');
     btn.setAttribute('data-i18n', 'agent.save.btn');
@@ -14508,6 +14536,14 @@ function cancelAgentForm() {
   _editingAgentId = null;
 }
 
+// Comma-separated -> array, trimmed, de-duplicated and capped the same way the
+// server's sanitizeAgentCatalog does, so the local mirror never disagrees with what
+// was stored. An empty box yields [] — a deliberate clear, not "keep the old list".
+function _parseAgentCatalog(value) {
+  return [...new Set(String(value || '').split(',').map(s => s.trim())
+    .filter(s => s && s.length <= 64 && !s.startsWith('-')))].slice(0, 50);
+}
+
 async function saveAgent() {
   const label = $i('agentLabel').value.trim();
   const fields = {
@@ -14518,6 +14554,8 @@ async function saveAgent() {
     newIdFlag:   $i('agentNewIdFlag').value.trim(),
     newIdCommand: $i('agentNewIdCommand').value.trim(),
   };
+  const models = _parseAgentCatalog($i('agentModels').value);
+  const efforts = _parseAgentCatalog($i('agentEfforts').value);
   // An agent needs at least one capability: delegation (template) or a terminal
   // session (interactive). Both is fine.
   if (!label || (!fields.template && !fields.interactive)) { toast(t('agent.err.empty'), true); return; }
@@ -14526,13 +14564,16 @@ async function saveAgent() {
   try {
     const r = await fetch('/api/external-agents', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ id, label, ...fields })
+      body: JSON.stringify({ id, label, ...fields, models, efforts })
     });
     const d = await r.json();
     if (d.error) { toast(d.error, true); return; }
     // Mirror the server's merge semantics: an empty field clears, a filled one sets.
     const next = { ...(_externalAgents[id] || {}), label };
     for (const [k, v] of Object.entries(fields)) { if (v) next[k] = v; else delete next[k]; }
+    // [] (not delete), as the server stores it — a deleted key is re-seeded from the defaults.
+    next.models = models;
+    next.efforts = efforts;
     _externalAgents[id] = next;
     toast(_editingAgentId ? t('toast.agent_updated') : t('toast.agent_added'));
   } catch (e) { toast(e.message, true); return; }

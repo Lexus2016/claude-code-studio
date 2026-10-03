@@ -115,6 +115,7 @@ const UNATTENDED_MAX_TURNS = 30;
 const { isTransientOverload, shouldRetryOverload, detectUsageLimit, taskStatusForStop } = require('./rate-limit-utils');
 const { detectAuthError, authErrorNotice } = require('./auth-errors');
 const { buildTerminalCommand: buildDelegateCommand, winTerminalArgs, hasCommand, isHeadless, getLinuxTerminalCandidates } = require('./delegate-terminal');
+const { sanitizeAgentCatalog } = require('./agent-catalog');
 const { isAgentSuccess, shouldAutoContinue, agentStopReason } = require('./multi-agent-result');
 const {
   resolveAgentCommands, supportsTerminal, mergeAgentDefaults, parseNewIdOutput,
@@ -11171,7 +11172,7 @@ app.get('/api/external-agents', (_, res) => {
 });
 
 app.post('/api/external-agents', express.json(), (req, res) => {
-  const { id, label, template, interactive, newIdFlag, resume, resumeLast } = req.body;
+  const { id, label, template, interactive, newIdFlag, resume, resumeLast, models, efforts } = req.body;
   if (!id || !label) return res.status(400).json({ error: 'id and label required' });
   // An agent is useful for delegation (template), for terminal sessions
   // (interactive), or both — but at least one, or it can do nothing.
@@ -11186,12 +11187,23 @@ app.post('/api/external-agents', express.json(), (req, res) => {
   // never wipes the other half.
   const prev = config.externalAgents[id] || {};
   const next = { ...prev, label };
-  // Arrays are preserved by the `...prev` spread above; they have no form field yet,
-  // so editing an agent in the UI must not silently drop the catalogs it shipped with.
   for (const [k, v] of Object.entries({ template, interactive, newIdFlag, resume, resumeLast })) {
     if (v === undefined) continue;              // not submitted — keep whatever is stored
     const s = String(v).trim();
     if (s) next[k] = s; else delete next[k];    // submitted empty — clear it
+  }
+  // The catalogs back a real form field, so they are handled separately: `undefined`
+  // means the client did not send them (keep what is stored), an array is sanitised,
+  // and an EMPTY array is a deliberate clear — that is how the user removes a catalog
+  // and the delegate modal stops offering the choice. A non-array (a typo) is refused
+  // rather than coerced, so a bad edit cannot silently become the string "opus".
+  // A clear is STORED as [] rather than deleting the key: mergeAgentDefaults()
+  // backfills every `undefined` field on each loadConfig(), so a deleted catalog on
+  // the built-in `claude` agent would be re-seeded by the very next read.
+  for (const [k, v] of [['models', models], ['efforts', efforts]]) {
+    if (v === undefined) continue;
+    if (!Array.isArray(v)) return res.status(400).json({ error: `${k} must be an array of strings` });
+    next[k] = sanitizeAgentCatalog(v);
   }
   config.externalAgents[id] = next;
   // If re-adding a previously removed default, clear the removal marker
