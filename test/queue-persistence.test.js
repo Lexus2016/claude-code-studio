@@ -322,12 +322,16 @@ console.log('\nwiring + the invariant the schema promises:');
     /if \(!msg \|\| !row\.session_id\) \{ try \{ stmts\.delQueuedMsg\.run\(row\.id\)/.test(SRC), true);
   // Every statement that can remove a row must be used somewhere — an unused one means a
   // path went back to memory-only.
-  // delQueuedBySession has THREE call sites: `stop` (tested above) and BOTH session-delete
-  // paths. The single-session DELETE was missing it — queued_messages has no FK, so
+  // delQueuedBySession has TWO call sites: `stop` (tested above) and teardownSessions(),
+  // the one session teardown every delete door goes through. The single-session DELETE
+  // was once missing it, and expiry never had it — queued_messages has no FK, so
   // boot-restore resurrected rows of a deleted chat on every restart, forever.
-  check('deleting a session drops its queued rows', /deleteSession[\s\S]{0,4000}?stmts\.delQueuedBySession\.run\(id\)/.test(SRC), true);
-  check('the single-session DELETE purges the queue too', /deleteSession\.run\(sid\)[\s\S]{0,600}?stmts\.delQueuedBySession\.run\(sid\)/.test(SRC), true);
-  for (const [name, count] of [['delQueuedMsg', 4], ['delQueuedBySession', 3], ['updQueuedMsg', 1]]) {
+  // test/session-expiry.test.js checks the expiry half against a real server.
+  const td = SRC.slice(SRC.indexOf('function teardownSessions('));
+  const tdBody = td.slice(0, td.indexOf('\n}\n') + 3);
+  check('deleting a session drops its queued rows', /deleteSession\.run\(id\)[\s\S]{0,400}?stmts\.delQueuedBySession\.run\(id\)/.test(tdBody), true);
+  check('the single-session DELETE goes through that teardown', /teardownSessions\(\[sessRow\]/.test(SRC), true);
+  for (const [name, count] of [['delQueuedMsg', 4], ['delQueuedBySession', 2], ['updQueuedMsg', 1]]) {
     const uses = (SRC.match(new RegExp(`stmts\\.${name}\\.run\\(`, 'g')) || []).length;
     check(`stmts.${name} is used at ${count} call site(s)`, uses, count);
   }

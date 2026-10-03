@@ -355,7 +355,7 @@ console.log('\na shared worktree is not removed while another session uses it:')
   // force:true means a removal that should not have happened reports no error at all,
   // so the guard has to come BEFORE the call rather than being cleaned up after.
   check('the delete path asks whether the worktree is still in use',
-    /_worktreeStillInUse\(sessRow\.workdir/.test(win), true);
+    /_worktreeStillInUseExcluding\(s\.workdir, batch\)/.test(win), true);
   check('and asks before removeWorktree, not after',
     win.indexOf('_worktreeStillInUse(') < win.indexOf('WM.removeWorktree'), true);
 }
@@ -434,8 +434,8 @@ console.log('\nno worktree is removed while another unit lives in it:');
   // the other as a holder — both keep the tree, then both vanish.
   check('the single-unit rule exists once', (SRV.match(/function _worktreeStillInUse\(/g) || []).length, 1);
   check('and the batch rule exists once', (SRV.match(/function _worktreeStillInUseExcluding\(/g) || []).length, 1);
-  check('bulk delete uses the batch rule', /_worktreeStillInUseExcluding\(s\.workdir, _bulkIds\)/.test(SRV), true);
-  check('and removes a shared tree only once per batch', /_bulkDone\.has\(s\.workdir\)/.test(SRV), true);
+  check('session teardown uses the batch rule', /_worktreeStillInUseExcluding\(s\.workdir, batch\)/.test(SRV), true);
+  check('and removes a shared tree only once per batch', /done\.has\(s\.workdir\)/.test(SRV), true);
   const h = SRV.slice(SRV.indexOf('function _worktreeStillInUse('));
   const hBody = h.slice(0, h.indexOf('\n}\n') + 3);
   // Counting only sessions missed the case that destroys work: a RECURRING task
@@ -446,11 +446,12 @@ console.log('\nno worktree is removed while another unit lives in it:');
   // FOUR removal sites, not three. The auto-merge in startTask was missed in the
   // first pass and the count of 4 (1 def + 3 uses) made the gap look complete —
   // the task's own sidecar session, and any compact of it, live in that same tree.
-  // 1 definition + 3 call sites: task auto-merge, task delete, session delete. Bulk
-  // uses the batch variant, and a COMPLETED CHAIN uses its own — the plain refcount
-  // counts the chain's own members and session, so it answered "in use" forever and
-  // the tree was never removed while the next cycle minted another.
-  check('the single-unit rule guards three sites', (SRV.match(/_worktreeStillInUse\(/g) || []).length, 4);
+  // 1 definition + 2 call sites: task auto-merge and task delete. Every SESSION
+  // delete — single, bulk and expiry — goes through teardownSessions(), which uses the
+  // batch variant (a batch of one is the single delete), and a COMPLETED CHAIN uses its
+  // own — the plain refcount counts the chain's own members and session, so it answered
+  // "in use" forever and the tree was never removed while the next cycle minted another.
+  check('the single-unit rule guards the two task sites', (SRV.match(/_worktreeStillInUse\(/g) || []).length, 3);
   check('a completed chain uses the chain-aware variant',
     /_chainWorktreeStillInUse\(chain, allChainTasks\)/.test(SRV), true);
   check('which exists once', (SRV.match(/function _chainWorktreeStillInUse\(/g) || []).length, 1);
@@ -460,14 +461,22 @@ console.log('\nno worktree is removed while another unit lives in it:');
   check('a failed check keeps the tree, never removes it',
     /catch \(e\) \{[\s\S]*?return true;\s*\}/.test(hBody) && !/catch[\s\S]*?return false;/.test(hBody), true);
   // Read before the cascade, the count still saw rows this delete is about to remove.
-  check('session delete counts AFTER its cascade',
-    SRV.indexOf('stmts.deleteTasksBySession.run(sid);') < SRV.indexOf('_worktreeStillInUse(sessRow.workdir'), true);
-  // The single delete was fixed first and the bulk one was left behind — this pin
-  // did not cover it, so the ordering bug looked closed while it was still live on
-  // the batch path. Both are pinned now.
-  check('bulk delete removes AFTER its cascade runs',
-    SRV.indexOf('del();') < SRV.indexOf('_worktreeStillInUseExcluding(s.workdir, _bulkIds)'), true);
-  check('and the cascade runs exactly once', (SRV.match(/^\s*del\(\);/gm) || []).length, 1);
+  // The single delete was fixed first and the bulk one was left behind, and expiry
+  // never removed a tree at all — three copies drift. There is one teardown now, and
+  // these pins are what keep it one.
+  const td = SRV.slice(SRV.indexOf('function teardownSessions('));
+  const tdBody = td.slice(0, td.indexOf('\n}\n') + 3);
+  check('session teardown counts AFTER its cascade',
+    tdBody.indexOf('stmts.deleteTasksBySession.run(id);') > 0 &&
+    tdBody.indexOf('})();') < tdBody.indexOf('_worktreeStillInUseExcluding(s.workdir, batch)'), true);
+  check('the teardown is defined once', (SRV.match(/function teardownSessions\(/g) || []).length, 1);
+  check('and all three doors use it — delete, bulk delete, expiry',
+    [/teardownSessions\(\[sessRow\], \{ deleteTasks: true \}\)/, /teardownSessions\(sessRows, \{ deleteTasks: true \}\)/,
+     /teardownSessions\(doomed, \{ deleteTasks: false \}\)/].map(re => re.test(SRV)), [true, true, true]);
+  check('no other code path removes a session worktree',
+    (SRV.match(/removeWorktree failed on (session|bulk) delete/g) || []).length, 1);
+  check('expiry never deletes sessions behind the teardown\'s back',
+    /DELETE FROM sessions WHERE updated_at/.test(SRV), false);
 }
 
 // ── A chain shares ONE tree and merges ONCE ────────────────────────────────
@@ -586,6 +595,38 @@ console.log('\na failed commit stops the merge and the removal:');
   // A parent got 403 on the result of the task it had just created.
   check('both MCP project guards resolve through git_root',
     (SRV.match(/git_root \|\| \w+\.workdir \|\| null\) !== \(task\.git_root/g) || []).length, 2);
+}
+
+// ── pruneOrphanWorktrees: the reconciliation behind session expiry ──────────
+// The end-to-end half (expiry at boot, a dirty tree, a fresh orphan) lives in
+// test/session-expiry.test.js. These are the cases it does not reach.
+{
+  console.log('\n— pruneOrphanWorktrees —');
+  const app = tmpDir('orph-app');
+  const proj = tmpDir('orph-proj');
+  initTestIdentity(proj);
+  fs.writeFileSync(path.join(proj, 'f.txt'), 'x\n');
+  git(['add', '.'], proj); git(['commit', '-qm', 'init'], proj);
+  const slug = path.join(app, 'data', 'worktrees', 'p1');
+  const mk = (name) => { const d = path.join(slug, name); git(['worktree', 'add', '-q', d, '-b', `ccs/${name}`], proj); return d; };
+  const owned = mk('session-owned');
+  const merged = mk('session-merged');
+  const ahead = mk('session-ahead');
+  initTestIdentity(ahead);
+  fs.writeFileSync(path.join(ahead, 'new.txt'), 'y\n');
+  git(['add', '.'], ahead); git(['commit', '-qm', 'unmerged work'], ahead);
+  const notGit = path.join(slug, 'session-notgit'); fs.mkdirSync(notGit);
+  const later = Date.now() + 2 * 3600 * 1000;   // everything reads as old
+  const r = WM.pruneOrphanWorktrees({ appDir: app, isReferenced: d => d === owned, now: later });
+  const reason = d => (r.kept.find(k => k.dir === d) || {}).reason || null;
+  check('a tree a row owns is not even inspected', [fs.existsSync(owned), reason(owned)], [true, null]);
+  check('a clean, merged orphan is removed', [r.removed.includes(merged), fs.existsSync(merged)], [true, false]);
+  check('…and its branch with it', git(['branch', '--list', 'ccs/session-merged'], proj), '');
+  check('an orphan with COMMITTED but unmerged work is kept', [fs.existsSync(ahead), reason(ahead)], [true, 'unmerged or uncommitted work']);
+  check('…and so is its branch', git(['branch', '--list', 'ccs/session-ahead'], proj).replace(/^[*+ ]+/, ''), 'ccs/session-ahead');
+  check('a directory that is not a worktree is kept, not rm -rf\'d', [fs.existsSync(notGit), reason(notGit)], [true, 'not a git worktree']);
+  check('no worktrees directory at all is not an error',
+    WM.pruneOrphanWorktrees({ appDir: tmpDir('orph-empty'), isReferenced: () => false }), { removed: [], kept: [] });
 }
 
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} passed, ${fail} failed`);
