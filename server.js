@@ -546,27 +546,73 @@ const CLEANUP_INTERVAL_HOURS = parseInt(process.env.CLEANUP_INTERVAL_HOURS || '2
 // ============================================
 
 /**
- * Delete sessions older than SESSION_TTL_DAYS.
- * Messages are auto-deleted via ON DELETE CASCADE.
+ * Delete sessions older than SESSION_TTL_DAYS, through the same teardownSessions()
+ * the delete buttons use — so an expired session's worktree, terminal pane and
+ * queued messages go with it instead of outliving the row that owned them.
+ *
+ * Expiry is unattended, so it skips what a user would have been asked about: a
+ * session that is running right now, one with a live terminal pane, and one whose
+ * worktree holds unmerged or uncommitted work. Those keep their row — and with it an
+ * owner for the tree — and are counted in the log rather than discarded. Its Kanban
+ * tasks are kept as well (deleteTasks: false); the FK unlinks them.
  */
 function cleanOldSessions() {
   try {
-    // Archive dashboard stats before deletion (ON DELETE CASCADE removes messages)
-    const toDelete = db.prepare(`SELECT id FROM sessions WHERE updated_at < datetime('now', '-' || ? || ' days')`).all(SESSION_TTL_DAYS);
-    if (toDelete.length > 0) {
-      archiveSessionStats(toDelete.map(r => r.id));
-      // Best-effort: kill interactive tmux sessions tied to expiring studio sessions
-      for (const r of toDelete) { try { killInteractiveTmux(r.id); } catch {} }
+    const expired = db.prepare(`SELECT * FROM sessions WHERE updated_at < datetime('now', '-' || ? || ' days')`).all(SESSION_TTL_DAYS);
+    const kept = { running: 0, terminal: 0, unmerged: 0 };
+    const doomed = expired.filter(s => {
+      if (activeTasks.has(s.id) || activeChatSessions.has(s.id)) { kept.running++; return false; }
+      let live = false;
+      try { live = termBridge.tmuxAvailable() && termBridge.hasSession(tmuxNameFor(s.id)); } catch {}
+      if (live) { kept.terminal++; return false; }
+      if (sessionHasUnmergedWork(s, { failSafe: true })) { kept.unmerged++; return false; }
+      return true;
+    });
+    teardownSessions(doomed, { deleteTasks: false });
+    if (doomed.length > 0) {
+      log.info(`[cleanup] Deleted ${doomed.length} sessions older than ${SESSION_TTL_DAYS} days`);
     }
-    const result = db.prepare(`DELETE FROM sessions WHERE updated_at < datetime('now', '-' || ? || ' days')`).run(SESSION_TTL_DAYS);
-    if (result.changes > 0) {
-      log.info(`[cleanup] Deleted ${result.changes} sessions older than ${SESSION_TTL_DAYS} days`);
+    if (kept.running + kept.terminal + kept.unmerged > 0) {
+      log.info('[cleanup] expired sessions kept', { ...kept, ttlDays: SESSION_TTL_DAYS });
     }
-    return result.changes;
+    pruneOrphanWorktrees();
+    return doomed.length;
   } catch (err) {
     log.error('[cleanup] Failed to clean old sessions:', err.message);
     return 0;
   }
+}
+
+/**
+ * Remove worktrees no row owns — the ones expiry leaked before it went through
+ * teardownSessions(). Every table that stores a unit's workdir counts as an owner;
+ * the cautious rules (age, unmerged work, no --force) live in worktree-manager.
+ */
+function pruneOrphanWorktrees() {
+  // Directory first: an install that never minted a worktree must not spawn git here.
+  if (!fs.existsSync(path.join(APP_DIR, 'data', 'worktrees')) || !WM.gitAvailable()) return;
+  let owned;
+  try {
+    owned = new Set();
+    for (const t of ['sessions', 'tasks', 'task_chains']) {
+      for (const r of db.prepare(`SELECT DISTINCT workdir FROM ${t} WHERE workdir IS NOT NULL`).all()) {
+        owned.add(path.resolve(r.workdir));
+        try { owned.add(fs.realpathSync(r.workdir)); } catch {}
+      }
+    }
+  } catch (e) {
+    // Fail SAFE: without the owner list every tree would read as an orphan.
+    log.warn('[cleanup] orphan worktree scan skipped — owner list unreadable', { err: e?.message });
+    return;
+  }
+  const isReferenced = (dir) => {
+    if (owned.has(path.resolve(dir))) return true;
+    try { return owned.has(fs.realpathSync(dir)); } catch { return false; }
+  };
+  const { removed, kept } = WM.pruneOrphanWorktrees({ appDir: APP_DIR, isReferenced });
+  if (removed.length) log.info(`[cleanup] Removed ${removed.length} orphan worktrees`);
+  const unmerged = kept.filter(k => k.reason === 'unmerged or uncommitted work');
+  if (unmerged.length) log.info('[cleanup] orphan worktrees kept — they hold work', { dirs: unmerged.map(k => k.dir) });
 }
 
 /**
@@ -8597,70 +8643,48 @@ ${transcript}`;
 });
 
 app.get('/api/sessions/:id/tasks-count', (req,res) => { res.json(stmts.countTasksBySession.get(req.params.id)); });
-app.delete('/api/sessions/:id', (req,res) => {
-  const sid = req.params.id;
-  const sessRow = stmts.getSession.get(sid);
-  // Deleting a session whose worktree still has unmerged commits or uncommitted
-  // changes silently discards real work — same guard as archiving in the design
-  // (there is no separate archive state in this app; delete is the one action).
-  // ?force=1 / body.force bypasses it, same convention as other confirm-to-proceed actions.
-  const force = req.query.force === '1' || req.body?.force === true;
-  if (sessRow && sessRow.git_root && sessRow.workdir && !force) {
-    let unmerged = false;
-    try {
-      unmerged = WM.hasUnmergedWork({ worktreeDir: sessRow.workdir, projectDir: sessRow.git_root, defaultBranch: WM.getDefaultBranch(sessRow.git_root), branch: sessRow.git_branch });
-    } catch { /* worktree already gone — nothing to lose */ }
-    if (unmerged) return res.status(409).json({ error: 'session has unmerged or uncommitted changes', code: 'UNMERGED_WORK' });
-  }
-  // Abort any running Claude subprocess for this session before deleting
-  const active = activeTasks.get(sid);
-  if (active) {
-    try { active.abortController.abort(); } catch {}
-    if (active.cleanupTimer) clearTimeout(active.cleanupTimer);
-    activeTasks.delete(sid);
-  }
-  chatBuffers.delete(sid);
-  // Archive dashboard stats before deletion (ON DELETE CASCADE removes messages)
-  archiveSessionStats([sid]);
-  // Best-effort: kill the interactive tmux session tied to this studio session
-  try { killInteractiveTmux(sid); } catch {}
-  // Unlink recurring tasks from session (preserve the schedule), delete the rest
-  db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(sid);
-  stmts.deleteTasksBySession.run(sid);
-  // Worktree removal comes AFTER the cascade above, deliberately. Read before it, the
-  // count still saw the task rows this delete is about to remove, and answered "in use"
-  // for a tree nothing would own a line later — a leak instead of a stranding.
-  // Never a bare rm -rf: always through git, so .git/worktrees/<name> never goes stale.
-  if (sessRow && sessRow.git_root && sessRow.workdir) {
-    if (_worktreeStillInUse(sessRow.workdir, { exceptSession: sid })) {
-      log.info('worktree kept — still in use by another unit', { sid, workdir: sessRow.workdir });
-    } else {
-      try { WM.removeWorktree({ projectDir: sessRow.git_root, worktreeDir: sessRow.workdir, branch: sessRow.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on session delete', { sid, err: e.message }); }
-    }
-  }
-  stmts.deleteSession.run(sid);
-  // queued_messages has no FK to sessions, so the cascade never reaches it. Bulk delete
-  // already does this; the single-session path did not, and boot-restore then resurrected
-  // rows belonging to a chat that no longer exists — forever, since nothing else deletes them.
-  try { stmts.delQueuedBySession.run(sid); } catch {}
-  sessionQueues.delete(sid);
-  res.json({ok:true});
-});
-app.post('/api/sessions/bulk-delete', (req,res) => {
-  // Array.isArray alone is not enough: better-sqlite3 treats a plain object bound as a
-  // parameter as a NAMED-parameter set and throws "Unknown named parameter" — a 500.
-  const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).filter(x => typeof x === 'string' && x);
-  if (ids.length === 0) return res.status(400).json({ error: 'no ids' });
-  const sessRows = ids.map(id => stmts.getSession.get(id)).filter(Boolean);
-  const force = req.body?.force === true;
-  if (!force) {
-    const blocked = sessRows.filter(s => {
-      if (!s.git_root || !s.workdir) return false;
-      try { return WM.hasUnmergedWork({ worktreeDir: s.workdir, projectDir: s.git_root, defaultBranch: WM.getDefaultBranch(s.git_root), branch: s.git_branch }); } catch { return false; }
-    }).map(s => s.id);
-    if (blocked.length > 0) return res.status(409).json({ error: 'some sessions have unmerged or uncommitted changes', code: 'UNMERGED_WORK', blocked });
-  }
-  // Abort running subprocesses before deleting
+
+/** Would deleting this session's worktree discard work? The one gate every delete
+ *  door asks before teardownSessions().
+ *
+ *  `failSafe` is what an unreadable tree means. A user-confirmed delete reads it as
+ *  "nothing to lose" (the tree is usually already gone, and the user can retry with
+ *  force); unattended expiry reads it as "keep it" — nobody is there to retry, and a
+ *  stale row costs nothing while a deleted tree cannot be brought back. */
+function sessionHasUnmergedWork(row, { failSafe = false } = {}) {
+  if (!row?.git_root || !row?.workdir) return false;
+  try {
+    return WM.hasUnmergedWork({ worktreeDir: row.workdir, projectDir: row.git_root, defaultBranch: WM.getDefaultBranch(row.git_root), branch: row.git_branch });
+  } catch { return failSafe; }
+}
+
+/** Delete sessions and everything that hangs off them — the ONE teardown.
+ *
+ *  Three doors delete sessions: DELETE /api/sessions/:id, bulk delete and expiry
+ *  (cleanOldSessions). Each used to carry its own copy, and the copies had drifted:
+ *  the single delete never killed the terminal pane, and expiry did nothing but
+ *  `DELETE FROM sessions` — every expired session's git worktree stayed on disk with
+ *  no row left to own it, and its queued_messages (no FK) came back at boot.
+ *
+ *  Callers decide WHETHER a session may go (the unmerged-work guard, what is still
+ *  running); this decides only what deleting one means. The one real difference is a
+ *  policy, so it is a parameter: a user-confirmed delete removes the chat's one-off
+ *  tasks (the UI asks with /tasks-count first), while expiry is unattended and must
+ *  not empty Kanban columns because a chat went quiet — its tasks keep their cards and
+ *  the FK sets session_id to NULL.
+ *
+ *  Worktree removal runs AFTER the row cascade: read before it, the in-use count still
+ *  sees the task rows this delete is about to remove and keeps a tree nobody owns a
+ *  moment later. The whole batch is excluded from that count, not one row at a time —
+ *  delete an origin and its compact together and each would otherwise keep the other's
+ *  tree alive, then both vanish. A tree is removed ONCE however many holders it had.
+ *  Never a bare rm -rf: always through git, so .git/worktrees/<name> never goes stale.
+ *  @param {object[]} rows  session rows (stmts.getSession shape)
+ *  @param {{deleteTasks: boolean}} opts
+ */
+function teardownSessions(rows, { deleteTasks }) {
+  const ids = rows.map(r => r.id);
+  if (ids.length === 0) return;
   for (const id of ids) {
     const active = activeTasks.get(id);
     if (active) {
@@ -8672,49 +8696,66 @@ app.post('/api/sessions/bulk-delete', (req,res) => {
   }
   // Archive dashboard stats before deletion (ON DELETE CASCADE removes messages)
   archiveSessionStats(ids);
-  // Best-effort: kill interactive tmux sessions tied to these studio sessions
-  for (const id of ids) { try { killInteractiveTmux(id); } catch {} }
-  // Terminal sessions live under their own tmux prefix and need their own cleanup,
-  // plus the scrollback file the reaper may have left behind.
   for (const id of ids) {
+    try { killInteractiveTmux(id); } catch {}
+    // Terminal sessions live under their own tmux prefix and need their own cleanup,
+    // plus the scrollback file the reaper may have left behind.
     try { termBridge.killSession(tmuxNameFor(id)); } catch {}
     try { fs.unlinkSync(path.join(os.tmpdir(), `ccsterm-sb-${id}.txt`)); } catch {}
   }
-  const del = db.transaction(() => {
+  db.transaction(() => {
     for (const id of ids) {
-      // Unlink recurring tasks from session (preserve the schedule), delete the rest
-      db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(id);
-      stmts.deleteTasksBySession.run(id); stmts.deleteSession.run(id); sessionQueues.delete(id);
+      if (deleteTasks) {
+        // Unlink recurring tasks from session (preserve the schedule), delete the rest
+        db.prepare(`UPDATE tasks SET session_id=NULL WHERE session_id=? AND recurrence IS NOT NULL`).run(id);
+        stmts.deleteTasksBySession.run(id);
+      }
+      stmts.deleteSession.run(id);
+      // queued_messages has no FK to sessions, so the cascade never reaches it.
       try { stmts.delQueuedBySession.run(id); } catch {}
     }
-  });
-  del();
-  // Runs AFTER the cascade above, for the same reason the single delete does: read
-  // before it, the count still sees the task rows the cascade is about to remove and
-  // keeps a tree nobody owns a moment later. Recurring tasks are UNLINKED rather than
-  // deleted there, so they still count — correctly: their auto-merge is skipped and
-  // that tree is their live cwd.
-  // Never a bare rm -rf — always through git so .git/worktrees/<name> never goes stale.
-  //
-  // Excluding only the row being processed is wrong for a BATCH: delete an origin and
-  // its compact together and each one sees the other still present, both answer "in
-  // use", and the tree survives with nobody left to own it. The whole batch is excluded
-  // instead, and a tree is removed ONCE however many of its holders are in the batch.
-  const _bulkIds = new Set(sessRows.map(r => r.id));
-  const _bulkDone = new Set();
-  for (const s of sessRows) {
-    if (s.git_root && s.workdir) {
-      if (_bulkDone.has(s.workdir)) {
-        // already handled for an earlier holder in this same batch
-      } else if (_worktreeStillInUseExcluding(s.workdir, _bulkIds)) {
-        log.info('worktree kept on bulk delete — still in use', { sid: s.id, workdir: s.workdir });
-      } else {
-        _bulkDone.add(s.workdir);
-        try { WM.removeWorktree({ projectDir: s.git_root, worktreeDir: s.workdir, branch: s.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on bulk delete', { sid: s.id, err: e.message }); }
-      }
+  })();
+  for (const id of ids) sessionQueues.delete(id);
+  const batch = new Set(ids);
+  const done = new Set();
+  for (const s of rows) {
+    if (!s.git_root || !s.workdir || done.has(s.workdir)) continue;
+    if (_worktreeStillInUseExcluding(s.workdir, batch)) {
+      log.info('worktree kept — still in use by another unit', { sid: s.id, workdir: s.workdir });
+      continue;
     }
+    done.add(s.workdir);
+    try { WM.removeWorktree({ projectDir: s.git_root, worktreeDir: s.workdir, branch: s.git_branch, force: true }); }
+    catch (e) { log.warn('removeWorktree failed on session delete', { sid: s.id, err: e.message }); }
   }
+}
 
+app.delete('/api/sessions/:id', (req,res) => {
+  const sid = req.params.id;
+  const sessRow = stmts.getSession.get(sid);
+  // Deleting a session whose worktree still has unmerged commits or uncommitted
+  // changes silently discards real work — same guard as archiving in the design
+  // (there is no separate archive state in this app; delete is the one action).
+  // ?force=1 / body.force bypasses it, same convention as other confirm-to-proceed actions.
+  const force = req.query.force === '1' || req.body?.force === true;
+  if (sessRow && !force && sessionHasUnmergedWork(sessRow)) {
+    return res.status(409).json({ error: 'session has unmerged or uncommitted changes', code: 'UNMERGED_WORK' });
+  }
+  if (sessRow) teardownSessions([sessRow], { deleteTasks: true });
+  res.json({ok:true});
+});
+app.post('/api/sessions/bulk-delete', (req,res) => {
+  // Array.isArray alone is not enough: better-sqlite3 treats a plain object bound as a
+  // parameter as a NAMED-parameter set and throws "Unknown named parameter" — a 500.
+  const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).filter(x => typeof x === 'string' && x);
+  if (ids.length === 0) return res.status(400).json({ error: 'no ids' });
+  const sessRows = ids.map(id => stmts.getSession.get(id)).filter(Boolean);
+  const force = req.body?.force === true;
+  if (!force) {
+    const blocked = sessRows.filter(s => sessionHasUnmergedWork(s)).map(s => s.id);
+    if (blocked.length > 0) return res.status(409).json({ error: 'some sessions have unmerged or uncommitted changes', code: 'UNMERGED_WORK', blocked });
+  }
+  teardownSessions(sessRows, { deleteTasks: true });
   res.json({ ok: true, deleted: ids.length });
 });
 app.get('/api/sessions/:id/git-status', (req, res) => {

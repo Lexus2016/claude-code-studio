@@ -200,6 +200,61 @@ function hasUnmergedWork({ worktreeDir, projectDir, defaultBranch, branch }) {
 }
 
 /**
+ * Remove every unit worktree under `<appDir>/data/worktrees` that no database row
+ * owns any more — the trees that leaked before session expiry learned to remove its
+ * own (SESSION_TTL_DAYS deleted the row and left the tree). The caller supplies
+ * `isReferenced(dir)`; this module does not read the database.
+ *
+ * Deliberately more cautious than removeWorktree(force:true), because nobody is
+ * watching and nobody confirmed anything:
+ *   - a tree younger than `minAgeMs` is kept — creation writes the tree first and
+ *     the owning row a moment later, and a clean fresh tree looks exactly like an
+ *     orphan in between;
+ *   - a tree with uncommitted changes, or commits its project's current branch does
+ *     not have, is kept and reported, never discarded;
+ *   - a tree whose project or branch cannot be read is kept (fail safe);
+ *   - removal is `git worktree remove` WITHOUT --force, so git itself refuses a tree
+ *     that changed between the check and the call.
+ * @returns {{ removed: string[], kept: Array<{dir: string, reason: string}> }}
+ */
+function pruneOrphanWorktrees({ appDir, isReferenced, minAgeMs = 60 * 60 * 1000, now = Date.now() }) {
+  const out = { removed: [], kept: [] };
+  const root = path.join(appDir, 'data', 'worktrees');
+  let projects;
+  try { projects = fs.readdirSync(root, { withFileTypes: true }).filter(d => d.isDirectory()); }
+  catch { return out; }   // no worktrees directory yet
+  for (const proj of projects) {
+    const projDir = path.join(root, proj.name);
+    let units;
+    try { units = fs.readdirSync(projDir, { withFileTypes: true }).filter(d => d.isDirectory()); }
+    catch { continue; }
+    for (const unit of units) {
+      const dir = path.join(projDir, unit.name);
+      const keep = (reason) => out.kept.push({ dir, reason });
+      if (isReferenced(dir)) continue;
+      try { if (now - fs.statSync(dir).mtimeMs < minAgeMs) { keep('recent'); continue; } }
+      catch { continue; }
+      let projectDir, branch;
+      try {
+        // A linked worktree's common dir is the main repository's `.git`.
+        projectDir = path.dirname(path.resolve(dir, _git(['rev-parse', '--git-common-dir'], dir)));
+        branch = _git(['branch', '--show-current'], dir);
+      } catch { keep('not a git worktree'); continue; }
+      if (!branch) { keep('detached HEAD'); continue; }
+      try {
+        if (hasUnmergedWork({ worktreeDir: dir, projectDir, defaultBranch: getDefaultBranch(projectDir), branch })) {
+          keep('unmerged or uncommitted work'); continue;
+        }
+        removeWorktree({ projectDir, worktreeDir: dir, branch, force: false });
+        out.removed.push(dir);
+      } catch (e) { keep(`git refused: ${String(e?.stderr || e?.message || e).trim().split('\n')[0]}`); }
+    }
+    try { fs.rmdirSync(projDir); } catch { /* not empty — still holds live trees */ }
+  }
+  return out;
+}
+
+/**
  * green/amber/red only — a merge CONFLICT happens in the shared project
  * root (projectDir), not in this worktree, so 'purple' is not derivable
  * from git state here. Callers overlay 'purple' from a stored conflict flag
@@ -255,6 +310,6 @@ module.exports = {
   gitAvailable, _resetGitAvailableCache,
   hasGitRepo, ensureGitInitialized, getDefaultBranch,
   branchNameFor, worktreePath,
-  ensureWorktree, removeWorktree, hasUnmergedWork,
+  ensureWorktree, removeWorktree, hasUnmergedWork, pruneOrphanWorktrees,
   getStatus, commitAll, mergeBranch,
 };
