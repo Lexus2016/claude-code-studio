@@ -597,7 +597,7 @@ function pruneOrphanWorktrees() {
     for (const t of ['sessions', 'tasks', 'task_chains']) {
       for (const r of db.prepare(`SELECT DISTINCT workdir FROM ${t} WHERE workdir IS NOT NULL`).all()) {
         owned.add(path.resolve(r.workdir));
-        try { owned.add(fs.realpathSync(r.workdir)); } catch {}
+        try { owned.add(fs.realpathSync.native(r.workdir)); } catch {}
       }
     }
   } catch (e) {
@@ -605,9 +605,13 @@ function pruneOrphanWorktrees() {
     log.warn('[cleanup] orphan worktree scan skipped — owner list unreadable', { err: e?.message });
     return;
   }
+  // `.native`, not plain realpathSync: the JS one keeps the caller's LETTER CASE, so on
+  // a case-insensitive disk (macOS, Windows) a row stored as /Users/x and a scan of
+  // /users/x name one tree and still compare unequal — and an owned tree reads as an
+  // orphan. The native call returns the on-disk spelling for both sides.
   const isReferenced = (dir) => {
     if (owned.has(path.resolve(dir))) return true;
-    try { return owned.has(fs.realpathSync(dir)); } catch { return false; }
+    try { return owned.has(fs.realpathSync.native(dir)); } catch { return true; }   // unreadable: keep
   };
   const { removed, kept } = WM.pruneOrphanWorktrees({ appDir: APP_DIR, isReferenced });
   if (removed.length) log.info(`[cleanup] Removed ${removed.length} orphan worktrees`);
@@ -3966,7 +3970,12 @@ function _worktreeStillInUseExcluding(workdir, ids) {
     const rows = db.prepare(`SELECT id FROM sessions WHERE workdir=?`).all(workdir).map(r => r.id);
     if (rows.some(id => !ids.has(id))) return true;
     const t = db.prepare(`SELECT COUNT(*) c FROM tasks WHERE workdir=?`).get(workdir).c;
-    return t > 0;
+    // A chain owns its tree before any member carries it (setupChainWorktree writes the
+    // chain row first), so a chain's session expiring must not take the tree with it.
+    // A COMPLETED chain's tree is removed by its own rule; a stale path here only keeps
+    // a tree that is already gone.
+    const c = db.prepare(`SELECT COUNT(*) c FROM task_chains WHERE workdir=?`).get(workdir).c;
+    return t + c > 0;
   } catch (e) {
     log.warn('worktree in-use check failed — keeping the tree', { workdir, err: e?.message });
     return true;

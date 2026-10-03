@@ -96,7 +96,7 @@ async function api(method, url, body) {
   boot(); await up();
   if ((await api('POST', '/api/projects', { name: 'proj', workdir: PROJ })).status !== 200) die('could not register the project');
   const ids = {};
-  for (const k of ['clean', 'dirty', 'card', 'fresh']) {
+  for (const k of ['clean', 'dirty', 'card', 'fresh', 'chained']) {
     const r = await api('POST', '/api/sessions', { title: k, workdir: PROJ });
     if (r.status !== 200 || !r.json?.id) die(`could not create session ${k}: ${r.text}`);
     ids[k] = r.json.id;
@@ -110,9 +110,11 @@ async function api(method, url, body) {
     die(`sessions were not worktree-isolated: ${JSON.stringify(tree)}`);
   }
   const age = db.prepare(`UPDATE sessions SET updated_at=datetime('now','-40 days') WHERE id=?`);
-  for (const k of ['clean', 'dirty', 'card']) age.run(ids[k]);
+  for (const k of ['clean', 'dirty', 'card', 'chained']) age.run(ids[k]);
   db.prepare(`INSERT INTO queued_messages (session_id, payload) VALUES (?, ?)`).run(ids.clean, JSON.stringify({ type: 'chat', text: 'queued' }));
   db.prepare(`INSERT INTO tasks (id, title, status, session_id) VALUES ('card-1', 'a card', 'backlog', ?)`).run(ids.card);
+  // A chain owns its tree before any member does — its session expiring must not take it.
+  db.prepare(`INSERT INTO task_chains (id, workdir, session_id) VALUES ('chain-1', ?, ?)`).run(tree.chained, ids.chained);
   db.close();
   fs.writeFileSync(path.join(tree.dirty, 'work-in-progress.txt'), 'not committed\n');
 
@@ -124,6 +126,19 @@ async function api(method, url, body) {
   git(['worktree', 'add', '-q', orphanNew, '-b', 'ccs/session-orphan-new'], PROJ);
   const twoHoursAgo = (Date.now() - 2 * 3600 * 1000) / 1000;
   fs.utimesSync(orphanOld, twoHoursAgo, twoHoursAgo);
+  // An OWNED old tree whose row spells the path in a different letter case. On a
+  // case-insensitive disk (macOS, Windows) that is the same directory, and a
+  // case-preserving compare would read it as an orphan.
+  const caseTree = path.join(slugDir, 'task-casecheck');
+  git(['worktree', 'add', '-q', caseTree, '-b', 'ccs/task-casecheck'], PROJ);
+  fs.utimesSync(caseTree, twoHoursAgo, twoHoursAgo);
+  const caseRow = caseTree.replace(/task-casecheck$/, 'TASK-CASECHECK');
+  const caseInsensitive = fs.existsSync(caseRow);
+  if (caseInsensitive) {
+    const dbc = new Database(path.join(APP_DIR, 'data', 'chats.db'));
+    dbc.prepare(`INSERT INTO tasks (id, title, status, workdir) VALUES ('case-1', 'case', 'backlog', ?)`).run(caseRow);
+    dbc.close();
+  }
 
   boot(); await up();   // expiry runs at startup
   const db2 = new Database(path.join(APP_DIR, 'data', 'chats.db'), { readonly: true });
@@ -147,6 +162,9 @@ async function api(method, url, body) {
   check('an orphan older than an hour is removed', fs.existsSync(orphanOld), false);
   check('…through git, branch included', branches().includes('ccs/session-orphan-old'), false);
   check('a fresh orphan is kept (its row may be a moment away)', fs.existsSync(orphanNew), true);
+  check('an expired chain session goes, its chain keeps the tree', [row(ids.chained), fs.existsSync(tree.chained)], [null, true]);
+  if (caseInsensitive) check('a tree owned under a differently-cased path is not an orphan', fs.existsSync(caseTree), true);
+  else console.log('  skip case-insensitive path check (this filesystem is case-sensitive)');
   db2.close();
 
   console.log('\n— the delete buttons share that teardown —');

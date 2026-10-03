@@ -1021,6 +1021,12 @@ terminal pane.
   `--force`. It checks for `data/worktrees` before probing git, so an install that
   never minted a worktree spawns nothing at boot (`git-clone.test.js` counts every
   `git` call its fake binary sees).
+- **Two owners are easy to miss, and a review caught both.** A CHAIN owns its tree
+  before any member carries it, so `_worktreeStillInUseExcluding` counts `task_chains`
+  too. And the owner list is compared through `fs.realpathSync.native`: the JS
+  `realpathSync` keeps the caller's letter case, so on macOS/Windows a row spelled
+  `/Users/x` and a scan of `/users/x` are one directory that compares unequal — and an
+  owned tree reads as an orphan.
 
 ### A remote run must always end (issue #67)
 
