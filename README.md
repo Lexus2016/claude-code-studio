@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.18.1** — **Model and effort for every delegated agent.** The Delegate dialog now offers a model and a reasoning effort for Codex, opencode and any other configured agent, not just Claude: list them in **Settings → Agents** (new Models and Reasoning efforts fields) and use `{model}` / `{effort}` in the agent's command template. Values that look like command-line flags are refused. Builds on **v7.18.0**: the macOS app is signed, notarized and updates itself from the in-app banner (Apple Silicon only).
+> **v7.18.2** — **Expired chats clean up after themselves.** A session that expires (`SESSION_TTL_DAYS`, 30 days by default) now removes its git worktree, branch, terminal and queued messages, exactly like the delete button, so `data/worktrees` stops growing. Nothing that holds work is touched: a running session, an open terminal and a worktree with uncommitted or unmerged changes are kept, and so are the chat's Kanban cards. Worktrees left behind by earlier versions are cleaned up on start under the same rules. Also recent: in **v7.18.1** the Delegate dialog offers a model and an effort for every agent, and since **v7.18.0** the macOS app is signed, notarized and updates itself (Apple Silicon only).
 >
 > **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
 > `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)

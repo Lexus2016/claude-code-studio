@@ -1,5 +1,33 @@
 # Changelog
 
+## 7.18.2
+
+### Expired sessions no longer leave their worktrees behind (#125)
+
+Sessions older than `SESSION_TTL_DAYS` (30 by default) were deleted from the
+database, and nothing else: each one's git worktree and `ccs/session-*` branch stayed
+in `data/worktrees` with no session left to own it, so the folder grew for as long as
+the studio ran. The chat's queued messages were also restored at every start. The
+problem surfaced in a third-party Docker image, which had to prune the trees in its
+own entrypoint.
+
+- **Expiry now deletes a session exactly the way the delete button does**, through
+  one shared teardown: worktree, branch, terminal pane, queued messages. The three
+  places that deleted sessions had drifted apart; the single delete, for one, never
+  closed the terminal pane.
+- **Expiry discards nothing you would have been asked about.** It skips a session
+  that is running, one with an open terminal, and one whose worktree holds
+  uncommitted or unmerged work. Those stay until you delete them yourself. The Kanban
+  cards of an expired chat stay on the board.
+- **Worktrees leaked by earlier versions are cleaned up** at start and on every
+  maintenance pass, but only trees no session, task or task group refers to, older
+  than an hour, with nothing uncommitted or unmerged in them, and removed through
+  `git worktree remove` without `--force`. A tree that holds work is kept and named
+  in the log.
+- **A review caught two more owners before release:** a task group owns its tree
+  before any of its tasks carries it, and on macOS and Windows a path stored in a
+  different letter case names the same folder.
+
 ## 7.18.1
 
 ### Delegate dialog: model and effort for every agent, not only Claude (#123)
