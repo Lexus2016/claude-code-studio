@@ -193,6 +193,15 @@ function removeWorktree({ projectDir, worktreeDir, branch, force = false }) {
   }
 }
 
+// True/false only when git ANSWERED. for-each-ref succeeds with no output for an absent
+// ref, where `rev-parse --verify` exits non-zero for both "absent" and "not a repository" —
+// and a failure here must keep throwing so hasUnmergedWork() reads it as unknown.
+function _branchExists(projectDir, branch) {
+  if (!branch) return false;
+  const ref = `refs/heads/${branch}`;
+  return _git(['for-each-ref', '--format=%(refname)', ref], projectDir).split('\n').includes(ref);
+}
+
 /**
  * Returns whether the unit's worktree has unmerged commits and/or
  * uncommitted changes — used to gate archive/delete on real data loss.
@@ -202,6 +211,11 @@ function hasUnmergedWork({ worktreeDir, projectDir, defaultBranch, branch }) {
     if (fs.existsSync(worktreeDir)) {
       const dirty = _git(['status', '--porcelain'], worktreeDir).length > 0;
       if (dirty) return true;
+    } else if (!_branchExists(projectDir, branch)) {
+      // Neither a tree nor a branch is left: the unit was merged and removed (its
+      // session row keeps git_branch — nothing clears it) or never got a worktree.
+      // That is "nothing to lose", not "unknown".
+      return false;
     }
     // A removed directory can still own committed work through its branch. The
     // deletion path removes that branch too, so it must be checked in either case.

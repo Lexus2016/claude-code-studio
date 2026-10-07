@@ -76,6 +76,31 @@ test('a missing directory whose branch is merged is safe to clean up', t => {
   assert.equal(WM.hasUnmergedWork(f), false);
 });
 
+// A task or chain that auto-merged has had BOTH its directory and its branch removed
+// (removeWorktree), yet its session row keeps git_root/workdir/git_branch — nothing
+// clears them. Reading "the branch is gone" as "unknown" made every such session look
+// like it held unmerged work: expiry kept it forever (the #125 leak, for merged
+// sessions) and a manual delete asked for a confirmation about nothing.
+test('a worktree that was merged and removed has nothing left to lose', t => {
+  const f = fixture(t);
+  WM.ensureWorktree(f);
+  WM.removeWorktree({ ...f, force: true });
+  assert.equal(fs.existsSync(f.worktreeDir), false);
+  assert.equal(f.git(['branch', '--list', f.branch]), '');
+  assert.equal(WM.hasUnmergedWork(f), false);
+});
+
+test('a unit that never created a worktree has nothing to lose', t => {
+  const f = fixture(t);
+  assert.equal(WM.hasUnmergedWork(f), false);
+  assert.equal(WM.hasUnmergedWork({ ...f, branch: null }), false);
+});
+
+test('an unreadable project is still not permission to delete', t => {
+  const f = fixture(t);
+  assert.equal(WM.hasUnmergedWork({ ...f, projectDir: path.join(f.projectDir, 'no-such-repo') }), true);
+});
+
 test('an automatic merge never aborts an existing manual merge', async t => {
   const f = fixture(t);
   fs.writeFileSync(path.join(f.projectDir, 'shared.txt'), 'base\n');
