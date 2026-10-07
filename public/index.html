@@ -4520,6 +4520,11 @@ let curMode = 'auto', curAgent = 'single', curModel = 'sonnet', curEngine = 'api
 // Global default engine for NEW chats (server-backed via /api/default-engine).
 // _curSessionRunEngine = the open chat's explicit run_engine (null = inherit default).
 let _globalDefaultEngine = 'api', _curSessionRunEngine = null;
+// curEngine above is a placeholder until checkVersion() has fetched the configured default.
+// Boot replaces this with checkVersion()'s promise; send() waits on it (engineDefaultReady),
+// so the first message of a page load cannot go out on the placeholder.
+let _versionCheckDone = Promise.resolve();
+const VERSION_WAIT_MS = 3000;   // upper bound on that wait — a dead /api/version must not freeze the composer
 // Server truth for the currently-open session, snapshotted by loadSess() — an
 // 'interrupt' row still undelivered only means "lost" if the task has actually
 // ended; while it's running, the same row is still sitting in the server's queue.
@@ -11910,7 +11915,20 @@ inEl.addEventListener('paste', e => {
 // ─── Send / Stop ─────────────────────────────────────────────────────────
 function sendChat(text) { inEl.value = text; send(); }
 
+// Resolves once the configured default engine is known (checkVersion() has run
+// resolveEngineForView()), or after VERSION_WAIT_MS if it never answers. The server stores the
+// engine of every turn it receives, so a message sent on the 'api' placeholder runs — and
+// bills — on the wrong engine. Never throws: the worst case is the pre-fix behaviour.
+async function engineDefaultReady() {
+  let timer;
+  try {
+    await Promise.race([_versionCheckDone, new Promise(r => { timer = setTimeout(r, VERSION_WAIT_MS); })]);
+  } catch {}
+  clearTimeout(timer);
+}
+
 async function send() {
+  await engineDefaultReady();   // a settled promise costs one microtask once the page has been open a moment
   if (!ws || ws.readyState !== 1) { toast(t('toast.no_connection'), true); return; }
 
   const txt = inEl.value.trim();
@@ -12270,7 +12288,11 @@ async function checkVersion() {
     if (local.claudeCli && local.claudeCli.available === false) {
       showNotification({ level: 'error', title: t('claudecli.unavailable.title'), detail: t('claudecli.unavailable.detail'), timestamp: Date.now() });
     }
-    loadTerminalCapability();
+    // loadTerminalCapability() lives in the LAST script block. A reply that lands before the
+    // parser reaches it would throw ReferenceError into the catch below and skip everything
+    // after this line — the configured engine included — so it is optional here. Its other
+    // callers (`if (_terminalAvailable === null) await …`) load it lazily.
+    if (typeof loadTerminalCapability === 'function') loadTerminalCapability();
     loadBots();
     // Store the global default and resolve the current view's engine. An open
     // chat's explicit run_engine wins; a chat without one inherits this default.
@@ -16948,6 +16970,7 @@ function syncMobSheetFromDesktop() {
     if (group === 'mode') cur = curMode;
     else if (group === 'agent') cur = curAgent;
     else if (group === 'model') cur = curModel;
+    else if (group === 'engine') cur = curEngine;   // without it cur stays '' and the toggle below strips the shipped `on` from both engine chips
     chip.classList.toggle('on', v === cur);
   });
   // Sync turns
@@ -17661,7 +17684,7 @@ loadCfg();
 _projectsReady = loadProjectsList();
 loadRemoteHosts();
 connect();
-checkVersion();
+_versionCheckDone = checkVersion();
 // ─── Image chip hover preview ───
 {
   const _prev = $i('imgChipPreview');
