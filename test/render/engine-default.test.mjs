@@ -62,6 +62,7 @@ test('the engine branch leaves the other chip groups alone', () => {
 
 test('engineDefaultReady() holds until the version check has settled', async () => {
   globalThis.VERSION_WAIT_MS = 5000;     // far beyond the test: only the check may release it
+  globalThis._engineUserPicked = false;  // the page always declares it; here nobody has clicked
   let release;
   globalThis._versionCheckDone = new Promise(r => { release = r; });
   let done = false;
@@ -75,6 +76,7 @@ test('engineDefaultReady() holds until the version check has settled', async () 
 
 test('engineDefaultReady() gives up after VERSION_WAIT_MS when /api/version never answers', async () => {
   globalThis.VERSION_WAIT_MS = 40;
+  globalThis._engineUserPicked = false;
   globalThis._versionCheckDone = new Promise(() => {});   // never settles
   const t0 = Date.now();
   await loadFn('engineDefaultReady')();
@@ -85,6 +87,7 @@ test('engineDefaultReady() gives up after VERSION_WAIT_MS when /api/version neve
 
 test('engineDefaultReady() never throws, even if the version check rejects', async () => {
   globalThis.VERSION_WAIT_MS = 5000;
+  globalThis._engineUserPicked = false;
   globalThis._versionCheckDone = Promise.reject(new Error('boom'));
   await loadFn('engineDefaultReady')();    // would reject here if the error escaped
 });
@@ -117,7 +120,9 @@ test('send() waits for engineDefaultReady() before it touches the socket', async
 
 function versionEnv(calls) {
   globalThis._globalDefaultEngine = 'api';
+  globalThis._engineUserPicked = false;
   Object.assign(globalThis, {
+    syncDefaultStar: () => calls.push('syncDefaultStar'),
     fetch: () => Promise.resolve({ json: () => ({ version: '7.18.4', tmuxAvailable: true, defaultEngine: 'subscription',
                                                   claudeCli: { available: true }, editor: { label: 'VS Code' } }) }),
     applyTmuxCapability: () => {},
@@ -152,6 +157,118 @@ test('checkVersion() still preloads the terminal capability once that block exis
   assert.strictEqual(calls.filter(c => c === 'loadTerminalCapability').length, 1);
   assert.strictEqual(globalThis._globalDefaultEngine, 'subscription');
   delete globalThis.loadTerminalCapability;
+});
+
+// ── 4. what an independent review (codex + agy) found in the first version of 2. ────
+// a) A click on an engine chip made BEFORE /api/version answered was overwritten by
+//    resolveEngineForView() — and, because send() now waited for that, the message left on
+//    the overwritten engine: the user chose Subscription, the turn ran on API.
+// b) _versionCheckDone was the promise of the WHOLE checkVersion(), which ends by awaiting
+//    api.github.com for the update badge. Behind a firewall that drops packets, every send()
+//    paid the full VERSION_WAIT_MS.
+// c) The default was stored only after calls that can throw (notification, loadBots).
+
+const chip = v => ({ dataset: { v }, classList: { add() {}, remove() {} },
+                     closest: () => ({ querySelectorAll: () => [] }) });
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+test('clicking an engine chip is remembered as the user\'s own choice (desktop and mobile)', () => {
+  Object.assign(globalThis, { curEngine: 'api', syncDefaultStar() {}, updInd() {}, syncBtn() {}, saveUIState() {},
+                              updateMobSubtitle() {}, _engineUserPicked: false });
+  loadFn('setOpt')(chip('subscription'), 'engine');
+  assert.strictEqual(globalThis._engineUserPicked, true, 'toolbar chip');
+  globalThis._engineUserPicked = false;
+  loadFn('setMobOpt')(chip('subscription'), 'engine');
+  assert.strictEqual(globalThis._engineUserPicked, true, 'mobile chip');
+});
+
+test('picking a model or mode is NOT an engine choice', () => {
+  Object.assign(globalThis, { curModel: 'sonnet', syncDefaultStar() {}, updInd() {}, _engineUserPicked: false });
+  loadFn('setOpt')(chip('opus'), 'model');
+  assert.strictEqual(globalThis._engineUserPicked, false);
+});
+
+test('resolveEngineForView() hands the engine back to the defaults', () => {
+  Object.assign(globalThis, { _engineUserPicked: true, _curSessionRunEngine: null, _globalDefaultEngine: 'api',
+                              _tmuxAvailable: true, syncBtn() {}, syncDefaultStar() {} });
+  loadFn('resolveEngineForView')();
+  assert.strictEqual(globalThis._engineUserPicked, false, 'a re-resolved view is derived state again');
+});
+
+test('engineDefaultReady() does not hold a user who already chose an engine', async () => {
+  globalThis.VERSION_WAIT_MS = 5000;
+  globalThis._versionCheckDone = new Promise(() => {});   // /api/version has not answered
+  globalThis._engineUserPicked = true;
+  const r = await Promise.race([loadFn('engineDefaultReady')().then(() => 'ready'), sleep(200).then(() => 'HELD')]);
+  assert.strictEqual(r, 'ready');
+});
+
+test('checkVersion() stores the default but leaves an explicit choice alone', async () => {
+  const calls = [];
+  versionEnv(calls);
+  globalThis._engineUserPicked = true;                    // the user already clicked API
+  await loadFn('checkVersion')();                         // server default is 'subscription'
+  assert.strictEqual(globalThis._globalDefaultEngine, 'subscription', 'the default is still recorded for new chats');
+  assert.ok(!calls.includes('resolveEngineForView'), 'the explicit choice was overwritten');
+  assert.ok(calls.includes('syncDefaultStar'), 'the default star must follow the new default');
+});
+
+test('checkVersion() stores the default even if a later step throws', async () => {
+  const calls = [];
+  versionEnv(calls);
+  globalThis.loadBots = () => { throw new Error('boom'); };
+  delete globalThis.loadTerminalCapability;
+  await loadFn('checkVersion')();
+  assert.strictEqual(globalThis._globalDefaultEngine, 'subscription');
+  assert.ok(calls.includes('resolveEngineForView'));
+});
+
+test('checkVersion() settles without waiting for the GitHub release lookup', async () => {
+  const calls = [];
+  versionEnv(calls);
+  const local = { version: '7.18.4', tmuxAvailable: true, defaultEngine: 'subscription', claudeCli: { available: true } };
+  globalThis.fetch = url => String(url).includes('api.github.com')
+    ? new Promise(() => {})                               // a firewall that drops the packets
+    : Promise.resolve({ json: () => local });
+  globalThis.$i = () => ({});                             // a #versionBadge exists -> reaches the lookup
+  globalThis.window = {};
+  globalThis._checkLatestRelease = loadFn('_checkLatestRelease');
+  const r = await Promise.race([loadFn('checkVersion')().then(() => 'settled'), sleep(300).then(() => 'HUNG on GitHub')]);
+  assert.strictEqual(r, 'settled');
+});
+
+test('an engine picked while /api/version is pending is the engine the message leaves on', async () => {
+  // The reviewer's scenario end to end, on the real functions: pick Subscription, then the
+  // server's default turns out to be API, then send.
+  const frames = [];
+  const box = () => ({ dataset: {}, style: {}, appendChild() {}, querySelector() { return { before() {} }; } });
+  let reply;
+  Object.assign(globalThis, {
+    document: { querySelectorAll: () => [], createElement: box },
+    localStorage: { removeItem() {} }, t: k => k, toast() {},
+    inEl: { value: 'Use the engine I selected', style: {} },
+    ws: { readyState: 1, send: s => frames.push(JSON.parse(s)) },
+    _attachments: [], _clearAttachments() { globalThis._attachments = []; }, _closeAtPopup() {},
+    curProjectId: 'p', currentSessionId: null, activeTabId: 'A', openTabs: [{ id: 'A', generating: true }],
+    projects: [{ id: 'p' }], curEngine: 'api', _globalDefaultEngine: 'api', _curSessionRunEngine: null,
+    _tmuxAvailable: true, _engineUserPicked: false,
+    curAgent: 'single', curModel: 'sonnet', curMode: 'auto', curEffort: '', curWorkdir: '/p',
+    activeSkills: new Set(), activeMcp: new Set(), replyTo: null, clearReply() {}, addMsg: box,
+    setUserMsgText() {}, getTS: () => ({}), interruptSendMode: 'queue', autoSkillsMode: false,
+    $i: id => (id === 'versionBadge' ? null : { value: '50' }),
+    syncBtn() {}, syncDefaultStar() {}, updInd() {}, loadBots() {}, _syncEditorLabels() {},
+    loadChatDefaults: () => Promise.resolve(), applyChatDefaults() {}, _editorLabel: 'VS Code',
+    applyTmuxCapability: loadFn('applyTmuxCapability'), resolveEngineForView: loadFn('resolveEngineForView'),
+    VERSION_WAIT_MS: 3000, engineDefaultReady: loadFn('engineDefaultReady'),
+    fetch: () => new Promise(r => { reply = () => r({ json: () => ({ defaultEngine: 'api', tmuxAvailable: true }) }); }),
+  });
+  globalThis._versionCheckDone = loadFn('checkVersion')();          // still waiting for the server
+  loadFn('setOpt')(chip('subscription'), 'engine');                 // the user clicks Subscription
+  const pending = loadFn('send')();
+  reply();
+  await pending;
+  assert.strictEqual(frames[0]?.engine, 'subscription', 'the message left on the engine the user chose');
+  assert.strictEqual(globalThis.curEngine, 'subscription', 'and the toolbar still shows it');
 });
 
 // The behaviour above is only real if the page feeds the promise. Column-0 anchors match
