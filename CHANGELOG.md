@@ -1,5 +1,56 @@
 # Changelog
 
+## 7.18.4
+
+### A security and reliability pass: sign-out means sign-out, Stop stops everything, boards stop showing stale data
+
+An audit of the authentication boundary, the process lifecycle and the scheduling
+screens turned up a set of defects that were each small and none of which anyone had
+reported. They are fixed together here.
+
+- **Signing out, changing the password or an expired token now closes the open chat and
+  terminal connections.** A WebSocket used to stay authenticated for as long as it stayed
+  open, so a revoked token kept working until the page was reloaded. Every message and
+  every heartbeat now re-checks the token. The saved login file is validated on load
+  (only well-formed 64-character tokens with a creation time are kept), and a password
+  change racing a login, or a second password change, can no longer mint a session from
+  a password that has already been retired.
+- **Desktop mode and first-run setup require a direct local request.** Both skip the
+  login, and "the connection comes from 127.0.0.1" is not proof the browser is local: a
+  page on a hostname an attacker controls can be pointed at your loopback port (DNS
+  rebinding), and so can a local reverse proxy. These paths now also require a literal
+  `localhost` / `127.x.x.x` / `[::1]` Host and no forwarding headers. If you put the
+  studio behind a reverse proxy, never do it in desktop mode; the README says how to set
+  the proxy up for web mode.
+- **Stop reaches the whole process tree.** On macOS and Linux each `claude` run now has
+  its own process group, so Stop, a timeout or a server shutdown also ends a Bash tool
+  the run had started. Before, such a tool could keep the output pipe open, so the turn
+  never finished and the chat looked stuck. A Stop that arrives while a retry is being
+  prepared is honoured instead of being lost.
+- **Attachments no longer overwrite each other.** Every turn gets a private temporary
+  folder, and each file is numbered, so two chats uploading in the same millisecond, or
+  two attachments with the same name, keep separate files (local and over SSH).
+- **Kanban and Schedule stop showing the wrong board.** A slow response for the project
+  you just left can no longer overwrite the one you switched to. Change detection uses a
+  persistent revision counter instead of "latest timestamp plus row count", which missed
+  two writes in the same second. **Run now** on a scheduled task or chain really runs
+  now — a future time used to keep it waiting even after it was queued. Editing a task
+  keeps its worktree folder and the seconds of its schedule. A failed dashboard load
+  keeps the charts, so Refresh can recover.
+- **Worktrees are protected from more ways of losing work.** A directory that exists but
+  is not registered with git is no longer deleted to make room; the studio refuses
+  instead of replacing it. An automatic merge never aborts a merge you are resolving by
+  hand. Deleting a chat checks its branch even when the folder has gone. A chat whose
+  task was merged and removed is not reported as holding unmerged work.
+- **The desktop app keeps remote pages away from its privileged window.** Navigation and
+  redirects leave the app for your browser, and the update controls answer only to the
+  studio's own top-level page.
+- **A release can no longer ship a red build.** The release workflows run the full test
+  suite first, CI also runs on Node 24, and the Docker image installs exactly what the
+  lockfile pins. Dependencies were refreshed inside their existing ranges.
+  `npm install` no longer registers file-lock hooks that point at scripts that are not
+  there, and no longer overwrites a `.claude/settings.json` it cannot read.
+
 ## 7.18.3
 
 ### The Subscription engine starts on a machine where `claude` was never opened (#126)

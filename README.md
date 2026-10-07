@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.18.3** — **The Subscription engine works on a fresh install.** On a machine where `claude` was never opened (any new Docker container, for one), the engine used to stop on Claude's first-run screens, close `claude` and lose the message. It now answers them the way the default engine already does, trusts only the folder the session runs in, and touches your `~/.claude.json` only when something is missing. A screen it cannot answer is shown to you instead of being typed into. Also recent: in **v7.18.2** expired chats remove their worktrees, and since **v7.18.0** the macOS app is signed, notarized and updates itself (Apple Silicon only).
+> **v7.18.4** — **Signing out really signs out, and Stop stops everything.** An open chat or terminal connection used to stay logged in after you signed out or changed the password; it is now closed, and desktop mode and first-run setup accept only a direct local request (no DNS-rebinding or proxy tricks). Stop now ends the whole `claude` process tree, so a stray Bash tool can no longer leave a turn hanging. Kanban and Schedule no longer show a stale board after you switch project, and **Run now** really runs now. Releases are gated on the test suite. Also recent: in **v7.18.3** the Subscription engine works on a fresh install, in **v7.18.2** expired chats remove their worktrees, and since **v7.18.0** the macOS app is signed, notarized and updates itself (Apple Silicon only).
 >
 > **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
 > `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)
