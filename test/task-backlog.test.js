@@ -242,7 +242,7 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
     'true,true,true,false');
 
   // …and behaviourally on the branch that IS the default: a second server booted in
-  // desktop mode (loopback, forced) with a 12-char override must ACCEPT it. This is the
+  // web mode bound explicitly to loopback with a 12-char override must ACCEPT it. This is the
   // regression that matters — the value exists so a local test can drive the endpoint,
   // and silently ignoring it hands the developer a 401 with no explanation.
   const PORT2 = PORT + 1;
@@ -250,7 +250,7 @@ const NEVER = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
   fs.mkdirSync(path.join(APP2, 'data'), { recursive: true });
   fs.writeFileSync(path.join(APP2, 'config.json'), JSON.stringify({ mcpServers: {}, skills: {} }, null, 2));
   const weak = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PORT: String(PORT2), CCS_DESKTOP: '1', APP_DIR: APP2,
+    env: { ...process.env, PORT: String(PORT2), CCS_DESKTOP: '', HOST: '127.0.0.1', APP_DIR: APP2,
            WORKDIR, HOME: HOME_DIR, CCS_TASK_MANAGER_SECRET: 'short-secret' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

@@ -59,7 +59,13 @@ function childEnv(extra) {
 }
 
 function firstExternalIPv4() {
-  for (const list of Object.values(os.networkInterfaces())) {
+  let interfaces;
+  try { interfaces = os.networkInterfaces(); } catch (error) {
+    if (error.syscall !== 'uv_interface_addresses' && error.info?.syscall !== 'uv_interface_addresses') throw error;
+    console.log('  skip  network-interface enumeration unavailable — LAN bind probe skipped: ' + error.message);
+    return null;
+  }
+  for (const list of Object.values(interfaces)) {
     for (const ni of list || []) {
       if (ni.family === 'IPv4' && !ni.internal) return ni.address;
     }

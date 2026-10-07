@@ -38,6 +38,15 @@ const OUR_HOOKS = {
   ],
 };
 
+// Never install a command whose target was omitted from the checkout/package.
+// File-locking scripts are optional assets; an empty directory is not an install.
+const MISSING_COMMANDS = Object.values(OUR_HOOKS).flat().flatMap(entry => entry.hooks)
+  .map(hook => hook.command)
+  .filter(command => !fs.existsSync(path.join(ROOT, command.slice('node '.length))));
+for (const event of Object.keys(OUR_HOOKS)) {
+  OUR_HOOKS[event] = OUR_HOOKS[event].filter(entry => !MISSING_COMMANDS.includes(entry.hooks[0].command));
+}
+
 // Legacy commands from older versions — remove on upgrade to prevent duplicates
 const LEGACY_COMMANDS = [
   'bash .claude/scripts/file-lock.sh',
@@ -61,7 +70,7 @@ function removeLegacyHooks(existing) {
     if (!Array.isArray(existing.hooks[event])) continue;
     existing.hooks[event] = existing.hooks[event].filter(entry => {
       if (!Array.isArray(entry.hooks)) return true;
-      entry.hooks = entry.hooks.filter(h => !LEGACY_COMMANDS.includes(h.command));
+      entry.hooks = entry.hooks.filter(h => !LEGACY_COMMANDS.includes(h.command) && !MISSING_COMMANDS.includes(h.command));
       return entry.hooks.length > 0;
     });
   }
@@ -73,6 +82,7 @@ function mergeHooks(existing) {
   removeLegacyHooks(existing);
 
   for (const [event, entries] of Object.entries(OUR_HOOKS)) {
+    if (!entries.length) continue;
     if (!existing.hooks[event]) {
       existing.hooks[event] = entries;
       continue;
@@ -103,8 +113,17 @@ if (fs.existsSync(SETTINGS)) {
   try {
     settings = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
   } catch {
-    console.warn('[hooks] Could not parse .claude/settings.json — starting fresh.');
+    console.error('[hooks] Could not parse .claude/settings.json — leaving it unchanged.');
+    process.exit(1);
   }
+}
+
+// Refuse malformed shapes instead of silently destroying user configuration.
+if (!settings || typeof settings !== 'object' || Array.isArray(settings) ||
+    (settings.hooks !== undefined && (!settings.hooks || typeof settings.hooks !== 'object' || Array.isArray(settings.hooks))) ||
+    Object.values(settings.hooks || {}).some(entries => !Array.isArray(entries) || entries.some(entry => !entry || typeof entry !== 'object'))) {
+  console.error('[hooks] Invalid settings shape — leaving it unchanged.');
+  process.exit(1);
 }
 
 // 2. Merge
@@ -122,4 +141,5 @@ if (!fs.existsSync(gitkeep)) fs.writeFileSync(gitkeep, '');
 // 5. Ensure scripts directory exists
 ensureScriptsDir();
 
-console.log('✓ Claude Code file-lock hooks installed (.claude/settings.json)');
+if (MISSING_COMMANDS.length) console.warn('[hooks] File-lock scripts are missing; unavailable hooks were not installed.');
+else console.log('✓ Claude Code file-lock hooks installed (.claude/settings.json)');

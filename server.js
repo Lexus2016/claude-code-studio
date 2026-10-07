@@ -84,6 +84,7 @@ const cfgResolve = require('./config-resolve');
 // spawning `claude` — see agent-dag.js and test/agent-dag.test.js.
 const { pickRunnable, buildDepContext, computeWaves, sanitizePlan } = require('./agent-dag');
 const openDatabase = require('./db-adapter');
+const installRevisionTracking = require('./db-revisions');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -174,6 +175,20 @@ const wss = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 * 1024 })
 // reason to carry.
 const wssTerm = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 * 1024 });
 
+// An upgrade is not a lifetime authentication grant. Keep both socket protocols
+// behind the same token lifecycle as HTTP after logout, eviction and expiry.
+function wsHasValidAuth(ws) {
+  if (auth.validateWsToken(ws._authToken)) return true;
+  try { ws.close(1008, 'authentication expired'); } catch {}
+  return false;
+}
+
+function closeRevokedWebSockets() {
+  for (const server of [wss, wssTerm]) {
+    for (const ws of server.clients) wsHasValidAuth(ws);
+  }
+}
+
 // Heartbeat: without an active ping/pong, a connection whose TCP path died silently
 // (proxy idle timeout, laptop sleep/wake, NAT drop) sits "open" on both ends forever —
 // no 'close' event ever fires, so a terminal (or chat) socket just freezes with
@@ -183,12 +198,14 @@ const wssTerm = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 * 102
 // already handles. 30s interval, one missed pong tolerated — the standard `ws`
 // heartbeat.js pattern.
 function attachHeartbeat(server) {
-  server.on('connection', (ws) => {
+  server.on('connection', (ws, req) => {
+    ws._authToken = req.authToken;
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
   });
   setInterval(() => {
     for (const ws of server.clients) {
+      if (!wsHasValidAuth(ws)) continue;
       if (ws.isAlive === false) { ws.terminate(); continue; }
       ws.isAlive = false;
       try { ws.ping(); } catch {}
@@ -1006,6 +1023,9 @@ function wrapStmt(stmt, label) {
   return stmt;
 }
 
+// Install after schema migrations and before preparing any polling statements.
+const dataRevisions = installRevisionTracking(db);
+
 const stmts = {
   createSession: db.prepare(`INSERT INTO sessions (id,title,active_mcp,active_skills,mode,agent_mode,model,workdir) VALUES (?,?,?,?,?,?,?,?)`),
   // Terminal sessions get their own INSERT: createSession is called from eight
@@ -1119,7 +1139,7 @@ const stmts = {
   deleteTask: db.prepare(`DELETE FROM tasks WHERE id=?`),
   deleteTasksBySession: db.prepare(`DELETE FROM tasks WHERE session_id=?`),
   countTasksBySession: db.prepare(`SELECT COUNT(*) as n FROM tasks WHERE session_id=?`),
-  getTasksEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM tasks`),
+  getTasksEtag: dataRevisions.tasks,
   // ── #25 Global workspace ──────────────────────────────────────────────────
   // One GROUP BY instead of "load every project, then query it" — N projects cost
   // one scan of idx_task_wd_status, not N round trips. Rows whose workdir is NULL
@@ -1228,7 +1248,7 @@ const stmts = {
   deleteChain: db.prepare(`DELETE FROM task_chains WHERE id=?`),
   deleteChainTasks: db.prepare(`DELETE FROM tasks WHERE chain_id=?`),
   getChainTasksList: db.prepare(`SELECT * FROM tasks WHERE chain_id=? ORDER BY sort_order ASC, created_at ASC`),
-  getChainsEtag: db.prepare(`SELECT COALESCE(MAX(updated_at),'') as ts, COUNT(*) as n FROM task_chains`),
+  getChainsEtag: dataRevisions.task_chains,
   // Dashboard analytics — pre-compiled for performance (11 queries per request)
   dashSummary: db.prepare(`SELECT (SELECT COUNT(*) FROM sessions) AS total_sessions, (SELECT COUNT(*) FROM messages) AS total_messages, (SELECT COUNT(*) FROM messages WHERE type='tool') AS total_tool_calls, (SELECT COUNT(*) FROM messages WHERE role='assistant' AND type='text') AS assistant_messages, (SELECT COALESCE(SUM(LENGTH(content)),0) FROM messages) AS total_chars`),
   dashTools: db.prepare(`SELECT tool_name AS name, COUNT(*) AS count FROM messages WHERE type='tool' AND tool_name IS NOT NULL GROUP BY tool_name ORDER BY count DESC LIMIT 15`),
@@ -5756,6 +5776,16 @@ app.use((_req, res, next) => {
 app.use(express.json({ limit:'5mb' }));
 app.use(cookieParser());
 
+// Desktop skips bearer authentication, so same-Origin alone is insufficient:
+// with DNS rebinding both Origin and Host are the attacker's hostname. Refuse
+// these requests even for GETs, whose responses the rebound page could read.
+app.use((req, res, next) => {
+  if (process.env.CCS_DESKTOP === '1' && !auth.isDirectLoopbackRequest(req)) {
+    return res.status(403).json({ error: 'desktop requires a direct loopback request' });
+  }
+  next();
+});
+
 // ─── Cross-origin guard ───────────────────────────────────────────────────────
 // A WebSocket handshake is NOT subject to the same-origin policy: any page on the
 // internet can open ws://127.0.0.1:<port>/ against this server. In desktop mode
@@ -6883,8 +6913,7 @@ app.get('/api/auth/status', (req,res) => {
 // treat the mere PRESENCE of a forwarding header as proof a hop happened, whatever
 // TRUST_PROXY says: a real console visit has neither.
 function setupCallerIsLocal(req) {
-  if (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.headers.forwarded) return false;
-  return auth.isLoopbackAddress(req.socket?.remoteAddress);
+  return auth.isDirectLoopbackRequest(req);
 }
 
 app.post('/api/auth/setup', authLimiter, async (req,res) => {
@@ -6910,16 +6939,23 @@ app.post('/api/auth/setup', authLimiter, async (req,res) => {
 app.post('/api/auth/login', authLimiter, async (req,res) => {
   try {
     const token = await auth.login(req.body.password);
+    closeRevokedWebSockets();
     res.cookie('token', token, { httpOnly:true, sameSite:'lax', secure:SECURE_COOKIES, maxAge:30*24*60*60*1000 });
     res.json({ ok:true, displayName:auth.loadAuth()?.displayName });
   } catch(e) { res.status(401).json({ error:e.message }); }
 });
 
-app.post('/api/auth/logout', (req,res) => { if(req.cookies?.token) auth.revokeToken(req.cookies.token); res.clearCookie('token'); res.json({ ok:true }); });
+app.post('/api/auth/logout', (req,res) => {
+  if (req.authToken) auth.revokeToken(req.authToken);
+  closeRevokedWebSockets();
+  res.clearCookie('token');
+  res.json({ ok:true });
+});
 
 app.post('/api/auth/change-password', async (req,res) => {
   try {
     const token = await auth.changePassword(req.body.oldPassword, req.body.newPassword);
+    closeRevokedWebSockets();
     res.cookie('token', token, { httpOnly:true, sameSite:'lax', secure:SECURE_COOKIES, maxAge:30*24*60*60*1000 });
     res.json({ ok:true });
   } catch(e) { res.status(400).json({ error:e.message }); }
@@ -7629,6 +7665,9 @@ app.post('/api/task-chains/:id/activate', (req, res) => {
   if (!chain) return res.status(404).json({ error: 'Chain not found' });
   const tasks = stmts.getChainTasksList.all(req.params.id);
   if (!tasks.length) return res.status(400).json({ error: 'Chain has no tasks' });
+  // Normal activation respects the saved slot. Schedule's explicit Run now
+  // replaces it; recurring chains then re-arm one interval from completion.
+  const scheduledAt = req.body?.run_now === true ? null : (chain.scheduled_at || null);
   db.transaction(() => {
     for (let i = 0; i < tasks.length; i++) {
       const t = tasks[i];
@@ -7637,9 +7676,9 @@ app.post('/api/task-chains/:id/activate', (req, res) => {
       const prevId = i > 0 ? tasks[i - 1].id : null;
       const dependsOn = prevId ? JSON.stringify([prevId]) : null;
       db.prepare(`UPDATE tasks SET status='todo', depends_on=?, sort_order=?, scheduled_at=?, updated_at=datetime('now') WHERE id=?`)
-        .run(dependsOn, i * 1000, chain.scheduled_at || null, t.id);
+        .run(dependsOn, i * 1000, scheduledAt, t.id);
     }
-    db.prepare(`UPDATE task_chains SET updated_at=datetime('now') WHERE id=?`).run(req.params.id);
+    db.prepare(`UPDATE task_chains SET scheduled_at=?, updated_at=datetime('now') WHERE id=?`).run(scheduledAt, req.params.id);
   })();
   setImmediate(processQueue);
   res.json(chainWithSummary(stmts.getChain.get(req.params.id)));
@@ -11532,9 +11571,12 @@ app.delete('/api/delegate/:id', (req, res) => {
 // WEBSOCKET
 // ============================================
 server.on('upgrade', (req, socket, head) => {
+  if (process.env.CCS_DESKTOP === '1' && !auth.isDirectLoopbackRequest(req)) {
+    socket.write('HTTP/1.1 403 Forbidden\r\n\r\n'); socket.destroy(); return;
+  }
   // BEFORE the token check, because validateWsToken() short-circuits to true in
-  // desktop mode — the origin is the only thing standing between a random web page
-  // and a chat socket there. See isCrossOrigin() above.
+  // desktop mode. This origin check and the direct-loopback check above jointly
+  // protect that bypass against cross-site requests and DNS rebinding.
   if (isCrossOrigin(req)) {
     log.warn('ws upgrade refused: cross-origin', { origin: req.headers.origin, host: req.headers.host, url: req.url });
     socket.write('HTTP/1.1 403 Forbidden\r\n\r\n'); socket.destroy(); return;
@@ -11544,6 +11586,7 @@ server.on('upgrade', (req, socket, head) => {
   const bearerToken = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null;
   const token = cookies.token || req.headers['x-auth-token'] || bearerToken;
   if (!auth.validateWsToken(token)) { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); socket.destroy(); return; }
+  req.authToken = token;
   // Route AFTER the auth check — the terminal endpoint reuses it verbatim and must
   // never grow an auth path of its own.
   let pathname = req.url;
@@ -11655,6 +11698,7 @@ wssTerm.on('connection', (ws, req) => {
     log.info('engine pane attached', { sessionId: session.id, tmux: engName });
 
     ws.on('message', (raw, isBinary) => {
+      if (!wsHasValidAuth(ws)) return;
       if (!engHandle) return;
       if (isBinary) { engHandle.write(raw); return; }
       let msg = null;
@@ -11767,6 +11811,7 @@ wssTerm.on('connection', (ws, req) => {
   startAndAttach(session.terminal_started === 1);
 
   ws.on('message', (raw, isBinary) => {
+    if (!wsHasValidAuth(ws)) return;
     if (!handle) return;
     if (isBinary) { handle.write(raw); return; }
     let msg = null;
@@ -12507,6 +12552,7 @@ wss.on('connection', (ws) => {
   }
 
   ws.on('message', async (raw) => {
+    if (!wsHasValidAuth(ws)) return;
     // JSON.parse('null') SUCCEEDS, and `msg.type` on the next line then threw inside an
     // async listener — an unhandledRejection per frame, spammable at line rate by any
     // authenticated client. Same for '123', '"str"' and '[1,2]'.

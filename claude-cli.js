@@ -5,11 +5,14 @@ const os = require('os');
 const crypto = require('crypto');
 const { StringDecoder } = require('string_decoder');
 const { agentsMdPreamble } = require('./agents-md');
+const { attachmentFileName } = require('./attachment-files');
 
 // Kill a child process and its tree. On Windows `proc.kill()` only kills the
 // direct child (cmd.exe), leaving grandchildren (node.exe) orphaned.
-// `taskkill /T /F` kills the entire process tree.
-function killProc(proc) {
+// `taskkill /T /F` kills the entire process tree. Unix children are spawned in
+// their own process group below so a Bash tool cannot survive Stop while holding
+// stdout open (which also prevents the child's 'close' and the turn's onDone).
+function killProc(proc, signal = 'SIGTERM') {
   if (process.platform === 'win32' && proc.pid && Number.isInteger(proc.pid)) {
     // spawnSync, not execSync: no shell means the pid can never be a command, whatever
     // it holds. The Number.isInteger guard above already made this unreachable, but a
@@ -19,7 +22,10 @@ function killProc(proc) {
     // with manual concatenation loses normalisation on an already-sanitised filename.)
     try { spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' }); } catch {}
   } else {
-    try { proc.kill('SIGTERM'); } catch {}
+    if (Number.isInteger(proc.pid) && proc.pid > 0) {
+      try { process.kill(-proc.pid, signal); return; } catch {}
+    }
+    try { proc.kill(signal); } catch {}
   }
 }
 
@@ -316,17 +322,11 @@ class ClaudeCLI {
       for (const block of contentBlocks) {
         if ((block.type === 'image' || block.type === 'file') && block.source?.data) {
           if (!_tempDir) {
-            _tempDir = path.join(os.tmpdir(), `claude-att-${Date.now()}`);
-            fs.mkdirSync(_tempDir, { recursive: true });
+            // Millisecond timestamps collide across simultaneous chats. A turn
+            // must own its directory, including the cleanup when its child exits.
+            _tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-att-'));
           }
-          let ext = '';
-          const srcName = String(block.source.name || '').trim();
-          if (srcName) ext = path.extname(srcName).replace(/^\./, '');
-          if (!ext) ext = (block.source.media_type || (block.type === 'image' ? 'image/png' : 'application/octet-stream')).split('/')[1] || (block.type === 'image' ? 'png' : 'bin');
-          const safeBase = srcName
-            ? path.basename(srcName).replace(/[^a-zA-Z0-9._-]/g, '_')
-            : `attachment-${_tempFiles.length + 1}.${ext}`;
-          const fname = path.extname(safeBase) ? safeBase : `${safeBase}.${ext}`;
+          const fname = attachmentFileName({ name: block.source.name, mediaType: block.source.media_type, type: block.type }, _tempFiles.length);
           const fpath = path.join(_tempDir, fname);
           fs.writeFileSync(fpath, Buffer.from(block.source.data, 'base64'));
           _tempFiles.push(fpath);
@@ -368,6 +368,7 @@ class ClaudeCLI {
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: needsShell,
+      detached: process.platform !== 'win32',
     });
 
     // Close stdin immediately (non-interactive)
@@ -393,15 +394,16 @@ class ClaudeCLI {
 
     // ─── Watchdog timers ─────────────────────────────────────────────────────
     // Escalate to SIGKILL 3 s after SIGTERM if the process ignores it (Unix only —
-    // on Windows killProc already force-kills the whole tree). Guarded so it never
-    // signals a PID the OS may have reused after the child already exited.
+    // on Windows killProc already force-kills the whole tree). The group can still
+    // contain a tool after the CLI parent exits; only 'close' proves its inherited
+    // pipes closed, and that handler clears this timer.
     const escalateSigkill = () => {
       if (process.platform === 'win32') return;
       if (sigkillTimer) { clearTimeout(sigkillTimer); sigkillTimer = null; }
       sigkillTimer = setTimeout(() => {
         sigkillTimer = null;
-        if (proc.exitCode !== null || proc.signalCode !== null) return;
-        try { proc.kill('SIGKILL'); } catch {}
+        if (_finished) return;
+        killProc(proc, 'SIGKILL');
       }, 3000);
     };
 
@@ -551,10 +553,15 @@ class ClaudeCLI {
 
     if (abortController) {
       _abortListener = () => {
+        if (_finished) return;
         killProc(proc);
         escalateSigkill(); // force-kill 3 s later if SIGTERM is ignored (Unix only)
       };
-      abortController.signal.addEventListener('abort', _abortListener);
+      // Stop can arrive while the caller is preparing a retry. An already-aborted
+      // signal never emits another event, so listening alone lets that run continue.
+      // Defer so callers can attach their chained completion handlers first.
+      if (abortController.signal.aborted) setImmediate(_abortListener);
+      else abortController.signal.addEventListener('abort', _abortListener, { once: true });
     }
 
     return {

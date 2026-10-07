@@ -6,6 +6,7 @@ const os  = require('os');
 const path = require('path');
 const fs  = require('fs');
 const crypto = require('crypto');
+const { attachmentFileName } = require('./attachment-files');
 
 const MAX_LINE_BUFFER    = 10 * 1024 * 1024; // 10 MB
 // Idle (inactivity) watchdog — the remote process is killed ONLY after it produces no
@@ -319,13 +320,7 @@ class ClaudeSSH {
             const sftp = await this._openSftp(conn);
             for (let i = 0; i < attachmentSpecs.length; i++) {
               const spec = attachmentSpecs[i];
-              let ext = '';
-              if (spec.name) ext = path.extname(spec.name).replace(/^\./, '');
-              if (!ext) ext = spec.mediaType.split('/')[1] || (spec.type === 'image' ? 'png' : 'bin');
-              const safeBase = spec.name
-                ? path.basename(spec.name).replace(/[^a-zA-Z0-9._-]/g, '_')
-                : `attachment-${i + 1}.${ext}`;
-              const fileName = path.extname(safeBase) ? safeBase : `${safeBase}.${ext}`;
+              const fileName = attachmentFileName(spec, i);
               const remotePath = path.posix.join(remoteTempDir, fileName);
               await this._uploadBuffer(sftp, remotePath, Buffer.from(spec.data, 'base64'));
               remoteFilePaths.push(remotePath);

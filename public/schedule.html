@@ -1053,14 +1053,20 @@ async function fetchChains() {
 }
 
 async function refresh() {
+  const generation = refresh.generation = (refresh.generation || 0) + 1;
+  const project = curWorkdir;
+  const current = () => generation === refresh.generation && project === curWorkdir;
   const el = $i('schStatusEl');
   try {
-    [tasks, sessions, chains] = await Promise.all([fetchTasks(), fetchSessions(), fetchChains().catch(() => [])]);
+    const next = await Promise.all([fetchTasks(), fetchSessions(), fetchChains().catch(() => [])]);
+    if (!current()) return;
+    [tasks, sessions, chains] = next;
     render();
     const now = new Date().toLocaleTimeString(t('locale'), { hour: '2-digit', minute: '2-digit' });
     $i('refreshTs').textContent = now;
     if (el) { el.textContent = t('hdr.connected'); el.className = 'status-dot ok'; }
   } catch(e) {
+    if (!current()) return;
     if (el) { el.textContent = t('hdr.disconnected'); el.className = 'status-dot err'; }
     toast(t('toast.err.load') + e.message, 'err');
   }
@@ -1331,7 +1337,10 @@ function renderScheduleChainCard(chain, cls) {
 
 async function runChainNow(chainId) {
   try {
-    await apiFetch(`/api/task-chains/${chainId}/activate`, { method: 'POST' });
+    await apiFetch(`/api/task-chains/${chainId}/activate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run_now: true }),
+    });
     toast(t('toast.queued'));
     await refresh();
   } catch(e) { toast(t('toast.err') + e.message, 'err'); }
@@ -1375,7 +1384,9 @@ async function runNow(id) {
     await apiFetch(`/api/tasks/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'todo' }),
+      // A future timestamp still blocks the queue even after status becomes todo.
+      // A manual run replaces that slot; recurring jobs next re-arm from completion.
+      body: JSON.stringify({ status: 'todo', scheduled_at: null }),
     });
     toast(t('toast.queued'), 'ok');
     await refresh();
@@ -1573,21 +1584,27 @@ async function saveTask() {
   const title = ($i('fTitle')?.value || '').trim();
   if (!title) { toast(t('toast.err.title'), 'err'); $i('fTitle')?.focus(); return; }
 
+  const orig = editingId ? tasks.find(x => x.id === editingId) : null;
   const scheduledAtRaw = $i('fScheduledAt')?.value;
-  const scheduled_at = scheduledAtRaw ? Math.floor(new Date(scheduledAtRaw).getTime() / 1000) : null;
+  // datetime-local only displays minutes. Keep the stored seconds when an edit
+  // leaves that field untouched, just as the Kanban editor does.
+  const scheduled_at = orig?.scheduled_at && scheduledAtRaw === toLocalDatetimeStr(orig.scheduled_at)
+    ? orig.scheduled_at
+    : (scheduledAtRaw ? Math.floor(new Date(scheduledAtRaw).getTime() / 1000) : null);
   const recurrence = buildRecurToken();
   const endDateRaw = $i('fEndDate')?.value;
   const recurrence_end_at = (recurrence && endDateRaw)
     ? Math.floor(new Date(endDateRaw + 'T23:59:59').getTime() / 1000) : null;
 
-  const orig = editingId ? tasks.find(x => x.id === editingId) : null;
   const body = {
     title,
     description: $i('fDesc')?.value || '',
     // Preserve existing status on edit — don't forcibly queue a running/backlog task
     status: orig ? (orig.status || 'todo') : 'todo',
     session_id: $i('fSession')?.value || null,
-    workdir: curWorkdir || null,
+    // The filter is not an editable project field. Preserve the task's exact
+    // directory (including a worktree) in both global and project-scoped views.
+    workdir: orig ? orig.workdir : (curWorkdir || null),
     model: getScVal('model', 'sonnet'),
     mode: getScVal('mode', 'auto'),
     agent_mode: getScVal('agent_mode', 'single'),

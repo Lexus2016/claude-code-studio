@@ -1184,35 +1184,52 @@ async function fetchMessages(sessId){
 }
 
 async function refresh(force=false){
+  const generation=refresh.generation=(refresh.generation||0)+1;
+  const project=curWorkdir;
+  const current=()=>generation===refresh.generation&&project===curWorkdir;
   const btn=$i('refreshBtn');
   btn.innerHTML='<span class="spinning"></span>';
   try{
+    let changed=force;
     const etag=await fetchEtag();
-    if(!force&&etag===lastEtag)return;
-    const[newTasks,newSessions]=await Promise.all([fetchTasks(),fetchSessions()]);
-    tasks=newTasks;sessions=newSessions;lastEtag=etag;
-    // Fetch chains
+    if(!current())return;
+    if(force||refresh.project!==project||etag!==lastEtag){
+      const[newTasks,newSessions]=await Promise.all([fetchTasks(),fetchSessions()]);
+      if(!current())return;
+      tasks=newTasks;sessions=newSessions;lastEtag=etag;refresh.project=project;
+      changed=true;
+    }
+    // Chains and delegations change independently of the task-table ETag.
     try{
       const ce=await apiFetch('/api/task-chains/etag').then(r=>r.json());
+      if(!current())return;
       const cEtag=ce.ts+'|'+ce.n;
-      if(force||cEtag!==lastChainEtag){
-        lastChainEtag=cEtag;
+      if(force||refresh.chainProject!==project||cEtag!==lastChainEtag){
         const url=curWorkdir?`/api/task-chains?workdir=${encodeURIComponent(curWorkdir)}`:'/api/task-chains';
-        chains=await apiFetch(url).then(r=>r.json());
+        const nextChains=await apiFetch(url).then(r=>r.json());
+        if(!current())return;
+        chains=nextChains;
+        lastChainEtag=cEtag;refresh.chainProject=project;
+        changed=true;
       }
-    }catch(e){console.warn('chains fetch:',e);chains=[];}
+    }catch(e){if(!current())return;console.warn('chains fetch:',e);}
     // Fetch active delegations
     try{
       const delRes=await apiFetch('/api/delegate/status').then(r=>r.json());
-      _activeDelegations=delRes.delegations||[];
-    }catch{_activeDelegations=[];}
-    renderBoard();
+      if(!current())return;
+      const nextDelegations=delRes.delegations||[];
+      if(JSON.stringify(nextDelegations)!==JSON.stringify(_activeDelegations)){
+        _activeDelegations=nextDelegations;changed=true;
+      }
+    }catch{if(!current())return;}
+    // Preserve the DOM during unchanged polls (including any in-progress drag).
+    if(changed)renderBoard();
     // fr and he were missing from this chain and fell through to en-GB.
     const ts=new Date().toLocaleTimeString(UI_LOCALES[lang]||UI_LOCALES.en,{hour:'2-digit',minute:'2-digit'});
     $i('refreshTs').textContent=ts;
     $i('refreshTs2').textContent=ts;
-  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
-  finally{btn.innerHTML='&#8635;';}
+  }catch(e){if(current()&&e.message!=='401')toast(t('toast.err')+e.message,true);}
+  finally{if(current())btn.innerHTML='&#8635;';}
 }
 function startAutoRefresh(){
   clearTimeout(refreshTimer);
@@ -2355,9 +2372,9 @@ async function saveTask(){
   let session_id=$i('fSession')?.value||null;
   const cfg=getSessCfg();
   const existingTask=editingId?tasks.find(t=>t.id===editingId):null;
-  // curWorkdir when a project is selected; otherwise whatever the picker (global view)
-  // or the task itself already carries.
-  const taskWorkdir=curWorkdir||($i('fProject')?.value||'')||existingTask?.workdir||null;
+  // A project filter must not replace an existing task's isolated worktree.
+  // The picker/filter apply only to new or previously unassigned tasks.
+  const taskWorkdir=existingTask?.workdir||curWorkdir||($i('fProject')?.value||'')||null;
   if(!taskWorkdir){toast(t('toast.pick_project'),true);$i('fProject')?.focus();return;}
   // An empty datetime clears the schedule — PUT falls back to the stored value only when
   // the field is absent, so null has to be sent explicitly.

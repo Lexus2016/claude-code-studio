@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const fs = require('fs');
+const net = require('net');
 
 const APP_DIR = process.env.APP_DIR || __dirname;
 const AUTH_FILE = path.join(APP_DIR, 'data', 'auth.json');
@@ -41,9 +42,28 @@ let _sessionsCache = null;
 
 function loadSessions() {
   if (_sessionsCache !== null) return _sessionsCache;
-  try { _sessionsCache = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf-8')); }
-  catch { _sessionsCache = {}; }
+  // Tokens are dictionary keys, never properties inherited from Object.prototype.
+  // Accept only the records this module writes; malformed JSON must fail closed.
+  _sessionsCache = Object.create(null);
+  try {
+    const stored = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf-8'));
+    if (stored && typeof stored === 'object' && !Array.isArray(stored)) {
+      for (const [token, record] of Object.entries(stored)) {
+        if (isTokenString(token) && isSessionRecord(record)) _sessionsCache[token] = record;
+      }
+    }
+  } catch {}
   return _sessionsCache;
+}
+
+function isTokenString(token) {
+  return typeof token === 'string' && /^[0-9a-f]{64}$/.test(token);
+}
+
+function isSessionRecord(record) {
+  return record !== null && typeof record === 'object' && !Array.isArray(record) &&
+    Object.prototype.hasOwnProperty.call(record, 'created') &&
+    Number.isFinite(record.created) && record.created > 0;
 }
 
 function saveSessions(data) {
@@ -108,7 +128,10 @@ async function login(password) {
   const auth = loadAuth();
   // Generic message: do not distinguish 'not configured' from 'wrong password'
   // to prevent user-enumeration via error message differences.
-  if (!auth || !(await bcrypt.compare(password, auth.passwordHash))) throw new Error('Invalid credentials');
+  if (!auth || typeof password !== 'string' || !(await bcrypt.compare(password, auth.passwordHash))) throw new Error('Invalid credentials');
+  // bcrypt yields. A password change can revoke all tokens while this comparison
+  // is in flight; do not mint a new session from the now-obsolete password hash.
+  if (loadAuth()?.passwordHash !== auth.passwordHash) throw new Error('Invalid credentials');
   return createToken();
 }
 
@@ -130,10 +153,11 @@ function createToken() {
 }
 
 function validateToken(token) {
-  if (!token) return false;
+  if (!isTokenString(token)) return false;
   const sessions = loadSessions();
+  if (!Object.prototype.hasOwnProperty.call(sessions, token)) return false;
   const s = sessions[token];
-  if (!s) return false;
+  if (!isSessionRecord(s)) return false;
   if (Date.now() - s.created > TOKEN_TTL) { delete sessions[token]; saveSessions(sessions); return false; }
   const now = Date.now();
   // Always update lastUsed in the in-memory cache (loadSessions returns _sessionsCache,
@@ -160,9 +184,13 @@ function revokeAll() {
 async function changePassword(oldPassword, newPassword) {
   const auth = loadAuth();
   if (!auth) throw new Error('Not configured');
-  if (!(await bcrypt.compare(oldPassword, auth.passwordHash))) throw new Error('Invalid current password');
+  if (typeof oldPassword !== 'string' || !(await bcrypt.compare(oldPassword, auth.passwordHash))) throw new Error('Invalid current password');
   validatePassword(newPassword);
-  auth.passwordHash = await bcrypt.hash(newPassword, 12);
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  // Two concurrent changes must not let the later writer overwrite a password
+  // after authenticating against a hash the earlier change already retired.
+  if (loadAuth()?.passwordHash !== auth.passwordHash) throw new Error('Invalid current password');
+  auth.passwordHash = passwordHash;
   saveAuth(auth);
   revokeAll();
   return createToken();
@@ -180,6 +208,25 @@ function isLoopbackAddress(addr) {
   if (!addr) return false;
   const a = String(addr).replace(/^::ffff:/, '');
   return a === '::1' || a === 'localhost' || /^127\./.test(a);
+}
+
+// Loopback socket addresses alone do not prove a browser is local: a DNS-rebound
+// attacker hostname and a local reverse proxy both arrive from 127.0.0.1. Auth
+// bypasses (desktop mode and first-run setup) also need a literal local Host and
+// no evidence that the request was forwarded. A proxy that rewrites Host and strips
+// every forwarding header remains indistinguishable from a local client; never
+// expose desktop mode through such a proxy. Do not use isLoopbackAddress() on
+// a hostname: its address-only prefix check would trust 127.attacker.example.
+function isDirectLoopbackRequest(req) {
+  if (!isLoopbackAddress(req.socket?.remoteAddress)) return false;
+  if (['x-forwarded-for', 'x-real-ip', 'forwarded'].some(h => h in req.headers)) return false;
+  if (typeof req.headers.host !== 'string') return false;
+  let url;
+  try { url = new URL('http://' + req.headers.host); } catch { return false; }
+  if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) return false;
+  const host = url.hostname;
+  return host === 'localhost' || host === '[::1]' ||
+    (net.isIP(host) === 4 && host.startsWith('127.'));
 }
 
 // Generated lazily and only while setup is pending, so a finished install keeps
@@ -223,4 +270,4 @@ function authMiddleware(req, res, next) {
 
 function validateWsToken(token) { if (process.env.CCS_DESKTOP === '1') return true; return validateToken(token); }
 
-module.exports = { isSetupDone, setupUser, login, validateToken, revokeToken, revokeAll, changePassword, authMiddleware, validateWsToken, loadAuth, isLoopbackAddress, getSetupCode, checkSetupCode, clearSetupCode };
+module.exports = { isSetupDone, setupUser, login, validateToken, revokeToken, revokeAll, changePassword, authMiddleware, validateWsToken, loadAuth, isLoopbackAddress, isDirectLoopbackRequest, getSetupCode, checkSetupCode, clearSetupCode };

@@ -12,6 +12,7 @@ const net = require('net');
 const os = require('os');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
+const { isStudioUrl, isTrustedSender } = require('./navigation-policy');
 
 let serverProc = null;
 let serverPort = null;
@@ -154,7 +155,7 @@ function stopServer() {
 
 function applyWindowOpenPolicy(webContents) {
   webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(`http://127.0.0.1:${serverPort}/`)) {
+    if (isStudioUrl(url, serverPort)) {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
@@ -166,6 +167,15 @@ function applyWindowOpenPolicy(webContents) {
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
+  // target=_self links and redirects do not pass through setWindowOpenHandler.
+  // Keep remote documents away from the privileged preload in every app window.
+  const guardNavigation = (event, url) => {
+    if (isStudioUrl(url, serverPort)) return;
+    event.preventDefault();
+    if (/^https?:\/\//.test(url)) shell.openExternal(url);
+  };
+  webContents.on('will-navigate', guardNavigation);
+  webContents.on('will-redirect', guardNavigation);
   webContents.on('did-create-window', (childWindow) => applyWindowOpenPolicy(childWindow.webContents));
 }
 
@@ -398,14 +408,19 @@ async function startUpdate() {
   return { started: true, via: 'electron-updater' };
 }
 
-ipcMain.handle('update:check', async () => {
+ipcMain.handle('update:check', async (event) => {
+  if (!isTrustedSender(event, serverPort)) return { error: 'Untrusted sender' };
   try { return await checkUpdate(); } catch (e) { return { available: false, error: e.message, currentVersion: app.getVersion() }; }
 });
-ipcMain.handle('update:start', async () => {
+ipcMain.handle('update:start', async (event) => {
+  if (!isTrustedSender(event, serverPort)) return { error: 'Untrusted sender' };
   try { return await startUpdate(); } catch (e) { return { error: e.message }; }
 });
 
-ipcMain.handle('app:getVersion', () => app.getVersion());
+ipcMain.handle('app:getVersion', (event) => {
+  if (!isTrustedSender(event, serverPort)) throw new Error('Untrusted sender');
+  return app.getVersion();
+});
 
 // ─── Import data from the CLI / web version ─────────────────────────────────
 // Native menu item to migrate an existing studio's chat history + settings into

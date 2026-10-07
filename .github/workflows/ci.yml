@@ -6,17 +6,24 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 24]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node }}
 
       # Four suites (terminal bridge, engine pane, terminal session, path guard)
       # check tmux behaviour and self-skip where the binary is missing. Installing
@@ -25,7 +32,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y tmux
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm ci
 
       # APP_DIR / CCS_DESKTOP repoint the data directory and turn the auth wall
       # off. Nothing sets them on a runner, but the suites are written to be run

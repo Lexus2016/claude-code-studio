@@ -152,11 +152,19 @@ function ensureWorktree({ projectDir, worktreeDir, branch }) {
   const existing = _listWorktrees(projectDir).find(w => _real(w.worktree) === _real(worktreeDir));
   if (existing && fs.existsSync(path.join(worktreeDir, '.git'))) return { created: false, path: worktreeDir, branch: existing.branch || branch };
 
-  // A directory can be left on disk without git's own registration (crash
-  // between mkdir and `worktree add`, or a stale entry after manual cleanup)
-  // — prune git's bookkeeping and remove any orphan directory before retrying.
+  // Missing registration (or a missing .git link) does not mean the contents are
+  // disposable: a restored directory may contain the only copy of uncommitted work.
+  // Only an empty directory is safe to recover automatically. rmdir, never rm -rf,
+  // also refuses a file that appears between the check and removal.
+  if (fs.existsSync(worktreeDir)) {
+    if (!fs.lstatSync(worktreeDir).isDirectory() || fs.readdirSync(worktreeDir).length) {
+      throw new Error(`Refusing to replace non-empty worktree directory with existing files: ${worktreeDir}`);
+    }
+    fs.rmdirSync(worktreeDir);
+  }
+  // A directory can disappear while git still holds its registration. Prune that
+  // stale entry before adding the replacement, retaining its existing branch.
   try { _git(['worktree', 'prune'], projectDir); } catch { /* best effort */ }
-  if (fs.existsSync(worktreeDir)) fs.rmSync(worktreeDir, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(worktreeDir), { recursive: true });
 
   const branchExists = _gitOk(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], projectDir);
@@ -190,13 +198,16 @@ function removeWorktree({ projectDir, worktreeDir, branch, force = false }) {
  * uncommitted changes — used to gate archive/delete on real data loss.
  */
 function hasUnmergedWork({ worktreeDir, projectDir, defaultBranch, branch }) {
-  if (!fs.existsSync(worktreeDir)) return false;
-  const dirty = _git(['status', '--porcelain'], worktreeDir).length > 0;
-  if (dirty) return true;
   try {
+    if (fs.existsSync(worktreeDir)) {
+      const dirty = _git(['status', '--porcelain'], worktreeDir).length > 0;
+      if (dirty) return true;
+    }
+    // A removed directory can still own committed work through its branch. The
+    // deletion path removes that branch too, so it must be checked in either case.
     const ahead = _git(['rev-list', '--count', `${defaultBranch}..${branch}`], projectDir);
-    return parseInt(ahead, 10) > 0;
-  } catch { return false; }
+    return !/^\d+$/.test(ahead) || Number(ahead) > 0;
+  } catch { return true; } // Unknown is not permission to destroy the only copy.
 }
 
 /**
@@ -293,6 +304,12 @@ function _enqueue(key, fn) {
  */
 function mergeBranch({ projectDir, defaultBranch, branch }) {
   return _enqueue(path.resolve(projectDir), async () => {
+    // Only abort a merge this call started. A user's unfinished merge may contain
+    // hours of manual conflict resolution that `merge --abort` would discard when
+    // git refuses our new merge below.
+    if (_gitOk(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], projectDir)) {
+      return { ok: false, conflict: true, message: 'A merge is already in progress in the project. Finish or abort it before merging this worktree.' };
+    }
     const current = _git(['rev-parse', '--abbrev-ref', 'HEAD'], projectDir);
     if (current !== defaultBranch) _git(['checkout', defaultBranch], projectDir);
     try {

@@ -24,7 +24,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn, execFileSync } = require('child_process');
-const Database = require('better-sqlite3');
+// Exercise the same backend as the server: native better-sqlite3 on Node 20,
+// built-in SQLite on newer Node versions (the native addon is optional there).
+const openDatabase = require('../db-adapter');
 
 let pass = 0, fail = 0;
 function check(label, actual, expected) {
@@ -103,7 +105,7 @@ async function api(method, url, body) {
   }
   await stop();
 
-  const db = new Database(path.join(APP_DIR, 'data', 'chats.db'));
+  const db = openDatabase(path.join(APP_DIR, 'data', 'chats.db'));
   const tree = {};
   for (const [k, id] of Object.entries(ids)) tree[k] = db.prepare('SELECT workdir FROM sessions WHERE id=?').get(id).workdir;
   if (!Object.values(tree).every(d => d && fs.existsSync(d) && d.startsWith(path.join(APP_DIR, 'data', 'worktrees')))) {
@@ -135,13 +137,13 @@ async function api(method, url, body) {
   const caseRow = caseTree.replace(/task-casecheck$/, 'TASK-CASECHECK');
   const caseInsensitive = fs.existsSync(caseRow);
   if (caseInsensitive) {
-    const dbc = new Database(path.join(APP_DIR, 'data', 'chats.db'));
+    const dbc = openDatabase(path.join(APP_DIR, 'data', 'chats.db'));
     dbc.prepare(`INSERT INTO tasks (id, title, status, workdir) VALUES ('case-1', 'case', 'backlog', ?)`).run(caseRow);
     dbc.close();
   }
 
   boot(); await up();   // expiry runs at startup
-  const db2 = new Database(path.join(APP_DIR, 'data', 'chats.db'), { readonly: true });
+  const db2 = openDatabase(path.join(APP_DIR, 'data', 'chats.db'));
   const row = id => db2.prepare('SELECT id FROM sessions WHERE id=?').get(id) || null;
 
   console.log('\n— an expired clean session goes with everything it owned —');
@@ -154,7 +156,7 @@ async function api(method, url, body) {
   console.log('\n— expiry is unattended, so it discards nothing anyone would be asked about —');
   check('a session with uncommitted work keeps its row', !!row(ids.dirty), true);
   check('…and its worktree, with the work in it', fs.existsSync(path.join(tree.dirty, 'work-in-progress.txt')), true);
-  check('a Kanban card outlives its expired chat', db2.prepare(`SELECT session_id FROM tasks WHERE id='card-1'`).get(), { session_id: null });
+  check('a Kanban card outlives its expired chat', db2.prepare(`SELECT session_id FROM tasks WHERE id='card-1'`).get()?.session_id, null);
   check('…while that chat and its tree are gone', [row(ids.card), fs.existsSync(tree.card)], [null, false]);
   check('a fresh session is untouched', [!!row(ids.fresh), fs.existsSync(tree.fresh)], [true, true]);
 

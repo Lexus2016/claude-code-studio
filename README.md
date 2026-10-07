@@ -546,6 +546,14 @@ ANTHROPIC_BASE_URL=       # LLM proxy/gateway (LiteLLM, Bifrost, OpenRouter)
 
 **Security:** bcrypt (12 rounds), 32-byte tokens (30-day TTL), AES-256-GCM for SSH passwords, Helmet.js headers, path traversal protection, XSS filtering, parameterized SQL queries, 2MB buffer caps.
 
+**Reverse-proxy boundary:** never expose the desktop-mode server through a reverse proxy.
+For web mode, finish first-run setup locally before exposing the server, and configure
+the proxy to preserve the original Host or set a forwarding header such as
+`X-Forwarded-For` (overwriting untrusted client values). A proxy that rewrites Host to
+loopback and strips every forwarding header cannot be distinguished from a direct
+local client, so first-run setup would not require the remote setup code.
+
+
 **Development:**
 
 ```bash

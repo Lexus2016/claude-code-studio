@@ -226,6 +226,7 @@ body::after{
 <!-- Content -->
 <div class="main" id="main">
   <div class="loading" id="loader"><div class="spinner"></div></div>
+  <div id="loadError" style="display:none" role="status"></div>
   <div class="grid" id="content" style="display:none">
 
     <!-- Hero cards -->
@@ -444,21 +445,28 @@ function adoptServerLang(srvLang){
 
 // --- Data loading ---
 async function loadData(){
+  const generation = loadData.generation = (loadData.generation || 0) + 1;
+  const current = () => generation === loadData.generation;
   const loader = $('#loader');
   const content = $('#content');
+  const loadError = $('#loadError');
   loader.style.display = 'flex';
   content.style.display = 'none';
+  loadError.style.display = 'none';
   try {
     const res = await fetch('/api/dashboard', { credentials:'include' });
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const d = await res.json();
+    if(!current()) return;
     render(d);
     content.style.display = '';
   } catch(e){
-    content.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>${t('error.loadfailed')}</p><small>${e.message}</small></div>`;
-    content.style.display = '';
+    if(!current()) return;
+    // Keep the chart containers intact so Refresh can recover after a failure.
+    loadError.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>${t('error.loadfailed')}</p><small>${escHtml(e.message)}</small></div>`;
+    loadError.style.display = '';
   } finally {
-    loader.style.display = 'none';
+    if(current()) loader.style.display = 'none';
   }
 }
 
