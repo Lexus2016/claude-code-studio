@@ -184,10 +184,9 @@ test('Kanban still lets the global-view picker assign a previously unassigned ta
   assert.equal(body.workdir, '/projects/chosen');
 });
 
-test('all inline Dashboard and Kanban scripts parse', () => {
-  for (const [filename, src] of [['dashboard', dashboard], ['kanban', kanban]]) {
-    for (const [i, match] of [...src.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].entries()) {
-      new vm.Script(match[1], { filename: `${filename}.html#script${i}` });
-    }
+// Kanban's inline-script parse guard lives in kanban-group-button.test.js.
+test('all inline Dashboard scripts parse', () => {
+  for (const [i, match] of [...dashboard.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].entries()) {
+    new vm.Script(match[1], { filename: `dashboard.html#script${i}` });
   }
 });

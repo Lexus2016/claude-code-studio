@@ -4,22 +4,11 @@
 // code while still passing.
 //
 // This file used to be named `_load.selftest.mjs`, which does NOT match the
-// `test/render/*.test.mjs` glob in package.json — so it never ran, and the two
-// isSafeHref assertions below were dead code for their whole existence.
+// `test/render/*.test.mjs` glob in package.json — so it never ran. The allowlist
+// matrix below exercises the extracted callable and owns the URL cases.
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { loadFn } from './_load.mjs';
-
-test('loadFn returns a real callable from index.html', () => {
-  const isSafeHref = loadFn('isSafeHref');
-  assert.strictEqual(typeof isSafeHref, 'function');
-});
-
-test('isSafeHref allows https and rejects javascript:', () => {
-  const isSafeHref = loadFn('isSafeHref');
-  assert.strictEqual(isSafeHref('https://x.com'), true);
-  assert.strictEqual(isSafeHref('javascript:alert(1)'), false);
-});
 
 test('the allowlist covers the schemes the renderer actually emits', () => {
   const isSafeHref = loadFn('isSafeHref');
