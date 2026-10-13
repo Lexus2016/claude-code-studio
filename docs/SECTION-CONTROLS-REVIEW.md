@@ -55,6 +55,17 @@ Dialogs now share readable headings and field text, consistent input/button geom
 
 The aggregate test command includes focused workspace, secondary navigation, section controls, settings/MCP, team forms and remaining-page forms regressions, alongside the original rendering/backend/security/task/terminal suites. Tests execute source functions in VM fixtures and validate markup/payload preservation; they do not substitute for a real browser.
 
-Chromium execution is blocked by the environment's socket restriction, and the supported cloud browser cannot reach the local preview. Consequently there are no before/after rendered screenshots, no real desktop/mobile visual approval and no live Claude streaming acceptance result. Host-dependent tmux/SSH/LAN checks may self-skip. No whole-product 70% speed or complexity claim is made.
+The implementation environment could not run a browser. The review before merging did, in Chromium against live servers (1366x768, 1440x900, 1920x1080, 390x844, 390x667): configuration open/close/save, bot, MCP, SSH, external-agent, CLI-import and New project dialogs, the folder picker, Kanban backlog saves, the Schedule form, Dashboard, and the login and first-run setup pages. It found and fixed:
+
+- **New project — the Add button was off screen and unreachable** at 1366x768 and 1440x900 (only the folder list scrolls). The list now gives way.
+- **Kanban/Schedule — a Save made while the previous save's board refresh ran was silently ignored.**
+- **Configuration — a CRLF file counted as edited** once its tab was shown (false "Discard unsaved changes?" and browser leave prompt).
+- **New project — closing during the first folder listing left "Loading…" for good** on reopen.
+- **A config.json the server refused ("Invalid JSON") was reported as "may have been saved"**; the reason is shown again.
+- Reopening a dialog whose cancelled action still ran did nothing; it now says "Saving…". A stale SSH test result no longer leaves "Connecting…".
+
+Confirmed separately: the parent version could fail to open Configuration at all — it awaited three requests without a catch before showing the dialog, so one hung or non-JSON reply meant no dialog and no message (reproduced by holding `/api/config/resolved`). This version opens the dialog first and reports a failed load inside it.
+
+Known and not changed: declining the discard prompt during Back rewrites the entry the browser landed on (described above), so that entry's earlier visit is lost. Not tested: Safari/WebKit and Firefox, real touch devices, the Subscription engine. No whole-product 70% speed or complexity claim is made.
 
 No backend API contract, production deployment, release, merge or package publication is part of this follow-up.
