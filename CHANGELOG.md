@@ -1,5 +1,33 @@
 # Changelog
 
+## 8.0.2
+
+### Names you can read in the sidebar, and chats that delete when you ask
+
+- **Bot, command and chat names use the whole row.** The edit, delete and mention
+  buttons that appear when you hover a row kept their width while they were invisible,
+  so at the default sidebar width a bot's name got half of its row and a command's about
+  two fifths. With a mouse they now take no space until you hover the row or reach a
+  button with Tab. On a touch screen they are shown all the time; before, they were
+  invisible there but could still be tapped. The drag handle no longer pushes the title
+  aside when it appears, and the sections under **Tools & team** lost a second layer of
+  side padding.
+- **A refused delete is explained instead of undone.** The sidebar ignored the server's
+  answer: when it refused to delete a chat, the tab closed, the list reloaded and the
+  chat came back with no message. If a chat's worktree has uncommitted changes or
+  commits not merged into the main branch, deleting it now asks a second time and says
+  those changes will be lost; deleting several chats names the ones affected, and
+  Cancel deletes nothing. Any other failure shows its reason.
+- **A chat that could never be deleted now deletes.** A chat whose working folder was
+  the project folder itself, with no branch of its own, was counted as holding unsaved
+  work, so every delete was refused. The project folder's own uncommitted files belong
+  to the project, not to that chat; it now deletes with one confirmation.
+- **Deleting a chat can never remove the project folder.** After a delete, the chat's
+  working folder is removed, with a forced fallback when git refuses. For a chat like
+  the one above, that folder was the project, and only other chats in the same folder
+  kept the fallback from running. The cleanup now refuses the project, any folder that
+  contains it, and the main folder of any repository.
+
 ## 8.0.1
 
 ### A calmer workspace: fewer controls on screen, everything one click away, and Back that brings you back
