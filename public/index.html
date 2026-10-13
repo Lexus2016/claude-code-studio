@@ -14206,6 +14206,11 @@ function settingsRemember(id) { settingsDrafts.set(id, settingsSnapshot(id)); }
 // One deadline spans fetch, JSON decoding and any refresh. Cancellation cannot
 // undo a write already received by the server; never automatically retry it.
 const settingsOperations = new Map();
+// The server ANSWERED and refused (e.g. "Invalid JSON"): nothing was saved, and its
+// reason is what the user needs. Only a timeout, abort or lost connection leaves the
+// outcome unknown and earns settings.uncertain.
+function settingsRejected(message) { const e = new Error(message); e.settingsRejected = true; return e; }
+function settingsFailureText(e) { return e?.settingsRejected ? t('toast.err_prefix') + e.message : t('settings.uncertain'); }
 function settingsStartOperation(id, write = true) {
   settingsCancelOperation(id);
   const controller = new AbortController();
@@ -14814,7 +14819,7 @@ async function doMcpImport() {
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await operation.wait(r.json());
-    if (!d.ok) throw new Error(d.error || 'Server error');
+    if (!d.ok) throw settingsRejected(d.error || 'Server error');
     // Reload full config from server to stay in sync with what was actually saved
     const refreshed = await operation.fetch('/api/config');
     if (!refreshed.ok) throw new Error(`HTTP ${refreshed.status}`);
@@ -14828,7 +14833,7 @@ async function doMcpImport() {
   } catch(e) {
     if (!operation.current()) return;
     btn.disabled = false;
-    toast(t('settings.uncertain'), true);
+    toast(settingsFailureText(e), true);
   } finally { settingsEndOperation(operation); }
 }
 async function exportMcp() {
@@ -15572,7 +15577,7 @@ async function saveCfg() {
         body:JSON.stringify({filename:tab, content}) });
     }
     const d = await operation.wait(r.json());
-    if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    if (!r.ok || !d.ok) throw settingsRejected(d.error || `HTTP ${r.status}`);
     cfgSavedFiles[tab] = content;
     if (activeCfgTab === tab && $i('cfgEditor').value === content) {
       $i('saveNotice').className = 'save-notice';
@@ -15585,7 +15590,7 @@ async function saveCfg() {
       renderMcp(); renderSkills(); renderCommands();
     }
     toast(t('cfg.saved'));
-  } catch (e) { if (operation.current()) toast(t('settings.uncertain'), true); }
+  } catch (e) { if (operation.current()) toast(settingsFailureText(e), true); }
   finally { if (operation.current()) { settingsEndOperation(operation); cfgSaving = false; $i('cfgSaveBtn').disabled = false; } }
 }
 

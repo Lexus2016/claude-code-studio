@@ -68,3 +68,15 @@ test('a dialog whose cancelled action is still running says so when reopened',()
   for(const [name,id] of [['openAddProject','dirAddBtn'],['openCliImport','cliImportBtn'],['openAddHostModal','sshHostSaveBtn'],['editRemoteHost','sshHostSaveBtn']])
     assert.match(src(name),new RegExp('_formActions\\.has\\(\''+id+'\'\\)\\) \\{ toast\\(t\\(\'team\\.saving\'\\)\\); return; \\}'),name);
 });
+
+test('a save the server refused shows its reason, not "the outcome is unknown"',()=>{
+  // "Invalid JSON" on a config.json save is a definite answer; settings.uncertain (which
+  // says the change may have been saved) is only for timeouts, aborts and lost links.
+  const c=vm.createContext({t:k=>k==='toast.err_prefix'?'Error: ':k});
+  vm.runInContext(src('settingsRejected')+'\n'+src('settingsFailureText'),c);
+  assert.equal(c.settingsFailureText(c.settingsRejected('Invalid JSON')),'Error: Invalid JSON');
+  assert.equal(c.settingsFailureText(new Error('The operation was aborted')),'settings.uncertain');
+  assert.match(src('saveCfg'),/throw settingsRejected\(d\.error/);
+  assert.match(src('saveCfg'),/toast\(settingsFailureText\(e\), true\)/);
+  assert.match(src('doMcpImport'),/throw settingsRejected\(d\.error/);
+});
