@@ -8,7 +8,7 @@
 <style>
 :root{--bg:#0d1117;--s1:#161b22;--s2:#1c2129;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#7c6aef;--accent2:#9d8df1;--red:#f85149;--green:#3fb950}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100vh;height:100dvh;display:flex;align-items:center;justify-content:center}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh;padding:24px 0;display:flex;align-items:center;justify-content:center}
 .card{background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:40px;width:400px;max-width:90vw;text-align:center}
 .logo{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--accent),#a855f7);display:inline-flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:white;margin-bottom:16px}
 h1{font-size:20px;margin-bottom:4px}
@@ -22,32 +22,105 @@ h1{font-size:20px;margin-bottom:4px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .error{color:var(--red);font-size:12px;margin-top:8px;min-height:18px}
 .note{color:var(--muted);font-size:11px;margin-top:16px;line-height:1.5}
+
+.card{box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.field input:focus-visible,.btn:focus-visible{outline:2px solid var(--accent2);outline-offset:3px}
+.field input[aria-invalid="true"]{border-color:var(--red)}
+.btn-secondary{background:var(--s2);color:var(--text);border:1px solid var(--border)}
+@media(max-width:440px){.card{padding:28px 22px}}
 </style>
 </head>
 <body>
-<div class="card">
+<main class="card" aria-labelledby="title">
   <div class="logo">CCS</div>
   <h1 id="title">Claude Code Chat</h1>
-  <p class="sub" id="subtitle">Loading...</p>
+  <p class="sub" id="subtitle" role="status">Loading...</p>
+  <div id="statusError" class="error" role="alert" hidden></div>
+  <button type="button" class="btn btn-secondary" id="statusRetry" onclick="checkStatus()" hidden>Try again</button>
   <form id="setupForm" style="display:none" onsubmit="return doSetup(event)">
-    <div class="field"><label>Your name</label><input type="text" id="setupName" placeholder="Admin" autocomplete="name"></div>
-    <div class="field"><label>Password (min. 8 characters)</label><input type="password" id="setupPass" placeholder="••••••••" required minlength="8"></div>
-    <div class="field"><label>Confirm password</label><input type="password" id="setupPass2" placeholder="••••••••" required minlength="8"></div>
-    <div class="field" id="setupCodeField" style="display:none"><label>Setup code (printed in the server console)</label><input type="text" id="setupCode" placeholder="A1B2C3D4" autocomplete="off" spellcheck="false"></div>
+    <div class="field"><label for="setupName">Your name</label><input type="text" id="setupName" placeholder="Admin" autocomplete="name"></div>
+    <div class="field"><label for="setupPass">Password (min. 8 characters)</label><input type="password" id="setupPass" autocomplete="new-password" aria-describedby="setupError" placeholder="••••••••" required minlength="8"></div>
+    <div class="field"><label for="setupPass2">Confirm password</label><input type="password" id="setupPass2" autocomplete="new-password" aria-describedby="setupError" placeholder="••••••••" required minlength="8"></div>
+    <div class="field" id="setupCodeField" style="display:none"><label for="setupCode">Setup code (printed in the server console)</label><input type="text" id="setupCode" placeholder="A1B2C3D4" autocomplete="off" spellcheck="false"></div>
     <button type="submit" class="btn btn-primary" id="setupBtn">🚀 Create account</button>
-    <div class="error" id="setupError"></div>
+    <div class="error" id="setupError" role="alert"></div>
     <p class="note">First run. Password is stored locally (bcrypt hash).</p>
   </form>
   <form id="loginForm" style="display:none" onsubmit="return doLogin(event)">
-    <div class="field"><label>Password</label><input type="password" id="loginPass" placeholder="••••••••" required autofocus></div>
+    <div class="field"><label for="loginPass">Password</label><input type="password" id="loginPass" autocomplete="current-password" aria-describedby="loginError" placeholder="••••••••" required autofocus></div>
     <button type="submit" class="btn btn-primary" id="loginBtn">🔑 Sign in</button>
-    <div class="error" id="loginError"></div>
+    <div class="error" id="loginError" role="alert"></div>
   </form>
-</div>
+</main>
 <script>
-async function checkStatus(){const r=await fetch('/api/auth/status');const d=await r.json();if(d.loggedIn){window.location.href='/';return}if(!d.setupDone){document.getElementById('title').textContent='First run';document.getElementById('subtitle').textContent='Create a password to get started';document.getElementById('setupForm').style.display='block';if(d.setupCodeRequired){document.getElementById('setupCodeField').style.display='block';document.getElementById('subtitle').textContent='Create a password — and enter the code from the server console'}}else{document.getElementById('title').textContent='Sign in';document.getElementById('subtitle').textContent='Enter your password';document.getElementById('loginForm').style.display='block'}}
-async function doSetup(e){e.preventDefault();const p=document.getElementById('setupPass').value,p2=document.getElementById('setupPass2').value,n=document.getElementById('setupName').value||'Admin',err=document.getElementById('setupError');if(p!==p2){err.textContent='Passwords do not match';return false}document.getElementById('setupBtn').disabled=true;try{const r=await fetch('/api/auth/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p,displayName:n,setupCode:document.getElementById('setupCode').value.trim()})});const d=await r.json();if(d.ok)window.location.href='/';else err.textContent=d.error==='setup_code_required'?'Wrong or missing setup code — check the server console':(d.error||'Error')}catch(e){err.textContent='Connection error'}document.getElementById('setupBtn').disabled=false;return false}
-async function doLogin(e){e.preventDefault();const p=document.getElementById('loginPass').value,err=document.getElementById('loginError');document.getElementById('loginBtn').disabled=true;try{const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})});const d=await r.json();if(d.ok)window.location.href='/';else err.textContent=d.error==='Invalid password'?'Invalid password':d.error}catch(e){err.textContent='Connection error'}document.getElementById('loginBtn').disabled=false;return false}
+async function checkStatus(){
+  const retry=document.getElementById('statusRetry'),error=document.getElementById('statusError');
+  retry.hidden=true;error.hidden=true;error.textContent='';
+  document.getElementById('subtitle').textContent='Loading...';
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),15000);
+  try{
+    const r=await fetch('/api/auth/status',{signal:controller.signal});
+    if(!r.ok)throw new Error('status');
+    const d=await r.json();
+    if(d.loggedIn){window.location.href='/';return}
+    if(!d.setupDone){
+      document.getElementById('title').textContent='First run';
+      document.getElementById('subtitle').textContent='Create a password to get started';
+      document.getElementById('setupForm').style.display='block';
+      if(d.setupCodeRequired){
+        document.getElementById('setupCodeField').style.display='block';
+        document.getElementById('subtitle').textContent='Create a password — and enter the code from the server console';
+      }
+      document.getElementById('setupName').focus();
+    }else{
+      document.getElementById('title').textContent='Sign in';
+      document.getElementById('subtitle').textContent='Enter your password';
+      document.getElementById('loginForm').style.display='block';
+      document.getElementById('loginPass').focus();
+    }
+  }catch(e){
+    document.getElementById('subtitle').textContent='Unable to connect';
+    error.textContent='Could not reach Studio. Check that the server is running, then try again.';
+    error.hidden=false;retry.hidden=false;
+  }finally{clearTimeout(timeout)}
+}
+function setAuthBusy(prefix,busy){
+  const button=document.getElementById(prefix+'Btn');
+  if(busy)button.dataset.idleText=button.textContent;
+  button.disabled=busy;
+  button.textContent=busy?(prefix==='setup'?'Creating account...':'Signing in...'):button.dataset.idleText;
+  document.getElementById(prefix+'Form').setAttribute('aria-busy',String(busy));
+}
+async function doSetup(e){
+  e.preventDefault();
+  if(document.getElementById('setupBtn').disabled)return false;
+  const p=document.getElementById('setupPass').value,p2=document.getElementById('setupPass2').value,n=document.getElementById('setupName').value||'Admin',err=document.getElementById('setupError');
+  err.textContent='';document.getElementById('setupPass2').removeAttribute('aria-invalid');
+  if(p!==p2){err.textContent='Passwords do not match';document.getElementById('setupPass2').setAttribute('aria-invalid','true');document.getElementById('setupPass2').focus();return false}
+  setAuthBusy('setup',true);
+  try{
+    const r=await fetch('/api/auth/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p,displayName:n,setupCode:document.getElementById('setupCode').value.trim()})});
+    const d=await r.json();
+    if(d.ok)window.location.href='/';
+    else err.textContent=d.error==='setup_code_required'?'Wrong or missing setup code — check the server console':(d.error||'Could not create account. Try again.');
+  }catch(e){err.textContent='Connection error. Check the server and try again.'}
+  finally{setAuthBusy('setup',false)}
+  return false;
+}
+async function doLogin(e){
+  e.preventDefault();
+  if(document.getElementById('loginBtn').disabled)return false;
+  const p=document.getElementById('loginPass').value,err=document.getElementById('loginError');
+  err.textContent='';setAuthBusy('login',true);
+  try{
+    const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})});
+    const d=await r.json();
+    if(d.ok)window.location.href='/';else err.textContent=d.error==='Invalid password'?'Invalid password':(d.error||'Could not sign in. Try again.');
+  }catch(e){err.textContent='Connection error. Check the server and try again.'}
+  finally{setAuthBusy('login',false)}
+  return false;
+}
 checkStatus();
 </script>
 </body>

@@ -293,7 +293,7 @@ body::after{ display:none; }
 
 <!-- Content -->
 <div class="main" id="main" role="main" tabindex="-1" aria-label="Dashboard" data-i18n-aria="nav.dashboard">
-  <div class="loading" id="loader"><div class="spinner"></div></div>
+  <div class="loading" id="loader" role="status" aria-label="Loading" data-i18n-aria="loading"><div class="spinner"></div></div>
   <div id="loadError" style="display:none" role="status"></div>
   <div class="grid" id="content" style="display:none">
 
@@ -489,6 +489,7 @@ function locale(){ return LOCALE_MAP[lang] || 'en-US'; }
 
 const TR = {
   uk: {
+    'loading':'Завантаження',
     'nav.back': 'Назад',
     'nav.skip': 'Перейти до вмісту',
     'nav.aria':'Навігація між розділами','nav.chat':'Чат','nav.kanban':'Kanban дошка','nav.schedule':'Розклад','nav.dashboard':'Панель','hdr.refresh':'Оновити',
@@ -507,6 +508,7 @@ const TR = {
     'hourly.tip':'{time} — {n} повідомл.','error.loadfailed':'Не вдалося завантажити аналітику',
   },
   en: {
+    'loading':'Loading',
     'nav.back': 'Back',
     'nav.skip': 'Skip to content',
     'nav.aria':'Navigation','nav.chat':'Chat','nav.kanban':'Kanban board','nav.schedule':'Schedule','nav.dashboard':'Dashboard','hdr.refresh':'Refresh',
@@ -525,6 +527,7 @@ const TR = {
     'hourly.tip':'{time} — {n} msgs','error.loadfailed':'Failed to load analytics',
   },
   ru: {
+    'loading':'Загрузка',
     'nav.back': 'Назад',
     'nav.skip': 'Перейти к содержимому',
     'nav.aria':'Навигация','nav.chat':'Чат','nav.kanban':'Kanban доска','nav.schedule':'Расписание','nav.dashboard':'Панель','hdr.refresh':'Обновить',
@@ -543,6 +546,7 @@ const TR = {
     'hourly.tip':'{time} — {n} сообщ.','error.loadfailed':'Не удалось загрузить аналитику',
   },
   fr: {
+    'loading':'Chargement',
     'nav.back': 'Retour',
     'nav.skip': 'Aller au contenu',
     'nav.aria':'Navigation','nav.chat':'Discussion','nav.kanban':'Tableau Kanban','nav.schedule':'Planning','nav.dashboard':'Tableau de bord','hdr.refresh':'Actualiser',
@@ -561,6 +565,7 @@ const TR = {
     'hourly.tip':'{time} — {n} messages','error.loadfailed':'Échec du chargement des statistiques',
   },
   he: {
+    'loading':'טוען',
     'nav.back': 'חזרה',
     'nav.skip': 'דילוג לתוכן',
     'nav.aria':'ניווט','nav.chat':'צ׳אט','nav.kanban':'לוח קנבן','nav.schedule':'לוח זמנים','nav.dashboard':'לוח מחוונים','hdr.refresh':'רענון',
@@ -612,6 +617,7 @@ async function loadData(){
   const content = $('#content');
   const loadError = $('#loadError');
   loader.style.display = 'flex';
+  content.ariaBusy = 'true';
   content.style.display = 'none';
   loadError.style.display = 'none';
   try {
@@ -624,10 +630,10 @@ async function loadData(){
   } catch(e){
     if(!current()) return;
     // Keep the chart containers intact so Refresh can recover after a failure.
-    loadError.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>${t('error.loadfailed')}</p><small>${escHtml(e.message)}</small></div>`;
+    loadError.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>${t('error.loadfailed')}</p><small>${escHtml(e.message)}</small><div style="margin-top:18px"><button class="hb" onclick="loadData()">${t('hdr.refresh')}</button></div></div>`;
     loadError.style.display = '';
   } finally {
-    if(current()) loader.style.display = 'none';
+    if(current()) { loader.style.display = 'none'; content.ariaBusy = 'false'; }
   }
 }
 

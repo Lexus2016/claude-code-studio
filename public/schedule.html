@@ -358,6 +358,30 @@ body::after{ display:none; }
   .btn-run,.btn-edit{ min-height:44px; }
   .tl-time-date{ font-size:11px; white-space:normal; }
 }
+
+/* Form rhythm: keep choices readable without hiding execution or scheduling options. */
+.modal-body > .grid2 { gap:16px; }
+.modal-body .lbl { font-size:12px; font-weight:600; margin-bottom:7px; }
+.modal-body .inp,.modal-body .sel { min-height:40px; }
+.modal-body textarea.inp { min-height:90px; resize:vertical; line-height:1.55; }
+.modal-body .sc-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:8px; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--s2); }
+.modal-body .sc-seg { min-width:0; align-content:start; flex-wrap:wrap; gap:5px; padding:8px; }
+.modal-body .sc-seg select { max-width:100%; }
+.modal-body .sc-seg .sc-lbl { width:100%; margin-bottom:3px; }
+.modal-body .sc-sep { display:none; }
+.modal-body .sc-btn { min-height:32px; }
+.modal-body :is(input,select,textarea,button):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.modal-body .inp-hint,.modal-body .sched-hint { line-height:1.6; margin-top:6px; }
+@media(max-width:600px){
+  .modal-body .grid2 { grid-template-columns:1fr; }
+  .modal-body .sc-row { grid-template-columns:1fr; }
+  .modal-body .sc-seg { width:100%; }
+  .modal-body :is(.inp,.sel,.sc-turns) { font-size:16px; }
+  .modal-body .sc-btn { min-height:40px; }
+}
+
+.modal-ft button[aria-busy="true"] { opacity:.7; cursor:wait; }
+.modal-ft button[aria-busy="true"]::after { content:'…'; margin-inline-start:5px; }
 </style>
 </head>
 <body>
@@ -963,9 +987,20 @@ function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;
 const MODAL_FOCUSABLE_SEL='button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let modalRestoreFocus = null;
 
+function syncModalChoices(dialog) {
+  dialog.querySelectorAll('.sc-seg[data-group]').forEach(group => {
+    group.setAttribute('role', 'group');
+    const label = group.querySelector('.sc-lbl');
+    if (label) group.setAttribute('aria-label', label.textContent.trim());
+    group.querySelectorAll('.sc-btn').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.classList.contains('on')));
+    });
+  });
+}
 function openOverlay(id, opts={}) {
   const ov = $i(id); if (!ov) return;
   const dialog = ov.querySelector('[role="dialog"], .modal'); if (!dialog) return;
+  syncModalChoices(dialog);
   modalRestoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   ov.classList.remove('hidden');
   ov.setAttribute('aria-hidden', 'false');
@@ -1579,20 +1614,20 @@ function buildForm(tk={}) {
 
   return `
     <div>
-      <label class="lbl">${t('form.title')}</label>
+      <label class="lbl" for="fTitle">${t('form.title')}</label>
       <input id="fTitle" class="inp" placeholder="${t('form.title.ph')}" value="${escH(tk.title||'')}" maxlength="200">
     </div>
     <div class="grid2">
       <div>
-        <label class="lbl">${t('form.date')}</label>
-        <input id="fScheduledAt" type="datetime-local" class="inp" value="${dtVal}">
-        <div class="inp-hint">${t('form.date.hint')}</div>
+        <label class="lbl" for="fScheduledAt">${t('form.date')}</label>
+        <input id="fScheduledAt" aria-describedby="fScheduledAtHint" type="datetime-local" class="inp" value="${dtVal}">
+        <div class="inp-hint" id="fScheduledAtHint">${t('form.date.hint')}</div>
       </div>
       <div>
-        <label class="lbl">${t('form.recur')}</label>
+        <label class="lbl" for="fRecurUnit">${t('form.recur')}</label>
         <div style="display:flex;gap:6px;align-items:center">
-          <input id="fRecurN" type="number" min="1" max="365" value="${rec.n}" class="inp" style="width:62px;${rec.unit?'':'display:none'}" title="${t('form.recur')}">
-          <select id="fRecurUnit" class="sel" onchange="onRecurChange()" style="flex:1">
+          <input aria-label="${t('form.recur')}" id="fRecurN" type="number" min="1" max="365" value="${rec.n}" class="inp" style="width:62px;${rec.unit?'':'display:none'}" title="${t('form.recur')}">
+          <select id="fRecurUnit" aria-describedby="fRecurUnitHint" class="sel" onchange="onRecurChange()" style="flex:1">
             <option value=""${!rec.unit?' selected':''}>${t('form.recur.once')}</option>
             <option value="hour"${rec.unit==='hour'?' selected':''}>${t('recur.unit.hour')}</option>
             <option value="day"${rec.unit==='day'?' selected':''}>${t('recur.unit.day')}</option>
@@ -1601,22 +1636,22 @@ function buildForm(tk={}) {
             <option value="times-month"${rec.unit==='times-month'?' selected':''}>${t('recur.unit.timesMonth')}</option>
           </select>
         </div>
-        <div class="inp-hint">${t('form.recur.hint')}</div>
+        <div class="inp-hint" id="fRecurUnitHint">${t('form.recur.hint')}</div>
       </div>
     </div>
     <div id="endDateWrap" style="display:${tk.recurrence?'block':'none'}">
-      <label class="lbl">${t('form.recur.end')}</label>
-      <input id="fEndDate" type="date" class="inp" value="${endDtVal}">
-      <div class="inp-hint">${t('form.recur.end.hint')}</div>
+      <label class="lbl" for="fEndDate">${t('form.recur.end')}</label>
+      <input id="fEndDate" aria-describedby="fEndDateHint" type="date" class="inp" value="${endDtVal}">
+      <div class="inp-hint" id="fEndDateHint">${t('form.recur.end.hint')}</div>
     </div>
     <div>
-      <label class="lbl">${t('form.desc')}</label>
+      <label class="lbl" for="fDesc">${t('form.desc')}</label>
       <textarea id="fDesc" class="inp" rows="3" placeholder="${t('form.desc.ph')}" maxlength="2000">${escH(tk.description||'')}</textarea>
     </div>
     <div>
-      <label class="lbl">${t('form.session')}</label>
-      <select id="fSession" class="sel">${sessOpts}</select>
-      <div class="inp-hint">${t('form.session.hint')}</div>
+      <label class="lbl" for="fSession">${t('form.session')}</label>
+      <select id="fSession" aria-describedby="fSessionHint" class="sel">${sessOpts}</select>
+      <div class="inp-hint" id="fSessionHint">${t('form.session.hint')}</div>
     </div>
     <div>
       <label class="lbl">${t('form.exec')}</label>
@@ -1643,7 +1678,7 @@ function buildForm(tk={}) {
         </div>
         <div class="sc-sep"></div>
         <div class="sc-seg">
-          <span class="sc-lbl">${t('form.exec.bot')}</span>
+          <label class="sc-lbl" for="fBot">${t('form.exec.bot')}</label>
           <select id="fBot" class="sel" style="width:auto;min-width:120px" title="${t('form.exec.bot.tip')}">
             <option value="">${t('form.exec.bot.none')}</option>
             ${schedBots.map(b => `<option value="${escH(b.id)}"${tk.bot_id===b.id?' selected':''}>${escH((b.avatar||'🤖')+' '+b.label)}</option>`).join('')}
@@ -1654,12 +1689,12 @@ function buildForm(tk={}) {
         ${engineSegHtml(tk.run_engine)}
         <div class="sc-sep"></div>
         <div class="sc-seg">
-          <span class="sc-lbl">${t('form.exec.turns')}</span>
+          <label class="sc-lbl" for="fMaxTurns">${t('form.exec.turns')}</label>
           <input type="number" class="sc-turns" id="fMaxTurns" value="${tk.max_turns||30}" min="1" max="100">
         </div>
         <div class="sc-sep"></div>
         <div class="sc-seg">
-          <span class="sc-lbl">${t('form.exec.effort')}</span>
+          <label class="sc-lbl" for="fEffort">${t('form.exec.effort')}</label>
           <select class="sc-turns" id="fEffort" style="width:auto">
             <option value=""${!tk.effort?' selected':''}>${escH(t('effort.auto'))}</option>
             <option value="low"${tk.effort==='low'?' selected':''}>${escH(t('effort.low'))}</option>
@@ -1684,6 +1719,7 @@ function scOpt(btn) {
   if (!grp) return;
   grp.querySelectorAll('.sc-btn').forEach(b => b.classList.remove('on'));
   btn.classList.add('on');
+  syncModalChoices(grp.parentElement);
 }
 
 // Engine (api/subscription) segment. Subscription disabled without server tmux.
@@ -1741,6 +1777,7 @@ async function openEditModal(id) {
 }
 
 async function saveTask() {
+  if (saveTask.pending) return;
   const title = ($i('fTitle')?.value || '').trim();
   if (!title) { toast(t('toast.err.title'), 'err'); $i('fTitle')?.focus(); return; }
 
@@ -1777,6 +1814,9 @@ async function saveTask() {
     recurrence_end_at,
   };
 
+  const saveButton=$i('modalFt')?.querySelector('[onclick="saveTask()"]');
+  saveTask.pending=true;
+  if(saveButton){saveButton.disabled=true;saveButton.setAttribute('aria-busy','true');}
   try {
     if (!editingId) {
       await apiFetch('/api/tasks', {
@@ -1796,7 +1836,10 @@ async function saveTask() {
     }
     closeModal();
     await refresh();
-  } catch(e) { toast(t('toast.err') + e.message, 'err'); }
+  } catch(e) { toast(t('toast.err') + e.message, 'err'); } finally {
+    saveTask.pending=false;
+    if(saveButton){saveButton.disabled=false;saveButton.removeAttribute('aria-busy');}
+  }
 }
 
 async function deleteTask(id) {

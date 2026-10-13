@@ -3052,6 +3052,47 @@ summary::-webkit-details-marker { display:none; }
 .workspace-jump-results button:hover, .workspace-jump-results button:focus-visible { background:var(--abg); border-color:var(--accent2); }
 @media (max-width:800px) { .workspace-location { padding:6px 10px; gap:6px; } .workspace-location button { min-height:36px; } .workspace-location kbd { display:none; } }
 
+
+/* Polished form primitives shared by the existing dialogs. */
+.modal { border-radius:18px; border-color:#3a465f; }
+.modal-hdr { padding:18px 22px; gap:14px; }
+.modal-hdr h2 { font-size:17px !important; line-height:1.4; letter-spacing:-.25px; }
+.modal-body { padding:20px 22px; }
+.modal-footer, .dir-footer { padding:14px 22px; gap:10px; background:var(--s2); border-top:1px solid var(--border); flex-wrap:wrap; }
+.modal :is(input, select):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]):not([type=range]) { min-height:40px; font-size:14px !important; border-radius:8px; }
+.modal textarea { font-size:14px !important; line-height:1.65; border-radius:9px; }
+.modal :is(input,select,textarea):focus-visible { outline:2px solid var(--accent2); outline-offset:2px; }
+.modal :is(input,textarea,select)[aria-invalid=true] { border-color:var(--red); }
+.modal label { font-size:13px; line-height:1.5; }
+.modal :is(.bp,.bg,.proj-type-btn,.fpv-btn) { min-height:38px; font-size:13px !important; border-radius:8px; }
+.modal :is(button,input,select,textarea):disabled { cursor:wait; opacity:.55; }
+.modal-close { min-width:36px; min-height:36px; display:grid; place-items:center; border-radius:9px; }
+.form-feedback { padding:10px 14px; margin:10px 16px; border:1px solid var(--border); border-radius:9px; color:var(--muted); font-size:13px; line-height:1.6; }
+.form-feedback:empty { display:none; }
+.form-feedback[role=alert] { color:var(--red); background:rgba(248,81,73,.07); border-color:rgba(248,81,73,.35); }
+.form-section-hint { margin:12px 16px 4px; color:var(--muted); font-size:13px; line-height:1.6; }
+.inline-retry { padding:16px; font-size:13px; line-height:1.6; color:var(--muted); }
+.inline-retry button { display:block; margin-top:10px; min-height:36px; }
+.dir-list .dii { width:100%; font:inherit; font-size:14px; text-align:start; color:var(--text); background:transparent; border:1px solid transparent; min-height:42px; }
+.dir-list .dii.selected { border-color:var(--accent2); background:var(--abg); }
+.dir-list .dir-choice { display:flex; align-items:center; gap:6px; }
+.dir-choice .dii { flex:1; min-width:0; }
+.dir-open { flex-shrink:0; padding:7px 12px; min-height:38px; font:inherit; font-size:12px; border:1px solid var(--border); border-radius:8px; color:var(--text); background:var(--s2); cursor:pointer; }
+.fii:focus-visible { outline:2px solid var(--accent2); outline-offset:-2px; }
+.fii:focus-within .fdl, .fii:focus-within .fpe { opacity:1; }
+.tn-provider-card:focus-within { outline:2px solid var(--accent2); outline-offset:3px; }
+#tunnelBody, #tgBody { font-size:13px; }
+#tunnelBody :is(input,button), #tgBody :is(input,button) { min-height:36px; }
+@media(max-width:800px) {
+  .modal-hdr,.modal-body { padding:16px; }
+  .modal-footer,.dir-footer { padding:12px 16px; }
+  .modal :is(input,select,textarea):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]):not([type=range]) { font-size:16px !important; }
+  .modal :is(.bp,.bg,.proj-type-btn,.fpv-btn),.dir-open { min-height:44px; }
+  .dir-clone-row { flex-wrap:wrap; }
+  .dir-clone-row input { min-width:0; flex:1 1 180px !important; }
+  #projRemoteSection .rh-form-row { flex-wrap:wrap; }
+}
+
 </style>
 </head>
 <body>
@@ -3253,7 +3294,7 @@ summary::-webkit-details-marker { display:none; }
 
         <!-- Ngrok authtoken (shown only for ngrok) -->
         <div class="tg-section" id="tunnelNgrokAuth" style="display:none;margin-top:8px">
-          <label style="font-size:11px;color:var(--muted)"><span data-i18n="tn.ng.authtoken">Authtoken:</span> <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener" style="color:var(--accent2);text-decoration:none;opacity:.8" data-i18n="tn.ng.get_token">↗ get token</a></label>
+          <label for="tunnelNgrokToken" style="font-size:11px;color:var(--muted)"><span data-i18n="tn.ng.authtoken">Authtoken:</span> <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener" style="color:var(--accent2);text-decoration:none;opacity:.8" data-i18n="tn.ng.get_token">↗ get token</a></label>
           <div style="display:flex;gap:4px;margin-top:4px">
             <input id="tunnelNgrokToken" type="password" placeholder="ngrok authtoken..." style="flex:1;font-size:11px;padding:5px 8px;background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:monospace">
             <button class="bg" onclick="tunnelToggleNgrokPwd(this)" data-i18n-title="tn.token.toggle" title="Show/hide" style="padding:5px 7px;font-size:12px;flex-shrink:0" data-i18n-aria="tn.token.aria" aria-label="Show token">👁</button>
@@ -3268,11 +3309,11 @@ summary::-webkit-details-marker { display:none; }
         </div>
 
         <!-- Inline error display -->
-        <div id="tunnelError" style="display:none;margin-top:6px;padding:6px 8px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;font-size:11px;color:#f87171;line-height:1.4"></div>
+        <div id="tunnelError" role="alert" style="display:none;margin-top:6px;padding:6px 8px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;font-size:11px;color:#f87171;line-height:1.4"></div>
 
         <!-- Public URL display -->
         <div id="tunnelUrlBox" style="display:none;margin-top:8px">
-          <label style="font-size:11px;color:var(--muted)" data-i18n="tn.url">Public URL:</label>
+          <label for="tunnelUrlDisplay" style="font-size:11px;color:var(--muted)" data-i18n="tn.url">Public URL:</label>
           <div style="display:flex;gap:4px;margin-top:4px;align-items:center">
             <input id="tunnelUrlDisplay" readonly style="flex:1;font-size:11px;padding:5px 8px;background:var(--s1);border:1px solid var(--accent);border-radius:6px;color:var(--text);font-family:monospace;cursor:copy" onclick="this.select()">
             <button class="bg" id="tunnelCopyBtn" onclick="tunnelCopyUrl()" data-i18n-title="tn.copy.url" title="Copy URL" data-i18n-aria="tn.copy.aria" aria-label="Copy tunnel URL" style="padding:5px 8px;font-size:13px;transition:color .15s">📋</button>
@@ -3296,7 +3337,7 @@ summary::-webkit-details-marker { display:none; }
 
         <!-- Bot Token -->
         <div class="tg-section">
-          <label style="font-size:11px;color:var(--muted)" data-i18n="tg.token">Bot Token (from @BotFather):</label>
+          <label for="tgBotToken" style="font-size:11px;color:var(--muted)" data-i18n="tg.token">Bot Token (from @BotFather):</label>
           <div style="display:flex;gap:4px;margin-top:4px">
             <input id="tgBotToken" type="password" placeholder="123456:ABC-DEF..." style="flex:1;font-size:11px;padding:5px 8px;background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:monospace">
             <button class="bp" id="tgStartBtn" onclick="tgStartBot()" style="padding:5px 10px;font-size:11px;white-space:nowrap" data-i18n="tg.start">▶ Start</button>
@@ -3836,7 +3877,7 @@ summary::-webkit-details-marker { display:none; }
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18a15 15 0 010-18"/></svg>
         <span data-i18n="gw.title">Global workspace</span>
       </h2>
-      <button class="modal-close" onclick="closeGlobalHome()">✕</button>
+      <button class="modal-close" onclick="closeGlobalHome()" aria-label="Close" data-i18n-aria="cfg.close">✕</button>
     </div>
     <div class="modal-body gw-body">
       <input class="gw-search" id="gwSearch" type="search" autocomplete="off"
@@ -3853,12 +3894,33 @@ summary::-webkit-details-marker { display:none; }
   </div>
 </div>
 
+<!-- Settings-only layout and keyboard affordances. -->
+<style>
+#cfgModal .settings-note { padding:10px 20px;color:var(--muted);font-size:12px;line-height:1.5 }
+#cfgModal #cfgTabs { overflow-x:auto;flex-shrink:0 }
+#cfgModal #cfgTabs button { white-space:nowrap;font:inherit }
+#cfgModal .cfg-sec-hdr { width:100%;text-align:start;font:inherit;color:inherit;border:0 }
+#cfgModal button:focus-visible,#mcpImportDrop:focus-visible { outline:2px solid var(--accent);outline-offset:2px }
+#mcpEditModal #meStdioFields,#mcpEditModal #meHttpFields { border-top:1px solid var(--border);padding-top:16px }
+#mcpEditModal .mcp-field-hint:empty { display:none }
+#mcpEditModal .mcp-type-opt input[type="radio"] { display:block;position:absolute;opacity:0;width:1px;height:1px }
+#mcpEditModal .mcp-type-opt input:focus-visible + .mcp-type-label { outline:2px solid var(--accent);outline-offset:2px }
+@media(max-width:600px) {
+  #mcpEditModal .mcp-two-col { grid-template-columns:1fr }
+  #mcpEditModal .mcp-type-selector { flex-direction:column }
+  #mcpSettingsModal .env-kv-row,#mcpEditModal .env-kv-row { flex-wrap:wrap }
+  #mcpSettingsModal .env-kv-key,#mcpEditModal .env-kv-key { flex:1 1 100% }
+  #cfgModal .modal-footer,#mcpImportModal .modal-footer { flex-wrap:wrap;gap:8px }
+}
+</style>
 <div class="modal-overlay hidden" id="cfgModal" aria-hidden="true" onclick="if(event.target===this)closeCfg()">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cfgTitle" tabindex="-1">
     <div class="modal-hdr">
       <h2 id="cfgTitle" data-i18n="cfg.title">Configuration</h2>
-      <button class="modal-close" onclick="closeCfg()">✕</button>
+      <button class="modal-close" onclick="closeCfg()" aria-label="Close" data-i18n-aria="cfg.close">✕</button>
     </div>
+    <div class="settings-note" data-i18n="cfg.save.help">Form fields save automatically. Use Save for changes in file tabs.</div>
+    <div id="cfgLoadStatus" class="settings-note hidden" role="status"></div>
     <div class="modal-tabs" id="cfgTabs"></div>
     <div class="cfg-toolbar hidden" id="cfgToolbar">
       <input type="search" id="cfgSearch" spellcheck="false" autocomplete="off"
@@ -3871,7 +3933,7 @@ summary::-webkit-details-marker { display:none; }
     <div class="modal-body">
       <div class="cfg-path hidden" id="cfgPathInfo"></div>
       <div class="cfg-form hidden" id="cfgForm"></div>
-      <textarea id="cfgEditor" spellcheck="false"></textarea>
+      <textarea id="cfgEditor" data-i18n-aria="cfg.title" aria-label="Configuration file contents" spellcheck="false"></textarea>
     </div>
     <div class="modal-footer">
       <span class="save-notice hidden" id="saveNotice" data-i18n="cfg.saved">✓ Saved</span>
@@ -3888,12 +3950,12 @@ summary::-webkit-details-marker { display:none; }
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mcpSettingsTitle" tabindex="-1" style="width:580px;max-height:85vh;max-height:85dvh">
     <div class="modal-hdr">
       <h2 id="mcpSettingsTitle" style="font-size:16px;font-weight:700">⚙ MCP</h2>
-      <button class="modal-close" onclick="closeMcpSettings()">✕</button>
+      <button class="modal-close" onclick="closeMcpSettings()" aria-label="Close" data-i18n-aria="cfg.close">✕</button>
     </div>
     <div class="modal-body" id="mcpSettingsBody" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;overflow-y:auto"></div>
     <div class="modal-footer">
       <button class="bg" onclick="closeMcpSettings()" data-i18n="mcp.cfg.cancel">Cancel</button>
-      <button class="bp" onclick="saveMcpSettings()" data-i18n="mcp.cfg.save">Save</button>
+      <button class="bp" id="mcpSettingsSaveBtn" onclick="saveMcpSettings()" data-i18n="mcp.cfg.save">Save</button>
     </div>
   </div>
 </div>
@@ -3903,13 +3965,13 @@ summary::-webkit-details-marker { display:none; }
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mcpImportTitle" tabindex="-1" style="width:500px;max-height:82vh;max-height:82dvh">
     <div class="modal-hdr">
       <h2 id="mcpImportTitle" style="font-size:14px;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="mcp.import.modal.title">Import MCP servers</span></h2>
-      <button class="modal-close" onclick="closeMcpImport()">✕</button>
+      <button class="modal-close" onclick="closeMcpImport()" aria-label="Close" data-i18n-aria="cfg.close">✕</button>
     </div>
     <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto">
       <div style="font-size:12px;color:var(--muted);line-height:1.6">
         <span data-i18n-html="mcp.import.formats">Supported: the <strong>Claude Desktop</strong> format (<code>claude_desktop_config.json</code>) and any JSON shaped like <code style='font-size:11px'>{"mcpServers":{...}}</code></span>
       </div>
-      <div id="mcpImportDrop"
+      <div id="mcpImportDrop" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();$i('mcpImportFile').click()}"
            style="border:2px dashed var(--border);border-radius:8px;padding:18px 12px;text-align:center;cursor:pointer;transition:border-color .15s"
            onclick="$i('mcpImportFile').click()"
            ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
@@ -3919,11 +3981,11 @@ summary::-webkit-details-marker { display:none; }
         <input type="file" id="mcpImportFile" accept=".json" style="display:none" onchange="handleMcpImportFile(this)">
       </div>
       <div style="text-align:center;font-size:11px;color:var(--muted);margin:-2px 0" data-i18n="mcp.import.or">— or paste JSON manually —</div>
-      <textarea id="mcpImportJson"
+      <textarea id="mcpImportJson" data-i18n-aria="mcp.import.modal.title" aria-label="MCP servers JSON"
                 placeholder='{"mcpServers":{"my-server":{"command":"npx","args":["my-mcp"],"env":{"API_KEY":"value"}}}}'
                 style="background:var(--s2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:11px;outline:none;width:100%;font-family:monospace;min-height:90px;resize:vertical;transition:border .15s"
                 oninput="mcpImportPreviewClear()"></textarea>
-      <div id="mcpImportError" style="display:none;font-size:12px;color:var(--orange);padding:7px 10px;background:var(--s2);border-radius:6px;border:1px solid var(--orange)"></div>
+      <div id="mcpImportError" role="alert" style="display:none;font-size:12px;color:var(--orange);padding:7px 10px;background:var(--s2);border-radius:6px;border:1px solid var(--orange)"></div>
       <div id="mcpImportPreview" style="display:none;flex-direction:column;gap:6px">
         <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">
           <span data-i18n="mcp.import.found">Servers found:</span> <span id="mcpImportCount" style="color:var(--text)">0</span>
@@ -3948,7 +4010,7 @@ summary::-webkit-details-marker { display:none; }
   <div class="modal mcp-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="mcpEditTitle">
     <div class="modal-hdr">
       <h2 id="mcpEditTitle" style="font-size:15px;font-weight:700" data-i18n="me.title.add">Add MCP Server</h2>
-      <button class="modal-close" onclick="closeMcpModal()">✕</button>
+      <button class="modal-close" onclick="closeMcpModal()" aria-label="Close" data-i18n-aria="cfg.close">✕</button>
     </div>
     <div class="modal-tabs" id="mcpEditTabs">
       <button class="modal-tab active" id="mcpTabForm" onclick="switchMcpTab('form')" data-i18n="me.tab.form">Form</button>
@@ -4022,11 +4084,11 @@ summary::-webkit-details-marker { display:none; }
       <!-- JSON TAB -->
       <div id="mcpEditJsonPane" style="display:none">
         <div class="mcp-json-hint" data-i18n="me.json.hint">Edit the raw server configuration in JSON. When switching back to Form, the JSON will be parsed and fields populated automatically.</div>
-        <textarea id="meJson" class="mcp-json-area" placeholder='{"type":"stdio","command":"npx","args":["-y","@modelcontextprotocol/server-name"],"env":{}}' spellcheck="false" autocomplete="off"></textarea>
+        <textarea id="meJson" data-i18n-aria="me.tab.json" aria-label="Server configuration JSON" class="mcp-json-area" placeholder='{"type":"stdio","command":"npx","args":["-y","@modelcontextprotocol/server-name"],"env":{}}' spellcheck="false" autocomplete="off"></textarea>
       </div>
     </div>
     <div class="modal-footer">
-      <div id="mcpEditError" class="mcp-edit-error" style="display:none"></div>
+      <div id="mcpEditError" role="alert" class="mcp-edit-error" style="display:none"></div>
       <div style="display:flex;gap:8px;margin-left:auto">
         <button class="bg" onclick="closeMcpModal()" data-i18n="me.cancel">Cancel</button>
         <button class="bp mcp-edit-save-btn" id="mcpEditSaveBtn" onclick="saveMcpModal()"><span id="mcpEditSaveBtnLabel" data-i18n="me.save.add">Add Server</span></button>
@@ -4040,7 +4102,7 @@ summary::-webkit-details-marker { display:none; }
   <div class="modal fpv-modal" role="dialog" aria-modal="true" aria-labelledby="fpvTitle" tabindex="-1">
     <div class="modal-hdr">
       <h2 id="fpvTitle" style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0"></h2>
-      <button class="modal-close" onclick="closeFpv()">✕</button>
+      <button class="modal-close" onclick="closeFpv()" aria-label="Close" data-i18n-aria="cfg.close">✕</button>
     </div>
     <div class="fpv-toolbar">
       <span class="fpv-ext" id="fpvExt"></span>
@@ -4070,9 +4132,10 @@ summary::-webkit-details-marker { display:none; }
   <div class="modal dir-modal" role="dialog" aria-modal="true" aria-labelledby="dirModalTitle" tabindex="-1">
     <div class="modal-hdr">
       <h2 id="dirModalTitle" data-i18n="dir.title">New project</h2>
-      <button class="modal-close" onclick="closeDirModal()">✕</button>
+      <button class="modal-close" onclick="closeDirModal()" aria-label="Close" data-i18n-aria="cfg.close">✕</button>
     </div>
 
+    <p class="form-section-hint" data-i18n="forms.draft_hint">Your entered details are kept while this page stays open.</p>
     <!-- Local / Remote toggle -->
     <div class="proj-type-toggle">
       <button class="proj-type-btn active" id="projTypeLocal" onclick="setProjType('local')" data-i18n="proj.type.local">📁 Local</button>
@@ -4082,21 +4145,22 @@ summary::-webkit-details-marker { display:none; }
     <!-- LOCAL section -->
     <div id="projLocalSection">
       <div class="dir-path-bar">
-        <input type="text" class="dir-path-input" id="dirPathInput" data-i18n-ph="dir.path.ph" placeholder="Enter path, e.g. /Users/you/projects" spellcheck="false">
+        <input type="text" class="dir-path-input" id="dirPathInput" data-i18n-aria="dir.path.ph" aria-label="dir.path.ph" data-i18n-ph="dir.path.ph" placeholder="Enter path, e.g. /Users/you/projects" spellcheck="false">
         <button class="dir-path-go" onclick="navigateToPath()" data-i18n="dir.path.go">Go</button>
       </div>
       <div class="dir-filter-bar">
-        <input type="text" class="dir-filter-input" id="dirFilterInput" data-i18n-ph="dir.filter.ph" placeholder="Filter folders..." spellcheck="false">
+        <input type="text" class="dir-filter-input" id="dirFilterInput" data-i18n-aria="dir.filter.ph" aria-label="dir.filter.ph" data-i18n-ph="dir.filter.ph" placeholder="Filter folders..." spellcheck="false">
       </div>
-      <div class="dir-list" id="dirList">
+      <p class="form-section-hint" data-i18n="forms.dir_hint">Choose a folder, then add the project. Open explores inside; selecting keeps that folder as the project location.</p>
+      <div class="dir-list" id="dirList" aria-live="polite">
         <div style="padding:14px;color:var(--muted);text-align:center;font-size:12px" data-i18n="toast.loading">Loading...</div>
       </div>
       <!-- Clone from a Git URL (issue #94): the browsed folder is the PARENT, the
            repository lands in <parent>/<repo> and becomes the project. -->
       <div class="dir-clone-row">
         <span class="dir-clone-label" data-i18n="dir.clone.label">Clone:</span>
-        <input type="text" class="dir-path-input" id="cloneUrlInput" data-i18n-ph="dir.clone.url.ph" placeholder="Git URL — cloned into the selected folder (optional)" spellcheck="false">
-        <input type="text" class="dir-path-input" id="cloneBranchInput" data-i18n-ph="dir.clone.branch.ph" placeholder="branch" spellcheck="false" style="flex:0 0 120px">
+        <input type="text" class="dir-path-input" id="cloneUrlInput" data-i18n-aria="dir.clone.url.ph" aria-label="dir.clone.url.ph" data-i18n-ph="dir.clone.url.ph" placeholder="Git URL — cloned into the selected folder (optional)" spellcheck="false">
+        <input type="text" class="dir-path-input" id="cloneBranchInput" data-i18n-aria="dir.clone.branch.ph" aria-label="dir.clone.branch.ph" data-i18n-ph="dir.clone.branch.ph" placeholder="branch" spellcheck="false" style="flex:0 0 120px">
       </div>
     </div>
 
@@ -4105,14 +4169,14 @@ summary::-webkit-details-marker { display:none; }
       <div class="remote-form">
         <div class="rh-form-row">
           <span class="rh-label" data-i18n="dir.ssh_host">SSH Host:</span>
-          <select id="remoteHostSelect" style="flex:1">
+          <select id="remoteHostSelect" data-i18n-aria="dir.ssh_host" aria-label="dir.ssh_host" style="flex:1">
             <option value="" data-i18n="dir.pick_host">— pick a host —</option>
           </select>
           <button class="bg" onclick="openAddHostModal()" style="padding:5px 10px;font-size:12px;flex-shrink:0" data-i18n="dir.remote.add_new">＋ New</button>
         </div>
         <div class="rh-form-row">
           <span class="rh-label" data-i18n="dir.remote.path">Server path:</span>
-          <input id="remoteWorkdirInput" placeholder="/home/user/myproject" style="flex:1">
+          <input id="remoteWorkdirInput" data-i18n-aria="dir.remote.path" aria-label="dir.remote.path" placeholder="/home/user/myproject" style="flex:1">
         </div>
         <div class="rh-form-row">
           <span class="rh-label"></span>
@@ -4122,9 +4186,10 @@ summary::-webkit-details-marker { display:none; }
       </div>
     </div>
 
+    <div class="form-feedback" id="projectFormFeedback" role="status" aria-live="polite"></div>
     <div class="proj-name-row">
       <span style="font-size:12px;color:var(--muted);white-space:nowrap" data-i18n="dir.name.label">Name:</span>
-      <input id="projNameInput" data-i18n-ph="dir.proj_name" placeholder="Project name (auto if empty)">
+      <input id="projNameInput" data-i18n-aria="dir.name.label" aria-label="dir.name.label" data-i18n-ph="dir.proj_name" placeholder="Project name (auto if empty)">
     </div>
     <div class="dir-footer">
       <label id="gitInitLabel">
@@ -4147,7 +4212,7 @@ summary::-webkit-details-marker { display:none; }
         <span data-i18n="thinking.title">Chain of thought</span>
         <span id="thinkingModalMeta" style="font-size:11px;font-weight:400;color:var(--muted)"></span>
       </h2>
-      <button class="modal-close" onclick="closeThinkingModal()">✕</button>
+      <button class="modal-close" onclick="closeThinkingModal()" aria-label="Close" data-i18n-aria="cfg.close">✕</button>
     </div>
     <div class="thinking-modal-body">
       <pre class="thinking-modal-pre" id="thinkingModalPre"></pre>
@@ -4175,21 +4240,21 @@ summary::-webkit-details-marker { display:none; }
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span data-i18n="cli.import.title">Import Claude CLI Sessions</span>
       </h2>
-      <button class="modal-close" onclick="closeCliImport()">✕</button>
+      <button class="modal-close" onclick="closeCliImport()" aria-label="Close" data-i18n-aria="cfg.close">✕</button>
     </div>
     <div style="padding:10px 16px 0;display:flex;align-items:center;gap:8px;flex-shrink:0">
       <span style="font-size:12px;color:var(--muted);white-space:nowrap" data-i18n="cli.import.source">Source:</span>
-      <select id="cliImportSource" onchange="cliImportSourceChanged()" style="flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-size:12px;outline:none">
+      <select id="cliImportSource" data-i18n-aria="cli.import.source" aria-label="cli.import.source" onchange="cliImportSourceChanged()" style="flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-size:12px;outline:none">
         <option value="" data-i18n="cli.import.source_local">This machine</option>
       </select>
       <button class="cfg" onclick="openAddHostModal()" data-i18n-title="ssh.add" title="＋ Add SSH host" style="flex-shrink:0">＋</button>
     </div>
     <div style="padding:10px 16px 6px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0">
       <span style="font-size:12px;color:var(--muted);white-space:nowrap" data-i18n="cli.import.project">Project:</span>
-      <input id="cliImportWorkdir" style="flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-size:12px;font-family:monospace;outline:none" placeholder="/path/to/project" oninput="cliImportWorkdirChanged()">
+      <input id="cliImportWorkdir" data-i18n-aria="cli.import.project" aria-label="cli.import.project" style="flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-size:12px;font-family:monospace;outline:none" placeholder="/path/to/project" oninput="cliImportWorkdirChanged()">
       <button class="bp" onclick="loadCliSessions()" style="white-space:nowrap;padding:5px 10px;font-size:12px" data-i18n="cli.import.load">Load</button>
     </div>
-    <div id="cliImportStatus" style="padding:8px 16px;font-size:12px;color:var(--muted);flex-shrink:0;display:none"></div>
+    <div id="cliImportStatus" role="status" aria-live="polite" style="padding:8px 16px;font-size:12px;color:var(--muted);flex-shrink:0;display:none"></div>
     <div style="padding:6px 16px;display:flex;align-items:center;gap:8px;flex-shrink:0;border-bottom:1px solid var(--border)" id="cliImportSelRow">
       <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;user-select:none">
         <input type="checkbox" id="cliImportSelAll" onchange="cliImportToggleAll(this.checked)"> <span data-i18n="cli.import.sel_all">Select all</span>
@@ -4211,21 +4276,21 @@ summary::-webkit-details-marker { display:none; }
   <div class="modal ssh-host-modal" role="dialog" aria-modal="true" aria-labelledby="sshHostModalTitle" tabindex="-1">
     <div class="modal-hdr">
       <h2 id="sshHostModalTitle" data-i18n="ssh.modal.add.title">🌐 Add SSH host</h2>
-      <button class="modal-close" onclick="closeSshHostModal()">✕</button>
+      <button class="modal-close" onclick="closeSshHostModal()" aria-label="Close" data-i18n-aria="cfg.close">✕</button>
     </div>
     <div class="ssh-host-form">
       <div>
-        <label data-i18n="ssh.modal.label">Host name *</label>
+        <label for="sshHostLabel" data-i18n="ssh.modal.label">Host name *</label>
         <input id="sshHostLabel" data-i18n-ph="ssh.modal.label.ph" placeholder="My production server">
       </div>
       <div>
-        <label data-i18n="ssh.modal.host">Host (user@host or host) *</label>
+        <label for="sshHostHost" data-i18n="ssh.modal.host">Host (user@host or host) *</label>
         <input id="sshHostHost" placeholder="deploy@eu.myserver.com">
       </div>
       <div class="rh-form-row" style="gap:12px">
         <div style="flex:1">
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" data-i18n="ssh.modal.port">Port</label>
-          <input id="sshHostPort" type="number" placeholder="22" value="22" style="width:100%;box-sizing:border-box">
+          <label for="sshHostPort" style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" data-i18n="ssh.modal.port">Port</label>
+          <input id="sshHostPort" type="number" min="1" max="65535" step="1" placeholder="22" value="22" style="width:100%;box-sizing:border-box">
         </div>
         <div style="flex:3">
           <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px" data-i18n="ssh.modal.auth">Authentication method</label>
@@ -4236,15 +4301,16 @@ summary::-webkit-details-marker { display:none; }
         </div>
       </div>
       <div id="sshHostKeyRow">
-        <label data-i18n="ssh.modal.keypath">SSH key path (optional)</label>
+        <label for="sshHostKey" data-i18n="ssh.modal.keypath">SSH key path (optional)</label>
         <input id="sshHostKey" placeholder="~/.ssh/id_rsa">
       </div>
       <div id="sshHostPasswordRow" class="hidden">
-        <label data-i18n="ssh.modal.password">Password</label>
+        <label for="sshHostPassword" data-i18n="ssh.modal.password">Password</label>
         <input id="sshHostPassword" type="password" placeholder="••••••••" autocomplete="current-password">
       </div>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;padding:2px 0" data-i18n="ssh.modal.tip">💡 SSH key: no passphrase or added to ssh-agent. First connection will auto-confirm the fingerprint. Password is stored in plain text — we recommend using a key.</div>
-      <div class="rh-test-result" id="sshHostTestResult"></div>
+      <div class="rh-test-result" id="sshHostTestResult" role="status" aria-live="polite"></div>
+      <div class="form-feedback" id="sshHostFeedback" role="status" aria-live="polite"></div>
     </div>
     <div class="dir-footer">
       <button class="bg" onclick="testNewSshHost()" style="padding:6px 14px" data-i18n="ssh.modal.test">🔌 Test</button>
@@ -4255,23 +4321,54 @@ summary::-webkit-details-marker { display:none; }
   </div>
 </div>
 
+<!-- Team forms: scoped progressive disclosure and keyboard/touch targets. -->
+<style>
+.team-options { border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin:4px 0; }
+.team-options > summary { cursor:pointer; font-weight:600; min-height:28px; }
+.team-options[open] > summary { margin-bottom:12px; }
+.team-options .cmd-field + .cmd-field { margin-top:12px; }
+.team-feedback { color:var(--muted); font-size:12px; line-height:1.5; min-height:18px; overflow-wrap:anywhere; }
+.team-feedback[data-error="true"] { color:var(--red,#f87171); }
+#botModal [aria-invalid="true"], #agentModal [aria-invalid="true"], #cmdModal [aria-invalid="true"], #delegateModal [aria-invalid="true"] { outline:2px solid var(--red,#f87171); }
+#delegateModal .dlg-agent-card { font:inherit; color:inherit; text-align:start; }
+#delegateModal .dlg-mode-card:has(input:checked) { border-color:var(--accent); background:var(--s2); }
+#delegateModal .dlg-mode-card:focus-within, #delegateModal .dlg-agent-card:focus-visible, .team-options > summary:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+#delegateModal input[name="dlgMode"] { display:inline-block; width:18px; height:18px; padding:0; margin:0; flex:none; accent-color:var(--accent); }
+#botModal .cmd-field > label, #agentModal .cmd-field > label, #cmdModal .cmd-field > label, #delegateModal .cmd-field > label { text-transform:none; letter-spacing:normal; font-size:12px; color:var(--text); }
+#agentModal input { height:42px; padding:9px 12px; font:14px var(--font-mono, monospace); letter-spacing:normal; border-radius:8px; }
+#agentModal #agentLabel, #cmdModal #cmdName { font-size:16px; font-weight:500; letter-spacing:normal; }
+#delegateModal .dlg-mode-card { text-transform:none; letter-spacing:normal; }
+#delegateModal .dlg-mode-desc { font-weight:400; line-height:1.5; }
+#botModal button:disabled, #agentModal button:disabled, #cmdModal button:disabled, #delegateModal button:disabled { opacity:.55; cursor:wait; }
+#cmdsList .cmd-insert { background:transparent; border:0; color:inherit; text-align:start; cursor:pointer; padding:4px 0; font:inherit; }
+#cmdsList .cmd-insert:focus-visible { outline:2px solid var(--accent); }
+@media(max-width:600px) {
+  #botModal .modal-footer, #agentModal .modal-footer, #cmdModal .modal-footer, #delegateModal .modal-footer { flex-wrap:wrap; }
+  #botModal input, #botModal textarea, #botModal select, #agentModal input, #cmdModal input, #cmdModal textarea, #delegateModal textarea, #delegateModal select { font-size:16px; }
+  #botModal button, #agentModal button, #cmdModal button, #delegateModal button, #botsList button, #agentsList button, #cmdsList button { min-height:40px; }
+  #delegateModal .dlg-mode-cards { grid-template-columns:1fr; }
+}
+</style>
+
 <!-- Slash Command Modal -->
 <div class="modal-overlay hidden" id="cmdModal" aria-hidden="true" onclick="if(event.target===this)cancelCmdForm()">
   <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="cmdModalTitle" tabindex="-1">
     <div class="modal-hdr">
       <h2 id="cmdModalTitle" data-i18n="cmd.modal.add.title">＋ Add command</h2>
-      <button class="modal-close" onclick="cancelCmdForm()">✕</button>
+      <button class="modal-close" onclick="cancelCmdForm()" aria-label="Close" data-i18n-aria="btn.close">✕</button>
     </div>
     <div class="modal-body">
+      <p class="cmd-name-hint" data-i18n="team.command.help">Save a reusable prompt. Choose it from the list or type its slash command in chat.</p>
       <div class="cmd-field">
         <label for="cmdName" data-i18n="cmd.modal.name.label">Slash command</label>
-        <input id="cmdName" data-i18n-ph="cmd.name.ph" placeholder="/name (e.g. /check)" autocomplete="off">
+        <input id="cmdName" aria-required="true" aria-describedby="cmdFeedback" data-i18n-ph="cmd.name.ph" placeholder="/name (e.g. /check)" autocomplete="off">
         <div class="cmd-name-hint" data-i18n-html="cmd.modal.name.hint">Use a short trigger like <code>/check</code> or <code>/review</code>.</div>
       </div>
       <div class="cmd-field">
         <label for="cmdText" data-i18n="cmd.modal.text.label">Prompt</label>
-        <textarea id="cmdText" data-i18n-ph="cmd.text.ph" placeholder="Full prompt text..."></textarea>
+        <textarea id="cmdText" aria-required="true" aria-describedby="cmdFeedback" data-i18n-ph="cmd.text.ph" placeholder="Full prompt text..."></textarea>
       </div>
+      <div id="cmdFeedback" class="team-feedback" role="status" aria-live="polite"></div>
     </div>
     <div class="modal-footer">
       <button class="bg" onclick="cancelCmdForm()" data-i18n="cmd.modal.cancel">Cancel</button>
@@ -4303,8 +4400,41 @@ summary::-webkit-details-marker { display:none; }
       <input type="hidden" id="botId">
       <div class="cmd-field">
         <label for="botLabel" data-i18n="bot.modal.label.label">Name</label>
-        <input id="botLabel" data-i18n-ph="bot.modal.label.ph" placeholder="Crypto Analyst" autocomplete="off" oninput="_botHandlePreview()">
+        <input id="botLabel" aria-required="true" aria-describedby="botFeedback" data-i18n-ph="bot.modal.label.ph" placeholder="Crypto Analyst" autocomplete="off" oninput="_botHandlePreview()">
         <div class="cmd-name-hint"><span data-i18n="bot.modal.handle.hint">Addressed in chat as:</span> <b id="botHandlePreview">@@—</b></div>
+      </div>
+      <div class="cmd-field">
+        <label for="botDesc" data-i18n="bot.modal.desc.label">Purpose</label>
+        <input id="botDesc" data-i18n-ph="bot.modal.desc.ph" placeholder="crypto market analysis" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="bot.modal.desc.hint">One line. Other bots see this, so they know who to hand work to.</div>
+      </div>
+      <div class="cmd-field">
+        <label for="botPrompt" data-i18n="bot.modal.prompt.label">System prompt</label>
+        <div id="botTemplates" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:2px"></div>
+        <textarea id="botPrompt" maxlength="8000" rows="7" data-i18n-ph="bot.modal.prompt.ph" placeholder="You are a crypto market analyst..."></textarea>
+        <div class="cmd-name-hint" data-i18n="bot.modal.prompt.hint">Who this bot is and how it works. Up to 8000 characters.</div>
+      </div>
+      <div class="cmd-field">
+        <label class="bot-global-row" for="botGlobal">
+          <input type="checkbox" id="botGlobal">
+          <span>
+            <b data-i18n="bot.modal.global.label">Available in every project</b>
+            <span class="cmd-name-hint" data-i18n="bot.modal.global.hint">A role like a programmer is wanted everywhere. Turn this on and the bot shows up in every project without being added to each one.</span>
+          </span>
+        </label>
+        <div class="cmd-name-hint" id="botAlsoIn" style="display:none"></div>
+      </div>
+
+      <details class="team-options" id="botOptions"><summary data-i18n="team.bot.options">Model and appearance (optional)</summary>
+      <div class="cmd-field">
+        <label for="botModel" data-i18n="bot.modal.model.label">Model</label>
+        <select id="botModel">
+          <option value="" data-i18n="bot.model.inherit">Same as chat</option>
+          <option value="haiku">haiku</option>
+          <option value="sonnet">sonnet</option>
+          <option value="opus">opus</option>
+          <option value="fable">fable</option>
+        </select>
       </div>
       <div class="cmd-field">
         <label for="botAvatar" data-i18n="bot.modal.avatar.label">Emoji</label>
@@ -4317,37 +4447,8 @@ summary::-webkit-details-marker { display:none; }
           <div class="emoji-pop hidden" id="emojiPop" role="dialog" data-i18n-aria="aria.emoji" aria-label="Emoji"></div>
         </div>
       </div>
-      <div class="cmd-field">
-        <label for="botDesc" data-i18n="bot.modal.desc.label">Purpose</label>
-        <input id="botDesc" data-i18n-ph="bot.modal.desc.ph" placeholder="crypto market analysis" autocomplete="off">
-        <div class="cmd-name-hint" data-i18n="bot.modal.desc.hint">One line. Other bots see this, so they know who to hand work to.</div>
-      </div>
-      <div class="cmd-field">
-        <label for="botModel" data-i18n="bot.modal.model.label">Model</label>
-        <select id="botModel">
-          <option value="" data-i18n="bot.model.inherit">Same as chat</option>
-          <option value="haiku">haiku</option>
-          <option value="sonnet">sonnet</option>
-          <option value="opus">opus</option>
-          <option value="fable">fable</option>
-        </select>
-      </div>
-      <div class="cmd-field">
-        <label class="bot-global-row" for="botGlobal">
-          <input type="checkbox" id="botGlobal">
-          <span>
-            <b data-i18n="bot.modal.global.label">Available in every project</b>
-            <span class="cmd-name-hint" data-i18n="bot.modal.global.hint">A role like a programmer is wanted everywhere. Turn this on and the bot shows up in every project without being added to each one.</span>
-          </span>
-        </label>
-        <div class="cmd-name-hint" id="botAlsoIn" style="display:none"></div>
-      </div>
-      <div class="cmd-field">
-        <label for="botPrompt" data-i18n="bot.modal.prompt.label">System prompt</label>
-        <div id="botTemplates" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:2px"></div>
-        <textarea id="botPrompt" rows="7" data-i18n-ph="bot.modal.prompt.ph" placeholder="You are a crypto market analyst..."></textarea>
-        <div class="cmd-name-hint" data-i18n="bot.modal.prompt.hint">Who this bot is and how it works. Up to 8000 characters.</div>
-      </div>
+      </details>
+      <div id="botFeedback" class="team-feedback" role="status" aria-live="polite"></div>
     </div>
     <div class="modal-footer">
       <button class="bot-danger" id="botDeleteBtn" onclick="deleteBotGlobally()" style="display:none" data-i18n="bot.modal.delete">Delete bot</button>
@@ -4362,19 +4463,26 @@ summary::-webkit-details-marker { display:none; }
   <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="agentModalTitle" tabindex="-1">
     <div class="modal-hdr">
       <h2 id="agentModalTitle" data-i18n="agent.modal.add.title">＋ Add agent</h2>
-      <button class="modal-close" onclick="cancelAgentForm()">✕</button>
+      <button class="modal-close" onclick="cancelAgentForm()" aria-label="Close" data-i18n-aria="btn.close">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="agentId">
+      <p class="cmd-name-hint" data-i18n="team.agent.help">Give the agent a name, then add a delegation command, a terminal command, or both.</p>
       <div class="cmd-field">
         <label for="agentLabel" data-i18n="agent.modal.label.label">Label</label>
-        <input id="agentLabel" data-i18n-ph="agent.label.ph" placeholder="OpenAI Codex" autocomplete="off">
+        <input id="agentLabel" aria-required="true" aria-describedby="agentFeedback" data-i18n-ph="agent.label.ph" placeholder="OpenAI Codex" autocomplete="off">
       </div>
       <div class="cmd-field">
         <label for="agentTemplate" data-i18n="agent.modal.template.label">Command template</label>
         <input id="agentTemplate" data-i18n-ph="agent.template.ph" placeholder="codex {prompt}" autocomplete="off">
         <div class="cmd-name-hint" data-i18n="agent.modal.template.hint">{prompt} — placeholder for task text</div>
       </div>
+      <div class="cmd-field">
+        <label for="agentInteractive" data-i18n="agent.modal.interactive.label">Interactive command</label>
+        <input id="agentInteractive" placeholder="codex" autocomplete="off">
+        <div class="cmd-name-hint" data-i18n="agent.modal.interactive.hint">Starts the agent's TUI for a terminal session. Leave empty for a delegation-only agent.</div>
+      </div>
+      <details class="team-options" id="agentCatalogOptions"><summary data-i18n="team.agent.catalogs">Model and effort catalogs (optional)</summary>
       <!-- Catalogs for the {model} / {effort} placeholders. These are what the Delegate
            dialog offers for this agent, and the allow-list the server validates a chosen
            value against — never a list baked into the UI, which would go stale for every
@@ -4389,11 +4497,8 @@ summary::-webkit-details-marker { display:none; }
         <input id="agentEfforts" data-i18n-ph="agent.efforts.ph" placeholder="low, medium, high" autocomplete="off">
         <div class="cmd-name-hint" data-i18n="agent.modal.efforts.hint">Shown in the Delegate dialog for the {effort} placeholder. Leave empty if this CLI takes no effort choice.</div>
       </div>
-      <div class="cmd-field">
-        <label for="agentInteractive" data-i18n="agent.modal.interactive.label">Interactive command</label>
-        <input id="agentInteractive" placeholder="codex" autocomplete="off">
-        <div class="cmd-name-hint" data-i18n="agent.modal.interactive.hint">Starts the agent's TUI for a terminal session. Leave empty for a delegation-only agent.</div>
-      </div>
+      </details>
+      <details class="team-options" id="agentResumeOptions"><summary data-i18n="team.agent.resume">Session restore (optional)</summary>
       <div class="cmd-field">
         <label for="agentResume" data-i18n="agent.modal.resume.label">Resume command</label>
         <input id="agentResume" placeholder="codex resume {sid}" autocomplete="off">
@@ -4414,6 +4519,8 @@ summary::-webkit-details-marker { display:none; }
         <input id="agentNewIdCommand" placeholder="cursor-agent create-chat" autocomplete="off">
         <div class="cmd-name-hint" data-i18n="agent.modal.newIdCommand.hint">Alternative to the flag: a command that creates a conversation and prints its id. Run once when the session is created.</div>
       </div>
+      </details>
+      <div id="agentFeedback" class="team-feedback" role="status" aria-live="polite"></div>
     </div>
     <div class="modal-footer">
       <button class="bg" onclick="cancelAgentForm()" data-i18n="agent.modal.cancel">Cancel</button>
@@ -4457,7 +4564,7 @@ summary::-webkit-details-marker { display:none; }
   <div class="modal cmd-modal" role="dialog" aria-modal="true" aria-labelledby="dlgModalTitle">
     <div class="modal-hdr">
       <h2 id="dlgModalTitle" data-i18n="dlg.title">Delegate to Agent</h2>
-      <button class="modal-close" onclick="closeDelegateModal()">&times;</button>
+      <button class="modal-close" onclick="closeDelegateModal()" aria-label="Close" data-i18n-aria="btn.close">&times;</button>
     </div>
     <div class="modal-body" style="gap:16px;display:flex;flex-direction:column;">
       <div class="cmd-field">
@@ -4471,38 +4578,39 @@ summary::-webkit-details-marker { display:none; }
       <div class="form-row hidden" id="dlgTuningRow">
         <div style="display:flex;gap:12px;flex-wrap:wrap">
           <div class="hidden" id="dlgModelWrap" style="flex:1;min-width:150px">
-            <label data-i18n="dlg.model">Model</label>
+            <label for="dlgModel" data-i18n="dlg.model">Model</label>
             <select id="dlgModel" class="inp"></select>
           </div>
           <div class="hidden" id="dlgEffortWrap" style="flex:1;min-width:150px">
-            <label data-i18n="dlg.effort">Reasoning effort</label>
+            <label for="dlgEffort" data-i18n="dlg.effort">Reasoning effort</label>
             <select id="dlgEffort" class="inp"></select>
           </div>
         </div>
       </div>
       <div class="cmd-field">
         <label data-i18n="dlg.mode">Mode</label>
-        <div class="dlg-mode-cards">
-          <label class="dlg-mode-card selected" onclick="this.parentElement.querySelectorAll('.dlg-mode-card').forEach(c=>c.classList.remove('selected'));this.classList.add('selected')">
-            <input type="radio" name="dlgMode" value="handoff" checked style="display:none">
+        <div class="dlg-mode-cards" role="radiogroup" aria-label="Mode" data-i18n-aria="dlg.mode">
+          <label class="dlg-mode-card">
+            <input type="radio" name="dlgMode" value="handoff" checked>
             <span class="dlg-mode-title" data-i18n="dlg.mode.handoff">Handoff</span>
             <span class="dlg-mode-desc" data-i18n="dlg.mode.handoff.desc">Full transfer. Opens terminal, you continue working there.</span>
           </label>
-          <label class="dlg-mode-card" onclick="this.parentElement.querySelectorAll('.dlg-mode-card').forEach(c=>c.classList.remove('selected'));this.classList.add('selected')">
-            <input type="radio" name="dlgMode" value="sync" style="display:none">
+          <label class="dlg-mode-card">
+            <input type="radio" name="dlgMode" value="sync">
             <span class="dlg-mode-title" data-i18n="dlg.mode.sync">Sync</span>
             <span class="dlg-mode-desc" data-i18n="dlg.mode.sync.desc">Parallel work. Both agents active, communicate via dialog file.</span>
           </label>
         </div>
       </div>
       <div class="cmd-field">
-        <label data-i18n="dlg.task">Task</label>
+        <label for="dlgTask" data-i18n="dlg.task">Task</label>
         <textarea id="dlgTask" rows="3" class="dlg-textarea" data-i18n-ph="dlg.task.ph" placeholder="What should the agent do..."></textarea>
       </div>
+      <div id="delegateFeedback" class="team-feedback" role="status" aria-live="polite"></div>
     </div>
     <div class="modal-footer">
       <button onclick="closeDelegateModal()" style="background:var(--s2);color:var(--muted);" data-i18n="dlg.cancel">Cancel</button>
-      <button onclick="submitDelegation()" style="background:var(--accent);color:#fff;" data-i18n="dlg.submit">Delegate</button>
+      <button id="delegateSaveBtn" onclick="submitDelegation()" style="background:var(--accent);color:#fff;" data-i18n="dlg.submit">Delegate</button>
     </div>
   </div>
 </div>
@@ -4880,6 +4988,7 @@ document.addEventListener('keydown', e => {
     const pop = $i('emojiPop');
     if (pop && !pop.classList.contains('hidden')) { closeEmojiPicker(); return; }
     if (typeof top.onEscape === 'function') top.onEscape();
+    else closeModalOverlay(top.id);
     return;
   }
   if (e.key !== 'Tab') return;
@@ -4904,6 +5013,31 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    "forms.project_created":"Проєкт додано. Він доступний у розділі «Проєкти».",
+    "forms.uncertain":"Час очікування минув. Запит міг виконатися. Оновіть список перед повторною спробою.",
+    "forms.open_folder":"Відкрити папку",
+    "forms.dir_hint":"Виберіть папку й додайте проєкт. «Відкрити» показує її вміст, а вибір задає розташування проєкту.",
+    "forms.ssh_hint":"Форма зберігається після закриття. Збережені SSH-паролі ніколи не показуються.",
+    "forms.retry":"Спробувати ще",
+    "forms.load_error":"Не вдалося завантажити розділ. Спробуйте ще раз.",
+    "forms.port_error":"Вкажіть порт від 1 до 65535.",
+    "forms.draft_hint":"Введені дані зберігаються, доки ця сторінка відкрита.",
+    "forms.skills_empty":"Навичок ще немає. Завантажте файл інструкцій для повторного використання командою.",
+
+    "team.bot.options":"Модель і вигляд (необов’язково)",
+    "team.agent.catalogs":"Каталоги моделей і рівнів міркування (необов’язково)",
+    "team.agent.resume":"Відновлення сесії (необов’язково)",
+    "team.agent.help":"Назвіть агента та додайте команду делегування, термінальну команду або обидві.",
+    "team.command.help":"Збережіть повторюваний запит. Виберіть його зі списку або введіть слеш-команду в чаті.",
+    "team.command.empty":"Збережених команд ще немає. Додайте запит для повторного використання.",
+    "team.saving":"Збереження…",
+    "team.starting":"Запуск делегування…",
+    "team.load":"Завантаження агентів…",
+    "team.retry":"Спробувати ще раз",
+    "team.network":"Не вдалося підтвердити запит. Введені дані збережено. Перед повторною спробою перевірте список, щоб уникнути дублікатів.",
+    "team.load.failed":"Не вдалося завантажити список. Спробуйте ще раз.",
+    "team.bot.loading":"Завантаження ботів…",
+    "team.agent.empty":"Зовнішніх агентів ще немає. Додайте CLI-агента для делегування або термінальних сесій.",
     "focus.shortcut":"⌘ / Ctrl K",
     "focus.navigation":"Навігація робочого простору",
     "focus.back":"Назад",
@@ -4924,6 +5058,12 @@ const TRANSLATIONS = {
     'cfg.tab.form':'⚙ Параметри',
     'cfg.search.ph':'Пошук параметра…',
     'cfg.search.aria':'Пошук параметрів',
+    'settings.uncertain':"Результат запиту ще не підтверджено. Зміни могли зберегтися. Перевірте стан перед повторною спробою.",
+    'settings.discard':"Відкинути незбережені зміни? Натисніть Скасувати, щоб продовжити редагування, або OK, щоб відкинути зміни.",
+    'cfg.save.help':"Поля форми зберігаються автоматично. У вкладках файлів натисніть «Зберегти».",
+    'cfg.load.error':"Не вдалося завантажити налаштування.",
+    'cfg.retry':"Спробувати ще",
+    'cfg.form.error':"Не вдалося завантажити форму. Файли доступні у вкладках.",
     'cfg.search.none':'Нічого не знайдено за «{q}»',
     'cfg.sec.engine':'🤖 Моделі та рушій',
     'cfg.sec.defaults':'⭐ Типові значення нового чату',
@@ -5324,6 +5464,31 @@ const TRANSLATIONS = {
     'upd.available':'Доступне оновлення','upd.move_to_apps':'Щоб оновити, перемістіть Claude Code Studio у папку «Програми» (Applications) і відкрийте її звідти.','upd.btn':'Оновити','upd.updating':'Оновлення… {time}','upd.retry':'Повторити','upd.failed':'Оновлення не вдалося','upd.new_version':'Доступна нова версія {version}',
   },
   en: {
+    "forms.project_created":"Project added. It is available in Projects.",
+    "forms.uncertain":"The request timed out. It may still have completed. Refresh the list before trying again.",
+    "forms.open_folder":"Open folder",
+    "forms.dir_hint":"Choose a folder, then add the project. Open explores inside; selecting keeps that folder as the project location.",
+    "forms.ssh_hint":"The form stays here if you close it. Saved SSH passwords are never displayed.",
+    "forms.retry":"Retry",
+    "forms.load_error":"Could not load this section. Try again.",
+    "forms.port_error":"Please use a port between 1 and 65535.",
+    "forms.draft_hint":"Your entered details are kept while this page stays open.",
+    "forms.skills_empty":"No skills yet. Upload an instruction file to give your team reusable guidance.",
+
+    "team.bot.options":"Model and appearance (optional)",
+    "team.agent.catalogs":"Model and effort catalogs (optional)",
+    "team.agent.resume":"Session restore (optional)",
+    "team.agent.help":"Give the agent a name, then add a delegation command, a terminal command, or both.",
+    "team.command.help":"Save a reusable prompt. Choose it from the list or type its slash command in chat.",
+    "team.command.empty":"No saved commands yet. Add a reusable prompt to get started.",
+    "team.saving":"Saving…",
+    "team.starting":"Starting delegation…",
+    "team.load":"Loading agents…",
+    "team.retry":"Try again",
+    "team.network":"The request could not be confirmed. Your input is kept. Check the list before retrying to avoid duplicates.",
+    "team.load.failed":"Could not load this list. Try again.",
+    "team.bot.loading":"Loading bots…",
+    "team.agent.empty":"No external agents yet. Add a CLI agent for delegation or terminal sessions.",
     "focus.shortcut":"⌘ / Ctrl K",
     "focus.navigation":"Workspace navigation",
     "focus.back":"Back",
@@ -5344,6 +5509,12 @@ const TRANSLATIONS = {
     'cfg.tab.form':'⚙ Settings',
     'cfg.search.ph':'Search settings…',
     'cfg.search.aria':'Search settings',
+    'settings.uncertain':"The request outcome is not confirmed. Changes may have been saved. Check the saved state before trying again.",
+    'settings.discard':"Discard unsaved changes? Choose Cancel to keep editing, or OK to discard.",
+    'cfg.save.help':"Form fields save automatically. Use Save for changes in file tabs.",
+    'cfg.load.error':"Could not load configuration.",
+    'cfg.retry':"Retry",
+    'cfg.form.error':"The settings form could not load. You can still use the file tabs.",
     'cfg.search.none':'Nothing matches “{q}”',
     'cfg.sec.engine':'🤖 Models and engine',
     'cfg.sec.defaults':'⭐ New-chat defaults',
@@ -5744,6 +5915,31 @@ const TRANSLATIONS = {
     'upd.available':'Update available','upd.move_to_apps':'To update, move Claude Code Studio to the Applications folder and open it from there.','upd.btn':'Update','upd.updating':'Updating… {time}','upd.retry':'Retry','upd.failed':'Update failed','upd.new_version':'New version {version} available',
   },
   ru: {
+    "forms.project_created":"Проект добавлен. Он доступен в разделе «Проекты».",
+    "forms.uncertain":"Время ожидания истекло. Запрос мог выполниться. Обновите список перед повторной попыткой.",
+    "forms.open_folder":"Открыть папку",
+    "forms.dir_hint":"Выберите папку и добавьте проект. «Открыть» показывает содержимое, а выбор задаёт расположение проекта.",
+    "forms.ssh_hint":"Форма сохраняется после закрытия. Сохранённые SSH-пароли никогда не показываются.",
+    "forms.retry":"Повторить",
+    "forms.load_error":"Не удалось загрузить раздел. Попробуйте ещё раз.",
+    "forms.port_error":"Укажите порт от 1 до 65535.",
+    "forms.draft_hint":"Введённые данные сохраняются, пока эта страница открыта.",
+    "forms.skills_empty":"Навыков пока нет. Загрузите файл инструкций для повторного использования командой.",
+
+    "team.bot.options":"Модель и оформление (необязательно)",
+    "team.agent.catalogs":"Каталоги моделей и уровней рассуждения (необязательно)",
+    "team.agent.resume":"Восстановление сессии (необязательно)",
+    "team.agent.help":"Назовите агента и добавьте команду делегирования, терминальную команду или обе.",
+    "team.command.help":"Сохраните повторяемый запрос. Выберите его из списка или введите слеш-команду в чате.",
+    "team.command.empty":"Сохранённых команд пока нет. Добавьте запрос для повторного использования.",
+    "team.saving":"Сохранение…",
+    "team.starting":"Запуск делегирования…",
+    "team.load":"Загрузка агентов…",
+    "team.retry":"Попробовать снова",
+    "team.network":"Не удалось подтвердить запрос. Введённые данные сохранены. Перед повторной попыткой проверьте список, чтобы избежать дубликатов.",
+    "team.load.failed":"Не удалось загрузить список. Попробуйте снова.",
+    "team.bot.loading":"Загрузка ботов…",
+    "team.agent.empty":"Внешних агентов пока нет. Добавьте CLI-агента для делегирования или терминальных сессий.",
     "focus.shortcut":"⌘ / Ctrl K",
     "focus.navigation":"Навигация рабочего пространства",
     "focus.back":"Назад",
@@ -5764,6 +5960,12 @@ const TRANSLATIONS = {
     'cfg.tab.form':'⚙ Параметры',
     'cfg.search.ph':'Поиск параметра…',
     'cfg.search.aria':'Поиск параметров',
+    'settings.uncertain':"Результат запроса ещё не подтверждён. Изменения могли сохраниться. Проверьте состояние перед повторной попыткой.",
+    'settings.discard':"Отбросить несохранённые изменения? Нажмите Отмена, чтобы продолжить, или OK, чтобы отбросить.",
+    'cfg.save.help':"Поля формы сохраняются автоматически. Во вкладках файлов нажмите «Сохранить».",
+    'cfg.load.error':"Не удалось загрузить настройки.",
+    'cfg.retry':"Повторить",
+    'cfg.form.error':"Не удалось загрузить форму. Файлы доступны во вкладках.",
     'cfg.search.none':'Ничего не найдено по «{q}»',
     'cfg.sec.engine':'🤖 Модели и движок',
     'cfg.sec.defaults':'⭐ Значения по умолчанию для нового чата',
@@ -6164,6 +6366,31 @@ const TRANSLATIONS = {
     'upd.available':'Доступно обновление','upd.move_to_apps':'Чтобы обновить, переместите Claude Code Studio в папку «Программы» (Applications) и откройте оттуда.','upd.btn':'Обновить','upd.updating':'Обновление… {time}','upd.retry':'Повторить','upd.failed':'Обновление не удалось','upd.new_version':'Доступна новая версия {version}',
   },
   fr: {
+    "forms.project_created":"Projet ajouté. Il est disponible dans Projets.",
+    "forms.uncertain":"Le délai est dépassé. La requête peut avoir abouti. Actualisez la liste avant de réessayer.",
+    "forms.open_folder":"Ouvrir le dossier",
+    "forms.dir_hint":"Choisissez un dossier, puis ajoutez le projet. Ouvrir explore son contenu ; sélectionner définit le dossier du projet.",
+    "forms.ssh_hint":"Le formulaire est conservé après fermeture. Les mots de passe SSH enregistrés ne sont jamais affichés.",
+    "forms.retry":"Réessayer",
+    "forms.load_error":"Impossible de charger cette section. Réessayez.",
+    "forms.port_error":"Utilisez un port entre 1 et 65535.",
+    "forms.draft_hint":"Vos données saisies sont conservées tant que cette page reste ouverte.",
+    "forms.skills_empty":"Aucune compétence. Importez un fichier d’instructions réutilisables pour votre équipe.",
+
+    "team.bot.options":"Modèle et apparence (facultatif)",
+    "team.agent.catalogs":"Catalogues des modèles et niveaux de raisonnement (facultatif)",
+    "team.agent.resume":"Reprise de session (facultatif)",
+    "team.agent.help":"Nommez l’agent, puis ajoutez une commande de délégation, une commande de terminal, ou les deux.",
+    "team.command.help":"Enregistrez un prompt réutilisable. Choisissez-le dans la liste ou saisissez sa commande slash dans le chat.",
+    "team.command.empty":"Aucune commande enregistrée. Ajoutez un prompt réutilisable pour commencer.",
+    "team.saving":"Enregistrement…",
+    "team.starting":"Démarrage de la délégation…",
+    "team.load":"Chargement des agents…",
+    "team.retry":"Réessayer",
+    "team.network":"La requête n’a pas pu être confirmée. Votre saisie est conservée. Vérifiez la liste avant de réessayer pour éviter les doublons.",
+    "team.load.failed":"Impossible de charger cette liste. Réessayez.",
+    "team.bot.loading":"Chargement des bots…",
+    "team.agent.empty":"Aucun agent externe. Ajoutez un agent CLI pour la délégation ou les sessions de terminal.",
     "focus.shortcut":"⌘ / Ctrl K",
     "focus.navigation":"Navigation de l’espace de travail",
     "focus.back":"Retour",
@@ -6184,6 +6411,12 @@ const TRANSLATIONS = {
     'cfg.tab.form':'⚙ Paramètres',
     'cfg.search.ph':'Rechercher un paramètre…',
     'cfg.search.aria':'Rechercher un paramètre',
+    'settings.uncertain':"Le résultat de la demande est incertain. Les modifications ont peut-être été enregistrées. Vérifiez avant de réessayer.",
+    'settings.discard':"Abandonner les modifications ? Annuler pour continuer, OK pour abandonner.",
+    'cfg.save.help':"Les champs sont enregistrés automatiquement. Utilisez Enregistrer dans les onglets de fichiers.",
+    'cfg.load.error':"Impossible de charger la configuration.",
+    'cfg.retry':"Réessayer",
+    'cfg.form.error':"Le formulaire ne peut pas être chargé. Les onglets de fichiers restent disponibles.",
     'cfg.search.none':'Aucun résultat pour « {q} »',
     'cfg.sec.engine':'🤖 Modèles et moteur',
     'cfg.sec.defaults':'⭐ Valeurs par défaut d\u2019un nouveau chat',
@@ -6485,6 +6718,31 @@ const TRANSLATIONS = {
     "upd.available":"Mise à jour disponible","upd.move_to_apps":"Pour mettre à jour, déplacez Claude Code Studio dans le dossier Applications et ouvrez-le depuis celui-ci.","upd.btn":"Mettre à jour","upd.updating":"Mise à jour… {time}","upd.retry":"Réessayer","upd.failed":"Échec de la mise à jour","upd.new_version":"Nouvelle version {version} disponible",
   },
   he: {
+    "forms.project_created":"הפרויקט נוסף. הוא זמין באזור הפרויקטים.",
+    "forms.uncertain":"זמן ההמתנה הסתיים. ייתכן שהבקשה הושלמה. רעננו את הרשימה לפני ניסיון נוסף.",
+    "forms.open_folder":"פתיחת תיקייה",
+    "forms.dir_hint":"בחרו תיקייה והוסיפו את הפרויקט. פתיחה מציגה את התוכן; בחירה קובעת את מיקום הפרויקט.",
+    "forms.ssh_hint":"הטופס נשמר לאחר סגירה. סיסמאות SSH שמורות לעולם אינן מוצגות.",
+    "forms.retry":"ניסיון נוסף",
+    "forms.load_error":"לא ניתן לטעון את האזור. נסו שוב.",
+    "forms.port_error":"בחרו פורט בין 1 ל־65535.",
+    "forms.draft_hint":"הפרטים שהזנתם נשמרים כל עוד הדף פתוח.",
+    "forms.skills_empty":"אין מיומנויות עדיין. העלו קובץ הוראות לשימוש חוזר של הצוות.",
+
+    "team.bot.options":"מודל ומראה (אופציונלי)",
+    "team.agent.catalogs":"רשימות מודלים ורמות חשיבה (אופציונלי)",
+    "team.agent.resume":"שחזור סשן (אופציונלי)",
+    "team.agent.help":"תנו שם לסוכן, ואז הוסיפו פקודת האצלה, פקודת טרמינל, או שתיהן.",
+    "team.command.help":"שמרו הנחיה לשימוש חוזר. בחרו אותה מהרשימה או הקלידו את פקודת הלוכסן שלה בצ׳אט.",
+    "team.command.empty":"אין פקודות שמורות. הוסיפו הנחיה לשימוש חוזר כדי להתחיל.",
+    "team.saving":"שומר…",
+    "team.starting":"מתחיל האצלה…",
+    "team.load":"טוען סוכנים…",
+    "team.retry":"לנסות שוב",
+    "team.network":"לא ניתן היה לאשר את הבקשה. הקלט נשמר. בדקו את הרשימה לפני ניסיון נוסף כדי למנוע כפילויות.",
+    "team.load.failed":"לא ניתן לטעון את הרשימה. נסו שוב.",
+    "team.bot.loading":"טוען בוטים…",
+    "team.agent.empty":"אין סוכנים חיצוניים. הוסיפו סוכן CLI להאצלה או לסשנים בטרמינל.",
     "focus.shortcut":"⌘ / Ctrl K",
     "focus.navigation":"ניווט בסביבת העבודה",
     "focus.back":"חזרה",
@@ -6505,6 +6763,12 @@ const TRANSLATIONS = {
     'cfg.tab.form':'⚙ הגדרות',
     'cfg.search.ph':'חיפוש הגדרה…',
     'cfg.search.aria':'חיפוש הגדרות',
+    'settings.uncertain':"תוצאת הבקשה אינה ודאית. ייתכן שהשינויים נשמרו. בדקו את המצב לפני ניסיון נוסף.",
+    'settings.discard':"למחוק שינויים שלא נשמרו? בחרו ביטול כדי להמשיך לערוך, או אישור כדי למחוק.",
+    'cfg.save.help':"שדות הטופס נשמרים אוטומטית. בלשוניות הקבצים השתמשו בשמירה.",
+    'cfg.load.error':"לא ניתן לטעון את ההגדרות.",
+    'cfg.retry':"ניסיון נוסף",
+    'cfg.form.error':"טופס ההגדרות לא נטען. לשוניות הקבצים עדיין זמינות.",
     'cfg.search.none':'אין תוצאות עבור «{q}»',
     'cfg.sec.engine':'🤖 מודלים ומנוע',
     'cfg.sec.defaults':'⭐ ברירות מחדל לצ׳אט חדש',
@@ -7714,8 +7978,13 @@ function connect() {
   ws.onerror = (err) => { console.warn('WebSocket error:', err); };
 }
 
-// Stop reconnect loop on page unload to avoid pointless connections
-window.addEventListener('beforeunload', () => { _intentionalClose = true; if (_reconnectTimer) clearTimeout(_reconnectTimer); });
+// Only an actual departure stops reconnecting; a dirty-form leave prompt may be canceled.
+window.addEventListener('pagehide', () => { _intentionalClose = true; if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; } });
+window.addEventListener('pageshow', e => {
+  if (!e.persisted) return;
+  _intentionalClose = false;
+  if (!ws || (ws.readyState !== 0 && ws.readyState !== 1)) connect();
+});
 window.addEventListener('online', () => {
   if (!ws || ws.readyState !== 1) {
     if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
@@ -9117,24 +9386,31 @@ function restoreBotsStrip(tabId) {
 // means the same bot. Which bots a PROJECT offers is separate — see
 // docs/superpowers/specs/2026-08-18-bots-design.md
 let _bots = [], _botsById = {}, _editingBotId = null;
+let _botsLoadError = false;
 // Handles seen in the transcript that are no longer in the roster. Populated as
 // history renders, so an old message from a deleted bot still reads as one.
 const _deletedBotIds = new Set();
 
 async function loadBots() {
+  const list = $i('botsList');
+  if (list && !_bots.length) list.textContent = t('team.bot.loading');
+  _botsLoadError = false;
   // Same stale-response guard as loadHist/loadFiles: switching projects twice in a
   // row must not let the first project's roster land after the second one's.
   const gen = _switchGen;
   try {
     const url = curProjectId ? `/api/bots?project=${encodeURIComponent(curProjectId)}` : '/api/bots';
-    const r = await fetch(url);
+    const r = await _teamFetch(url);
     if (gen !== _switchGen) return;
+    if (!r.ok) throw new Error('load failed');
     const data = await r.json();
     if (gen !== _switchGen) return;
-    _bots = Array.isArray(data) ? data : [];
+    if (!Array.isArray(data)) throw new Error('invalid list');
+    _bots = data;
   } catch {
     if (gen !== _switchGen) return;
     _bots = [];
+    _botsLoadError = true;
   }
   _botsById = {};
   for (const b of _bots) _botsById[b.id] = b;
@@ -9145,6 +9421,10 @@ function renderBots() {
   const el = $i('botsList'); if (!el) return;
   el.innerHTML = '';
   const cnt = $i('botsCount'); if (cnt) cnt.textContent = _bots.length;
+  if (_botsLoadError) {
+    el.innerHTML = `<div class="team-feedback" role="status">${escH(t('team.load.failed'))}</div><button class="empty-cta" onclick="loadBots()">${escH(t('team.retry'))}</button>`;
+    return;
+  }
   // An empty list should teach, not just report emptiness: this is where a user
   // first meets the feature, and "0 bots" alone explains nothing about what a bot
   // is or how it would be used.
@@ -9178,6 +9458,7 @@ function renderBots() {
     div.querySelector('.bot-edit-btn').addEventListener('click', e => { e.stopPropagation(); openBotForm(b.id); });
     const unlinkBtn = div.querySelector('.bot-unlink-btn');
     if (unlinkBtn) unlinkBtn.addEventListener('click', e => { e.stopPropagation(); unlinkBotFromProject(b.id); });
+    div.querySelectorAll('button[title]').forEach(button => button.setAttribute('aria-label', button.title));
     el.appendChild(div);
   }
 }
@@ -9283,7 +9564,60 @@ function _slugifyHandle(label) {
   return latin.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32).replace(/-+$/, '');
 }
 
+// Team form state: prevent duplicate requests and preserve input after failures.
+const _teamPending = new Map();
+function _teamFeedback(prefix, message = '', fieldId = '') {
+  const modal = $i(prefix === 'delegate' ? 'delegateModal' : prefix + 'Modal');
+  modal?.querySelectorAll('[aria-invalid]').forEach(el => el.removeAttribute('aria-invalid'));
+  const status = $i(prefix + 'Feedback');
+  if (status) { status.textContent = message; status.dataset.error = message ? 'true' : 'false'; }
+  if (message && modal?.classList?.contains('hidden')) toast(message, true);
+  const field = fieldId && $i(fieldId);
+  if (field) {
+    const details = field.closest('details'); if (details) details.open = true;
+    field.setAttribute('aria-invalid', 'true'); field.focus();
+  }
+}
+function _teamBegin(prefix) {
+  if (_teamPending.has(prefix)) return false;
+  _teamFeedback(prefix);
+  const modal = $i(prefix + 'Modal');
+  const controls = [...modal.querySelectorAll('input, textarea, select, button')].filter(el => !/(?:cancelBotForm|cancelCmdForm|cancelAgentForm|closeDelegateModal)\(/.test(el.getAttribute?.('onclick') || ''))
+    .map(el => [el, el.disabled]);
+  _teamPending.set(prefix, controls);
+  controls.forEach(([el]) => { el.disabled = true; });
+  modal.setAttribute('aria-busy', 'true');
+  const status = $i(prefix + 'Feedback');
+  status.textContent = t(prefix === 'delegate' ? 'team.starting' : 'team.saving');
+  return true;
+}
+// A dismissed dialog does not cancel the server operation. Bound the client wait,
+// retain its identity until settled, and report an uncertain outcome without retrying.
+async function _teamFetch(url, options) {
+  const controller = new AbortController();
+  let timer;
+  try {
+    return await Promise.race([
+      fetch(url, { ...options, signal: controller.signal }).then(async response => {
+        const data = await response.json();
+        return { ok: response.ok, status: response.status, json: async () => data };
+      }),
+      new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('Request outcome unknown')); }, 30000); }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
+function _teamFinish(prefix) {
+  const controls = _teamPending.get(prefix); if (!controls) return;
+  controls.forEach(([el, disabled]) => { el.disabled = disabled; });
+  _teamPending.delete(prefix);
+  $i(prefix + 'Modal')?.removeAttribute('aria-busy');
+  const status = $i(prefix + 'Feedback');
+  if (status?.dataset.error !== 'true') status.textContent = '';
+}
+
 function openBotForm(id) {
+  if (_teamPending.has('bot')) { toast(t('team.saving')); return; }
+  _teamFeedback('bot');
   _editingBotId = id || null;
   const bot = id ? _botsById[id] : null;
   if (id && !bot) return;
@@ -9294,6 +9628,7 @@ function openBotForm(id) {
   $i('botModel').value = bot?.model || '';
   $i('botPrompt').value = bot?.system_prompt || '';
   $i('botGlobal').checked = !!bot?.is_global;
+  $i('botOptions').open = !!(bot?.model || bot?.avatar);
   // Where this bot is available today. Shown only when sharing is not obvious from
   // the checkbox alone, i.e. it is linked to projects other than the open one.
   const alsoIn = $i('botAlsoIn');
@@ -9318,11 +9653,13 @@ function openBotForm(id) {
   openModalOverlay('botModal', { initialFocus: '#botLabel', labelId: 'botModalTitle', onEscape: cancelBotForm });
 }
 
-function cancelBotForm() { closeModalOverlay('botModal'); _editingBotId = null; }
+function cancelBotForm() { closeModalOverlay('botModal'); if (!_teamPending.has('bot')) _editingBotId = null; }
 
 async function saveBot() {
+  if (_teamPending.has('bot')) return;
+  const origin = { project: curProjectId, session: currentSessionId, tab: activeTabId };
   const label = $i('botLabel').value.trim();
-  if (!label) { toast(t('bot.err.label'), true); return; }
+  if (!label) { _teamFeedback('bot', t('bot.err.label'), 'botLabel'); return; }
   const payload = {
     label,
     avatar: $i('botAvatar').value.trim(),
@@ -9335,20 +9672,23 @@ async function saveBot() {
   // followed by a separate "now add it here" step.
   if (!_editingBotId && curProjectId) payload.projectId = curProjectId;
   const url = _editingBotId ? `/api/bots/${encodeURIComponent(_editingBotId)}` : '/api/bots';
+  _teamBegin('bot');
   try {
-    const r = await fetch(url, {
+    const r = await _teamFetch(url, {
       method: _editingBotId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     const d = await r.json();
-    if (d.error) { toast(d.error, true); return; }
+    if (!r.ok || d.error) { _teamFeedback('bot', d.error || t('toast.err_prefix') + r.status); return; }
     const created = !_editingBotId;
-    cancelBotForm();
     await loadBots();
+    _teamFinish('bot');
+    cancelBotForm();
     toast(created ? t('toast.bot_added') : t('toast.bot_updated'));
-    if (created && d.id) insertBotMention(d.id);
-  } catch (e) { toast(e.message, true); }
+    if (created && d.id && origin.project === curProjectId && origin.session === currentSessionId && origin.tab === activeTabId) insertBotMention(d.id);
+  } catch (e) { _teamFeedback('bot', t('team.network')); }
+  finally { _teamFinish('bot'); }
 }
 
 // Remove the bot from THIS project only. The bot, its past messages and its handle
@@ -13844,20 +14184,87 @@ function tMcp(id) {
 async function rMcp(id) {
   const label = config.mcpServers[id]?.label || id;
   if (!confirm(`${t('mcp.del.confirm')} "${label}"?`)) return;
-  activeMcp.delete(id);
-  await fetch(`/api/mcp/${id}`, { method: 'DELETE' });
-  delete config.mcpServers[id];
-  renderMcp();
+  try {
+    const response = await fetch(`/api/mcp/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(t('status.error'));
+    activeMcp.delete(id); delete config.mcpServers[id]; renderMcp();
+  } catch (error) { toast(error.message || t('status.error'), true); }
 }
+// In-memory only: secrets in these forms are never persisted as drafts.
+const settingsDrafts = new Map();
+const settingsBusy = new Set();
+function settingsSnapshot(id) {
+  return JSON.stringify(Array.from($i(id).querySelectorAll('input, textarea, select'), el =>
+    [el.id || el.name || el.className, el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value]));
+}
+function settingsRemember(id) { settingsDrafts.set(id, settingsSnapshot(id)); }
+// One deadline spans fetch, JSON decoding and any refresh. Cancellation cannot
+// undo a write already received by the server; never automatically retry it.
+const settingsOperations = new Map();
+function settingsStartOperation(id, write = true) {
+  settingsCancelOperation(id);
+  const controller = new AbortController();
+  const op = { id, write, controller, timer:null, reject:null };
+  op.deadline = new Promise((_, reject) => { op.reject = reject; });
+  op.deadline.catch(() => {});
+  op.current = () => settingsOperations.get(id) === op;
+  op.wait = async promise => {
+    const result = await Promise.race([promise, op.deadline]);
+    if (!op.current()) throw new Error('Operation closed');
+    return result;
+  };
+  op.fetch = (url, init = {}) => op.wait(fetch(url, { ...init, signal:controller.signal }));
+  op.timer = setTimeout(() => { controller.abort(); op.reject(new Error(t(write ? 'settings.uncertain' : 'cfg.load.error'))); }, 30000);
+  settingsOperations.set(id, op);
+  if (write) settingsBusy.add(id);
+  return op;
+}
+function settingsCancelOperation(id) {
+  const op = settingsOperations.get(id);
+  if (!op) return;
+  settingsOperations.delete(id);
+  settingsBusy.delete(id);
+  clearTimeout(op.timer);
+  op.controller.abort();
+  op.reject(new Error('Operation closed'));
+}
+function settingsEndOperation(op) {
+  if (!op.current()) return;
+  clearTimeout(op.timer);
+  settingsOperations.delete(op.id);
+  settingsBusy.delete(op.id);
+}
+function settingsCanClose(id) {
+  const dirty = settingsDrafts.has(id) && settingsDrafts.get(id) !== settingsSnapshot(id);
+  if (settingsBusy.has(id)) return confirm(t('settings.uncertain') + '\n\n' + t('settings.discard'));
+  return !dirty || confirm(t('settings.discard'));
+}
+function settingsHasUnsavedChanges() {
+  if (settingsBusy.size) return true;
+  if (!$i('cfgModal').classList.contains('hidden')) {
+    const current = activeCfgTab && activeCfgTab !== CFG_FORM_TAB ? $i('cfgEditor').value : null;
+    if (Object.keys(cfgSavedFiles).some(id => (id === activeCfgTab && current !== null ? current : cfgFiles[id]) !== cfgSavedFiles[id])) return true;
+  }
+  return ['mcpEditModal','mcpSettingsModal','mcpImportModal'].some(id =>
+    !$i(id).classList.contains('hidden') && settingsDrafts.has(id) && settingsDrafts.get(id) !== settingsSnapshot(id));
+}
+window.addEventListener('beforeunload', event => {
+  if (!settingsHasUnsavedChanges()) return;
+  event.preventDefault(); event.returnValue = '';
+});
+
 // ─── MCP Add/Edit Modal ──────────────────────────────────────────────────────
 let _mcpEditMode = 'add';
 let _mcpEditId = null;
 let _mcpEditTab = 'form';
 
 function openMcpModal(mode, serverId = null) {
+  settingsCancelOperation('mcpEditModal');
+  $i('mcpEditSaveBtn').disabled = false;
   _mcpEditMode = mode;
   _mcpEditId = serverId;
   _mcpEditTab = 'form';
+  _mcpEditReset();
   const overlay = $i('mcpEditModal');
   const title = $i('mcpEditTitle');
   const saveBtn = $i('mcpEditSaveBtnLabel');
@@ -13877,6 +14284,7 @@ function openMcpModal(mode, serverId = null) {
     idInput.title = '';
     _mcpEditReset();
   }
+  settingsRemember('mcpEditModal');
   openModalOverlay('mcpEditModal', {
     initialFocus: mode === 'add' ? '#meId' : '#meLabel',
     labelId: 'mcpEditTitle',
@@ -13885,11 +14293,14 @@ function openMcpModal(mode, serverId = null) {
 }
 
 function closeMcpModal() {
+  if (!settingsCanClose('mcpEditModal')) return;
+  settingsCancelOperation('mcpEditModal');
   closeModalOverlay('mcpEditModal');
 }
 
 function switchMcpTab(tab) {
   if (tab === _mcpEditTab) return;
+  const wasClean = settingsDrafts.get('mcpEditModal') === settingsSnapshot('mcpEditModal');
   if (_mcpEditTab === 'form' && tab === 'json') {
     const data = _mcpEditCollectForm();
     if (data) {
@@ -13910,6 +14321,7 @@ function switchMcpTab(tab) {
     }
   }
   _applyMcpTab(tab);
+  if (wasClean) settingsRemember('mcpEditModal');
 }
 
 function _applyMcpTab(tab) {
@@ -13932,10 +14344,10 @@ function addMeKvRow(containerId, kind, key = '', val = '') {
   row.className = 'env-kv-row';
   const keyPh = kind === 'header' ? 'Authorization' : 'KEY_NAME';
   const valPh = kind === 'header' ? 'Bearer TOKEN' : 'value';
-  const isSecret = kind === 'env' && /KEY|TOKEN|SECRET|PASS/i.test(key);
+  const isSecret = kind === 'header' || /KEY|TOKEN|SECRET|PASS/i.test(key);
   row.innerHTML = `
-    <input type="text" class="mcp-cfg-input env-kv-key" value="${escH(key)}" placeholder="${keyPh}" autocomplete="off" spellcheck="false" oninput="_meKvKeyChanged(this,'${kind}')">
-    <input type="${isSecret ? 'password' : 'text'}" class="mcp-cfg-input env-kv-val" value="${escH(val)}" placeholder="${valPh}" autocomplete="off" spellcheck="false">
+    <input type="text" aria-label="${escH(t('me.env'))}: key" class="mcp-cfg-input env-kv-key" value="${escH(key)}" placeholder="${keyPh}" autocomplete="off" spellcheck="false" oninput="_meKvKeyChanged(this,'${kind}')">
+    <input type="${isSecret ? 'password' : 'text'}" aria-label="${escH(t('me.env'))}: value" class="mcp-cfg-input env-kv-val" value="${escH(val)}" placeholder="${valPh}" autocomplete="off" spellcheck="false">
     <button class="env-kv-del" title="${escH(t('me.kv.del'))}" onclick="this.closest('.env-kv-row').remove()">✕</button>`;
   container.appendChild(row);
   row.querySelector('.env-kv-key').focus();
@@ -14038,6 +14450,7 @@ function _mcpEditFillForm(parsed) {
 }
 
 async function saveMcpModal() {
+  if (settingsBusy.has('mcpEditModal')) return;
   let data;
   if (_mcpEditTab === 'json') {
     try {
@@ -14058,6 +14471,9 @@ async function saveMcpModal() {
   if (data.type === 'stdio' && !data.command) { _mcpEditSetError(t('me.err.cmd_req')); _applyMcpTab('form'); $i('meCmd').focus(); return; }
 
   const saveBtn = $i('mcpEditSaveBtn');
+  const submittedDraft = settingsSnapshot('mcpEditModal');
+  const operation = settingsStartOperation('mcpEditModal');
+  $i('meId').disabled = true;
   saveBtn.disabled = true;
   $i('mcpEditSaveBtnLabel').textContent = _mcpEditMode === 'add' ? t('me.saving.add') : t('me.saving.edit');
 
@@ -14065,18 +14481,28 @@ async function saveMcpModal() {
     const id = data.id;
     const { id: _id, ...body } = data;
     if (_mcpEditMode === 'add') {
-      await fetch('/api/mcp/add', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id, ...body }) });
+      const response = await operation.fetch('/api/mcp/add', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id, ...body }) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       config.mcpServers[id] = { ...body, custom: true };
       activeMcp.add(id);
     } else {
-      await fetch(`/api/mcp/${_mcpEditId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const response = await operation.fetch(`/api/mcp/${_mcpEditId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       config.mcpServers[_mcpEditId] = { ...config.mcpServers[_mcpEditId], ...body };
     }
-    renderMcp(); closeMcpModal();
+    settingsBusy.delete('mcpEditModal');
+    settingsDrafts.set('mcpEditModal', submittedDraft);
+    renderMcp();
+    if (settingsSnapshot('mcpEditModal') === submittedDraft) closeMcpModal();
     toast(_mcpEditMode === 'add' ? t('me.toast.added') : t('me.toast.updated'));
+    if (_mcpEditMode === 'add') { _mcpEditMode = 'edit'; _mcpEditId = id; $i('meId').disabled = true; $i('mcpEditTitle').textContent = t('me.title.edit'); }
   } catch (err) {
-    _mcpEditSetError(t('me.err.request'));
+    if (!operation.current()) return;
+    _mcpEditSetError(t('settings.uncertain'));
   } finally {
+    if (!operation.current()) return;
+    settingsEndOperation(operation);
+    $i('meId').disabled = _mcpEditMode === 'edit';
     saveBtn.disabled = false;
     $i('mcpEditSaveBtnLabel').textContent = _mcpEditMode === 'add' ? t('me.save.add') : t('me.save.edit');
   }
@@ -14097,14 +14523,16 @@ function _mcpEnvRow(container, key='', val='') {
   row.className = 'env-kv-row';
   const isSecret = /KEY|TOKEN|SECRET|PASS/i.test(key);
   row.innerHTML = `
-    <input type="text" class="mcp-cfg-input env-kv-key" value="${escH(key)}" placeholder="KEY_NAME">
-    <input type="${isSecret?'password':'text'}" class="mcp-cfg-input env-kv-val" value="${escH(val)}" placeholder="value">
+    <input type="text" aria-label="${escH(t('me.env'))}: key" class="mcp-cfg-input env-kv-key" value="${escH(key)}" placeholder="KEY_NAME">
+    <input type="${isSecret?'password':'text'}" aria-label="${escH(t('me.env'))}: value" class="mcp-cfg-input env-kv-val" value="${escH(val)}" placeholder="value">
     <button class="env-kv-del" title="${escH(t('chip.remove'))}" onclick="this.closest('.env-kv-row').remove()">✕</button>`;
   container.appendChild(row);
   return row;
 }
 
 function showMcpSettings(id, enableAfter=false) {
+  settingsCancelOperation('mcpSettingsModal');
+  $i('mcpSettingsSaveBtn').disabled = false;
   _mcpCfgId=id; _mcpCfgEnable=enableAfter;
   const m=config.mcpServers[id]; if(!m) return;
   $i('mcpSettingsTitle').textContent=`⚙ ${m.label||id}`;
@@ -14159,7 +14587,7 @@ function showMcpSettings(id, enableAfter=false) {
         ? ` data-arg-idx="${f.argIdx}" data-placeholder="${escH(f.placeholder)}" data-prefix="${escH(f.prefix)}" data-suffix="${escH(f.suffix)}"`
         : f.source==='arg' ? ` data-arg-idx="${f.argIdx}"` : '';
       row.innerHTML=`<label class="mcp-cfg-label">${escH(f.label)}${need?' <span style="color:var(--orange)">⚠</span>':''}</label>
-        <input type="${f.secret?'password':'text'}" data-src="${f.source}" data-key="${escH(String(f.key))}" value="${escH(f.val)}"${extraAttrs}
+        <input type="${f.secret?'password':'text'}" aria-label="${escH(f.label)}" data-src="${f.source}" data-key="${escH(String(f.key))}" value="${escH(f.val)}"${extraAttrs}
           class="mcp-cfg-input" style="${need?'border-color:var(--orange)':''}">`;
       body.appendChild(row);
     });
@@ -14203,6 +14631,7 @@ function showMcpSettings(id, enableAfter=false) {
   }
 
   body.appendChild(envSection);
+  settingsRemember('mcpSettingsModal');
   openModalOverlay('mcpSettingsModal', {
     initialFocus: '#mcpSettingsBody input, #mcpSettingsBody button, #mcpSettingsBody textarea, #mcpSettingsBody select',
     labelId: 'mcpSettingsTitle',
@@ -14210,10 +14639,13 @@ function showMcpSettings(id, enableAfter=false) {
   });
 }
 function closeMcpSettings() {
+  if (!settingsCanClose('mcpSettingsModal')) return;
+  settingsCancelOperation('mcpSettingsModal');
   closeModalOverlay('mcpSettingsModal');
   _mcpCfgId=null; _mcpCfgEnable=false;
 }
 async function saveMcpSettings() {
+  if (settingsBusy.has('mcpSettingsModal')) return;
   const id=_mcpCfgId; if(!id) return;
   const inputs=$i('mcpSettingsBody').querySelectorAll('input[data-src]');
   const envU={}, headU={};
@@ -14248,8 +14680,11 @@ async function saveMcpSettings() {
     for(const ch of argDirectChanges) newArgs[ch.argIdx]=ch.newVal;
     payload.args=newArgs;
   }
+  const submittedDraft = settingsSnapshot('mcpSettingsModal');
+  const operation = settingsStartOperation('mcpSettingsModal');
+  $i('mcpSettingsSaveBtn').disabled = true;
   try{
-    const r=await fetch(`/api/mcp/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const r=await operation.fetch(`/api/mcp/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     if(m){
       if(payload.env !== undefined) m.env=payload.env;
@@ -14258,20 +14693,27 @@ async function saveMcpSettings() {
       if(payload.args) m.args=payload.args;
     }
     if(_mcpCfgEnable){activeMcp.add(id);renderMcp();saveUIState();}
-    closeMcpSettings(); toast(t('mcp.cfg.saved'));
-  }catch(e){toast(t('mcp.cfg.save_err'),true);}
+    settingsBusy.delete('mcpSettingsModal');
+    settingsDrafts.set('mcpSettingsModal', submittedDraft);
+    if (settingsSnapshot('mcpSettingsModal') === submittedDraft) closeMcpSettings();
+    toast(t('mcp.cfg.saved'));
+  }catch(e){if (operation.current()) toast(t('settings.uncertain'),true);}
+  finally { if (operation.current()) { settingsEndOperation(operation); $i('mcpSettingsSaveBtn').disabled = false; } }
 }
 
 // ─── MCP Import / Export ─────────────────────────────────────────────────
 let _mcpImportData = null;
 
 function openMcpImport() {
+  settingsCancelOperation('mcpImportModal');
+  $i('mcpImportBtn').disabled = false;
   _mcpImportData = null;
   $i('mcpImportJson').value = '';
   $i('mcpImportPreview').style.display = 'none';
   $i('mcpImportError').style.display = 'none';
   $i('mcpImportBtn').disabled = true;
   $i('mcpImportReplace').checked = false;
+  settingsRemember('mcpImportModal');
   openModalOverlay('mcpImportModal', {
     initialFocus: '#mcpImportJson',
     labelId: 'mcpImportTitle',
@@ -14279,6 +14721,8 @@ function openMcpImport() {
   });
 }
 function closeMcpImport() {
+  if (!settingsCanClose('mcpImportModal')) return;
+  settingsCancelOperation('mcpImportModal');
   closeModalOverlay('mcpImportModal');
   _mcpImportData = null;
 }
@@ -14290,17 +14734,23 @@ function mcpImportPreviewClear() {
 }
 function handleMcpImportFile(input) {
   const file = input.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => { $i('mcpImportJson').value = e.target.result; previewMcpImport(); };
-  reader.readAsText(file);
+  readMcpImportFile(file);
   input.value = '';
+}
+function readMcpImportFile(file) {
+  if (settingsBusy.has('mcpImportModal')) return;
+  const reader = new FileReader();
+  reader.onerror = () => { $i('mcpImportError').textContent = t('me.err.request'); $i('mcpImportError').style.display = 'block'; };
+  reader.onload = e => {
+    if ($i('mcpImportModal').classList.contains('hidden') || settingsBusy.has('mcpImportModal')) return;
+    $i('mcpImportJson').value = e.target.result; previewMcpImport();
+  };
+  reader.readAsText(file);
 }
 function handleMcpImportDrop(e) {
   const file = e.dataTransfer.files[0];
   if (!file || !file.name.toLowerCase().endsWith('.json')) { toast(t('toast.json_req'), true); return; }
-  const reader = new FileReader();
-  reader.onload = ev => { $i('mcpImportJson').value = ev.target.result; previewMcpImport(); };
-  reader.readAsText(file);
+  readMcpImportFile(file);
 }
 function parseMcpImportJson(raw) {
   const parsed = JSON.parse(raw);
@@ -14346,26 +14796,35 @@ function previewMcpImport() {
   }
 }
 async function doMcpImport() {
-  if (!_mcpImportData) return;
+  if (!_mcpImportData || settingsBusy.has('mcpImportModal')) return;
+  const submittedDraft = settingsSnapshot('mcpImportModal');
+  const operation = settingsStartOperation('mcpImportModal');
   const btn = $i('mcpImportBtn');
   btn.disabled = true;
   const replace = $i('mcpImportReplace').checked;
   try {
-    const r = await fetch('/api/mcp/import', {
+    const r = await operation.fetch('/api/mcp/import', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ servers: _mcpImportData, replace })
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const d = await r.json();
+    const d = await operation.wait(r.json());
     if (!d.ok) throw new Error(d.error || 'Server error');
     // Reload full config from server to stay in sync with what was actually saved
-    await loadCfg();
-    closeMcpImport();
+    const refreshed = await operation.fetch('/api/config');
+    if (!refreshed.ok) throw new Error(`HTTP ${refreshed.status}`);
+    config = await operation.wait(refreshed.json());
+    renderMcp(); renderSkills(); renderCommands();
+    settingsBusy.delete('mcpImportModal');
+    settingsDrafts.set('mcpImportModal', submittedDraft);
+    if (settingsSnapshot('mcpImportModal') === submittedDraft) closeMcpImport();
+    else btn.disabled = !_mcpImportData;
     toast(t('toast.mcp_imported').replace('{n}', d.imported));
   } catch(e) {
+    if (!operation.current()) return;
     btn.disabled = false;
-    toast(t('toast.mcp_import_err') + e.message, true);
-  }
+    toast(t('settings.uncertain'), true);
+  } finally { settingsEndOperation(operation); }
 }
 async function exportMcp() {
   try {
@@ -14555,6 +15014,7 @@ function renderSkills() {
       appendSkillItem(id, s);
     }
   }
+  if (!el.children.length) { const empty = document.createElement('p'); empty.className = 'workspace-help'; empty.textContent = t('forms.skills_empty'); el.appendChild(empty); }
   $i('skillsCount').textContent = c;
   _reapplySecFilter('skills');
 }
@@ -14581,23 +15041,28 @@ function tSkill(id) {
   }
 }
 async function rSkill(id) {
-  activeSkills.delete(id);
-  await fetch(`/api/skills/${id}`, { method: 'DELETE' });
-  delete config.skills[id];
-  renderSkills();
+  try {
+    const response = await fetch(`/api/skills/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(t('status.error'));
+    activeSkills.delete(id); delete config.skills[id]; renderSkills();
+  } catch (error) { toast(error.message || t('status.error'), true); }
 }
 async function uploadSkill(input) {
+  if (input.disabled) return;
   const file = input.files[0];
   if (!file) return;
   const name = prompt(t('skill.name_prompt'), file.name.replace(/\.md$/, ''));
   if (!name) return;
-  const fd = new FormData();
-  fd.append('file', file); fd.append('name', name);
-  fd.append('label', name); fd.append('description', t('skill.custom_desc'));
-  const r = await fetch('/api/skills/upload', { method: 'POST', body: fd });
-  const d = await r.json();
-  if (d.ok) { toast(t('toast.skill_uploaded')); input.value = ''; await loadCfg(); }
-  else toast(t('toast.err_prefix') + (d.error || '?'), true);
+  input.disabled = true;
+  try {
+    const fd = new FormData(); fd.append('file', file); fd.append('name', name);
+    fd.append('label', name); fd.append('description', t('skill.custom_desc'));
+    const response = await fetch('/api/skills/upload', { method: 'POST', body: fd });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || t('status.error'));
+    toast(t('toast.skill_uploaded')); input.value = ''; await loadCfg();
+  } catch (error) { toast(error.message || t('status.error'), true); }
+  finally { input.disabled = false; }
 }
 
 // ─── Slash Commands ───────────────────────────────────────────────────────
@@ -14608,31 +15073,37 @@ function renderCommands() {
   const el = $i('cmdsList'); el.innerHTML = '';
   const cmds = [...(config.slashCommands || [])].sort((a, b) => a.name.localeCompare(b.name));
   $i('cmdsCount').textContent = cmds.length;
+  if (!cmds.length) {
+    el.innerHTML = `<div class="team-feedback">${escH(t('team.command.empty'))}</div><button class="empty-cta" onclick="openCmdForm()">＋ ${escH(t('cmd.add.btn'))}</button>`;
+  }
   for (const cmd of cmds) {
     const div = document.createElement('div');
     div.className = 'ci';
     div.dataset.tip = cmd.text;
     div.innerHTML = `
-      <div class="inf" style="flex:1;min-width:0">
+      <button type="button" class="inf cmd-insert" style="flex:1;min-width:0">
         <div class="nm" style="color:var(--accent)">${escH(cmd.name)}</div>
         <div class="ds" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(cmd.text)}</div>
-      </div>
+      </button>
       <button class="cfg" onclick="event.stopPropagation();editCommand('${escH(cmd.id)}')" title="${t('cmd.edit.title')}">✏️</button>
       <button class="cfg term-paste-btn" title="${t('term.paste.title')}">›_</button>
       <button class="rm" onclick="event.stopPropagation();rCommand('${escH(cmd.id)}')" title="${t('cmd.del.title')}">✕</button>`;
     div.querySelector('.term-paste-btn').addEventListener('click', (e) => { e.stopPropagation(); pasteToTerminal(cmd.text); });
-    div.addEventListener('click', () => {
+    div.querySelector('.cmd-insert').addEventListener('click', () => {
       inEl.value = cmd.text;
       inEl.focus();
       inEl.selectionStart = inEl.selectionEnd = inEl.value.length;
       inEl.dispatchEvent(new Event('input'));
     });
+    div.querySelectorAll('button[title]').forEach(button => button.setAttribute('aria-label', button.title));
     el.appendChild(div);
   }
   _reapplySecFilter('cmds');
 }
 
 function openCmdForm(id) {
+  if (_teamPending.has('cmd')) { toast(t('team.saving')); return; }
+  _teamFeedback('cmd');
   _editingCmdId = id || null;
   const btn = $i('cmdSaveBtn');
   const title = $i('cmdModalTitle');
@@ -14662,48 +15133,58 @@ function openCmdForm(id) {
 
 function cancelCmdForm() {
   closeModalOverlay('cmdModal');
+  if (_teamPending.has('cmd')) return;
   _editingCmdId = null;
 }
 
 function editCommand(id) { openCmdForm(id); }
 
 async function saveCommand() {
+  if (_teamPending.has('cmd')) return;
   let name = $i('cmdName').value.trim();
   const text = $i('cmdText').value.trim();
-  if (!name || !text) { toast(t('cmd.err.empty'), true); return; }
+  if (!name || !text) { _teamFeedback('cmd', t('cmd.err.empty'), !name ? 'cmdName' : 'cmdText'); return; }
   if (!name.startsWith('/')) name = '/' + name;
 
-  if (_editingCmdId) {
-    // UPDATE
-    const r = await fetch(`/api/commands/${_editingCmdId}`, {
-      method: 'PUT', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ name, text })
-    });
-    const d = await r.json();
-    if (!d.ok) { toast(t('toast.err_prefix') + (d.error || '?'), true); return; }
-    const cmd = (config.slashCommands || []).find(c => c.id === _editingCmdId);
-    if (cmd) { cmd.name = name; cmd.text = text; }
-    toast(t('toast.cmd_updated'));
-  } else {
-    // CREATE
-    const r = await fetch('/api/commands', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ name, text })
-    });
-    const d = await r.json();
-    if (!d.ok) { toast(t('toast.err_prefix') + (d.error || '?'), true); return; }
-    if (!config.slashCommands) config.slashCommands = [];
-    config.slashCommands.push({ id: d.id, name, text });
-    toast(t('toast.cmd_added'));
-  }
-  cancelCmdForm();
-  renderCommands();
+  _teamBegin('cmd');
+  try {
+    if (_editingCmdId) {
+      // UPDATE
+      const r = await _teamFetch(`/api/commands/${_editingCmdId}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name, text })
+      });
+      const d = await r.json();
+      if (!r.ok || !d.ok) { _teamFeedback('cmd', t('toast.err_prefix') + (d.error || '?')); return; }
+      const cmd = (config.slashCommands || []).find(c => c.id === _editingCmdId);
+      if (cmd) { cmd.name = name; cmd.text = text; }
+      toast(t('toast.cmd_updated'));
+    } else {
+      // CREATE
+      const r = await _teamFetch('/api/commands', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name, text })
+      });
+      const d = await r.json();
+      if (!r.ok || !d.ok) { _teamFeedback('cmd', t('toast.err_prefix') + (d.error || '?')); return; }
+      if (!config.slashCommands) config.slashCommands = [];
+      config.slashCommands.push({ id: d.id, name, text });
+      toast(t('toast.cmd_added'));
+    }
+    _teamFinish('cmd');
+    cancelCmdForm();
+    renderCommands();
+  } catch (e) { _teamFeedback('cmd', t('team.network')); }
+  finally { _teamFinish('cmd'); }
 }
 
 async function rCommand(id) {
   const cmd = (config.slashCommands || []).find(c => c.id === id);
   if (!confirm(`${t('cmd.del.confirm')} "${cmd?.name || id}"?`)) return;
-  await fetch(`/api/commands/${id}`, { method: 'DELETE' });
+  try {
+    const r = await fetch(`/api/commands/${id}`, { method: 'DELETE' });
+    if (!r.ok) { toast(t('toast.err_prefix') + r.status, true); return; }
+  } catch (e) { toast(t('team.network'), true); return; }
   config.slashCommands = (config.slashCommands || []).filter(c => c.id !== id);
   if (_editingCmdId === id) cancelCmdForm();
   renderCommands();
@@ -14729,6 +15210,7 @@ function renderAgents() {
   el.innerHTML = '';
   const agents = Object.entries(_externalAgents);
   const cnt = $i('agentsCount'); if (cnt) cnt.textContent = agents.length;
+  if (!agents.length) el.innerHTML = `<div class="team-feedback">${escH(t('team.agent.empty'))}</div><button class="empty-cta" onclick="openAgentForm()">＋ ${escH(t('agent.add.btn'))}</button>`;
   for (const [id, cfg] of agents) {
     const icon = _agentIcons[id] || '🤖';
     const canDelegate = !!String(cfg?.template || '').trim();
@@ -14750,6 +15232,7 @@ function renderAgents() {
     div.querySelector('.agent-test-btn').addEventListener('click', e => { e.stopPropagation(); testAgent(id, e.currentTarget); });
     div.querySelector('.agent-edit-btn').addEventListener('click', e => { e.stopPropagation(); openAgentForm(id); });
     div.querySelector('.agent-del-btn').addEventListener('click', e => { e.stopPropagation(); deleteAgent(id); });
+    div.querySelectorAll('button[title]').forEach(button => button.setAttribute('aria-label', button.title));
     el.appendChild(div);
   }
 }
@@ -14774,6 +15257,8 @@ function _agentUniqueId(label) {
 // One form for every agent: delegation and terminal are two capability fields on the
 // same record, not two kinds of thing.
 function openAgentForm(id) {
+  if (_teamPending.has('agent')) { toast(t('team.saving')); return; }
+  _teamFeedback('agent');
   _editingAgentId = id || null;
   const btn = $i('agentSaveBtn');
   const title = $i('agentModalTitle');
@@ -14789,6 +15274,8 @@ function openAgentForm(id) {
   $i('agentNewIdCommand').value = cfg?.newIdCommand || '';
   $i('agentModels').value = Array.isArray(cfg?.models) ? cfg.models.join(', ') : '';
   $i('agentEfforts').value = Array.isArray(cfg?.efforts) ? cfg.efforts.join(', ') : '';
+  $i('agentCatalogOptions').open = !!(cfg?.models?.length || cfg?.efforts?.length);
+  $i('agentResumeOptions').open = !!(cfg?.resume || cfg?.resumeLast || cfg?.newIdFlag || cfg?.newIdCommand);
   if (id) {
     btn.textContent = t('agent.save.btn');
     btn.setAttribute('data-i18n', 'agent.save.btn');
@@ -14809,6 +15296,7 @@ function openAgentForm(id) {
 
 function cancelAgentForm() {
   closeModalOverlay('agentModal');
+  if (_teamPending.has('agent')) return;
   _editingAgentId = null;
 }
 
@@ -14821,6 +15309,7 @@ function _parseAgentCatalog(value) {
 }
 
 async function saveAgent() {
+  if (_teamPending.has('agent')) return;
   const label = $i('agentLabel').value.trim();
   const fields = {
     template:    $i('agentTemplate').value.trim(),
@@ -14834,16 +15323,17 @@ async function saveAgent() {
   const efforts = _parseAgentCatalog($i('agentEfforts').value);
   // An agent needs at least one capability: delegation (template) or a terminal
   // session (interactive). Both is fine.
-  if (!label || (!fields.template && !fields.interactive)) { toast(t('agent.err.empty'), true); return; }
+  if (!label || (!fields.template && !fields.interactive)) { _teamFeedback('agent', t('agent.err.empty'), !label ? 'agentLabel' : 'agentTemplate'); return; }
   // Use existing ID when editing, generate unique slug when creating
   const id = _editingAgentId || _agentUniqueId(label);
+  _teamBegin('agent');
   try {
-    const r = await fetch('/api/external-agents', {
+    const r = await _teamFetch('/api/external-agents', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ id, label, ...fields, models, efforts })
     });
     const d = await r.json();
-    if (d.error) { toast(d.error, true); return; }
+    if (!r.ok || d.error) { _teamFeedback('agent', d.error || t('toast.err_prefix') + r.status); return; }
     // Mirror the server's merge semantics: an empty field clears, a filled one sets.
     const next = { ...(_externalAgents[id] || {}), label };
     for (const [k, v] of Object.entries(fields)) { if (v) next[k] = v; else delete next[k]; }
@@ -14852,7 +15342,8 @@ async function saveAgent() {
     next.efforts = efforts;
     _externalAgents[id] = next;
     toast(_editingAgentId ? t('toast.agent_updated') : t('toast.agent_added'));
-  } catch (e) { toast(e.message, true); return; }
+  } catch (e) { _teamFeedback('agent', t('team.network')); return; }
+  finally { _teamFinish('agent'); }
   cancelAgentForm();
   renderAgents();
 }
@@ -14962,13 +15453,31 @@ const CFG_TABS_BASE = [
   { id: 'global-claude-md', get label() { return t('cfg.tab.global_md'); } },
 ];
 
+let cfgLoadGeneration = 0, cfgSavedFiles = {}, cfgSaving = false, cfgOpeningWorkdir = null;
 async function openCfgEditor() {
+  const generation = ++cfgLoadGeneration;
+  const workdir = cfgOpeningWorkdir = curWorkdir;
+  const operation = settingsStartOperation('cfgModal', false);
+  cfgSaving = false;
+  $i('cfgForm').inert = false;
+  $i('cfgSaveBtn').disabled = false;
+  $i('cfgLoadStatus').classList.remove('hidden');
+  $i('cfgLoadStatus').textContent = t('toast.loading');
+  $i('cfgTabs').innerHTML = '';
+  ['cfgToolbar','cfgForm','cfgEditor','cfgPathInfo','cfgSaveBtn'].forEach(id => $i(id).classList.add('hidden'));
+  activeCfgTab = null;
+  cfgFiles = {}; cfgSavedFiles = {};
+  if ($i('cfgModal').classList.contains('hidden')) openModalOverlay('cfgModal', { labelId:'cfgTitle', onEscape:closeCfg });
+  try {
   const mdUrl = curWorkdir ? `/api/claude-md?dir=${encodeURIComponent(curWorkdir)}` : '/api/claude-md';
   const resUrl = curWorkdir ? `/api/config/resolved?workdir=${encodeURIComponent(curWorkdir)}` : '/api/config/resolved';
-  const [r1, r2, r3] = await Promise.all([fetch('/api/config-files'), fetch(mdUrl), fetch(resUrl)]);
-  cfgFiles = await r1.json();
-  const cm = await r2.json();
-  cfgResolved = r3.ok ? await r3.json() : null;
+  const [r1, r2, r3] = await Promise.all([operation.fetch('/api/config-files'), operation.fetch(mdUrl), operation.fetch(resUrl)]);
+  if (!r1.ok || !r2.ok) throw new Error(t('cfg.load.error'));
+  const [files, cm, resolved] = await operation.wait(Promise.all([r1.json(), r2.json(), r3.ok ? r3.json() : null]));
+  if (generation !== cfgLoadGeneration || !operation.current()) return;
+  if (workdir !== curWorkdir) throw new Error('Project changed');
+  cfgFiles = files;
+  cfgResolved = resolved;
   cfgFiles['global-claude-md'] = cm.global || '';
   cfgFiles['__globalPath']     = cm.globalPath || '~/.claude/CLAUDE.md';
 
@@ -14980,25 +15489,28 @@ async function openCfgEditor() {
     tabs.push({ id: 'local-claude-md', label: `📁 ${projName}` });
   }
 
-  const t = $i('cfgTabs');
-  t.innerHTML = '';
+  const tabsEl = $i('cfgTabs');
+  tabsEl.innerHTML = '';
   tabs.forEach((c, i) => {
-    const d = document.createElement('div');
+    const d = document.createElement('button');
+    d.type = 'button';
     d.className = `modal-tab ${i === 0 ? 'active' : ''}`;
     d.dataset.tabId = c.id;
     d.textContent = c.label;
     d.onclick = () => switchCfgTab(c.id);
-    t.appendChild(d);
+    tabsEl.appendChild(d);
   });
+  cfgSavedFiles = { ...cfgFiles };
+  $i('cfgLoadStatus').classList.add('hidden');
   activeCfgTab = tabs[0].id;
   $i('cfgEditor').value = '';
   $i('saveNotice').className = 'save-notice hidden';
   applyCfgTabView(activeCfgTab);
-  openModalOverlay('cfgModal', {
-    initialFocus: activeCfgTab === CFG_FORM_TAB ? '#cfgSearch' : '#cfgEditor',
-    labelId: 'cfgTitle',
-    onEscape: closeCfg,
-  });
+  $i(activeCfgTab === CFG_FORM_TAB ? 'cfgSearch' : 'cfgEditor').focus();
+  } catch (err) {
+    if (generation !== cfgLoadGeneration || !operation.current()) return;
+    $i('cfgLoadStatus').innerHTML = `${escH(t('cfg.load.error'))} <button class="bg" onclick="openCfgEditor()">${escH(t('cfg.retry'))}</button>`;
+  } finally { settingsEndOperation(operation); }
 }
 
 function updateCfgPathInfo(id) {
@@ -15032,31 +15544,50 @@ function switchCfgTab(id) {
 }
 
 async function saveCfg() {
-  if (activeCfgTab === CFG_FORM_TAB) return; // form fields save themselves on change
-  cfgFiles[activeCfgTab] = $i('cfgEditor').value;
+  if (!activeCfgTab || activeCfgTab === CFG_FORM_TAB || cfgSaving) return;
+  const tab = activeCfgTab, content = $i('cfgEditor').value, workdir = cfgOpeningWorkdir;
+  cfgFiles[tab] = content;
+  const operation = settingsStartOperation('cfgModal');
+  cfgSaving = true;
+  $i('cfgSaveBtn').disabled = true;
   try {
     let r;
-    if (activeCfgTab === 'global-claude-md') {
-      r = await fetch('/api/claude-md', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'global', content: cfgFiles[activeCfgTab] }) });
-    } else if (activeCfgTab === 'local-claude-md') {
-      r = await fetch('/api/claude-md', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'local', content: cfgFiles[activeCfgTab], dir: curWorkdir }) });
+    if (tab === 'global-claude-md' || tab === 'local-claude-md') {
+      r = await operation.fetch('/api/claude-md', { method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({type:tab === 'global-claude-md' ? 'global' : 'local', content, ...(tab === 'local-claude-md' ? {dir:workdir} : {})}) });
     } else {
-      r = await fetch('/api/config-files', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: activeCfgTab, content: cfgFiles[activeCfgTab] }) });
+      r = await operation.fetch('/api/config-files', { method:'PUT', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({filename:tab, content}) });
     }
-    const d = await r.json();
-    if (d.ok) {
+    const d = await operation.wait(r.json());
+    if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    cfgSavedFiles[tab] = content;
+    if (activeCfgTab === tab && $i('cfgEditor').value === content) {
       $i('saveNotice').className = 'save-notice';
       setTimeout(() => $i('saveNotice').className = 'save-notice hidden', 2000);
-      if (activeCfgTab === 'config.json') loadCfg();
-      toast(t('cfg.saved'));
-    } else toast(t('toast.err_prefix') + (d.error || '?'), true);
-  } catch (e) { toast(e.message, true); }
+    }
+    if (tab === 'config.json') {
+      const refreshed = await operation.fetch('/api/config');
+      if (!refreshed.ok) throw new Error(`HTTP ${refreshed.status}`);
+      config = await operation.wait(refreshed.json());
+      renderMcp(); renderSkills(); renderCommands();
+    }
+    toast(t('cfg.saved'));
+  } catch (e) { if (operation.current()) toast(t('settings.uncertain'), true); }
+  finally { if (operation.current()) { settingsEndOperation(operation); cfgSaving = false; $i('cfgSaveBtn').disabled = false; } }
 }
 
-function closeCfg() { closeModalOverlay('cfgModal'); }
+function closeCfg() {
+  if (activeCfgTab && activeCfgTab !== CFG_FORM_TAB) cfgFiles[activeCfgTab] = $i('cfgEditor').value;
+  const dirty = Object.keys(cfgSavedFiles).some(id => cfgFiles[id] !== cfgSavedFiles[id]);
+  if ((dirty || cfgSaving) && !confirm((cfgSaving ? t('settings.uncertain') + '\n\n' : '') + t('settings.discard'))) return;
+  settingsCancelOperation('cfgModal');
+  cfgSaving = false;
+  $i('cfgForm').inert = false;
+  $i('cfgSaveBtn').disabled = false;
+  ++cfgLoadGeneration;
+  closeModalOverlay('cfgModal');
+}
 
 // ─── Settings form + source/precedence view (issue #40) ───────────────────
 // The server does the resolving (config-resolve.js); this only renders it.
@@ -15094,17 +15625,17 @@ function cfgFieldHtml(s) {
   if (s.readOnly || s.secret) return `<div class="cfg-ro">${escH(shown)}</div>`;
   const k = escArg(s.key);
   if (s.type === 'bool') {
-    return `<label class="cfg-switch"><input type="checkbox" ${s.effective ? 'checked' : ''}
+    return `<label class="cfg-switch"><input aria-label="${escH(s.key)}" type="checkbox" ${s.effective ? 'checked' : ''}
       onchange="cfgSetSetting('${k}', this.checked)"><span>${escH(shown)}</span></label>`;
   }
   if (s.type === 'enum') {
     const opts = (s.choices || []).map(c =>
       `<option value="${escH(c)}" ${String(s.effective) === c ? 'selected' : ''}>${escH(c)}</option>`).join('');
-    return `<select onchange="cfgSetSetting('${k}', this.value)">${opts}</select>`;
+    return `<select aria-label="${escH(s.key)}" onchange="cfgSetSetting('${k}', this.value)">${opts}</select>`;
   }
   const type = s.type === 'number' ? 'number' : 'text';
   const val = s.effective === null || s.effective === undefined ? '' : String(s.effective);
-  return `<input type="${type}" value="${escH(val)}" onchange="cfgSetSetting('${k}', this.value)">`;
+  return `<input aria-label="${escH(s.key)}" type="${type}" value="${escH(val)}" onchange="cfgSetSetting('${k}', this.value)">`;
 }
 
 function cfgRowHtml(s, q) {
@@ -15150,7 +15681,7 @@ function cfgRowHtml(s, q) {
 function renderCfgForm() {
   const box = $i('cfgForm');
   if (!box) return;
-  if (!cfgResolved) { box.innerHTML = ''; return; }
+  if (!cfgResolved) { box.innerHTML = `<div class="cfg-empty" role="status">${escH(t('cfg.form.error'))}</div>`; return; }
   const q = ($i('cfgSearch')?.value || '').trim().toLowerCase();
   let shown = 0;
   const html = cfgResolved.sections.map(sec => {
@@ -15161,10 +15692,10 @@ function renderCfgForm() {
     // section is the same as no hit.
     const collapsed = !q && cfgCollapsedSections.has(sec);
     return `<div class="cfg-sec ${collapsed ? 'collapsed' : ''}">
-      <div class="cfg-sec-hdr" onclick="cfgToggleSection('${escArg(sec)}')">
+      <button type="button" class="cfg-sec-hdr" data-cfg-section="${escH(sec)}" aria-expanded="${!collapsed}" onclick="cfgToggleSection('${escArg(sec)}')">
         <span class="cfg-caret">▼</span><span>${cfgHl(t('cfg.sec.' + sec), q)}</span>
         <span class="cfg-sec-count">${rows.length}</span>
-      </div>
+      </button>
       <div class="cfg-sec-body">${rows.map(s => cfgRowHtml(s, q)).join('')}</div>
     </div>`;
   }).join('');
@@ -15176,6 +15707,7 @@ function cfgToggleSection(sec) {
   if (cfgCollapsedSections.has(sec)) cfgCollapsedSections.delete(sec);
   else cfgCollapsedSections.add(sec);
   renderCfgForm();
+  Array.from($i('cfgForm').querySelectorAll('[data-cfg-section]')).find(el => el.dataset.cfgSection === sec)?.focus();
 }
 
 function cfgToggleAllSections() {
@@ -15193,15 +15725,20 @@ function cfgToggleAllSections() {
 }
 
 async function _cfgWrite(key, init, doneMsg, endpoint) {
+  if (cfgSaving) return;
+  const operation = settingsStartOperation('cfgModal');
+  const workdir = cfgOpeningWorkdir;
+  cfgSaving = true;
+  $i('cfgForm').inert = true;
   try {
-    const r = await fetch(endpoint || '/api/config/setting', init);
-    const d = await r.json();
+    const r = await operation.fetch(endpoint || '/api/config/setting', init);
+    const d = await operation.wait(r.json());
     if (!d.ok) { toast(t('toast.err_prefix') + (d.error || '?'), true); return; }
     // Re-resolve rather than patch locally: one write can change which source
     // wins for a setting, and that is exactly what this view is for.
-    const url = curWorkdir ? `/api/config/resolved?workdir=${encodeURIComponent(curWorkdir)}` : '/api/config/resolved';
-    const rr = await fetch(url);
-    if (rr.ok) cfgResolved = await rr.json();
+    const url = workdir ? `/api/config/resolved?workdir=${encodeURIComponent(workdir)}` : '/api/config/resolved';
+    const rr = await operation.fetch(url);
+    if (rr.ok) cfgResolved = await operation.wait(rr.json());
     renderCfgForm();
     toast(d.restart ? t('cfg.saved_restart') : doneMsg);
     // The effective language after a reset is whatever the resolver now reports,
@@ -15209,8 +15746,14 @@ async function _cfgWrite(key, init, doneMsg, endpoint) {
     if (key === 'lang') {
       const lg = String((d.setting && d.setting.effective) || 'en');
       localStorage.setItem('lang', lg); setLang(lg, false);
-    } else loadCfg();
-  } catch (e) { toast(e.message, true); }
+    } else {
+      const refreshed = await operation.fetch('/api/config');
+      if (!refreshed.ok) throw new Error(`HTTP ${refreshed.status}`);
+      config = await operation.wait(refreshed.json());
+      renderMcp(); renderSkills(); renderCommands();
+    }
+  } catch (e) { if (operation.current()) toast(t('settings.uncertain'), true); }
+  finally { if (operation.current()) { settingsEndOperation(operation); cfgSaving = false; $i('cfgForm').inert = false; } }
 }
 
 function cfgSetSetting(key, value) {
@@ -15241,14 +15784,18 @@ function _filesQS(relPath) {
 // to fail. Reset on every load and never inferred from the project type — the source
 // of truth is the response that actually produced what is on screen.
 let _filesRemote = false;
+let _filesListSeq = 0;
 
 async function loadFiles(dir = '') {
+  const seq = ++_filesListSeq, gen = _switchGen;
+  const treeEl = $i('filesTree');
+  if (treeEl) { treeEl.setAttribute('aria-busy', 'true'); treeEl.textContent = t('toast.loading'); }
   try {
-    const gen = _switchGen;
     const r = await fetch(`/api/files?${_filesQS(dir)}`);
-    if (gen !== _switchGen) return; // project switched while fetching — discard stale response
+    if (gen !== _switchGen || seq !== _filesListSeq) return; // project switched while fetching — discard stale response
     const d = await r.json();
-    if (gen !== _switchGen) return;
+    if (gen !== _switchGen || seq !== _filesListSeq) return;
+    if (!r.ok || d.error) throw new Error(d.error || t('forms.load_error'));
     if (d.type === 'remote') {
       // Still reachable: a project whose SSH host was deleted has no way to browse.
       _filesRemote = true;
@@ -15256,7 +15803,7 @@ async function loadFiles(dir = '') {
       if (treeEl) treeEl.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:8px 4px;line-height:1.6">${t('files.remote_unavail')}</div>`;
       return;
     }
-    if (d.type !== 'dir') return;
+    if (d.type !== 'dir') throw new Error(t('forms.load_error'));
     _filesRemote = !!d.remote;
     const treeEl = $i('filesTree');
     treeEl.innerHTML = '';
@@ -15266,6 +15813,7 @@ async function loadFiles(dir = '') {
       b.className = 'fii';
       b.innerHTML = '<span class="fi" style="color:var(--muted)">↑</span><span class="fn">..</span>';
       b.onclick = () => loadFiles(dir.split('/').slice(0, -1).join('/'));
+      makeKeyboardRow(b, b.onclick);
       treeEl.appendChild(b);
     }
 
@@ -15277,6 +15825,7 @@ async function loadFiles(dir = '') {
       const fileBtns = it.type === 'file' ? `<button class="fpe" onclick="event.stopPropagation();openFilePreview('${escArg(it.path)}','${escArg(it.name)}')" title="${t('files.view')}">👁</button>` + dlBtn : '';
       el.innerHTML = `<span class="fi">${it.type === 'dir' ? '<span style="color:var(--accent2);font-size:13px">▸</span>' : fileIcon(it.name)}</span><span class="fn">${escH(it.name)}</span><span class="fs">${it.size ? fmtSize(it.size) : ''}</span>${fileBtns}`;
       el.onclick = it.type === 'dir' ? () => loadFiles(it.path) : () => openFilePreview(it.path, it.name);
+      makeKeyboardRow(el, el.onclick);
       treeEl.appendChild(el);
     }
 
@@ -15288,12 +15837,15 @@ async function loadFiles(dir = '') {
       w.textContent = t('files.truncated');
       treeEl.appendChild(w);
     }
-  } catch {}
+  } catch (error) { if (gen === _switchGen && seq === _filesListSeq) renderSectionError(treeEl, () => loadFiles(dir), error.message); }
+  finally { if (gen === _switchGen && seq === _filesListSeq) treeEl?.removeAttribute('aria-busy'); }
 }
 
 let _fpvPath = '', _fpvName = '', _fpvIsImg = false;
+let _filePreviewSeq = 0;
 
 function closeFpv() {
+  ++_filePreviewSeq;
   closeModalOverlay('filePreviewModal');
   $i('fpvBody').innerHTML = '';
   _fpvPath = ''; _fpvName = ''; _fpvIsImg = false;
@@ -15305,6 +15857,7 @@ function closeFpv() {
 }
 
 async function openFilePreview(relPath, name) {
+  const seq = ++_filePreviewSeq, gen = _switchGen;
   _fpvPath = relPath;
   _fpvName = name || relPath.split('/').pop();
   const ext = (_fpvName.lastIndexOf('.') > 0 ? _fpvName.slice(_fpvName.lastIndexOf('.')).toLowerCase() : '');
@@ -15358,6 +15911,7 @@ async function openFilePreview(relPath, name) {
   try {
     const r = await fetch(`/api/files?${_filesQS(relPath)}`);
     const d = await r.json();
+    if (seq !== _filePreviewSeq || gen !== _switchGen) return;
     // A refusal used to fall through to the text branch and paint an empty pane —
     // indistinguishable from an empty file. Remote projects have more ways to refuse
     // (host gone, symlinked file, path denied), so it is now said out loud.
@@ -15375,6 +15929,7 @@ async function openFilePreview(relPath, name) {
       body.innerHTML = `<div class="fpv-text">${escH(d.content || '')}</div>`;
     }
   } catch {
+    if (seq !== _filePreviewSeq || gen !== _switchGen) return;
     body.innerHTML = `<div class="fpv-binary">${t('fpv.load_error')}</div>`;
   }
 }
@@ -15926,13 +16481,63 @@ async function renameProject(id, btnEl) {
   input.addEventListener('blur', () => setTimeout(commit, 150));
 }
 
+
+const _formActions = new Set();
+async function runFormAction(buttonId, feedbackId, action, timeoutMs = 30000) {
+  if (_formActions.has(buttonId)) return;
+  const button = $i(buttonId), feedback = feedbackId ? $i(feedbackId) : null;
+  const previous = button?.textContent;
+  const dialog = button?.closest?.('.modal');
+  const controls = [...(dialog?.querySelectorAll('input, select, textarea, button') || [])]
+    .filter(control => !control.classList.contains('modal-close') && !/^(?:close|cancel)/.test(control.getAttribute('onclick') || ''))
+    .map(control => [control, control.disabled]);
+  controls.forEach(([control]) => { control.disabled = true; });
+  const controller = new AbortController();
+  let timer;
+  const timedOut = new Promise((resolve, reject) => { timer = setTimeout(() => { controller.abort(); const error = new Error('Request timed out'); error.name = 'AbortError'; reject(error); }, timeoutMs); });
+  _formActions.add(buttonId);
+  if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = t('toast.loading'); }
+  if (feedback) { feedback.textContent = ''; feedback.setAttribute('role', 'status'); }
+  try { return await Promise.race([action(controller.signal), timedOut]); }
+  catch (error) {
+    const message = error?.name === 'AbortError' ? t('forms.uncertain') : error?.message || t('status.error');
+    if (feedback) { feedback.textContent = message; feedback.setAttribute('role', 'alert'); }
+    else toast(message, true);
+  } finally {
+    clearTimeout(timer);
+    controls.forEach(([control, disabled]) => { control.disabled = disabled; });
+    _formActions.delete(buttonId);
+    if (button) { button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = previous; }
+  }
+}
+function renderSectionError(container, retry, message) {
+  if (!container) return;
+  container.replaceChildren();
+  const box = document.createElement('div'); box.className = 'inline-retry'; box.setAttribute('role', 'alert');
+  const text = document.createElement('div'); text.textContent = message || t('forms.load_error');
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'bg'; button.textContent = t('forms.retry'); button.onclick = retry;
+  box.append(text, button); container.appendChild(box);
+}
+function makeKeyboardRow(element, activate) {
+  element.setAttribute('role', 'button'); element.tabIndex = 0;
+  element.onkeydown = event => { if (event.target !== element) return; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate(); } };
+}
+
 // ─── Directory browser ───────────────────────────────────────────────────
+let _projectFormHasDraft = false;
+let _projectAutoName = '';
+let _projectDialogSeq = 0;
+let _browseDirsSeq = 0;
 function openAddProject() {
+  if (_formActions.has('dirAddBtn')) return;
+  ++_projectDialogSeq;
   openModalOverlay('dirModal', {
     initialFocus: '#dirPathInput',
     labelId: 'dirModalTitle',
     onEscape: () => closeDirModal(),
   });
+  if (_projectFormHasDraft) return;
+  _projectAutoName = '';
   $i('gitInitChk').checked = false;
   $i('cloneUrlInput').value = '';
   $i('cloneBranchInput').value = '';
@@ -15948,10 +16553,17 @@ function openAddProject() {
 }
 
 async function browseDirs(dirPath) {
+  const seq = ++_browseDirsSeq;
+  dirBrowsePath = null;
+  const listEl = $i('dirList');
+  listEl.setAttribute('aria-busy', 'true');
+  listEl.textContent = t('toast.loading');
   const url = dirPath ? `/api/browse-dirs?path=${encodeURIComponent(dirPath)}` : '/api/browse-dirs';
   try {
     const r = await fetch(url);
     const d = await r.json();
+    if (seq !== _browseDirsSeq) return;
+    if (!r.ok || d.error) throw new Error(d.error || t('forms.load_error'));
     if (d.error) { toast(d.error, true); return; }
 
     const isDrivesList = d.path === '__drives__';
@@ -15962,7 +16574,7 @@ async function browseDirs(dirPath) {
     // Auto-fill name if empty (skip for drives list)
     if (!isDrivesList) {
       const nameEl = $i('projNameInput');
-      if (!nameEl.value) nameEl.value = d.path.split(/[/\\]/).filter(Boolean).pop() || '';
+      if (!nameEl.value || nameEl.value === _projectAutoName) { _projectAutoName = d.path.split(/[/\\]/).filter(Boolean).pop() || ''; nameEl.value = _projectAutoName; }
     }
 
     const list = $i('dirList');
@@ -15970,7 +16582,7 @@ async function browseDirs(dirPath) {
 
     // Up button
     if (d.parent) {
-      const b = document.createElement('div');
+      const b = document.createElement('button'); b.type = 'button';
       b.className = 'dii';
       const upLabel = d.parent === '__drives__' ? t('dir.drives') : '..';
       b.innerHTML = `<span class="di" style="color:var(--muted)">↑</span><span class="dn" style="color:var(--muted)">${upLabel}</span>`;
@@ -15980,31 +16592,28 @@ async function browseDirs(dirPath) {
 
     // Current dir as selectable row (not shown for drives list)
     if (!isDrivesList) {
-      const self = document.createElement('div');
+      const self = document.createElement('button'); self.type = 'button';
       self.className = 'dii selected';
       self.innerHTML = `<span class="di" style="color:var(--accent2)">▸</span><span class="dn"><strong>${t('dir.this_dir')}</strong></span>`;
       self.onclick = () => { dirBrowsePath = d.path; $i('dirPathInput').value = d.path; highlightSelected(self); };
       list.appendChild(self);
     }
 
-    // Drives or subdirectories — single click selects, double click navigates
+    // Selection and navigation have separate native buttons: no timing gesture.
     for (const it of d.items) {
-      const el = document.createElement('div');
+      const row = document.createElement('div'); row.className = 'dir-choice';
+      const el = document.createElement('button'); el.type = 'button';
       el.className = `dii${it.hidden ? ' hidden-dir' : ''}`;
-      const icon = isDrivesList ? '💾' : '▸';
-      const iconStyle = isDrivesList ? '' : 'color:var(--muted)';
-      el.innerHTML = `<span class="di" style="${iconStyle}">${icon}</span><span class="dn">${escH(it.name)}</span>`;
+      el.innerHTML = `<span class="di" aria-hidden="true">${isDrivesList ? '💾' : '▸'}</span><span class="dn">${escH(it.name)}</span>`;
       el.onclick = () => {
-        if (el._t) { clearTimeout(el._t); el._t = null; browseDirs(it.path); }
-        else { el._t = setTimeout(() => {
-          el._t = null;
-          dirBrowsePath = it.path;
-          $i('dirPathInput').value = it.path;
-          if (!isDrivesList) $i('projNameInput').value = it.name;
-          highlightSelected(el);
-        }, 220); }
+        dirBrowsePath = it.path; $i('dirPathInput').value = it.path;
+        if (!isDrivesList && (!$i('projNameInput').value.trim() || $i('projNameInput').value === _projectAutoName)) { _projectAutoName = it.name; $i('projNameInput').value = it.name; }
+        highlightSelected(el);
       };
-      list.appendChild(el);
+      const open = document.createElement('button'); open.type = 'button'; open.className = 'dir-open';
+      open.textContent = t('forms.open_folder'); open.setAttribute('aria-label', t('forms.open_folder') + ': ' + it.name);
+      open.onclick = () => browseDirs(it.path);
+      row.append(el, open); list.appendChild(row);
     }
 
     if (!d.items.length) {
@@ -16013,7 +16622,8 @@ async function browseDirs(dirPath) {
       e.textContent = t('dir.no_subdirs');
       list.appendChild(e);
     }
-  } catch(e) { toast(t('toast.err_prefix') + e.message, true); }
+  } catch(e) { if (seq === _browseDirsSeq) renderSectionError(listEl, () => browseDirs(dirPath), e.message); }
+  finally { if (seq === _browseDirsSeq) listEl.removeAttribute('aria-busy'); }
 }
 
 function highlightSelected(el) {
@@ -16042,11 +16652,21 @@ $i('dirFilterInput').addEventListener('input', function() {
     const name = nameEl.textContent.toLowerCase();
     // Always show ".." (up) and "current dir" rows
     const isNav = name === '..' || name === t('dir.drives').toLowerCase() || nameEl.querySelector('strong');
-    el.style.display = (isNav || !q || name.includes(q)) ? '' : 'none';
+    (el.closest('.dir-choice') || el).style.display = (isNav || !q || name.includes(q)) ? '' : 'none';
   });
 });
 
 async function selectDir() {
+  return runFormAction('dirAddBtn', 'projectFormFeedback', _selectDirRequest, 120000);
+}
+function projectRequestContext() {
+  return { generation: _projectDialogSeq, project: curProjectId, tab: activeTabId };
+}
+function projectRequestStillCurrent(context) {
+  return context.generation === _projectDialogSeq && context.project === curProjectId && context.tab === activeTabId && !$i('dirModal').classList.contains('hidden');
+}
+async function _selectDirRequest(signal) {
+  const context = projectRequestContext();
   // Remote project
   if (curProjType === 'remote') {
     const rhId = $i('remoteHostSelect')?.value;
@@ -16055,13 +16675,14 @@ async function selectDir() {
     if (!remoteWorkdir) { toast(t('dir.remote.err.no_path'), true); return; }
     const name = ($i('projNameInput').value.trim()) || remoteWorkdir.split('/').filter(Boolean).pop() || remoteWorkdir;
     const r = await fetch('/api/projects', {
-      method: 'POST',
+      method: 'POST', signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, workdir: remoteWorkdir, isRemote: true, remoteHostId: rhId, remoteWorkdir }),
     });
     const d = await r.json();
     if (!d.ok) { toast((d.error || t('ssh.err')), true); return; }
     await loadProjectsList();
+    if (signal?.aborted || !projectRequestStillCurrent(context)) { toast(t('forms.project_created')); return; }
     if (d.id) switchProject(d.id);
     closeDirModal(true);
     if (_onProjectCreated) { const cb = _onProjectCreated; _onProjectCreated = null; cb(); }
@@ -16070,12 +16691,12 @@ async function selectDir() {
   // Local project
   if (!dirBrowsePath) { toast(t('toast.select_dir'), true); return; }
   const cloneUrl = ($i('cloneUrlInput')?.value || '').trim();
-  if (cloneUrl) return cloneProjectFromUrl(cloneUrl);
+  if (cloneUrl) return cloneProjectFromUrl(cloneUrl, signal);
   const name = ($i('projNameInput').value.trim()) || dirBrowsePath.split(/[/\\]/).filter(Boolean).pop() || dirBrowsePath;
   const gitInit = $i('gitInitChk').checked;
 
   const r = await fetch('/api/projects', {
-    method: 'POST',
+    method: 'POST', signal,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, workdir: dirBrowsePath, gitInit }),
   });
@@ -16085,6 +16706,7 @@ async function selectDir() {
   else if (d.actions?.length) toast('✓ ' + d.actions.join(', '));
 
   await loadProjectsList();
+  if (signal?.aborted || !projectRequestStillCurrent(context)) { toast(t('forms.project_created')); return; }
   if (d.id) switchProject(d.id);
   closeDirModal(true);
   if (_onProjectCreated) { const cb = _onProjectCreated; _onProjectCreated = null; cb(); }
@@ -16093,7 +16715,8 @@ async function selectDir() {
 // Issue #94 — the browsed folder is the parent; the server clones into
 // <parent>/<repo> and registers that as the project. The request stays open for
 // the whole clone (server-side timeout), so the button is locked meanwhile.
-async function cloneProjectFromUrl(url) {
+async function cloneProjectFromUrl(url, signal) {
+  const context = projectRequestContext();
   const branch = ($i('cloneBranchInput')?.value || '').trim();
   const name = $i('projNameInput').value.trim();
   const btn = $i('dirAddBtn');
@@ -16102,7 +16725,7 @@ async function cloneProjectFromUrl(url) {
   btn.textContent = t('dir.clone.busy');
   try {
     const r = await fetch('/api/projects/clone', {
-      method: 'POST',
+      method: 'POST', signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, branch, parentDir: dirBrowsePath, name }),
     });
@@ -16110,11 +16733,12 @@ async function cloneProjectFromUrl(url) {
     if (!r.ok || !d.ok) { toast(t('toast.clone_err').replace('{err}', d.error || r.statusText || '?'), true, 6000); return; }
     toast(t('toast.cloned').replace('{dir}', d.workdir));
     await loadProjectsList();
+    if (signal?.aborted || !projectRequestStillCurrent(context)) { toast(t('forms.project_created')); return; }
     if (d.id) switchProject(d.id);
     closeDirModal(true);
     if (_onProjectCreated) { const cb = _onProjectCreated; _onProjectCreated = null; cb(); }
   } catch (e) {
-    toast(t('toast.clone_err').replace('{err}', e.message), true, 6000);
+    toast(t('toast.clone_err').replace('{err}', e.name === 'AbortError' ? t('forms.uncertain') : e.message), true, 6000);
   } finally {
     btn.disabled = false;
     btn.textContent = prevLabel;
@@ -16122,6 +16746,9 @@ async function cloneProjectFromUrl(url) {
 }
 
 function closeDirModal(preservePending = false) {
+  ++_browseDirsSeq;
+  ++_projectDialogSeq;
+  _projectFormHasDraft = !preservePending;
   closeModalOverlay('dirModal');
   if (!preservePending) {
     _pendingProjectSend = false;
@@ -16134,6 +16761,8 @@ let curProjType = 'local';
 
 function setProjType(type) {
   curProjType = type;
+  $i('projTypeLocal').setAttribute('aria-pressed', String(type === 'local'));
+  $i('projTypeRemote').setAttribute('aria-pressed', String(type === 'remote'));
   $i('projTypeLocal').classList.toggle('active', type === 'local');
   $i('projTypeRemote').classList.toggle('active', type === 'remote');
   $i('projLocalSection').style.display = type === 'local' ? '' : 'none';
@@ -16150,13 +16779,17 @@ let _editingHostId = null;
 async function loadRemoteHosts() {
   try {
     const r = await fetch('/api/remote-hosts');
-    if (!r.ok) return;
+    if (!r.ok) throw new Error(t('forms.load_error'));
     remoteHosts = await r.json();
     renderRemoteHostsList();
     renderRemoteHostSelect();
     const cnt = $i('sshHostCount');
     if (cnt) cnt.textContent = remoteHosts.length;
-  } catch(e) { console.error('loadRemoteHosts:', e); }
+    return true;
+  } catch(error) {
+    renderSectionError($i('sshHostList'), loadRemoteHosts, error.message);
+    return false;
+  }
 }
 
 function renderRemoteHostsList() {
@@ -16207,9 +16840,11 @@ async function testRemoteHost(id) {
 async function deleteRemoteHost(id) {
   const h = remoteHosts.find(x => x.id === id);
   if (!confirm(t('ssh.del.confirm').replace('{name}', h?.label || id))) return;
-  await fetch(`/api/remote-hosts/${id}`, { method: 'DELETE' });
-  await loadRemoteHosts();
-  toast(t('ssh.deleted'));
+  try {
+    const response = await fetch(`/api/remote-hosts/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(t('ssh.err'));
+    await loadRemoteHosts(); toast(t('ssh.deleted'));
+  } catch (error) { toast(error.message || t('ssh.err'), true); }
 }
 
 async function testSelectedHost() {
@@ -16228,6 +16863,7 @@ async function testSelectedHost() {
 
 // ─── Add SSH Host Modal ───────────────────────────────────────────────────
 function openAddHostModal() {
+  if (_formActions.has('sshHostSaveBtn')) return;
   _editingHostId = null;
   $i('sshHostModalTitle').textContent = t('ssh.modal.add.title');
   $i('sshHostSaveBtn').textContent = t('ssh.modal.save');
@@ -16342,9 +16978,11 @@ async function translateThinking() {
 }
 
 // ─── CLI Import ──────────────────────────────────────────────────────────────
+let _cliListSeq = 0;
 let _cliSessions = []; // cache of loaded sessions from server
 
 function openCliImport() {
+  if (_formActions.has('cliImportBtn')) return;
   // Pre-fill workdir from current project
   const workdir = curWorkdir || '';
   $i('cliImportWorkdir').value = workdir;
@@ -16356,11 +16994,11 @@ function openCliImport() {
   $i('cliImportSelAll').checked = false;
   $i('cliImportSelAll').indeterminate = false;
   $i('cliImportSelCount').textContent = '';
-  openModalOverlay('cliImportModal');
+  openModalOverlay('cliImportModal', { initialFocus: '#cliImportSource', onEscape: closeCliImport });
   // Saved SSH hosts ARE the remote-connection memory (issue #23) — /api/remote-hosts,
   // not a second store. Auto-load only for the local source; a remote listing costs an
   // SSH round trip and should stay an explicit click.
-  loadCliImportHosts().then(() => { if (!cliImportHostId() && $i('cliImportWorkdir').value.trim()) loadCliSessions(); });
+  loadCliImportHosts().then(() => { if (!$i('cliImportModal').classList.contains('hidden') && !cliImportHostId() && $i('cliImportWorkdir').value.trim()) loadCliSessions(); });
 }
 
 // ─── CLI Import: remote (SSH) source ─────────────────────────────────────────
@@ -16398,9 +17036,10 @@ function cliImportErrText(data) {
   return (data && data.error) || t('status.error');
 }
 
-function closeCliImport() { closeModalOverlay('cliImportModal'); }
+function closeCliImport() { ++_cliListSeq; closeModalOverlay('cliImportModal'); }
 
 function cliImportWorkdirChanged() {
+  ++_cliListSeq;
   _cliSessions = [];
   $i('cliImportBtn').disabled = true;
   $i('cliImportSelCount').textContent = '';
@@ -16411,6 +17050,7 @@ function cliImportWorkdirChanged() {
 }
 
 async function loadCliSessions() {
+  const seq = ++_cliListSeq;
   const workdir = $i('cliImportWorkdir').value.trim();
   const hostId = cliImportHostId();
   // Remote with an empty project = auto-discover every project on that host.
@@ -16420,12 +17060,14 @@ async function loadCliSessions() {
   statusEl.style.display = '';
   statusEl.textContent = t('cli.import.loading');
   listEl.innerHTML = '';
+  _cliSessions = []; $i('cliImportBtn').disabled = true; $i('cliImportSelCount').textContent = '';
   const url = hostId
     ? `/api/sessions/cli-list-remote?hostId=${encodeURIComponent(hostId)}` + (workdir ? `&workdir=${encodeURIComponent(workdir)}` : '')
     : `/api/sessions/cli-list?workdir=${encodeURIComponent(workdir)}`;
   try {
     const res = await fetch(url);
     const data = await res.json();
+    if (seq !== _cliListSeq) return;
     if (!res.ok) { statusEl.textContent = '⚠ ' + cliImportErrText(data); return; }
     _cliSessions = data.sessions || [];
     statusEl.textContent = t('cli.import.found_n').replace('{n}', _cliSessions.length) + ' ' + (data.projectPath || '');
@@ -16437,7 +17079,7 @@ async function loadCliSessions() {
       return;
     }
     renderCliSessionList();
-  } catch (e) { statusEl.textContent = '⚠ ' + e.message; }
+  } catch (e) { if (seq !== _cliListSeq) return; statusEl.textContent = '⚠ ' + e.message; }
 }
 
 function renderCliSessionList() {
@@ -16485,6 +17127,10 @@ function cliImportToggleAll(checked) {
 }
 
 async function doCliImport() {
+  if (!listEl_getChecked().length) return;
+  return runFormAction('cliImportBtn', 'cliImportStatus', _doCliImportRequest, 120000);
+}
+async function _doCliImportRequest(signal) {
   const sessionIds = listEl_getChecked();
   if (sessionIds.length === 0) return;
   const workdir = $i('cliImportWorkdir').value.trim();
@@ -16504,7 +17150,7 @@ async function doCliImport() {
       for (const s of _cliSessions) if (s.project && sessionIds.includes(s.sessionId)) body.projects[s.sessionId] = s.project;
     }
     const res = await fetch(hostId ? '/api/sessions/cli-import-remote' : '/api/sessions/cli-import',
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) { statusEl.textContent = '⚠ ' + cliImportErrText(data); btn.disabled = false; btn.textContent = t('cli.import.do'); return; }
     const ok = data.imported?.length || 0;
@@ -16514,12 +17160,13 @@ async function doCliImport() {
     if (ok > 0) {
       // Refresh session list in sidebar
       await loadHist();
+      if (signal?.aborted) return;
       closeCliImport();
     } else {
       btn.textContent = t('cli.import.do');
     }
   } catch (e) {
-    statusEl.textContent = '⚠ ' + e.message;
+    statusEl.textContent = '⚠ ' + (e.name === 'AbortError' ? t('forms.uncertain') : e.message);
     btn.textContent = t('cli.import.do');
     btn.disabled = false;
   }
@@ -16527,6 +17174,8 @@ async function doCliImport() {
 
 function setAuthType(type) {
   const isKey = type === 'key';
+  $i('sshAuthBtnKey').setAttribute('aria-pressed', String(isKey));
+  $i('sshAuthBtnPwd').setAttribute('aria-pressed', String(!isKey));
   $i('sshAuthBtnKey').classList.toggle('active', isKey);
   $i('sshAuthBtnPwd').classList.toggle('active', !isKey);
   $i('sshHostKeyRow').classList.toggle('hidden', !isKey);
@@ -16534,6 +17183,7 @@ function setAuthType(type) {
 }
 
 async function editRemoteHost(id) {
+  if (_formActions.has('sshHostSaveBtn')) return;
   const h = remoteHosts.find(x => x.id === id);
   if (!h) return;
   _editingHostId = id;
@@ -16571,6 +17221,7 @@ async function testNewSshHost() {
     toast(msg, true);
     return;
   }
+  const stillCurrent = () => $i('sshHostHost').value.trim() === host && String($i('sshHostPort').value || 22) === String(port) && $i('sshAuthBtnPwd').classList.contains('active') === usePwd && (usePwd ? $i('sshHostPassword').value === password : $i('sshHostKey').value.trim() === sshKeyPath) && !$i('sshHostModal').classList.contains('hidden');
   const res = $i('sshHostTestResult');
   res.textContent = t('ssh.connecting'); res.className = 'rh-test-result';
   try {
@@ -16580,22 +17231,31 @@ async function testNewSshHost() {
       body: JSON.stringify({ host, port: Number(port), sshKeyPath, password }),
     });
     const d = await r.json();
+    if (!stillCurrent()) return;
     res.textContent = d.ok ? `✓ ${d.message} (${d.latencyMs}ms)` : `✗ ${d.error}`;
     res.className = 'rh-test-result ' + (d.ok ? 'ok' : 'err');
   } catch(e) {
+    if (!stillCurrent()) return;
     res.textContent = t('ssh.conn_err'); res.className = 'rh-test-result err';
   }
 }
 
 async function saveNewSshHost() {
+  return runFormAction('sshHostSaveBtn', 'sshHostFeedback', _saveNewSshHostRequest);
+}
+async function _saveNewSshHostRequest(signal) {
+  const sourceBefore = $i('cliImportSource')?.value || '';
+  const editingId = _editingHostId;
   const label = $i('sshHostLabel').value.trim();
   const host = $i('sshHostHost').value.trim();
-  const port = Number($i('sshHostPort').value) || 22;
+  const port = Number($i('sshHostPort').value || 22);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) { $i('sshHostPort').setAttribute('aria-invalid', 'true'); $i('sshHostPort').focus(); throw new Error(t('forms.port_error')); }
+  $i('sshHostPort').removeAttribute('aria-invalid');
   const usePwd = $i('sshAuthBtnPwd').classList.contains('active');
   const sshKeyPath = usePwd ? '' : $i('sshHostKey').value.trim();
   const password = usePwd ? $i('sshHostPassword').value : '';
-  if (!label) { toast(t('ssh.err.no_label'), true); return; }
-  if (!host) { toast(t('ssh.err.no_host'), true); return; }
+  if (!label) { $i('sshHostLabel').focus(); throw new Error(t('ssh.err.no_label')); }
+  if (!host) { $i('sshHostHost').focus(); throw new Error(t('ssh.err.no_host')); }
   const isEdit = !!_editingHostId;
   const url = isEdit ? `/api/remote-hosts/${_editingHostId}` : '/api/remote-hosts';
   const existingHost = isEdit ? remoteHosts.find(x => x.id === _editingHostId) : null;
@@ -16613,19 +17273,21 @@ async function saveNewSshHost() {
     payload.password = '';
   }
   const r = await fetch(url, {
-    method: isEdit ? 'PUT' : 'POST',
+    method: isEdit ? 'PUT' : 'POST', signal,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
   const d = await r.json();
-  if (!d.ok) { toast(d.error || t('ssh.err'), true); return; }
+  if (!r.ok || !d.ok) throw new Error(d.error || t('ssh.err'));
   await loadRemoteHosts();
-  closeSshHostModal();
+  if (signal?.aborted) return;
+  const unchanged = editingId === _editingHostId && $i('sshHostLabel').value.trim() === label && $i('sshHostHost').value.trim() === host && Number($i('sshHostPort').value || 22) === port && $i('sshAuthBtnPwd').classList.contains('active') === usePwd && (usePwd ? $i('sshHostPassword').value === password : $i('sshHostKey').value.trim() === sshKeyPath);
+  if (unchanged) closeSshHostModal();
   // The CLI-import picker reads the same list. If it is open behind this modal, refresh
   // it and select the host that was just added, so "add host → import" is one flow.
   if (!$i('cliImportModal').classList.contains('hidden')) {
     await loadCliImportHosts();
-    if (!isEdit && d.id) { $i('cliImportSource').value = d.id; cliImportSourceChanged(); }
+    if (!isEdit && d.id && $i('cliImportSource').value === sourceBefore) { $i('cliImportSource').value = d.id; cliImportSourceChanged(); }
   }
   toast((isEdit ? t('ssh.updated') : t('ssh.saved')).replace('{name}', label));
   // If project dialog is open and on remote tab, update the select
@@ -16801,7 +17463,8 @@ async function tunnelStop() {
   if (btn) btn.disabled = true;
   tunnelSetBtnState('stopping');
   try {
-    await fetch('/api/tunnel/stop', { method: 'POST' });
+    const response = await fetch('/api/tunnel/stop', { method: 'POST' });
+    if (!response.ok) throw new Error(t('tn.err.network'));
     toast(t('tn.stopped') || '⬛ Remote access stopped');
     // Set definitive state first, then refresh from server
     _tunnelRunning = false;
@@ -16929,25 +17592,27 @@ async function tgStartBot() {
 
 async function tgStopBot() {
   try {
-    await fetch('/api/telegram/stop', { method: 'POST' });
+    const response = await fetch('/api/telegram/stop', { method: 'POST' });
+    if (!response.ok) throw new Error(t('status.error'));
     toast(t('tg.stopped') || '⏹ Telegram bot stopped');
     $i('tgBotToken').value = '';
     tgLoadStatus();
-  } catch {}
+  } catch (error) { toast(error.message || t('status.error'), true); }
 }
 
 async function tgToggleAccept(checked) {
   try {
-    await fetch('/api/telegram/accept-connections', {
+    const response = await fetch('/api/telegram/accept-connections', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accept: checked }),
     });
+    if (!response.ok) throw new Error(t('status.error'));
     $i('tgPairBtn').disabled = !checked;
     $i('tgPairBtn').style.opacity = checked ? '1' : '.5';
     if (!checked) tgCancelPairing();
     toast(t(checked ? 'tg.lock.on' : 'tg.lock.off'));
-  } catch {}
+  } catch (error) { toast(error.message || t('status.error'), true); tgLoadStatus(); }
 }
 
 async function tgGenerateCode() {
@@ -17592,10 +18257,12 @@ function _showNewDlgEntries() {
 async function _loadExternalAgents() {
   try {
     const r = await fetch('/api/external-agents');
-    if (!r.ok) { _externalAgents = {}; return; }
+    if (!r.ok) return false;
     const data = await r.json();
-    _externalAgents = (data && typeof data === 'object' && !data.error) ? data : {};
-  } catch { _externalAgents = {}; }
+    if (!data || typeof data !== 'object' || Array.isArray(data) || data.error) return false;
+    _externalAgents = data;
+    return true;
+  } catch { return false; }
 }
 
 // Icons for the agents shipped by default (server.js DEFAULT_EXTERNAL_AGENTS).
@@ -17604,8 +18271,22 @@ async function _loadExternalAgents() {
 const _agentIcons = { claude: '🟣', codex: '🧠', grok: '🤖', agy: '🛸', opencode: '⚡',
                       hermes: '📨', 'cursor-agent': '▶', kimi: '🌙', aider: '🔧' };
 
-function openDelegateModal() {
-  _loadExternalAgents().then(() => {
+let _delegateLoadGeneration = 0;
+function openDelegateModal(keepTask = false) {
+  if (_teamPending.has('delegate')) { toast(t('team.saving')); return; }
+  _teamFeedback('delegate');
+  $i('dlgAgentCards').textContent = t('team.load');
+  if (!keepTask) $i('dlgTask').value = '';
+  const generation = ++_delegateLoadGeneration;
+  $i('delegateSaveBtn').disabled = true;
+  _dlgFillTuning(null);
+  openModalOverlay('delegateModal', { initialFocus: '#dlgTask', labelId: 'dlgModalTitle', onEscape: closeDelegateModal });
+  _loadExternalAgents().then(loaded => {
+    if (generation !== _delegateLoadGeneration) return;
+    if (!loaded) {
+      $i('dlgAgentCards').innerHTML = `<div class="team-feedback" role="status">${escH(t('team.load.failed'))}</div><button class="bg" onclick="openDelegateModal(true)">${escH(t('team.retry'))}</button>`;
+      return;
+    }
     renderAgents();
     const container = $i('dlgAgentCards');
     if (!container) return;
@@ -17622,12 +18303,16 @@ function openDelegateModal() {
       container.appendChild(empty);
     } else {
       for (const [id, cfg] of agents) {
-        const card = document.createElement('div');
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.setAttribute('aria-pressed', 'false');
         card.className = 'dlg-agent-card';
         card.dataset.agentId = id;
         card.onclick = () => {
-          container.querySelectorAll('.dlg-agent-card').forEach(c => c.classList.remove('selected'));
+          container.querySelectorAll('.dlg-agent-card').forEach(c => { c.classList.remove('selected'); c.setAttribute('aria-pressed', 'false'); });
           card.classList.add('selected');
+          card.setAttribute('aria-pressed', 'true');
+          $i('delegateSaveBtn').disabled = false;
           _dlgFillTuning(cfg);
         };
         const icon = document.createElement('span');
@@ -17641,9 +18326,7 @@ function openDelegateModal() {
         container.appendChild(card);
       }
     }
-    $i('dlgTask').value = '';
-    _dlgFillTuning(null); // nothing picked yet — no catalog to show
-    openModalOverlay('delegateModal', { onEscape: closeDelegateModal });
+
   });
 }
 
@@ -17683,26 +18366,36 @@ function _dlgFillTuning(cfg) {
 }
 
 function closeDelegateModal() {
+  ++_delegateLoadGeneration;
   closeModalOverlay('delegateModal');
 }
 
 async function submitDelegation() {
+  if (_teamPending.has('delegate')) return;
+  const origin = { project: curProjectId, session: currentSessionId, tab: activeTabId };
   const agentId = $i('dlgAgentCards')?.querySelector('.dlg-agent-card.selected')?.dataset?.agentId || '';
   const task = $i('dlgTask')?.value?.trim();
   const mode = document.querySelector('input[name="dlgMode"]:checked')?.value || 'handoff';
 
-  if (!agentId) { toast(t('dlg.toast.select_agent'), true); return; }
-  if (!task) { toast(t('dlg.toast.describe_task'), true); return; }
+  if (!agentId) { _teamFeedback('delegate', t('dlg.toast.select_agent')); $i('dlgAgentCards')?.querySelector('button')?.focus(); return; }
+  if (!task) { _teamFeedback('delegate', t('dlg.toast.describe_task'), 'dlgTask'); return; }
 
+  _teamBegin('delegate');
   try {
-    const r = await fetch('/api/delegate', {
+    const r = await _teamFetch('/api/delegate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agentId, mode, task, sessionId: currentSessionId, model: $i('dlgModel')?.value || undefined, effort: $i('dlgEffort')?.value || undefined }),
     });
     const d = await r.json();
-    if (!r.ok) { toast(d.error || t('dlg.toast.fail').replace('{err}', ''), true); return; }
+    if (!r.ok) { _teamFeedback('delegate', d.error || t('dlg.toast.fail').replace('{err}', '')); return; }
 
+    if (origin.project !== curProjectId || origin.session !== currentSessionId || origin.tab !== activeTabId) {
+      _teamFinish('delegate');
+      closeDelegateModal();
+      toast(t('dlg.toast.delegated').replace('{agent}', d.agent), false, 3000);
+      return;
+    }
     _activeDelegation = {
       id: d.delegationId,
       agentId,
@@ -17715,6 +18408,7 @@ async function submitDelegation() {
     };
     _dlgShownCount = 0;
 
+    _teamFinish('delegate');
     closeDelegateModal();
     _renderDelegatePanel();
     // Poll for dialog changes — 15s for sync (real-time collaboration), 30s for handoff (check completion)
@@ -17722,8 +18416,8 @@ async function submitDelegation() {
 
     toast(t('dlg.toast.delegated').replace('{agent}', d.agent), false, 3000);
   } catch (err) {
-    toast(t('dlg.toast.fail').replace('{err}', err.message), true);
-  }
+    _teamFeedback('delegate', t('team.network'));
+  } finally { _teamFinish('delegate'); }
 }
 
 function _renderDelegatePanel() {
@@ -18009,10 +18703,13 @@ function dismissWorkspaceOverlays() {
   for (const entry of [...modalStack].reverse()) {
     if (typeof entry.onEscape === 'function') entry.onEscape();
     else closeModalOverlay(entry.id, { restoreFocus: false });
+    // A declined discard prompt keeps BOTH the form and its workspace in place.
+    if (modalStack.some(open => open.id === entry.id) && !entry.overlay.classList.contains('hidden')) return false;
   }
   if ($i('mobSheet')?.classList.contains('open')) closeMobSheet();
   closeMobTabs();
   ['workspaceMenu', 'runSettings'].forEach(id => { const el = $i(id); if (el) el.open = false; });
+  return true;
 }
 function initWorkspaceNavigation() {
   const pendingIntents = new WeakMap();
@@ -18047,10 +18744,13 @@ function initWorkspaceNavigation() {
   document.addEventListener('click', finishIntent);
   document.addEventListener('keydown', finishIntent);
   window.addEventListener('popstate', e => {
-    // history.state is already the entry we arrived on; closing an overlay may
-    // re-render the tabs, and a sync then would overwrite it with the view we left.
+    // Protect the arrived-at entry before closing overlays can re-render tabs.
     _workspaceHistoryRestoring = !!e.state?.ccsWorkspace;
-    dismissWorkspaceOverlays(); restoreWorkspaceVisit(e.state?.ccsWorkspace);
+    if (dismissWorkspaceOverlays() === false) {
+      ++_workspaceHistorySeq; _workspaceHistoryRestoring = false; _pendingWorkspaceReturn = null;
+      rememberWorkspaceVisit(workspaceVisit()); return;
+    }
+    restoreWorkspaceVisit(e.state?.ccsWorkspace);
   });
   window.addEventListener('pagehide', () => { saveUIState(); rememberWorkspaceVisit(workspaceVisit()); });
   window.addEventListener('pageshow', e => { if (e.persisted) updateWorkspaceLocation(); });

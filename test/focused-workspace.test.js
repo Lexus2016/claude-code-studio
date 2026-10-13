@@ -164,6 +164,14 @@ test('mobile close-before-open is synchronous and settings launches from persist
   assert.match(source('initFocusedWorkspace'),/summary'\)\.focus\(\);\n    menu\.open = false;/);
 });
 
+test('declining dirty-form dismissal keeps the workspace coherent on repeated Back', () => {
+  const h=harness();const visit=h.context.workspaceVisit();let restores=0;
+  h.context.dismissWorkspaceOverlays=()=>false;h.context.restoreWorkspaceVisit=()=>{restores++};
+  for(let i=0;i<2;i++)h.windowEvents.popstate({state:{ccsWorkspace:{projectId:'q',tabId:'b'}}});
+  assert.equal(restores,0);assert.equal(h.history.state.ccsWorkspace.projectId,visit.projectId);assert.equal(h.history.state.ccsWorkspace.tabId,visit.tabId);
+  h.context.dismissWorkspaceOverlays=()=>true;h.windowEvents.popstate({state:{ccsWorkspace:{projectId:'q',tabId:'b'}}});assert.equal(restores,1);
+});
+
 test('a click whose handler re-renders the tabs synchronously still records history', async () => {
   // openTab() -> renderTabs() -> updateWorkspaceLocation() runs INSIDE the click.
   // Without the pending-intent guard the sync would rewrite the current entry to

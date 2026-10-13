@@ -452,6 +452,35 @@ body::after{ display:none; }
   .proj-bar{ padding:8px 12px; }
   .kb-stats{ gap:8px; }
 }
+
+/* Form rhythm: keep choices readable without hiding execution or scheduling options. */
+.modal-body > .grid2 { gap:16px; }
+.modal-body .lbl { font-size:12px; font-weight:600; margin-bottom:7px; }
+.modal-body .inp,.modal-body .sel { min-height:40px; }
+.modal-body textarea.inp { min-height:90px; resize:vertical; line-height:1.55; }
+.modal-body .sc-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:8px; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--s2); }
+.modal-body .sc-seg { min-width:0; align-content:start; flex-wrap:wrap; gap:5px; padding:8px; }
+.modal-body .sc-seg select { max-width:100%; }
+.modal-body .sc-seg .sc-lbl { width:100%; margin-bottom:3px; }
+.modal-body .sc-sep { display:none; }
+.modal-body .sc-btn { min-height:32px; }
+.modal-body :is(input,select,textarea,button):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.modal-body .inp-hint,.modal-body .sched-hint { line-height:1.6; margin-top:6px; }
+@media(max-width:600px){
+  .modal-body .grid2 { grid-template-columns:1fr; }
+  .modal-body .sc-row { grid-template-columns:1fr; }
+  .modal-body .sc-seg { width:100%; }
+  .modal-body :is(.inp,.sel,.sc-turns) { font-size:16px; }
+  .modal-body .sc-btn { min-height:40px; }
+}
+
+.chain-modal-task .task-fields { min-width:0; }
+.chain-modal-task .task-remove { min-width:36px; min-height:36px; }
+.chain-modal-task .task-fields :is(input,textarea) { padding:9px 11px; line-height:1.5; }
+@media(max-width:600px){ .chain-modal-task .task-fields :is(input,textarea){font-size:16px;} }
+
+.modal-ft button[aria-busy="true"] { opacity:.7; cursor:wait; }
+.modal-ft button[aria-busy="true"]::after { content:'…'; margin-inline-start:5px; }
 </style>
 </head>
 <body>
@@ -561,11 +590,11 @@ body::after{ display:none; }
       </div>
       <div class="grid2 hidden" id="dlgTuningRow">
         <div class="hidden" id="dlgModelWrap">
-          <label class="lbl" data-i18n="tb.model">Model</label>
+          <label class="lbl" data-i18n="tb.model" for="dlgModel">Model</label>
           <select id="dlgModel" class="sel"></select>
         </div>
         <div class="hidden" id="dlgEffortWrap">
-          <label class="lbl" data-i18n="tb.effort">Effort</label>
+          <label class="lbl" data-i18n="tb.effort" for="dlgEffort">Effort</label>
           <select id="dlgEffort" class="sel"></select>
         </div>
         <div class="dlg-hint" style="grid-column:1/-1;font-size:11px;color:var(--muted)" data-i18n="dlg.tuning.hint">Options come from this agent's own catalog (models / efforts in its config). “—” leaves the choice to the agent.</div>
@@ -586,7 +615,7 @@ body::after{ display:none; }
         </div>
       </div>
       <div>
-        <label class="lbl" data-i18n="dlg.task">Task</label>
+        <label class="lbl" data-i18n="dlg.task" for="dlgTask">Task</label>
         <textarea id="dlgTask" class="inp" rows="3" placeholder="What should the agent do..." data-i18n-ph="dlg.task.ph"></textarea>
       </div>
     </div>
@@ -1058,9 +1087,20 @@ function escArg(s){return escH(String(s==null?'':s).replace(/\\/g,'\\\\').replac
 function $i(id){return document.getElementById(id);}
 const MODAL_FOCUSABLE_SEL='button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const modalStack=[];
+function syncModalChoices(dialog) {
+  dialog.querySelectorAll('.sc-seg[data-group]').forEach(group => {
+    group.setAttribute('role', 'group');
+    const label = group.querySelector('.sc-lbl');
+    if (label) group.setAttribute('aria-label', label.textContent.trim());
+    group.querySelectorAll('.sc-btn').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.classList.contains('on')));
+    });
+  });
+}
 function openOverlay(id, opts={}){
   const ov=$i(id); if(!ov) return;
   const dialog=ov.querySelector('[role="dialog"], .modal'); if(!dialog) return;
+  syncModalChoices(dialog);
   ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false');
   const entry={id,ov,dialog,restore:document.activeElement instanceof HTMLElement?document.activeElement:null,initialFocus:opts.initialFocus||null,onEscape:opts.onEscape||null};
   const idx=modalStack.findIndex(x=>x.id===id);
@@ -1908,10 +1948,10 @@ function openAddChainTaskModal(chainId){
   modalMode='add_chain_task';editingId=chainId;
   $i('modalTitle').textContent=t('group.add_task');
   $i('modalBody').innerHTML=`
-    <div><label class="lbl">${t('modal.name')}</label>
+    <div><label class="lbl" for="fChainTaskTitle">${t('modal.name')}</label>
       <input id="fChainTaskTitle" class="inp" placeholder="${t('modal.name')}" maxlength="200">
     </div>
-    <div><label class="lbl">${t('modal.desc')}</label>
+    <div><label class="lbl" for="fChainTaskDesc">${t('modal.desc')}</label>
       <textarea id="fChainTaskDesc" class="inp" rows="3" placeholder="…" maxlength="2000"></textarea>
     </div>`;
   $i('modalFt').innerHTML=`
@@ -1932,10 +1972,10 @@ function buildChainForm(chain){
           <div class="chain-modal-task" data-idx="0">
             <span class="task-num">1.</span>
             <div class="task-fields">
-              <input class="chain-task-input" placeholder="${escH(t('modal.name'))}" maxlength="200">
-              <textarea class="chain-task-desc-input" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="2000"></textarea>
+              <input class="chain-task-input" aria-label="${escH(t('modal.name'))}" placeholder="${escH(t('modal.name'))}" maxlength="200">
+              <textarea class="chain-task-desc-input" aria-label="${escH(t('modal.desc'))}" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="2000"></textarea>
             </div>
-            <button class="task-remove" onclick="removeChainFormTask(this)">✕</button>
+            <button class="task-remove" aria-label="${escH(t('modal.delete'))}" onclick="removeChainFormTask(this)">✕</button>
           </div>
         </div>
         <button class="col-add" style="margin-top:4px" onclick="addChainFormTask()">${escH(t('group.add_task'))}</button>
@@ -1949,10 +1989,10 @@ function buildChainForm(chain){
             <div class="chain-modal-task" data-task-id="${tk.id}" data-idx="${i}">
               <span class="task-num">${i+1}.</span>
               <div class="task-fields">
-                <input class="chain-task-input" placeholder="${escH(t('modal.name'))}" maxlength="200" value="${escH(tk.title)}">
-                <textarea class="chain-task-desc-input" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="2000">${escH(tk.description||'')}</textarea>
+                <input class="chain-task-input" aria-label="${escH(t('modal.name'))}" placeholder="${escH(t('modal.name'))}" maxlength="200" value="${escH(tk.title)}">
+                <textarea class="chain-task-desc-input" aria-label="${escH(t('modal.desc'))}" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="2000">${escH(tk.description||'')}</textarea>
               </div>
-              <button class="task-remove" onclick="removeChainFormTask(this)">✕</button>
+              <button class="task-remove" aria-label="${escH(t('modal.delete'))}" onclick="removeChainFormTask(this)">✕</button>
             </div>`:`
             <div class="chain-modal-task chain-modal-task-locked" data-task-id="${tk.id}">
               <span class="task-num">${i+1}.</span>
@@ -1967,7 +2007,7 @@ function buildChainForm(chain){
       </div>`;
   }
   return `
-    <div><label class="lbl">${t('group.title')}</label>
+    <div><label class="lbl" for="fChainTitle">${t('group.title')}</label>
       <input id="fChainTitle" class="inp" placeholder="${escH(t('group.title'))}" value="${escH(chain.title||'')}" maxlength="200">
     </div>
     <div id="chainSessCfg" class="new-sess-cfg visible">
@@ -1999,12 +2039,12 @@ function buildChainForm(chain){
              copy from buildForm() referenced its tk variable and threw, so the modal never opened. -->
         <div class="sc-sep"></div>
         <div class="sc-seg">
-          <span class="sc-lbl">${t('tb.turns')}</span>
+          <label class="sc-lbl" for="fChainMaxTurns">${t('tb.turns')}</label>
           <input type="number" class="sc-turns" id="fChainMaxTurns" value="${chain.max_turns||kbSettings.max_turns||30}" min="1" max="100">
         </div>
         <div class="sc-sep"></div>
         <div class="sc-seg">
-          <span class="sc-lbl">${t('tb.effort')}</span>
+          <label class="sc-lbl" for="fChainEffort">${t('tb.effort')}</label>
           <select class="sc-turns" id="fChainEffort" style="width:auto">
             <option value=""${!chain.effort?' selected':''}>${escH(t('effort.auto'))}</option>
             <option value="low"${chain.effort==='low'?' selected':''}>${escH(t('effort.low'))}</option>
@@ -2028,10 +2068,10 @@ function addChainFormTask(){
   div.innerHTML=`
     <span class="task-num">${count+1}.</span>
     <div class="task-fields">
-      <input class="chain-task-input" placeholder="${escH(t('modal.name'))}" maxlength="200">
-      <textarea class="chain-task-desc-input" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="2000"></textarea>
+      <input class="chain-task-input" aria-label="${escH(t('modal.name'))}" placeholder="${escH(t('modal.name'))}" maxlength="200">
+      <textarea class="chain-task-desc-input" aria-label="${escH(t('modal.desc'))}" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="2000"></textarea>
     </div>
-    <button class="task-remove" onclick="removeChainFormTask(this)">✕</button>`;
+    <button class="task-remove" aria-label="${escH(t('modal.delete'))}" onclick="removeChainFormTask(this)">✕</button>`;
   container.appendChild(div);
   div.querySelector('input')?.focus();
 }
@@ -2048,6 +2088,7 @@ function removeChainFormTask(btn){
   });
 }
 async function saveChain(){
+  if (saveChain.pending) return;
   const title=($i('fChainTitle')?.value||'').trim();
   if(!title){toast(t('group.title'),true);$i('fChainTitle')?.focus();return;}
   const cfg={};
@@ -2060,6 +2101,9 @@ async function saveChain(){
   }
   const maxTurns=parseInt($i('fChainMaxTurns')?.value||30);
   const chainEffort=($i('fChainEffort')?.value||'').trim()||null;
+  const saveButton=$i('modalFt')?.querySelector('[onclick="saveChain()"]');
+  saveChain.pending=true;
+  if(saveButton){saveButton.disabled=true;saveButton.setAttribute('aria-busy','true');}
   try{
     if(modalMode==='add_chain'){
       const chainRes=await apiFetch('/api/task-chains',{
@@ -2137,12 +2181,19 @@ async function saveChain(){
     }
     closeModal();
     await refresh(true);
-  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
+  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);} finally {
+    saveChain.pending=false;
+    if(saveButton){saveButton.disabled=false;saveButton.removeAttribute('aria-busy');}
+  }
 }
 async function saveChainTask(){
+  if (saveChainTask.pending) return;
   const title=($i('fChainTaskTitle')?.value||'').trim();
   if(!title){toast(t('modal.name'),true);$i('fChainTaskTitle')?.focus();return;}
   const desc=($i('fChainTaskDesc')?.value||'').trim();
+  const saveButton=$i('modalFt')?.querySelector('[onclick="saveChainTask()"]');
+  saveChainTask.pending=true;
+  if(saveButton){saveButton.disabled=true;saveButton.setAttribute('aria-busy','true');}
   try{
     await apiFetch(`/api/task-chains/${editingId}/tasks`,{
       method:'POST',headers:{'Content-Type':'application/json'},
@@ -2151,7 +2202,10 @@ async function saveChainTask(){
     toast(t('group.task_added'));
     closeModal();
     await refresh(true);
-  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
+  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);} finally {
+    saveChainTask.pending=false;
+    if(saveButton){saveButton.disabled=false;saveButton.removeAttribute('aria-busy');}
+  }
 }
 function openEditChainTaskModal(chainId,taskId){
   const chain=chains.find(c=>c.id===chainId);
@@ -2162,10 +2216,10 @@ function openEditChainTaskModal(chainId,taskId){
   $i('modalTitle').textContent=t('group.edit_task');
   const dis=editable?'':' disabled';
   $i('modalBody').innerHTML=`
-    <div><label class="lbl">${t('modal.name')}</label>
+    <div><label class="lbl" for="fChainTaskTitle">${t('modal.name')}</label>
       <input id="fChainTaskTitle" class="inp" placeholder="${t('modal.name')}" maxlength="200" value="${escH(tk.title)}"${dis}>
     </div>
-    <div><label class="lbl">${t('modal.desc')}</label>
+    <div><label class="lbl" for="fChainTaskDesc">${t('modal.desc')}</label>
       <textarea id="fChainTaskDesc" class="inp" rows="3" placeholder="…" maxlength="2000"${dis}>${escH(tk.description||'')}</textarea>
     </div>`;
   $i('modalFt').innerHTML=editable?`
@@ -2189,9 +2243,13 @@ function openEditChainTaskModal(chainId,taskId){
   }
 }
 async function saveChainTaskEdit(){
+  if (saveChainTaskEdit.pending) return;
   const title=($i('fChainTaskTitle')?.value||'').trim();
   if(!title){toast(t('modal.name'),true);$i('fChainTaskTitle')?.focus();return;}
   const desc=($i('fChainTaskDesc')?.value||'').trim();
+  const saveButton=$i('modalFt')?.querySelector('[onclick="saveChainTaskEdit()"]');
+  saveChainTaskEdit.pending=true;
+  if(saveButton){saveButton.disabled=true;saveButton.setAttribute('aria-busy','true');}
   try{
     await apiFetch(`/api/tasks/${editingId}`,{
       method:'PUT',headers:{'Content-Type':'application/json'},
@@ -2201,7 +2259,10 @@ async function saveChainTaskEdit(){
     toast(t('group.task_saved'));
     closeModal();
     await refresh(true);
-  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
+  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);} finally {
+    saveChainTaskEdit.pending=false;
+    if(saveButton){saveButton.disabled=false;saveButton.removeAttribute('aria-busy');}
+  }
 }
 
 // ─── Modal: Add ────────────────────────────────────────────────────────────
@@ -2289,7 +2350,7 @@ function buildForm(tk={}){
   // Shown only when the board is on "All projects" and the task has no project yet:
   // creating from the global view used to be refused outright (issue #25).
   const projPickerHtml=(!curWorkdir&&!tk.workdir)?`
-    <div><label class="lbl">${t('modal.project')}</label>
+    <div><label class="lbl" for="fProject">${t('modal.project')}</label>
       <select id="fProject" class="sel" onchange="onKbProjectChange()">
         <option value="">${escH(t('modal.project.ph'))}</option>
         ${projects.map(pr=>`<option value="${escH(pr.workdir||pr.id)}">${escH(pr.name||pr.workdir)}</option>`).join('')}
@@ -2301,14 +2362,14 @@ function buildForm(tk={}){
   const schedFormHtml=`
     <div class="grid2">
       <div>
-        <label class="lbl">${t('modal.sched')}</label>
-        <input id="fScheduledAt" type="datetime-local" class="inp" onchange="onKbSchedChange()" value="${schedVal}" data-orig="${schedVal}" data-orig-ts="${tk.scheduled_at||''}">
-        <div class="sched-hint">${t('modal.sched.hint')}</div>
+        <label class="lbl" for="fScheduledAt">${t('modal.sched')}</label>
+        <input id="fScheduledAt" aria-describedby="fScheduledAtHint" type="datetime-local" class="inp" onchange="onKbSchedChange()" value="${schedVal}" data-orig="${schedVal}" data-orig-ts="${tk.scheduled_at||''}">
+        <div class="sched-hint" id="fScheduledAtHint">${t('modal.sched.hint')}</div>
       </div>
       <div>
-        <label class="lbl">${t('modal.recur')}</label>
+        <label class="lbl" for="fRecurUnit">${t('modal.recur')}</label>
         <div style="display:flex;gap:6px;align-items:center">
-          <input id="fRecurN" type="number" min="1" max="365" value="${rec.n}" class="inp" style="width:62px;${rec.unit?'':'display:none'}">
+          <input aria-label="${t('modal.recur')}" id="fRecurN" type="number" min="1" max="365" value="${rec.n}" class="inp" style="width:62px;${rec.unit?'':'display:none'}">
           <select id="fRecurUnit" class="sel" onchange="onKbRecurChange()" style="flex:1">
             <option value=""${!rec.unit?' selected':''}>${t('modal.recur.once')}</option>
             <option value="hour"${rec.unit==='hour'?' selected':''}>${t('recur.unit.hour')}</option>
@@ -2321,19 +2382,19 @@ function buildForm(tk={}){
       </div>
     </div>
     <div id="kbEndDateWrap" style="display:${rec.unit?'block':'none'}">
-      <label class="lbl">${t('modal.recur.end')}</label>
+      <label class="lbl" for="fEndDate">${t('modal.recur.end')}</label>
       <input id="fEndDate" type="date" class="inp" value="${endVal}">
     </div>`;
   return `
     ${schedInfoHtml}
     ${projPickerHtml}
-    <div><label class="lbl">${t('modal.name')}</label>
+    <div><label class="lbl" for="fTitle">${t('modal.name')}</label>
       <input id="fTitle" class="inp" placeholder="${t('modal.name')}" value="${escH(tk.title||'')}" maxlength="200">
     </div>
     ${schedFormHtml}
     <div class="grid2">
-      <div><label class="lbl">${t('modal.status')}</label><select id="fStatus" class="sel">${statusOpts}</select></div>
-      <div><label class="lbl">${t('modal.session')}</label><select id="fSession" class="sel" onchange="onFSessionChange()">${sessOpts}</select></div>
+      <div><label class="lbl" for="fStatus">${t('modal.status')}</label><select id="fStatus" class="sel">${statusOpts}</select></div>
+      <div><label class="lbl" for="fSession">${t('modal.session')}</label><select id="fSession" class="sel" onchange="onFSessionChange()">${sessOpts}</select></div>
     </div>
     <div id="newSessCfg" class="new-sess-cfg${visClass}">
       <div class="new-sess-hdr">${isNew?t('modal.new_sess_cfg'):t('modal.task_cfg')}</div>
@@ -2363,7 +2424,7 @@ function buildForm(tk={}){
         ${engineSegHtml(tk.run_engine)}
         <div class="sc-sep"></div>
         <div class="sc-seg">
-          <span class="sc-lbl">${t('tb.bot')}</span>
+          <label class="sc-lbl" for="fBot">${t('tb.bot')}</label>
           <select class="sc-turns" id="fBot" style="width:auto" title="${t('tb.bot.tip')}">
             <option value="">${t('tb.bot.none')}</option>
             ${kbBots.map(b=>`<option value="${escH(b.id)}"${tk.bot_id===b.id?' selected':''}>${escH((b.avatar||'🤖')+' '+b.label)}</option>`).join('')}
@@ -2372,12 +2433,12 @@ function buildForm(tk={}){
         </div>
         <div class="sc-sep"></div>
         <div class="sc-seg">
-          <span class="sc-lbl">${t('tb.turns')}</span>
+          <label class="sc-lbl" for="fMaxTurns">${t('tb.turns')}</label>
           <input type="number" class="sc-turns" id="fMaxTurns" value="${tk.max_turns||kbSettings.max_turns||30}" min="1" max="100" oninput="kbSettings.max_turns=+this.value||30;try{localStorage.setItem('kanban_sess_cfg',JSON.stringify(kbSettings));}catch{}">
         </div>
         <div class="sc-sep"></div>
         <div class="sc-seg">
-          <span class="sc-lbl">${t('tb.effort')}</span>
+          <label class="sc-lbl" for="fEffort">${t('tb.effort')}</label>
           <select class="sc-turns" id="fEffort" style="width:auto">
             <option value=""${!tk.effort?' selected':''}>${escH(t('effort.auto'))}</option>
             <option value="low"${tk.effort==='low'?' selected':''}>${escH(t('effort.low'))}</option>
@@ -2389,14 +2450,14 @@ function buildForm(tk={}){
         </div>
       </div>
     </div>
-    <div><label class="lbl">${t('modal.desc')}</label>
+    <div><label class="lbl" for="fDesc">${t('modal.desc')}</label>
       <textarea id="fDesc" class="inp" rows="3" placeholder="…" maxlength="2000">${escH(tk.description||'')}</textarea>
     </div>
-    <div><label class="lbl">${t('modal.notes')}</label>
+    <div><label class="lbl" for="fNotes">${t('modal.notes')}</label>
       <textarea id="fNotes" class="inp" rows="2" placeholder="…" maxlength="2000">${escH(tk.notes||'')}</textarea>
     </div>
     <div>
-      <label class="lbl">${t('modal.attach')}</label>
+      <label class="lbl" for="fAttachments">${t('modal.attach')}</label>
       <input type="file" id="fAttachments" multiple accept="image/*,.txt,.md,.json,.csv,.log,.py,.js,.ts,.html,.css" style="display:none" onchange="onFileSelect(event)">
       <div class="att-dropzone" onclick="$i('fAttachments').click()" ondragover="event.preventDefault()" ondrop="onFileDrop(event)">${t('modal.attach_hint')}</div>
       <div class="att-previews" id="attPreviews"></div>
@@ -2467,6 +2528,7 @@ function scOpt(btn){
   if(g==='agent')kbSettings.agent_mode=btn.dataset.v;
   else if(g)kbSettings[g]=btn.dataset.v;
   try{localStorage.setItem('kanban_sess_cfg',JSON.stringify(kbSettings));}catch{}
+  syncModalChoices(grp.parentElement);
 }
 function onFSessionChange(){
   const hasSess=!!$i('fSession')?.value;
@@ -2533,6 +2595,7 @@ function buildChatPanel(tk,msgs){
 
 // ─── Save task ────────────────────────────────────────────────────────────
 async function saveTask(){
+  if (saveTask.pending) return;
   const title=($i('fTitle')?.value||'').trim();
   if(!title){toast(t('modal.name'),true);$i('fTitle')?.focus();return;}
   let session_id=$i('fSession')?.value||null;
@@ -2574,6 +2637,9 @@ async function saveTask(){
     bot_id:cfg.bot_id||null,
     attachments:pendingAttachments.length?JSON.stringify(pendingAttachments):null,
   };
+  const saveButton=$i('modalFt')?.querySelector('[onclick="saveTask()"]');
+  saveTask.pending=true;
+  if(saveButton){saveButton.disabled=true;saveButton.setAttribute('aria-busy','true');}
   try{
     if(modalMode==='add'){
       if(!session_id){
@@ -2597,7 +2663,10 @@ async function saveTask(){
     }
     closeModal();
     await refresh(true);
-  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
+  }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);} finally {
+    saveTask.pending=false;
+    if(saveButton){saveButton.disabled=false;saveButton.removeAttribute('aria-busy');}
+  }
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────
