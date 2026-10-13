@@ -1,5 +1,62 @@
 # Changelog
 
+## 8.0.1
+
+### A calmer workspace: fewer controls on screen, everything one click away, and Back that brings you back
+
+The chat screen used to show every section and every run setting at once — eleven
+groups in the left rail, seventeen controls in a toolbar that ran off the right edge of
+a laptop screen. This release keeps every feature and puts most of them one click away.
+
+- **Tools & team.** The left rail now shows Activity, Projects and Chats. Bots, external
+  agents, MCP servers, skills, commands, SSH hosts, remote access and Telegram are in a
+  collapsible **Tools & team** group with a badge counting the active MCP servers and
+  skills. Their controls are unchanged.
+- **Run settings.** Mode, agent mode, model, engine, effort, turns and the default
+  buttons are in one **Run settings** panel. When it is closed, a one-line summary shows
+  what the next message will run with, e.g. `Auto · Single · sonnet · API`. It closes on
+  Escape or a click outside it. Each chat still keeps its own settings.
+- **More.** CLI import, Configuration, language, GitHub and logout moved from the header
+  into a **More** menu. **Files** is a button next to Run settings, and the Files panel
+  starts closed, then remembers your choice.
+- **Back and Forward work.** Picking a chat or a project adds a browser-history entry,
+  so Back and Forward (browser, mouse, or the new **Back** button under the header)
+  return you to that chat or project with its sidebar filter and reading position. Back
+  closes an open dialog first. Background refreshes never add entries. If a chat appears
+  without a click, for example when you send from a project's welcome screen, the entry
+  follows it.
+- **Go to…** — ⌘K on macOS, Ctrl+K elsewhere — opens a search over pages, tools and
+  projects. On a Mac, Ctrl+K stays the text field's delete-to-end-of-line.
+- **Kanban, Schedule and Dashboard** get a Back button. Coming back to one of these
+  pages restores its project, search and scroll position. A fresh visit still opens on
+  the project you last chose in the chat.
+- **Forms across the app** have labelled fields, keyboard support and inline errors. A
+  failed save keeps what you typed, a double click cannot submit twice, and a slow reply
+  that arrives after you moved on is ignored. Configuration and MCP forms warn before
+  you close them with unsaved edits. A save the server refuses shows its reason, e.g.
+  "Invalid JSON". A save that timed out says its outcome is unknown instead of guessing.
+  The folder picker has separate **Select** and **Open folder** actions instead of a
+  timed double click. The login and first-run setup page can retry when the server
+  does not answer.
+- **Configuration always opens.** It used to wait for three requests before showing the
+  dialog, so a single hung or malformed reply meant no dialog and no message. It now
+  opens at once and reports a failed load inside it.
+- **Mobile:** the settings sheet gained Dashboard, CLI import and an Effort selector.
+
+Fixed along the way:
+
+- **The configured engine applies before the first message (#127).** A first message
+  could go out on the API engine while Subscription was the configured default (and be
+  billed to the API). The same start-up error could also skip the new-chat defaults and
+  the bot list, and opening the mobile settings sheet cleared both engine chips.
+- **The New project dialog keeps its Add button on screen at 768–900px window
+  heights.** The folder list now shrinks instead.
+- **A file with Windows (CRLF) line endings no longer counts as edited** just because
+  its Configuration tab was opened.
+
+The design notes behind the new layout, and the live QA it went through, are in
+`docs/FOCUSED-WORKSPACE.md` and `docs/SECTION-CONTROLS-REVIEW.md`.
+
 ## 7.18.4
 
 ### A security and reliability pass: sign-out means sign-out, Stop stops everything, boards stop showing stale data

@@ -10,7 +10,7 @@
 
 > Works on **Windows, macOS, and Linux** — zero platform-specific setup.
 
-> **v7.18.4** — **Signing out really signs out, and Stop stops everything.** An open chat or terminal connection used to stay logged in after you signed out or changed the password; it is now closed, and desktop mode and first-run setup accept only a direct local request (no DNS-rebinding or proxy tricks). Stop now ends the whole `claude` process tree, so a stray Bash tool can no longer leave a turn hanging. Kanban and Schedule no longer show a stale board after you switch project, and **Run now** really runs now. Releases are gated on the test suite. Also recent: in **v7.18.3** the Subscription engine works on a fresh install, in **v7.18.2** expired chats remove their worktrees, and since **v7.18.0** the macOS app is signed, notarized and updates itself (Apple Silicon only).
+> **v8.0.1** — **A calmer workspace, and a Back button that brings you back.** The left rail now shows Activity, Projects and Chats; bots, agents, MCP, skills, SSH and Telegram are under **Tools & team**, and mode, model, engine, effort and turns sit in one **Run settings** panel with a one-line summary. **Back** and **Forward** return you to the chat or project you came from, **Go to…** (⌘K / Ctrl+K) jumps anywhere, and forms across the app keep what you typed when a save fails. Also recent: in **v7.18.4** signing out closes open connections and Stop ends the whole `claude` process tree on macOS and Linux, and since **v7.18.0** the macOS app is signed, notarized and updates itself (Apple Silicon only).
 >
 > **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
 > `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)
