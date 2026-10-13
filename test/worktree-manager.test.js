@@ -176,6 +176,70 @@ console.log('\nhasUnmergedWork():');
     WM.hasUnmergedWork({ worktreeDir, projectDir, defaultBranch, branch }), true);
 }
 
+// Rows exist whose workdir IS the project root (git_root === workdir) with a
+// ccs/session-* branch that was never created — found on a real install. Such a chat
+// owns no tree, so the root's state is the project's business, and the branch is the
+// only thing it can own. The old verdict ran `rev-list main..<absent branch>`, which
+// throws, and read that as "unknown → keep": the chat could never be deleted.
+console.log('\nhasUnmergedWork() — a unit whose workdir is the project root itself:');
+{
+  const projectDir = tmpDir('project-rootrow');
+  initTestIdentity(projectDir);
+  const defaultBranch = WM.ensureGitInitialized(projectDir);
+  const branch = WM.branchNameFor('session', 'rootrow');
+  const args = { worktreeDir: projectDir, projectDir, defaultBranch, branch };
+
+  check('clean root and no branch → nothing to lose', WM.hasUnmergedWork(args), false);
+  fs.writeFileSync(path.join(projectDir, 'wip.txt'), 'x');
+  check("the root's uncommitted files belong to the project, not to this chat", WM.hasUnmergedWork(args), false);
+
+  git(['checkout', '-q', '-b', branch], projectDir);
+  git(['add', 'wip.txt'], projectDir);
+  git(['commit', '-q', '-m', 'on the session branch'], projectDir);
+  git(['checkout', '-q', defaultBranch], projectDir);
+  check("…but commits on the chat's OWN branch still count", WM.hasUnmergedWork(args), true);
+}
+
+// removeWorktree(force:true) falls back to an rm -rf when `git worktree remove` fails —
+// and git refuses to remove a MAIN worktree. Handed a row whose workdir is the project
+// root, that fallback deleted the project. It must refuse anything that is, or contains,
+// the project, and any directory whose `.git` is a directory (a main worktree; a linked
+// tree's `.git` is a file).
+console.log('\nremoveWorktree() — never removes a project or a main worktree:');
+{
+  const projectDir = tmpDir('project-norm');
+  initTestIdentity(projectDir);
+  WM.ensureGitInitialized(projectDir);
+  fs.writeFileSync(path.join(projectDir, 'keep.txt'), 'project file');
+  const branch = WM.branchNameFor('session', 'norm');
+  git(['branch', branch], projectDir);
+
+  WM.removeWorktree({ projectDir, worktreeDir: projectDir, branch, force: true });
+  check('force-removing the project root as a "worktree" leaves the project on disk',
+    [fs.existsSync(path.join(projectDir, 'keep.txt')), fs.existsSync(path.join(projectDir, '.git'))], [true, true]);
+  check("…while the chat's own branch is still deleted", git(['branch', '--list', branch], projectDir), '');
+
+  let threw = false;
+  try { WM.removeWorktree({ projectDir, worktreeDir: projectDir, branch, force: false }); } catch { threw = true; }
+  check('without force it is an error, so a caller cannot count it as removed', threw, true);
+
+  // A worktreeDir that CONTAINS the project. Built inside a temp dir of our own: if the
+  // guard ever fails, only this test's scratch directory is lost.
+  const outer = tmpDir('outer');
+  const inner = path.join(outer, 'proj');
+  fs.mkdirSync(inner);
+  initTestIdentity(inner);
+  WM.ensureGitInitialized(inner);
+  WM.removeWorktree({ projectDir: inner, worktreeDir: outer, branch: null, force: true });
+  check('a directory that contains the project is refused', fs.existsSync(path.join(inner, '.git')), true);
+
+  const otherRepo = tmpDir('other-repo');
+  initTestIdentity(otherRepo);
+  WM.ensureGitInitialized(otherRepo);
+  WM.removeWorktree({ projectDir, worktreeDir: otherRepo, branch: null, force: true });
+  check("another repository's main worktree is refused", fs.existsSync(path.join(otherRepo, '.git')), true);
+}
+
 console.log('\nmergeBranch():');
 {
   const projectDir = tmpDir('project-merge');

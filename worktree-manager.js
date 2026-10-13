@@ -176,8 +176,36 @@ function ensureWorktree({ projectDir, worktreeDir, branch }) {
   return { created: true, path: worktreeDir, branch };
 }
 
-/** Never a bare rm -rf — always through git so `.git/worktrees/<name>` never goes stale. */
+// realpathSync.native, not _real(): the JS realpath keeps the caller's letter case, so on
+// macOS/Windows `/Users/x` and `/users/x` — one directory — would compare unequal.
+function _realNative(p) {
+  try { return fs.realpathSync.native(p); } catch { return path.resolve(p); }
+}
+
+// True when worktreeDir is not a tree a unit can own: the project itself, a directory
+// that contains it, or any repository's MAIN worktree (its `.git` is a directory; a
+// linked tree's is a file). Session rows exist whose workdir IS the project root
+// (found on a real install; origin not traced).
+function _isProtectedDir(worktreeDir, projectDir) {
+  const wt = _realNative(worktreeDir);
+  const proj = _realNative(projectDir);
+  if (wt === proj || proj.startsWith(wt.endsWith(path.sep) ? wt : wt + path.sep)) return true;
+  try { return fs.lstatSync(path.join(worktreeDir, '.git')).isDirectory(); } catch { return false; }
+}
+
+/** Never a bare rm -rf — always through git so `.git/worktrees/<name>` never goes stale.
+ *  A protected directory (see _isProtectedDir) is never removed: git refuses a main
+ *  worktree, and the --force fallback below is an rm -rf that would take the project
+ *  with it. With force only the unit's branch goes; without, it is an error so a caller
+ *  cannot count the tree as removed. */
 function removeWorktree({ projectDir, worktreeDir, branch, force = false }) {
+  if (_isProtectedDir(worktreeDir, projectDir)) {
+    if (!force) throw new Error(`refusing to remove a project or main worktree: ${worktreeDir}`);
+    if (branch) {
+      try { _git(['branch', '-D', branch], projectDir); } catch { /* checked out, or never existed */ }
+    }
+    return;
+  }
   const args = ['worktree', 'remove', worktreeDir];
   if (force) args.push('--force');
   try {
@@ -208,7 +236,11 @@ function _branchExists(projectDir, branch) {
  */
 function hasUnmergedWork({ worktreeDir, projectDir, defaultBranch, branch }) {
   try {
-    if (fs.existsSync(worktreeDir)) {
+    if (_realNative(worktreeDir) === _realNative(projectDir)) {
+      // The unit owns no tree: the root's uncommitted files belong to the project and
+      // to every chat working in it. Only the unit's own branch can hold its work.
+      if (!_branchExists(projectDir, branch)) return false;
+    } else if (fs.existsSync(worktreeDir)) {
       const dirty = _git(['status', '--porcelain'], worktreeDir).length > 0;
       if (dirty) return true;
     } else if (!_branchExists(projectDir, branch)) {
