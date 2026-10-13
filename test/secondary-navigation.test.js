@@ -84,7 +84,8 @@ function navigationHarness(name, { saved = null, historySaved = null, search = '
 
 for (const name of ['kanban', 'schedule', 'dashboard']) {
   test(`${name}: restores tab-local scroll and project search only after layout`, () => {
-    const h = navigationHarness(name, {saved:{project:'/saved', search:'studio', scroll:{x:-220,y:480,columns:[{status:'todo',y:160}]}}});
+    // A same-tab snapshot of the project now on screen (the harness curWorkdir).
+    const h = navigationHarness(name, {saved:{project:'/current', search:'studio', scroll:{x:-220,y:480,columns:[{status:'todo',y:160}]}}});
     h.navigation.restore();
     assert.equal(h.input.value,'studio');
     assert.equal(h.host.scrollTop,0);
@@ -99,6 +100,20 @@ for (const name of ['kanban', 'schedule', 'dashboard']) {
     h.host.scrollTop=80;
     h.navigation.restore();h.flush();
     assert.equal(h.host.scrollTop,80,'restoration must not fight later user scrolling');
+  });
+  test(`${name}: a fresh visit never borrows the view of a different project`, () => {
+    // Chat moved to another project since this tab last saw the page: the old
+    // board's scroll and search must not be painted over the current one.
+    const h = navigationHarness(name, {saved:{project:'/saved', search:'studio', scroll:{x:0,y:480,columns:[]}}});
+    h.navigation.restore(); h.flush();
+    assert.equal(h.input.value,'');
+    assert.equal(name === 'schedule' ? h.context.window.scrollY : h.host.scrollTop, 0);
+  });
+  test(`${name}: Back/Forward to this entry restores its own view, whatever project is current`, () => {
+    const h = navigationHarness(name, {historySaved:{project:'/entry', search:'q', scroll:{x:0,y:300,columns:[]}}});
+    h.navigation.restore(); h.flush();
+    assert.equal(h.input.value,'q');
+    assert.equal(name === 'schedule' ? h.context.window.scrollY : h.host.scrollTop, 300);
   });
   test(`${name}: remembers departure state without replacing unrelated history`, () => {
     const h = navigationHarness(name);
@@ -121,8 +136,13 @@ for (const name of ['kanban', 'schedule', 'dashboard']) {
       assert.equal(h.navigation.resolveProject('/current',projects),expected,search);
     }
     assert.equal(navigationHarness(name,{saved:{project:'/gone'}}).navigation.resolveProject('/current',projects),'/current');
-    assert.equal(navigationHarness(name,{saved:{project:null}}).navigation.resolveProject('/current',projects),null);
-    assert.equal(navigationHarness(name,{saved:{project:'/saved'}}).navigation.resolveProject('/current',projects),'/saved');
+    // Only the history entry itself carries a project; the per-tab copy is the
+    // last visit, and a fresh visit follows the shared current project instead.
+    assert.equal(navigationHarness(name,{saved:{project:null}}).navigation.resolveProject('/current',projects),'/current');
+    assert.equal(navigationHarness(name,{saved:{project:'/saved'}}).navigation.resolveProject('/current',projects),'/current');
+    assert.equal(navigationHarness(name,{historySaved:{project:null}}).navigation.resolveProject('/current',projects),null);
+    assert.equal(navigationHarness(name,{historySaved:{project:'/saved'}}).navigation.resolveProject('/current',projects),'/saved');
+    assert.equal(navigationHarness(name,{historySaved:{project:'/gone'}}).navigation.resolveProject('/current',projects),'/current');
   });
   test(`${name}: blocked storage does not break navigation`, () => {
     const h=navigationHarness(name,{blocked:true});

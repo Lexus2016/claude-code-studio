@@ -19,7 +19,11 @@ Explicit chat/project selections create browser-history entries. Background rend
 
 Back dismisses open overlays and restores the previous workspace entry. Overlays do not create artificial history entries or trigger a second Back operation. Opening and closing a disclosure does not change browser history. Close/Escape returns focus to its persistent trigger.
 
-Kanban, Schedule and Dashboard preserve per-tab, per-history-entry project/search and scroll state. Kanban also preserves board and column scroll positions during refresh. Explicit URL filters and session deep links take precedence over remembered state. Page departure saves the chat draft, attachments and reply selection through the existing persistence path.
+The current entry follows the screen when it changes without a click — a message sent from a project's welcome screen opens a chat, a new chat becomes a session — so Forward returns to that chat rather than to the empty project. That sync is suspended before boot has read the entry, during a Back/Forward restore, and while a click is still being recorded. An entry pushed by a click opens at the bottom; only the entry being left keeps its reading position. A restore that starts during boot (reload, or Back across a page boundary) waits for the whole document, because it calls helpers from the last script block.
+
+Kanban, Schedule and Dashboard restore project, search and scroll for **the same history entry** (Back, Forward, reload). A fresh visit follows the project chosen last in the chat or on these pages (`cc_ui_state`), as before; the tab's previous snapshot only supplies scroll and search when it belongs to that same project. Kanban also preserves board and column scroll positions during refresh. Explicit URL filters and session deep links take precedence over remembered state. Page departure saves the chat draft, attachments and reply selection through the existing persistence path.
+
+Run settings closes on Escape and on a click outside it. Go to… opens with ⌘K on macOS and Ctrl+K elsewhere; on a Mac, Ctrl+K stays the text field's kill-to-end-of-line.
 
 ## Honest simplification measures
 
@@ -39,6 +43,8 @@ The conditional reset-defaults control is excluded from the run-setting baseline
 
 DOM-only checks also inspected the actual HTML for unique IDs, retained feature sections, native disclosure behavior and focus handoff. These do not prove visual layout, real browser history event timing, touch behavior or live Claude streaming.
 
-In the implementation environment, real Chromium preview was blocked by socket creation restrictions; the supported cloud browser could not reach the local preview. No screenshots or visual acceptance are claimed. Live tmux/SSH checks self-skip when those capabilities are unavailable. Before merging, perform desktop/mobile visual QA and live chat/terminal smoke tests on a normal supported environment.
+The first implementation environment could not run a real browser. The review before merging did, in Chromium against a live server (1440×900 and 390×844): a real API-engine chat streamed and finished; Back/Forward across chats and projects; Back across a page boundary and a reload; Kanban following the chat's project and a Kanban history entry keeping its own; Run settings and the Go to… paths; the mobile sheet with no horizontal overflow. That review found and fixed four defects the VM tests could not see: Kanban/Schedule reopening on a project the chat had left, Forward landing on an empty project, a `ReferenceError: hideTerminalView` when a restore ran during boot, and Run settings staying open over the transcript. Visual and touch QA on real phones, Safari and Firefox, and the terminal and Subscription-engine paths were not part of it.
+
+Known cost, not addressed here: on desktop the chat now sits under four horizontal bands (header, run bar, Back/Go to row, tabs), about 44px more than before. The Back/Go to row is deliberately outside the collapsible header zone, so it stays available when the header is collapsed and on phones.
 
 No release, package publication or production deployment is part of this change.

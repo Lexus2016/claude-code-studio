@@ -13565,10 +13565,12 @@ async function loadSess(id) {
     // Scroll to bottom after all layout and focus changes are complete
     setTimeout(() => {
       if (id !== activeTabId) return; // a newer navigation owns the viewport
-      const returning = typeof _pendingWorkspaceReturn !== 'undefined' && _pendingWorkspaceReturn?.tabId === id ? _pendingWorkspaceReturn : null;
+      const pending = typeof _pendingWorkspaceReturn !== 'undefined' && _pendingWorkspaceReturn?.tabId === id ? _pendingWorkspaceReturn : null;
+      // An entry with no recorded reading position (null) opens at the bottom, as before.
+      const returning = pending && Number.isFinite(pending.scrollTop) ? pending : null;
       userScrolled = !!returning && returning.scrollTop < msgsEl.scrollHeight - msgsEl.clientHeight - 80;
       msgsEl.scrollTo({ top: returning ? returning.scrollTop : msgsEl.scrollHeight, behavior: 'instant' });
-      if (returning) _pendingWorkspaceReturn = null;
+      if (pending) _pendingWorkspaceReturn = null;
     }, 100);
   } catch (e) { console.error('loadSess:', e); toast(t('sess.load.err'), true); }
 }
@@ -17921,6 +17923,14 @@ async function _restoreDelegationState() {
 let _workspaceHistoryRestoring = false;
 let _workspaceHistorySeq = 0;
 let _pendingWorkspaceReturn = null;
+// The CURRENT entry follows what is on screen even when no click moved it — a
+// send from a project's welcome screen opens a tab, a new chat becomes a session.
+// Without that, Forward landed on the empty project instead of the chat the user
+// left. Three windows must not rewrite it: before boot has read the entry it
+// arrived on, while a Back/Forward restore runs, and while a click is pending
+// (finishIntent compares history.state with the new view and would see no change).
+let _workspaceNavReady = false;
+let _workspaceIntentPending = 0;
 function workspaceVisit() {
   const tab = openTabs.find(x => x.id === activeTabId);
   return {
@@ -17937,12 +17947,21 @@ function sameWorkspaceVisit(a, b) {
 function rememberWorkspaceVisit(visit) {
   try { history.replaceState({ ...history.state, ccsWorkspace: visit }, '', location.href); } catch {}
 }
+function syncWorkspaceEntry() {
+  if (!_workspaceNavReady || _workspaceHistoryRestoring || _workspaceIntentPending) return;
+  const cur = history.state?.ccsWorkspace, now = workspaceVisit();
+  // Write only on a real change: Safari throws after ~100 replaceState calls in 30s.
+  if (cur && sameWorkspaceVisit(cur, now) && cur.isNew === now.isNew && cur.kind === now.kind) return;
+  // The transcript on screen may still be the previous one; let a return open at the bottom.
+  rememberWorkspaceVisit({ ...now, scrollTop: null, shownFrom: null });
+}
 function updateWorkspaceLocation() {
   const label = $i('workspaceLocation');
   const project = projects.find(p => p.id === curProjectId);
   const tab = openTabs.find(x => x.id === activeTabId);
   if (label) label.textContent = [project?.name || t('focus.workspace'), tab?.title || t('nav.chat')].join(' / ');
   const back = $i('workspaceBack'); if (back) back.disabled = history.length <= 1;
+  syncWorkspaceEntry();
 }
 async function restoreWorkspaceVisit(visit) {
   if (!visit || typeof visit !== 'object') return;
@@ -17952,6 +17971,10 @@ async function restoreWorkspaceVisit(visit) {
   saveUIState(); // Persist the outgoing draft before any project/tab change.
   try {
     await _projectsReady;
+    // A reload, or Back/Forward across a document boundary, restores from boot.
+    // /api/projects can answer before the parser reaches the last script block,
+    // and this path calls into it (hideTerminalView): wait for the whole document.
+    if (document.readyState === 'loading') await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
     if (seq !== _workspaceHistorySeq) return;
     if (visit.projectId && !projects.some(p => p.id === visit.projectId)) return;
     _pendingWorkspaceReturn = visit;
@@ -17997,7 +18020,10 @@ function initWorkspaceNavigation() {
     const before = pendingIntents.get(e);
     if (!before) return;
     pendingIntents.delete(e);
-    const after = workspaceVisit();
+    _workspaceIntentPending = Math.max(0, _workspaceIntentPending - 1);
+    // The new transcript is usually still loading, so msgsEl's offset belongs to
+    // the chat being left; an entry carrying it would reopen mid-history.
+    const after = { ...workspaceVisit(), scrollTop: null, shownFrom: null };
     if (sameWorkspaceVisit(before, after) || sameWorkspaceVisit(history.state?.ccsWorkspace, after)) return;
     rememberWorkspaceVisit(before);
     try { history.pushState({ ...history.state, ccsWorkspace: after }, '', location.href); } catch {}
@@ -18010,6 +18036,7 @@ function initWorkspaceNavigation() {
     ++_workspaceHistorySeq;
     _workspaceHistoryRestoring = false;
     _pendingWorkspaceReturn = null;
+    if (!pendingIntents.has(e)) _workspaceIntentPending++;
     pendingIntents.set(e, workspaceVisit());
     // Stopped events still commit AFTER dispatch; never use a capture microtask,
     // because native event dispatch may checkpoint before the target handler.
@@ -18019,11 +18046,19 @@ function initWorkspaceNavigation() {
   document.addEventListener('keydown', captureIntent, true);
   document.addEventListener('click', finishIntent);
   document.addEventListener('keydown', finishIntent);
-  window.addEventListener('popstate', e => { dismissWorkspaceOverlays(); restoreWorkspaceVisit(e.state?.ccsWorkspace); });
+  window.addEventListener('popstate', e => {
+    // history.state is already the entry we arrived on; closing an overlay may
+    // re-render the tabs, and a sync then would overwrite it with the view we left.
+    _workspaceHistoryRestoring = !!e.state?.ccsWorkspace;
+    dismissWorkspaceOverlays(); restoreWorkspaceVisit(e.state?.ccsWorkspace);
+  });
   window.addEventListener('pagehide', () => { saveUIState(); rememberWorkspaceVisit(workspaceVisit()); });
   window.addEventListener('pageshow', e => { if (e.persisted) updateWorkspaceLocation(); });
+  // ⌘K on macOS, Ctrl+K elsewhere. On a Mac, Ctrl+K in a text field is the
+  // system's kill-to-end-of-line, and taking it would break that in the composer.
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
   document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !e.altKey) {
+    if ((isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey) && e.key.toLowerCase() === 'k' && !e.altKey) {
       e.preventDefault(); if ($i('workspaceJumpModal').classList.contains('hidden')) openWorkspaceJump(); else closeWorkspaceJump();
     }
   });
@@ -18094,6 +18129,10 @@ function initFocusedWorkspace() {
   document.addEventListener('click', e => {
     const menu = $i('workspaceMenu');
     if (menu?.open && !menu.contains(e.target)) menu.open = false;
+    // Run settings floats over the transcript, so it closes like the menu does.
+    // "Go to… → Run settings" opens it from inside this very click; leave that one.
+    const run = $i('runSettings');
+    if (run?.open && !run.contains(e.target) && !e.target.closest?.('#workspaceJumpModal')) run.open = false;
   });
   // Focus the persistent trigger BEFORE a dialog captures its return target.
   $i('workspaceMenu')?.addEventListener('click', e => {
@@ -18145,6 +18184,9 @@ _projectsReady = loadProjectsList();
 if (history.state?.ccsWorkspace && !new URLSearchParams(location.search).has('open_session')) {
   restoreWorkspaceVisit(history.state.ccsWorkspace);
 }
+// Only now may the entry follow the screen: the boot renders above ran before the
+// entry was read, and a running restore holds _workspaceHistoryRestoring itself.
+_workspaceNavReady = true;
 loadRemoteHosts();
 connect();
 _versionCheckDone = checkVersion();

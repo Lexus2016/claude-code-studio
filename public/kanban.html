@@ -632,11 +632,15 @@ body::after{ display:none; }
 const pageNavigation = (() => {
   const route = location.pathname + location.search;
   const key = 'ccs_navigation:' + route;
+  // `entry` is true only for Back/Forward/reload of THIS history entry. The
+  // sessionStorage copy is this tab's LAST visit to the route, which a fresh click
+  // must not take a project from (see resolveProject).
   function read() {
     try {
       const fromHistory = history.state && history.state.ccsNavigation;
-      const value = fromHistory && fromHistory.route === route ? fromHistory : JSON.parse(sessionStorage.getItem(key) || 'null');
-      return value && value.version === 1 && value.route === route ? value : null;
+      const entry = !!(fromHistory && fromHistory.route === route);
+      const value = entry ? fromHistory : JSON.parse(sessionStorage.getItem(key) || 'null');
+      return value && value.version === 1 && value.route === route ? {...value, entry} : null;
     } catch { return null; }
   }
   const saved = read();
@@ -680,7 +684,10 @@ const pageNavigation = (() => {
     }
     // A deep link expresses intent and must never inherit a remembered filter.
     if (query.has('session') || query.has('open_session')) return current;
-    if (!saved || !Object.prototype.hasOwnProperty.call(saved, 'project')) return current;
+    // A fresh visit follows the project chosen last anywhere (cc_ui_state, written by
+    // the chat and by this page alike); a per-tab copy would reopen the page on a
+    // project the chat has since left.
+    if (!saved || !saved.entry || !Object.prototype.hasOwnProperty.call(saved, 'project')) return current;
     if (saved.project === null) return null;
     const found = projects.find(p => p.workdir === saved.project || p.id === saved.project);
     return found ? found.workdir || found.id : current;
@@ -689,6 +696,8 @@ const pageNavigation = (() => {
   function restore() {
     if (restored || !saved) return;
     restored = true;
+    // Scroll and search describe one project's view: a fresh visit reuses them only for that project.
+    if (!saved.entry && saved.project !== (typeof curWorkdir === 'undefined' ? null : curWorkdir)) return;
     const search = document.getElementById('projDdSearch');
     if (search && typeof saved.search === 'string') search.value = saved.search;
     // Wait until the freshly loaded board/agenda has a measurable layout.

@@ -22,6 +22,7 @@ function harness({ ready = Promise.resolve() } = {}) {
   const context = vm.createContext({
     console, URLSearchParams, WeakMap, Object, Number, Set,
     _workspaceHistoryRestoring:false, _workspaceHistorySeq:0, _pendingWorkspaceReturn:null,
+    _workspaceNavReady:true, _workspaceIntentPending:0, navigator:{platform:'MacIntel'},
     _projectsReady:ready, curProjectId:'p', curWorkdir:'/p', activeTabId:'a', currentSessionId:'a',
     projects:[{id:'p',name:'Project'}, {id:'q',name:'Other'}], openTabs:[{id:'a',title:'Alpha'},{id:'b',title:'Beta'}],
     msgsEl:{scrollTop:41,innerHTML:''}, _shownFrom:7, _SEC_FILTER_CFG:{hist:{}},
@@ -38,7 +39,7 @@ function harness({ ready = Promise.resolve() } = {}) {
   context.openTab = (id,title) => {calls.push(['open',id]);context.activeTabId=id;context.currentSessionId=id;};
   context.loadSess = async id => {calls.push(['load',id]);context.currentSessionId=id;};
   context.switchProject = id => {calls.push(['project',id]);context.curProjectId=id;context.activeTabId='b';};
-  for(const name of ['workspaceVisit','sameWorkspaceVisit','rememberWorkspaceVisit','updateWorkspaceLocation','restoreWorkspaceVisit','initWorkspaceNavigation']) vm.runInContext(source(name),context);
+  for(const name of ['workspaceVisit','sameWorkspaceVisit','rememberWorkspaceVisit','syncWorkspaceEntry','updateWorkspaceLocation','restoreWorkspaceVisit','initWorkspaceNavigation']) vm.runInContext(source(name),context);
   context.initWorkspaceNavigation();
   const event = type => ({type,key:'Enter',target:{closest:()=>true}});
   async function dispatch(target,{stopped=false,kind='click'}={}) {
@@ -161,4 +162,71 @@ test('mobile close-before-open is synchronous and settings launches from persist
   assert.match(source('closeMobSheet'),/sheet\.inert = true/);
   assert.match(html,/onclick="closeMobSheet\(\);openCfgEditor\(\)"/);
   assert.match(source('initFocusedWorkspace'),/summary'\)\.focus\(\);\n    menu\.open = false;/);
+});
+
+test('a click whose handler re-renders the tabs synchronously still records history', async () => {
+  // openTab() -> renderTabs() -> updateWorkspaceLocation() runs INSIDE the click.
+  // Without the pending-intent guard the sync would rewrite the current entry to
+  // the new view, finishIntent would find nothing changed, and no entry is pushed.
+  const h=harness();
+  await h.dispatch(()=>{h.context.activeTabId='b';h.context.updateWorkspaceLocation();});
+  assert.equal(h.history.length,2);
+  assert.equal(h.history.entries[0].ccsWorkspace.tabId,'a');
+  assert.equal(h.history.entries[1].ccsWorkspace.tabId,'b');
+  assert.equal(h.context._workspaceIntentPending,0);
+});
+
+test('the current entry follows a chat that appears without a click, in place', () => {
+  const h=harness();
+  h.history.state={ccsWorkspace:{projectId:'p',tabId:null,isNew:false,kind:'chat'}};
+  h.context.activeTabId='a'; h.context.updateWorkspaceLocation();
+  assert.equal(h.history.length,1,'a sync replaces, it never pushes');
+  assert.equal(h.history.state.ccsWorkspace.tabId,'a');
+  assert.equal(h.history.state.ccsWorkspace.scrollTop,null,'the offset on screen may belong to another chat');
+  const written=h.history.state; h.context.updateWorkspaceLocation();
+  assert.equal(h.history.state,written,'an unchanged view writes nothing (Safari rate-limits replaceState)');
+});
+
+test('boot renders cannot overwrite the entry before it has been read', () => {
+  const h=harness(); h.context._workspaceNavReady=false;
+  const entry={ccsWorkspace:{projectId:'q',tabId:'old',isNew:false,kind:'chat'}};
+  h.history.state=entry; h.context.updateWorkspaceLocation();
+  assert.equal(h.history.state,entry);
+});
+
+test('Back: an overlay closing re-renders the tabs, and the arrived-at entry survives', () => {
+  const h=harness(); const arrived={ccsWorkspace:{projectId:'q',tabId:'old',isNew:false,kind:'chat'}};
+  h.history.state=arrived;
+  h.context.dismissWorkspaceOverlays=()=>h.context.updateWorkspaceLocation();
+  h.context.restoreWorkspaceVisit=()=>{};
+  h.windowEvents.popstate({state:arrived});
+  assert.equal(h.history.state,arrived);
+});
+
+test('a pushed entry opens at the bottom; only the departed one keeps its reading position', async () => {
+  const h=harness(); await h.dispatch(()=>{h.context.activeTabId='b';});
+  assert.equal(h.history.entries[0].ccsWorkspace.scrollTop,41);
+  assert.equal(h.history.entries[1].ccsWorkspace.scrollTop,null);
+});
+
+test('a restore started during boot waits for the last script block to be parsed', async () => {
+  // Reload or a cross-document Back restores from boot, and the no-tab branch calls
+  // hideTerminalView(), declared in the LAST <script> block. Observed: ReferenceError.
+  const h=harness(); const doc=h.context.document; doc.readyState='loading';
+  const done=h.context.restoreWorkspaceVisit({projectId:'p',tabId:null});
+  for(let i=0;i<5;i++) await Promise.resolve();
+  assert.ok(!h.calls.includes('hide-terminal'),'nothing may run before DOMContentLoaded');
+  doc.readyState='interactive'; for(const l of h.events.DOMContentLoaded) l.fn();
+  await done;
+  assert.ok(h.calls.includes('hide-terminal'));
+});
+
+test('Go to opens with Cmd+K on macOS and leaves Ctrl+K to the text field', () => {
+  const src=source('initWorkspaceNavigation');
+  assert.match(src,/isMac \? e\.metaKey && !e\.ctrlKey : e\.ctrlKey && !e\.metaKey/);
+});
+
+test('Run settings closes on an outside click, but not on the Go to… click that opened it', () => {
+  const src=source('initFocusedWorkspace');
+  assert.match(src,/run\?\.open && !run\.contains\(e\.target\) && !e\.target\.closest\?\.\('#workspaceJumpModal'\)/);
 });
