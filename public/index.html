@@ -395,6 +395,35 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .hist-bulk-bar .bulk-del { background: var(--red); border: none; color: #fff; font-size: 11px; padding: 3px 10px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
 .hist-bulk-bar .bulk-del:hover { opacity: .85; }
 .hist-bulk-bar .bulk-del:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Row actions that appear on hover (.ci .cfg/.rm/.ren, the history row's ↗ and ✕, the
+   drag handles) used to sit in the row at opacity 0: invisible, yet still holding their
+   width, so a bot's name or a command truncated after a few letters beside an empty
+   strip. With a mouse they now take no space until the row is hovered or a control in
+   it has KEYBOARD focus. Clipped rather than display:none, so Tab still reaches them and
+   the focused one unfolds its row. A click leaves focus without :focus-visible, so the
+   controls fold away again once the pointer leaves. */
+.ci, .hist-item { position: relative; }
+/* The drag handles sit in the row's left padding, out of flow: unfolded on hover they
+   would push the title right by their width every time the pointer crossed a row. */
+.ci .proj-drag-handle, .hist-item .drag-handle { position: absolute; left: 0; top: 50%; translate: 0 -50%; padding: 0 1px; }
+@media (hover: hover) and (pointer: fine) {
+  .ci:not(:hover):not(:has(:focus-visible)) :is(.cfg, .rm, .ren),
+  .hist-item:not(:hover):not(:focus-visible):not(:has(:focus-visible)) :is(.del, .fork-sess) {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; border: 0;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+}
+.ci:has(:focus-visible) :is(.cfg, .ren) { opacity: .6; }
+.ci:has(:focus-visible) .rm { opacity: .45; }
+.hist-item:is(:focus-visible, :has(:focus-visible)) :is(.del, .fork-sess:not(.fork-na)) { opacity: .5; }
+/* Touch has no hover, so these controls were invisible there and still tappable. */
+@media (hover: none) {
+  .ci :is(.cfg, .ren) { opacity: .6; }
+  .ci .rm { opacity: .45; }
+  .hist-item :is(.del, .fork-sess:not(.fork-na)) { opacity: .5; }
+  .hist-item .fork-sess.fork-na { opacity: .3; }
+}
 .hist-spin { width: 8px; height: 8px; flex-shrink: 0; margin-right: 4px; }
 
 /* ─── Header ─── */
@@ -2964,7 +2993,9 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 .workspace-tools > summary { display:flex; align-items:center; gap:9px; padding:13px 12px; font-size:13px; font-weight:700; cursor:pointer; list-style:none; }
 .workspace-tools > summary::after { content:'⌄'; margin-inline-start:auto; color:var(--muted); }
 .workspace-tools[open] > summary::after { transform:rotate(180deg); }
-.workspace-tools .sec { padding:12px 10px; }
+/* No side padding: .sec-title and .sec-body inset themselves, and a second 10px on each
+   side took 20px from every name in the card and set the titles off the summary's edge. */
+.workspace-tools .sec { padding:10px 0; }
 .workspace-tools .sec-title { text-transform:none; letter-spacing:0; font-size:13px; }
 .workspace-tools .workspace-help { padding:0 12px 12px; }
 .workspace-help { color:var(--muted); font-size:12px; line-height:1.6; margin:0; }
@@ -5224,7 +5255,7 @@ const TRANSLATIONS = {
     'interrupt.queued':'Уточнення надіслано','interrupt.delivered':'Доставлено до Claude','interrupt.expired':'Завдання завершено',
     'agents.title':'Активні агенти',
     'sess.fork':'Створити копію чату з тією ж історією Claude','sess.fork.na':'Форк недоступний — немає сесії Claude CLI','sess.forked':'Сесію форкнуто',
-    'sess.delete.tip':'Видалити чат','sess.delete.confirm':'Видалити сесію?','sess.delete.tasks':'Видалити сесію?\n\nДо неї прив\'язано завдань у Kanban: {n}. Вони також будуть видалені.','sess.load.err':'Помилка завантаження сесії',
+    'sess.delete.tip':'Видалити чат','sess.delete.confirm':'Видалити сесію?','sess.delete.tasks':'Видалити сесію?\n\nДо неї прив\'язано завдань у Kanban: {n}. Вони також будуть видалені.','sess.load.err':'Помилка завантаження сесії','sess.delete.unmerged':'У робочій копії цього чату є незакомічені зміни або коміти, не злиті в основну гілку.\n\nВидалити все одно? Ці зміни буде втрачено.','hist.del.unmerged':'У цих чатів є незакомічені або не злиті зміни:\n{list}\n\nВидалити всі вибрані все одно? Ці зміни буде втрачено. «Скасувати» не видаляє нічого.',
     'mcp.active':'● Активний у чаті','mcp.inactive':'○ Вимкнений','mcp.del.title':'Видалити сервер','mcp.del.confirm':'Видалити сервер',
     'mcp.cfg.tip':'Налаштування','mcp.cfg.warn':'Потрібна конфігурація',
     'mcp.toggle.on':'Клік — вимкнути','mcp.toggle.off':'Клік — увімкнути',
@@ -5675,7 +5706,7 @@ const TRANSLATIONS = {
     'interrupt.queued':'Clarification sent','interrupt.delivered':'Delivered to Claude','interrupt.expired':'Task ended',
     'agents.title':'Active agents',
     'sess.fork':'Create a copy of this chat with the same Claude history','sess.fork.na':'Fork unavailable — no Claude CLI session','sess.forked':'Session forked',
-    'sess.delete.tip':'Delete chat','sess.delete.confirm':'Delete session?','sess.delete.tasks':'Delete session?\n\nLinked Kanban tasks: {n}. They will also be deleted.','sess.load.err':'Error loading session',
+    'sess.delete.tip':'Delete chat','sess.delete.confirm':'Delete session?','sess.delete.tasks':'Delete session?\n\nLinked Kanban tasks: {n}. They will also be deleted.','sess.load.err':'Error loading session','sess.delete.unmerged':'This chat\'s worktree has uncommitted changes or commits not merged into the main branch.\n\nDelete anyway? Those changes will be lost.','hist.del.unmerged':'These chats have uncommitted or unmerged changes:\n{list}\n\nDelete all selected chats anyway? Those changes will be lost. Cancel deletes nothing.',
     'mcp.active':'● Active in chat','mcp.inactive':'○ Disabled','mcp.del.title':'Remove server','mcp.del.confirm':'Remove server',
     'mcp.cfg.tip':'Settings','mcp.cfg.warn':'Configuration required',
     'mcp.toggle.on':'Click to disable','mcp.toggle.off':'Click to enable',
@@ -6126,7 +6157,7 @@ const TRANSLATIONS = {
     'interrupt.queued':'Уточнение отправлено','interrupt.delivered':'Доставлено в Claude','interrupt.expired':'Задание завершено',
     'agents.title':'Активные агенты',
     'sess.fork':'Создать копию чата с той же историей Claude','sess.fork.na':'Форк недоступен — нет сессии Claude CLI','sess.forked':'Сессия форкнута',
-    'sess.delete.tip':'Удалить чат','sess.delete.confirm':'Удалить сессию?','sess.delete.tasks':'Удалить сессию?\n\nПривязанных задач в Kanban: {n}. Они также будут удалены.','sess.load.err':'Ошибка загрузки сессии',
+    'sess.delete.tip':'Удалить чат','sess.delete.confirm':'Удалить сессию?','sess.delete.tasks':'Удалить сессию?\n\nПривязанных задач в Kanban: {n}. Они также будут удалены.','sess.load.err':'Ошибка загрузки сессии','sess.delete.unmerged':'В рабочей копии этого чата есть незакоммиченные изменения или коммиты, не слитые в основную ветку.\n\nУдалить всё равно? Эти изменения будут потеряны.','hist.del.unmerged':'У этих чатов есть незакоммиченные или не слитые изменения:\n{list}\n\nУдалить все выбранные всё равно? Эти изменения будут потеряны. «Отмена» не удаляет ничего.',
     'mcp.active':'● Активен в чате','mcp.inactive':'○ Отключен','mcp.del.title':'Удалить сервер','mcp.del.confirm':'Удалить сервер',
     'mcp.cfg.tip':'Настройки','mcp.cfg.warn':'Требуется настройка',
     'mcp.toggle.on':'Клик — отключить','mcp.toggle.off':'Клик — включить',
@@ -6545,7 +6576,7 @@ const TRANSLATIONS = {
     "interrupt.pill.queue.tip":"Cliquez pour passer en mode clarification","interrupt.queued":"Clarification envoyée","interrupt.delivered":"Remis à Claude","interrupt.expired":"Tâche terminée",
     "agents.title":"Agents actifs","sess.fork":"Créez une copie de ce chat avec le même historique Claude","sess.fork.na":"Fork indisponible — aucune session Claude CLI","sess.forked":"Session dupliquée",
     "sess.delete.tip":"Supprimer le chat","sess.delete.confirm":"Supprimer la session ?","sess.delete.tasks":"Supprimer la session ?\n\nTâches Kanban liées : {n}. Elles seront également supprimées.",
-    "sess.load.err":"Erreur lors du chargement de la session","mcp.active":"● Actif dans le chat","mcp.inactive":"○ Désactivé","mcp.del.title":"Retirer le serveur","mcp.del.confirm":"Retirer le serveur",
+    "sess.load.err":"Erreur lors du chargement de la session","sess.delete.unmerged":"La copie de travail de ce chat contient des modifications non validées ou des commits non fusionnés dans la branche principale.\n\nSupprimer quand même ? Ces modifications seront perdues.","hist.del.unmerged":"Ces chats ont des modifications non validées ou non fusionnées :\n{list}\n\nSupprimer quand même tous les chats sélectionnés ? Ces modifications seront perdues. Annuler ne supprime rien.","mcp.active":"● Actif dans le chat","mcp.inactive":"○ Désactivé","mcp.del.title":"Retirer le serveur","mcp.del.confirm":"Retirer le serveur",
     "mcp.cfg.tip":"Paramètres","mcp.cfg.warn":"Configuration requise","mcp.toggle.on":"Cliquez pour désactiver","mcp.toggle.off":"Cliquez pour activer",
     "mcp.cfg.api_warn":"⚠ Renseignez les clés API pour activer","mcp.cfg.no_params":"Aucun paramètre à configurer","mcp.cfg.saved":"✓ Paramètres enregistrés","mcp.cfg.save_err":"Erreur d'enregistrement",
     "mcp.cfg.cancel":"Annuler","mcp.cfg.save":"Enregistrer","mcp.add.id_req":"L'ID est requis","mcp.add.url_req":"L'URL est requise","mcp.add.cmd_req":"La commande est requise",
@@ -6892,7 +6923,7 @@ const TRANSLATIONS = {
     "interrupt.queue":"📝 משימה חדשה (תור)","interrupt.pill.clarify":"הבהרה","interrupt.pill.queue":"תור","interrupt.pill.clarify.tip":"לחצו למעבר למצב תור",
     "interrupt.pill.queue.tip":"לחצו למעבר למצב הבהרה","interrupt.queued":"ההבהרה נשלחה","interrupt.delivered":"נמסר ל-Claude","interrupt.expired":"המשימה הסתיימה","agents.title":"Agents פעילים",
     "sess.fork":"יצירת עותק של הצ'אט הזה עם אותה היסטוריית Claude","sess.fork.na":"פיצול לא זמין — אין סשן Claude CLI","sess.forked":"הסשן פוצל","sess.delete.tip":"מחיקת צ'אט",
-    "sess.delete.confirm":"למחוק את הסשן?","sess.delete.tasks":"למחוק את הסשן?\n\nמשימות Kanban מקושרות: {n}. גם הן יימחקו.","sess.load.err":"שגיאה בטעינת הסשן","mcp.active":"● פעיל בצ'אט",
+    "sess.delete.confirm":"למחוק את הסשן?","sess.delete.tasks":"למחוק את הסשן?\n\nמשימות Kanban מקושרות: {n}. גם הן יימחקו.","sess.load.err":"שגיאה בטעינת הסשן","sess.delete.unmerged":"בעותק העבודה של הצ'אט הזה יש שינויים שלא בוצע להם commit או commits שלא מוזגו לענף הראשי.\n\nלמחוק בכל זאת? השינויים האלה יאבדו.","hist.del.unmerged":"לצ'אטים האלה יש שינויים שלא בוצע להם commit או שלא מוזגו:\n{list}\n\nלמחוק בכל זאת את כל הצ'אטים שנבחרו? השינויים האלה יאבדו. ביטול לא מוחק דבר.","mcp.active":"● פעיל בצ'אט",
     "mcp.inactive":"○ מושבת","mcp.del.title":"הסרת שרת","mcp.del.confirm":"הסרת שרת","mcp.cfg.tip":"הגדרות","mcp.cfg.warn":"נדרשת הגדרה","mcp.toggle.on":"לחצו כדי לכבות",
     "mcp.toggle.off":"לחצו כדי להפעיל","mcp.cfg.api_warn":"⚠ הגדירו מפתחות API כדי להפעיל","mcp.cfg.no_params":"אין פרמטרים להגדרה","mcp.cfg.saved":"✓ ההגדרות נשמרו","mcp.cfg.save_err":"שגיאת שמירה",
     "mcp.cfg.cancel":"ביטול","mcp.cfg.save":"שמירה","mcp.add.id_req":"נדרש ID","mcp.add.url_req":"נדרש URL","mcp.add.cmd_req":"נדרשת פקודה","mcp.add.ok":"✓ שרת MCP נוסף",
@@ -13920,6 +13951,36 @@ async function loadSess(id) {
   } catch (e) { console.error('loadSess:', e); toast(t('sess.load.err'), true); }
 }
 
+// The server refuses (409 UNMERGED_WORK) to delete a chat whose worktree holds work the
+// delete would destroy. Both delete doors used to ignore the answer, close the tab and
+// reload the list, so the chat came straight back and nothing said why. A refusal now
+// asks again, naming the loss, and resends with force; true only once the server deleted.
+async function _sessDeleteRequest(send, unmergedPrompt) {
+  let r = await send(false);
+  if (r.status === 409) {
+    const e = await r.json().catch(() => ({}));
+    if (e.code !== 'UNMERGED_WORK') { toast(e.error || t('toast.del_err'), true); return false; }
+    if (!confirm(unmergedPrompt(e))) return false;
+    r = await send(true);
+  }
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}));
+    toast(e.error || t('toast.del_err'), true);
+    return false;
+  }
+  return true;
+}
+
+// Titles for a confirm(), read from the rendered list: the 409 names only ids.
+function _histTitles(ids) {
+  const list = $i('histList');
+  const titles = (Array.isArray(ids) ? ids : []).map(id => {
+    const el = list && list.querySelector(`[data-sess="${CSS.escape(String(id))}"] .ht`);
+    return '• ' + (el ? el.textContent : String(id));
+  });
+  return titles.length > 8 ? titles.slice(0, 8).join('\n') + '\n…' : titles.join('\n');
+}
+
 async function delSess(id) {
   let msg = t('sess.delete.confirm');
   try {
@@ -13927,7 +13988,13 @@ async function delSess(id) {
     if (r.ok) { const d = await r.json(); if (d.n > 0) msg = t('sess.delete.tasks').replace('{n}', d.n); }
   } catch {}
   if (!confirm(msg)) return;
-  await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
+  let deleted = false;
+  try {
+    deleted = await _sessDeleteRequest(
+      force => fetch(`/api/sessions/${encodeURIComponent(id)}${force ? '?force=1' : ''}`, { method: 'DELETE' }),
+      () => t('sess.delete.unmerged'));
+  } catch { toast(t('toast.del_err'), true); }
+  if (!deleted) return;
   try { const bc = new BroadcastChannel('kanban'); bc.postMessage({ type: 'session_deleted', sessionId: id }); bc.close(); } catch {}
   if (openTabs.find(t => t.id === id)) closeTab(id);
   else if (id === currentSessionId) { currentSessionId = null; msgsEl.innerHTML = ''; showW(); }
@@ -14001,7 +14068,10 @@ async function delSelectedHist() {
   const btn = $i('histBulkDel');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
-    await fetch('/api/sessions/bulk-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+    const deleted = await _sessDeleteRequest(
+      force => fetch('/api/sessions/bulk-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(force ? { ids, force: true } : { ids }) }),
+      e => t('hist.del.unmerged').replace('{list}', _histTitles(e.blocked)));
+    if (!deleted) { updateHistBulkBar(); return; }
     try { const bc = new BroadcastChannel('kanban'); ids.forEach(id => bc.postMessage({ type: 'session_deleted', sessionId: id })); bc.close(); } catch {}
     ids.forEach(id => {
       if (openTabs.find(t => t.id === id)) closeTab(id);
