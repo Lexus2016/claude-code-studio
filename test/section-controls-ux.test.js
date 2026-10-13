@@ -18,7 +18,7 @@ test('HTTP file errors render actionable retry rather than old contents',async()
 test('file row keyboard activation ignores nested action-button keys',()=>{const h=harness(),row=element();let calls=0;h.c.makeKeyboardRow(row,()=>calls++);row.onkeydown({target:row,key:'Enter',preventDefault(){}});row.onkeydown({target:{},key:' ',preventDefault(){}});assert.equal(calls,1);assert.equal(row.tabIndex,0);});
 test('CLI source/path change invalidates an outstanding listing',async()=>{const h=harness();h.el('cliImportWorkdir').value='/old';const a=h.c.loadCliSessions();h.c._cliListSeq++;h.pending[0](reply({sessions:[{sessionId:'old'}]}));await a;assert.equal(h.c._cliSessions.length,0);assert.equal(h.el('cliImportBtn').disabled,true);});
 test('folder selection and exploration are separate native actions without click delay',()=>{const fn=src('browseDirs');assert.match(fn,/createElement\('button'\)/);assert.match(fn,/open\.onclick = \(\) => browseDirs\(it\.path\)/);assert.doesNotMatch(fn,/el\._t|setTimeout/);assert.match(fn,/seq !== _browseDirsSeq/);assert.match(fn,/renderSectionError/);});
-test('directory draft stays in DOM while closed; success clears its reuse flag',()=>{assert.match(src('openAddProject'),/if \(_projectFormHasDraft\) return/);assert.match(src('closeDirModal'),/_projectFormHasDraft = !preservePending/);assert.match(src('_selectDirRequest'),/closeDirModal\(true\)/);});
+test('directory draft stays in DOM while closed; success clears its reuse flag',()=>{assert.match(src('openAddProject'),/if \(_projectFormHasDraft\) \{/);assert.match(src('openAddProject'),/getAttribute\('aria-busy'\) === 'true'\) browseDirs\(/);assert.match(src('closeDirModal'),/_projectFormHasDraft = !preservePending/);assert.match(src('_selectDirRequest'),/closeDirModal\(true\)/);});
 test('preview ignores responses after Close or a newer project/file',()=>{assert.match(src('closeFpv'),/\+\+_filePreviewSeq/);assert.match(src('openFilePreview'),/seq !== _filePreviewSeq \|\| gen !== _switchGen/);});
 test('SSH save preserves blank-on-edit password semantics and validates port',()=>{const fn=src('_saveNewSshHostRequest');assert.match(fn,/if \(!isEdit \|\| password !== '' \|\| !existingHost\?\.password\) payload\.password = password/);assert.match(fn,/port < 1 \|\| port > 65535/);assert.match(fn,/payload\.password = ''/);assert.match(src('saveNewSshHost'),/runFormAction/);assert.match(src('testNewSshHost'),/if \(!stillCurrent\(\)\) return/);});
 test('SSH fields have labels and credentials never enter navigation draft storage',()=>{for(const id of ['sshHostLabel','sshHostHost','sshHostPort','sshHostKey','sshHostPassword'])assert.match(html,new RegExp('<label for="'+id+'"'));assert.doesNotMatch(src('workspaceVisit'),/password|sshHostPassword|tunnelNgrokToken|tgBotToken/);});
@@ -46,4 +46,25 @@ test('the folder list, not the dialog footer, gives way on a short screen',()=>{
   // pushed the Add button below .modal's overflow:hidden edge at 1366x768 (observed live).
   assert.match(html,/#projLocalSection \{ display:flex; flex-direction:column; flex:0 1 auto; min-height:0; \}/);
   assert.match(html,/#projLocalSection \.dir-list \{ min-height:96px; \}/);
+});
+
+test('a CRLF file shown in a config tab is not reported as edited',()=>{
+  // textarea.value normalises CRLF to LF, so the raw snapshot never matched it again.
+  const c=vm.createContext({cfgSavedFiles:{'CLAUDE.md':'a\r\nb\r\n'}});
+  vm.runInContext(src('cfgFileChanged'),c);
+  assert.equal(c.cfgFileChanged('CLAUDE.md','a\nb\n'),false);
+  assert.equal(c.cfgFileChanged('CLAUDE.md','a\nB\n'),true);
+  assert.match(src('closeCfg'),/cfgFileChanged\(id, cfgFiles\[id\]\)/);
+  assert.match(src('settingsHasUnsavedChanges'),/cfgFileChanged\(id,/);
+});
+
+test('a dropped SSH test result does not leave "Connecting…" behind',()=>{
+  const fn=src('testNewSshHost');
+  assert.equal((fn.match(/if \(!stillCurrent\(\)\) return dropStale\(\);/g)||[]).length,2);
+  assert.match(fn,/seq === testNewSshHost\.seq/);
+});
+
+test('a dialog whose cancelled action is still running says so when reopened',()=>{
+  for(const [name,id] of [['openAddProject','dirAddBtn'],['openCliImport','cliImportBtn'],['openAddHostModal','sshHostSaveBtn'],['editRemoteHost','sshHostSaveBtn']])
+    assert.match(src(name),new RegExp('_formActions\\.has\\(\''+id+'\'\\)\\) \\{ toast\\(t\\(\'team\\.saving\'\\)\\); return; \\}'),name);
 });

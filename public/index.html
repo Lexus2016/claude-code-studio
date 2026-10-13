@@ -14248,7 +14248,7 @@ function settingsHasUnsavedChanges() {
   if (settingsBusy.size) return true;
   if (!$i('cfgModal').classList.contains('hidden')) {
     const current = activeCfgTab && activeCfgTab !== CFG_FORM_TAB ? $i('cfgEditor').value : null;
-    if (Object.keys(cfgSavedFiles).some(id => (id === activeCfgTab && current !== null ? current : cfgFiles[id]) !== cfgSavedFiles[id])) return true;
+    if (Object.keys(cfgSavedFiles).some(id => cfgFileChanged(id, id === activeCfgTab && current !== null ? current : cfgFiles[id]))) return true;
   }
   return ['mcpEditModal','mcpSettingsModal','mcpImportModal'].some(id =>
     !$i(id).classList.contains('hidden') && settingsDrafts.has(id) && settingsDrafts.get(id) !== settingsSnapshot(id));
@@ -15459,6 +15459,13 @@ const CFG_TABS_BASE = [
 ];
 
 let cfgLoadGeneration = 0, cfgSavedFiles = {}, cfgSaving = false, cfgOpeningWorkdir = null;
+// A textarea hands its text back with LF line breaks whatever the file used, so a CRLF
+// file must not count as edited merely because its tab was shown. Compare only; the
+// file itself is not rewritten on load.
+function cfgFileChanged(id, current) {
+  const lf = s => typeof s === 'string' ? s.replace(/\r\n?/g, '\n') : s;
+  return lf(current) !== lf(cfgSavedFiles[id]);
+}
 async function openCfgEditor() {
   const generation = ++cfgLoadGeneration;
   const workdir = cfgOpeningWorkdir = curWorkdir;
@@ -15584,7 +15591,7 @@ async function saveCfg() {
 
 function closeCfg() {
   if (activeCfgTab && activeCfgTab !== CFG_FORM_TAB) cfgFiles[activeCfgTab] = $i('cfgEditor').value;
-  const dirty = Object.keys(cfgSavedFiles).some(id => cfgFiles[id] !== cfgSavedFiles[id]);
+  const dirty = Object.keys(cfgSavedFiles).some(id => cfgFileChanged(id, cfgFiles[id]));
   if ((dirty || cfgSaving) && !confirm((cfgSaving ? t('settings.uncertain') + '\n\n' : '') + t('settings.discard'))) return;
   settingsCancelOperation('cfgModal');
   cfgSaving = false;
@@ -16534,14 +16541,20 @@ let _projectAutoName = '';
 let _projectDialogSeq = 0;
 let _browseDirsSeq = 0;
 function openAddProject() {
-  if (_formActions.has('dirAddBtn')) return;
+  // A cancelled create may still be running; say so instead of ignoring the click.
+  if (_formActions.has('dirAddBtn')) { toast(t('team.saving')); return; }
   ++_projectDialogSeq;
   openModalOverlay('dirModal', {
     initialFocus: '#dirPathInput',
     labelId: 'dirModalTitle',
     onEscape: () => closeDirModal(),
   });
-  if (_projectFormHasDraft) return;
+  if (_projectFormHasDraft) {
+    // Close during the first listing left the list on "Loading…" (its reply is now
+    // stale); reload it from the drafted path without touching the drafted fields.
+    if ($i('dirList').getAttribute('aria-busy') === 'true') browseDirs($i('dirPathInput').value.trim() || null);
+    return;
+  }
   _projectAutoName = '';
   $i('gitInitChk').checked = false;
   $i('cloneUrlInput').value = '';
@@ -16868,7 +16881,7 @@ async function testSelectedHost() {
 
 // ─── Add SSH Host Modal ───────────────────────────────────────────────────
 function openAddHostModal() {
-  if (_formActions.has('sshHostSaveBtn')) return;
+  if (_formActions.has('sshHostSaveBtn')) { toast(t('team.saving')); return; }
   _editingHostId = null;
   $i('sshHostModalTitle').textContent = t('ssh.modal.add.title');
   $i('sshHostSaveBtn').textContent = t('ssh.modal.save');
@@ -16987,7 +17000,7 @@ let _cliListSeq = 0;
 let _cliSessions = []; // cache of loaded sessions from server
 
 function openCliImport() {
-  if (_formActions.has('cliImportBtn')) return;
+  if (_formActions.has('cliImportBtn')) { toast(t('team.saving')); return; }
   // Pre-fill workdir from current project
   const workdir = curWorkdir || '';
   $i('cliImportWorkdir').value = workdir;
@@ -17188,7 +17201,7 @@ function setAuthType(type) {
 }
 
 async function editRemoteHost(id) {
-  if (_formActions.has('sshHostSaveBtn')) return;
+  if (_formActions.has('sshHostSaveBtn')) { toast(t('team.saving')); return; }
   const h = remoteHosts.find(x => x.id === id);
   if (!h) return;
   _editingHostId = id;
@@ -17228,6 +17241,10 @@ async function testNewSshHost() {
   }
   const stillCurrent = () => $i('sshHostHost').value.trim() === host && String($i('sshHostPort').value || 22) === String(port) && $i('sshAuthBtnPwd').classList.contains('active') === usePwd && (usePwd ? $i('sshHostPassword').value === password : $i('sshHostKey').value.trim() === sshKeyPath) && !$i('sshHostModal').classList.contains('hidden');
   const res = $i('sshHostTestResult');
+  const seq = testNewSshHost.seq = (testNewSshHost.seq || 0) + 1;
+  // A result for settings that have since changed is dropped, but it must not leave
+  // "Connecting…" on screen forever; a newer test owns the line if one started.
+  const dropStale = () => { if (seq === testNewSshHost.seq) { res.textContent = ''; res.className = 'rh-test-result'; } };
   res.textContent = t('ssh.connecting'); res.className = 'rh-test-result';
   try {
     const r = await fetch('/api/remote-hosts/test-new', {
@@ -17236,11 +17253,11 @@ async function testNewSshHost() {
       body: JSON.stringify({ host, port: Number(port), sshKeyPath, password }),
     });
     const d = await r.json();
-    if (!stillCurrent()) return;
+    if (!stillCurrent()) return dropStale();
     res.textContent = d.ok ? `✓ ${d.message} (${d.latencyMs}ms)` : `✗ ${d.error}`;
     res.className = 'rh-test-result ' + (d.ok ? 'ok' : 'err');
   } catch(e) {
-    if (!stillCurrent()) return;
+    if (!stillCurrent()) return dropStale();
     res.textContent = t('ssh.conn_err'); res.className = 'rh-test-result err';
   }
 }
