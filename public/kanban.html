@@ -384,9 +384,78 @@ textarea.inp{ resize:vertical; min-height:80px; }
 .chain-modal-task .task-remove{ background:none; border:none; color:var(--muted); cursor:pointer; padding:2px 6px; font-size:14px; border-radius:3px; }
 .chain-modal-task .task-remove:hover{ color:var(--red); background:rgba(248,81,73,.1); }
 .chain-modal-task-locked{ opacity:.6; }
+
+/* Focused workspace: readable labels and predictable, keyboard-friendly navigation. */
+:root{ --muted:#9aa9c0; }
+body{ font-size:15px; }
+body::after{ display:none; }
+.hdr{ gap:16px; padding:12px 20px; }
+.hdr-l{ min-width:0; flex-wrap:wrap; }
+.hdr-btns{ gap:8px; flex-wrap:wrap; }
+.nav-sw{ background:transparent; border-color:transparent; gap:4px; padding:0; }
+.nav-sw-btn{ min-height:40px; padding:8px 12px; font-size:14px; }
+.nav-sw-btn span,.hb span{ display:inline; }
+.nav-sw-btn.active{ background:var(--abg); color:#c9bcff; box-shadow:inset 0 0 0 1px rgba(160,141,245,.35); }
+.hb,.proj-dd-btn{ min-height:40px; font-size:14px; }
+.hb{ color:var(--text); }
+#addBtn{ background:var(--accent); border-color:var(--accent); color:white; font-weight:700; }
+#addBtn:hover{ background:#8977f5; border-color:#a08df5; }
+.proj-dd-btn{ box-shadow:none; background:var(--s2); }
+.proj-dd-menu{ min-width:min(300px,calc(100vw - 32px)); max-width:calc(100vw - 32px); }
+.skip-link{ position:fixed; top:8px; left:12px; transform:translateY(-160%); z-index:10000; padding:10px 16px; background:var(--s2); color:var(--text); border:2px solid var(--accent2); border-radius:8px; text-decoration:none; }
+.skip-link:focus{ transform:none; }
+:focus-visible{ outline:2px solid var(--accent2); outline-offset:3px; }
+@media(max-width:1100px){
+  .hdr{ flex-wrap:wrap; gap:10px; }
+  .hdr-l{ flex:1 1 100%; gap:10px; }
+  .hdr-btns{ margin-left:auto; }
+}
+@media(max-width:600px){
+  .hdr{ padding:10px 12px; }
+  .hdr-l{ width:100%; }
+  .hdr-l>.logo{ display:none; }
+  .nav-sw{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); width:100%; gap:2px; }
+  .nav-sw-btn{ min-height:44px; padding:7px 4px; justify-content:center; text-align:center; white-space:normal; font-size:12px; }
+  .nav-sw-btn span{ display:block; overflow-wrap:anywhere; }
+  .nav-sw-btn svg{ display:none; }
+  .hdr-meta{ display:flex; width:100%; }
+  .proj-dd-btn{ max-width:calc(100vw - 24px); min-height:44px; }
+  .hb{ min-height:44px; padding:8px 12px; }
+  .hb span{ display:inline; }
+  .hdr-btns{ width:100%; justify-content:flex-end; }
+  .hdr-btns .refresh-ts{ margin-right:auto; }
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{ animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; scroll-behavior:auto!important; }
+}
+
+/* Clear hierarchy on the board, without hiding statuses or run settings. */
+.board{ gap:16px; padding:20px; min-height:0; }
+.col{ width:292px; }
+.col-head{ background:transparent; border-color:transparent; padding:8px 4px; }
+.col-title{ color:var(--text); font-size:14px; text-transform:none; letter-spacing:0; }
+.col-cnt,.kb-stat,.kb-stat-lbl,.kb-progress-pct{ font-size:12px; }
+.card{ padding:15px; background:var(--s1); }
+.card-title{ font-size:15px; line-height:1.5; }
+.card-desc{ font-size:13px; }
+.card-actions{ display:flex; opacity:0; }
+.card:hover .card-actions,.card:focus-within .card-actions{ opacity:1; }
+.card:hover .card-time{ display:inline; }
+.cbtn{ min-height:32px; min-width:32px; }
+.col-add{ min-height:40px; font-size:13px; }
+.proj-bar{ padding:10px 20px; flex-wrap:wrap; gap:10px; }
+@media(hover:none),(pointer:coarse){ .card-actions{ opacity:1; } .cbtn{ min-height:44px; min-width:44px; } }
+@media(max-width:800px){ .card-actions{ opacity:1; } }
+@media(max-width:600px){
+  .board{ padding:14px 12px; gap:12px; }
+  .col{ width:min(292px,85vw); }
+  .proj-bar{ padding:8px 12px; }
+  .kb-stats{ gap:8px; }
+}
 </style>
 </head>
 <body>
+<a class="skip-link" href="#board" data-i18n="nav.skip">Skip to content</a>
 
 <!-- Header -->
 <div class="hdr">
@@ -397,7 +466,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
         <span class="nav-lbl" data-i18n="nav.chat">Chat</span>
       </a>
-      <a class="nav-sw-btn active" href="/kanban" data-tip="Kanban" data-i18n-tip="nav.kanban">
+      <a class="nav-sw-btn active" aria-current="page" href="/kanban" data-tip="Kanban" data-i18n-tip="nav.kanban">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="9" rx="1"/></svg>
         <span class="nav-lbl" data-i18n="hdr.title">Kanban</span>
       </a>
@@ -427,11 +496,12 @@ textarea.inp{ resize:vertical; min-height:80px; }
     </div>
   </div>
   <div class="hdr-btns">
+    <button class="hb" type="button" onclick="history.back()" id="pageBackBtn"><span aria-hidden="true">←</span> <span data-i18n="nav.back">Back</span></button>
     <span class="refresh-ts" id="refreshTs" style="margin-right:4px"></span>
     <button class="hb" onclick="refresh(true)" id="refreshBtn" title="Refresh" data-i18n-title="hdr.refresh">&#8635;</button>
     <button class="hb" onclick="openAddChainModal()" id="addGroupBtn" data-i18n-title="hdr.group_hint">&#xFF0B; <span id="addGroupBtnLabel" data-i18n="hdr.group">Group</span></button>
     <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel" data-i18n="hdr.add">Task</span></button>
-    <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener">
+    <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener" aria-label="GitHub">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
     </a>
   </div>
@@ -448,7 +518,7 @@ textarea.inp{ resize:vertical; min-height:80px; }
 </div>
 
 <!-- Board -->
-<div class="board" id="board"></div>
+<div class="board" id="board" role="main" tabindex="-1" aria-label="Kanban" data-i18n-aria="nav.kanban"></div>
 
 <!-- Task modal -->
 <div class="ov hidden" id="taskOv" aria-hidden="true" onclick="if(event.target===this)closeModal()">
@@ -556,10 +626,86 @@ textarea.inp{ resize:vertical; min-height:80px; }
 
 <div class="toast" id="toast"></div>
 
+
+<script>
+// Per-tab navigation memory. It never changes server data or stores task drafts.
+const pageNavigation = (() => {
+  const route = location.pathname + location.search;
+  const key = 'ccs_navigation:' + route;
+  function read() {
+    try {
+      const fromHistory = history.state && history.state.ccsNavigation;
+      const value = fromHistory && fromHistory.route === route ? fromHistory : JSON.parse(sessionStorage.getItem(key) || 'null');
+      return value && value.version === 1 && value.route === route ? value : null;
+    } catch { return null; }
+  }
+  const saved = read();
+  const back = document.getElementById('pageBackBtn');
+  if (back) back.disabled = history.length < 2;
+  const number = value => Number.isFinite(value) ? value : 0;
+  function scrollSnapshot() {
+    const host = document.getElementById('board') || document.getElementById('main');
+    return {
+      x: host ? host.scrollLeft : window.scrollX,
+      y: host ? host.scrollTop : window.scrollY,
+      columns: Array.from(document.querySelectorAll('.col-body')).map(el => ({status:el.dataset.status, y:el.scrollTop})),
+    };
+  }
+  function applyScroll(scroll) {
+    if (!scroll || typeof scroll !== 'object') return;
+    const host = document.getElementById('board') || document.getElementById('main');
+    if (host) { host.scrollLeft = number(scroll.x); host.scrollTop = Math.max(0, number(scroll.y)); }
+    else window.scrollTo(number(scroll.x), Math.max(0, number(scroll.y)));
+    for (const el of document.querySelectorAll('.col-body')) {
+      const col = Array.isArray(scroll.columns) && scroll.columns.find(item => item && item.status === el.dataset.status);
+      if (col) el.scrollTop = Math.max(0, number(col.y));
+    }
+  }
+  function save() {
+    try {
+      const state = {version:1, route, project:typeof curWorkdir === 'undefined' ? null : curWorkdir,
+        search:document.getElementById('projDdSearch')?.value || '', scroll:scrollSnapshot()};
+      sessionStorage.setItem(key, JSON.stringify(state));
+      // Preserve unrelated state owned by other navigation features.
+      history.replaceState({...history.state, ccsNavigation:state}, '');
+    } catch { /* Storage may be blocked; ordinary navigation must still work. */ }
+  }
+  function resolveProject(current, projects) {
+    const query = new URLSearchParams(location.search);
+    if (query.get('all') === '1') return null;
+    const explicit = query.get('workdir') ?? query.get('project');
+    if (explicit !== null) {
+      const found = projects.find(p => p.workdir === explicit || p.id === explicit);
+      return found ? found.workdir || found.id : null;
+    }
+    // A deep link expresses intent and must never inherit a remembered filter.
+    if (query.has('session') || query.has('open_session')) return current;
+    if (!saved || !Object.prototype.hasOwnProperty.call(saved, 'project')) return current;
+    if (saved.project === null) return null;
+    const found = projects.find(p => p.workdir === saved.project || p.id === saved.project);
+    return found ? found.workdir || found.id : current;
+  }
+  let restored = false;
+  function restore() {
+    if (restored || !saved) return;
+    restored = true;
+    const search = document.getElementById('projDdSearch');
+    if (search && typeof saved.search === 'string') search.value = saved.search;
+    // Wait until the freshly loaded board/agenda has a measurable layout.
+    requestAnimationFrame(() => applyScroll(saved.scroll));
+  }
+  window.addEventListener('pagehide', save);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
+  return {resolveProject, restore, scrollSnapshot, applyScroll, save};
+})();
+</script>
+
 <script>
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TR = {
   uk: {
+    'nav.back': 'Назад',
+    'nav.skip': 'Перейти до вмісту',
     'modal.task_cfg':'Параметри запуску','modal.task_cfg_note':'Зміни зберігаються і впливають на наступний запуск, а не на поточний. Які саме дилки подіють, залежить від двигуна задачі й від того, чи вона вже має сесію.',
     'tb.bot':'Бот','tb.bot.none':'без бота','tb.bot.tip':'Задача виконається промптом і моделлю цього бота',
     'hdr.title':'Kanban','hdr.add':'Завдання',
@@ -614,6 +760,8 @@ const TR = {
     'dlg.tuning.hint':'Варіанти — з каталогу самого агента (models / efforts у його конфігу). «—» лишає вибір агенту.','dlg.toast.delegated':'Делеговано {agent} — стежте за ходом через значок ⇗ на картці','dlg.toast.stopped':'Делегування зупинено',
   },
   en: {
+    'nav.back': 'Back',
+    'nav.skip': 'Skip to content',
     'modal.task_cfg':'Run settings','modal.task_cfg_note':'Changes are saved and affect the next run, not the one in progress. Which dials take effect depends on the task engine and on whether it already has a session.',
     'tb.bot':'Bot','tb.bot.none':'no bot','tb.bot.tip':'The task runs with this bot\'s prompt and model',
     'hdr.title':'Kanban','hdr.add':'Task',
@@ -668,6 +816,8 @@ const TR = {
     'dlg.tuning.hint':'Options come from this agent\'s own catalog (models / efforts in its config). “—” leaves the choice to the agent.','dlg.toast.delegated':'Delegated to {agent} — follow it via the ⇗ badge on the card','dlg.toast.stopped':'Delegation stopped',
   },
   ru: {
+    'nav.back': 'Назад',
+    'nav.skip': 'Перейти к содержимому',
     'modal.task_cfg':'Параметры запуска','modal.task_cfg_note':'Изменения сохраняются и влияют на следующий запуск, а не на текущий. Какие именно настройки подействуют, зависит от движка задачи и от того, есть ли у неё уже сессия.',
     'tb.bot':'Бот','tb.bot.none':'без бота','tb.bot.tip':'Задача выполнится промптом и моделью этого бота',
     'hdr.title':'Kanban','hdr.add':'Задача',
@@ -722,6 +872,8 @@ const TR = {
     'dlg.tuning.hint':'Варианты — из каталога самого агента (models / efforts в его конфиге). «—» оставляет выбор агенту.','dlg.toast.delegated':'Делегировано {agent} — следите за ходом через значок ⇗ на карточке','dlg.toast.stopped':'Делегирование остановлено',
   },
   fr: {
+    'nav.back': 'Retour',
+    'nav.skip': 'Aller au contenu',
     'modal.task_cfg':'Paramètres d exécution','modal.task_cfg_note':'Les modifications sont enregistrées et affectent le prochain lancement, pas celui en cours. Les réglages qui prennent effet dépendent du moteur de la tâche et du fait qu elle ait déjà une session.',
     'tb.bot':'Bot','tb.bot.none':'sans bot','tb.bot.tip':"La tâche s'exécute avec le prompt et le modèle de ce bot",
     'hdr.title':'Kanban','hdr.add':'Tâche',
@@ -776,6 +928,8 @@ const TR = {
     'dlg.tuning.hint':'Les options viennent du catalogue de cet agent (models / efforts dans sa config). « — » laisse le choix à l\'agent.','dlg.toast.delegated':'Délégué à {agent} — suivez-le via le badge ⇗ de la carte','dlg.toast.stopped':'Délégation arrêtée',
   },
   he: {
+    'nav.back': 'חזרה',
+    'nav.skip': 'דילוג לתוכן',
     'modal.task_cfg':'הגדרות הרצה','modal.task_cfg_note':'השינויים נשמרים ומשפיעים על ההרצה הבאה, לא על זו שרצה כעת. אילו הגדרות ייכנסו לתוקף תלוי במנוע המשימה ובשאלה אם כבר יש לה סשן.',
     'tb.bot':'בוט','tb.bot.none':'ללא בוט','tb.bot.tip':'המשימה תרוץ עם הפרומפט והמודל של הבוט הזה',
     'hdr.title':'קנבן','hdr.add':'משימה',
@@ -1005,6 +1159,7 @@ async function loadProjects(){
       if(found)curWorkdir=found.workdir||found.id;
     }
   }catch{}
+  curWorkdir = pageNavigation.resolveProject(curWorkdir, projects);
   updateProjDropdownBtn();
   refresh(true);
 }
@@ -1038,7 +1193,7 @@ function toggleProjDropdown() {
   menu?.classList.toggle('open', _projDdOpen);
   if (_projDdOpen) {
     $i('projDdSearch')?.focus();
-    renderProjDropdownList();
+    renderProjDropdownList($i('projDdSearch')?.value || '');
   }
 }
 
@@ -1302,6 +1457,7 @@ function updateStats(){
 
 // ─── Board Render ─────────────────────────────────────────────────────────
 function renderBoard(){
+  const scroll = pageNavigation.scrollSnapshot();
   const board=$i('board');board.innerHTML='';
   const chainIds=new Set(chains.map(c=>c.id));
   const standaloneTasks=tasks.filter(tk=>!tk.chain_id||!chainIds.has(tk.chain_id));
@@ -1311,6 +1467,7 @@ function renderBoard(){
     board.appendChild(makeColumn(col,colStandalone,colChains));
   }
   updateStats();
+  pageNavigation.applyScroll(scroll);
 }
 function makeColumn(col,colTasks,colChains=[]){
   const el=document.createElement('div');el.className='col';
@@ -2695,6 +2852,7 @@ async function stopActiveDelegation() {
 
   await loadProjects();
   await refresh(true);
+  pageNavigation.restore();
   startAutoRefresh();
   try{
     const bc=new BroadcastChannel('kanban');

@@ -2947,12 +2947,118 @@ html[dir="rtl"] .notif-card.notif-warning   { border-right-color: var(--orange);
 html[dir="rtl"] .notif-card.notif-error     { border-right-color: var(--red); }
 html[dir="rtl"] .notif-card.notif-milestone { border-right-color: var(--green); }
 html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
+
+/* ─── Focused workspace: existing controls, calmer hierarchy ─── */
+:root { --muted: #98a7bf; --msg-font: 16px; --sidebar-w: 264px; }
+.left.collapsed, .right.collapsed { visibility:hidden; }
+.workspace-tools .badge[hidden] { display:none; }
+.workspace-heading { display:flex; align-items:center; gap:12px; padding:22px 18px; border-bottom:1px solid var(--border); }
+.workspace-heading strong { display:block; font-size:14px; letter-spacing:-.3px; color:var(--text); }
+.workspace-heading span:not(.workspace-mark) { display:block; font-size:12px; color:var(--muted); margin-top:3px; }
+.workspace-mark { display:grid; place-items:center; width:36px; height:38px; border:1px solid var(--accent2); border-radius:11px 11px 11px 3px; background:var(--abg); color:var(--accent2); font-size:11px; font-weight:800; letter-spacing:.5px; }
+.left .sec { padding:14px 12px; }
+.left .sec-title { font-size:12px; letter-spacing:.6px; min-height:32px; }
+.left .ci, .left .hist-item { font-size:13px; min-height:36px; }
+.left .sec-add-btn, .left .sec-filter-btn, .hist-select-btn { min-width:28px; min-height:28px; }
+.workspace-tools { margin:8px 10px 16px; border:1px solid var(--border); border-radius:12px; background:var(--bg); }
+.workspace-tools > summary { display:flex; align-items:center; gap:9px; padding:13px 12px; font-size:13px; font-weight:700; cursor:pointer; list-style:none; }
+.workspace-tools > summary::after { content:'⌄'; margin-inline-start:auto; color:var(--muted); }
+.workspace-tools[open] > summary::after { transform:rotate(180deg); }
+.workspace-tools .sec { padding:12px 10px; }
+.workspace-tools .sec-title { text-transform:none; letter-spacing:0; font-size:13px; }
+.workspace-tools .workspace-help { padding:0 12px 12px; }
+.workspace-help { color:var(--muted); font-size:12px; line-height:1.6; margin:0; }
+.disclosure-icon { font-size:21px; color:var(--accent2); line-height:1; }
+.workspace-runbar { display:flex; gap:12px; align-items:flex-start; padding:10px 18px; border-bottom:1px solid var(--border); background:var(--s1); }
+.run-settings { flex:1; min-width:0; position:relative; }
+.run-settings > summary { min-height:38px; display:flex; align-items:center; gap:14px; padding:8px 12px; border:1px solid var(--border); border-radius:9px; cursor:pointer; list-style:none; font-size:12px; font-weight:700; background:var(--s2); }
+.run-summary { color:var(--muted); font-size:12px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.disclosure-chevron { margin-inline-start:auto; }
+.run-settings[open] .disclosure-chevron { transform:rotate(180deg); }
+.run-settings-content { position:absolute; inset-inline:0; top:calc(100% + 8px); z-index:115; padding:16px; background:var(--s2); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); max-height:65vh; max-height:65dvh; overflow-y:auto; }
+.run-settings-content .toolbar { border:0; padding:12px 0 4px; gap:10px; flex-wrap:wrap; }
+.run-settings-content .tb-group { padding:7px; border:1px solid var(--border); border-radius:9px; background:var(--bg); }
+.run-settings-content .tb-sep { display:none; }
+.run-settings-content .tb-btn { font-size:12px; min-height:32px; }
+.run-settings-content .label { font-size:11px; }
+.workspace-files { display:flex; align-items:center; gap:7px; padding:8px 12px; min-height:38px; border:1px solid var(--border); border-radius:9px; color:var(--text); background:var(--s2); font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+.workspace-files:hover, .workspace-files.active { border-color:var(--accent2); background:var(--abg); }
+.workspace-menu { position:relative; }
+.workspace-menu > summary { display:flex; align-items:center; min-height:36px; padding:6px 12px; border:1px solid var(--border); border-radius:8px; cursor:pointer; font-size:12px; list-style:none; }
+.workspace-menu > summary::after { content:'⌄'; margin-inline-start:8px; }
+.workspace-menu-content { position:absolute; inset-inline-end:0; top:calc(100% + 8px); z-index:120; width:230px; padding:8px; background:var(--s2); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); display:flex; flex-direction:column; gap:4px; }
+.workspace-menu-content .hb { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; min-height:40px; padding:8px 10px; font-size:13px; border:0; }
+.workspace-menu-content .lang-sel { min-height:38px; width:100%; font-size:13px; margin:4px 0; }
+summary::-webkit-details-marker { display:none; }
+.hdr { min-height:68px; padding:12px 18px; }
+.hdr .logo { display:none; } /* The same brand is now anchored in the project rail. */
+.nav-sw-btn { min-height:34px; padding:7px 11px; font-size:12px; }
+.hdr-btns > .hb { min-height:36px; background:var(--accent); color:#fff; border-color:var(--accent); font-size:13px; }
+.hdr-btns { align-items:center; }
+.hdr-collapse-zone { overflow:visible; }
+.hdr-collapse-zone.collapsed { overflow:hidden; }
+.tabs-bar { min-height:42px; }
+.sess-bar { gap:7px; flex-wrap:wrap; }
+.sess-bar button, .sess-bar a { min-height:28px; }
+.welcome { gap:16px; padding:32px 20px; }
+.welcome .wi { width:64px; height:64px; border-radius:20px 20px 20px 5px; box-shadow:0 0 0 7px var(--abg); }
+.welcome h2 { font-size:28px; letter-spacing:-.9px; line-height:1.2; }
+.welcome p { max-width:500px; font-size:14px; line-height:1.8; }
+.welcome-prompts { max-width:560px; width:100%; gap:10px; }
+.wp-card { font-family:inherit; color:var(--text); font-size:14px; padding:16px; min-height:64px; border-radius:12px; }
+.wp-card:focus-visible { border-color:var(--accent2); }
+.composer-guide { display:flex; justify-content:space-between; gap:12px; padding:0 3px 8px; color:var(--muted); font-size:11px; }
+.composer-guide > span:last-child { white-space:nowrap; }
+.iw { border-radius:16px; border-color:#465371; box-shadow:0 4px 18px rgba(0,0,0,.16); }
+.iw:focus-within { border-color:var(--accent2); box-shadow:0 0 0 3px var(--abg); }
+.ia { padding:14px 24px 20px; }
+.iw textarea { min-height:42px; font-size:16px; }
+#mobEffort { width:100%; min-height:44px; font-size:16px; }
+@media (max-width:1100px) and (min-width:801px) {
+  .hdr { flex-wrap:wrap; gap:10px; }
+  .hdr-l { flex:1; min-width:0; }
+  .hdr-meta { flex-wrap:wrap; }
+  .composer-guide > span:first-child { display:none; }
+}
+@media (max-width:800px) {
+  .workspace-heading { padding:16px; }
+  .workspace-tools > summary { min-height:48px; font-size:14px; }
+  .left .sec-add-btn, .left .sec-filter-btn, .hist-select-btn { min-width:34px; min-height:34px; }
+  .workspace-tools .workspace-help { font-size:13px; }
+  .welcome { padding:24px 16px; gap:14px; }
+  .welcome h2 { font-size:25px; }
+  .welcome p { font-size:14px; }
+  .welcome-prompts { max-width:440px; }
+  .wp-card { min-height:52px; padding:12px 14px; }
+  .composer-guide { font-size:10px; padding-bottom:7px; }
+  .composer-guide > span:first-child { display:none; }
+  .ia { padding:10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .mob-sheet .mob-sheet-label { font-size:12px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .workspace-tools, .run-settings, .wp-card { transition:none; }
+}
+
+
+.workspace-location { display:flex; align-items:center; gap:12px; min-height:44px; padding:6px 18px; background:var(--bg); border-bottom:1px solid var(--border); }
+.workspace-location button { display:flex; align-items:center; gap:7px; min-height:30px; padding:4px 9px; border:1px solid var(--border); border-radius:7px; background:var(--s1); color:var(--text); cursor:pointer; font:inherit; font-size:12px; }
+.workspace-location button:disabled { opacity:.4; cursor:default; }
+.workspace-location-text { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:12px; color:var(--muted); }
+.workspace-location kbd { color:var(--muted); font-size:10px; padding-inline-start:10px; }
+.workspace-jump { width:min(560px,95vw); max-height:80dvh; }
+#workspaceJumpSearch { margin:16px; padding:12px; font:inherit; font-size:15px; background:var(--bg); border:1px solid var(--border); border-radius:9px; color:var(--text); }
+.workspace-jump-results { padding:0 10px 12px; overflow-y:auto; min-height:0; }
+.workspace-jump-results button { display:flex; width:100%; padding:12px; margin:2px 0; background:transparent; border:1px solid transparent; border-radius:8px; color:var(--text); text-align:start; font:inherit; font-size:14px; cursor:pointer; }
+.workspace-jump-results button:hover, .workspace-jump-results button:focus-visible { background:var(--abg); border-color:var(--accent2); }
+@media (max-width:800px) { .workspace-location { padding:6px 10px; gap:6px; } .workspace-location button { min-height:36px; } .workspace-location kbd { display:none; } }
+
 </style>
 </head>
 <body>
 
 <!-- LEFT PANEL -->
 <div class="left" id="leftPanel">
+  <div class="workspace-heading"><span class="workspace-mark" aria-hidden="true">CCS</span><div><strong>Claude Code Studio</strong><span data-i18n="focus.workspace">Your workspace</span></div></div>
   <div class="left-inner">
     <!-- Activity: live runs + scheduled + recent, across ALL projects -->
     <div class="sec" id="activitySec">
@@ -2983,20 +3089,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
     </div>
 
     <!-- SSH Hosts section -->
-    <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('sshHosts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('sshHosts')}">
-        <span data-i18n="sec.sshHosts">SSH Hosts</span>
-        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-filter-btn" id="sshHostsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('sshHosts')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();openAddHostModal()" title="＋ Add SSH host" data-i18n-title="ssh.add">＋</button>
-          <span class="badge" id="sshHostCount">0</span>
-        </div>
-      </div>
-      <div class="sec-body" id="sshHostsBody">
-        <div class="sec-filter-row" id="sshHostsFilterRow"><input type="text" id="sshHostsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.ssh" aria-label="Filter SSH hosts" oninput="applySecFilter('sshHosts',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('sshHosts');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('sshHosts')">×</button></div>
-        <div class="sec-list"><div id="sshHostList"></div></div>
-      </div>
-    </div>
+
 
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('hist')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('hist')}">
@@ -3018,6 +3111,55 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       </div>
     </div>
 
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- Tunnel Manager -->
+
+
+    <!-- Telegram Remote Access -->
+
+
+    <details class="workspace-tools" id="workspaceTools">
+      <summary><span class="disclosure-icon" aria-hidden="true">◇</span><span data-i18n="focus.tools">Tools & team</span><span id="workspaceToolsCount" class="badge"></span></summary>
+      <p class="workspace-help" data-i18n="focus.tools.hint">Bots, skills, integrations and remote connections. Everything stays available here.</p>
+    <div class="sec">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('bots')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('bots')}">
+        <span data-i18n="sec.bots">Bots</span>
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
+          <button class="sec-add-btn" onclick="event.stopPropagation();openBotsImport()" title="Import bots from a JSON file" data-i18n-title="bots.import.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();exportBots()" title="Export bots to a JSON file" data-i18n-title="bots.export.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openBotForm()" title="Create bot" data-i18n-title="bot.add.new">＋</button>
+          <span class="badge" id="botsCount">0</span>
+        </div>
+      </div>
+      <div class="sec-body" id="botsBody">
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="bots.hint">Participants in this project. Mention one with @@ in a message.</div>
+        <div class="sec-list"><div id="botsList"></div></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('agents')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('agents')}">
+        <span data-i18n="sec.agents">Agents</span>
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
+          <button class="sec-add-btn" onclick="event.stopPropagation();openAgentForm()" title="Add agent" data-i18n-title="agent.add.new">＋</button>
+          <span class="badge" id="agentsCount">0</span>
+        </div>
+      </div>
+      <div class="sec-body" id="agentsBody">
+        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="agents.hint">External agents for task delegation.</div>
+        <div class="sec-list"><div id="agentsList"></div></div>
+      </div>
+    </div>
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('mcp')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('mcp')}">
         <span data-i18n="sec.mcp">MCP</span>
@@ -3035,7 +3177,6 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <div class="sec-list"><div id="mcpList"></div></div>
       </div>
     </div>
-
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('skills')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('skills')}">
         <span data-i18n="sec.skills">Skills</span>
@@ -3054,7 +3195,6 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <input type="file" id="skillUpload" accept=".md,.txt" style="display:none" onchange="uploadSkill(this)">
       </div>
     </div>
-
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('cmds')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('cmds')}">
         <span data-i18n="sec.cmds">/ Commands</span>
@@ -3070,40 +3210,20 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <div class="sec-list"><div id="cmdsList"></div></div>
       </div>
     </div>
-
     <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('bots')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('bots')}">
-        <span data-i18n="sec.bots">Bots</span>
+      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('sshHosts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('sshHosts')}">
+        <span data-i18n="sec.sshHosts">SSH Hosts</span>
         <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-add-btn" onclick="event.stopPropagation();openBotsImport()" title="Import bots from a JSON file" data-i18n-title="bots.import.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();exportBots()" title="Export bots to a JSON file" data-i18n-title="bots.export.title"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
-          <button class="sec-add-btn" onclick="event.stopPropagation();openBotForm()" title="Create bot" data-i18n-title="bot.add.new">＋</button>
-          <span class="badge" id="botsCount">0</span>
+          <button class="sec-filter-btn" id="sshHostsFilterBtn" onclick="event.stopPropagation();toggleSecFilter('sshHosts')" data-i18n-title="sec.filter" title="Filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+          <button class="sec-add-btn" onclick="event.stopPropagation();openAddHostModal()" title="＋ Add SSH host" data-i18n-title="ssh.add">＋</button>
+          <span class="badge" id="sshHostCount">0</span>
         </div>
       </div>
-      <div class="sec-body" id="botsBody">
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="bots.hint">Participants in this project. Mention one with @@ in a message.</div>
-        <div class="sec-list"><div id="botsList"></div></div>
+      <div class="sec-body" id="sshHostsBody">
+        <div class="sec-filter-row" id="sshHostsFilterRow"><input type="text" id="sshHostsFilterInp" data-i18n-ph="sec.filter.ph" placeholder="Filter..." data-i18n-aria="sec.filter.aria.ssh" aria-label="Filter SSH hosts" oninput="applySecFilter('sshHosts',this.value)" onkeydown="if(event.key==='Escape'){clearSecFilter('sshHosts');event.stopPropagation()}"><button class="sfx" onclick="clearSecFilter('sshHosts')">×</button></div>
+        <div class="sec-list"><div id="sshHostList"></div></div>
       </div>
     </div>
-
-    <div class="sec">
-      <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('agents')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('agents')}">
-        <span data-i18n="sec.agents">Agents</span>
-        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-          <button class="sec-add-btn" onclick="event.stopPropagation();openAgentForm()" title="Add agent" data-i18n-title="agent.add.new">＋</button>
-          <span class="badge" id="agentsCount">0</span>
-        </div>
-      </div>
-      <div class="sec-body" id="agentsBody">
-        <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="agents.hint">External agents for task delegation.</div>
-        <div class="sec-list"><div id="agentsList"></div></div>
-      </div>
-    </div>
-
-    
-
-    <!-- Tunnel Manager -->
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="false" onclick="toggleSec('tunnel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('tunnel')}">
         <span data-i18n="sec.tunnel">Remote Access</span>
@@ -3163,8 +3283,6 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         </div>
       </div>
     </div>
-
-    <!-- Telegram Remote Access -->
     <div class="sec">
       <div class="sec-title" role="button" tabindex="0" aria-expanded="true" onclick="toggleSec('tg')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSec('tg')}">
         <span data-i18n="sec.telegram">Telegram</span>
@@ -3213,7 +3331,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         </div>
       </div>
     </div>
-
+    </details>
   </div>
 </div>
 
@@ -3254,7 +3372,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 
   <!-- ══════ MOBILE SETTINGS BOTTOM SHEET ══════ -->
   <div class="mob-sheet-overlay" id="mobSheetOverlay" onclick="closeMobSheet()"></div>
-  <div class="mob-sheet" id="mobSheet">
+  <div class="mob-sheet" id="mobSheet" role="dialog" aria-modal="true" aria-label="Run settings" data-i18n-aria="focus.run" aria-hidden="true" inert>
     <div class="mob-sheet-handle" id="mobSheetHandle"></div>
     <div class="mob-sheet-scroll">
       <div class="mob-sheet-section">
@@ -3292,6 +3410,12 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         </div>
       </div>
       <div class="mob-sheet-section">
+        <label class="mob-sheet-label" for="mobEffort" data-i18n="tb.effort">Effort</label>
+        <select class="tb-input" id="mobEffort" onchange="setEffort(this.value)">
+          <option value="" data-i18n="effort.auto">Auto</option><option value="low" data-i18n="effort.low">Low</option><option value="medium" data-i18n="effort.med">Med</option><option value="high" data-i18n="effort.high">High</option><option value="xhigh" data-i18n="effort.xhigh">X-High</option><option value="max" data-i18n="effort.max">Max</option>
+        </select>
+      </div>
+      <div class="mob-sheet-section">
         <div class="mob-sheet-label" data-i18n="tb.turns">Max turns</div>
         <div class="mob-sheet-turns">
           <input type="number" id="mobMaxTurns" value="50" min="1" max="200" data-i18n-tip="turns.tip">
@@ -3307,12 +3431,14 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <a class="mob-sheet-link" href="/schedule" data-i18n-tip="nav.schedule.tip">
         <span class="mob-sheet-link-icon">📅</span> <span data-i18n="nav.schedule">Schedule</span>
       </a>
+      <a class="mob-sheet-link" href="/dashboard"><span class="mob-sheet-link-icon" aria-hidden="true">▥</span><span data-i18n="nav.dashboard">Dashboard</span></a>
+      <button class="mob-sheet-link" onclick="closeMobSheet();openCliImport()"><span class="mob-sheet-link-icon" aria-hidden="true">↓</span><span data-i18n="cli.import.tip">Import CLI sessions</span></button>
       <div class="mob-sheet-divider"></div>
       <button class="mob-sheet-link" onclick="toggle('rightPanel');closeMobSheet()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
         <span data-i18n="mob.files">Files</span>
       </button>
-      <button class="mob-sheet-link" onclick="openCfgEditor();closeMobSheet()">
+      <button class="mob-sheet-link" onclick="closeMobSheet();openCfgEditor()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
         <span data-i18n="btn.cfg">Config</span>
       </button>
@@ -3392,8 +3518,9 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         </div>
       </div>
       <button class="hb" onclick="newSession()" data-tip="New chat" data-i18n-tip="tip.new">&#xFF0B; <span data-i18n="btn.new">Chat</span></button>
-      <button class="hb" onclick="openCliImport()" data-tip="Import Claude CLI sessions" data-i18n-tip="cli.import.tip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-      <button class="hb" onclick="openCfgEditor()" data-tip="Configuration" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
+      <details class="workspace-menu" id="workspaceMenu"><summary data-i18n="focus.more">More</summary><div class="workspace-menu-content">
+      <button class="hb" onclick="openCliImport()" data-tip="Import Claude CLI sessions" data-i18n-tip="cli.import.tip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span data-i18n="cli.import.tip">Import CLI sessions</span></button>
+      <button class="hb" onclick="openCfgEditor()" data-tip="Configuration" data-i18n-tip="tip.cfg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg><span data-i18n="cfg.title">Configuration</span></button>
       <select class="lang-sel" id="langSel" onchange="setLang(this.value)" data-i18n-aria="tip.lang" aria-label="Interface language" data-tip="Interface language" data-i18n-tip="tip.lang">
         <option value="en">EN</option>
         <option value="uk">UK</option>
@@ -3401,11 +3528,17 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         <option value="fr">FR</option>
         <option value="he">HE</option>
       </select>
-      <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener" data-tip="GitHub" style="text-decoration:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg></a>
-      <button class="hb" onclick="logout()" data-tip="Logout" data-i18n-tip="tip.logout"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+      <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener" data-tip="GitHub" style="text-decoration:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg><span>GitHub</span></a>
+      <button class="hb" onclick="logout()" data-tip="Logout" data-i18n-tip="tip.logout"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span data-i18n="tip.logout">Log out</span></button>
+      </div></details>
     </div>
   </div>
 
+  <div class="workspace-runbar">
+  <details class="run-settings" id="runSettings">
+    <summary><span data-i18n="focus.run">Run settings</span><span id="runSettingsSummary" class="run-summary"></span><span class="disclosure-chevron" aria-hidden="true">⌄</span></summary>
+    <div class="run-settings-content">
+    <p class="workspace-help" data-i18n="focus.run.hint">Choose how the next message runs. Existing chats keep their own settings.</p>
   <div class="toolbar">
     <div class="tb-group" data-tbg="mode">
       <span class="label" data-i18n="tb.mode">Mode</span>
@@ -3462,8 +3595,17 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
         data-i18n-title="defaults.reset.title" title="Drop this project's overrides and inherit the global defaults">↺</button>
     </div>
   </div>
+    </div>
+  </details>
+  <button class="workspace-files" onclick="toggle('rightPanel')" aria-controls="rightPanel" aria-expanded="false"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg><span data-i18n="mob.files">Files</span></button>
+  </div>
   </div><!-- /hdr-collapse-zone -->
 
+  <div class="workspace-location" aria-label="Workspace navigation" data-i18n-aria="focus.navigation">
+    <button type="button" id="workspaceBack" onclick="history.back()" data-i18n-title="focus.back" title="Back"><span aria-hidden="true">←</span><span data-i18n="focus.back">Back</span></button>
+    <span id="workspaceLocation" class="workspace-location-text"></span>
+    <button type="button" id="workspaceJumpBtn" onclick="openWorkspaceJump()"><span aria-hidden="true">⌕</span><span data-i18n="focus.find">Go to…</span><kbd data-i18n="focus.shortcut">⌘ / Ctrl K</kbd></button>
+  </div>
   <div class="tabs-bar" id="tabsBar"></div>
 
   <div class="sess-bar" id="sessBar" style="display:none">
@@ -3578,10 +3720,10 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
       <h2>Claude Code Studio</h2>
       <p data-i18n="welcome.desc">Choose MCP and Skills on the left, files on the right.</p>
       <div class="welcome-prompts">
-        <div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; <span data-i18n="welcome.prompt.1">Explain this code step by step</span></div>
-        <div class="wp-card" onclick="setPrompt(this)">&#x1F41B; <span data-i18n="welcome.prompt.2">Find and fix bugs</span></div>
-        <div class="wp-card" onclick="setPrompt(this)">&#x2728; <span data-i18n="welcome.prompt.3">Write unit tests</span></div>
-        <div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; <span data-i18n="welcome.prompt.4">Design the architecture</span></div>
+        <button type="button" class="wp-card" onclick="setPrompt(this)">&#x1F4A1; <span data-i18n="welcome.prompt.1">Explain this code step by step</span></button>
+        <button type="button" class="wp-card" onclick="setPrompt(this)">&#x1F41B; <span data-i18n="welcome.prompt.2">Find and fix bugs</span></button>
+        <button type="button" class="wp-card" onclick="setPrompt(this)">&#x2728; <span data-i18n="welcome.prompt.3">Write unit tests</span></button>
+        <button type="button" class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; <span data-i18n="welcome.prompt.4">Design the architecture</span></button>
       </div>
       <button class="welcome-import-btn" onclick="$i('sessImportInput').click()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="welcome.import">Import session from JSON</span></button>
     </div>
@@ -3593,6 +3735,7 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
   <button id="scrollBtn" onclick="scrollToBottom()" data-i18n-title="scroll.down" title="Scroll to bottom">↓</button>
 
   <div class="ia" style="position:relative">
+    <div class="composer-guide"><span data-i18n="focus.compose">Describe the outcome. Your team can take it from here.</span><span data-i18n="focus.shortcuts">@@ bots · @ files · / commands · # SSH</span></div>
     <!-- Hidden file input for local file attachment -->
     <input type="file" id="filePickerInput" multiple style="display:none" onchange="onFilePicker(this)">
     <!-- @ file picker popup -->
@@ -3661,19 +3804,27 @@ html[dir="rtl"] .notif-card.notif-progress  { border-right-color: #a78bfa; }
 </div>
 
 <!-- RIGHT PANEL TAB (left side of right panel) -->
-<div class="panel-tab panel-tab-right active" role="button" tabindex="0" data-i18n-aria="tip.panels.right" aria-label="Toggle right panel" onclick="toggle('rightPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('rightPanel')}" data-tip="Toggle right panel" data-i18n-tip="tip.panels.right">
+<div class="panel-tab panel-tab-right" role="button" tabindex="0" data-i18n-aria="tip.panels.right" aria-label="Toggle right panel" onclick="toggle('rightPanel')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('rightPanel')}" data-tip="Toggle right panel" data-i18n-tip="tip.panels.right">
   <div class="panel-tab-inner">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
   </div>
 </div>
 
 <!-- RIGHT PANEL: File Browser -->
-<div class="right" id="rightPanel">
+<div class="right collapsed" id="rightPanel">
   <div class="fh">
     <span data-i18n="files.title">Workspace</span>
     <button onclick="loadFiles()" data-i18n-title="files.refresh" title="Refresh">↻</button>
   </div>
   <div class="ft" id="filesTree"></div>
+</div>
+
+<div class="modal-overlay hidden" id="workspaceJumpModal" aria-hidden="true" onclick="if(event.target===this)closeWorkspaceJump()">
+  <div class="modal workspace-jump" role="dialog" aria-modal="true" aria-labelledby="workspaceJumpTitle" tabindex="-1">
+    <div class="modal-hdr"><h2 id="workspaceJumpTitle" data-i18n="focus.find">Go to…</h2><button class="modal-close" onclick="closeWorkspaceJump()" data-i18n-aria="cfg.close" aria-label="Close">×</button></div>
+    <input type="search" id="workspaceJumpSearch" data-i18n-ph="focus.search" data-i18n-aria="focus.search" placeholder="Find a page, tool or project…" aria-label="Find a page, tool or project" oninput="renderWorkspaceJump(this.value)">
+    <div id="workspaceJumpResults" class="workspace-jump-results"></div>
+  </div>
 </div>
 
 <!-- Config Modal -->
@@ -4540,6 +4691,7 @@ function setEffort(v) {
   const valid = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
   curEffort = valid.includes(v) ? v : '';
   try { localStorage.setItem('effort', curEffort); } catch {}
+  ['effortSel', 'mobEffort'].forEach(id => { const el = $i(id); if (el) el.value = curEffort; });
 }
 let curWorkdir = null; // current working directory for the session
 let projects = [], curProjectId = null; // projects list + active project
@@ -4752,6 +4904,21 @@ document.addEventListener('keydown', e => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   uk: {
+    "focus.shortcut":"⌘ / Ctrl K",
+    "focus.navigation":"Навігація робочого простору",
+    "focus.back":"Назад",
+    "focus.find":"Перейти до…",
+    "focus.search":"Знайти сторінку, інструмент або проєкт…",
+
+    "focus.workspace":"Ваш робочий простір",
+    "focus.tools":"Інструменти й команда",
+    "focus.tools.hint":"Боти, навички, інтеграції та віддалені підключення. Усі можливості доступні тут.",
+    "focus.run":"Параметри запуску",
+    "focus.run.hint":"Виберіть, як виконати наступне повідомлення. Наявні чати зберігають власні параметри.",
+    "focus.more":"Ще",
+    "focus.compose":"Опишіть результат. Команда допоможе його отримати.",
+    "focus.shortcuts":"@@ боти · @ файли · / команди · # SSH",
+
     'dlg.model':'Модель','dlg.effort':'Рівень міркування','dlg.tuning.default':'За замовчуванням',
     /* settings form (issue #40) */
     'cfg.tab.form':'⚙ Параметри',
@@ -4864,8 +5031,8 @@ const TRANSLATIONS = {
     'btn.new':'Чат','btn.cfg':'Конфіг','btn.logout':'Вийти','mob.files':'Файли','mob.tabs':'Сесії',
     'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Кроки',
     'welcome.title':'Нова сесія','welcome.ready':'Готовий до роботи',
-    'welcome.desc':'Виберіть MCP та Навички зліва, файли — справа.',
-    'input.ph':'Напишіть завдання... Ctrl+V — скріншот · @@ — бот · @ — файл · # — SSH · 📎 — будь-який файл',
+    'welcome.desc':"Почніть із завдання. Боти й навички доступні в «Інструменти й команда», а контекст проєкту — у «Файли».",
+    'input.ph':"Що ви хочете створити або покращити?",
     'files.title':'Робоча директорія','files.refresh':'Оновити','queue.title':'Завдань у черзі',
     'cfg.title':'Налаштування','cfg.saved':'✓ Збережено','cfg.close':'Закрити','cfg.save':'Зберегти',
     'dir.title':'Новий проект','toast.loading':'Завантаження...',
@@ -5157,6 +5324,21 @@ const TRANSLATIONS = {
     'upd.available':'Доступне оновлення','upd.move_to_apps':'Щоб оновити, перемістіть Claude Code Studio у папку «Програми» (Applications) і відкрийте її звідти.','upd.btn':'Оновити','upd.updating':'Оновлення… {time}','upd.retry':'Повторити','upd.failed':'Оновлення не вдалося','upd.new_version':'Доступна нова версія {version}',
   },
   en: {
+    "focus.shortcut":"⌘ / Ctrl K",
+    "focus.navigation":"Workspace navigation",
+    "focus.back":"Back",
+    "focus.find":"Go to…",
+    "focus.search":"Find a page, tool or project…",
+
+    "focus.workspace":"Your workspace",
+    "focus.tools":"Tools & team",
+    "focus.tools.hint":"Bots, skills, integrations and remote connections. Everything stays available here.",
+    "focus.run":"Run settings",
+    "focus.run.hint":"Choose how the next message runs. Existing chats keep their own settings.",
+    "focus.more":"More",
+    "focus.compose":"Describe the outcome. Your team can take it from here.",
+    "focus.shortcuts":"@@ bots · @ files · / commands · # SSH",
+
     'dlg.model':'Model','dlg.effort':'Reasoning effort','dlg.tuning.default':'Default',
     /* settings form (issue #40) */
     'cfg.tab.form':'⚙ Settings',
@@ -5269,8 +5451,8 @@ const TRANSLATIONS = {
     'btn.new':'Chat','btn.cfg':'Config','btn.logout':'Logout','mob.files':'Files','mob.tabs':'Sessions',
     'tb.mode':'Mode','tb.agent':'Agent','tb.model':'Model','tb.turns':'Turns',
     'welcome.title':'New session','welcome.ready':'Ready to work',
-    'welcome.desc':'Choose MCP and Skills on the left, files on the right.',
-    'input.ph':'Write a task... Ctrl+V — screenshot · @@ — bot · @ — file · # — SSH · 📎 — any file',
+    'welcome.desc':"Start with a task. Open Tools & team for specialist bots and skills, or Files for project context.",
+    'input.ph':"What would you like to build or improve?",
     'files.title':'Workspace','files.refresh':'Refresh','queue.title':'Tasks waiting in queue',
     'cfg.title':'Configuration','cfg.saved':'✓ Saved','cfg.close':'Close','cfg.save':'Save',
     'dir.title':'New project','toast.loading':'Loading...',
@@ -5562,6 +5744,21 @@ const TRANSLATIONS = {
     'upd.available':'Update available','upd.move_to_apps':'To update, move Claude Code Studio to the Applications folder and open it from there.','upd.btn':'Update','upd.updating':'Updating… {time}','upd.retry':'Retry','upd.failed':'Update failed','upd.new_version':'New version {version} available',
   },
   ru: {
+    "focus.shortcut":"⌘ / Ctrl K",
+    "focus.navigation":"Навигация рабочего пространства",
+    "focus.back":"Назад",
+    "focus.find":"Перейти к…",
+    "focus.search":"Найти страницу, инструмент или проект…",
+
+    "focus.workspace":"Ваше рабочее пространство",
+    "focus.tools":"Инструменты и команда",
+    "focus.tools.hint":"Боты, навыки, интеграции и удалённые подключения. Все возможности доступны здесь.",
+    "focus.run":"Параметры запуска",
+    "focus.run.hint":"Выберите, как выполнить следующее сообщение. Существующие чаты сохраняют свои настройки.",
+    "focus.more":"Ещё",
+    "focus.compose":"Опишите результат. Команда поможет его получить.",
+    "focus.shortcuts":"@@ боты · @ файлы · / команды · # SSH",
+
     'dlg.model':'Модель','dlg.effort':'Уровень рассуждений','dlg.tuning.default':'По умолчанию',
     /* settings form (issue #40) */
     'cfg.tab.form':'⚙ Параметры',
@@ -5674,8 +5871,8 @@ const TRANSLATIONS = {
     'btn.new':'Чат','btn.cfg':'Конфиг','btn.logout':'Выйти','mob.files':'Файлы','mob.tabs':'Сессии',
     'tb.mode':'Режим','tb.agent':'Агент','tb.model':'Модель','tb.turns':'Шаги',
     'welcome.title':'Новая сессия','welcome.ready':'Готов к работе',
-    'welcome.desc':'Выберите MCP и Навыки слева, файлы — справа.',
-    'input.ph':'Напишите задание... Ctrl+V — скриншот · @@ — бот · @ — файл · # — SSH · 📎 — любой файл',
+    'welcome.desc':"Начните с задачи. Боты и навыки доступны в «Инструменты и команда», а контекст проекта — в «Файлы».",
+    'input.ph':"Что вы хотите создать или улучшить?",
     'files.title':'Рабочая директория','files.refresh':'Обновить','queue.title':'Задач в очереди',
     'cfg.title':'Настройки','cfg.saved':'✓ Сохранено','cfg.close':'Закрыть','cfg.save':'Сохранить',
     'dir.title':'Новый проект','toast.loading':'Загрузка...',
@@ -5967,6 +6164,21 @@ const TRANSLATIONS = {
     'upd.available':'Доступно обновление','upd.move_to_apps':'Чтобы обновить, переместите Claude Code Studio в папку «Программы» (Applications) и откройте оттуда.','upd.btn':'Обновить','upd.updating':'Обновление… {time}','upd.retry':'Повторить','upd.failed':'Обновление не удалось','upd.new_version':'Доступна новая версия {version}',
   },
   fr: {
+    "focus.shortcut":"⌘ / Ctrl K",
+    "focus.navigation":"Navigation de l’espace de travail",
+    "focus.back":"Retour",
+    "focus.find":"Aller à…",
+    "focus.search":"Trouver une page, un outil ou un projet…",
+
+    "focus.workspace":"Votre espace de travail",
+    "focus.tools":"Outils et équipe",
+    "focus.tools.hint":"Bots, compétences, intégrations et connexions distantes. Tout reste accessible ici.",
+    "focus.run":"Options d’exécution",
+    "focus.run.hint":"Choisissez comment exécuter le prochain message. Les discussions conservent leurs propres réglages.",
+    "focus.more":"Plus",
+    "focus.compose":"Décrivez le résultat. Votre équipe peut vous aider.",
+    "focus.shortcuts":"@@ bots · @ fichiers · / commandes · # SSH",
+
     'dlg.model':'Modèle','dlg.effort':'Niveau de raisonnement','dlg.tuning.default':'Par défaut',
     /* settings form (issue #40) */
     'cfg.tab.form':'⚙ Paramètres',
@@ -6073,8 +6285,8 @@ const TRANSLATIONS = {
     "skills.hint":"Les compétences sont des fichiers d'instructions ajoutés au prompt système.","skills.upload":"＋ Importer un fichier .md","sec.projects":"Projets","proj.add":"＋ Ajouter un projet",
     "tip.new":"Nouveau chat","tip.cfg":"Configuration","tip.logout":"Déconnexion","tip.panels.left":"Afficher/masquer le panneau gauche","tip.panels.right":"Afficher/masquer le panneau droit",
     "btn.new":"Chat","btn.cfg":"Config","btn.logout":"Déconnexion","mob.files":"Fichiers","mob.tabs":"Sessions","tb.mode":"Mode","tb.agent":"Agent","tb.model":"Modèle","tb.turns":"Tours",
-    "welcome.title":"Nouvelle session","welcome.ready":"Prêt à travailler","welcome.desc":"Choisissez MCP et Compétences à gauche, les fichiers à droite.",
-    "input.ph":"Écrivez une tâche... Ctrl+V — capture d'écran · @ — fichiers · # — SSH · 📎 — tout fichier","files.title":"Espace de travail","files.refresh":"Actualiser",
+    "welcome.title":"Nouvelle session","welcome.ready":"Prêt à travailler","welcome.desc":"Commencez par une tâche. Ouvrez Outils et équipe pour les bots et compétences, ou Fichiers pour le contexte du projet.",
+    "input.ph":"Que souhaitez-vous créer ou améliorer ?","files.title":"Espace de travail","files.refresh":"Actualiser",
     "queue.title":"Tâches en attente dans la file d'attente","cfg.title":"Configuration","cfg.saved":"✓ Enregistré","cfg.close":"Fermer","cfg.save":"Enregistrer","dir.title":"Nouveau projet",
     "toast.loading":"Chargement...","scroll.down":"Défiler vers le bas","at.search":"Rechercher un fichier...","at.search_bot":"Rechercher un bot...","reply.cancel":"Annuler la réponse","stop.agent":"Arrêter l'agent",
     "send.msg":"Envoyer (Enter)","dir.cancel":"Annuler","confirm.stop.h":"Arrêter la tâche ?","confirm.stop.yes":"Oui, arrêter","confirm.stop.cancel":"Annuler","copy.code":"Copier","copy.msg":"Copier",
@@ -6273,6 +6485,21 @@ const TRANSLATIONS = {
     "upd.available":"Mise à jour disponible","upd.move_to_apps":"Pour mettre à jour, déplacez Claude Code Studio dans le dossier Applications et ouvrez-le depuis celui-ci.","upd.btn":"Mettre à jour","upd.updating":"Mise à jour… {time}","upd.retry":"Réessayer","upd.failed":"Échec de la mise à jour","upd.new_version":"Nouvelle version {version} disponible",
   },
   he: {
+    "focus.shortcut":"⌘ / Ctrl K",
+    "focus.navigation":"ניווט בסביבת העבודה",
+    "focus.back":"חזרה",
+    "focus.find":"מעבר אל…",
+    "focus.search":"חיפוש דף, כלי או פרויקט…",
+
+    "focus.workspace":"סביבת העבודה שלך",
+    "focus.tools":"כלים וצוות",
+    "focus.tools.hint":"בוטים, מיומנויות, חיבורים וגישה מרחוק. הכול נשאר זמין כאן.",
+    "focus.run":"הגדרות הרצה",
+    "focus.run.hint":"בחרו כיצד להריץ את ההודעה הבאה. שיחות קיימות שומרות על ההגדרות שלהן.",
+    "focus.more":"עוד",
+    "focus.compose":"תארו את התוצאה. הצוות יכול לעזור.",
+    "focus.shortcuts":"@@ בוטים · @ קבצים · / פקודות · # SSH",
+
     'dlg.model':'מודל','dlg.effort':'רמת חשיבה','dlg.tuning.default':'ברירת מחדל',
     /* settings form (issue #40) */
     'cfg.tab.form':'⚙ הגדרות',
@@ -6378,8 +6605,8 @@ const TRANSLATIONS = {
     "mcp.args":"ארגומנטים מופרדים בפסיקים","mcp.add_btn":"הוספה","sec.skills":"Skills","skills.hint":"Skills הם קובצי הנחיות שמתווספים ל-system prompt.","skills.upload":"＋ העלאת קובץ .md",
     "sec.projects":"פרויקטים","proj.add":"＋ הוספת פרויקט","tip.new":"צ'אט חדש","tip.cfg":"הגדרות","tip.logout":"התנתקות","tip.panels.left":"הצגה/הסתרה של הפאנל השמאלי",
     "tip.panels.right":"הצגה/הסתרה של הפאנל הימני","btn.new":"צ'אט","btn.cfg":"הגדרות","btn.logout":"התנתקות","mob.files":"קבצים","mob.tabs":"סשנים","tb.mode":"מצב","tb.agent":"Agent","tb.model":"מודל",
-    "tb.turns":"תורות","welcome.title":"סשן חדש","welcome.ready":"מוכן לעבודה","welcome.desc":"בחרו MCP ו-Skills משמאל, קבצים מימין.",
-    "input.ph":"כתבו משימה... Ctrl+V — צילום מסך · @ — קבצים · # — SSH · 📎 — כל קובץ","files.title":"סביבת עבודה","files.refresh":"רענון","queue.title":"משימות ממתינות בתור","cfg.title":"הגדרות",
+    "tb.turns":"תורות","welcome.title":"סשן חדש","welcome.ready":"מוכן לעבודה","welcome.desc":"התחילו במשימה. פתחו כלים וצוות לבוטים ומיומנויות, או קבצים להקשר הפרויקט.",
+    "input.ph":"מה תרצו לבנות או לשפר?","files.title":"סביבת עבודה","files.refresh":"רענון","queue.title":"משימות ממתינות בתור","cfg.title":"הגדרות",
     "cfg.saved":"✓ נשמר","cfg.close":"סגירה","cfg.save":"שמירה","dir.title":"פרויקט חדש","toast.loading":"טוען...","scroll.down":"גלילה לתחתית","at.search":"חיפוש קובץ...","at.search_bot":"חיפוש בוט...","reply.cancel":"ביטול תגובה",
     "stop.agent":"עצירת ה-agent","send.msg":"שליחה (Enter)","dir.cancel":"ביטול","confirm.stop.h":"לעצור את המשימה?","confirm.stop.yes":"כן, לעצור","confirm.stop.cancel":"ביטול","copy.code":"העתקה",
     "copy.msg":"העתקה","msg.reply":"תגובה","fork.title":"המשך בצ'אט חדש","use.input":"הכנסה לשדה הקלט","tab.new":"צ'אט חדש","you.label":"אתם","err.stop.switch":"עצרו את ה-agent לפני המעבר",
@@ -6606,6 +6833,7 @@ function setLang(lang, persist = true) {
   if (typeof autosizeInput === 'function') autosizeInput();
   try { if (typeof renderActivity === 'function') renderActivity(_lastActivity); } catch {}
   rerenderI18nDynamic();
+  updateWorkspaceSummary();
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -9425,7 +9653,7 @@ function showW() {
   // Welcome/blank screen = no active chat → engine selector reflects the global default
   _curSessionRunEngine = null;
   if (typeof resolveEngineForView === 'function') resolveEngineForView();
-  msgsEl.innerHTML = `<div class="welcome"><div class="wi">CCS</div><h2>Claude Code Studio</h2><p>${t('welcome.desc')}</p><div class="welcome-prompts"><div class="wp-card" onclick="setPrompt(this)">&#x1F4A1; ${t('welcome.prompt.1')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F41B; ${t('welcome.prompt.2')}</div><div class="wp-card" onclick="setPrompt(this)">&#x2728; ${t('welcome.prompt.3')}</div><div class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; ${t('welcome.prompt.4')}</div></div><button class="welcome-import-btn" onclick="$i('sessImportInput').click()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('welcome.import')}</button></div>`;
+  msgsEl.innerHTML = `<div class="welcome"><div class="wi">CCS</div><h2>Claude Code Studio</h2><p>${t('welcome.desc')}</p><div class="welcome-prompts"><button type="button" class="wp-card" onclick="setPrompt(this)">&#x1F4A1; ${t('welcome.prompt.1')}</button><button type="button" class="wp-card" onclick="setPrompt(this)">&#x1F41B; ${t('welcome.prompt.2')}</button><button type="button" class="wp-card" onclick="setPrompt(this)">&#x2728; ${t('welcome.prompt.3')}</button><button type="button" class="wp-card" onclick="setPrompt(this)">&#x1F3D7;&#xFE0F; ${t('welcome.prompt.4')}</button></div><button class="welcome-import-btn" onclick="$i('sessImportInput').click()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('welcome.import')}</button></div>`;
 }
 
 function showStatus(txt) {
@@ -10535,6 +10763,7 @@ Continue from here:`;
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────
 function renderTabs() {
+  if (typeof updateWorkspaceLocation === 'function') updateWorkspaceLocation();
   const bar = $i('tabsBar'); if (!bar) return;
   // Shared project-switcher node (normally lives in .hdr-meta) — grab the live
   // reference before wiping the bar so it survives the rebuild below no matter
@@ -11096,6 +11325,7 @@ function toggle(id) {
   const el = $i(id);
   el.classList.toggle('collapsed');
   const isOpen = !el.classList.contains('collapsed');
+  document.querySelectorAll(`[aria-controls="${id}"]`).forEach(btn => btn.setAttribute('aria-expanded', String(isOpen)));
   document.querySelectorAll(`[onclick="toggle('${id}')"]`).forEach(btn => btn.classList.toggle('active', isOpen));
   // Mobile backdrop
   if (window.innerWidth <= 800) {
@@ -11390,7 +11620,7 @@ function setDefaultEngine() {
   }).catch(() => toast(t('engine.default.err'), true));
 }
 
-function updInd() { /* removed — mode indicator no longer in toolbar */ }
+function updInd() { updateWorkspaceSummary(); }
 
 function updateSessBarSkills() {
   const el = $i('sessBarSkills');
@@ -11444,6 +11674,7 @@ function syncBtn(group, val) {
     c.classList.toggle('on', c.dataset.v === val);
   });
   if (typeof updateMobSubtitle === 'function') updateMobSubtitle();
+  updateWorkspaceSummary();
 }
 
 // ─── Attachments (@ files + clipboard screenshots) ───────────────────────
@@ -13183,6 +13414,7 @@ async function loadSess(id) {
       }
     }
     _shownFrom = Math.max(0, _allMsgs.length - MSG_PAGE);
+    if (typeof _pendingWorkspaceReturn !== 'undefined' && _pendingWorkspaceReturn?.tabId === id && Number.isInteger(_pendingWorkspaceReturn.shownFrom)) _shownFrom = Math.min(_shownFrom, Math.max(0, _pendingWorkspaceReturn.shownFrom));
 
     for (let i = _shownFrom; i < _allMsgs.length; i++) {
       try { _renderMsgAt(i, false); } catch (e) { console.error('renderMsg failed at', i, _allMsgs[i], e); }
@@ -13332,8 +13564,11 @@ async function loadSess(id) {
     document.getElementById('input').focus();
     // Scroll to bottom after all layout and focus changes are complete
     setTimeout(() => {
-      userScrolled = false;
-      msgsEl.scrollTo({ top: msgsEl.scrollHeight, behavior: 'instant' });
+      if (id !== activeTabId) return; // a newer navigation owns the viewport
+      const returning = typeof _pendingWorkspaceReturn !== 'undefined' && _pendingWorkspaceReturn?.tabId === id ? _pendingWorkspaceReturn : null;
+      userScrolled = !!returning && returning.scrollTop < msgsEl.scrollHeight - msgsEl.clientHeight - 80;
+      msgsEl.scrollTo({ top: returning ? returning.scrollTop : msgsEl.scrollHeight, behavior: 'instant' });
+      if (returning) _pendingWorkspaceReturn = null;
     }, 100);
   } catch (e) { console.error('loadSess:', e); toast(t('sess.load.err'), true); }
 }
@@ -13540,6 +13775,7 @@ function buildAutoTooltipHtml() {
 }
 
 function renderMcp() {
+  updateWorkspaceSummary();
   const el = $i('mcpList'); el.innerHTML = '';
   const tipWarn = t('mcp.cfg.warn'), tipCfg = t('mcp.cfg.tip');
   let c = 0;
@@ -14230,6 +14466,7 @@ function toggleAutoSkills() {
 }
 
 function renderSkills() {
+  updateWorkspaceSummary();
   const el = $i('skillsList'); el.innerHTML = '';
   let c = 0;
 
@@ -16947,7 +17184,10 @@ function toggleMobSheet() {
   if (opening) {
     syncMobSheetFromDesktop();
     overlay.classList.add('open');
-    requestAnimationFrame(() => sheet.classList.add('open'));
+    sheet.classList.add('open');
+    sheet.inert = false;
+    sheet.setAttribute('aria-hidden', 'false');
+    sheet.querySelector('button, select, input')?.focus();
   } else {
     closeMobSheet();
   }
@@ -16955,7 +17195,8 @@ function toggleMobSheet() {
 function closeMobSheet() {
   const sheet = $i('mobSheet');
   const overlay = $i('mobSheetOverlay');
-  if (sheet) sheet.classList.remove('open');
+  if (sheet) { sheet.classList.remove('open'); sheet.inert = true; sheet.setAttribute('aria-hidden', 'true'); }
+  $i('mobSettingsBtn')?.focus();
   if (overlay) {
     overlay.classList.remove('open');
     setTimeout(() => { if (!overlay.classList.contains('open')) overlay.style.display = ''; }, 300);
@@ -16977,6 +17218,7 @@ function setMobOpt(btn, group) {
   saveUIState();
 }
 function syncMobSheetFromDesktop() {
+  if ($i('mobEffort')) $i('mobEffort').value = $i('effortSel').value;
   // Sync mob chips from current state
   document.querySelectorAll('.mob-chip[data-mob]').forEach(chip => {
     const group = chip.dataset.mob;
@@ -17673,6 +17915,207 @@ async function _restoreDelegationState() {
   } catch {}
 }
 
+
+
+// Only explicit navigation records history. Renders/polls never add entries.
+let _workspaceHistoryRestoring = false;
+let _workspaceHistorySeq = 0;
+let _pendingWorkspaceReturn = null;
+function workspaceVisit() {
+  const tab = openTabs.find(x => x.id === activeTabId);
+  return {
+    projectId: curProjectId || null, tabId: activeTabId || null,
+    title: tab?.title || '', isNew: !!tab?.isNew, kind: tab?.kind || 'chat',
+    scrollTop: msgsEl.scrollTop, shownFrom: _shownFrom,
+    sidebarScroll: document.querySelector('.left-inner')?.scrollTop || 0,
+    filters: Object.fromEntries(Object.keys(_SEC_FILTER_CFG).map(k => [k, $i(k + 'FilterInp')?.value || ''])),
+  };
+}
+function sameWorkspaceVisit(a, b) {
+  return a?.projectId === b?.projectId && a?.tabId === b?.tabId;
+}
+function rememberWorkspaceVisit(visit) {
+  try { history.replaceState({ ...history.state, ccsWorkspace: visit }, '', location.href); } catch {}
+}
+function updateWorkspaceLocation() {
+  const label = $i('workspaceLocation');
+  const project = projects.find(p => p.id === curProjectId);
+  const tab = openTabs.find(x => x.id === activeTabId);
+  if (label) label.textContent = [project?.name || t('focus.workspace'), tab?.title || t('nav.chat')].join(' / ');
+  const back = $i('workspaceBack'); if (back) back.disabled = history.length <= 1;
+}
+async function restoreWorkspaceVisit(visit) {
+  if (!visit || typeof visit !== 'object') return;
+  const seq = ++_workspaceHistorySeq;
+  _workspaceHistoryRestoring = true;
+  _pendingWorkspaceReturn = null;
+  saveUIState(); // Persist the outgoing draft before any project/tab change.
+  try {
+    await _projectsReady;
+    if (seq !== _workspaceHistorySeq) return;
+    if (visit.projectId && !projects.some(p => p.id === visit.projectId)) return;
+    _pendingWorkspaceReturn = visit;
+    const switchedProject = !!visit.projectId && visit.projectId !== curProjectId;
+    if (switchedProject) switchProject(visit.projectId);
+    if (visit.tabId) {
+      const known = openTabs.find(t => t.id === visit.tabId);
+      // Never recreate a discarded unsent draft from a history ID.
+      if (!known && (visit.isNew || visit.kind === 'terminal')) { _pendingWorkspaceReturn = null; return; }
+      if (activeTabId !== visit.tabId) openTab(visit.tabId, visit.title);
+      else if (!switchedProject && visit.kind !== 'terminal' && !visit.isNew) await loadSess(visit.tabId);
+    } else {
+      if (activeTabId) saveComposerState(activeTabId);
+      activeTabId = null; currentSessionId = null;
+      hideTerminalView(); msgsEl.innerHTML = ''; showW(); restoreComposerState(null); renderTabs(); updateSessBar();
+    }
+    if (seq !== _workspaceHistorySeq) return;
+    for (const [key, value] of Object.entries(visit.filters || {})) {
+      if (!_SEC_FILTER_CFG[key] || typeof value !== 'string') continue;
+      const input = $i(key + 'FilterInp'); if (input) input.value = value;
+      const row = $i(key + 'FilterRow'); if (row) row.style.display = value ? 'flex' : 'none';
+      applySecFilter(key, value);
+    }
+    const rail = document.querySelector('.left-inner'); if (rail) rail.scrollTop = Number(visit.sidebarScroll) || 0;
+    if (visit.isNew || !visit.tabId) { msgsEl.scrollTop = Number(visit.scrollTop) || 0; _pendingWorkspaceReturn = null; }
+    saveUIState(); updateWorkspaceLocation();
+  } finally { if (seq === _workspaceHistorySeq) _workspaceHistoryRestoring = false; }
+}
+function dismissWorkspaceOverlays() {
+  // Back leaves the overlay and returns to the previous workspace entry. It does
+  // not push an artificial modal entry, recurse into history.back(), or submit forms.
+  for (const entry of [...modalStack].reverse()) {
+    if (typeof entry.onEscape === 'function') entry.onEscape();
+    else closeModalOverlay(entry.id, { restoreFocus: false });
+  }
+  if ($i('mobSheet')?.classList.contains('open')) closeMobSheet();
+  closeMobTabs();
+  ['workspaceMenu', 'runSettings'].forEach(id => { const el = $i(id); if (el) el.open = false; });
+}
+function initWorkspaceNavigation() {
+  const pendingIntents = new WeakMap();
+  const finishIntent = e => {
+    const before = pendingIntents.get(e);
+    if (!before) return;
+    pendingIntents.delete(e);
+    const after = workspaceVisit();
+    if (sameWorkspaceVisit(before, after) || sameWorkspaceVisit(history.state?.ccsWorkspace, after)) return;
+    rememberWorkspaceVisit(before);
+    try { history.pushState({ ...history.state, ccsWorkspace: after }, '', location.href); } catch {}
+    saveUIState(); updateWorkspaceLocation();
+  };
+  const captureIntent = e => {
+    if (e.type === 'keydown' && !['Enter', ' '].includes(e.key)) return;
+    if (!e.target.closest('#tabsBar, #histList, #projList, #projDdMenu, #newTabModal, #mobTabsList, #workspaceJumpModal, #activityList, #gwModal')) return;
+    // A new user choice always wins over a pending Back/Forward restore.
+    ++_workspaceHistorySeq;
+    _workspaceHistoryRestoring = false;
+    _pendingWorkspaceReturn = null;
+    pendingIntents.set(e, workspaceVisit());
+    // Stopped events still commit AFTER dispatch; never use a capture microtask,
+    // because native event dispatch may checkpoint before the target handler.
+    setTimeout(() => finishIntent(e), 0);
+  };
+  document.addEventListener('click', captureIntent, true);
+  document.addEventListener('keydown', captureIntent, true);
+  document.addEventListener('click', finishIntent);
+  document.addEventListener('keydown', finishIntent);
+  window.addEventListener('popstate', e => { dismissWorkspaceOverlays(); restoreWorkspaceVisit(e.state?.ccsWorkspace); });
+  window.addEventListener('pagehide', () => { saveUIState(); rememberWorkspaceVisit(workspaceVisit()); });
+  window.addEventListener('pageshow', e => { if (e.persisted) updateWorkspaceLocation(); });
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !e.altKey) {
+      e.preventDefault(); if ($i('workspaceJumpModal').classList.contains('hidden')) openWorkspaceJump(); else closeWorkspaceJump();
+    }
+  });
+  updateWorkspaceLocation();
+}
+function openWorkspaceJump() {
+  $i('workspaceJumpSearch').value = '';
+  renderWorkspaceJump('');
+  openModalOverlay('workspaceJumpModal', { labelId: 'workspaceJumpTitle', initialFocus: '#workspaceJumpSearch', onEscape: closeWorkspaceJump });
+}
+function closeWorkspaceJump() { closeModalOverlay('workspaceJumpModal'); }
+function revealWorkspaceSection(id) {
+  if ($i('leftPanel').classList.contains('collapsed')) toggle('leftPanel');
+  $i('workspaceTools').open = true;
+  const body = $i(id + 'Body');
+  if (body?.classList.contains('collapsed')) toggleSec(id);
+  body?.previousElementSibling?.focus();
+  body?.parentElement.scrollIntoView({ block: 'nearest' });
+}
+function renderWorkspaceJump(query) {
+  const items = [
+    { label: t('nav.chat'), run: () => inEl.focus() },
+    { label: t('nav.kanban'), url: '/kanban' }, { label: t('nav.schedule'), url: '/schedule' }, { label: t('nav.dashboard'), url: '/dashboard' },
+    { label: t('gw.title'), run: openGlobalHome }, { label: t('cfg.title'), run: openCfgEditor },
+    { label: t('focus.run'), run: () => { if (_isMob()) toggleMobSheet(); else { $i('hdrZone').classList.remove('collapsed'); renderTabs(); $i('runSettings').open = true; $i('runSettings').querySelector('summary').focus(); } } },
+    { label: t('mob.files'), run: () => { if ($i('rightPanel').classList.contains('collapsed')) toggle('rightPanel'); $i('rightPanel').querySelector('button')?.focus(); } },
+    ...[['bots', 'sec.bots'], ['agents', 'sec.agents'], ['mcp', 'sec.mcp'], ['skills', 'sec.skills'], ['cmds', 'sec.cmds'], ['sshHosts', 'sec.sshHosts'], ['tunnel', 'sec.tunnel'], ['tg', 'sec.telegram']].map(([id, key]) => ({ label: t(key), run: () => revealWorkspaceSection(id) })),
+    ...projects.map(p => ({ label: t('sec.projects') + ' / ' + p.name, run: () => switchProject(p.id) })),
+  ];
+  const list = $i('workspaceJumpResults'); list.replaceChildren();
+  const q = query.trim().toLocaleLowerCase();
+  for (const item of items.filter(x => x.label.toLocaleLowerCase().includes(q))) {
+    const button = document.createElement('button'); button.type = 'button'; button.textContent = item.label;
+    button.onclick = () => {
+      // Synchronous persistent focus target: a subsequently opened dialog can return here.
+      closeModalOverlay('workspaceJumpModal', { restoreFocus: false });
+      $i('workspaceJumpBtn').focus();
+      if (item.url) { saveUIState(); location.href = item.url; } else item.run();
+    };
+    list.appendChild(button);
+  }
+  if (!list.children.length) { const empty = document.createElement('p'); empty.className = 'workspace-help'; empty.textContent = t('search.empty'); list.appendChild(empty); }
+}
+
+// ─── Focused workspace: progressive disclosure, never execution defaults ───
+function updateWorkspaceSummary() {
+  const summary = $i('runSettingsSummary');
+  if (summary) {
+    const modeKey = { auto: 'mode.auto', planning: 'mode.plan', task: 'mode.task' }[curMode];
+    const agentKey = { single: 'agent.single', multi: 'agent.multi', dispatch: 'agent.dispatch', conversation: 'agent.conversation' }[curAgent];
+    summary.textContent = [t(modeKey || 'mode.auto'), t(agentKey || 'agent.single'), curModel, curEngine === 'subscription' ? t('engine.sub') : 'API'].join(' · ');
+  }
+  const count = $i('workspaceToolsCount');
+  if (count) { const n = activeMcp.size + activeSkills.size; count.textContent = n ? String(n) : ''; count.hidden = !n; }
+}
+function initFocusedWorkspace() {
+  const controls = ['workspaceTools', 'runSettings', 'workspaceMenu'];
+  controls.forEach(id => {
+    const detail = $i(id);
+    if (!detail) return;
+    detail.addEventListener('keydown', e => {
+      if (e.key !== 'Escape' || !detail.open || e.defaultPrevented) return;
+      detail.open = false;
+      detail.querySelector('summary').focus();
+      e.preventDefault(); e.stopPropagation();
+    });
+  });
+  document.addEventListener('click', e => {
+    const menu = $i('workspaceMenu');
+    if (menu?.open && !menu.contains(e.target)) menu.open = false;
+  });
+  // Focus the persistent trigger BEFORE a dialog captures its return target.
+  $i('workspaceMenu')?.addEventListener('click', e => {
+    if (!e.target.closest('button, a')) return;
+    const menu = $i('workspaceMenu');
+    menu.querySelector('summary').focus();
+    menu.open = false;
+  }, true);
+  const files = $i('rightPanel');
+  document.querySelectorAll('[aria-controls="rightPanel"]').forEach(el => el.setAttribute('aria-expanded', String(!files.classList.contains('collapsed'))));
+  const sheet = $i('mobSheet');
+  sheet?.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !e.defaultPrevented) { closeMobSheet(); e.preventDefault(); e.stopPropagation(); return; }
+    if (e.key !== 'Tab') return;
+    const items = [...sheet.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled])')].filter(el => el.getClientRects().length);
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { last?.focus(); e.preventDefault(); }
+    else if (!e.shiftKey && document.activeElement === last) { first?.focus(); e.preventDefault(); }
+  });
+  updateWorkspaceSummary();
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────
 setLang(localStorage.getItem('lang') || 'en', false);
 _i18nDynReady = true; // dynamic renderers are safe to call only after boot
@@ -17682,6 +18125,8 @@ fetch('/api/lang').then(r => r.json()).then(d => {
   if (d.lang && d.lang !== localStorage.getItem('lang')) setLang(d.lang, false);
 }).catch(() => {});
 restoreUIState();
+initFocusedWorkspace();
+initWorkspaceNavigation();
 _rlRestore(); // Restore rate limit badge from localStorage if still active
 _loadExternalAgents().then(() => renderAgents()); // Load agent labels + render sidebar
 _restoreDelegationState(); // Restore active delegation panel if server has one
@@ -17697,6 +18142,9 @@ _restoreDelegationState(); // Restore active delegation panel if server has one
 renderTabs();
 loadCfg();
 _projectsReady = loadProjectsList();
+if (history.state?.ccsWorkspace && !new URLSearchParams(location.search).has('open_session')) {
+  restoreWorkspaceVisit(history.state.ccsWorkspace);
+}
 loadRemoteHosts();
 connect();
 _versionCheckDone = checkVersion();

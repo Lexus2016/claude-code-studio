@@ -189,9 +189,76 @@ body::after{
   .nav-sw-btn span{ display:none; }
   .donut-wrap{ flex-direction:column; }
 }
+
+/* Focused workspace: readable labels and predictable, keyboard-friendly navigation. */
+:root{ --muted:#9aa9c0; }
+body{ font-size:15px; }
+body::after{ display:none; }
+.hdr{ gap:16px; padding:12px 20px; }
+.hdr-l{ min-width:0; flex-wrap:wrap; }
+.hdr-btns{ gap:8px; flex-wrap:wrap; }
+.nav-sw{ background:transparent; border-color:transparent; gap:4px; padding:0; }
+.nav-sw-btn{ min-height:40px; padding:8px 12px; font-size:14px; }
+.nav-sw-btn span,.hb span{ display:inline; }
+.nav-sw-btn.active{ background:var(--abg); color:#c9bcff; box-shadow:inset 0 0 0 1px rgba(160,141,245,.35); }
+.hb,.proj-dd-btn{ min-height:40px; font-size:14px; }
+.hb{ color:var(--text); }
+#addBtn{ background:var(--accent); border-color:var(--accent); color:white; font-weight:700; }
+#addBtn:hover{ background:#8977f5; border-color:#a08df5; }
+.proj-dd-btn{ box-shadow:none; background:var(--s2); }
+.proj-dd-menu{ min-width:min(300px,calc(100vw - 32px)); max-width:calc(100vw - 32px); }
+.skip-link{ position:fixed; top:8px; left:12px; transform:translateY(-160%); z-index:10000; padding:10px 16px; background:var(--s2); color:var(--text); border:2px solid var(--accent2); border-radius:8px; text-decoration:none; }
+.skip-link:focus{ transform:none; }
+:focus-visible{ outline:2px solid var(--accent2); outline-offset:3px; }
+@media(max-width:1100px){
+  .hdr{ flex-wrap:wrap; gap:10px; }
+  .hdr-l{ flex:1 1 100%; gap:10px; }
+  .hdr-btns{ margin-left:auto; }
+}
+@media(max-width:600px){
+  .hdr{ padding:10px 12px; }
+  .hdr-l{ width:100%; }
+  .hdr-l>.logo{ display:none; }
+  .nav-sw{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); width:100%; gap:2px; }
+  .nav-sw-btn{ min-height:44px; padding:7px 4px; justify-content:center; text-align:center; white-space:normal; font-size:12px; }
+  .nav-sw-btn span{ display:block; overflow-wrap:anywhere; }
+  .nav-sw-btn svg{ display:none; }
+  .hdr-meta{ display:flex; width:100%; }
+  .proj-dd-btn{ max-width:calc(100vw - 24px); min-height:44px; }
+  .hb{ min-height:44px; padding:8px 12px; }
+  .hb span{ display:inline; }
+  .hdr-btns{ width:100%; justify-content:flex-end; }
+  .hdr-btns .refresh-ts{ margin-right:auto; }
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{ animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; scroll-behavior:auto!important; }
+}
+
+/* Quiet surfaces let the numbers and chart labels carry the hierarchy. */
+.main{ padding:28px; }
+.grid{ gap:20px; }
+.hero-card:hover{ transform:none; }
+.hero-label{ font-size:13px; text-transform:none; letter-spacing:0; }
+.hero-sub,.bar-label,.tl-meta{ font-size:13px; }
+.card-title{ font-size:16px; }
+.tl-title{ font-size:15px; }
+.tl-item{ color:inherit; text-decoration:none; min-height:64px; }
+.tl-item:focus-visible{ border-color:var(--accent2); }
+.heatmap-wrap{ overflow-x:auto; }
+@media(max-width:600px){
+  .main{ padding:16px 12px; }
+  .card,.hero-card{ padding:16px; }
+  .hero-row{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .hero-icon{ position:static; margin-bottom:10px; }
+  .hero-value{ font-size:28px; }
+  .tl-item{ gap:8px; padding:12px; flex-wrap:wrap; }
+  .tl-info{ min-width:120px; }
+  .tl-meta{ overflow-wrap:anywhere; }
+}
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main" data-i18n="nav.skip">Skip to content</a>
 
 <!-- Header -->
 <header class="hdr">
@@ -210,13 +277,14 @@ body::after{
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         <span data-i18n="nav.schedule">Schedule</span>
       </a>
-      <a class="nav-sw-btn active" href="/dashboard" data-tip="Dashboard" data-i18n-tip="nav.dashboard">
+      <a class="nav-sw-btn active" aria-current="page" href="/dashboard" data-tip="Dashboard" data-i18n-tip="nav.dashboard">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
         <span data-i18n="nav.dashboard">Dashboard</span>
       </a>
     </nav>
   </div>
   <div class="hdr-btns">
+    <button class="hb" type="button" onclick="history.back()" id="pageBackBtn"><span aria-hidden="true">←</span> <span data-i18n="nav.back">Back</span></button>
     <button class="hb" onclick="loadData()" title="Refresh" data-i18n-title="hdr.refresh">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
     </button>
@@ -224,7 +292,7 @@ body::after{
 </header>
 
 <!-- Content -->
-<div class="main" id="main">
+<div class="main" id="main" role="main" tabindex="-1" aria-label="Dashboard" data-i18n-aria="nav.dashboard">
   <div class="loading" id="loader"><div class="spinner"></div></div>
   <div id="loadError" style="display:none" role="status"></div>
   <div class="grid" id="content" style="display:none">
@@ -303,6 +371,80 @@ body::after{
   </div>
 </div>
 
+
+<script>
+// Per-tab navigation memory. It never changes server data or stores task drafts.
+const pageNavigation = (() => {
+  const route = location.pathname + location.search;
+  const key = 'ccs_navigation:' + route;
+  function read() {
+    try {
+      const fromHistory = history.state && history.state.ccsNavigation;
+      const value = fromHistory && fromHistory.route === route ? fromHistory : JSON.parse(sessionStorage.getItem(key) || 'null');
+      return value && value.version === 1 && value.route === route ? value : null;
+    } catch { return null; }
+  }
+  const saved = read();
+  const back = document.getElementById('pageBackBtn');
+  if (back) back.disabled = history.length < 2;
+  const number = value => Number.isFinite(value) ? value : 0;
+  function scrollSnapshot() {
+    const host = document.getElementById('board') || document.getElementById('main');
+    return {
+      x: host ? host.scrollLeft : window.scrollX,
+      y: host ? host.scrollTop : window.scrollY,
+      columns: Array.from(document.querySelectorAll('.col-body')).map(el => ({status:el.dataset.status, y:el.scrollTop})),
+    };
+  }
+  function applyScroll(scroll) {
+    if (!scroll || typeof scroll !== 'object') return;
+    const host = document.getElementById('board') || document.getElementById('main');
+    if (host) { host.scrollLeft = number(scroll.x); host.scrollTop = Math.max(0, number(scroll.y)); }
+    else window.scrollTo(number(scroll.x), Math.max(0, number(scroll.y)));
+    for (const el of document.querySelectorAll('.col-body')) {
+      const col = Array.isArray(scroll.columns) && scroll.columns.find(item => item && item.status === el.dataset.status);
+      if (col) el.scrollTop = Math.max(0, number(col.y));
+    }
+  }
+  function save() {
+    try {
+      const state = {version:1, route, project:typeof curWorkdir === 'undefined' ? null : curWorkdir,
+        search:document.getElementById('projDdSearch')?.value || '', scroll:scrollSnapshot()};
+      sessionStorage.setItem(key, JSON.stringify(state));
+      // Preserve unrelated state owned by other navigation features.
+      history.replaceState({...history.state, ccsNavigation:state}, '');
+    } catch { /* Storage may be blocked; ordinary navigation must still work. */ }
+  }
+  function resolveProject(current, projects) {
+    const query = new URLSearchParams(location.search);
+    if (query.get('all') === '1') return null;
+    const explicit = query.get('workdir') ?? query.get('project');
+    if (explicit !== null) {
+      const found = projects.find(p => p.workdir === explicit || p.id === explicit);
+      return found ? found.workdir || found.id : null;
+    }
+    // A deep link expresses intent and must never inherit a remembered filter.
+    if (query.has('session') || query.has('open_session')) return current;
+    if (!saved || !Object.prototype.hasOwnProperty.call(saved, 'project')) return current;
+    if (saved.project === null) return null;
+    const found = projects.find(p => p.workdir === saved.project || p.id === saved.project);
+    return found ? found.workdir || found.id : current;
+  }
+  let restored = false;
+  function restore() {
+    if (restored || !saved) return;
+    restored = true;
+    const search = document.getElementById('projDdSearch');
+    if (search && typeof saved.search === 'string') search.value = saved.search;
+    // Wait until the freshly loaded board/agenda has a measurable layout.
+    requestAnimationFrame(() => applyScroll(saved.scroll));
+  }
+  window.addEventListener('pagehide', save);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
+  return {resolveProject, restore, scrollSnapshot, applyScroll, save};
+})();
+</script>
+
 <script>
 // --- Helpers ---
 function $(sel, ctx=document){ return ctx.querySelector(sel); }
@@ -338,6 +480,8 @@ function locale(){ return LOCALE_MAP[lang] || 'en-US'; }
 
 const TR = {
   uk: {
+    'nav.back': 'Назад',
+    'nav.skip': 'Перейти до вмісту',
     'nav.aria':'Навігація між розділами','nav.chat':'Чат','nav.kanban':'Kanban дошка','nav.schedule':'Розклад','nav.dashboard':'Панель','hdr.refresh':'Оновити',
     'page.title':'Панель — Claude Code Studio',
     'card.activity':'Активність','card.tools':'Використання інструментів','card.automation':'Індекс автоматизації',
@@ -354,6 +498,8 @@ const TR = {
     'hourly.tip':'{time} — {n} повідомл.','error.loadfailed':'Не вдалося завантажити аналітику',
   },
   en: {
+    'nav.back': 'Back',
+    'nav.skip': 'Skip to content',
     'nav.aria':'Navigation','nav.chat':'Chat','nav.kanban':'Kanban board','nav.schedule':'Schedule','nav.dashboard':'Dashboard','hdr.refresh':'Refresh',
     'page.title':'Dashboard — Claude Code Studio',
     'card.activity':'Activity','card.tools':'Tool Usage','card.automation':'Automation Index',
@@ -370,6 +516,8 @@ const TR = {
     'hourly.tip':'{time} — {n} msgs','error.loadfailed':'Failed to load analytics',
   },
   ru: {
+    'nav.back': 'Назад',
+    'nav.skip': 'Перейти к содержимому',
     'nav.aria':'Навигация','nav.chat':'Чат','nav.kanban':'Kanban доска','nav.schedule':'Расписание','nav.dashboard':'Панель','hdr.refresh':'Обновить',
     'page.title':'Панель — Claude Code Studio',
     'card.activity':'Активность','card.tools':'Использование инструментов','card.automation':'Индекс автоматизации',
@@ -386,6 +534,8 @@ const TR = {
     'hourly.tip':'{time} — {n} сообщ.','error.loadfailed':'Не удалось загрузить аналитику',
   },
   fr: {
+    'nav.back': 'Retour',
+    'nav.skip': 'Aller au contenu',
     'nav.aria':'Navigation','nav.chat':'Discussion','nav.kanban':'Tableau Kanban','nav.schedule':'Planning','nav.dashboard':'Tableau de bord','hdr.refresh':'Actualiser',
     'page.title':'Tableau de bord — Claude Code Studio',
     'card.activity':'Activité','card.tools':'Utilisation des outils','card.automation':'Indice d’automatisation',
@@ -402,6 +552,8 @@ const TR = {
     'hourly.tip':'{time} — {n} messages','error.loadfailed':'Échec du chargement des statistiques',
   },
   he: {
+    'nav.back': 'חזרה',
+    'nav.skip': 'דילוג לתוכן',
     'nav.aria':'ניווט','nav.chat':'צ׳אט','nav.kanban':'לוח קנבן','nav.schedule':'לוח זמנים','nav.dashboard':'לוח מחוונים','hdr.refresh':'רענון',
     'page.title':'לוח מחוונים — Claude Code Studio',
     'card.activity':'פעילות','card.tools':'שימוש בכלים','card.automation':'מדד האוטומציה',
@@ -687,14 +839,14 @@ function renderTimeline(sessions){
     const proj = s.workdir ? s.workdir.split('/').pop() : '';
     const mode = modeLabels[s.agent_mode] || escHtml(s.agent_mode || 'single');
     wrap.innerHTML += `
-      <div class="tl-item" onclick="window.location='/?open_session=${encodeURIComponent(s.id)}'">
+      <a class="tl-item" href="/?open_session=${encodeURIComponent(s.id)}">
         <div class="tl-rank">${i+1}</div>
         <div class="tl-info">
           <div class="tl-title">${escHtml(title)}</div>
           <div class="tl-meta">${proj ? '<span class="tl-proj">'+escHtml(proj)+'</span> &middot; ' : ''}${date} &middot; ${s.msg_count} msgs &middot; ${s.tool_count} tools &middot; ${mode}</div>
         </div>
         <div class="tl-badge ${escHtml(model)}">${escHtml(model)}</div>
-      </div>`;
+      </a>`;
   });
 }
 // Includes the single quote: this output lands in single-quoted attributes elsewhere
@@ -712,7 +864,8 @@ function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&l
     if(rc.ok){ const config = await rc.json(); adoptServerLang(config && config.lang); }
   } catch {}
   applyStaticI18n();
-  loadData();
+  await loadData();
+  pageNavigation.restore();
 })();
 </script>
 </body>
