@@ -112,3 +112,30 @@ test('dashboard: error includes an in-context Refresh action and localized loadi
   assert.match(pages.dashboard,/loadError.innerHTML[^\n]*onclick="loadData\(\)"/);
   assert.equal((pages.dashboard.match(/'loading':/g)||[]).length,5);
 });
+
+test('a successful save releases its guard before the board refresh finishes',async()=>{
+  // The refresh after a save can take a while; holding the guard through it made the
+  // NEXT Save (a new card opened meanwhile) return silently with an enabled button.
+  for(const [page,names] of [['kanban',['saveChainTask','saveChainTaskEdit']],['schedule',['saveTask']]]){
+    for(const name of names){
+      const button=element(),fields={modalFt:{querySelector:()=>button},fChainTaskTitle:element('Title'),fChainTaskDesc:element('Description'),fTitle:element('Title')};
+      let releaseRefresh;
+      const ctx=vm.createContext({$i:id=>fields[id]||null,editingId:null,tasks:[],curWorkdir:'/project',_schedDefaultEngine:'api',_schedTmuxAvailable:true,
+        getScVal:(_,fallback)=>fallback,buildRecurToken:()=>null,t:x=>x,toast(){},closeModal(){},BroadcastChannel:class{postMessage(){}close(){}},
+        refresh:()=>new Promise(r=>{releaseRefresh=r;}),apiFetch:async()=>({ok:true,json:async()=>({})})});
+      vm.runInContext(lift(pages[page],name),ctx);
+      const run=ctx[name]();
+      for(let i=0;i<20;i++)await Promise.resolve();
+      assert.equal(typeof releaseRefresh,'function',`${page}:${name} never reached the refresh`);
+      assert.equal(ctx[name].pending,false,`${page}:${name} still blocks the next Save while the board refreshes`);
+      releaseRefresh();await run;
+    }
+  }
+});
+
+test('kanban: every guarded save releases its guard before refreshing the board',()=>{
+  for(const name of ['saveChain','saveChainTask','saveChainTaskEdit','saveTask']){
+    const body=lift(pages.kanban,name);
+    assert.ok(body.indexOf(`${name}.pending=false;\n    closeModal();`)>=0&&body.indexOf(`${name}.pending=false;`)<body.indexOf('await refresh('),name);
+  }
+});

@@ -3077,6 +3077,11 @@ summary::-webkit-details-marker { display:none; }
 .dir-list .dii.selected { border-color:var(--accent2); background:var(--abg); }
 .dir-list .dir-choice { display:flex; align-items:center; gap:6px; }
 .dir-choice .dii { flex:1; min-width:0; }
+/* The folder list absorbs whatever height the dialog lacks. #projLocalSection was a
+   plain block, so the list kept its full 340px and pushed the footer — the Add button —
+   below .modal's overflow:hidden edge on a 768–900px-tall screen. */
+#projLocalSection { display:flex; flex-direction:column; flex:0 1 auto; min-height:0; }
+#projLocalSection .dir-list { min-height:96px; }
 .dir-open { flex-shrink:0; padding:7px 12px; min-height:38px; font:inherit; font-size:12px; border:1px solid var(--border); border-radius:8px; color:var(--text); background:var(--s2); cursor:pointer; }
 .fii:focus-visible { outline:2px solid var(--accent2); outline-offset:-2px; }
 .fii:focus-within .fdl, .fii:focus-within .fpe { opacity:1; }

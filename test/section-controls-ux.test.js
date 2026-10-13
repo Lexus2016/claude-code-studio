@@ -40,3 +40,10 @@ test('canceled departure keeps reconnect enabled; bfcache return can reconnect',
  handlers.pageshow({persisted:true});assert.equal(ctx._intentionalClose,false);assert.equal(connects,1);
  ctx.ws.readyState=0;handlers.pageshow({persisted:true});assert.equal(connects,1);
 });
+
+test('the folder list, not the dialog footer, gives way on a short screen',()=>{
+  // #projLocalSection is the list's parent; as a plain block it kept the list at 340px and
+  // pushed the Add button below .modal's overflow:hidden edge at 1366x768 (observed live).
+  assert.match(html,/#projLocalSection \{ display:flex; flex-direction:column; flex:0 1 auto; min-height:0; \}/);
+  assert.match(html,/#projLocalSection \.dir-list \{ min-height:96px; \}/);
+});

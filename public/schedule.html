@@ -1834,6 +1834,8 @@ async function saveTask() {
       });
       toast(t('toast.saved'), 'ok');
     }
+    // The write landed: a slow board refresh below must not swallow the next Save.
+    saveTask.pending=false;
     closeModal();
     await refresh();
   } catch(e) { toast(t('toast.err') + e.message, 'err'); } finally {

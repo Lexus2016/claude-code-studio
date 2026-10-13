@@ -2179,6 +2179,8 @@ async function saveChain(){
       }
       toast(t('group.saved'));
     }
+    // The write landed: a slow board refresh below must not swallow the next Save.
+    saveChain.pending=false;
     closeModal();
     await refresh(true);
   }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);} finally {
@@ -2200,6 +2202,8 @@ async function saveChainTask(){
       body:JSON.stringify({title,description:desc})
     });
     toast(t('group.task_added'));
+    // The write landed: a slow board refresh below must not swallow the next Save.
+    saveChainTask.pending=false;
     closeModal();
     await refresh(true);
   }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);} finally {
@@ -2257,6 +2261,8 @@ async function saveChainTaskEdit(){
     });
     try{const bc=new BroadcastChannel('tasks');bc.postMessage({type:'task_changed',id:editingId});bc.close();}catch{}
     toast(t('group.task_saved'));
+    // The write landed: a slow board refresh below must not swallow the next Save.
+    saveChainTaskEdit.pending=false;
     closeModal();
     await refresh(true);
   }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);} finally {
@@ -2661,6 +2667,8 @@ async function saveTask(){
       try{const bc=new BroadcastChannel('tasks');bc.postMessage({type:'task_changed',id:editingId});bc.close();}catch{}
       toast(t('toast.saved'));
     }
+    // The write landed: a slow board refresh below must not swallow the next Save.
+    saveTask.pending=false;
     closeModal();
     await refresh(true);
   }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);} finally {
