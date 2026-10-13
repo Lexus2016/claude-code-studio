@@ -167,9 +167,11 @@ npm install -g npm@latest
 
 Not a chatbot. "Refactor this function and add tests" → Claude opens files, edits them, runs tests, fixes errors, reports back — in real time. Paste screenshots with Ctrl+V. When Claude asks a question mid-task, the card collapses into a compact pill after you answer. Hit **Compact & New** to summarize the conversation via Haiku and continue in a fresh session — all context preserved, zero token waste.
 
-**Sidebar quick-filter** — every sidebar section (Projects, Chats, MCP servers, Skills, Commands) has a 🔽 filter button. Click it, type a few letters — the list narrows instantly. Press Esc to clear.
+**Focused workspace** — the left rail keeps Activity, Projects and Chats; bots, agents, MCP servers, skills, commands, SSH hosts, remote access and Telegram sit under **Tools & team**. Mode, agent mode, model, engine, effort and turns live in one **Run settings** panel with a one-line summary, and CLI import, configuration, language and logout are under **More**. **Back** returns to the previous chat or project (browser Back and Forward work too), and **Go to…** (⌘K on macOS, Ctrl+K elsewhere) jumps to any page, tool or project.
 
-**Claude CLI session import** — import existing sessions from Claude Code CLI (`~/.claude/projects/`) directly into Studio. Click the ↓ button in the header, pick a project path, select sessions, import. Already-imported sessions are marked so you don't duplicate them. Works on Windows (`C:\...`), macOS, and Linux; supports `~` path expansion.
+**Sidebar quick-filter** — every sidebar section (Projects, Chats, and MCP servers, Skills and Commands under Tools & team) has a 🔽 filter button. Click it, type a few letters — the list narrows instantly. Press Esc to clear.
+
+**Claude CLI session import** — import existing sessions from Claude Code CLI (`~/.claude/projects/`) directly into Studio. Open **More → Import Claude CLI sessions**, pick a project path, select sessions, import. Already-imported sessions are marked so you don't duplicate them. Works on Windows (`C:\...`), macOS, and Linux; supports `~` path expansion.
 
 **Extended thinking** — when Claude uses extended thinking, each thinking block appears as a "Chain of thought" badge showing estimated word count. Click to open the full reasoning in a modal with a copy button. The CLI import modal and thinking modal are fully localized (EN/UA/RU/FR/HE) — all labels, status messages, and dates adapt to the selected interface language.
 
@@ -187,7 +189,7 @@ Hit **Translate** inside the thinking modal to render the chain of thought in yo
 
 **In-chat message search** — press **Ctrl+F** (or **⌘F** on Mac) to open a search bar above the messages. Type to instantly filter — only matching messages stay visible. Navigate between hits with ▲▼ or **Enter / Shift+Enter**. Press **Esc** to close. Instantly find that command you ran three hundred messages ago.
 
-**Export as Markdown** — click **📄 MD** in the session bar to download the entire conversation as a clean `.md` file. User messages become `## You` headings, assistant responses become `## Claude` headings. Perfect for pasting into docs, Notion, Obsidian, or dropping into another AI for analysis. Zero setup — one click, instant download.
+**Export as Markdown** — click **↓ Export ▾ → Markdown (.md)** in the session bar to download the entire conversation as a clean `.md` file. User messages become `## You` headings, assistant responses become `## Claude` headings. Perfect for pasting into docs, Notion, Obsidian, or dropping into another AI for analysis. Zero setup — one click, instant download.
 
 **`G` key — jump to latest message** — press **`G`** (outside a text field) to instantly snap to the bottom of the chat. Essential in long sessions where you've scrolled up to review context and want to get back without reaching for the mouse.
 
@@ -220,7 +222,7 @@ Use cases beyond backup:
 
 One assistant answering everything is a generalist. **Bots** let you create *named specialists* — each with its own system prompt, its own model, its own conversation memory — and put several of them in the **same chat**, addressed by name.
 
-Create a bot in the sidebar: give it a name, an avatar, a description, pick a model, write its instructions (or start from a built-in template — Analyst, Editor, Reviewer, Explainer). Then just call it:
+Create a bot under **Tools & team → Bots**: give it a name, an avatar, a description, pick a model, write its instructions (or start from a built-in template — Analyst, Editor, Reviewer, Explainer). Then just call it:
 
 ```
 @@analyst @@writer Analyse this quarter's crypto market and produce a PDF report for the traders' club.
@@ -321,7 +323,7 @@ Tasks inherit the project directory. Context is passed explicitly — children k
 
 ### 📱 Telegram Bot — Control from Your Phone
 
-Pair in 30 seconds (6-character code from Settings). Your phone becomes a full remote control:
+Pair in 30 seconds: **Tools & team → Telegram → Connect Telegram**, then enter the 6-character code in the bot. Your phone becomes a full remote control:
 
 - **Queue & monitor:** `/projects`, `/chats`, `/tasks`, `/chat`, `/new`
 - **See results:** `/last`, `/full` — plus push notifications when tasks finish or fail
@@ -345,13 +347,13 @@ Forum Mode is now powered by a **dedicated standalone module** (`telegram-bot-fo
 | | Single | Multi | Dispatch | Room |
 |---|---|---|---|---|
 | Where | Chat | Chat | Kanban board | Chat |
-| Agents | 1 | 2–5 parallel | 2–5 as task cards | 2–6 project bots |
+| Agents | 1 | 2–5 planned (up to 8), 3 at a time | 2–5 as task cards | 2–6 project bots |
 | Dependencies | — | Basic | Full DAG | Serial turns |
 | Auto-retry | No | No | Yes (with backoff) | No |
 | Survives restart | No | No | Yes (SQLite) | No |
 | Best for | Focused work | Complex tasks to watch | Background batch work | One question from several angles |
 
-**Multi** — orchestrator decomposes into 2–5 subtasks with real-time streaming. The planning step uses `--json-schema` structured output — the plan JSON is guaranteed to parse without regex extraction, even with complex prompts. Send plan to Kanban with 📋 button.
+**Multi** — orchestrator decomposes into 2–5 subtasks with real-time streaming. The planning step requests `--json-schema` structured output, so the plan normally arrives as valid JSON; a fallback still recovers a malformed reply, and the plan is sanitised either way. Send plan to Kanban with 📋 button.
 **Dispatch** — subtasks go to Kanban as persistent cards with dependency graphs, auto-retry, and cascade cancellation. Effort level set in chat flows to all dispatched tasks automatically.
 **Room** — 2–6 of the project's bots take serial turns on a single message, for at most 3 rounds, and the room then closes with one artifact. No bot can dispatch another from inside a room, and any of them can escalate to you with `@user`.
 
@@ -368,7 +370,7 @@ Send tasks to external AI CLIs — OpenAI Codex, Grok CLI, Antigravity CLI, open
 
 How it works: click **Delegate** in the session bar, pick an agent and mode, describe the task. Studio generates a `CONTEXT.md` with conversation history and opens a terminal with the external agent. In Sync mode, both agents communicate through a shared `DIALOG.md` — responses appear directly in the main chat with real-time notifications.
 
-**Agents sidebar** — managing external agents is now effortless. A dedicated **Agents** section in the sidebar lets you add, edit, and delete agents without touching `config.json`. Eight agents — Claude Code, Codex, Grok, Antigravity CLI, opencode, Hermes, Cursor Agent and Kimi — come **pre-configured out of the box**, seeded automatically on first run. Hit the **Test** button next to any agent to verify connectivity before delegating. Agent IDs auto-generate from the label (with Cyrillic transliteration), and the full UI is localized in EN/UA/RU/FR/HE. Works on **Windows** too — delegation now routes through `cmd.exe` with proper shell escaping. Delegations survive server restarts via persistent state files.
+**Agents sidebar** — managing external agents is now effortless. A dedicated **Agents** section under **Tools & team** lets you add, edit, and delete agents without touching `config.json`. Eight agents — Claude Code, Codex, Grok, Antigravity CLI, opencode, Hermes, Cursor Agent and Kimi — come **pre-configured out of the box**, seeded automatically on first run. Hit the **Test** button next to any agent to verify connectivity before delegating. Agent IDs auto-generate from the label (with Cyrillic transliteration), and the full UI is localized in EN/UA/RU/FR/HE. Works on **Windows** too — delegation now routes through `cmd.exe` with proper shell escaping. Delegations survive server restarts via persistent state files.
 
 ### 🎛 Chat Modes
 
@@ -410,7 +412,7 @@ Sonnet, Opus and Fable run with a **1 million token context window** — entire 
 
 Turn budget: 1–200 (default 50). Auto-continues up to 3x — so 50 turns effectively means up to 200 steps.
 
-**Thinking effort dial** — a new `Effort` dropdown in the chat toolbar (and task/chain forms) lets you tune how hard Claude thinks before responding: `Auto` (CLI default), `Low`, `Med`, `High`, `X-High`, or `Max`. The effort level flows automatically to every subtask and chain — set it once, runs everywhere.
+**Thinking effort dial** — an `Effort` dropdown in the chat's **Run settings** panel (and task/chain forms) lets you tune how hard Claude thinks before responding: `Auto` (CLI default), `Low`, `Med`, `High`, `X-High`, or `Max`. The effort level flows automatically to every subtask and chain — set it once, runs everywhere.
 
 **Every chat keeps its own dials.** Turn budget and thinking effort are stored *with the chat*, next to its mode, agent mode and model. Reopen a tab, fork a conversation, compact it, import an exported JSON, or open the chat behind a Kanban card — it comes back on the settings it was created with, not on whatever the previously open tab happened to be using. A chat that stored none of its own (created before this shipped, or through the API) falls back to the new-chat defaults chain below.
 
@@ -423,9 +425,9 @@ Turn budget: 1–200 (default 50). Auto-continues up to 3x — so 50 turns effec
 
 The active engine is always visible at a glance: a **⚡ Max** badge appears in the session bar whenever your session runs on the Subscription engine — so you never confuse which billing mode is in effect. Hover any engine button in the toolbar for a full explanation before you switch.
 
-**Global default** — set your preferred engine once with the **★** button next to the toolbar selector (the star lights up when the current selection is your default). Every new chat — and every new **Kanban** card and **Scheduler** task — starts on it, while any individual chat or task can still override per-item. The engine selector lives in Chat, the Kanban task form, and the Scheduler form alike, and falls back to **API** automatically when `tmux` is unavailable (e.g. native Windows without WSL) — the Subscription option is disabled with a clear hint rather than failing only after you send.
+**Global default** — set your preferred engine once with the **★** button next to the engine selector in **Run settings** (the star lights up when the current selection is your default). Every new chat — and every new **Kanban** card and **Scheduler** task — starts on it, while any individual chat or task can still override per-item. The engine selector lives in Chat, the Kanban task form, and the Scheduler form alike, and falls back to **API** automatically when `tmux` is unavailable (e.g. native Windows without WSL) — the Subscription option is disabled with a clear hint rather than failing only after you send.
 
-**New-chat defaults** — the same idea, extended to the whole toolbar. Pin **mode, agent mode, model, effort and turn budget** in Settings → *New-chat defaults*, and every new chat opens on them instead of on the built-ins. A project can override any subset of the five in its own settings; it stores **only the dials you actually pinned**, so the rest keep following the global value as you change it later. The chain is **project override → global default → built-in**, and every row shows which of the three it came from, with a one-click Reset. Existing chats are never re-seeded — each one carries its own settings in SQLite.
+**New-chat defaults** — the same idea, extended to the whole toolbar. Pin **mode, agent mode, model, effort and turn budget** in **More → Configuration → Settings** → *New-chat defaults*, and every new chat opens on them instead of on the built-ins. A project can override any subset of the five in its own settings; it stores **only the dials you actually pinned**, so the rest keep following the global value as you change it later. The chain is **project override → global default → built-in**, and every row shows which of the three it came from, with a one-click Reset. Existing chats are never re-seeded — each one carries its own settings in SQLite.
 
 ### 🌐 Remote Access & SSH
 
@@ -535,7 +537,7 @@ skills/                — .md skill files → system prompt
 PORT=3000
 WORKDIR=./workspace
 MAX_TASK_WORKERS=5
-CLAUDE_IDLE_TIMEOUT_MS=600000   # kill subprocess after this idle gap (no output); default 10 min (legacy alias: CLAUDE_TIMEOUT_MS)
+CLAUDE_IDLE_TIMEOUT_MS=600000   # kill subprocess after this idle gap (no output); default 10 min, .env.example ships 30 min (legacy alias: CLAUDE_TIMEOUT_MS)
 CLAUDE_HARD_CAP_MS=0            # optional absolute timeout ceiling; 0 = disabled (default)
 TASK_DISCONNECT_TIMEOUT_MS=1800000  # abort a task this long after the browser tab detaches; 0 = never
 MULTI_AGENT_MAX_TURNS_CAP=200   # ceiling on turns per sub-agent; each may auto-continue 3x
