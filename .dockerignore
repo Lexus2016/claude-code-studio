@@ -38,6 +38,7 @@ Thumbs.db
 
 # Video / large media (promo assets, not needed at runtime)
 public/videos
+docs/media
 
 # Project meta (not needed in production image)
 tasks
