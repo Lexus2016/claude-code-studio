@@ -25,6 +25,14 @@
 
 ---
 
+## Demo
+
+[<img src="docs/media/claude-code-studio-poster.jpg" alt="Claude Code Studio demo" width="300">](docs/media/claude-code-studio-promo.mp4)
+
+[Watch the 30-second demo](docs/media/claude-code-studio-promo.mp4)
+
+---
+
 ## Why Claude Code Studio?
 
 Claude Code CLI is powerful — it writes code, runs tests, edits files, and ships features. But it lives in the terminal, and the terminal has limits: context gets lost between sessions, parallel work means juggling tabs, and there's no way to queue tasks and walk away.
