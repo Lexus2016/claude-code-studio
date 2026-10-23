@@ -25,6 +25,14 @@
 
 ---
 
+## Демо
+
+[<img src="docs/media/claude-code-studio-poster.jpg" alt="Демо Claude Code Studio" width="300">](docs/media/claude-code-studio-promo.mp4)
+
+[Смотреть 30-секундное демо](docs/media/claude-code-studio-promo.mp4)
+
+---
+
 ## Зачем нужен Claude Code Studio?
 
 Claude Code CLI — мощный инструмент: пишет код, запускает тесты, редактирует файлы, выпускает фичи. Но он живёт в терминале, а у терминала есть ограничения: контекст теряется между сессиями, параллельная работа превращается в жонглирование вкладками, и нет способа поставить задачи в очередь и отойти.
