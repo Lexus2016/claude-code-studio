@@ -2,26 +2,13 @@
 
 # Claude Code Studio
 
-**The browser interface for Claude Code CLI.** Chat with AI, run tasks on autopilot, and manage your projects — all from one tab.
+**A self-hosted web and desktop workspace for Claude Code CLI: chat, Kanban tasks, and project management.**
 
-> [English](README.md) | [Українська](README_UA.md) | [Русский](README_RU.md)
+> [English](README.md) | [Українська](README_UA.md) | [Русский](README_RU.md) | [简体中文入门](docs/README.zh-CN.md) | [日本語入門](docs/README.ja.md)
 
 > 📖 [From Terminal to Dashboard](https://www.notion.so/From-Terminal-to-Dashboard-How-Claude-Code-Studio-Changes-AI-Assisted-Development-329676bbc5b6809f9c63e29ca66d8135) | [Remote Access Revolution](https://www.notion.so/Claude-Code-Studio-The-Remote-Access-Revolution-for-AI-Assisted-Development-329676bbc5b68097a5aefac4db29a60d)
 
-> Works on **Windows, macOS, and Linux** — zero platform-specific setup.
-
-> **v8.0.2** — **Names you can read in the sidebar, and chats that delete when you ask.** Hover buttons no longer hold empty space, so bot, command and chat names use the whole row (a bot's name used to get half of it). A chat the server refused to delete used to come straight back without a word; now a chat with uncommitted or unmerged work asks once more and says what will be lost, and a chat whose working folder was the project itself, which could never be deleted, now deletes. Also recent: **v8.0.1** moved bots, agents, MCP, skills, SSH and Telegram under **Tools & team**, put mode, model, engine, effort and turns in one **Run settings** panel, and made **Back** / **Forward** return you to the chat or project you came from; since **v7.18.0** the macOS app is signed, notarized and updates itself (Apple Silicon only).
->
-> **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
-> `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)
-> so the config UI's changes survive a container rebuild — previously they lived in
-> the image layer and were discarded. On first start the server copies a legacy file
-> across automatically and leaves the original in place. The one case it cannot
-> rescue is a container whose `config.json` only ever existed in that discarded
-> writable layer: copy it out **before** upgrading —
-> `docker cp claude-code-studio:/app/config.json ./config.json`, then after
-> `docker compose up -d` put it back with
-> `docker cp ./config.json claude-code-studio:/app/data/config.json && docker compose restart`.
+> Available for **Windows, macOS, and Linux**. Prerequisites and terminal features vary by platform.
 
 ---
 
@@ -35,15 +22,11 @@
 
 ## Why Claude Code Studio?
 
-Claude Code CLI is powerful — it writes code, runs tests, edits files, and ships features. But it lives in the terminal, and the terminal has limits: context gets lost between sessions, parallel work means juggling tabs, and there's no way to queue tasks and walk away.
+Use Claude Code from a browser or desktop window, with project work organized in one interface.
 
-Claude Code Studio fixes this:
-
-- **Queue work and walk away** — Kanban board + Scheduler. Claude works while you sleep. Come back to everything done.
-- **Control from anywhere** — Telegram bot + Remote Access. Check results from your phone at the gym.
-- **Autonomous pipelines** — Tasks create child tasks during execution. One "check issues" task spawns fix tasks automatically.
-- **Context never gets lost** — SQLite-backed sessions with self-healing replay. Resume days later, right where you left off.
-- **True parallel execution** — Multiple tasks run simultaneously in the same project. No manual tab juggling.
+- **Chat and project history:** SQLite-backed conversations and saved project settings.
+- **Task organization:** Kanban queues, scheduled jobs, and configurable task workers. Review task results before relying on them.
+- **Optional remote access:** SSH and Telegram integrations for configured environments. Keep authentication and the network boundary in place.
 
 ---
 
@@ -111,9 +94,9 @@ Open `http://localhost:3000`, set a password, start chatting.
 <details>
 <summary><b>Other install methods</b></summary>
 
-**Update:**
+**Run the current main branch:**
 ```bash
-npx github:Lexus2016/claude-code-studio@latest
+npx github:Lexus2016/claude-code-studio#main
 ```
 
 **Install globally:**
@@ -168,6 +151,24 @@ npm install -g npm@latest
 </details>
 
 ---
+
+<details>
+<summary><b>Release and upgrade notes</b></summary>
+
+> **v8.0.2** — **Names you can read in the sidebar, and chats that delete when you ask.** Hover buttons no longer hold empty space, so bot, command and chat names use the whole row (a bot's name used to get half of it). A chat the server refused to delete used to come straight back without a word; now a chat with uncommitted or unmerged work asks once more and says what will be lost, and a chat whose working folder was the project itself, which could never be deleted, now deletes. Also recent: **v8.0.1** moved bots, agents, MCP, skills, SSH and Telegram under **Tools & team**, put mode, model, engine, effort and turns in one **Run settings** panel, and made **Back** / **Forward** return you to the chat or project you came from; since **v7.18.0** the macOS app is signed, notarized and updates itself (Apple Silicon only).
+>
+> **Upgrading a Docker install from 7.2.x or older.** `docker-compose.yml` now keeps
+> `config.json` and `.env` on the `data` volume (`CCS_CONFIG_PATH` / `CCS_ENV_PATH`)
+> so the config UI's changes survive a container rebuild — previously they lived in
+> the image layer and were discarded. On first start the server copies a legacy file
+> across automatically and leaves the original in place. The one case it cannot
+> rescue is a container whose `config.json` only ever existed in that discarded
+> writable layer: copy it out **before** upgrading —
+> `docker cp claude-code-studio:/app/config.json ./config.json`, then after
+> `docker compose up -d` put it back with
+> `docker cp ./config.json claude-code-studio:/app/data/config.json && docker compose restart`.
+
+</details>
 
 ## Features
 
@@ -572,6 +573,10 @@ npm start     # production
 ```
 
 ---
+
+## Contributing
+
+For setup questions, reproducible bugs, and code changes, see [CONTRIBUTING.md](CONTRIBUTING.md). Never include API keys, session cookies, SSH credentials, or private project files in public reports.
 
 ## License
 
