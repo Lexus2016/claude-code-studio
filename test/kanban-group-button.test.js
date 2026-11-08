@@ -42,10 +42,16 @@ check('every inline <script> in kanban.html parses', () => {
   scripts.forEach((src, i) => { new vm.Script(src, { filename: `kanban.html#script${i}` }); });
 });
 
+// The templates read the page-level task-text limit. Take the number from the page
+// rather than repeating it here, so a change to the limit cannot leave this sandbox
+// rendering something the real page would not.
+const PAGE_LIMIT = Number((html.match(/const MAX_TASK_TEXT = (\d+);/) || [])[1]);
+assert.ok(PAGE_LIMIT > 0, 'MAX_TASK_TEXT not found in kanban.html');
+
 function runChainForm(mode, chain) {
   const ctx = {
     t: k => k, escH: s => String(s ?? ''), kbSettings: {}, kbBots: [{ id: 'b1', label: 'B', avatar: '🤖' }],
-    engineSegHtml: () => '', modalMode: mode,
+    engineSegHtml: () => '', modalMode: mode, MAX_TASK_TEXT: PAGE_LIMIT,
   };
   vm.createContext(ctx);
   vm.runInContext(fnSource('buildChainForm') + '\nthis.__out = buildChainForm(__chain);', Object.assign(ctx, { __chain: chain }));

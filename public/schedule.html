@@ -153,7 +153,7 @@ button{font-family:inherit;cursor:pointer}
 /* ─── Card body ─── */
 .agcard-body{flex:1;min-width:0}
 .agcard-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px}
-.agcard-desc{font-size:12px;color:var(--muted);margin-bottom:7px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
+.agcard-desc{font-size:12px;color:var(--muted);margin-bottom:7px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
 .agcard-badges{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 
 /* ─── Badges ─── */
@@ -232,6 +232,7 @@ button{font-family:inherit;cursor:pointer}
 .inp[type="date"]{color-scheme:dark}
 .inp[type="date"]::-webkit-calendar-picker-indicator{filter:invert(.5) sepia(1) saturate(5) hue-rotate(200deg);cursor:pointer;opacity:.6}
 .inp-hint{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}
+.inp-hint.over{color:var(--red)}
 .sel{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:13px;padding:8px 12px;font-family:inherit;cursor:pointer;transition:border-color .15s;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a8baa' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
 .sel:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,106,239,.12)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -585,6 +586,19 @@ const pageNavigation = (() => {
 let lang = localStorage.getItem('lang') || 'en';
 document.documentElement.lang = lang;
 document.documentElement.dir = (lang === 'he') ? 'rtl' : 'ltr';
+
+// ─── Task text limit ───────────────────────────────────────────────────────
+// The number server.js stores and mcp-task-manager.js advertises (task-text-limit.js).
+// A maxlength attribute cuts a paste without a word, so a field that holds prose
+// also carries a counter: it reaches MAX_TASK_TEXT exactly where the text was cut.
+const MAX_TASK_TEXT = 20000;
+function updTextCount(id, outId) {
+  const el = $i(id), out = $i(outId);
+  if (!el || !out) return;
+  const n = el.value.length;
+  out.textContent = n + ' / ' + MAX_TASK_TEXT;
+  out.classList.toggle('over', n >= MAX_TASK_TEXT);
+}
 const TR = {
   uk: {
     'nav.back': 'Назад',
@@ -1646,7 +1660,8 @@ function buildForm(tk={}) {
     </div>
     <div>
       <label class="lbl" for="fDesc">${t('form.desc')}</label>
-      <textarea id="fDesc" class="inp" rows="3" placeholder="${t('form.desc.ph')}" maxlength="2000">${escH(tk.description||'')}</textarea>
+      <textarea id="fDesc" class="inp" rows="3" placeholder="${t('form.desc.ph')}" maxlength="${MAX_TASK_TEXT}" oninput="updTextCount('fDesc','fDescCount')">${escH(tk.description||'')}</textarea>
+      <div class="inp-hint" id="fDescCount">${(tk.description||'').length} / ${MAX_TASK_TEXT}</div>
     </div>
     <div>
       <label class="lbl" for="fSession">${t('form.session')}</label>
