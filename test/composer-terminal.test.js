@@ -202,9 +202,11 @@ console.log('\n— focus: why a deaf pane used to need a tab switch —');
 check('a reconnect refocuses the pane',
   /ws\.onopen = \(\) => \{[\s\S]{0,700}?requestAnimationFrame\(\(\) => \{ try \{ term\.focus\(\); \} catch \{\} \}\);/.test(TB), true);
 check('clicking the pane refocuses it',
-  /host\.addEventListener\('mouseup'[\s\S]{0,260}?term\.focus\(\)/.test(TB), true);
-check('but not while a selection is being dragged out — that mouseup copies the selection instead',
-  /host\.addEventListener\('mouseup'[\s\S]{0,160}?if \(term\.hasSelection && term\.hasSelection\(\)\) \{\s*copyText\(term\.getSelection\(\)\)[^\n]*\n\s*return;/.test(TB), true);
+  // #131 widened the handler: it now takes `ev` and skips a right-button release
+  // before reaching the branches, so the gap from the listener to focus() is longer.
+  /host\.addEventListener\('mouseup', ev => \{[\s\S]{0,700}?term\.focus\(\)/.test(TB), true);
+check('but not while a selection is being dragged out — that mouseup copies it, and only when the setting is on',
+  /host\.addEventListener\('mouseup'[\s\S]{0,700}?if \(termCopyOnSelect\(\)\) copyText\(term\.getSelection\(\)\)[^\n]*\n\s*return;/.test(TB), true);
 // xterm fires onSelectionChange from the selection service's refresh on every
 // animation frame while the mouse is still dragging — a clipboard write per frame,
 // and over plain http copyText()'s textarea fallback steals focus mid-drag.
@@ -241,9 +243,11 @@ check('switchTab returns early when the tab is already active',
 
 // Run the real function, rather than grepping for a focus() call that a later edit could
 // move onto an early-return path. Same technique as test/ask-user-question.test.js.
-const ptSrc = TB.slice(TB.indexOf('function pasteToTerminal(text)'));
+// #131 added an optional second argument (`{ silent }`, used by the Ctrl+Shift+V
+// chord so a paste from the keyboard does not toast); the body below is unchanged.
+const ptSrc = TB.slice(TB.indexOf('function pasteToTerminal(text, opts)'));
 const ptBody = ptSrc.slice(0, ptSrc.indexOf('\n}\n') + 3);
-check('pasteToTerminal declared exactly once', count('function pasteToTerminal(text)'), 1);
+check('pasteToTerminal declared exactly once', count('function pasteToTerminal(text, opts)'), 1);
 
 let focused = 0, sent = [];
 const fakeEntry = { ws: { readyState: 1, send: (s) => sent.push(JSON.parse(s)) }, term: { focus: () => { focused++; } } };
