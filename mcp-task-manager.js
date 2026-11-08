@@ -13,6 +13,9 @@
 
 const http = require('http');
 const { StringDecoder } = require('string_decoder');
+// Same limit the HTTP API enforces; advertising a smaller one here makes the model
+// shorten a task for no reason.
+const { MAX_TASK_TEXT } = require('./task-text-limit.js');
 
 const SERVER_URL = process.env.TASK_MANAGER_SERVER_URL || 'http://127.0.0.1:3000';
 const TASK_ID = process.env.TASK_MANAGER_TASK_ID || '';
@@ -42,7 +45,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         title: { type: 'string', description: 'Short task title (max 200 chars)' },
-        description: { type: 'string', description: 'Detailed task description (max 2000 chars)' },
+        description: { type: 'string', description: `Detailed task description (max ${MAX_TASK_TEXT} chars)` },
         status: { type: 'string', enum: ['backlog', 'todo', 'done'], description: 'todo = queue it for execution now (default). backlog = add to the board only, nothing runs. done = an already-finished item, e.g. a "- [x]" line from a plan you are importing.' },
         context: {
           description: 'Curated context to pass to the child task. Include ONLY what the child needs — issue details, code snippets, error messages, etc. Can be a string or a JSON object. The child reads this via get_current_task.',

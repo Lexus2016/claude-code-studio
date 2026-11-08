@@ -27,6 +27,9 @@ asarUnpack:
   # level deeper than the entry point: mcp-bots.js unpacked fine and still died on
   # `Cannot find module './bots.js'`. Pinned by test/asar-helpers.test.js.
   - "bots.js"
+  # One level deeper the same trap: mcp-task-manager.js requires the task-text limit,
+  # so that module has to sit outside the archive with it.
+  - "task-text-limit.js"
 
 files:
   - "**/*"

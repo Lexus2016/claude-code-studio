@@ -79,6 +79,9 @@ const _ENV_AT_BOOT = { ...process.env };
 }
 
 const multer = require('multer');
+// The one task-text limit, shared with the MCP schema and the two pages. A local
+// require, so it sits below the .env loader like every other one (test/env-load-order).
+const { MAX_TASK_TEXT } = require('./task-text-limit.js');
 const cfgResolve = require('./config-resolve');
 // Wave scheduling for multi-agent mode. Extracted so it can be tested without
 // spawning `claude` — see agent-dag.js and test/agent-dag.test.js.
@@ -6122,7 +6125,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
         const depsJson = depends_on ? JSON.stringify(depends_on) : null;
 
         stmts.createTask.run(
-          id, String(title).substring(0, 200), String(description).substring(0, 2000),
+          id, String(title).substring(0, 200), String(description).substring(0, MAX_TASK_TEXT),
           '', // notes
           newStatus, // 'todo' → immediately eligible for processQueue; the rest are board rows
           0,  // sort_order
@@ -6258,7 +6261,7 @@ app.post('/api/internal/task-manager', express.json({ limit: '1mb' }), (req, res
 
           stmts.createTask.run(
             taskId, String(td.title || `Step ${i + 1}`).substring(0, 200),
-            String(td.description || '').substring(0, 2000),
+            String(td.description || '').substring(0, MAX_TASK_TEXT),
             '', // notes
             'todo',
             i * 1000, // sort_order
@@ -7423,7 +7426,7 @@ app.post('/api/tasks', (req, res) => {
   let _wt = null;
   try { _wt = setupUnitWorktree('task', id, workdir); }
   catch (e) { if (e.code === 'GIT_UNAVAILABLE') return res.status(400).json({ error: e.message }); throw e; }
-  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0,2000), String(notes||'').substring(0,2000), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(_wt ? _wt.workdir : workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null, sqlVal(run_engine)||null, sqlVal(bot_id)||null);
+  stmts.createTask.run(id, String(title).substring(0,200), String(description).substring(0, MAX_TASK_TEXT), String(notes||'').substring(0, MAX_TASK_TEXT), sqlVal(status), sqlVal(sort_order), sqlVal(session_id)||null, sqlVal(_wt ? _wt.workdir : workdir)||null, sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments)||null, sqlVal(depends_on)||null, sqlVal(chain_id)||null, sqlVal(source_session_id)||null, sqlVal(scheduled_at)||null, sqlVal(recurrence)||null, sqlVal(recurrence_end_at)||null, sqlVal(effort)||null, sqlVal(run_engine)||null, sqlVal(bot_id)||null);
   if (_wt) stmts.setTaskGit.run(_wt.workdir, _wt.git_root, _wt.git_branch, id);
   const task = stmts.getTask.get(id);
   if (status === 'todo') setImmediate(processQueue);
@@ -7459,8 +7462,8 @@ app.put('/api/tasks/:id', (req, res) => {
     }
   }
   stmts.updateTask.run(
-    String(title).substring(0,200), String(description).substring(0,2000),
-    String(notes||'').substring(0,2000),
+    String(title).substring(0,200), String(description).substring(0, MAX_TASK_TEXT),
+    String(notes||'').substring(0, MAX_TASK_TEXT),
     sqlVal(status), sqlVal(sort_order), sqlVal(session_id) || null, sqlVal(workdir) || null,
     sqlVal(model), sqlVal(mode), sqlVal(agent_mode), sqlVal(max_turns), sqlVal(attachments) || null,
     sqlVal(depends_on) || null, sqlVal(chain_id) || null, sqlVal(source_session_id) || null,
@@ -7621,8 +7624,8 @@ app.post('/api/task-chains/:id/tasks', (req, res) => {
   const chainStatus = deriveChainStatus(req.params.id);
   const taskStatus = (chainStatus === 'in_progress' || chainStatus === 'todo') ? 'todo' : 'backlog';
   const taskId = genId();
-  stmts.createTask.run(taskId, String(title).substring(0, 200), String(description).substring(0, 2000),
-    String(notes || '').substring(0, 2000), taskStatus, sortOrder,
+  stmts.createTask.run(taskId, String(title).substring(0, 200), String(description).substring(0, MAX_TASK_TEXT),
+    String(notes || '').substring(0, MAX_TASK_TEXT), taskStatus, sortOrder,
     chain.session_id || null, chain.workdir || null, chain.model || 'sonnet',
     chain.mode || 'auto', chain.agent_mode || 'single', chain.max_turns || UNATTENDED_MAX_TURNS,
     null, dependsOn, req.params.id, chain.source_session_id || null,
@@ -7792,7 +7795,7 @@ app.post('/api/tasks/dispatch', (req, res) => {
       stmts.createTask.run(
         taskId,
         (t.title || t.role || 'Subtask').substring(0, 200),
-        (t.description || t.task || '').substring(0, 2000),
+        (t.description || t.task || '').substring(0, MAX_TASK_TEXT),
         '',            // notes
         'todo',
         i,             // sort_order preserves plan ordering
@@ -13230,7 +13233,7 @@ wss.on('connection', (ws) => {
               stmts.createTask.run(
                 taskId,
                 (a.role || 'Subtask').substring(0, 200),
-                (a.task || '').substring(0, 2000),
+                (a.task || '').substring(0, MAX_TASK_TEXT),
                 '', 'todo', i, chainSessionId, _wdchainWd,
                 sqlVal(model) || 'sonnet', 'auto', 'single', UNATTENDED_MAX_TURNS, null,
                 realDeps.length ? JSON.stringify(realDeps) : null,

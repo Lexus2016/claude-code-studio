@@ -465,6 +465,8 @@ body::after{ display:none; }
 .modal-body .sc-sep { display:none; }
 .modal-body .sc-btn { min-height:32px; }
 .modal-body :is(input,select,textarea,button):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.inp-hint{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}
+.inp-hint.over{color:var(--red)}
 .modal-body .inp-hint,.modal-body .sched-hint { line-height:1.6; margin-top:6px; }
 @media(max-width:600px){
   .modal-body .grid2 { grid-template-columns:1fr; }
@@ -1029,6 +1031,19 @@ let lang = localStorage.getItem('lang') || 'en';
 function t(k){ return (TR[lang]||TR.en)[k] || k; }
 document.documentElement.lang = lang;
 document.documentElement.dir = (lang === 'he') ? 'rtl' : 'ltr';
+
+// ─── Task text limit ───────────────────────────────────────────────────────
+// The number server.js stores and mcp-task-manager.js advertises (task-text-limit.js).
+// A maxlength attribute cuts a paste without a word, so a field that holds prose
+// also carries a counter: it reaches MAX_TASK_TEXT exactly where the text was cut.
+const MAX_TASK_TEXT = 20000;
+function updTextCount(id, outId) {
+  const el = $i(id), out = $i(outId);
+  if (!el || !out) return;
+  const n = el.value.length;
+  out.textContent = n + ' / ' + MAX_TASK_TEXT;
+  out.classList.toggle('over', n >= MAX_TASK_TEXT);
+}
 
 // Declarative i18n — same attribute contract as index.html: the markup carries the
 // key, this pass fills in text/attributes for the active language. Every user-facing
@@ -1952,7 +1967,7 @@ function openAddChainTaskModal(chainId){
       <input id="fChainTaskTitle" class="inp" placeholder="${t('modal.name')}" maxlength="200">
     </div>
     <div><label class="lbl" for="fChainTaskDesc">${t('modal.desc')}</label>
-      <textarea id="fChainTaskDesc" class="inp" rows="3" placeholder="…" maxlength="2000"></textarea>
+      <textarea id="fChainTaskDesc" class="inp" rows="3" placeholder="…" maxlength="${MAX_TASK_TEXT}"></textarea>
     </div>`;
   $i('modalFt').innerHTML=`
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
@@ -1973,7 +1988,7 @@ function buildChainForm(chain){
             <span class="task-num">1.</span>
             <div class="task-fields">
               <input class="chain-task-input" aria-label="${escH(t('modal.name'))}" placeholder="${escH(t('modal.name'))}" maxlength="200">
-              <textarea class="chain-task-desc-input" aria-label="${escH(t('modal.desc'))}" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="2000"></textarea>
+              <textarea class="chain-task-desc-input" aria-label="${escH(t('modal.desc'))}" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="${MAX_TASK_TEXT}"></textarea>
             </div>
             <button class="task-remove" aria-label="${escH(t('modal.delete'))}" onclick="removeChainFormTask(this)">✕</button>
           </div>
@@ -1990,7 +2005,7 @@ function buildChainForm(chain){
               <span class="task-num">${i+1}.</span>
               <div class="task-fields">
                 <input class="chain-task-input" aria-label="${escH(t('modal.name'))}" placeholder="${escH(t('modal.name'))}" maxlength="200" value="${escH(tk.title)}">
-                <textarea class="chain-task-desc-input" aria-label="${escH(t('modal.desc'))}" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="2000">${escH(tk.description||'')}</textarea>
+                <textarea class="chain-task-desc-input" aria-label="${escH(t('modal.desc'))}" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="${MAX_TASK_TEXT}">${escH(tk.description||'')}</textarea>
               </div>
               <button class="task-remove" aria-label="${escH(t('modal.delete'))}" onclick="removeChainFormTask(this)">✕</button>
             </div>`:`
@@ -2069,7 +2084,7 @@ function addChainFormTask(){
     <span class="task-num">${count+1}.</span>
     <div class="task-fields">
       <input class="chain-task-input" aria-label="${escH(t('modal.name'))}" placeholder="${escH(t('modal.name'))}" maxlength="200">
-      <textarea class="chain-task-desc-input" aria-label="${escH(t('modal.desc'))}" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="2000"></textarea>
+      <textarea class="chain-task-desc-input" aria-label="${escH(t('modal.desc'))}" rows="2" placeholder="${escH(t('modal.desc'))}" maxlength="${MAX_TASK_TEXT}"></textarea>
     </div>
     <button class="task-remove" aria-label="${escH(t('modal.delete'))}" onclick="removeChainFormTask(this)">✕</button>`;
   container.appendChild(div);
@@ -2224,7 +2239,7 @@ function openEditChainTaskModal(chainId,taskId){
       <input id="fChainTaskTitle" class="inp" placeholder="${t('modal.name')}" maxlength="200" value="${escH(tk.title)}"${dis}>
     </div>
     <div><label class="lbl" for="fChainTaskDesc">${t('modal.desc')}</label>
-      <textarea id="fChainTaskDesc" class="inp" rows="3" placeholder="…" maxlength="2000"${dis}>${escH(tk.description||'')}</textarea>
+      <textarea id="fChainTaskDesc" class="inp" rows="3" placeholder="…" maxlength="${MAX_TASK_TEXT}"${dis}>${escH(tk.description||'')}</textarea>
     </div>`;
   $i('modalFt').innerHTML=editable?`
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">${t('modal.cancel')}</button>
@@ -2457,10 +2472,12 @@ function buildForm(tk={}){
       </div>
     </div>
     <div><label class="lbl" for="fDesc">${t('modal.desc')}</label>
-      <textarea id="fDesc" class="inp" rows="3" placeholder="…" maxlength="2000">${escH(tk.description||'')}</textarea>
+      <textarea id="fDesc" class="inp" rows="3" placeholder="…" maxlength="${MAX_TASK_TEXT}" oninput="updTextCount('fDesc','fDescCount')">${escH(tk.description||'')}</textarea>
+      <div class="inp-hint" id="fDescCount">${(tk.description||'').length} / ${MAX_TASK_TEXT}</div>
     </div>
     <div><label class="lbl" for="fNotes">${t('modal.notes')}</label>
-      <textarea id="fNotes" class="inp" rows="2" placeholder="…" maxlength="2000">${escH(tk.notes||'')}</textarea>
+      <textarea id="fNotes" class="inp" rows="2" placeholder="…" maxlength="${MAX_TASK_TEXT}" oninput="updTextCount('fNotes','fNotesCount')">${escH(tk.notes||'')}</textarea>
+      <div class="inp-hint" id="fNotesCount">${(tk.notes||'').length} / ${MAX_TASK_TEXT}</div>
     </div>
     <div>
       <label class="lbl" for="fAttachments">${t('modal.attach')}</label>
