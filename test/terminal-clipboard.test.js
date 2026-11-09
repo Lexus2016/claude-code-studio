@@ -9,8 +9,8 @@
 //   - macOS uses Cmd+C / Cmd+V and ignores the Ctrl+Shift form;
 //   - copy-on-select is OFF by default, persists when turned on, and a right-button
 //     mouseup never copies;
-//   - the context menu lists Copy / Paste / Select all / Copy on select, with Copy
-//     disabled while there is no selection;
+//   - the context menu lists Copy / Paste / Select all / Find / Copy on select, with
+//     Copy disabled while there is no selection;
 //   - the xterm options keep macOptionClickForcesSelection and drop word-select on
 //     right-click.
 //
@@ -36,6 +36,13 @@ const pureEnd = html.indexOf('function _showTermMenu(');
 assert.ok(pureStart > 0 && pureEnd > pureStart, 'terminal clipboard block not found in public/index.html');
 const PURE = html.slice(pureStart, pureEnd);
 assert.ok(!/document\.|addEventListener/.test(PURE), 'the pure block must not touch the DOM');
+
+// #131 slice 2: the addon/find block sits between _pasteFromClipboard and
+// _createTerminal, and _createTerminal calls into it, so the same sandbox needs it.
+const addonsStart = html.indexOf('// \u2500\u2500 Terminal addons and find (#131)');
+const addonsEnd = html.indexOf('// Build (once) the live terminal');
+assert.ok(addonsStart > 0 && addonsEnd > addonsStart, 'terminal addons block not found in public/index.html');
+const ADDONS = html.slice(addonsStart, addonsEnd);
 
 // _createTerminal, from its own header to its top-level closing brace.
 function liftFunction(src, name) {
@@ -115,7 +122,7 @@ function load(opts = {}) {
   };
   vm.createContext(ctx);
   vm.runInContext(
-    PURE + '\n' + CREATE +
+    PURE + '\n' + ADDONS + '\n' + CREATE +
     '\nthis.api = { termChordAction, termOptions, termMenuItems, termCopyOnSelect, setTermCopyOnSelect, isMacPlatform, _createTerminal };',
     ctx,
   );
@@ -186,17 +193,18 @@ check('a browser that refuses storage keeps copy-on-select off instead of throwi
 check('menu model: Copy is disabled without a selection, copy-on-select mirrors the setting', () => {
   const { api } = load();
   const none = api.termMenuItems({ hasSelection: false, copyOnSelect: false });
-  assert.deepStrictEqual([...none.map(i => i.id)], ['copy', 'paste', 'selectAll', 'copyOnSelect']);
+  assert.deepStrictEqual([...none.map(i => i.id)], ['copy', 'paste', 'selectAll', 'find', 'copyOnSelect']);
   assert.deepStrictEqual([...none.map(i => i.labelKey)],
-    ['term.menu.copy', 'term.menu.paste', 'term.menu.selectAll', 'term.menu.copyOnSelect']);
+    ['term.menu.copy', 'term.menu.paste', 'term.menu.selectAll', 'term.menu.find', 'term.menu.copyOnSelect']);
   assert.strictEqual(none[0].enabled, false, 'Copy must be disabled with nothing selected');
   assert.strictEqual(none[1].enabled, true);
   assert.strictEqual(none[2].enabled, true);
-  assert.strictEqual(none[3].checked, false);
+  assert.strictEqual(none[3].enabled, true, 'Find never depends on a selection');
+  assert.strictEqual(none[4].checked, false);
 
   const some = api.termMenuItems({ hasSelection: true, copyOnSelect: true });
   assert.strictEqual(some[0].enabled, true);
-  assert.strictEqual(some[3].checked, true);
+  assert.strictEqual(some[4].checked, true);
 });
 
 // ── 5. wiring through _createTerminal ──────────────────────────────────────
