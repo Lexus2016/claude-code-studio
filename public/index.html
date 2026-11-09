@@ -1141,6 +1141,14 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
 .term-menu-item:hover:not(:disabled) { background: var(--s3); }
 .term-menu-item:disabled { opacity: .45; cursor: default; }
 .term-menu-item.on { color: var(--green); }
+/* #131 — the pane's find bar. A row, not an overlay: a search must not cover the last
+   lines of output, which is what the person searching is looking at. */
+.term-find { display: none; align-items: center; gap: 8px; padding: 6px 9px; background: var(--s1); box-shadow: inset 0 -1px 0 rgba(255,255,255,.09); }
+.term-find.open { display: flex; }
+.term-find input { flex: 1; min-width: 0; background: var(--s2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; font-size: 12.5px; font-family: inherit; outline: none; }
+.term-find input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,239,.15); }
+.term-find input::placeholder { color: var(--text-dim); }
+.term-find .search-count { min-width: 62px; }
 .term-send { display: flex; gap: 6px; align-items: center; padding: 6px 8px 8px; border-top: 1px solid var(--border); background: #0b0b0f; }
 .term-send input { flex: 1; min-width: 0; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: inherit; font-size: 13px; padding: 6px 10px; outline: none; }
 .term-send input:focus { border-color: var(--accent); }
@@ -3773,6 +3781,19 @@ summary::-webkit-details-marker { display:none; }
       <button id="termRefreshBtn" class="bg" style="font-size:12px;padding:4px 9px" onclick="refreshTerminalSession()" data-i18n-title="term.refresh.title" title="Reconnect this terminal" data-i18n-aria="term.refresh.title" aria-label="Reconnect this terminal">&#x21BB;</button>
       <button id="termKillBtn" class="bg" style="font-size:11px;padding:4px 10px"></button>
     </div>
+    <!-- #131: find in the pane's scrollback. Ctrl+Shift+F (Cmd+F on macOS) or the
+         pane's own menu opens it; Enter / Shift+Enter step, Esc closes and hands the
+         keyboard back to the terminal. -->
+    <div class="term-find" id="termFind" role="search">
+      <input id="termFindInput" type="text" autocomplete="off" spellcheck="false"
+             data-i18n-ph="term.find.ph" placeholder="Find in this pane…"
+             data-i18n-aria="term.find.ph" aria-label="Find in this pane"
+             oninput="termFindSearch()" onkeydown="termFindKeydown(event)">
+      <span class="search-count" id="termFindCount"></span>
+      <button type="button" class="search-nav-btn" onclick="termFindStep(-1)" data-i18n-title="term.find.prev" title="Previous match (Shift+Enter)" data-i18n-aria="term.find.prev" aria-label="Previous match">&#x25B2;</button>
+      <button type="button" class="search-nav-btn" onclick="termFindStep(1)" data-i18n-title="term.find.next" title="Next match (Enter)" data-i18n-aria="term.find.next" aria-label="Next match">&#x25BC;</button>
+      <button type="button" class="search-close" onclick="termFindClose()" data-i18n-title="term.find.close" title="Close find (Esc)" data-i18n-aria="term.find.close" aria-label="Close find">&#x2715;</button>
+    </div>
     <div id="termHost" data-i18n-title="term.select.hint" title="Shift+drag selects text when the app uses the mouse"></div>
     <!-- The composer (.ia) is display:none in term-mode, so until now there was no
          way to send a line to a terminal session except typing into the pane itself
@@ -5199,6 +5220,13 @@ const TRANSLATIONS = {
     'at.no_bots':'Ботів не знайдено',
     'sec.bots':'Боти','bots.hint':'Учасники цього проєкту. Згадайте бота через @@ у повідомленні.','bot.add.new':'Створити бота','bot.add.btn':'Створити','bot.use.title':'Вставити згадку','bot.modal.add.title':'Новий бот','bot.modal.edit.title':'Редагувати бота','bot.modal.label.label':'Ім\'я','bot.modal.handle.hint':'Звертання у чаті:','bot.modal.avatar.label':'Емодзі','bot.modal.desc.label':'Призначення','bot.modal.desc.hint':'Одним рядком. Це бачать інші боти, щоб знати, кому передати роботу.','bot.modal.model.label':'Модель','bot.model.inherit':'Як у чаті','bot.modal.prompt.label':'Системний промпт','bot.modal.prompt.hint':'Хто цей бот і як він працює. До 8000 символів.','bot.err.label':'Вкажіть імʼя бота','bot.del.confirm':'Видалити бота','bot.del.note':'Його минулі повідомлення лишаться, а звертання більше ніколи не дістанеться іншому боту.','bot.deleted':'видалений бот','toast.bot_added':'✓ Бота створено','toast.bot_updated':'✓ Бота оновлено','toast.bot_deleted':'✓ Бота видалено','bot.modal.global.label':'Доступний у всіх проєктах','bot.modal.global.hint':'Роль на кшталт програміста потрібна скрізь. Увімкніть — і бот зʼявиться в кожному проєкті без окремого додавання.','bot.modal.also_in':'Також у проєктах:','bot.modal.delete':'Видалити бота','bot.global.badge':'Доступний у всіх проєктах','bot.unlink.title':'Прибрати з цього проєкту','bot.unlink.confirm':'Прибрати з цього проєкту','bot.unlink.note':'Бот лишиться в інших проєктах, його повідомлення нікуди не зникнуть.','bot.del.everywhere':'Він доступний у всіх проєктах — зникне звідусіль.','bot.del.in_n':'Він доступний у {n} проєктах — зникне з усіх.','toast.bot_unlinked':'✓ Прибрано з проєкту','bots.import.title':'Імпортувати ботів з JSON файлу','bots.export.title':'Експортувати ботів у JSON файл','bots.import.conflict':'Ботів із такими звертаннями вже є: {n}. Перезаписати їх даними з файлу? Локальні зміни в них буде втрачено.','toast.bots_imported':'✓ Імпортовано ботів: {n}, пропущено: {s}','toast.bots_import_err':'Не вдалося імпортувати: ','toast.bots_import_parse':'Файл не є коректним JSON','toast.bots_import_empty':'У файлі немає жодного бота','toast.bots_import_reserved':'Пропущено через видалених ботів: {n} ({list}) — ці звертання зарезервовані назавжди','toast.bots_export_err':'Не вдалося експортувати ботів','toast.bots_export_empty':'Немає кого експортувати','at.group.bots':'Боти','at.group.files':'Файли',
     'term.open.title':'Відкрити живий термінал цього агента у вкладці','term.kill':'Завершити','term.killConfirm':'Завершити цю термінальну сесію? Розмову можна буде відновити пізніше.','term.unavailable':'Термінальні сесії недоступні','term.state.attached':'підключено','term.state.started':'запущено','term.state.restored':'відновлено','term.state.restoredLast':'відновлено останню розмову агента','term.state.restoreFailed':'відновлювати не було чого — почато заново','term.state.exited':'агент завершився','term.state.error':'помилка','term.state.disconnected':'з’єднання втрачено — перепідключення...','term.state.reconnecting':'перепідключення...','term.paste.title':'Вставити в термінал','term.paste.notarget':'Немає відкритого термінала для вставки','term.paste.notconnected':'Термінал не підключений','term.paste.done':'Вставлено в термінал','term.refresh.title':'Перепідключити цей термінал','term.send.ph':'Надіслати рядок у термінал…','term.send.title':'Надіслати (Enter)','term.menu.copy':'Копіювати','term.menu.paste':'Вставити','term.menu.selectAll':'Виділити все','term.menu.copyOnSelect':'Копіювати при виділенні','term.select.hint':'Shift+перетягування виділяє текст, коли програма перехоплює мишу','term.paste.denied':'Браузер не дав доступ до буфера обміну — вставте через Ctrl+V у полі нижче','term.keys.aria':'Клавіші термінала',
+    'term.menu.find':'Знайти…',
+    'term.find.ph':'Знайти в цій панелі…',
+    'term.find.prev':'Попередній збіг (Shift+Enter)',
+    'term.find.next':'Наступний збіг (Enter)',
+    'term.find.close':'Закрити пошук (Esc)',
+    'term.find.none':'Немає збігів',
+    'term.find.count':'{i} з {n}',
     'agent.modal.newIdCommand.label':'Команда створення розмови','agent.modal.newIdCommand.hint':'Альтернатива прапорцю: команда, що створює розмову і друкує її id. Виконується один раз при створенні сесії.',
     'agent.modal.interactive.label':'Інтерактивна команда','agent.modal.interactive.hint':'Запускає TUI агента для термінальної сесії. Порожньо — агент лише для делегування.','agent.modal.resume.label':'Команда відновлення','agent.modal.resume.hint':'{sid} — ідентифікатор розмови. Використовується для відновлення сесії після перезавантаження.','agent.modal.resumeLast.label':'Відновити останню (запасний варіант)','agent.modal.resumeLast.hint':'Використовується, коли ідентифікатор невідомий. Може відновити іншу розмову.','agent.modal.newIdFlag.label':'Прапорець id нової розмови','agent.modal.newIdFlag.hint':'Якщо CLI дозволяє задати id НОВОЇ розмови, відновлення стає точним. Порожньо — не підтримується.',
     'export.btn':'Експорт','export.title':'Експортувати розмову','notes.btn':'Нотатки','notes.title':'Нотатки сесії (приватні)','notes.ph':'Приватні нотатки сесії — не надсилаються Claude...','notes.save':'Зберегти','notes.saved':'✓ Збережено',
@@ -5650,6 +5678,13 @@ const TRANSLATIONS = {
     'at.no_bots':'No bots found',
     'sec.bots':'Bots','bots.hint':'Participants in this project. Mention one with @@ in a message.','bot.add.new':'Create bot','bot.add.btn':'Create','bot.use.title':'Insert mention','bot.modal.add.title':'New bot','bot.modal.edit.title':'Edit bot','bot.modal.label.label':'Name','bot.modal.handle.hint':'Addressed in chat as:','bot.modal.avatar.label':'Emoji','bot.modal.desc.label':'Purpose','bot.modal.desc.hint':'One line. Other bots see this, so they know who to hand work to.','bot.modal.model.label':'Model','bot.model.inherit':'Same as chat','bot.modal.prompt.label':'System prompt','bot.modal.prompt.hint':'Who this bot is and how it works. Up to 8000 characters.','bot.err.label':'Give the bot a name','bot.del.confirm':'Delete bot','bot.del.note':'Its past messages stay, and its handle can never be taken by another bot.','bot.deleted':'deleted bot','toast.bot_added':'✓ Bot created','toast.bot_updated':'✓ Bot updated','toast.bot_deleted':'✓ Bot deleted','bot.modal.global.label':'Available in every project','bot.modal.global.hint':'A role like a programmer is wanted everywhere. Turn this on and the bot shows up in every project without being added to each one.','bot.modal.also_in':'Also in projects:','bot.modal.delete':'Delete bot','bot.global.badge':'Available in every project','bot.unlink.title':'Remove from this project','bot.unlink.confirm':'Remove from this project','bot.unlink.note':'The bot stays in other projects and keeps all of its messages.','bot.del.everywhere':'It is available in every project and will disappear from all of them.','bot.del.in_n':'It is available in {n} projects and will disappear from all of them.','toast.bot_unlinked':'✓ Removed from project','bots.import.title':'Import bots from a JSON file','bots.export.title':'Export bots to a JSON file','bots.import.conflict':'{n} of these handles already exist here. Overwrite them from the file? Local edits to those bots will be lost.','toast.bots_imported':'✓ Imported {n} bots, skipped {s}','toast.bots_import_err':'Could not import: ','toast.bots_import_parse':'That file is not valid JSON','toast.bots_import_empty':'No bots in that file','toast.bots_import_reserved':'Skipped {n} handle(s) belonging to deleted bots ({list}) — those are reserved forever','toast.bots_export_err':'Could not export the bots','toast.bots_export_empty':'Nothing to export','at.group.bots':'Bots','at.group.files':'Files',
     'term.open.title':"Open this agent's live terminal in a tab",'term.kill':'Kill','term.killConfirm':'Kill this terminal session? The conversation can be resumed later.','term.unavailable':'Terminal sessions are unavailable','term.state.attached':'attached','term.state.started':'started','term.state.restored':'restored','term.state.restoredLast':"restored the agent's last conversation",'term.state.restoreFailed':'nothing to resume — started fresh','term.state.exited':'agent exited','term.state.error':'error','term.state.disconnected':'connection lost — reconnecting…','term.state.reconnecting':'reconnecting…','term.paste.title':'Paste into terminal','term.paste.notarget':'No open terminal to paste into','term.paste.notconnected':'Terminal is not connected','term.paste.done':'Pasted into terminal','term.refresh.title':'Reconnect this terminal','term.send.ph':'Send a line to the terminal…','term.send.title':'Send (Enter)','term.menu.copy':'Copy','term.menu.paste':'Paste','term.menu.selectAll':'Select all','term.menu.copyOnSelect':'Copy on select','term.select.hint':'Shift+drag selects text when the app uses the mouse','term.paste.denied':'The browser refused clipboard access — paste with Ctrl+V in the line below','term.keys.aria':'Terminal keys',
+    'term.menu.find':'Find…',
+    'term.find.ph':'Find in this pane…',
+    'term.find.prev':'Previous match (Shift+Enter)',
+    'term.find.next':'Next match (Enter)',
+    'term.find.close':'Close find (Esc)',
+    'term.find.none':'No matches',
+    'term.find.count':'{i} of {n}',
     'agent.modal.newIdCommand.label':'New-conversation command','agent.modal.newIdCommand.hint':'Alternative to the flag: a command that creates a conversation and prints its id. Run once when the session is created.',
     'agent.modal.interactive.label':'Interactive command','agent.modal.interactive.hint':"Starts the agent's TUI for a terminal session. Leave empty for a delegation-only agent.",'agent.modal.resume.label':'Resume command','agent.modal.resume.hint':'{sid} — the conversation id. Used to restore the session after a reboot.','agent.modal.resumeLast.label':'Resume last (fallback)','agent.modal.resumeLast.hint':'Used when no conversation id is known. May restore a different conversation.','agent.modal.newIdFlag.label':'New-conversation id flag','agent.modal.newIdFlag.hint':'If the CLI can be told the id of a NEW conversation, restore becomes exact. Leave empty if unsupported.',
     'export.btn':'Export','export.title':'Export conversation','notes.btn':'Notes','notes.title':'Session notes (private)','notes.ph':'Private session notes — not sent to Claude...','notes.save':'Save','notes.saved':'✓ Saved',
@@ -6101,6 +6136,13 @@ const TRANSLATIONS = {
     'at.no_bots':'Боты не найдены',
     'sec.bots':'Боты','bots.hint':'Участники этого проекта. Упомяните бота через @@ в сообщении.','bot.add.new':'Создать бота','bot.add.btn':'Создать','bot.use.title':'Вставить упоминание','bot.modal.add.title':'Новый бот','bot.modal.edit.title':'Редактировать бота','bot.modal.label.label':'Имя','bot.modal.handle.hint':'Обращение в чате:','bot.modal.avatar.label':'Эмодзи','bot.modal.desc.label':'Назначение','bot.modal.desc.hint':'Одной строкой. Это видят другие боты, чтобы знать, кому передать работу.','bot.modal.model.label':'Модель','bot.model.inherit':'Как в чате','bot.modal.prompt.label':'Системный промпт','bot.modal.prompt.hint':'Кто этот бот и как он работает. До 8000 символов.','bot.err.label':'Укажите имя бота','bot.del.confirm':'Удалить бота','bot.del.note':'Его прошлые сообщения останутся, а обращение больше никогда не достанется другому боту.','bot.deleted':'удалённый бот','toast.bot_added':'✓ Бот создан','toast.bot_updated':'✓ Бот обновлён','toast.bot_deleted':'✓ Бот удалён','bot.modal.global.label':'Доступен во всех проектах','bot.modal.global.hint':'Роль вроде программиста нужна везде. Включите — и бот появится в каждом проекте без отдельного добавления.','bot.modal.also_in':'Также в проектах:','bot.modal.delete':'Удалить бота','bot.global.badge':'Доступен во всех проектах','bot.unlink.title':'Убрать из этого проекта','bot.unlink.confirm':'Убрать из этого проекта','bot.unlink.note':'Бот останется в других проектах, его сообщения никуда не денутся.','bot.del.everywhere':'Он доступен во всех проектах — исчезнет отовсюду.','bot.del.in_n':'Он доступен в {n} проектах — исчезнет из всех.','toast.bot_unlinked':'✓ Убран из проекта','bots.import.title':'Импортировать ботов из JSON файла','bots.export.title':'Экспортировать ботов в JSON файл','bots.import.conflict':'Ботов с такими обращениями уже есть: {n}. Перезаписать их данными из файла? Локальные изменения в них будут потеряны.','toast.bots_imported':'✓ Импортировано ботов: {n}, пропущено: {s}','toast.bots_import_err':'Не удалось импортировать: ','toast.bots_import_parse':'Файл не является корректным JSON','toast.bots_import_empty':'В файле нет ни одного бота','toast.bots_import_reserved':'Пропущено из-за удалённых ботов: {n} ({list}) — эти обращения зарезервированы навсегда','toast.bots_export_err':'Не удалось экспортировать ботов','toast.bots_export_empty':'Некого экспортировать','at.group.bots':'Боты','at.group.files':'Файлы',
     'term.open.title':'Открыть живой терминал этого агента во вкладке','term.kill':'Завершить','term.killConfirm':'Завершить эту терминальную сессию? Разговор можно будет восстановить позже.','term.unavailable':'Терминальные сессии недоступны','term.state.attached':'подключено','term.state.started':'запущено','term.state.restored':'восстановлено','term.state.restoredLast':'восстановлен последний разговор агента','term.state.restoreFailed':'восстанавливать было нечего — начато заново','term.state.exited':'агент завершился','term.state.error':'ошибка','term.state.disconnected':'соединение потеряно — переподключение...','term.state.reconnecting':'переподключение...','term.paste.title':'Вставить в терминал','term.paste.notarget':'Нет открытого терминала для вставки','term.paste.notconnected':'Терминал не подключен','term.paste.done':'Вставлено в терминал','term.refresh.title':'Переподключить этот терминал','term.send.ph':'Отправить строку в терминал…','term.send.title':'Отправить (Enter)','term.menu.copy':'Копировать','term.menu.paste':'Вставить','term.menu.selectAll':'Выделить всё','term.menu.copyOnSelect':'Копировать при выделении','term.select.hint':'Shift+перетаскивание выделяет текст, когда программа перехватывает мышь','term.paste.denied':'Браузер не дал доступ к буферу обмена — вставьте через Ctrl+V в поле ниже','term.keys.aria':'Клавиши терминала',
+    'term.menu.find':'Найти…',
+    'term.find.ph':'Найти в этой панели…',
+    'term.find.prev':'Предыдущее совпадение (Shift+Enter)',
+    'term.find.next':'Следующее совпадение (Enter)',
+    'term.find.close':'Закрыть поиск (Esc)',
+    'term.find.none':'Совпадений нет',
+    'term.find.count':'{i} из {n}',
     'agent.modal.newIdCommand.label':'Команда создания разговора','agent.modal.newIdCommand.hint':'Альтернатива флагу: команда, создающая разговор и печатающая его id. Выполняется один раз при создании сессии.',
     'agent.modal.interactive.label':'Интерактивная команда','agent.modal.interactive.hint':'Запускает TUI агента для терминальной сессии. Пусто — агент только для делегирования.','agent.modal.resume.label':'Команда восстановления','agent.modal.resume.hint':'{sid} — идентификатор разговора. Используется для восстановления сессии после перезагрузки.','agent.modal.resumeLast.label':'Восстановить последний (запасной вариант)','agent.modal.resumeLast.hint':'Используется, когда идентификатор неизвестен. Может восстановить другой разговор.','agent.modal.newIdFlag.label':'Флаг id нового разговора','agent.modal.newIdFlag.hint':'Если CLI позволяет задать id НОВОГО разговора, восстановление становится точным. Пусто — не поддерживается.',
     'export.btn':'Экспорт','export.title':'Экспортировать разговор','notes.btn':'Заметки','notes.title':'Заметки сессии (приватные)','notes.ph':'Приватные заметки сессии — не отправляются Claude...','notes.save':'Сохранить','notes.saved':'✓ Сохранено',
@@ -6552,6 +6594,13 @@ const TRANSLATIONS = {
     "at.no_bots":"Aucun bot trouvé",
     "sec.bots":"Bots","bots.hint":"Participants de ce projet. Mentionnez un bot avec @@ dans un message.","bot.add.new":"Créer un bot","bot.add.btn":"Créer","bot.use.title":"Insérer la mention","bot.modal.add.title":"Nouveau bot","bot.modal.edit.title":"Modifier le bot","bot.modal.label.label":"Nom","bot.modal.handle.hint":"Adressé dans le chat comme :","bot.modal.avatar.label":"Émoji","bot.modal.desc.label":"Rôle","bot.modal.desc.hint":"Une ligne. Les autres bots la voient pour savoir à qui passer le travail.","bot.modal.model.label":"Modèle","bot.model.inherit":"Comme le chat","bot.modal.prompt.label":"Invite système","bot.modal.prompt.hint":"Qui est ce bot et comment il travaille. Jusqu'à 8000 caractères.","bot.err.label":"Donnez un nom au bot","bot.del.confirm":"Supprimer le bot","bot.del.note":"Ses anciens messages restent, et son identifiant ne sera jamais repris par un autre bot.","bot.deleted":"bot supprimé","toast.bot_added":"✓ Bot créé","toast.bot_updated":"✓ Bot mis à jour","toast.bot_deleted":"✓ Bot supprimé","bot.modal.global.label":"Disponible dans tous les projets","bot.modal.global.hint":"Un rôle comme celui de programmeur est utile partout. Activez cette option et le bot apparaît dans chaque projet sans y être ajouté un par un.","bot.modal.also_in":"Aussi dans les projets :","bot.modal.delete":"Supprimer le bot","bot.global.badge":"Disponible dans tous les projets","bot.unlink.title":"Retirer de ce projet","bot.unlink.confirm":"Retirer de ce projet","bot.unlink.note":"Le bot reste dans les autres projets et conserve tous ses messages.","bot.del.everywhere":"Il est disponible dans tous les projets et disparaîtra de partout.","bot.del.in_n":"Il est disponible dans {n} projets et disparaîtra de tous.","toast.bot_unlinked":"✓ Retiré du projet","bots.import.title":"Importer des bots depuis un fichier JSON","bots.export.title":"Exporter les bots vers un fichier JSON","bots.import.conflict":"{n} de ces identifiants existent déjà ici. Les écraser avec le fichier ? Les modifications locales de ces bots seront perdues.","toast.bots_imported":"✓ {n} bots importés, {s} ignorés","toast.bots_import_err":"Import impossible : ","toast.bots_import_parse":"Ce fichier n'est pas du JSON valide","toast.bots_import_empty":"Aucun bot dans ce fichier","toast.bots_import_reserved":"{n} identifiant(s) ignoré(s), appartenant à des bots supprimés ({list}) — ils sont réservés définitivement","toast.bots_export_err":"Export des bots impossible","toast.bots_export_empty":"Rien à exporter","at.group.bots":"Bots","at.group.files":"Fichiers",
     "term.open.title":"Ouvrir le terminal","term.menu.copy":"Copier","term.menu.paste":"Coller","term.menu.selectAll":"Tout sélectionner","term.menu.copyOnSelect":"Copier à la sélection","term.select.hint":"Maj+glisser sélectionne le texte quand l'application utilise la souris","term.paste.denied":"Le navigateur a refusé l'accès au presse-papiers — collez avec Ctrl+V dans la ligne ci-dessous","term.keys.aria":"Touches du terminal","term.kill":"Terminer","term.killConfirm":"Terminer cette session terminal ? La conversation pourra être reprise plus tard.","term.unavailable":"Sessions terminal indisponibles","term.state.attached":"connecté","term.state.started":"démarré","term.state.restored":"restauré","term.state.restoredLast":"dernière conversation de l'agent restaurée","term.state.restoreFailed":"rien à reprendre — nouveau départ","term.state.exited":"agent terminé","term.state.error":"erreur","term.state.disconnected":"connexion perdue — reconnexion…","term.state.reconnecting":"reconnexion…","term.paste.title":"Coller dans le terminal","term.paste.notarget":"Aucun terminal ouvert où coller","term.paste.notconnected":"Le terminal n'est pas connecté","term.paste.done":"Collé dans le terminal","term.refresh.title":"Reconnecter ce terminal","term.send.ph":"Envoyer une ligne au terminal…","term.send.title":"Envoyer (Entrée)",
+    "term.menu.find":"Rechercher…",
+    "term.find.ph":"Rechercher dans ce panneau…",
+    "term.find.prev":"Correspondance précédente (Maj+Entrée)",
+    "term.find.next":"Correspondance suivante (Entrée)",
+    "term.find.close":"Fermer la recherche (Échap)",
+    "term.find.none":"Aucune correspondance",
+    "term.find.count":"{i} sur {n}",
     "agent.modal.newIdCommand.label":"Commande de nouvelle conversation","agent.modal.newIdCommand.hint":"Alternative à l'indicateur : une commande qui crée une conversation et affiche son id. Exécutée une fois à la création de la session.",
     "agent.modal.interactive.label":"Commande interactive","agent.modal.interactive.hint":"Lance le TUI de l'agent pour une session terminal. Vide — agent de délégation uniquement.","agent.modal.resume.label":"Commande de reprise","agent.modal.resume.hint":"{sid} — identifiant de la conversation. Sert à restaurer la session après un redémarrage.","agent.modal.resumeLast.label":"Reprendre la dernière (repli)","agent.modal.resumeLast.hint":"Utilisée quand aucun identifiant n'est connu. Peut restaurer une autre conversation.","agent.modal.newIdFlag.label":"Indicateur d'id de nouvelle conversation","agent.modal.newIdFlag.hint":"Si la CLI accepte l'id d'une NOUVELLE conversation, la restauration devient exacte. Vide si non pris en charge.",
     "export.btn":"Exporter","export.title":"Exporter la conversation","notes.btn":"Notes","notes.title":"Notes de session (privées)","notes.ph":"Notes de session privées — non envoyées à Claude...",
@@ -6904,6 +6953,13 @@ const TRANSLATIONS = {
     "at.no_bots":"לא נמצאו בוטים",
     "sec.bots":"בוטים","bots.hint":"משתתפים בפרויקט הזה. אזכרו בוט עם @@ בהודעה.","bot.add.new":"צור בוט","bot.add.btn":"צור","bot.use.title":"הוסף אזכור","bot.modal.add.title":"בוט חדש","bot.modal.edit.title":"עריכת בוט","bot.modal.label.label":"שם","bot.modal.handle.hint":"פנייה בצ׳אט:","bot.modal.avatar.label":"אמוג׳י","bot.modal.desc.label":"ייעוד","bot.modal.desc.hint":"שורה אחת. בוטים אחרים רואים אותה כדי לדעת למי להעביר עבודה.","bot.modal.model.label":"מודל","bot.model.inherit":"כמו בצ׳אט","bot.modal.prompt.label":"הנחיית מערכת","bot.modal.prompt.hint":"מי הבוט הזה ואיך הוא עובד. עד 8000 תווים.","bot.err.label":"תנו שם לבוט","bot.del.confirm":"למחוק בוט","bot.del.note":"ההודעות הקודמות שלו נשארות, והמזהה שלו לעולם לא יעבור לבוט אחר.","bot.deleted":"בוט שנמחק","toast.bot_added":"✓ הבוט נוצר","toast.bot_updated":"✓ הבוט עודכן","toast.bot_deleted":"✓ הבוט נמחק","bot.modal.global.label":"זמין בכל הפרויקטים","bot.modal.global.hint":"תפקיד כמו מתכנת נחוץ בכל מקום. הפעילו את האפשרות והבוט יופיע בכל פרויקט בלי להוסיף אותו לכל אחד בנפרד.","bot.modal.also_in":"גם בפרויקטים:","bot.modal.delete":"מחיקת הבוט","bot.global.badge":"זמין בכל הפרויקטים","bot.unlink.title":"הסרה מהפרויקט הזה","bot.unlink.confirm":"להסיר מהפרויקט הזה","bot.unlink.note":"הבוט יישאר בפרויקטים האחרים וכל ההודעות שלו נשמרות.","bot.del.everywhere":"הוא זמין בכל הפרויקטים וייעלם מכולם.","bot.del.in_n":"הוא זמין ב-{n} פרויקטים וייעלם מכולם.","toast.bot_unlinked":"✓ הוסר מהפרויקט","bots.import.title":"ייבוא בוטים מקובץ JSON","bots.export.title":"ייצוא בוטים לקובץ JSON","bots.import.conflict":"{n} מהשמות האלה כבר קיימים כאן. לדרוס אותם מהקובץ? שינויים מקומיים בבוטים האלה יאבדו.","toast.bots_imported":"✓ יובאו {n} בוטים, {s} דולגו","toast.bots_import_err":"הייבוא נכשל: ","toast.bots_import_parse":"הקובץ אינו JSON תקין","toast.bots_import_empty":"אין בוטים בקובץ הזה","toast.bots_import_reserved":"{n} שמות דולגו כי הם שייכים לבוטים שנמחקו ({list}) — הם שמורים לתמיד","toast.bots_export_err":"ייצוא הבוטים נכשל","toast.bots_export_empty":"אין מה לייצא","at.group.bots":"בוטים","at.group.files":"קבצים",
     "term.open.title":"פתח טרמינל","term.menu.copy":"העתק","term.menu.paste":"הדבק","term.menu.selectAll":"בחר הכל","term.menu.copyOnSelect":"העתקה בעת בחירה","term.select.hint":"Shift+גרירה בוחרת טקסט כשהתוכנית משתמשת בעכבר","term.paste.denied":"הדפדפן סירב לגישה ללוח — הדביקו עם Ctrl+V בשורה שלמטה","term.keys.aria":"מקשי הטרמינל","term.kill":"סיים","term.killConfirm":"לסיים את שיחת הטרמינל הזו? אפשר יהיה לשחזר אותה בהמשך.","term.unavailable":"שיחות טרמינל אינן זמינות","term.state.attached":"מחובר","term.state.started":"הופעל","term.state.restored":"שוחזר","term.state.restoredLast":"שוחזרה השיחה האחרונה של הסוכן","term.state.restoreFailed":"לא היה מה לשחזר — התחלה מחדש","term.state.exited":"הסוכן הסתיים","term.state.error":"שגיאה","term.state.disconnected":"החיבור אבד — מתחבר מחדש...","term.state.reconnecting":"מתחבר מחדש...","term.paste.title":"הדבק בטרמינל","term.paste.notarget":"אין טרמינל פתוח להדבקה","term.paste.notconnected":"הטרמינל אינו מחובר","term.paste.done":"הודבק בטרמינל","term.refresh.title":"חבר מחדש את הטרמינל","term.send.ph":"שלחו שורה לטרמינל…","term.send.title":"שליחה (Enter)",
+    "term.menu.find":"חיפוש…",
+    "term.find.ph":"חיפוש בפאנל הזה…",
+    "term.find.prev":"התאמה קודמת (Shift+Enter)",
+    "term.find.next":"התאמה הבאה (Enter)",
+    "term.find.close":"סגירת החיפוש (Esc)",
+    "term.find.none":"אין התאמות",
+    "term.find.count":"{i} מתוך {n}",
     "agent.modal.newIdCommand.label":"פקודת יצירת שיחה","agent.modal.newIdCommand.hint":"חלופה לדגל: פקודה שיוצרת שיחה ומדפיסה את המזהה שלה. מורצת פעם אחת ביצירת השיחה.",
     "agent.modal.interactive.label":"פקודה אינטראקטיבית","agent.modal.interactive.hint":"מפעילה את ה-TUI של הסוכן עבור שיחת טרמינל. ריק — סוכן להאצלה בלבד.","agent.modal.resume.label":"פקודת שחזור","agent.modal.resume.hint":"{sid} — מזהה השיחה. משמש לשחזור השיחה לאחר הפעלה מחדש.","agent.modal.resumeLast.label":"שחזר אחרונה (גיבוי)","agent.modal.resumeLast.hint":"משמש כאשר המזהה אינו ידוע. עשוי לשחזר שיחה אחרת.","agent.modal.newIdFlag.label":"דגל מזהה לשיחה חדשה","agent.modal.newIdFlag.hint":"אם ה-CLI מאפשר לקבוע מזהה לשיחה חדשה, השחזור נעשה מדויק. ריק אם אינו נתמך.",
     "export.btn":"ייצוא","export.title":"ייצוא שיחה","notes.btn":"הערות","notes.title":"הערות סשן (פרטי)","notes.ph":"הערות פרטיות לסשן — לא נשלחות ל-Claude...","notes.save":"שמירה",
@@ -19341,6 +19397,9 @@ document.addEventListener('keydown', e => {
 
 <script src="/vendor/xterm.js"></script>
 <script src="/vendor/xterm-addon-fit.js"></script>
+<script src="/vendor/xterm-addon-unicode11.js"></script>
+<script src="/vendor/xterm-addon-web-links.js"></script>
+<script src="/vendor/xterm-addon-search.js"></script>
 <script>
 // ── Terminal sessions ────────────────────────────────────────────────────────
 // A terminal session is a different species from a chat session: it is driven by
@@ -19548,6 +19607,10 @@ async function openTerminalTab(sessionId, label, avatar) {
 function showTerminalView(sessionId, label) {
   document.querySelector('.center').classList.add('term-mode');
   $i('termKillBtn').textContent = t('term.kill');
+  // A find bar belongs to the pane it was opened on — otherwise it would search the
+  // previous session's scrollback after a tab switch, and its query would stay on a
+  // terminal the user is no longer looking at.
+  if (_termSessionId && _termSessionId !== sessionId) termFindClose(_termSessionId);
   _termSessionId = sessionId;
   _lastTerminalSessionId = sessionId;
 
@@ -19621,6 +19684,7 @@ function termMenuItems(state) {
     { id: 'copy', labelKey: 'term.menu.copy', enabled: !!state.hasSelection },
     { id: 'paste', labelKey: 'term.menu.paste', enabled: true },
     { id: 'selectAll', labelKey: 'term.menu.selectAll', enabled: true },
+    { id: 'find', labelKey: 'term.menu.find', enabled: true },
     { id: 'copyOnSelect', labelKey: 'term.menu.copyOnSelect', checked: !!state.copyOnSelect },
   ];
 }
@@ -19662,7 +19726,7 @@ function _showTermMenu(sessionId, x, y) {
   }
   // Clamped to the viewport so a right-click near an edge still shows every item.
   menu.style.left = Math.max(8, Math.min(x, window.innerWidth - 200)) + 'px';
-  menu.style.top = Math.max(8, Math.min(y, window.innerHeight - 170)) + 'px';
+  menu.style.top = Math.max(8, Math.min(y, window.innerHeight - 210)) + 'px';
   document.body.appendChild(menu);
   // Dismissal, deferred by a task: the click that opened the menu is still being
   // dispatched, and a listener registered now would see it and close immediately.
@@ -19688,6 +19752,7 @@ function termMenuItem(sessionId, id) {
   }
   if (id === 'paste') { _pasteFromClipboard(); return; }
   if (id === 'selectAll') { try { term.selectAll(); } catch {} return; }
+  if (id === 'find') { termFindOpen(); return; }
   if (id === 'copyOnSelect') { setTermCopyOnSelect(!termCopyOnSelect()); return; }
 }
 
@@ -19698,6 +19763,120 @@ function _pasteFromClipboard() {
   navigator.clipboard.readText()
     .then(txt => { if (txt) pasteToTerminal(txt, { silent: true }); })
     .catch(() => toast(t('term.paste.denied'), true));
+}
+
+// ── Terminal addons and find (#131) ─────────────────────────────────────────────
+// Vendored under public/vendor from the same xterm release as xterm.js itself (5.3.0),
+// the way xterm-addon-fit.js already is: unicode11 0.7.0, web-links 0.10.0,
+// search 0.14.0. They are separate UMD files, so a checkout that lost one keeps the
+// pane it has instead of throwing before xterm.open().
+function termAddonPlan(globals) {
+  const g = globals || {};
+  const ctor = (ns, name) => (ns && typeof ns[name] === 'function' ? ns[name] : null);
+  return [
+    { id: 'unicode11', ctor: ctor(g.Unicode11Addon, 'Unicode11Addon') },
+    { id: 'webLinks', ctor: ctor(g.WebLinksAddon, 'WebLinksAddon') },
+    { id: 'search', ctor: ctor(g.SearchAddon, 'SearchAddon') },
+  ].filter(a => !!a.ctor);
+}
+
+// Only http(s) leaves the app. The stock provider matches nothing else today, but the
+// guard lives here so a future provider cannot make the pane open file:// or javascript:.
+function termLinkHandler(win) {
+  const w = win || (typeof window !== 'undefined' ? window : null);
+  return function (event, uri) {
+    if (!/^https?:\/\//i.test(String(uri || ''))) return;
+    try { if (w && typeof w.open === 'function') w.open(uri, '_blank', 'noopener'); } catch {}
+  };
+}
+
+// Ctrl+Shift+F (Cmd+F on macOS) opens the find bar from inside the pane. Plain Ctrl+F is
+// left to the TUI — it is readline's forward-char — and the chat's own Ctrl+F search is
+// bound where focus is outside the pane, so the two never fight over one chord.
+function termFindChord(ev, opts) {
+  const key = String((ev && ev.key) || '').toLowerCase();
+  if (key !== 'f') return null;
+  const mac = !!(opts && opts.mac);
+  if (mac) return ev.metaKey && !ev.ctrlKey && !ev.altKey ? 'open' : null;
+  return ev.ctrlKey && ev.shiftKey && !ev.altKey && !ev.metaKey ? 'open' : null;
+}
+
+// The addon stops highlighting at 1000 matches; say "1000+" rather than pretend the
+// number is exact.
+const TERM_FIND_DECORATIONS = {
+  matchBackground: '#4a3f00', matchOverviewRuler: '#d29922',
+  activeMatchBackground: '#7c5c00', activeMatchColorOverviewRuler: '#ffd33d',
+};
+function termFindLabel(result) {
+  const n = result ? Number(result.resultCount) : 0;
+  const i = result ? Number(result.resultIndex) : -1;
+  if (!(n > 0) || !(i >= 0)) return t('term.find.none');
+  return t('term.find.count')
+    .replace('{i}', String(i + 1))
+    .replace('{n}', n >= 1000 ? '1000+' : String(n));
+}
+
+function _termFindEntry() { const sid = _termSessionId; return sid ? _terms.get(sid) : null; }
+function _termFindCount(text) { const c = $i('termFindCount'); if (c) c.textContent = text; }
+// The bar takes a row from #termHost, so the pty has to learn the new height — otherwise
+// the TUI keeps drawing to the old one and leaves blank rows under its last line.
+function _termFindRefit() { requestAnimationFrame(() => { try { sendTermResize(); } catch {} }); }
+
+function termFindOpen() {
+  const entry = _termFindEntry();
+  const bar = $i('termFind');
+  if (!entry || !entry.search || !bar) return false;
+  bar.classList.add('open');
+  const inp = $i('termFindInput');
+  if (inp) { try { inp.focus(); if (inp.select) inp.select(); } catch {} }
+  _termFindRefit();
+  return true;
+}
+
+function termFindSearch() {
+  const entry = _termFindEntry();
+  const inp = $i('termFindInput');
+  if (!entry || !entry.search || !inp) return;
+  const q = inp.value;
+  if (!q) { try { entry.search.clearDecorations(); } catch {} _termFindCount(''); return; }
+  // incremental: keeps the view on the match already found while the query grows, instead
+  // of jumping back to the first one on every keystroke.
+  try { entry.search.findNext(q, { incremental: true, decorations: TERM_FIND_DECORATIONS }); } catch {}
+}
+
+function termFindStep(dir) {
+  const entry = _termFindEntry();
+  const inp = $i('termFindInput');
+  if (!entry || !entry.search || !inp || !inp.value) return;
+  const opts = { decorations: TERM_FIND_DECORATIONS };
+  try {
+    if (dir < 0) entry.search.findPrevious(inp.value, opts);
+    else entry.search.findNext(inp.value, opts);
+  } catch {}
+}
+
+function termFindKeydown(ev) {
+  if (!ev) return;
+  if (ev.key === 'Escape') { ev.preventDefault(); termFindClose(); return; }
+  if (ev.key === 'Enter') {
+    // Enter steps forward, Shift+Enter back — the shape every find bar has. Consumed here
+    // so it cannot reach the send line under the pane.
+    ev.preventDefault();
+    termFindStep(ev.shiftKey ? -1 : 1);
+  }
+}
+
+// Closing hands the keyboard back to the pane: focus left in a hidden input makes the
+// terminal look ready and swallow every key.
+function termFindClose(sid) {
+  const entry = _terms.get(sid || _termSessionId);
+  const bar = $i('termFind');
+  if (entry && entry.search) { try { entry.search.clearDecorations(); } catch {} }
+  if (bar) bar.classList.remove('open');
+  const inp = $i('termFindInput'); if (inp) inp.value = '';
+  _termFindCount('');
+  _termFindRefit();
+  if (entry && entry.term) { try { entry.term.focus(); } catch {} }
 }
 
 // Build (once) the live terminal for a session: its own host element, xterm and socket.
@@ -19713,11 +19892,40 @@ function _createTerminal(sessionId) {
   term.loadAddon(fit);
   term.open(host);
 
+  // #131 — the addons that make the pane behave like a terminal: wide characters and
+  // emoji keep their columns (unicode11), a URL in the output is clickable (web-links),
+  // and Ctrl+Shift+F / Cmd+F searches the scrollback (search). Each one is optional.
+  const addons = {};
+  for (const a of termAddonPlan({
+    Unicode11Addon: typeof Unicode11Addon !== 'undefined' ? Unicode11Addon : null,
+    WebLinksAddon: typeof WebLinksAddon !== 'undefined' ? WebLinksAddon : null,
+    SearchAddon: typeof SearchAddon !== 'undefined' ? SearchAddon : null,
+  })) {
+    try {
+      // The link addon is the only one that takes an argument, and its default handler
+      // would open the URL inside the app window.
+      addons[a.id] = a.id === 'webLinks' ? new a.ctor(termLinkHandler()) : new a.ctor();
+      term.loadAddon(addons[a.id]);
+    } catch { delete addons[a.id]; }
+  }
+  // Loading unicode11 is not enabling it: its width tables only take effect once its
+  // version is active, and until then the addon does nothing at all.
+  if (addons.unicode11 && term.unicode) { try { term.unicode.activeVersion = '11'; } catch {} }
+  if (addons.search) {
+    try {
+      addons.search.onDidChangeResults(r => { if (_termSessionId === sessionId) _termFindCount(termFindLabel(r)); });
+    } catch {}
+  }
+
   // #131 — Copy / Paste from the keyboard. Returning false is the part that matters:
   // xterm otherwise forwards the chord to the TUI as ^C / ^V, so Ctrl+Shift+C would
   // both copy and interrupt the running agent.
   term.attachCustomKeyEventHandler(ev => {
     if (ev.type !== 'keydown') return true;
+    // Search the scrollback. Swallowed like the copy chords, so the TUI never sees it.
+    // Swallowed only when the bar actually opened: with no search addon the chord is not
+    // ours to eat, and Ctrl+Shift+F stays with the TUI.
+    if (termFindChord(ev, { mac: isMacPlatform() }) && termFindOpen()) return false;
     const action = termChordAction(ev, { mac: isMacPlatform() });
     if (!action) return true;
     if (action === 'copy') {
@@ -19743,7 +19951,7 @@ function _createTerminal(sessionId) {
   // a window agent-teams has split it permanently mangles the layout.
   try { fit.fit(); } catch {}
 
-  const entry = { term, fit, ws: null, host, label: '', dot: '#8b949e', state: '' };
+  const entry = { term, fit, ws: null, host, label: '', dot: '#8b949e', state: '', search: addons.search || null };
   _terms.set(sessionId, entry);
 
   // Bound to `entry.ws`, not a captured socket — so a later reconnect (fresh
@@ -20081,6 +20289,7 @@ function _paintTermStatus(sessionId) {
 // Restore the chat surface when switching to a chat tab. The terminals stay alive
 // and connected behind it — only the surface changes.
 function hideTerminalView() {
+  if (_termSessionId) termFindClose(_termSessionId);
   document.querySelector('.center').classList.remove('term-mode');
   _termSessionId = null;
 }
