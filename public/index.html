@@ -4175,6 +4175,10 @@ summary::-webkit-details-marker { display:none; }
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
         <span data-i18n="fpv.copy_img">Copy</span>
       </button>
+      <button class="fpv-btn" id="fpvCopyBtn" onclick="fpvCopyText()" style="display:none" data-i18n-title="fpv.copy.title" title="Copy file contents">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        <span data-i18n="fpv.copy">Copy</span>
+      </button>
       <button class="fpv-btn" id="fpvDownloadBtn" onclick="fpvDownload()" data-i18n-title="fpv.download.title" title="Download file">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span data-i18n="fpv.download">Download</span>
@@ -5306,8 +5310,8 @@ const TRANSLATIONS = {
     'auto.title.on':'⚡ Auto-Skills: увімкнено — клік для вимкнення',
     'auto.title.off':'⚡ Auto-Skills: вимкнено — клік для увімкнення',
     'status.connected':'Підключено','status.generating':'Генерація…','status.thinking':'Обдумування...','status.processing':'Обробка...','status.classifying':'⚡ Визначення спеціалістів...','status.reconnecting':'Перепідключення…','status.stopped':'Зупинено','status.error':'Помилка',
-    'fpv.download':'Завантажити','fpv.download.title':'Завантажити файл','fpv.copy_img':'Копіювати','fpv.copy_img.title':'Скопіювати зображення в буфер','fpv.share':'Поділитись','fpv.share.title':'Поділитись / Скопіювати посилання','fpv.binary':'Бінарний файл — перегляд недоступний','fpv.img_error':'Помилка завантаження зображення','fpv.load_error':'Помилка завантаження файлу',
-    'toast.no_connection':'Немає з\'єднання','toast.sess_not_found':'Сесію не знайдено','toast.cfg_load_err':'Помилка завантаження конфігурації','toast.skill_uploaded':'✓ Скіл завантажено','toast.link_copied':'✓ Посилання скопійовано','toast.img_copied':'✓ Зображення скопійовано','toast.select_dir':'Виберіть директорію','toast.link_prompt':'Скопіюйте посилання:',
+    'fpv.download':'Завантажити','fpv.download.title':'Завантажити файл','fpv.copy_img':'Копіювати','fpv.copy_img.title':'Скопіювати зображення в буфер','fpv.copy':'Копіювати','fpv.copy.title':'Скопіювати вміст файлу','fpv.share':'Поділитись','fpv.share.title':'Поділитись / Скопіювати посилання','fpv.binary':'Бінарний файл — перегляд недоступний','fpv.img_error':'Помилка завантаження зображення','fpv.load_error':'Помилка завантаження файлу',
+    'toast.no_connection':'Немає з\'єднання','toast.sess_not_found':'Сесію не знайдено','toast.cfg_load_err':'Помилка завантаження конфігурації','toast.skill_uploaded':'✓ Скіл завантажено','toast.link_copied':'✓ Посилання скопійовано','toast.img_copied':'✓ Зображення скопійовано','toast.text_copied':'✓ Скопійовано в буфер','toast.select_dir':'Виберіть директорію','toast.link_prompt':'Скопіюйте посилання:',
     'at.no_project':'Оберіть проект, щоб шукати файли','at.searching':'Пошук...','at.search_err':'Помилка пошуку','at.no_files':'Файлів не знайдено','ssh.search':'Пошук SSH-сервера...','ssh.no_hosts':'SSH-сервери не налаштовано',
     'dir.this_dir':'. (ця директорія)','dir.no_subdirs':'Немає підпапок','dir.drives':'💻 Всі диски',
     'dir.path.ph':'Введіть шлях, напр. /Users/you/projects','dir.path.go':'Перейти','dir.filter.ph':'Фільтрувати папки...',
@@ -5764,8 +5768,8 @@ const TRANSLATIONS = {
     'auto.title.on':'⚡ Auto-Skills: enabled — click to disable',
     'auto.title.off':'⚡ Auto-Skills: disabled — click to enable',
     'status.connected':'Connected','status.generating':'Generating…','status.thinking':'Thinking...','status.processing':'Processing...','status.classifying':'⚡ Classifying specialists...','status.reconnecting':'Reconnecting…','status.stopped':'Stopped','status.error':'Error',
-    'fpv.download':'Download','fpv.download.title':'Download file','fpv.copy_img':'Copy','fpv.copy_img.title':'Copy image to clipboard','fpv.share':'Share','fpv.share.title':'Share / Copy link','fpv.binary':'Binary file — preview not available','fpv.img_error':'Image load error','fpv.load_error':'File load error',
-    'toast.no_connection':'No connection','toast.sess_not_found':'Session not found','toast.cfg_load_err':'Config load error','toast.skill_uploaded':'✓ Skill uploaded','toast.link_copied':'✓ Link copied','toast.img_copied':'✓ Image copied','toast.select_dir':'Select a directory','toast.link_prompt':'Copy link:',
+    'fpv.download':'Download','fpv.download.title':'Download file','fpv.copy_img':'Copy','fpv.copy_img.title':'Copy image to clipboard','fpv.copy':'Copy','fpv.copy.title':'Copy file contents','fpv.share':'Share','fpv.share.title':'Share / Copy link','fpv.binary':'Binary file — preview not available','fpv.img_error':'Image load error','fpv.load_error':'File load error',
+    'toast.no_connection':'No connection','toast.sess_not_found':'Session not found','toast.cfg_load_err':'Config load error','toast.skill_uploaded':'✓ Skill uploaded','toast.link_copied':'✓ Link copied','toast.img_copied':'✓ Image copied','toast.text_copied':'✓ Copied to clipboard','toast.select_dir':'Select a directory','toast.link_prompt':'Copy link:',
     'at.no_project':'Select a project to search files','at.searching':'Searching...','at.search_err':'Search error','at.no_files':'No files found','ssh.search':'Search SSH server...','ssh.no_hosts':'No SSH servers configured',
     'dir.this_dir':'. (this directory)','dir.no_subdirs':'No subdirectories','dir.drives':'💻 All Drives',
     'dir.path.ph':'Enter path, e.g. /Users/you/projects','dir.path.go':'Go','dir.filter.ph':'Filter folders...',
@@ -6222,8 +6226,8 @@ const TRANSLATIONS = {
     'auto.title.on':'⚡ Auto-Skills: включено — клик для отключения',
     'auto.title.off':'⚡ Auto-Skills: отключено — клик для включения',
     'status.connected':'Подключено','status.generating':'Генерация…','status.thinking':'Обдумывание...','status.processing':'Обработка...','status.classifying':'⚡ Определение специалистов...','status.reconnecting':'Переподключение…','status.stopped':'Остановлено','status.error':'Ошибка',
-    'fpv.download':'Скачать','fpv.download.title':'Скачать файл','fpv.copy_img':'Копировать','fpv.copy_img.title':'Скопировать изображение в буфер','fpv.share':'Поделиться','fpv.share.title':'Поделиться / Скопировать ссылку','fpv.binary':'Бинарный файл — предпросмотр недоступен','fpv.img_error':'Ошибка загрузки изображения','fpv.load_error':'Ошибка загрузки файла',
-    'toast.no_connection':'Нет соединения','toast.sess_not_found':'Сессия не найдена','toast.cfg_load_err':'Ошибка загрузки конфигурации','toast.skill_uploaded':'✓ Навык загружен','toast.link_copied':'✓ Ссылка скопирована','toast.img_copied':'✓ Изображение скопировано','toast.select_dir':'Выберите директорию','toast.link_prompt':'Скопируйте ссылку:',
+    'fpv.download':'Скачать','fpv.download.title':'Скачать файл','fpv.copy_img':'Копировать','fpv.copy_img.title':'Скопировать изображение в буфер','fpv.copy':'Копировать','fpv.copy.title':'Скопировать содержимое файла','fpv.share':'Поделиться','fpv.share.title':'Поделиться / Скопировать ссылку','fpv.binary':'Бинарный файл — предпросмотр недоступен','fpv.img_error':'Ошибка загрузки изображения','fpv.load_error':'Ошибка загрузки файла',
+    'toast.no_connection':'Нет соединения','toast.sess_not_found':'Сессия не найдена','toast.cfg_load_err':'Ошибка загрузки конфигурации','toast.skill_uploaded':'✓ Навык загружен','toast.link_copied':'✓ Ссылка скопирована','toast.img_copied':'✓ Изображение скопировано','toast.text_copied':'✓ Скопировано в буфер','toast.select_dir':'Выберите директорию','toast.link_prompt':'Скопируйте ссылку:',
     'at.no_project':'Выберите проект для поиска файлов','at.searching':'Поиск...','at.search_err':'Ошибка поиска','at.no_files':'Файлов не найдено','ssh.search':'Поиск SSH-сервера...','ssh.no_hosts':'SSH-серверы не настроены',
     'dir.this_dir':'. (эта директория)','dir.no_subdirs':'Нет подпапок','dir.drives':'💻 Все диски',
     'dir.path.ph':'Введите путь, напр. /Users/you/projects','dir.path.go':'Перейти','dir.filter.ph':'Фильтровать папки...',
@@ -6641,10 +6645,10 @@ const TRANSLATIONS = {
     "skills.auto_hint":"⚡ Les compétences sont sélectionnées automatiquement selon le texte de la tâche","auto.title.on":"⚡ Compétences auto : activées — cliquez pour désactiver",
     "auto.title.off":"⚡ Compétences auto : désactivées — cliquez pour activer","status.connected":"Connecté","status.generating":"Génération…","status.thinking":"Réflexion...",
     "status.processing":"Traitement...","status.classifying":"⚡ Classification des spécialistes...","status.reconnecting":"Reconnexion…","status.stopped":"Arrêté","status.error":"Erreur",
-    "fpv.download":"Télécharger","fpv.download.title":"Télécharger le fichier","fpv.copy_img":"Copier","fpv.copy_img.title":"Copier l'image dans le presse-papiers","fpv.share":"Partager",
+    "fpv.download":"Télécharger","fpv.download.title":"Télécharger le fichier","fpv.copy_img":"Copier","fpv.copy_img.title":"Copier l'image dans le presse-papiers","fpv.copy":"Copier","fpv.copy.title":"Copier le contenu du fichier","fpv.share":"Partager",
     "fpv.share.title":"Partager / Copier le lien","fpv.binary":"Fichier binaire — aperçu non disponible","fpv.img_error":"Erreur de chargement de l'image",
     "fpv.load_error":"Erreur de chargement du fichier","toast.no_connection":"Aucune connexion","toast.sess_not_found":"Session introuvable",
-    "toast.cfg_load_err":"Erreur de chargement de la configuration","toast.skill_uploaded":"✓ Compétence importée","toast.link_copied":"✓ Lien copié","toast.img_copied":"✓ Image copiée",
+    "toast.cfg_load_err":"Erreur de chargement de la configuration","toast.skill_uploaded":"✓ Compétence importée","toast.link_copied":"✓ Lien copié","toast.img_copied":"✓ Image copiée","toast.text_copied":"✓ Copié dans le presse-papiers",
     "toast.select_dir":"Sélectionnez un répertoire","toast.link_prompt":"Copier le lien :","at.no_project":"Sélectionnez un projet pour rechercher des fichiers","at.searching":"Recherche...",
     "at.search_err":"Erreur de recherche","at.no_files":"Aucun fichier trouvé","ssh.search":"Rechercher un serveur SSH...","ssh.no_hosts":"Aucun hôte SSH configuré","dir.this_dir":". (ce répertoire)",
     "dir.no_subdirs":"Aucun sous-répertoire","dir.drives":"💻 Tous les disques","dir.path.ph":"Saisissez un chemin, ex. /Users/you/projects","dir.path.go":"Aller",
@@ -6994,9 +6998,9 @@ const TRANSLATIONS = {
     "skill.active":"● ב-system prompt","skill.inactive":"○ לא פעיל","skill.del.title":"הסרת skill","skill.name_prompt":"שם ה-skill:","skills.auto_hint":"⚡ Skills נבחרים אוטומטית לפי טקסט המשימה",
     "auto.title.on":"⚡ Auto-Skills: פעיל — לחצו לכיבוי","auto.title.off":"⚡ Auto-Skills: כבוי — לחצו להפעלה","status.connected":"מחובר","status.generating":"יוצר…","status.thinking":"חושב...",
     "status.processing":"מעבד...","status.classifying":"⚡ מסווג מומחים...","status.reconnecting":"מתחבר מחדש…","status.stopped":"נעצר","status.error":"שגיאה","fpv.download":"הורדה",
-    "fpv.download.title":"הורדת קובץ","fpv.copy_img":"העתקה","fpv.copy_img.title":"העתקת תמונה ללוח","fpv.share":"שיתוף","fpv.share.title":"שיתוף / העתקת קישור",
+    "fpv.download.title":"הורדת קובץ","fpv.copy_img":"העתקה","fpv.copy_img.title":"העתקת תמונה ללוח","fpv.copy":"העתק","fpv.copy.title":"העתקת תוכן הקובץ","fpv.share":"שיתוף","fpv.share.title":"שיתוף / העתקת קישור",
     "fpv.binary":"קובץ בינארי — תצוגה מקדימה לא זמינה","fpv.img_error":"שגיאה בטעינת התמונה","fpv.load_error":"שגיאה בטעינת הקובץ","toast.no_connection":"אין חיבור","toast.sess_not_found":"הסשן לא נמצא",
-    "toast.cfg_load_err":"שגיאה בטעינת ההגדרות","toast.skill_uploaded":"✓ ה-skill הועלה","toast.link_copied":"✓ הקישור הועתק","toast.img_copied":"✓ התמונה הועתקה","toast.select_dir":"בחרו תיקייה",
+    "toast.cfg_load_err":"שגיאה בטעינת ההגדרות","toast.skill_uploaded":"✓ ה-skill הועלה","toast.link_copied":"✓ הקישור הועתק","toast.img_copied":"✓ התמונה הועתקה","toast.text_copied":"✓ הועתק ללוח","toast.select_dir":"בחרו תיקייה",
     "toast.link_prompt":"העתיקו קישור:","at.no_project":"בחרו פרויקט כדי לחפש קבצים","at.searching":"מחפש...","at.search_err":"שגיאת חיפוש","at.no_files":"לא נמצאו קבצים","ssh.search":"חיפוש שרת SSH...",
     "ssh.no_hosts":"לא הוגדרו hosts של SSH","dir.this_dir":". (התיקייה הזו)","dir.no_subdirs":"אין תת-תיקיות","dir.drives":"💻 כל הכוננים","dir.path.ph":"הזינו נתיב, לדוגמה /Users/you/projects",
     "dir.path.go":"מעבר","dir.filter.ph":"סינון תיקיות...","toast.read_err":"קריאה נכשלה: ","toast.err_prefix":"שגיאה: ","dir.proj_name":"שם הפרויקט (אוטומטי אם ריק)",
@@ -15993,14 +15997,18 @@ async function loadFiles(dir = '') {
 }
 
 let _fpvPath = '', _fpvName = '', _fpvIsImg = false;
+// What the last text/markdown preview fetched (issue #137). The viewer renders escaped
+// text, so a Copy action needs the raw string kept alongside it.
+let _fpvText = '';
 let _filePreviewSeq = 0;
 
 function closeFpv() {
   ++_filePreviewSeq;
   closeModalOverlay('filePreviewModal');
   $i('fpvBody').innerHTML = '';
-  _fpvPath = ''; _fpvName = ''; _fpvIsImg = false;
+  _fpvPath = ''; _fpvName = ''; _fpvIsImg = false; _fpvText = '';
   $i('fpvCopyImgBtn').style.display = 'none';
+  $i('fpvCopyBtn').style.display = 'none';
   // Restore what a remote file hid, or the next LOCAL file opens with no download.
   $i('fpvDownloadBtn').style.display = '';
   $i('fpvShareBtn').style.display = '';
@@ -16009,7 +16017,8 @@ function closeFpv() {
 
 async function openFilePreview(relPath, name) {
   const seq = ++_filePreviewSeq, gen = _switchGen;
-  _fpvPath = relPath;
+  _fpvPath = relPath; _fpvText = '';
+  $i('fpvCopyBtn').style.display = 'none';
   _fpvName = name || relPath.split('/').pop();
   const ext = (_fpvName.lastIndexOf('.') > 0 ? _fpvName.slice(_fpvName.lastIndexOf('.')).toLowerCase() : '');
   $i('fpvTitle').textContent = _fpvName;
@@ -16074,6 +16083,10 @@ async function openFilePreview(relPath, name) {
       body.innerHTML = `<div class="fpv-binary"><div style="font-size:40px">📦</div><div>${t(remote ? 'fpv.remote_binary' : 'fpv.binary')}</div><button class="fpv-btn" style="${remote ? 'display:none' : ''}" onclick="fpvDownload()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('fpv.download')}</button></div>`;
       return;
     }
+    // Only the text and markdown paths reach this point with content worth copying: a
+    // binary, image or PDF preview returned above with the button still hidden.
+    _fpvText = d.content || '';
+    $i('fpvCopyBtn').style.display = _fpvText ? '' : 'none';
     if (mdExts.includes(ext)) {
       body.innerHTML = `<div class="fpv-md msg">${renderMd(d.content || '')}</div>`;
     } else {
@@ -16097,6 +16110,20 @@ function fpvDownload() {
   // Guarded as well as hidden: the button is display:none for a remote file, but the
   // handler is a global and the modal outlives the listing that set the flag.
   if (_fpvPath && !_filesRemote) downloadFile(_fpvPath);
+}
+
+// Copy the text the viewer already loaded (issue #137). Works for a remote project too:
+// the text is in memory, so neither /api/files/raw nor /api/files/download is involved —
+// those are what issue #57 refuses, and why Download and Share are hidden for remote.
+async function fpvCopyText() {
+  if (!_fpvPath || !_fpvText) return;
+  try {
+    await copyText(_fpvText);
+    toast(t('toast.text_copied'));
+  } catch (e) {
+    console.error('Failed to copy file contents:', e);
+    toast(t('toast.err_prefix') + ' ' + t('fpv.copy'));
+  }
 }
 
 async function fpvShare() {
