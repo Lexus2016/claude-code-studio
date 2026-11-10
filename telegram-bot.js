@@ -139,7 +139,10 @@ class TelegramBot extends EventEmitter {
     this._pollTimer = null;
     this._offset = 0;
     this._acceptNewConnections = true;
-    this.lang = opts.lang || 'uk';
+    // The Studio UI language, not a Telegram-only default: /api/lang falls back to
+    // English and a fresh install has no saved `lang`, so a 'uk' fallback here made the
+    // bot answer in Ukrainian under an English UI (issue #135).
+    this.lang = opts.lang || 'en';
     // Resolves a workdir to its bot roster plus whether this chat's engine can run one.
     // Projects live in a JSON file that only server.js reads, so this arrives as a
     // callback rather than a query — same composition as the Forum module's facade.
@@ -199,9 +202,13 @@ class TelegramBot extends EventEmitter {
 
   // ─── i18n ─────────────────────────────────────────────────────────────────
 
-  _t(key, params = {}) {
-    const dict = BOT_I18N[this.lang] || BOT_I18N.uk;
-    let text = dict[key] || BOT_I18N.uk[key] || key;
+  // `lang` overrides the instance language for one call (the pre-pairing screen, which
+  // has no Studio preference to read yet). The last-resort fallback is English, the same
+  // language the SPA itself falls back to, never Ukrainian by accident.
+  _t(key, params = {}, lang = null) {
+    const target = lang || this.lang;
+    const dict = BOT_I18N[target] || BOT_I18N.en;
+    let text = dict[key] || BOT_I18N.en[key] || key;
     for (const [k, v] of Object.entries(params)) {
       // A function replacer, not a string one: String.replace(regex, string) treats
       // '$&', '$`', "$'" and '$$' in the REPLACEMENT as special patterns. A param
@@ -210,6 +217,15 @@ class TelegramBot extends EventEmitter {
       text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), () => String(v));
     }
     return text;
+  }
+
+  // Resolve the language for a message that arrives before a device is paired: there is
+  // no Studio preference to apply yet and the writer may not be the Studio owner at all,
+  // so the pairing screen answers in whatever locale their Telegram client reports, as
+  // long as we ship it. Everything after pairing stays on the Studio language.
+  _langForUser(msg) {
+    const code = String(msg?.from?.language_code || '').toLowerCase().split('-')[0];
+    return BOT_I18N[code] ? code : this.lang;
   }
 
   // ─── Database ──────────────────────────────────────────────────────────────
@@ -925,26 +941,27 @@ class TelegramBot extends EventEmitter {
     const userId = msg.from.id;
     const chatId = msg.chat.id;
     const text = msg.text.trim();
+    const lang = this._langForUser(msg);
 
     // Check if blocked
     if (this._isBlocked(userId)) {
-      await this._sendMessage(chatId, this._t('blocked'));
+      await this._sendMessage(chatId, this._t('blocked', {}, lang));
       return;
     }
 
     // /start command
     if (text === '/start') {
       if (!this._acceptNewConnections) {
-        await this._sendMessage(chatId, this._t('new_conn_disabled'));
+        await this._sendMessage(chatId, this._t('new_conn_disabled', {}, lang));
         return;
       }
-      await this._sendMessage(chatId, this._t('start_pairing'));
+      await this._sendMessage(chatId, this._t('start_pairing', {}, lang));
       return;
     }
 
     // Anything else — treat as pairing code attempt
     if (!this._acceptNewConnections) {
-      await this._sendMessage(chatId, this._t('new_conn_off'));
+      await this._sendMessage(chatId, this._t('new_conn_off', {}, lang));
       return;
     }
 
@@ -960,7 +977,7 @@ class TelegramBot extends EventEmitter {
       } catch (err) {
         // UNIQUE constraint — user already paired (shouldn't happen, but handle gracefully)
         if (err.message?.includes('UNIQUE')) {
-          await this._sendMessage(chatId, this._t('already_paired'));
+          await this._sendMessage(chatId, this._t('already_paired', {}, lang));
           return;
         }
         throw err;
@@ -971,11 +988,11 @@ class TelegramBot extends EventEmitter {
 
       this.log.info(`[telegram] Device paired: ${displayName} (@${username || 'no-username'}) [${userId}]`);
 
-      await this._sendMessage(chatId, this._t('paired_ok', { name: this._escHtml(displayName) }));
+      await this._sendMessage(chatId, this._t('paired_ok', { name: this._escHtml(displayName) }, lang));
 
       // Set persistent Reply Keyboard (dynamic, context-aware)
       const ctx = this._getContext(userId);
-      await this._sendReplyKeyboard(chatId, ctx, this._t('use_menu'));
+      await this._sendReplyKeyboard(chatId, ctx, this._t('use_menu', {}, lang));
 
       // Emit event so UI can update in real-time
       this.emit('device_paired', {
@@ -990,9 +1007,9 @@ class TelegramBot extends EventEmitter {
       const remaining = MAX_FAILED_ATTEMPTS - attempts;
 
       if (remaining <= 0) {
-        await this._sendMessage(chatId, this._t('blocked'));
+        await this._sendMessage(chatId, this._t('blocked', {}, lang));
       } else {
-        await this._sendMessage(chatId, this._t('invalid_code', { remaining }));
+        await this._sendMessage(chatId, this._t('invalid_code', { remaining }, lang));
       }
     }
   }
