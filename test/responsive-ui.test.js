@@ -52,5 +52,10 @@ check('kanban.html mobile media query forces card-actions display on touch scree
   assert.ok(/\.card-actions\s*\{[^}]*display:\s*flex\s*!important/.test(media800), 'missing display: flex !important for card-actions in mobile query');
 });
 
+check('configuration modal uses the available screen (#136)', () => {
+  assert.ok(idxSrc.includes('width:min(1180px,96vw)'), 'configuration modal should use the available width');
+  assert.ok(idxSrc.includes('height:88dvh'), 'configuration modal should use the available height');
+});
+
 if (failed) { console.log(`\n${failed} test(s) failed`); process.exit(1); }
 console.log('\nAll responsive-ui tests passed');
