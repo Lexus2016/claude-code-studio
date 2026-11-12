@@ -55,6 +55,19 @@ const IDLE_TIMEOUT_MS = parseInt(process.env.CLAUDE_IDLE_TIMEOUT_MS || process.e
 // Optional absolute ceiling — backstop against a turn that stays "busy" forever. 0 = off.
 const HARD_CAP_MS = parseInt(process.env.CLAUDE_HARD_CAP_MS || '0', 10) || 0;
 
+// Opt-in idle reaper for the engine's tmux sessions (GitHub #141). A subscription
+// chat keeps `ccs-<id>` — and every MCP server that pane spawned, ~1.2 GB on a
+// typical set — alive after its turn ends; nothing else ever reaps it, so memory
+// grows with the number of chats opened since the last restart. Unset (or 0) keeps
+// exactly the old behaviour. When set, a session with no turn and no attached
+// viewer for this long is killed, and the next message respawns it with
+// `--resume <cid>` — the path a config-change respawn already uses, so no history
+// is lost.
+const ENGINE_IDLE_KILL_MS = parseInt(process.env.CCS_ENGINE_IDLE_KILL_MS || '0', 10) || 0;
+// Floor for the reaper tick: a `list-clients` + `capture-pane` per engine session
+// is cheap, but not free, and nothing here needs sub-15s precision.
+const ENGINE_REAPER_MIN_TICK_MS = 15000;
+
 // ─── Interactive-prompt watchdog (GitHub #20) ────────────────────────────────
 // How often the turn loop looks at the transcript and the pane.
 const POLL_MS = 1500;
@@ -416,6 +429,112 @@ function killInteractiveTmux(localSessionId) {
   } catch {}
 }
 
+// ─── Idle reaper (GitHub #141) ────────────────────────────────────────────────
+// Every helper below is READ-ONLY on tmux except the two touch/kill calls. The
+// reaper is deliberately dumb about WHO owns a turn: it asks the caller
+// (`isLive`), because only server.js knows the activeTasks / activeChatSessions /
+// in_progress-task registries. Everything else — a viewer, a pending prompt, a
+// spinner still animating — is visible in the pane itself, so it is checked here.
+function listEngineSessions() {
+  try {
+    const r = spawnSync('tmux', tmuxArgs(['list-sessions', '-F', '#{session_name}']), { encoding: 'utf8' });
+    if (r.error || r.status !== 0) return [];
+    return String(r.stdout || '').split('\n').map(s => s.trim()).filter(n => /^ccs-/.test(n));
+  } catch { return []; }
+}
+
+// `list-clients -t` targets a CLIENT, not a session, so the filter must read the
+// client's session name from its format instead. A failure here reports 1 (assume
+// somebody is watching): a skipped reap costs memory, a wrong one costs the chat.
+function engineSessionClients(name) {
+  try {
+    const r = spawnSync('tmux', tmuxArgs(['list-clients', '-F', '#{client_session}']), { encoding: 'utf8' });
+    if (r.error || r.status !== 0) return 1;
+    return String(r.stdout || '').split('\n').map(s => s.trim()).filter(s => s === name).length;
+  } catch { return 1; }
+}
+
+function engineSessionId(name) {
+  const raw = getTmuxEnv(name, 'CCS_SESSION');
+  if (raw) return raw;
+  const bare = String(name || '').replace(/^ccs-/, '');
+  return bare || null;
+}
+
+function touchEngineSession(name, now = Date.now()) {
+  setTmuxEnv(name, 'CCS_LAST_TURN', String(now));
+}
+
+// Kill `ccs-<id>` panes that have been idle for longer than `idleMs`. Returns the
+// local session ids it killed. Injected seams (all optional) exist so the decision
+// table can be tested without tmux.
+function reapIdleEngineSessions(opts = {}) {
+  const idleMs = Number.isFinite(opts.idleMs) ? opts.idleMs : ENGINE_IDLE_KILL_MS;
+  if (!(idleMs > 0)) return [];                       // opt-in only
+  const now = Number.isFinite(opts.now) ? opts.now : Date.now();
+  const isLive = typeof opts.isLive === 'function' ? opts.isLive : () => false;
+  const list = typeof opts.list === 'function' ? opts.list : listEngineSessions;
+  const clientsOf = typeof opts.clientsOf === 'function' ? opts.clientsOf : engineSessionClients;
+  const paneOf = typeof opts.paneOf === 'function' ? opts.paneOf : capturePane;
+  const idOf = typeof opts.sessionIdOf === 'function' ? opts.sessionIdOf : engineSessionId;
+  const lastTurnOf = typeof opts.lastTurnOf === 'function'
+    ? opts.lastTurnOf
+    : (name) => parseInt(getTmuxEnv(name, 'CCS_LAST_TURN') || '', 10);
+  const kill = typeof opts.kill === 'function' ? opts.kill : (id) => killInteractiveTmux(id);
+  const touch = typeof opts.touch === 'function' ? opts.touch : (name) => touchEngineSession(name, now);
+
+  const killed = [];
+  for (const name of list() || []) {
+    if (!/^ccs-/.test(String(name))) continue;        // never touch anything else on the socket
+    const id = idOf(name);
+    if (!id) continue;
+    // A turn is running. The caller's registries also cover the window before the
+    // subprocess exists (autoSkill classification), which a pane check cannot see.
+    if (isLive(id)) { touch(name); continue; }
+    // A viewer is attached (view=engine, or a human in `tmux attach`). Treat it as
+    // activity: otherwise a viewer that reads for an hour then detaches would leave
+    // an already-expired clock behind and the pane would die on the next tick.
+    if (clientsOf(name) > 0) { touch(name); continue; }
+    // A pending prompt is waiting on a human (#20). Its turn may already have ended
+    // (grace expiry), but the pane must survive until the widget is answered — a
+    // killed pane turns "waiting for you" into a lost conversation.
+    const pane = paneOf(name);
+    if (paneBusy(pane, null) || paneAwaitingInput(pane) || paneAwaitingSelection(pane)) { touch(name); continue; }
+    const last = Number(lastTurnOf(name));
+    // Unknown age: a pane from before this feature, or a studio restart that lost the
+    // tmux environment. Start the clock now rather than kill a conversation of
+    // unknown age — the next full window still reaps it.
+    if (!(last > 0) || last > now) { touch(name); continue; }
+    if (now - last >= idleMs) { kill(id); killed.push(id); }
+  }
+  return killed;
+}
+
+// Start the periodic reaper. Returns null when CCS_ENGINE_IDLE_KILL_MS is unset —
+// no timer, no tmux calls, nothing to opt out of later.
+function startEngineIdleReaper(opts = {}) {
+  const idleMs = Number.isFinite(opts.idleMs) ? opts.idleMs : ENGINE_IDLE_KILL_MS;
+  if (!(idleMs > 0)) return null;
+  const tickMs = Number.isFinite(opts.tickMs) && opts.tickMs > 0
+    ? opts.tickMs
+    : Math.max(ENGINE_REAPER_MIN_TICK_MS, Math.min(60000, Math.floor(idleMs / 4)));
+  const log = opts.log || console;
+  const timer = setInterval(() => {
+    try {
+      const killed = reapIdleEngineSessions({ ...opts, idleMs });
+      for (const id of killed) {
+        try { log.info('engine idle session reaped', { sessionId: id, idleMs }); } catch {}
+        try { if (typeof opts.onKill === 'function') opts.onKill(id); } catch {}
+      }
+    } catch (e) {
+      // A reaper bug must never take the studio down with it.
+      try { log.error('engine idle reaper failed', { error: e && e.message ? e.message : String(e) }); } catch {}
+    }
+  }, tickMs);
+  try { if (timer.unref) timer.unref(); } catch {}
+  return timer;
+}
+
 // Run one message through the persistent interactive tmux session.
 // Params: same object as server.js runCliSingle — uses prompt, systemPrompt, model,
 // mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId; ignores the rest.
@@ -516,6 +635,13 @@ async function runInteractiveSingle(params) {
       }
 
       setTmuxEnv(name, 'CCS_CFG', cfgHash);
+
+      // Identity and idle clock for the reaper (GitHub #141). CCS_SESSION keeps the
+      // exact local session id even when tmuxName() had to sanitize it (the reaper
+      // must kill by the same name the engine uses); CCS_LAST_TURN lives in tmux's
+      // session environment, so it survives a studio restart together with the pane.
+      setTmuxEnv(name, 'CCS_SESSION', String(sessionId));
+      setTmuxEnv(name, 'CCS_LAST_TURN', String(Date.now()));
 
       // Wait for the TUI to settle: two consecutive identical, non-empty captures
       let prev = null;
@@ -900,6 +1026,9 @@ async function runInteractiveSingle(params) {
   } finally {
     // The turn is over whichever way it ended; the banner must not outlive it.
     if (awaitAnnounced) { awaitAnnounced = false; wsSendAll({ type: 'input_resolved', sessionId }); }
+    // The idle clock starts when the turn ENDS, not when the pane was spawned — a
+    // long first turn must never count as idle time. Skipped if the pane died.
+    if (tmuxHasSession(name)) setTmuxEnv(name, 'CCS_LAST_TURN', String(Date.now()));
   }
 }
 
@@ -991,4 +1120,4 @@ function catchUpFromTranscript({ cid, startOffset = 0 } = {}) {
   return out;
 }
 
-module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, paneAwaitingSelection, promptExcerpt, buildInteractiveCommand, tmuxLaunchCommand };
+module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, paneAwaitingSelection, promptExcerpt, buildInteractiveCommand, tmuxLaunchCommand, ENGINE_IDLE_KILL_MS, listEngineSessions, engineSessionClients, engineSessionId, touchEngineSession, reapIdleEngineSessions, startEngineIdleReaper };

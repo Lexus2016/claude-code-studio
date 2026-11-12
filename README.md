@@ -547,6 +547,7 @@ WORKDIR=./workspace
 MAX_TASK_WORKERS=5
 CLAUDE_IDLE_TIMEOUT_MS=600000   # kill subprocess after this idle gap (no output); default 10 min, .env.example ships 30 min (legacy alias: CLAUDE_TIMEOUT_MS)
 CLAUDE_HARD_CAP_MS=0            # optional absolute timeout ceiling; 0 = disabled (default)
+CCS_ENGINE_IDLE_KILL_MS=0       # kill an idle subscription-engine tmux pane (and its MCP servers) after this long; 0 = never (default)
 TASK_DISCONNECT_TIMEOUT_MS=1800000  # abort a task this long after the browser tab detaches; 0 = never
 MULTI_AGENT_MAX_TURNS_CAP=200   # ceiling on turns per sub-agent; each may auto-continue 3x
 TRUST_PROXY=false

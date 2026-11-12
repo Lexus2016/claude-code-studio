@@ -132,7 +132,7 @@ const botsLogic = require('./bots');
 // instruction at all. One line stands in for "you were addressed with nothing else
 // to go on".
 const BARE_MENTION_PROMPT = "You were addressed directly with no other text — greet them and ask what they need, or continue naturally if there is relevant prior context in this conversation.";
-const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName: interactiveTmuxName, listOrphanedDefaultSocketSessions } = require('./claude-interactive');
+const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName: interactiveTmuxName, listOrphanedDefaultSocketSessions, startEngineIdleReaper } = require('./claude-interactive');
 const WM = require('./worktree-manager');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
@@ -9189,6 +9189,12 @@ setInterval(cleanOldUploads, 30 * 60 * 1000); // then every 30 min
 // Database maintenance: sessions cleanup + WAL checkpoint
 runDatabaseMaintenance();                                            // run once on startup
 setInterval(runDatabaseMaintenance, CLEANUP_INTERVAL_HOURS * 60 * 60 * 1000); // every N hours
+
+// Idle engine reaper (GitHub #141): opt-in via CCS_ENGINE_IDLE_KILL_MS. It runs from
+// here because this is the one place that knows which chats are live — a pane whose
+// turn is running (activeTasks / activeChatSessions / an in_progress Kanban task) is
+// never touched. Unset, this returns null and nothing is scheduled.
+startEngineIdleReaper({ isLive: isSessionLive, log });
 
 app.post('/api/upload', fileUpload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
