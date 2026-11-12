@@ -1,5 +1,55 @@
 # Changelog
 
+## 8.1.0
+
+### Copy and find in the terminal pane, task prompts that keep their ending
+
+Seven fixes and additions from the issue tracker (#129, #131, #135, #136, #137, #141),
+plus a documentation pass for people arriving from GitHub.
+
+- **A task description is no longer cut at 2000 characters.** The textarea and every
+  server write truncated the end of a long prompt without a message, so the worker
+  received a task with its last instructions missing. One limit of 20000 characters now
+  applies everywhere a task's text is written (REST, the MCP tools an agent calls, the
+  Kanban and Schedule forms). The description and notes fields show a counter that turns
+  red at the limit, and a schedule card shows three lines of the description instead of
+  one. The server still truncates at the limit rather than answering 400, so an API
+  caller that sends more than 20000 characters still loses the tail; that is unchanged.
+- **Copy and paste work in the live terminal pane.** `Ctrl+Shift+C` / `Ctrl+Shift+V` on
+  Linux and Windows, `Cmd+C` / `Cmd+V` on macOS. A chord the pane handles is not sent to
+  the running agent, and plain `Ctrl+C` is untouched, so it still interrupts. Right-click
+  opens a menu with Copy, Paste, Select all and Copy on select; Copy is disabled while
+  nothing is selected. **Behaviour change:** copy-on-select used to be unconditional and
+  overwrote the clipboard on every mouse-up; it is now off by default, switched on from
+  that menu, and remembered in the browser.
+- **Find in the pane.** `Ctrl+Shift+F` (`Cmd+F` on macOS) or the pane menu opens a find
+  bar that searches as you type, steps with `Enter` / `Shift+Enter` and closes on `Esc`.
+  URLs in the output are clickable, and wide characters (CJK, emoji) now take the right
+  number of columns.
+- **A Copy button in the file viewer.** It copies the file's text as it was loaded and
+  appears only once there is text to copy. It also works for a remote SSH project, where
+  Download and Share stay hidden.
+- **The Telegram bot follows the Studio language.** A fresh install has no saved
+  language, the web UI answered English and the bot answered Ukrainian, starting with
+  the pairing screen. A missing language now resolves to English in both. The pairing
+  screen, which has no Studio preference to read yet, answers in the language of the
+  writer's Telegram client when that language is shipped.
+- **The Configuration dialog uses the screen.** It was fixed at 740 px wide and 86% of
+  the window height, which left most of a large window empty while the form, its tabs
+  and the search bar were squeezed together. It is now up to 1180 px wide and 88% high.
+- **Idle subscription-engine panes can be stopped (opt-in).** A chat on the
+  Subscription engine kept its `ccs-<id>` tmux pane, and every MCP server that pane had
+  started (about 1.2 GB on a typical set), alive after the turn ended. Set
+  `CCS_ENGINE_IDLE_KILL_MS` to stop a pane that has had no turn and no attached viewer
+  for that long; the next message starts it again with `--resume`, so the history stays.
+  A running turn, an attached terminal viewer, a pending prompt and a pane whose age is
+  unknown are never stopped. Unset or `0` keeps today's behaviour.
+- **Documentation.** The README opens with what the product does and says only what the
+  code supports, and release notes moved into a collapsible block. New:
+  `CONTRIBUTING.md`, issue and pull-request templates, quick-start pages in Chinese and
+  Japanese, and a 30-second demo video (kept out of the Docker image and the desktop
+  bundle).
+
 ## 8.0.2
 
 ### Names you can read in the sidebar, and chats that delete when you ask

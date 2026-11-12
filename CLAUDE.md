@@ -25,7 +25,8 @@ npm run dist:mac       # signed + notarized arm64 dmg/zip; needs the Developer I
                        # electron-builder.env on this Mac (docs/electron-desktop/MAC-SIGNING.md)
 
 # Release: two steps, and macOS is NEVER built in CI
-# 0. commit the CHANGELOG.md section and the `> **vX.Y.Z** —` line (line 13) of
+# 0. commit the CHANGELOG.md section and the `> **vX.Y.Z** —` line (inside the
+#    "Release and upgrade notes" <details> block, ~line 158) of
 #    README.md / README_UA.md / README_RU.md first: release.js refuses a dirty tree
 npm run release <patch|minor|major|x.y.z>  # bump, commit, tag, push → GitHub Release; CI builds Windows/Linux
 npm run release:mac                         # on the Mac with the cert: build, notarize, verify, upload, bump the cask
