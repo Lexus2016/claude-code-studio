@@ -82,12 +82,36 @@ check('legacy marker outside a spinner line', paneBusyReason('working — esc to
 check('no input box on screen (a dialog replaced it) falls back to the whole pane',
   paneBusy('Pick one\n❯ Yes\n  No\nclock 1', 'Pick one\n❯ Yes\n  No\nclock 2'), true);
 
-console.log('\n── the labeled rule is an input box everywhere');
-// RULE_RE also defines the box for the #20 widget detector: before it accepted a
-// label, a numbered draft in a named chat read as a permission prompt.
-check('a numbered draft in a LABELED box is not a widget',
-  paneAwaitingInput(pane(FINISHED, { draft: '1. fix the tests' }).replace(`❯ 1. fix the tests\n${RULE}`, `❯ 1. fix the tests\n  2. run lint\n${RULE}`)), false);
-check('a real numbered widget above a labeled box is still a widget',
+console.log('\n── review findings on PR #143: the box must be THE input box');
+// A rule/caret/rule block quoted in the history is not the input box. With no real box
+// at the bottom the detector falls back to the whole pane; otherwise that block would
+// cut the live spinner off and a working turn would read idle.
+check('a framed quote in the history does not hide a live spinner',
+  paneBusy(['----------------------------------------', '> Compiling modules', '----------------------------------------',
+    '', '✶ Thinking… (15s · ↓ 4.2k tokens)', 'more output', 'and more', 'and more', 'and more', 'and more', 'and more', 'last'].join('\n'), null), true);
+// The spinner is the line right above the box; an ellipsis-and-seconds phrase higher
+// up in a finished answer is history, not work.
+check('ellipsis + seconds higher up in a finished answer is not the spinner',
+  paneBusy(pane(['⏺ Building bundle… (finished in 12s)', '⏺ Step two', '⏺ Step three', '⏺ Step four', '⏺ Done.']), null), false);
+// RULE_RE (the widget detectors' box) is untouched: a dialog whose LABELED header rule
+// sits right above its caret must stay a widget, never be taken for the input box.
+check('a dialog under a labeled header rule is still a widget',
+  paneAwaitingInput([TOP, '❯ 1. Yes', '  2. No', RULE].join('\n')), true);
+// Round 2. A dialog replaces the input box, so the no-box branch runs — and a finished
+// subagent line above the dialog must not read as a spinner there either: `busy` forces
+// `awaiting` false, so the prompt would never be announced and the turn would hang on
+// the very question the user is meant to answer.
+const DIALOG = [...FINISHED, '', 'Do you want to proceed?', '❯ 1. Yes', '  2. No, and tell Claude what to do differently'].join('\n');
+check('a dialog under a finished subagent line is not busy', paneBusy(DIALOG, DIALOG), false);
+check('...so it is announced as a prompt', paneAwaitingInput(DIALOG), true);
+// A narrow pane leaves only a few dashes before a long label. The real top rule must
+// still be the one found; a rule-plus-"❯ old prompt" in the history must never be taken
+// for the box, which would cut the live spinner off the conversation.
+const NARROW_TOP = '──── Коля-Програміст-з-дуже-довгою-назвою ─';
+const HISTORY = ['──────────────────────', '❯ the previous prompt', '⏺ The previous answer.', '', '✶ Grooving… (12s · ↓ 1.0k tokens)'];
+check('a narrow labeled top rule is the box, not a rule in the history',
+  paneBusyReason(pane(HISTORY, { top: NARROW_TOP }), pane(HISTORY, { top: NARROW_TOP })), 'spinner');
+check('a real numbered widget above a labeled input box is still a widget',
   paneAwaitingInput(['Allow this command?', '❯ 1. Yes', '  2. No', '', TOP, '❯ ', RULE].join('\n')), true);
 
 console.log(`\n${pass} passed, ${fail} failed`);

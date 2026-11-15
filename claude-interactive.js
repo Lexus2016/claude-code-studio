@@ -177,30 +177,59 @@ function capturePane(name) {
 //     e.g. "⎿  Done (3 tool uses · 12.4k tokens · 8s)" — read as a running spinner;
 //   - signal 1 compared the WHOLE pane, so a statusline clock below the input box,
 //     or a person typing a draft in the live pane, read as animation.
-// Both signals therefore look only at the conversation above the input box, and
-// signal 2 only at a spinner-shaped line. Signal 3 keeps the whole pane: it is a
-// literal that only a working TUI prints.
+// When an input box is recognised, both content signals look only at the
+// conversation ABOVE it, and signal 2 only at the spinner, which sits directly above
+// the box. When none is (a dialog replaced it, or a layout this does not know) the
+// whole pane is diffed as before, and the timer still has to be spinner-shaped: a
+// dialog on screen means the agent is waiting, and a `Done (… 8s)` line above it
+// reading as "busy" is what kept `input_needed` from ever being sent.
 const SPINNER_TIMER_RE = /(?:…|\.\.\.)\s*\([^)\n]*?\d+s\s*[·)]/;
+const SPINNER_TAIL_LINES = 4;   // the spinner, plus a tip line the TUI may print under it
 function paneBusyReason(pane, prevPane) {
   if (typeof pane !== 'string') return null;
-  const now = _paneAboveInputBox(pane);
-  if (typeof prevPane === 'string' && now !== _paneAboveInputBox(prevPane)) return 'animation';
-  if (SPINNER_TIMER_RE.test(now)) return 'spinner';
+  const now = _conversationAboveInputBox(pane);
+  if (now === null) {
+    if (typeof prevPane === 'string' && pane !== prevPane) return 'animation';
+    if (SPINNER_TIMER_RE.test(pane)) return 'spinner';
+  } else {
+    const prev = typeof prevPane === 'string' ? _conversationAboveInputBox(prevPane) : undefined;
+    if (prev !== undefined && (prev === null || prev.join('\n') !== now.join('\n'))) return 'animation';
+    if (SPINNER_TIMER_RE.test(now.slice(-SPINNER_TAIL_LINES).join('\n'))) return 'spinner';
+  }
   if (pane.includes('esc to interrupt')) return 'legacy-marker';
   return null;
 }
 function paneBusy(pane, prevPane) { return paneBusyReason(pane, prevPane) !== null; }
 
-// The part of the pane the AGENT writes: everything above the input box. The box
-// holds a human's draft and below it sit the statusline and the mode footer — all
-// three change while the agent is idle. No box on screen (a dialog replaced it, or a
-// layout this does not recognise) → the whole pane, which is the previous behaviour.
-function _paneAboveInputBox(pane) {
+// The conversation above the input box, as lines, or null when no box is on screen.
+// Deliberately NOT _inInputBox(): that one serves the widget detectors, and widening
+// it would let a dialog whose labeled header rule sits right above its caret read as
+// the input box — silencing the prompt. This one is stricter where it can afford to be
+// and looser where it must be:
+//   - the box must be at the BOTTOM: its lower rule within BOX_FOOTER_MAX_LINES of the
+//     end (statusline + mode footer). A rule/caret/rule block earlier in the history
+//     (quoted output) can never truncate the pane and hide a live spinner;
+//   - the rule may carry a LABEL: a chat the studio opens with `--name` draws its title
+//     into the top rule ("──…── Коля-Програміст ─", captured live on 2.1.311 with 606
+//     dashes before the label). A narrow pane leaves only a few, so three is enough:
+//     the NEAREST rule above the lower one is taken as the top, and one not followed by
+//     the caret makes this return null — the pre-fix behaviour, never a search further
+//     up into the history, where an old "❯ prompt" under a rule would truncate the pane;
+//   - the caret is the first line under the top rule.
+const BOX_RULE_RE = /^\s*[─━═╌╍┄┅-]{3,}(?:\s.*)?$/;
+const BOX_FOOTER_MAX_LINES = 6;
+function _conversationAboveInputBox(pane) {
   const lines = _paneLines(pane);
-  for (let i = lines.length - 1; i > 0; i--) {
-    if (RULE_RE.test(lines[i - 1]) && _inInputBox(lines, i)) return lines.slice(0, i - 1).join('\n');
+  const floor = Math.max(1, lines.length - 1 - BOX_FOOTER_MAX_LINES);
+  for (let b = lines.length - 1; b >= floor; b--) {
+    if (!BOX_RULE_RE.test(lines[b])) continue;
+    for (let t = b - 1; t >= 0; t--) {
+      if (!BOX_RULE_RE.test(lines[t])) continue;
+      return t + 1 < b && /^\s*[❯➤►▶›»>](\s|$)/.test(lines[t + 1]) ? lines.slice(0, t) : null;
+    }
+    return null;
   }
-  return pane;
+  return null;
 }
 
 // Is the TUI blocked on a prompt only a human can answer? (GitHub #20)
@@ -263,10 +292,7 @@ function _paneLines(pane) {
 // would hide it — but its first framed line is a header ("☐ Color"), never the caret.
 // Searched over the WHOLE capture, not the tail: a long draft pushes the box's top
 // rule out of any fixed window.
-// A rule may carry a LABEL: a chat the studio opens with `--name` draws its top rule
-// as "──────── Коля-Програміст ─" (captured live, CLI 2.1.311). A plain-rule-only
-// pattern finds no box in exactly those sessions.
-const RULE_RE = /^\s*[─━═╌╍┄┅-]{10,}(?:\s.*[─━═╌╍┄┅-])?\s*$/;
+const RULE_RE = /^[\s─━═╌╍┄┅-]{10,}$/;
 function _inInputBox(lines, i) {
   let above = -1, below = -1;
   for (let k = i; k >= 0; k--) if (RULE_RE.test(lines[k])) { above = k; break; }

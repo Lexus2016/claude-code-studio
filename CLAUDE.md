@@ -164,14 +164,25 @@ watchdog stops declaring a blocked turn "done". The answer is typed through
 
 **A false "busy" holds a finished turn open (#130).** Every exit of the poll loop except
 the idle watchdog requires `!paneBusy()`, so a pane that reads busy forever ends a turn
-the TUI finished long ago as a 10-minute timeout. Both content signals therefore look
-only at the conversation ABOVE the input box (`_paneAboveInputBox`): the box holds a
-human's draft and the statusline below it may tick on its own. The timer signal matches
-only a spinner-shaped line (`SPINNER_TIMER_RE`, a verb ending in `…`), because CLI
-2.1.311 also prints `Done (3 tool uses · 12.4k tokens · 8s)` for a FINISHED subagent.
-`RULE_RE` accepts a labeled rule: a chat opened with `--name` draws its title into the
-box's top rule, and without that the box was invisible in exactly the studio's chats.
-The idle-timeout error names the signal that last held the pane busy.
+the TUI finished long ago as a 10-minute timeout. When an input box is recognised
+(`_conversationAboveInputBox`), both content signals look only at the conversation ABOVE
+it — the box holds a human's draft and the statusline below it may tick on its own — and
+the timer signal matches only a spinner-shaped line (`SPINNER_TIMER_RE`, a verb ending in
+`…`) in the last few lines above the box, because CLI 2.1.311 also prints
+`Done (3 tool uses · 12.4k tokens · 8s)` for a FINISHED subagent. No box recognised (a
+dialog replaced it) → the whole pane is diffed as before, but the timer must STILL be
+spinner-shaped: with the old regex a `Done (… 8s)` line above a permission dialog read
+as busy, which forces `awaiting` false, so `input_needed` was never sent and the turn
+hung on the question the user was meant to answer. Rules from two review rounds: the
+box's lower rule must sit within `BOX_FOOTER_MAX_LINES` of the bottom, or a
+rule/caret/rule block quoted in the history would truncate the pane and hide a live
+spinner; the top rule is the NEAREST rule above it (three dashes suffice — a narrow pane
+leaves few before a long label — and a mismatch returns null, never a search further up,
+where a rule over an old `❯ prompt` would cut the spinner off); and the labeled top rule a
+chat opened with `--name` draws (`──── <name> ─`) is accepted by `BOX_RULE_RE` ONLY —
+`RULE_RE` stays unlabeled, because widening it lets a dialog under a labeled header read
+as the input box and silences the #20 prompt detector. The idle-timeout error names the
+signal that last held the pane busy.
 
 **Why tmux (and not node-pty):** the engine needs a PTY that survives the Node process and is readable/writable from outside it. `tmux` delivers that as a plain binary — zero new npm deps, zero build step, matching the project philosophy. `node-pty` (the cross-platform alternative) is a native module requiring compilation — rejected for that reason.
 
