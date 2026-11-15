@@ -159,22 +159,77 @@ function capturePane(name) {
 // then would drop the trailing text. The spinner animates throughout that gap
 // and only clears when the turn truly ends.
 //
-// Detection is defense-in-depth and version-independent — ANY of three signals
-// means busy, biased so a false "busy" only DELAYS completion (caught by the
-// safety-net) while never risking a premature break that loses text:
+// Detection is version-independent — ANY of three signals means busy:
 //   1. animation — the spinner's elapsed counter ticks every ~0.5–1s, so the
-//      captured pane changes between polls during a turn (verified on live
-//      2.1.x: idle sessions stay static, working ones change every poll);
-//   2. elapsed-timer pattern — a seconds count followed by a "·" or ")", e.g.
-//      "(8s ·" / "26m 44s ·" / "8s)", shown only during an active turn (the
-//      persistent statusline uses "⏱ 5m" / "🕐 14:12", which don't match);
+//      conversation changes between polls during a turn;
+//   2. the spinner line itself — a verb ending in an ellipsis, then a seconds
+//      count followed by "·" or ")": "✶ Grooving… (2m 25s · ↓ 8.0k tokens)",
+//      "✻ Cogitating… (8s · esc to interrupt)";
 //   3. legacy "esc to interrupt" marker (older TUI builds).
-function paneBusy(pane, prevPane) {
-  if (pane === null) return false;
-  if (prevPane !== null && pane !== prevPane) return true;     // 1. spinner animating
-  if (/\d+s\s*[·)]/.test(pane)) return true;                  // 2. elapsed timer "(8s ·" / "43s ·" / "8s)"
-  if (pane.includes('esc to interrupt')) return true;         // 3. legacy marker
-  return false;
+//
+// A false "busy" is NOT harmless (issue #130). Every exit of the poll loop except
+// the idle watchdog requires !busy — the turn-end break and the quiet safety net
+// alike — so a pane that reads busy forever holds a FINISHED turn open for
+// CLAUDE_IDLE_TIMEOUT_MS (10 min) and then ends it as a timeout, while the live
+// pane plainly shows the answer. Two ways that happened:
+//   - signal 2 matched the WHOLE pane, so a completed subagent line still on
+//     screen — CLI 2.1.311 renders it as `Done (${uses} · ${tokens} · ${dur})`,
+//     e.g. "⎿  Done (3 tool uses · 12.4k tokens · 8s)" — read as a running spinner;
+//   - signal 1 compared the WHOLE pane, so a statusline clock below the input box,
+//     or a person typing a draft in the live pane, read as animation.
+// When an input box is recognised, both content signals look only at the
+// conversation ABOVE it, and signal 2 only at the spinner, which sits directly above
+// the box. When none is (a dialog replaced it, or a layout this does not know) the
+// whole pane is diffed as before, and the timer still has to be spinner-shaped: a
+// dialog on screen means the agent is waiting, and a `Done (… 8s)` line above it
+// reading as "busy" is what kept `input_needed` from ever being sent.
+const SPINNER_TIMER_RE = /(?:…|\.\.\.)\s*\([^)\n]*?\d+s\s*[·)]/;
+const SPINNER_TAIL_LINES = 4;   // the spinner, plus a tip line the TUI may print under it
+function paneBusyReason(pane, prevPane) {
+  if (typeof pane !== 'string') return null;
+  const now = _conversationAboveInputBox(pane);
+  if (now === null) {
+    if (typeof prevPane === 'string' && pane !== prevPane) return 'animation';
+    if (SPINNER_TIMER_RE.test(pane)) return 'spinner';
+  } else {
+    const prev = typeof prevPane === 'string' ? _conversationAboveInputBox(prevPane) : undefined;
+    if (prev !== undefined && (prev === null || prev.join('\n') !== now.join('\n'))) return 'animation';
+    if (SPINNER_TIMER_RE.test(now.slice(-SPINNER_TAIL_LINES).join('\n'))) return 'spinner';
+  }
+  if (pane.includes('esc to interrupt')) return 'legacy-marker';
+  return null;
+}
+function paneBusy(pane, prevPane) { return paneBusyReason(pane, prevPane) !== null; }
+
+// The conversation above the input box, as lines, or null when no box is on screen.
+// Deliberately NOT _inInputBox(): that one serves the widget detectors, and widening
+// it would let a dialog whose labeled header rule sits right above its caret read as
+// the input box — silencing the prompt. This one is stricter where it can afford to be
+// and looser where it must be:
+//   - the box must be at the BOTTOM: its lower rule within BOX_FOOTER_MAX_LINES of the
+//     end (statusline + mode footer). A rule/caret/rule block earlier in the history
+//     (quoted output) can never truncate the pane and hide a live spinner;
+//   - the rule may carry a LABEL: a chat the studio opens with `--name` draws its title
+//     into the top rule ("──…── Коля-Програміст ─", captured live on 2.1.311 with 606
+//     dashes before the label). A narrow pane leaves only a few, so three is enough:
+//     the NEAREST rule above the lower one is taken as the top, and one not followed by
+//     the caret makes this return null — the pre-fix behaviour, never a search further
+//     up into the history, where an old "❯ prompt" under a rule would truncate the pane;
+//   - the caret is the first line under the top rule.
+const BOX_RULE_RE = /^\s*[─━═╌╍┄┅-]{3,}(?:\s.*)?$/;
+const BOX_FOOTER_MAX_LINES = 6;
+function _conversationAboveInputBox(pane) {
+  const lines = _paneLines(pane);
+  const floor = Math.max(1, lines.length - 1 - BOX_FOOTER_MAX_LINES);
+  for (let b = lines.length - 1; b >= floor; b--) {
+    if (!BOX_RULE_RE.test(lines[b])) continue;
+    for (let t = b - 1; t >= 0; t--) {
+      if (!BOX_RULE_RE.test(lines[t])) continue;
+      return t + 1 < b && /^\s*[❯➤►▶›»>](\s|$)/.test(lines[t + 1]) ? lines.slice(0, t) : null;
+    }
+    return null;
+  }
+  return null;
 }
 
 // Is the TUI blocked on a prompt only a human can answer? (GitHub #20)
@@ -765,6 +820,7 @@ async function runInteractiveSingle(params) {
     let lastActivityAt = start;       // idle watchdog cursor — bumped on transcript progress (new bytes)
     let injectFails = 0;              // consecutive failed clarification pastes — see INJECT_MAX_FAILS
     let awaitPolls = 0;               // consecutive polls showing a blocking prompt
+    let busyReason = null;            // which paneBusy signal fired last poll — named in the idle-timeout error (#130)
 
     while (true) {
       await sleep(POLL_MS);
@@ -777,7 +833,10 @@ async function runInteractiveSingle(params) {
 
       if (Date.now() - lastActivityAt > IDLE_TIMEOUT_MS) {
         const mins = Math.round(IDLE_TIMEOUT_MS / 60000);
-        wsSend({ type: 'error', error: `interactive engine timed out — no activity for ${mins} min (idle). Raise CLAUDE_IDLE_TIMEOUT_MS to allow longer silences.` });
+        // Say whether the pane still LOOKED busy: a turn the TUI finished long ago but
+        // that a busy signal held open is a detector bug to report (#130), not a slow agent.
+        const held = busyReason ? ` The pane still looked busy (${busyReason}).` : '';
+        wsSend({ type: 'error', error: `interactive engine timed out — no activity for ${mins} min (idle). Raise CLAUDE_IDLE_TIMEOUT_MS to allow longer silences.${held}` });
         return { cid, completed: false, resultMeta: { durationMs: Date.now() - start }, fullText, fullThinking, toolEvents };
       }
       if (HARD_CAP_MS > 0 && Date.now() - start > HARD_CAP_MS) {
@@ -857,7 +916,8 @@ async function runInteractiveSingle(params) {
       }
 
       const pane = capturePane(name);
-      const busy = paneBusy(pane, prevPaneCap);
+      busyReason = paneBusyReason(pane, prevPaneCap);
+      const busy = busyReason !== null;
       prevPaneCap = pane;
 
       // ── Blocked on an interactive prompt? (GitHub #20) ─────────────────────
@@ -1120,4 +1180,4 @@ function catchUpFromTranscript({ cid, startOffset = 0 } = {}) {
   return out;
 }
 
-module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, paneAwaitingSelection, promptExcerpt, buildInteractiveCommand, tmuxLaunchCommand, ENGINE_IDLE_KILL_MS, listEngineSessions, engineSessionClients, engineSessionId, touchEngineSession, reapIdleEngineSessions, startEngineIdleReaper };
+module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, paneAwaitingSelection, paneBusy, paneBusyReason, promptExcerpt, buildInteractiveCommand, tmuxLaunchCommand, ENGINE_IDLE_KILL_MS, listEngineSessions, engineSessionClients, engineSessionId, touchEngineSession, reapIdleEngineSessions, startEngineIdleReaper };
