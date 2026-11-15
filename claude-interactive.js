@@ -159,22 +159,48 @@ function capturePane(name) {
 // then would drop the trailing text. The spinner animates throughout that gap
 // and only clears when the turn truly ends.
 //
-// Detection is defense-in-depth and version-independent — ANY of three signals
-// means busy, biased so a false "busy" only DELAYS completion (caught by the
-// safety-net) while never risking a premature break that loses text:
+// Detection is version-independent — ANY of three signals means busy:
 //   1. animation — the spinner's elapsed counter ticks every ~0.5–1s, so the
-//      captured pane changes between polls during a turn (verified on live
-//      2.1.x: idle sessions stay static, working ones change every poll);
-//   2. elapsed-timer pattern — a seconds count followed by a "·" or ")", e.g.
-//      "(8s ·" / "26m 44s ·" / "8s)", shown only during an active turn (the
-//      persistent statusline uses "⏱ 5m" / "🕐 14:12", which don't match);
+//      conversation changes between polls during a turn;
+//   2. the spinner line itself — a verb ending in an ellipsis, then a seconds
+//      count followed by "·" or ")": "✶ Grooving… (2m 25s · ↓ 8.0k tokens)",
+//      "✻ Cogitating… (8s · esc to interrupt)";
 //   3. legacy "esc to interrupt" marker (older TUI builds).
-function paneBusy(pane, prevPane) {
-  if (pane === null) return false;
-  if (prevPane !== null && pane !== prevPane) return true;     // 1. spinner animating
-  if (/\d+s\s*[·)]/.test(pane)) return true;                  // 2. elapsed timer "(8s ·" / "43s ·" / "8s)"
-  if (pane.includes('esc to interrupt')) return true;         // 3. legacy marker
-  return false;
+//
+// A false "busy" is NOT harmless (issue #130). Every exit of the poll loop except
+// the idle watchdog requires !busy — the turn-end break and the quiet safety net
+// alike — so a pane that reads busy forever holds a FINISHED turn open for
+// CLAUDE_IDLE_TIMEOUT_MS (10 min) and then ends it as a timeout, while the live
+// pane plainly shows the answer. Two ways that happened:
+//   - signal 2 matched the WHOLE pane, so a completed subagent line still on
+//     screen — CLI 2.1.311 renders it as `Done (${uses} · ${tokens} · ${dur})`,
+//     e.g. "⎿  Done (3 tool uses · 12.4k tokens · 8s)" — read as a running spinner;
+//   - signal 1 compared the WHOLE pane, so a statusline clock below the input box,
+//     or a person typing a draft in the live pane, read as animation.
+// Both signals therefore look only at the conversation above the input box, and
+// signal 2 only at a spinner-shaped line. Signal 3 keeps the whole pane: it is a
+// literal that only a working TUI prints.
+const SPINNER_TIMER_RE = /(?:…|\.\.\.)\s*\([^)\n]*?\d+s\s*[·)]/;
+function paneBusyReason(pane, prevPane) {
+  if (typeof pane !== 'string') return null;
+  const now = _paneAboveInputBox(pane);
+  if (typeof prevPane === 'string' && now !== _paneAboveInputBox(prevPane)) return 'animation';
+  if (SPINNER_TIMER_RE.test(now)) return 'spinner';
+  if (pane.includes('esc to interrupt')) return 'legacy-marker';
+  return null;
+}
+function paneBusy(pane, prevPane) { return paneBusyReason(pane, prevPane) !== null; }
+
+// The part of the pane the AGENT writes: everything above the input box. The box
+// holds a human's draft and below it sit the statusline and the mode footer — all
+// three change while the agent is idle. No box on screen (a dialog replaced it, or a
+// layout this does not recognise) → the whole pane, which is the previous behaviour.
+function _paneAboveInputBox(pane) {
+  const lines = _paneLines(pane);
+  for (let i = lines.length - 1; i > 0; i--) {
+    if (RULE_RE.test(lines[i - 1]) && _inInputBox(lines, i)) return lines.slice(0, i - 1).join('\n');
+  }
+  return pane;
 }
 
 // Is the TUI blocked on a prompt only a human can answer? (GitHub #20)
@@ -237,7 +263,10 @@ function _paneLines(pane) {
 // would hide it — but its first framed line is a header ("☐ Color"), never the caret.
 // Searched over the WHOLE capture, not the tail: a long draft pushes the box's top
 // rule out of any fixed window.
-const RULE_RE = /^[\s─━═╌╍┄┅-]{10,}$/;
+// A rule may carry a LABEL: a chat the studio opens with `--name` draws its top rule
+// as "──────── Коля-Програміст ─" (captured live, CLI 2.1.311). A plain-rule-only
+// pattern finds no box in exactly those sessions.
+const RULE_RE = /^\s*[─━═╌╍┄┅-]{10,}(?:\s.*[─━═╌╍┄┅-])?\s*$/;
 function _inInputBox(lines, i) {
   let above = -1, below = -1;
   for (let k = i; k >= 0; k--) if (RULE_RE.test(lines[k])) { above = k; break; }
@@ -765,6 +794,7 @@ async function runInteractiveSingle(params) {
     let lastActivityAt = start;       // idle watchdog cursor — bumped on transcript progress (new bytes)
     let injectFails = 0;              // consecutive failed clarification pastes — see INJECT_MAX_FAILS
     let awaitPolls = 0;               // consecutive polls showing a blocking prompt
+    let busyReason = null;            // which paneBusy signal fired last poll — named in the idle-timeout error (#130)
 
     while (true) {
       await sleep(POLL_MS);
@@ -777,7 +807,10 @@ async function runInteractiveSingle(params) {
 
       if (Date.now() - lastActivityAt > IDLE_TIMEOUT_MS) {
         const mins = Math.round(IDLE_TIMEOUT_MS / 60000);
-        wsSend({ type: 'error', error: `interactive engine timed out — no activity for ${mins} min (idle). Raise CLAUDE_IDLE_TIMEOUT_MS to allow longer silences.` });
+        // Say whether the pane still LOOKED busy: a turn the TUI finished long ago but
+        // that a busy signal held open is a detector bug to report (#130), not a slow agent.
+        const held = busyReason ? ` The pane still looked busy (${busyReason}).` : '';
+        wsSend({ type: 'error', error: `interactive engine timed out — no activity for ${mins} min (idle). Raise CLAUDE_IDLE_TIMEOUT_MS to allow longer silences.${held}` });
         return { cid, completed: false, resultMeta: { durationMs: Date.now() - start }, fullText, fullThinking, toolEvents };
       }
       if (HARD_CAP_MS > 0 && Date.now() - start > HARD_CAP_MS) {
@@ -857,7 +890,8 @@ async function runInteractiveSingle(params) {
       }
 
       const pane = capturePane(name);
-      const busy = paneBusy(pane, prevPaneCap);
+      busyReason = paneBusyReason(pane, prevPaneCap);
+      const busy = busyReason !== null;
       prevPaneCap = pane;
 
       // ── Blocked on an interactive prompt? (GitHub #20) ─────────────────────
@@ -1120,4 +1154,4 @@ function catchUpFromTranscript({ cid, startOffset = 0 } = {}) {
   return out;
 }
 
-module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, paneAwaitingSelection, promptExcerpt, buildInteractiveCommand, tmuxLaunchCommand, ENGINE_IDLE_KILL_MS, listEngineSessions, engineSessionClients, engineSessionId, touchEngineSession, reapIdleEngineSessions, startEngineIdleReaper };
+module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, paneAwaitingSelection, paneBusy, paneBusyReason, promptExcerpt, buildInteractiveCommand, tmuxLaunchCommand, ENGINE_IDLE_KILL_MS, listEngineSessions, engineSessionClients, engineSessionId, touchEngineSession, reapIdleEngineSessions, startEngineIdleReaper };
