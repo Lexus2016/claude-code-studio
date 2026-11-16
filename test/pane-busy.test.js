@@ -142,6 +142,9 @@ check('(d) a real widget above a matching labeled box holding a numbered draft i
 // draft's caret was the LAST caret, so the whole pane read "no widget" — a missed prompt.
 check('(d) same above an UNLABELED box: the draft no longer hides the widget',
   paneAwaitingInput([...WIDGET_ABOVE, RULE, '❯ 1. fix tests', '  2. run lint', RULE, ...footer('1m')].join('\n')), true);
+const LONG_DRAFT = ['❯ 1. fix tests', ...Array.from({ length: 26 }, (_, i) => `  ${i + 2}. step ${i + 2}`)];
+check('(d) a widget above a matching box holding a draft LONGER than the tail window is a widget',
+  paneAwaitingInput([...WIDGET_ABOVE, TOP, ...LONG_DRAFT, RULE, ...footer('1m')].join('\n'), { boxLabel: LABEL }), true);
 const LABELED_DIALOG = ['⏺ Bash(rm -rf build)', '──── Bash command ─', 'rm -rf build', '❯ 1. Yes', '  2. No', RULE].join('\n');
 check('(e) a dialog framed by a labeled header rule is a widget (launch name known)',
   paneAwaitingInput(LABELED_DIALOG, { boxLabel: LABEL }), true);

@@ -270,19 +270,20 @@ function paneAwaitingInput(pane, opts = {}) {
   if (typeof pane !== 'string' || !pane) return false;
   const lines = _paneLines(pane);
   const label = opts && opts.boxLabel;
-  const from = Math.max(0, lines.length - AWAIT_TAIL_LINES);
-  let numbered = 0, caretAt = -1;
-  for (let i = from; i < lines.length; i++) {
+  // A numbered list the user TYPED into the input box ("1. fix the tests") is not a
+  // widget, however much it looks like one. Only the box's own lines are skipped, and
+  // BEFORE the tail window is counted: a widget above the box still counts, so a
+  // draft — however long — can never push a real prompt out of view.
+  let numbered = 0, caret = false;
+  for (let i = lines.length - 1, seen = 0; i >= 0 && seen < AWAIT_TAIL_LINES; i--) {
+    if (_inInputBox(lines, i, label)) continue;
+    seen++;
     const m = CARET_RE.exec(lines[i].trim());
     if (!m) continue;
-    // A numbered list the user TYPED into the input box ("1. fix the tests") is not a
-    // widget, however much it looks like one. Only the box's own lines are skipped: a
-    // widget ABOVE the box still counts, so a draft can never hide a real prompt.
-    if (_inInputBox(lines, i, label)) continue;
     numbered++;
-    if (m[1]) caretAt = i;
+    if (m[1]) caret = true;
   }
-  if (numbered >= 2 && caretAt >= 0) return true;
+  if (numbered >= 2 && caret) return true;
   return paneAwaitingSelection(pane, opts);
 }
 
@@ -304,8 +305,10 @@ function _paneLines(pane) {
 // named-draft.txt). RULE_RE stays unlabeled on purpose — widened, a dialog whose
 // labeled header rule sits right above its caret would read as the input box and the
 // prompt would be silenced. A labeled rule is a top rule ONLY when its label equals
-// the name the engine itself launched with (`label`): a value the studio chose, so no
-// dialog header can match it by accident. Unknown label → exactly the unlabeled rule.
+// the name the engine itself launched with (`label`): the chat's title, not TUI
+// wording. Residual, stated: a chat titled EXACTLY like a dialog's labeled header,
+// with that header directly above the dialog's caret, would read as the box — no
+// such dialog is known on 2.1.311. Unknown label → exactly the unlabeled rule.
 const RULE_RE = /^[\s─━═╌╍┄┅-]{10,}$/;
 const LABELED_RULE_RE = /^\s*[─━═╌╍┄┅-]{3,}\s+(.+?)\s+[─━═╌╍┄┅-]+$/;
 const _normLabel = (s) => String(s).normalize('NFC').replace(/\s+/g, ' ').trim();

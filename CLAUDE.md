@@ -171,10 +171,12 @@ a permission prompt: a false `input_needed`, a 5-minute grace, no clarification 
 The engine now LAUNCHES with the chat's `--name` (`cleanSessionName`, shared with
 `claude-cli.js`), records it as `CCS_NAME` in the tmux env, and every widget-detector
 call passes it back as `{ boxLabel }`. A labeled rule is a box top ONLY when its label
-equals that value — a name the studio chose, so no dialog header matches by accident;
+equals that value — the chat's title, not TUI wording (residual: a chat titled exactly
+like a labeled dialog header sitting right above its caret; none is known on 2.1.311);
 no recorded name (an older pane, an untitled chat) is exactly the unlabeled rule. Two
-more rules: the numbered detector skips only the box's OWN lines, so a draft never hides
-a widget above the box; the unnumbered one still stops at a box caret, because that is
+more rules: the numbered detector skips only the box's OWN lines, before counting its
+24-line tail, so no draft hides a widget above the box, however long; the unnumbered
+one still stops at a box caret, because that is
 its only defence against history (tool output indented under a past `❯ prompt` reads as
 a sibling option). `pane-busy.test.js` pins the cases and every server.js engine door.
 
