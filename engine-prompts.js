@@ -13,24 +13,62 @@
 
 function createEnginePromptStore() {
   const open = new Map(); // sessionId -> the input_needed frame, as the engine sent it
+  // sessionId -> keys answered from a button (#131). Kept across input_resolved, which
+  // the engine also sends for a TRANSIENT blip (a transcript write, one poll where the
+  // pane did not qualify) before announcing the very same question again. Forgotten
+  // when the turn is seen dead; bounded so a long turn cannot grow it without limit.
+  // Cost of the bound and of keeping keys for a live session: an IDENTICAL question
+  // asked again later gets "Open pane" only, never a button that answers it twice.
+  const consumed = new Map();
+  const CONSUMED_MAX = 32;
+  const strip = (frame) => { const { options, promptKey, ...rest } = frame; return rest; };
 
   return {
     // Fed by runInteractiveSingle's onPromptState: a frame while a prompt is open,
     // null when it is answered or the turn ends (the engine's finally sends that edge
     // on every exit path).
-    track(sessionId, frame) {
-      if (!sessionId) return;
-      if (frame && frame.type === 'input_needed') open.set(sessionId, frame);
-      else open.delete(sessionId);
+    // Returns the frame it kept — without options when the key was already answered —
+    // so the engine sends exactly what a reload would replay.
+    // `meta.turnEnded` comes once, from the engine's finally: the only edge that may
+    // forget the turn's answered keys.
+    track(sessionId, frame, meta) {
+      if (!sessionId) return null;
+      if (meta && meta.turnEnded) consumed.delete(sessionId);
+      if (!frame || frame.type !== 'input_needed') { open.delete(sessionId); return null; }
+      const spent = frame.promptKey && consumed.get(sessionId)?.has(frame.promptKey);
+      const kept = spent ? strip(frame) : frame;
+      open.set(sessionId, kept);
+      return kept;
     },
     // The frame to replay to a subscriber, or null. A prompt is only worth replaying
     // while its turn is alive: an entry that outlived its turn (a crash between the
     // two edges) is dropped here instead of showing a question nobody is asking.
     replay(sessionId, isLive) {
+      const frame = this.current(sessionId, isLive);
+      return frame && { ...frame, tabId: frame.tabId || sessionId, replayed: true };
+    },
+    // The open prompt as the engine sent it, or null — same liveness rule as replay.
+    // An answer (#131) is checked against this before the pane is even captured: a
+    // button from a prompt the engine has withdrawn is refused without touching tmux.
+    current(sessionId, isLive) {
+      if (!isLive) { open.delete(sessionId); consumed.delete(sessionId); return null; }
+      return open.get(sessionId) || null;
+    },
+    // An answer was typed into the pane for the prompt whose key is `promptKey`: that
+    // prompt can never be answered from a button again. Its banner stays (the turn may
+    // still be waiting — a text field, a checkbox), only the buttons go, so neither a
+    // reload nor a second window can redraw them and type a digit into whatever the
+    // pane shows next. A NEW question is announced by the engine as a new frame, with
+    // its own key. Keyed so a frame announced meanwhile is never the one stripped.
+    consume(sessionId, promptKey) {
       const frame = open.get(sessionId);
-      if (!frame) return null;
-      if (!isLive) { open.delete(sessionId); return null; }
-      return { ...frame, tabId: frame.tabId || sessionId, replayed: true };
+      if (!frame || !promptKey || frame.promptKey !== promptKey) return false;
+      const keys = consumed.get(sessionId) || new Set();
+      keys.add(promptKey);
+      while (keys.size > CONSUMED_MAX) keys.delete(keys.values().next().value);
+      consumed.set(sessionId, keys);
+      open.set(sessionId, strip(frame));
+      return true;
     },
     size() { return open.size; },
   };

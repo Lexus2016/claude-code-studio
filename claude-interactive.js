@@ -358,6 +358,125 @@ function paneAwaitingSelection(pane, opts = {}) {
   return sibling(lines[at - 1]) || sibling(lines[at + 1]);
 }
 
+// ─── Answer buttons for a numbered widget (GitHub #131, proposal 8) ──────────
+// The options of the numbered widget on screen, so the browser can offer them as
+// buttons, plus a `key` naming WHICH question this is. Null when there is no single
+// unambiguous numbered widget — the banner then shows "Open pane" alone, as before.
+//
+// Measured on CLI 2.1.311 (test/fixtures/claude-tui/askuserquestion-*.txt): a digit on
+// a numbered widget SELECTS AND CONFIRMS that option at once. On a two-question
+// AskUserQuestion it moves straight to question 2, and the "Ready to submit your
+// answers?" screen after it is a numbered widget too. So one digit is a whole answer.
+// Two digits would not be (is "1" then "2" option 12?), hence MAX_ANSWER_OPTIONS.
+//
+// The widget is the LAST run 1..k in the tail with exactly one caret on it; a numbered
+// list higher up in the answer text is history, and a run with no caret or two is not
+// a widget anyone can answer.
+//
+// The key is the WHOLE widget as text — every line from the frame above option 1 down
+// to the last option, descriptions and wrapped lines included, labels untruncated —
+// with only the caret glyph blanked, so moving the caret in the live pane does not
+// make the question look new. A shorter key (a few lines of context, labels only) let
+// two different questions collide, and a collision is a button answering the wrong
+// one. The DISPLAY label is a separate, trimmed copy. Two genuinely identical prompts
+// in a row still share a key; the server consumes a prompt once it has typed an answer
+// (engine-prompts consume()), so the second one gets no buttons rather than a stale one.
+//
+// A framed dialog ("│ ❯ 1. Yes      │") carries its right border and padding on every
+// line; both are dropped here, or the label shows a stray "│" and the key changes
+// with the pane width.
+const OPTION_RE = /^([❯➤►▶›»>])?\s*(\d{1,2})[.)]\s+(\S.*)$/;
+const MAX_ANSWER_OPTIONS = 9;
+const PROMPT_CONTEXT_MAX = 40;
+const FRAME_EDGE_RE = /^\s*[╭╰┌└╔╚]/;
+const _unframe = (l) => l.replace(/\s*[│┃║]\s*$/, '').trim();
+function promptOptions(pane, opts = {}) {
+  if (typeof pane !== 'string' || !pane) return null;
+  const lines = _paneLines(pane);
+  const label = opts && opts.boxLabel;
+  const hits = [];
+  for (let i = lines.length - 1, seen = 0; i >= 0 && seen < AWAIT_TAIL_LINES; i--) {
+    if (_inInputBox(lines, i, label)) continue;
+    seen++;
+    const m = OPTION_RE.exec(_unframe(lines[i]));
+    if (m) hits.unshift({ i, n: Number(m[2]), label: m[3].trim(), caret: !!m[1] });
+  }
+  if (!hits.length) return null;
+  let start = hits.length - 1;
+  while (start > 0 && hits[start - 1].n === hits[start].n - 1) start--;
+  const run = hits.slice(start);
+  if (run[0].n !== 1 || run.length < 2 || run.length > MAX_ANSWER_OPTIONS) return null;
+  if (run.filter(h => h.caret).length !== 1) return null;
+  let from = run[0].i;
+  while (from > 0 && run[0].i - from < PROMPT_CONTEXT_MAX) {
+    const l = lines[from - 1];
+    if (RULE_RE.test(l) || BOX_RULE_RE.test(l) || FRAME_EDGE_RE.test(l)) break;
+    from--;
+  }
+  // The last option's own description and wrapped lines belong to it: everything after
+  // it indented deeper than the option line. Not the footer below the widget — its
+  // wording changes while the SAME question waits ("ctrl+g to edit in Vim" appears once
+  // "Type something." has focus), which would make an unchanged question read as new.
+  const indent = (l) => l.length - l.trimStart().length;
+  let to = run[run.length - 1].i;
+  const optIndent = indent(lines[to]);
+  while (to + 1 < lines.length && indent(lines[to + 1]) > optIndent && !RULE_RE.test(lines[to + 1])
+    && !FRAME_EDGE_RE.test(lines[to + 1])) to++;
+  const text = lines.slice(from, to + 1)
+    .map(l => _unframe(l).replace(/^[❯➤►▶›»>](?=\s*\d{1,2}[.)]\s)/, ''))
+    .map(l => l.trim()).filter(Boolean);
+  const options = run.map(h => ({ n: h.n, label: h.label.slice(0, 200) }));
+  return { options, key: JSON.stringify(text) };
+}
+
+// Answer the widget on screen with option `choice` — ONLY if it is still the widget
+// the browser was shown (`key`). A button rendered for one question must never answer
+// the next one: a multi-question AskUserQuestion replaces question 1 with question 2
+// in place, and a double tap would otherwise land on it.
+//
+// Every byte sent is computed here: one digit, 1..9, checked against the options
+// parsed from a capture taken now. Nothing the client sent reaches the pane.
+//
+// `advanced` reports whether the widget moved on. It does not when the option opens a
+// text field ("Type something." — measured: the digit focuses the field and waits) or
+// toggles a checkbox; the browser then sends the user to the live pane to finish.
+const ANSWER_SETTLE_MS = Number(process.env.CCS_PROMPT_ANSWER_SETTLE_MS) || 800;
+async function answerPrompt(sessionId, { key, choice, onSent } = {}) {
+  // A JSON number only: Number('2\r') is 2, and a string is never what the SPA sends.
+  const n = typeof choice === 'number' ? choice : NaN;
+  if (!Number.isInteger(n) || n < 1 || n > MAX_ANSWER_OPTIONS || typeof key !== 'string' || !key) return { ok: false, error: 'invalid' };
+  const name = tmuxName(sessionId);
+  // `=name:` is an EXACT session match. A bare `-t ccs-abc` is a prefix match in tmux
+  // and would type into `ccs-abcdef` when `ccs-abc` is gone.
+  const target = `=${name}:`;
+  const capture = () => {
+    try {
+      const r = spawnSync('tmux', tmuxArgs(['capture-pane', '-p', '-t', target]), { encoding: 'utf8' });
+      return r.error || r.status !== 0 ? null : (r.stdout || '');
+    } catch { return null; }
+  };
+  const opts = { boxLabel: getTmuxEnv(name, 'CCS_NAME') || null };
+  const showing = (pane) => {
+    if (typeof pane !== 'string' || paneBusy(pane, null) || !paneAwaitingInput(pane, opts)) return null;
+    return promptOptions(pane, opts);
+  };
+  const before = capture();
+  if (before === null) return { ok: false, error: 'no_pane' };
+  const shape = showing(before);
+  if (!shape || shape.key !== key) return { ok: false, error: 'stale' };
+  if (!shape.options.some(o => o.n === n)) return { ok: false, error: 'stale' };
+  try {
+    const r = spawnSync('tmux', tmuxArgs(['send-keys', '-t', target, '-l', String(n)]), { stdio: 'ignore' });
+    if (r.error || r.status !== 0) return { ok: false, error: 'send_failed' };
+  } catch { return { ok: false, error: 'send_failed' }; }
+  // The digit is in: the caller consumes the question NOW, not after the settle wait —
+  // a reload or a second window in those 800 ms would otherwise still get its buttons.
+  if (typeof onSent === 'function') { try { onSent(); } catch {} }
+  await new Promise(r => setTimeout(r, ANSWER_SETTLE_MS));
+  const after = showing(capture());
+  return { ok: true, advanced: !(after && after.key === key) };
+}
+
 // The pane tail the browser banner shows, so the user can recognise the question
 // without opening the pane. Never the whole capture: it carries the entire visible
 // conversation and is 50 lines of noise.
@@ -648,14 +767,24 @@ async function runInteractiveSingle(params) {
   // `onPromptState` hears the same two edges, so the caller can remember a prompt that
   // is still open: a page RELOADED while the turn waits has no socket that saw
   // input_needed and no tab state left to redraw the banner from (#130).
+  // The caller's answer to an input_needed is the frame it KEPT: a question that was
+  // already answered from a button (#131) comes back without its options, and the
+  // frame on the wire must match, or a re-announcement after a transient blip would
+  // hand every window buttons for a question the server will no longer accept.
   const wsSendAll = (obj) => {
-    wsSend(obj);
-    if (typeof fanout === 'function') { try { fanout({ ...obj, ...(tabId ? { tabId } : {}) }); } catch {} }
     // Only the two prompt edges: any other frame routed through here later must not
     // read as "answered" and erase a prompt that is still open.
     if (typeof onPromptState === 'function' && (obj.type === 'input_needed' || obj.type === 'input_resolved')) {
-      try { onPromptState(obj.type === 'input_needed' ? { ...obj, ...(tabId ? { tabId } : {}) } : null); } catch {}
+      try {
+        const kept = onPromptState(obj.type === 'input_needed' ? { ...obj, ...(tabId ? { tabId } : {}) } : null);
+        if (obj.type === 'input_needed' && obj.promptKey && kept && typeof kept === 'object' && !kept.promptKey) {
+          const { options, promptKey, ...rest } = obj;
+          obj = rest;
+        }
+      } catch {}
     }
+    wsSend(obj);
+    if (typeof fanout === 'function') { try { fanout({ ...obj, ...(tabId ? { tabId } : {}) }); } catch {} }
   };
 
   let fullText = '', fullThinking = '';
@@ -875,6 +1004,8 @@ async function runInteractiveSingle(params) {
     let lastActivityAt = start;       // idle watchdog cursor — bumped on transcript progress (new bytes)
     let injectFails = 0;              // consecutive failed clarification pastes — see INJECT_MAX_FAILS
     let awaitPolls = 0;               // consecutive polls showing a blocking prompt
+    let announcedKey = null;          // promptOptions().key of the prompt last announced
+    let shapeKey = null, shapePolls = 0;
     let busyReason = null;            // which paneBusy signal fired last poll — named in the idle-timeout error (#130)
 
     while (true) {
@@ -983,11 +1114,24 @@ async function runInteractiveSingle(params) {
       // able to clear itself when the prompt is answered.
       const awaiting = !busy && !gotNewBytes && paneAwaitingInput(pane, promptOpts);
       awaitPolls = awaiting ? awaitPolls + 1 : 0;
-      if (awaiting && !awaitAnnounced && awaitPolls >= AWAIT_CONFIRM_POLLS) {
+      // A prompt that turns into ANOTHER prompt without ever leaving the screen — a
+      // multi-question AskUserQuestion goes question 1 → question 2 → "Submit answers"
+      // in place (measured, 2.1.311) — is announced again, so the banner and its
+      // buttons follow the question actually on screen. Same confirmation rule as the
+      // first announcement: the new shape must hold for AWAIT_CONFIRM_POLLS.
+      const shape = awaiting ? promptOptions(pane, promptOpts) : null;
+      const key = shape ? shape.key : null;
+      shapePolls = awaiting && key === shapeKey ? shapePolls + 1 : (awaiting ? 1 : 0);
+      shapeKey = key;
+      if (awaiting && awaitPolls >= AWAIT_CONFIRM_POLLS
+          && (!awaitAnnounced || (key !== announcedKey && shapePolls >= AWAIT_CONFIRM_POLLS))) {
         awaitAnnounced = true;
-        wsSendAll({ type: 'input_needed', sessionId, engine: 'subscription', prompt: promptExcerpt(pane) });
+        announcedKey = key;
+        wsSendAll({ type: 'input_needed', sessionId, engine: 'subscription', prompt: promptExcerpt(pane),
+          ...(shape ? { options: shape.options, promptKey: shape.key } : {}) });
       } else if (awaitAnnounced && !awaiting) {
         awaitAnnounced = false;
+        announcedKey = null;
         wsSendAll({ type: 'input_resolved', sessionId });
       }
 
@@ -1141,6 +1285,10 @@ async function runInteractiveSingle(params) {
   } finally {
     // The turn is over whichever way it ended; the banner must not outlive it.
     if (awaitAnnounced) { awaitAnnounced = false; wsSendAll({ type: 'input_resolved', sessionId }); }
+    // ...and the caller hears that it is OVER, not just that a prompt closed: the
+    // engine also sends input_resolved for a transient blip mid-turn, so only this
+    // edge may forget which questions were already answered from a button (#131).
+    if (typeof onPromptState === 'function') { try { onPromptState(null, { turnEnded: true }); } catch {} }
     // The idle clock starts when the turn ENDS, not when the pane was spawned — a
     // long first turn must never count as idle time. Skipped if the pane died.
     if (tmuxHasSession(name)) setTmuxEnv(name, 'CCS_LAST_TURN', String(Date.now()));
@@ -1235,4 +1383,4 @@ function catchUpFromTranscript({ cid, startOffset = 0 } = {}) {
   return out;
 }
 
-module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, paneAwaitingSelection, paneBusy, paneBusyReason, promptExcerpt, buildInteractiveCommand, tmuxLaunchCommand, ENGINE_IDLE_KILL_MS, listEngineSessions, engineSessionClients, engineSessionId, touchEngineSession, reapIdleEngineSessions, startEngineIdleReaper };
+module.exports = { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName, listOrphanedDefaultSocketSessions, paneAwaitingInput, paneAwaitingSelection, promptOptions, answerPrompt, paneBusy, paneBusyReason, promptExcerpt, buildInteractiveCommand, tmuxLaunchCommand, ENGINE_IDLE_KILL_MS, listEngineSessions, engineSessionClients, engineSessionId, touchEngineSession, reapIdleEngineSessions, startEngineIdleReaper };

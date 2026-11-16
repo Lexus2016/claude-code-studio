@@ -132,9 +132,12 @@ const botsLogic = require('./bots');
 // instruction at all. One line stands in for "you were addressed with nothing else
 // to go on".
 const BARE_MENTION_PROMPT = "You were addressed directly with no other text — greet them and ask what they need, or continue naturally if there is relevant prior context in this conversation.";
-const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName: interactiveTmuxName, listOrphanedDefaultSocketSessions, startEngineIdleReaper } = require('./claude-interactive');
+const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName: interactiveTmuxName, listOrphanedDefaultSocketSessions, startEngineIdleReaper, answerPrompt: answerEnginePrompt } = require('./claude-interactive');
 // The prompt a subscription turn is blocked on, kept so a RELOADED page can be told (#130).
 const enginePrompts = require('./engine-prompts').createEnginePromptStore();
+// Sessions with an answer (#131) on its way into the pane: one at a time per pane, so a
+// double tap cannot send two digits before the first one has been seen to land.
+const _promptAnswering = new Set();
 const WM = require('./worktree-manager');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
@@ -2135,7 +2138,7 @@ async function startTask(task) {
           // The same --name the api branch below passes: the engine launches the pane
           // with it and recognises it as the input box's label (claude-interactive.js).
           name: taskBot?.label || task.title,
-          onPromptState: (f) => enginePrompts.track(sessionId, f),
+          onPromptState: (f, m) => enginePrompts.track(sessionId, f, m),
           // Same gap the chat path had, and found while reviewing that fix: the api
           // engine below delivers clarifications through the check-interrupt hook, but
           // the subscription engine has no hooks. Without these three callbacks a
@@ -10353,7 +10356,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
       // (mirrors the WS chat handler's subscription branch).
       const r = await runInteractiveSingle({
         ...params,
-        onPromptState: (f) => enginePrompts.track(params.sessionId, f),
+        onPromptState: (f, m) => enginePrompts.track(params.sessionId, f, m),
         // Matches the web WS handler's subscription branch: without a drain function,
         // a clarification typed into a busy Telegram chat on this engine sat in
         // pendingInterrupts and was NEVER delivered — this engine has no hook to pull
@@ -12283,7 +12286,7 @@ wss.on('connection', (ws) => {
           // waits for someone to answer a permission prompt. Only the blocked/unblocked
           // frames are fanned out; `ws` is excluded because it is served above.
           fanout: (obj) => { try { broadcastToSessionExcept(localSessionId, ws, obj); } catch {} },
-          onPromptState: (f) => enginePrompts.track(localSessionId, f),
+          onPromptState: (f, m) => enginePrompts.track(localSessionId, f, m),
           // Draining no longer implies delivery: the engine still has to type the text
           // into the tmux pane, and that can fail. It reports back through the two
           // callbacks below, so a paste that never landed is re-queued instead of
@@ -12952,6 +12955,37 @@ wss.on('connection', (ws) => {
       // (used when client auto-creates a tab and sends first message)
       // Nothing to do here since processChat now uses per-message sessionId
       // Just clear legacy state if no tabId involved
+    }
+
+    // An answer button on the "Claude is waiting" banner (GitHub #131, proposal 8).
+    // What may reach the pane is decided here and in answerPrompt, never by the frame:
+    //   - the session must have an OPEN prompt (enginePrompts) on a LIVE turn, and the
+    //     browser's promptKey must be that prompt's — a button from a withdrawn or
+    //     superseded question is refused before tmux is touched;
+    //   - answerPrompt re-captures the pane and re-parses it, and types one digit it
+    //     computed itself only if the widget on screen is still that question.
+    // Not behind the public-tunnel rule the terminal socket has: that rule stops a
+    // browser getting a SHELL. This sends one digit to a widget the chat's own agent
+    // drew, which this authenticated socket could already steer with a chat message.
+    if (msg.type === 'engine_prompt_answer') {
+      const sid = typeof msg.sessionId === 'string' ? msg.sessionId : '';
+      const reply = (o) => { try { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'engine_prompt_answer_result', sessionId: sid, tabId: sid, ...o })); } catch {} };
+      const open = sid ? enginePrompts.current(sid, isSessionLive(sid)) : null;
+      if (!open || !open.promptKey || open.promptKey !== msg.promptKey) return reply({ ok: false, error: 'stale', promptKey: typeof msg.promptKey === 'string' ? msg.promptKey : null });
+      if (_promptAnswering.has(sid)) return reply({ ok: false, error: 'busy', promptKey: open.promptKey });
+      _promptAnswering.add(sid);
+      try {
+        const key = open.promptKey;
+        // The moment a digit went in, this question is spent: every window watching the
+        // chat drops its buttons for it — not only this one — and a reload replays none.
+        const onSent = () => { if (enginePrompts.consume(sid, key)) broadcastToSession(sid, { type: 'engine_prompt_consumed', sessionId: sid, tabId: sid, promptKey: key }); };
+        const r = await answerEnginePrompt(sid, { key, choice: msg.choice, onSent });
+        log.info('engine prompt answered', { sessionId: sid, choice: Number(msg.choice), ok: r.ok, error: r.error, advanced: r.advanced });
+        reply({ ...r, promptKey: key });
+      } catch (e) {
+        reply({ ok: false, error: 'send_failed', promptKey: open.promptKey });
+      } finally { _promptAnswering.delete(sid); }
+      return;
     }
 
     if (msg.type === 'subscribe_session') {

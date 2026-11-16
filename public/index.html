@@ -1177,6 +1177,11 @@ button:focus-visible, a:focus-visible { border-radius: 5px; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
   white-space: pre; color: var(--fg,#e6edf3); }
 .needinput-card .ni-btns { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
+.needinput-card .ni-opts { display: flex; flex-direction: column; gap: 6px; margin-top: 9px; }
+.needinput-card .ni-opts:empty { display: none; }
+.needinput-card button.ni-opt { text-align: left; font-size: 13px; padding: 8px 12px; min-height: 40px; }
+.needinput-card button.ni-opt:disabled { opacity: .55; cursor: default; }
+.needinput-card button.ni-opt.ni-picked { opacity: 1; border-color: var(--warn,#f59e0b); }
 .needinput-card button { font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer;
   border: 1px solid rgba(124,106,239,.35); background: transparent; color: var(--accent2); }
 .needinput-card button.ni-dismiss { border-color: var(--border); color: var(--muted); }
@@ -5216,7 +5221,7 @@ const TRANSLATIONS = {
     'btn.close':'Закрити','bot.modal.label.ph':'Крипто-аналітик','bot.modal.desc.ph':'аналіз ринку криптовалют','bot.modal.prompt.ph':'Ти аналітик крипторинку...',
     'term.off.config':'Термінальні агенти вимкнені. Увімкніть їх у Конфігу: terminal.enabled = true — це навмисно вимкнено, бо термінал у браузері виконує команди на цій машині.','term.off.tmux':'На цьому хості немає tmux. Встановіть його (macOS: brew install tmux, Linux: apt install tmux), і термінальні агенти зʼявляться.','term.off.tunnel':'Активний публічний тунель — доступ до термінала заблоковано, поки він увімкнений.',
     'term.pane.btn':'Жива панель','term.pane.tab':'Жива панель','term.pane.title':'Відкрити живу панель Claude TUI цього чату — можна відповісти на інтерактивний запит просто в терміналі, не перериваючи хід.','term.pane.apihint':'Лише для рушія Subscription: рушій API запускає claude -p із закритим stdin, тож жодного PTY, до якого можна під’єднатися, не існує.','term.pane.none':'Для цього чату немає живої панелі. Вона зʼявляється, коли чат працює на рушії Subscription і вже виконав принаймні один хід.','term.state.enginePane':'жива панель рушія','term.state.noPane':'панелі немає',
-    'term.needinput.title':'Claude чекає на вашу відповідь','term.needinput.body':'Хід зупинився на інтерактивному запиті. Відповідайте просто в живій панелі — після цього хід продовжиться сам.','term.needinput.startup':'Сесія стартувала одразу в діалозі. Закрийте його в живій панелі, інакше ваше повідомлення потрапить у діалог, а не в поле вводу.','term.needinput.open':'Відповісти в живій панелі','term.needinput.dismiss':'Сховати','term.needinput.notif':'Потрібна ваша відповідь',
+    'term.needinput.title':'Claude чекає на вашу відповідь','term.needinput.stale':'Питання в панелі вже інше — відповідь не надіслано. Відкрийте панель.','term.needinput.failed':'Не вдалося передати відповідь у панель. Відкрийте панель.','term.needinput.finish':'Цей варіант потребує вводу — завершіть його в живій панелі.','term.needinput.offline':'Немає з’єднання з сервером.','term.needinput.body':'Хід зупинився на інтерактивному запиті. Відповідайте просто в живій панелі — після цього хід продовжиться сам.','term.needinput.startup':'Сесія стартувала одразу в діалозі. Закрийте його в живій панелі, інакше ваше повідомлення потрапить у діалог, а не в поле вводу.','term.needinput.open':'Відповісти в живій панелі','term.needinput.dismiss':'Сховати','term.needinput.notif':'Потрібна ваша відповідь',
     'newtab.title':'Що відкрити?','newtab.chat':'Чат','newtab.chat.desc':'Звичайна розмова. Ботів кличте через @@','newtab.term':'Термінальний агент','newtab.term.desc':'Живий термінал CLI-агента у вкладці. Оберіть, кого запустити:','newtab.or':'або','term.tab':'термінал',
     'stream.gap':'Частину подій не показано — зʼєднання переривалось. Текст відповіді повний.',
     'agent.cap.delegate':'делегування','agent.cap.terminal':'термінал',
@@ -5674,7 +5679,7 @@ const TRANSLATIONS = {
     'btn.close':'Close','bot.modal.label.ph':'Crypto Analyst','bot.modal.desc.ph':'crypto market analysis','bot.modal.prompt.ph':'You are a crypto market analyst...',
     'term.off.config':'Terminal agents are off. Turn them on in Config: terminal.enabled = true — it ships off on purpose, because a browser terminal runs commands on this machine.','term.off.tmux':'tmux is not installed on this host. Install it (macOS: brew install tmux, Linux: apt install tmux) and terminal agents appear.','term.off.tunnel':'A public tunnel is active — terminal access is blocked while it is running.',
     'term.pane.btn':'Live pane','term.pane.tab':'Live pane','term.pane.title':'Open this chat’s live Claude TUI — answer an interactive prompt right in the terminal, without killing the turn.','term.pane.apihint':'Subscription engine only: the API engine runs claude -p with stdin closed, so there is no PTY to attach to.','term.pane.none':'No live pane for this chat. One exists once the chat runs on the Subscription engine and has taken at least one turn.','term.state.enginePane':'engine pane','term.state.noPane':'no pane',
-    'term.needinput.title':'Claude is waiting for your answer','term.needinput.body':'The turn is paused on an interactive prompt. Answer it in the live pane and the turn carries on from there.','term.needinput.startup':'The session started straight into a dialog. Clear it in the live pane, or your message gets typed into the dialog instead of the prompt box.','term.needinput.open':'Answer in the live pane','term.needinput.dismiss':'Dismiss','term.needinput.notif':'Your answer is needed',
+    'term.needinput.title':'Claude is waiting for your answer','term.needinput.stale':'The question in the pane has changed — nothing was sent. Open the pane.','term.needinput.failed':'Could not send the answer to the pane. Open the pane.','term.needinput.finish':'This option needs input — finish it in the live pane.','term.needinput.offline':'Not connected to the server.','term.needinput.body':'The turn is paused on an interactive prompt. Answer it in the live pane and the turn carries on from there.','term.needinput.startup':'The session started straight into a dialog. Clear it in the live pane, or your message gets typed into the dialog instead of the prompt box.','term.needinput.open':'Answer in the live pane','term.needinput.dismiss':'Dismiss','term.needinput.notif':'Your answer is needed',
     'newtab.title':'What would you like to open?','newtab.chat':'Chat','newtab.chat.desc':'An ordinary conversation. Call bots with @@','newtab.term':'Terminal agent','newtab.term.desc':"A CLI agent's live terminal in a tab. Pick which one:",'newtab.or':'or','term.tab':'terminal',
     'stream.gap':'Some live activity was not shown — the connection dropped. The answer itself is complete.',
     'agent.cap.delegate':'delegation','agent.cap.terminal':'terminal',
@@ -6132,7 +6137,7 @@ const TRANSLATIONS = {
     'btn.close':'Закрыть','bot.modal.label.ph':'Крипто-аналитик','bot.modal.desc.ph':'анализ рынка криптовалют','bot.modal.prompt.ph':'Ты аналитик крипторынка...',
     'term.off.config':'Терминальные агенты выключены. Включите их в Конфиге: terminal.enabled = true — они выключены намеренно, потому что терминал в браузере выполняет команды на этой машине.','term.off.tmux':'На этом хосте нет tmux. Установите его (macOS: brew install tmux, Linux: apt install tmux), и терминальные агенты появятся.','term.off.tunnel':'Активен публичный туннель — доступ к терминалу заблокирован, пока он включён.',
     'term.pane.btn':'Живая панель','term.pane.tab':'Живая панель','term.pane.title':'Открыть живой Claude TUI этого чата — ответить на интерактивный запрос прямо в терминале, не прерывая ход.','term.pane.apihint':'Только для движка Subscription: движок API запускает claude -p с закрытым stdin, поэтому подключаться не к чему — PTY нет.','term.pane.none':'Для этого чата нет живой панели. Она появляется, когда чат работает на движке Subscription и уже выполнил хотя бы один ход.','term.state.enginePane':'панель движка','term.state.noPane':'панели нет',
-    'term.needinput.title':'Claude ждёт вашего ответа','term.needinput.body':'Ход остановился на интерактивном запросе. Ответьте прямо в живой панели — после этого ход продолжится сам.','term.needinput.startup':'Сессия стартовала сразу в диалоге. Закройте его в живой панели, иначе ваше сообщение уйдёт в диалог, а не в поле ввода.','term.needinput.open':'Ответить в живой панели','term.needinput.dismiss':'Скрыть','term.needinput.notif':'Нужен ваш ответ',
+    'term.needinput.title':'Claude ждёт вашего ответа','term.needinput.stale':'Вопрос в панели уже другой — ответ не отправлен. Откройте панель.','term.needinput.failed':'Не удалось передать ответ в панель. Откройте панель.','term.needinput.finish':'Этот вариант требует ввода — завершите его в живой панели.','term.needinput.offline':'Нет соединения с сервером.','term.needinput.body':'Ход остановился на интерактивном запросе. Ответьте прямо в живой панели — после этого ход продолжится сам.','term.needinput.startup':'Сессия стартовала сразу в диалоге. Закройте его в живой панели, иначе ваше сообщение уйдёт в диалог, а не в поле ввода.','term.needinput.open':'Ответить в живой панели','term.needinput.dismiss':'Скрыть','term.needinput.notif':'Нужен ваш ответ',
     'newtab.title':'Что открыть?','newtab.chat':'Чат','newtab.chat.desc':'Обычный разговор. Ботов зовите через @@','newtab.term':'Терминальный агент','newtab.term.desc':'Живой терминал CLI-агента во вкладке. Выберите, кого запустить:','newtab.or':'или','term.tab':'терминал',
     'stream.gap':'Часть событий не показана — соединение прерывалось. Текст ответа полный.',
     'agent.cap.delegate':'делегирование','agent.cap.terminal':'терминал',
@@ -6590,7 +6595,7 @@ const TRANSLATIONS = {
     "btn.close":"Fermer","bot.modal.label.ph":"Analyste crypto","bot.modal.desc.ph":"analyse du marché des cryptomonnaies","bot.modal.prompt.ph":"Tu es analyste du marché crypto...",
     "term.off.config":"Les agents terminal sont désactivés. Activez-les dans la Config : terminal.enabled = true — c'est désactivé volontairement, car un terminal dans le navigateur exécute des commandes sur cette machine.","term.off.tmux":"tmux n'est pas installé sur cet hôte. Installez-le (macOS : brew install tmux, Linux : apt install tmux) et les agents terminal apparaîtront.","term.off.tunnel":"Un tunnel public est actif — l'accès au terminal est bloqué tant qu'il fonctionne.",
     "term.pane.btn":"Vue live","term.pane.tab":"Vue live","term.pane.title":"Ouvrir le TUI Claude en direct de ce chat — répondez à une invite interactive dans le terminal, sans interrompre le tour.","term.pane.apihint":"Moteur Subscription uniquement : le moteur API lance claude -p avec stdin fermé, il n’existe donc aucun PTY auquel se rattacher.","term.pane.none":"Aucune vue live pour ce chat. Elle apparaît dès que le chat tourne sur le moteur Subscription et a effectué au moins un tour.","term.state.enginePane":"vue du moteur","term.state.noPane":"aucune vue",
-    "term.needinput.title":"Claude attend votre réponse","term.needinput.body":"Le tour est en pause sur une invite interactive. Répondez-y dans la vue live et il reprend aussitôt.","term.needinput.startup":"La session a démarré directement sur une boîte de dialogue. Fermez-la dans la vue live, sinon votre message sera saisi dans le dialogue au lieu du champ de saisie.","term.needinput.open":"Répondre dans la vue live","term.needinput.dismiss":"Masquer","term.needinput.notif":"Votre réponse est attendue",
+    "term.needinput.title":"Claude attend votre réponse","term.needinput.stale":"La question a changé dans la vue live — rien n’a été envoyé. Ouvrez la vue.","term.needinput.failed":"Impossible d’envoyer la réponse à la vue live. Ouvrez la vue.","term.needinput.finish":"Cette option demande une saisie — terminez-la dans la vue live.","term.needinput.offline":"Pas de connexion au serveur.","term.needinput.body":"Le tour est en pause sur une invite interactive. Répondez-y dans la vue live et il reprend aussitôt.","term.needinput.startup":"La session a démarré directement sur une boîte de dialogue. Fermez-la dans la vue live, sinon votre message sera saisi dans le dialogue au lieu du champ de saisie.","term.needinput.open":"Répondre dans la vue live","term.needinput.dismiss":"Masquer","term.needinput.notif":"Votre réponse est attendue",
     "newtab.title":"Que voulez-vous ouvrir ?","newtab.chat":"Chat","newtab.chat.desc":"Une conversation ordinaire. Appelez les bots avec @@","newtab.term":"Agent terminal","newtab.term.desc":"Le terminal vivant d'un agent CLI dans un onglet. Choisissez :","newtab.or":"ou","term.tab":"terminal",
     "stream.gap":"Une partie de l'activité n'a pas été affichée — la connexion a été interrompue. La réponse elle-même est complète.",
     "agent.cap.delegate":"délégation","agent.cap.terminal":"terminal",
@@ -6949,7 +6954,7 @@ const TRANSLATIONS = {
     "btn.close":"סגור","bot.modal.label.ph":"אנליסט קריפטו","bot.modal.desc.ph":"ניתוח שוק הקריפטו","bot.modal.prompt.ph":"אתה אנליסט שוק הקריפטו...",
     "term.off.config":"סוכני הטרמינל כבויים. הפעילו אותם בהגדרות: terminal.enabled = true — הם כבויים בכוונה, מפני שטרמינל בדפדפן מריץ פקודות על המחשב הזה.","term.off.tmux":"tmux אינו מותקן על מארח זה. התקינו אותו (macOS: brew install tmux, Linux: apt install tmux) וסוכני הטרמינל יופיעו.","term.off.tunnel":"מנהרה ציבורית פעילה — הגישה לטרמינל חסומה כל עוד היא פועלת.",
     "term.pane.btn":"חלונית חיה","term.pane.tab":"חלונית חיה","term.pane.title":"פתיחת ה‑TUI החי של Claude בצ׳אט הזה — אפשר לענות על שאלה אינטראקטיבית ישירות בטרמינל, בלי לעצור את התור.","term.pane.apihint":"רק במנוע Subscription: מנוע ה‑API מריץ claude ‎-p‎ כאשר stdin סגור, ולכן אין PTY להתחבר אליו.","term.pane.none":"אין חלונית חיה לצ׳אט הזה. היא נוצרת כשהצ׳אט רץ על מנוע Subscription ולאחר שביצע לפחות תור אחד.","term.state.enginePane":"חלונית המנוע","term.state.noPane":"אין חלונית",
-    "term.needinput.title":"Claude ממתין לתשובה שלכם","term.needinput.body":"התור עצר על שאלה אינטראקטיבית. ענו עליה בחלונית החיה והתור ימשיך משם.","term.needinput.startup":"הסשן עלה ישר לתוך תיבת דו־שיח. סגרו אותה בחלונית החיה, אחרת ההודעה שלכם תיכתב לתוך הדו־שיח במקום לשדה הקלט.","term.needinput.open":"לענות בחלונית החיה","term.needinput.dismiss":"הסתרה","term.needinput.notif":"נדרשת תשובה שלכם",
+    "term.needinput.title":"Claude ממתין לתשובה שלכם","term.needinput.stale":"השאלה בחלונית השתנתה — לא נשלח דבר. פתחו את החלונית.","term.needinput.failed":"לא ניתן היה לשלוח את התשובה לחלונית. פתחו את החלונית.","term.needinput.finish":"אפשרות זו דורשת קלט — השלימו אותה בחלונית החיה.","term.needinput.offline":"אין חיבור לשרת.","term.needinput.body":"התור עצר על שאלה אינטראקטיבית. ענו עליה בחלונית החיה והתור ימשיך משם.","term.needinput.startup":"הסשן עלה ישר לתוך תיבת דו־שיח. סגרו אותה בחלונית החיה, אחרת ההודעה שלכם תיכתב לתוך הדו־שיח במקום לשדה הקלט.","term.needinput.open":"לענות בחלונית החיה","term.needinput.dismiss":"הסתרה","term.needinput.notif":"נדרשת תשובה שלכם",
     "newtab.title":"מה לפתוח?","newtab.chat":"צ׳אט","newtab.chat.desc":"שיחה רגילה. קראו לבוטים עם @@","newtab.term":"סוכן טרמינל","newtab.term.desc":"טרמינל חי של סוכן CLI בלשונית. בחרו את מי:","newtab.or":"או","term.tab":"טרמינל",
     "stream.gap":"חלק מהפעילות לא הוצג — החיבור נותק. התשובה עצמה מלאה.",
     "agent.cap.delegate":"האצלה","agent.cap.terminal":"טרמינל",
@@ -8806,6 +8811,12 @@ function handleWsMsg(d) {
       _paintPaneWanted();
       break;
     }
+    case 'engine_prompt_answer_result':
+      if (isVisible) onEnginePromptAnswerResult(d);
+      break;
+    case 'engine_prompt_consumed':
+      onEnginePromptConsumed(d, getTS(tabId), isVisible);
+      break;
     case 'input_resolved': {
       const ts = getTS(tabId);
       ts._inputNeeded = null;
@@ -19512,15 +19523,81 @@ function renderInputNeededCard(d) {
     `<div class="ni-title">⏸ ${escH(t('term.needinput.title'))}</div>` +
     `<div class="ni-body">${escH(t(bodyKey))}</div>` +
     (d.prompt ? `<pre class="ni-pane">${escH(d.prompt)}</pre>` : '') +
+    `<div class="ni-opts"></div>` +
     `<div class="ni-btns"><button class="ni-open">▣ ${escH(t('term.needinput.open'))}</button>` +
     `<button class="ni-dismiss">${escH(t('term.needinput.dismiss'))}</button></div>`;
   card.querySelector('.ni-open').onclick = () => openEnginePane(sid);
+  if (d.promptKey) card.dataset.promptKey = d.promptKey;
+  renderInputNeededOptions(card, d, sid);
   // Dismiss hides the card only. The prompt itself is still open in the TUI, so the
   // tab keeps its state and the pulsing session-bar button stays — otherwise a
   // misclick would hide the only remaining sign that the turn is waiting.
   card.querySelector('.ni-dismiss').onclick = () => card.remove();
   msgsEl.appendChild(card);
   scrollBottom();
+}
+
+// Answer buttons (GitHub #131, proposal 8): the options the SERVER parsed off the pane,
+// one button each. A click sends the option NUMBER and the prompt's key, nothing else —
+// the server re-reads the pane and types the digit only if that question is still on
+// screen. Every button is disabled on the first click: one answer per question, and
+// the engine's next input_needed / input_resolved redraws or removes the card.
+function renderInputNeededOptions(card, d, sid) {
+  const box = card.querySelector('.ni-opts');
+  if (!box || !Array.isArray(d.options) || !d.promptKey || !d.options.length) return;
+  for (const o of d.options) {
+    const n = Number(o && o.n);
+    if (!Number.isInteger(n) || n < 1 || n > 9) continue;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ni-opt';
+    b.textContent = `${n}. ${String(o.label || '')}`;
+    b.onclick = () => {
+      if (!ws || ws.readyState !== 1) { toast(t('term.needinput.offline'), true); return; }
+      box.querySelectorAll('button').forEach(x => { x.disabled = true; });
+      b.classList.add('ni-picked');
+      ws.send(JSON.stringify({ type: 'engine_prompt_answer', sessionId: sid, tabId: sid, promptKey: d.promptKey, choice: n }));
+    };
+    box.appendChild(b);
+  }
+}
+
+// The server's verdict on an answer, applied only to the banner it was for: a reply
+// that arrives after the engine announced the NEXT question must not strip that
+// question's buttons. `stale`: the question on screen is no longer the one the buttons
+// were drawn for — drop them and leave "Open pane". Not `advanced`: the option opened a
+// text field or toggled a checkbox, which only the pane can finish.
+function _needInputCardFor(promptKey) {
+  const card = document.querySelector('.needinput-card:not(.interrupted-card)');
+  return card && promptKey && card.dataset && card.dataset.promptKey === promptKey ? card : null;
+}
+function onEnginePromptAnswerResult(d) {
+  const card = _needInputCardFor(d.promptKey);
+  if (!card) return;
+  const box = card.querySelector('.ni-opts');
+  if (!d.ok) {
+    if (box) box.remove();
+    toast(t(d.error === 'stale' ? 'term.needinput.stale' : 'term.needinput.failed'), true);
+    return;
+  }
+  if (d.advanced === false) {
+    if (box) box.remove();
+    toast(t('term.needinput.finish'), false, 5000);
+    openEnginePane(d.sessionId);
+  }
+}
+
+// Some window answered this question: no window may answer it again. Drops the
+// buttons on screen AND in the tab's stored frame, which is what a tab switch redraws.
+function onEnginePromptConsumed(d, ts, isVisible) {
+  if (ts && ts._inputNeeded && ts._inputNeeded.promptKey === d.promptKey) {
+    const { options, promptKey, ...rest } = ts._inputNeeded;
+    ts._inputNeeded = rest;
+  }
+  if (!isVisible) return;
+  const card = _needInputCardFor(d.promptKey);
+  const box = card && card.querySelector('.ni-opts');
+  if (box) box.remove();
 }
 
 // An unfinished turn is OFFERED back, never re-run silently: opening a chat must not replay
