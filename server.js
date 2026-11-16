@@ -2955,6 +2955,9 @@ setTimeout(() => {
     console.log(`[startup] recovered task "${task.title}" (${task.id}): in_progress → ${newStatus || 're-armed'}`);
   }
   processQueue();
+  // Unconditional and on console (not `log`, which LOG_LEVEL filters): tests that seed
+  // in_progress rows wait for this line, or this pass re-arms them mid-assertion.
+  console.log('[startup] in_progress recovery complete');
 }, 3000);
 
 // Watchdog: detect tasks stuck in 'in_progress' with no live worker process.

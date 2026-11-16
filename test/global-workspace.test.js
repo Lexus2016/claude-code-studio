@@ -137,6 +137,13 @@ const titles = rows => (rows || []).map(r => r.title).sort();
     await api('POST', '/api/projects', { name: 'Gamma', workdir: wdC });   // no tasks at all
     check('three projects registered', [typeof A, typeof B], ['string', 'string']);
 
+    // server.js re-arms every in_progress task with no live worker ~3 s after boot.
+    // A fixture created before that pass is flipped to todo under the assertions, so
+    // wait for the line the pass prints when it is done — not a fixed sleep.
+    const recovered = await waitFor(() => srvLog.includes('[startup] in_progress recovery complete'),
+      { timeoutMs: 30000, intervalMs: 100 });
+    if (!recovered) { console.error('startup recovery never finished:\n' + srvLog); stop(); process.exit(1); }
+
     const now = Math.floor(Date.now() / 1000);
     const mk = (t) => api('POST', '/api/tasks', t);
     // Scheduled fixtures are created as in_progress / far-future todo on purpose:
