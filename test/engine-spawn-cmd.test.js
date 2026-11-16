@@ -83,9 +83,12 @@ const haveTmux = (() => { const r = spawnSync('tmux', ['-V'], { encoding: 'utf8'
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-96-'));
     const dump = path.join(dir, 'argv.bin');
     // Fake `claude`: records its argv NUL-separated, then holds the pane open so the
-    // session is still there to assert on.
+    // session is still there to assert on. The argv is written to a temp file and
+    // renamed into place: `> dump` creates the file before the first byte lands, and
+    // the poll below reads as soon as the file EXISTS — under load that read a
+    // truncated 40 KB argument. A rename makes the dump appear only when complete.
     const fakeClaude = path.join(dir, 'claude');
-    fs.writeFileSync(fakeClaude, '#!/bin/sh\nfor a in "$@"; do printf \'%s\\0\' "$a"; done > "' + dump + '"\nsleep 30\n', { mode: 0o755 });
+    fs.writeFileSync(fakeClaude, '#!/bin/sh\nfor a in "$@"; do printf \'%s\\0\' "$a"; done > "' + dump + '.tmp" && mv "' + dump + '.tmp" "' + dump + '"\nsleep 30\n', { mode: 0o755 });
 
     const realInner = buildInteractiveCommand({
       claudeBin: fakeClaude, idFlag: "--session-id 'e2e'", modelAlias: 'sonnet', sp: BIG_PROMPT, mcpPath: null,
