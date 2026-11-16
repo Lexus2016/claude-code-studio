@@ -47,7 +47,9 @@ t('injection block runs before the completion break', () => {
 t('injection gate calls paneAwaitingInput directly', () => {
   const gate = CI.split('\n').find(l => l.includes('injectFails < INJECT_MAX_FAILS'));
   assert.ok(gate, 'injection gate line not found');
-  assert.ok(gate.includes('!paneAwaitingInput(pane)'), 'gate must re-check the pane itself');
+  // promptOpts carries the pane's launch label: without it a numbered draft in a named
+  // chat's input box reads as a widget and the clarification is never typed in.
+  assert.ok(gate.includes('!paneAwaitingInput(pane, promptOpts)'), 'gate must re-check the pane itself, with its box label');
   assert.ok(!/[^a-zA-Z]awaiting[^A-Za-z]/.test(gate.replace('paneAwaitingInput', '')),
     'gate must not depend on the precomputed `awaiting` variable');
 });

@@ -29,7 +29,7 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 
-const { findClaudeBin } = require('./claude-cli');
+const { findClaudeBin, cleanSessionName } = require('./claude-cli');
 const { agentsMdPreamble } = require('./agents-md');
 const { seedClaudeFirstRun, SKIP_BYPASS_WARNING_SETTINGS } = require('./claude-firstrun');
 // ONE definition of the socket name, imported — never a second copy of the string.
@@ -261,23 +261,30 @@ function _conversationAboveInputBox(pane) {
 //     a hook or an MCP server writing to the pane). Cost is the previous behaviour:
 //     the turn ends on the idle watchdog. The live pane is still reachable by hand.
 // Both are why the caller ALSO requires the spinner to be stopped before believing it.
+//
+// `opts.boxLabel` is the name the engine launched `claude --name` with (see
+// _inInputBox). Omitted, the input box is recognised only by an unlabeled top rule.
 const AWAIT_TAIL_LINES = 24;
 const CARET_RE = /^([❯➤►▶›»>])?\s*(\d{1,2})[.)]\s+\S/;
-function paneAwaitingInput(pane) {
+function paneAwaitingInput(pane, opts = {}) {
   if (typeof pane !== 'string' || !pane) return false;
   const lines = _paneLines(pane);
-  const from = Math.max(0, lines.length - AWAIT_TAIL_LINES);
-  let numbered = 0, caretAt = -1;
-  for (let i = from; i < lines.length; i++) {
+  const label = opts && opts.boxLabel;
+  // A numbered list the user TYPED into the input box ("1. fix the tests") is not a
+  // widget, however much it looks like one. Only the box's own lines are skipped, and
+  // BEFORE the tail window is counted: a widget above the box still counts, so a
+  // draft — however long — can never push a real prompt out of view.
+  let numbered = 0, caret = false;
+  for (let i = lines.length - 1, seen = 0; i >= 0 && seen < AWAIT_TAIL_LINES; i--) {
+    if (_inInputBox(lines, i, label)) continue;
+    seen++;
     const m = CARET_RE.exec(lines[i].trim());
     if (!m) continue;
     numbered++;
-    if (m[1]) caretAt = i;
+    if (m[1]) caret = true;
   }
-  // A numbered list the user TYPED into the input box ("1. fix the tests") is not a
-  // widget, however much it looks like one.
-  if (numbered >= 2 && caretAt >= 0 && !_inInputBox(lines, caretAt)) return true;
-  return paneAwaitingSelection(pane);
+  if (numbered >= 2 && caret) return true;
+  return paneAwaitingSelection(pane, opts);
 }
 
 // Non-blank lines, trailing space dropped, a leading box border turned into indent so
@@ -292,10 +299,27 @@ function _paneLines(pane) {
 // would hide it — but its first framed line is a header ("☐ Color"), never the caret.
 // Searched over the WHOLE capture, not the tail: a long draft pushes the box's top
 // rule out of any fixed window.
+//
+// A chat launched with `--name <label>` draws that label INTO the top rule
+// ("──…── ccs-c-probe ─", captured on CLI 2.1.311: test/fixtures/claude-tui/
+// named-draft.txt). RULE_RE stays unlabeled on purpose — widened, a dialog whose
+// labeled header rule sits right above its caret would read as the input box and the
+// prompt would be silenced. A labeled rule is a top rule ONLY when its label equals
+// the name the engine itself launched with (`label`): the chat's title, not TUI
+// wording. Residual, stated: a chat titled EXACTLY like a dialog's labeled header,
+// with that header directly above the dialog's caret, would read as the box — no
+// such dialog is known on 2.1.311. Unknown label → exactly the unlabeled rule.
 const RULE_RE = /^[\s─━═╌╍┄┅-]{10,}$/;
-function _inInputBox(lines, i) {
+const LABELED_RULE_RE = /^\s*[─━═╌╍┄┅-]{3,}\s+(.+?)\s+[─━═╌╍┄┅-]+$/;
+const _normLabel = (s) => String(s).normalize('NFC').replace(/\s+/g, ' ').trim();
+function _isLaunchLabelRule(line, label) {
+  if (!label) return false;
+  const m = LABELED_RULE_RE.exec(line);
+  return !!m && _normLabel(m[1]) === _normLabel(label);
+}
+function _inInputBox(lines, i, label) {
   let above = -1, below = -1;
-  for (let k = i; k >= 0; k--) if (RULE_RE.test(lines[k])) { above = k; break; }
+  for (let k = i; k >= 0; k--) if (RULE_RE.test(lines[k]) || _isLaunchLabelRule(lines[k], label)) { above = k; break; }
   for (let k = i + 1; k < lines.length; k++) if (RULE_RE.test(lines[k])) { below = k; break; }
   return above >= 0 && below >= 0 && /^\s?[❯➤►▶›»>](\s|$)/.test(lines[above + 1] || '');
 }
@@ -314,7 +338,11 @@ function _inInputBox(lines, i) {
 // adjacent line indented deeper than the caret. History cannot trip it: past prompts
 // render as "❯ text" too (measured), but the input box is below them while the pane is
 // usable, so they are never the last caret line.
-function paneAwaitingSelection(pane) {
+//
+// Unlike the numbered branch, this one does NOT skip the box and look further up: its
+// defence against history (past prompts render as "❯ text", tool output indented
+// under them reads as a sibling) is precisely that the box caret is the last caret.
+function paneAwaitingSelection(pane, opts = {}) {
   if (typeof pane !== 'string' || !pane) return false;
   const lines = _paneLines(pane);
   const from = Math.max(0, lines.length - AWAIT_TAIL_LINES);
@@ -323,7 +351,7 @@ function paneAwaitingSelection(pane) {
     const m = /^(\s*)[❯➤►▶›»]\s?/.exec(lines[i]);
     if (m) { at = i; col = m[1].length; break; }
   }
-  if (at < 0 || _inInputBox(lines, at)) return false;
+  if (at < 0 || _inInputBox(lines, at, opts && opts.boxLabel)) return false;
   if (!lines[at].slice(col + 1).trim()) return false;
   const indent = (l) => l.length - l.trimStart().length;
   const sibling = (l) => l !== undefined && !RULE_RE.test(l) && indent(l) > col;
@@ -407,7 +435,7 @@ function spawnScriptDir() {
 // the pane inherits the TMUX SERVER's environment, which survives a studio restart, so
 // a studio relaunched with a different CLAUDE_CONFIG_DIR would otherwise seed one config
 // and start `claude` on another.
-function buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath, configEnv = null }) {
+function buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath, configEnv = null, name = '' }) {
   let pin = '';
   if (configEnv) {
     if (!configEnv.CLAUDE_CONFIG_DIR) pin += ' -u CLAUDE_CONFIG_DIR';
@@ -417,6 +445,12 @@ function buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath, c
   // --settings answers the Bypass Permissions warning the TUI shows for the flag
   // before it — the same consent `claude -p` never asks for (claude-firstrun.js).
   let cmd = `env -u CLAUDECODE${pin} ${shq(claudeBin)} ${idFlag} --model ${shq(modelAlias)} --dangerously-skip-permissions --settings ${shq(SKIP_BYPASS_WARNING_SETTINGS)}`;
+  // --name: the same label the api engine passes (claude-cli.js). The TUI draws it into
+  // the input box's top rule, and that is how the widget detectors tell the box from a
+  // dialog (_inInputBox) — so the pane is launched with a label the studio KNOWS. On
+  // --resume it also replaces whatever title an earlier run stored (measured, 2.1.311).
+  const label = cleanSessionName(name);
+  if (label) cmd += ` --name ${shq(label)}`;
   if (sp) cmd += ` --append-system-prompt ${shq(sp)}`;
   if (mcpPath) cmd += ` --mcp-config ${shq(mcpPath)}`;
   return cmd;
@@ -537,6 +571,7 @@ function reapIdleEngineSessions(opts = {}) {
     : (name) => parseInt(getTmuxEnv(name, 'CCS_LAST_TURN') || '', 10);
   const kill = typeof opts.kill === 'function' ? opts.kill : (id) => killInteractiveTmux(id);
   const touch = typeof opts.touch === 'function' ? opts.touch : (name) => touchEngineSession(name, now);
+  const boxLabelOf = typeof opts.boxLabelOf === 'function' ? opts.boxLabelOf : (name) => getTmuxEnv(name, 'CCS_NAME');
 
   const killed = [];
   for (const name of list() || []) {
@@ -554,7 +589,9 @@ function reapIdleEngineSessions(opts = {}) {
     // (grace expiry), but the pane must survive until the widget is answered — a
     // killed pane turns "waiting for you" into a lost conversation.
     const pane = paneOf(name);
-    if (paneBusy(pane, null) || paneAwaitingInput(pane) || paneAwaitingSelection(pane)) { touch(name); continue; }
+    if (paneBusy(pane, null)) { touch(name); continue; }
+    const promptOpts = { boxLabel: boxLabelOf(name) || null };
+    if (paneAwaitingInput(pane, promptOpts) || paneAwaitingSelection(pane, promptOpts)) { touch(name); continue; }
     const last = Number(lastTurnOf(name));
     // Unknown age: a pane from before this feature, or a studio restart that lost the
     // tmux environment. Start the clock now rather than kill a conversation of
@@ -596,6 +633,8 @@ function startEngineIdleReaper(opts = {}) {
 // Returns { cid, completed, resultMeta, fullText, fullThinking, toolEvents }.
 async function runInteractiveSingle(params) {
   const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent, drainInterrupts, markInterruptsDelivered, requeueInterrupts, fanout, onPromptState } = params;
+  // `name` would shadow the tmux session name below; it is the chat's --name label.
+  const launchName = cleanSessionName(params.name);
   const start = Date.now();
   const wsSend = (obj) => {
     try { ws.send(JSON.stringify({ ...obj, ...(tabId ? { tabId } : {}) })); } catch {}
@@ -676,7 +715,7 @@ async function runInteractiveSingle(params) {
       firstRunSeed = seedClaudeFirstRun({ workdir: workdir || process.cwd() });
 
       const claudeBin = findClaudeBin();
-      const innerCmd = buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath,
+      const innerCmd = buildInteractiveCommand({ claudeBin, idFlag, modelAlias, sp, mcpPath, name: launchName,
         configEnv: { HOME: process.env.HOME || os.homedir(), CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR ? path.resolve(process.env.CLAUDE_CONFIG_DIR) : '' } });
 
       const env = utf8Env();
@@ -705,6 +744,10 @@ async function runInteractiveSingle(params) {
       // session environment, so it survives a studio restart together with the pane.
       setTmuxEnv(name, 'CCS_SESSION', String(sessionId));
       setTmuxEnv(name, 'CCS_LAST_TURN', String(Date.now()));
+      // The --name this pane was launched with: the label its input box carries. Kept
+      // out of cfgHash, so renaming a chat does not respawn the pane — the pane keeps
+      // drawing its spawn-time label, and this records exactly that one.
+      if (launchName) setTmuxEnv(name, 'CCS_NAME', launchName);
 
       // Wait for the TUI to settle: two consecutive identical, non-empty captures
       let prev = null;
@@ -734,14 +777,18 @@ async function runInteractiveSingle(params) {
     // On timeout the turn ends with the screen in the error instead of pasting: a
     // false positive costs a delay and a resend, a true one no longer costs the
     // message AND the session.
-    if (SPAWN_PROMPT_WAIT_MS > 0 && paneAwaitingInput(capturePane(name))) {
+    // Read back from the pane, not from params: a REUSED pane shows the label it was
+    // spawned with, and one spawned by an older build has none (→ the unlabeled rule,
+    // exactly the pre-label behaviour).
+    const promptOpts = { boxLabel: getTmuxEnv(name, 'CCS_NAME') || null };
+    if (SPAWN_PROMPT_WAIT_MS > 0 && paneAwaitingInput(capturePane(name), promptOpts)) {
       awaitAnnounced = true;
       wsSendAll({ type: 'input_needed', sessionId, engine: 'subscription', phase: spawned ? 'startup' : 'resume', prompt: promptExcerpt(capturePane(name)) });
       const until = Date.now() + SPAWN_PROMPT_WAIT_MS;
       while (Date.now() < until) {
         await sleep(POLL_MS);
         if (abortController?.signal?.aborted) break;
-        if (!paneAwaitingInput(capturePane(name))) break;
+        if (!paneAwaitingInput(capturePane(name), promptOpts)) break;
       }
       awaitAnnounced = false;
       wsSendAll({ type: 'input_resolved', sessionId });
@@ -755,7 +802,7 @@ async function runInteractiveSingle(params) {
       // open on "No, exit", so the paste quit `claude` and the message was lost anyway.
       // Saying so, with the screen, is the only outcome that leaves anything to act on.
       const still = capturePane(name);
-      if (paneAwaitingInput(still)) {
+      if (paneAwaitingInput(still, promptOpts)) {
         const why = firstRunSeed && firstRunSeed.reason && firstRunSeed.reason !== 'disabled'
           ? ` (could not pre-answer the first-run screens in ${firstRunSeed.path}: ${firstRunSeed.reason})` : '';
         wsSend({ type: 'error', error: `Claude is waiting on a screen in its terminal pane, so your message was not sent${why}. Answer it in the engine pane, then send again:\n\n${promptExcerpt(still, 10)}` });
@@ -934,7 +981,7 @@ async function runInteractiveSingle(params) {
       // so the browser can offer the live pane instead of letting the turn die on a
       // timeout with no explanation. Both edges are reported — the banner has to be
       // able to clear itself when the prompt is answered.
-      const awaiting = !busy && !gotNewBytes && paneAwaitingInput(pane);
+      const awaiting = !busy && !gotNewBytes && paneAwaitingInput(pane, promptOpts);
       awaitPolls = awaiting ? awaitPolls + 1 : 0;
       if (awaiting && !awaitAnnounced && awaitPolls >= AWAIT_CONFIRM_POLLS) {
         awaitAnnounced = true;
@@ -966,7 +1013,7 @@ async function runInteractiveSingle(params) {
       // tick (see its definition), so a permission/plan widget that appears in the
       // same poll as trailing transcript bytes would otherwise pass this gate and get
       // hijacked by a pasted clarification.
-      if (pane && !busy && !paneAwaitingInput(pane) && injectFails < INJECT_MAX_FAILS && typeof drainInterrupts === 'function') {
+      if (pane && !busy && !paneAwaitingInput(pane, promptOpts) && injectFails < INJECT_MAX_FAILS && typeof drainInterrupts === 'function') {
         let pending = [];
         try { pending = drainInterrupts() || []; } catch {}
         // One paste + one Enter for the whole batch: busy/awaiting were sampled

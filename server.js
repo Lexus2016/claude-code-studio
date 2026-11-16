@@ -2132,6 +2132,9 @@ async function startTask(task) {
           prompt: currentTaskPrompt, systemPrompt: '', model: session?.model || task.model || 'sonnet',
           mode: task.mode || 'auto', ws: _proxy, sessionId, abortController: taskAbort,
           claudeSessionId: currentTaskCid, workdir: task.workdir || WORKDIR, mcpServers: taskMcpServers,
+          // The same --name the api branch below passes: the engine launches the pane
+          // with it and recognises it as the input box's label (claude-interactive.js).
+          name: taskBot?.label || task.title,
           onPromptState: (f) => enginePrompts.track(sessionId, f),
           // Same gap the chat path had, and found while reviewing that fix: the api
           // engine below delivers clarifications through the check-interrupt hook, but
