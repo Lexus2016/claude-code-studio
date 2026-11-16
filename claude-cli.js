@@ -216,10 +216,8 @@ class ClaudeCLI {
     // --name: display name visible in /resume picker, prompt box, and terminal title.
     // Pass the human-readable session title so power users mixing the Studio UI
     // with `claude --resume` in a terminal see meaningful labels instead of UUIDs.
-    if (typeof name === 'string') {
-      const cleanName = name.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 100);
-      if (cleanName) args.push('--name', cleanName);
-    }
+    const cleanName = cleanSessionName(name);
+    if (cleanName) args.push('--name', cleanName);
 
     // --fork-session: branch from an existing session (requires --resume)
     if (forkSession && sessionId) args.push('--fork-session');
@@ -659,6 +657,15 @@ class ClaudeCLI {
   }
 }
 
+// The value handed to `--name`. Shared with the subscription engine
+// (claude-interactive.js), which both launches with it and recognises it as the label
+// the TUI draws into the input box's top rule — two copies would drift apart, and a
+// drifted copy silently stops recognising the box.
+function cleanSessionName(name) {
+  return typeof name === 'string' ? name.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 100) : '';
+}
+
 module.exports = ClaudeCLI;
+module.exports.cleanSessionName = cleanSessionName;
 module.exports.findClaudeBin = findClaudeBin;
 module.exports.claudeCliStatus = claudeCliStatus;

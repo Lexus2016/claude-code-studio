@@ -162,6 +162,22 @@ watchdog stops declaring a blocked turn "done". The answer is typed through
 `/ws/terminal?session=<id>&view=engine`, which ATTACHES a viewer to the engine's own
 `ccs-<id>` pane — it never creates one, and ignores `resize`/`kill`.
 
+**A draft in a named chat is not a widget.** `claude --name X` draws X into the input
+box's top rule (`──── X ─`, captured in `test/fixtures/claude-tui/named-draft.txt`), and
+`--resume` without `--name` draws whatever title an earlier `-p --name` run stored —
+measured on 2.1.311, so studio panes were labeled before the engine passed a name. The
+unlabeled `RULE_RE` did not see that box, so a numbered draft (`❯ 1. fix tests`) read as
+a permission prompt: a false `input_needed`, a 5-minute grace, no clarification typed.
+The engine now LAUNCHES with the chat's `--name` (`cleanSessionName`, shared with
+`claude-cli.js`), records it as `CCS_NAME` in the tmux env, and every widget-detector
+call passes it back as `{ boxLabel }`. A labeled rule is a box top ONLY when its label
+equals that value — a name the studio chose, so no dialog header matches by accident;
+no recorded name (an older pane, an untitled chat) is exactly the unlabeled rule. Two
+more rules: the numbered detector skips only the box's OWN lines, so a draft never hides
+a widget above the box; the unnumbered one still stops at a box caret, because that is
+its only defence against history (tool output indented under a past `❯ prompt` reads as
+a sibling option). `pane-busy.test.js` pins the cases and every server.js engine door.
+
 **A false "busy" holds a finished turn open (#130).** Every exit of the poll loop except
 the idle watchdog requires `!paneBusy()`, so a pane that reads busy forever ends a turn
 the TUI finished long ago as a 10-minute timeout. When an input box is recognised

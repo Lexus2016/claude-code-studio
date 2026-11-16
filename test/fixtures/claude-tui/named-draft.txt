@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.311
+▝▜██████▀  Sonnet 5.5 · Claude Max
+ ▝▝   ▝▝   /srv/project
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  tmux focus-events off · add 'set -g focus-events on' to ~/.tmux.conf and reattach for focus tracking
+────────────────────────────────────────────────────────────────────────────────────────────────────────── ccs-c-probe ─
+❯ 1. fix tests
+  2. run lint
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  🤖 Sonnet 5.5 │ 📁 project │ ⏱ 1m
+  ⏵⏵ bypass permissions on (shift+tab to cycle)
