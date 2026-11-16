@@ -180,7 +180,8 @@ process.on('exit', cleanup);
     // NAME instead of hanging the suite until the engine's own idle watchdog.
     const ac = new AbortController();
     const guard = setTimeout(() => ac.abort(), 20000);
-    const r = await CI.runInteractiveSingle({ prompt: 'please do the thing', model: 'sonnet', mode: 'auto', ws, sessionId: engineSession, workdir: proj, abortController: ac });
+    const promptStates = [];
+    const r = await CI.runInteractiveSingle({ prompt: 'please do the thing', model: 'sonnet', mode: 'auto', ws, sessionId: engineSession, workdir: proj, abortController: ac, onPromptState: (f) => promptStates.push(f && f.type) });
     clearTimeout(guard);
     const cfgFile = path.join(HOME, '.claude.json');
     const seeded = fs.existsSync(cfgFile) ? JSON.parse(fs.readFileSync(cfgFile, 'utf8')) : { projects: {} };
@@ -190,6 +191,10 @@ process.on('exit', cleanup);
     const si = argv.indexOf('--settings');
     check('--settings reaches the child argv byte-identical', si >= 0 ? argv[si + 1] : null, FR.SKIP_BYPASS_WARNING_SETTINGS);
     check('the browser was told the turn is blocked', frames.some(f => f.type === 'input_needed' && f.phase === 'startup'), true);
+    // #130: the server remembers an open prompt through this callback so a reloaded page
+    // can be told. It must hear the opening edge AND the closing one the engine's finally
+    // sends, or a prompt from a dead turn would be replayed forever.
+    check('onPromptState heard the prompt open, then close', [promptStates[0], promptStates[promptStates.length - 1]], ['input_needed', null]);
     const err = frames.find(f => f.type === 'error');
     check('a screen still up after the wait is reported with the screen', !!err && /waiting on a screen/.test(err.error) && /Yes, I trust this folder/.test(err.error), true);
     check('the turn ends incomplete', r.completed, false);
