@@ -57,7 +57,7 @@ for (const at of calls) {
   // The options object of each call: up to its closing "});" at the call's indentation.
   const body = src.slice(at, src.indexOf('\n', src.indexOf('});', at)));
   const line = src.slice(0, at).split('\n').length;
-  check(`server.js:${line} feeds the prompt store`, /onPromptState:\s*\(f\)\s*=>\s*enginePrompts\.track\(/.test(body), true);
+  check(`server.js:${line} feeds the prompt store`, /onPromptState:\s*\(f, m\)\s*=>\s*enginePrompts\.track\([\w.]+, f, m\)/.test(body), true);
 }
 const sub = src.indexOf("if (msg.type === 'subscribe_session')");
 const subEnd = src.indexOf("if (msg.type === 'dispatch_plan')", sub);
