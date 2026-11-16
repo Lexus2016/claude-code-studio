@@ -595,7 +595,7 @@ function startEngineIdleReaper(opts = {}) {
 // mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId; ignores the rest.
 // Returns { cid, completed, resultMeta, fullText, fullThinking, toolEvents }.
 async function runInteractiveSingle(params) {
-  const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent, drainInterrupts, markInterruptsDelivered, requeueInterrupts, fanout } = params;
+  const { prompt, systemPrompt, model, mode, ws, sessionId, abortController, claudeSessionId, workdir, tabId, mcpServers, userContent, drainInterrupts, markInterruptsDelivered, requeueInterrupts, fanout, onPromptState } = params;
   const start = Date.now();
   const wsSend = (obj) => {
     try { ws.send(JSON.stringify({ ...obj, ...(tabId ? { tabId } : {}) })); } catch {}
@@ -606,9 +606,17 @@ async function runInteractiveSingle(params) {
   // shows a spinner until the timeout. The rest of the stream reaches other windows
   // through history replay, so it stays on wsSend alone. `fanout` is optional — the
   // task-runner path already sends through a broadcasting proxy.
+  // `onPromptState` hears the same two edges, so the caller can remember a prompt that
+  // is still open: a page RELOADED while the turn waits has no socket that saw
+  // input_needed and no tab state left to redraw the banner from (#130).
   const wsSendAll = (obj) => {
     wsSend(obj);
     if (typeof fanout === 'function') { try { fanout({ ...obj, ...(tabId ? { tabId } : {}) }); } catch {} }
+    // Only the two prompt edges: any other frame routed through here later must not
+    // read as "answered" and erase a prompt that is still open.
+    if (typeof onPromptState === 'function' && (obj.type === 'input_needed' || obj.type === 'input_resolved')) {
+      try { onPromptState(obj.type === 'input_needed' ? { ...obj, ...(tabId ? { tabId } : {}) } : null); } catch {}
+    }
   };
 
   let fullText = '', fullThinking = '';

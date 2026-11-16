@@ -133,6 +133,8 @@ const botsLogic = require('./bots');
 // to go on".
 const BARE_MENTION_PROMPT = "You were addressed directly with no other text — greet them and ask what they need, or continue naturally if there is relevant prior context in this conversation.";
 const { runInteractiveSingle, killInteractiveTmux, tmuxAvailable, catchUpFromTranscript, transcriptSize, tmuxName: interactiveTmuxName, listOrphanedDefaultSocketSessions, startEngineIdleReaper } = require('./claude-interactive');
+// The prompt a subscription turn is blocked on, kept so a RELOADED page can be told (#130).
+const enginePrompts = require('./engine-prompts').createEnginePromptStore();
 const WM = require('./worktree-manager');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
@@ -2130,6 +2132,7 @@ async function startTask(task) {
           prompt: currentTaskPrompt, systemPrompt: '', model: session?.model || task.model || 'sonnet',
           mode: task.mode || 'auto', ws: _proxy, sessionId, abortController: taskAbort,
           claudeSessionId: currentTaskCid, workdir: task.workdir || WORKDIR, mcpServers: taskMcpServers,
+          onPromptState: (f) => enginePrompts.track(sessionId, f),
           // Same gap the chat path had, and found while reviewing that fix: the api
           // engine below delivers clarifications through the check-interrupt hook, but
           // the subscription engine has no hooks. Without these three callbacks a
@@ -10344,6 +10347,7 @@ async function processTelegramChat({ sessionId, text, userId, chatId, threadId, 
       // (mirrors the WS chat handler's subscription branch).
       const r = await runInteractiveSingle({
         ...params,
+        onPromptState: (f) => enginePrompts.track(params.sessionId, f),
         // Matches the web WS handler's subscription branch: without a drain function,
         // a clarification typed into a busy Telegram chat on this engine sat in
         // pendingInterrupts and was NEVER delivered — this engine has no hook to pull
@@ -12273,6 +12277,7 @@ wss.on('connection', (ws) => {
           // waits for someone to answer a permission prompt. Only the blocked/unblocked
           // frames are fanned out; `ws` is excluded because it is served above.
           fanout: (obj) => { try { broadcastToSessionExcept(localSessionId, ws, obj); } catch {} },
+          onPromptState: (f) => enginePrompts.track(localSessionId, f),
           // Draining no longer implies delivery: the engine still has to type the text
           // into the tmux pane, and that can fail. It reports back through the two
           // callbacks below, so a paste that never landed is re-queued instead of
@@ -13023,6 +13028,14 @@ wss.on('connection', (ws) => {
               }
             }
           }
+        }
+        // A subscription turn blocked on a TUI prompt announced it once; a page reloaded
+        // since then saw neither that frame nor kept the tab state that redraws the
+        // banner (#130). Not for noCatchUp: a background tab that never reloaded still
+        // holds the prompt and would only get the notification a second time.
+        if (!noCatchUp && ws.readyState === 1) {
+          const _openPrompt = enginePrompts.replay(sessionId, isSessionLive(sessionId));
+          if (_openPrompt) { try { ws.send(JSON.stringify(_openPrompt)); } catch {} }
         }
         // Cancel any pending delayed cleanup — a live WS is reclaiming this session
         const _cleanupTimer = sessionQueueCleanupTimers.get(sessionId);
