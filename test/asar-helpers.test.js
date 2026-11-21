@@ -79,8 +79,12 @@ check('server.js builds no spawned-helper path with a raw path.join(__dirname…
 });
 check('every mcp-*.js in the repo has a helperPath() spawn site', () => {
   const shipped = fs.readdirSync(ROOT).filter(f => /^mcp-[a-z-]+\.js$/.test(f));
-  const missing = shipped.filter(f => !SRV.includes(`helperPath('${f}')`));
   // mcp-task-manager.js and the four _ccs_* helpers are all spawned from server.js.
+  // mcp-ccs.js (#150) is the one exception and must stay one: it is the client for an
+  // OUTSIDE agent, started by someone else's MCP host against /api/external/v1, so a
+  // spawn site here would be a bug, not a fix. The asarUnpack glob still covers it.
+  const spawned = shipped.filter(f => f !== 'mcp-ccs.js');
+  const missing = spawned.filter(f => !SRV.includes(`helperPath('${f}')`));
   assert.deepStrictEqual(missing, [], `never spawned via helperPath: ${missing.join(', ')}`);
 });
 

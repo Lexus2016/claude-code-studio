@@ -92,6 +92,7 @@ const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const auth = require('./auth');
+const apiToken = require('./api-token');
 const ClaudeCLI = require('./claude-cli');
 // CLAUDE.md / AGENTS.md discovery + the AGENTS.md system-prompt block (issue #54).
 const agentsMd = require('./agents-md');
@@ -1141,6 +1142,10 @@ const stmts = {
     ORDER BY t.sort_order ASC, t.created_at ASC
   `),
   getTask: db.prepare(`SELECT * FROM tasks WHERE id=?`),
+  // Newest-first listing for the external API (#150). getTasks above is the board's
+  // order (sort_order, created_at) and needs a workdir; an outside client polling
+  // "what happened recently" across projects wants the opposite order and no filter.
+  getRecentTasks: db.prepare(`SELECT * FROM tasks ORDER BY updated_at DESC LIMIT @limit`),
   createTask: db.prepare(`INSERT INTO tasks (id,title,description,notes,status,sort_order,session_id,workdir,model,mode,agent_mode,max_turns,attachments,depends_on,chain_id,source_session_id,scheduled_at,recurrence,recurrence_end_at,effort,run_engine,bot_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
   updateTask: db.prepare(`UPDATE tasks SET title=?,description=?,notes=?,status=?,sort_order=?,session_id=?,workdir=?,model=?,mode=?,agent_mode=?,max_turns=?,attachments=?,depends_on=?,chain_id=?,source_session_id=?,scheduled_at=?,recurrence=?,recurrence_end_at=?,effort=?,run_engine=?,bot_id=?,updated_at=datetime('now') WHERE id=?`),
   patchTaskStatus: db.prepare(`UPDATE tasks SET status=?,sort_order=?,updated_at=datetime('now') WHERE id=?`),
@@ -6607,6 +6612,222 @@ const DISPATCH_REASONS = {
   budget: 'the hand-off budget for this message is used up',
 };
 
+// ─── External API: /api/external/v1 (dedicated token — issue #150) ───────────
+// mcp-ccs.js runs OUTSIDE this process: on the operator's laptop, in another
+// container. It cannot present a browser session cookie, and it must not borrow
+// the internal per-process TASK_MANAGER_SECRET, which is random on every restart
+// and deliberately unreachable from outside. So this surface is registered BEFORE
+// auth.authMiddleware and authenticates with its own bearer token (api-token.js).
+//
+// What the token does NOT open is why it lives here instead of being folded into
+// authMiddleware: chats, sessions, files, settings, terminals and project
+// management stay behind the session wall. This block plus api-token.js is the
+// entire contract an external client gets.
+//
+// The rules below are decisions, not omissions:
+//   - a request carrying an Origin header is refused. Browsers attach one to every
+//     cross-site fetch and a stdio MCP client never sends one, so refusing it stops
+//     a page the owner visits from spending the token that is sitting in the shell.
+//   - `read` lists and reads; `full` also creates and cancels. Creating a task runs
+//     `claude` in a project workdir — code execution with this container's
+//     permissions — and a monitoring client should not need that.
+//   - `project` is REQUIRED on create and is never inherited. An outside caller has
+//     no parent task to inherit a workdir from, and guessing one would start an
+//     unattended run in an arbitrary tree.
+//   - creating a task defaults to `backlog`, like POST /api/tasks does: nothing
+//     starts until the caller asks for `todo` explicitly.
+function externalTokenFrom(req) {
+  const header = req.headers.authorization || '';
+  if (!header.startsWith('Bearer ')) return null;
+  return apiToken.verifyToken(header.slice(7).trim());
+}
+
+function externalApiGuard(need) {
+  return (req, res, next) => {
+    if (req.headers.origin) {
+      return res.status(403).json({ error: 'the external API refuses browser requests (Origin header present)' });
+    }
+    const tok = externalTokenFrom(req);
+    if (!tok) return res.status(401).json({ error: 'unauthorized' });
+    if (need === 'full' && tok.scope !== 'full') {
+      return res.status(403).json({ error: 'this token is read-only' });
+    }
+    req.externalToken = tok;
+    next();
+  };
+}
+
+// `id` first because it is stable; then an exact case-insensitive name. Two
+// projects sharing a name is a real state, so an ambiguous name is refused with
+// the ids instead of resolved to whichever happened to be first.
+function resolveExternalProject(ref) {
+  if (!ref || typeof ref !== 'string') return null;
+  const projects = loadProjects();
+  const byId = projects.find(p => p.id === ref);
+  if (byId) return byId;
+  const wanted = ref.trim().toLowerCase();
+  const byName = projects.filter(p => String(p.name || '').trim().toLowerCase() === wanted);
+  if (byName.length === 1) return byName[0];
+  if (byName.length > 1) return { ambiguous: true, ids: byName.map(p => p.id) };
+  return null;
+}
+
+// A task stores `workdir`, and an isolated unit stores its WORKTREE there with the
+// project in `git_root` — matching raw `workdir` would drop every isolated card,
+// which is the same reason stmts.getTasks uses COALESCE.
+function externalProjectOfTask(task, projects) {
+  const root = task && (task.git_root || task.workdir || null);
+  if (!root) return null;
+  const hit = projects.find(p => {
+    try { return path.resolve(p.workdir) === path.resolve(root); } catch { return false; }
+  });
+  return hit ? { id: hit.id, name: hit.name } : null;
+}
+
+function externalTaskShape(task, projects, withDescription) {
+  const proj = externalProjectOfTask(task, projects);
+  const out = {
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    project_id: proj ? proj.id : null,
+    project_name: proj ? proj.name : null,
+    model: task.model || null,
+    max_turns: task.max_turns || null,
+    scheduled_at: task.scheduled_at || null,
+    chain_id: task.chain_id || null,
+    parent_task_id: task.parent_task_id || null,
+    created_at: task.created_at || null,
+    updated_at: task.updated_at || null,
+    failure_reason: task.failure_reason || null,
+  };
+  if (withDescription) {
+    out.description = task.description || '';
+    out.depends_on = task.depends_on ? (() => { try { return JSON.parse(task.depends_on); } catch { return null; } })() : [];
+  }
+  return out;
+}
+
+app.get('/api/external/v1/me', externalApiGuard('read'), (req, res) => {
+  res.json({ ok: true, token: req.externalToken.name, scope: req.externalToken.scope, api: 'claude-code-studio/external-v1' });
+});
+
+app.get('/api/external/v1/projects', externalApiGuard('read'), (_req, res) => {
+  res.json(loadProjects().map(p => ({ id: p.id, name: p.name, workdir: p.workdir, isRemote: !!p.isRemote })));
+});
+
+app.get('/api/external/v1/tasks', externalApiGuard('read'), (req, res) => {
+  const projects = loadProjects();
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+  let rows;
+  if (req.query.project) {
+    const proj = resolveExternalProject(String(req.query.project));
+    if (proj && proj.ambiguous) {
+      return res.status(400).json({ error: `ambiguous project name; use an id: ${proj.ids.join(', ')}` });
+    }
+    if (!proj) return res.status(404).json({ error: 'unknown project' });
+    rows = stmts.getTasks.all({ w: proj.workdir }).slice().reverse();
+  } else {
+    rows = stmts.getRecentTasks.all({ limit });
+  }
+  if (req.query.status) rows = rows.filter(t => t.status === String(req.query.status));
+  res.json(rows.slice(0, limit).map(t => externalTaskShape(t, projects, false)));
+});
+
+app.get('/api/external/v1/tasks/:id', externalApiGuard('read'), (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'task not found' });
+  res.json(externalTaskShape(task, loadProjects(), true));
+});
+
+// The result is whatever a run stored via `_ccs_task_manager.report_result` — the
+// same column the internal get_task_result reads, so an outside client sees what a
+// dependent task would.
+app.get('/api/external/v1/tasks/:id/result', externalApiGuard('read'), (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'task not found' });
+  let output = task.task_output;
+  if (output) { try { output = JSON.parse(output); } catch { /* keep the string */ } }
+  res.json({
+    task_id: task.id,
+    title: task.title,
+    status: task.status,
+    output: output === undefined ? null : output,
+    completed_at: task.status === 'done' ? task.updated_at : null,
+    failure_reason: task.failure_reason || null,
+  });
+});
+
+app.post('/api/external/v1/tasks', externalApiGuard('full'), (req, res) => {
+  const body = req.body || {};
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  const description = typeof body.description === 'string' ? body.description : '';
+  const status = body.status === undefined ? 'backlog' : String(body.status);
+  if (!title) return res.status(400).json({ error: 'title is required' });
+  if (!body.project) return res.status(400).json({ error: 'project is required (id or name); the external API never inherits a workdir' });
+  if (!['backlog', 'todo'].includes(status)) {
+    return res.status(400).json({ error: 'status must be "backlog" (board only, the default) or "todo" (queue a run now)' });
+  }
+  const proj = resolveExternalProject(String(body.project));
+  if (proj && proj.ambiguous) {
+    return res.status(400).json({ error: `ambiguous project name; use an id: ${proj.ids.join(', ')}` });
+  }
+  if (!proj) return res.status(404).json({ error: 'unknown project' });
+  if (proj.isRemote) return res.status(400).json({ error: 'remote projects are not supported by the external API yet' });
+  if (!isWorkdirAllowed(proj.workdir)) return res.status(403).json({ error: 'project workdir is outside the allowed roots' });
+
+  // Same isolation as a card created in the UI: a task that names a project gets
+  // its own worktree, because a task auto-merges on success and two runs in one
+  // tree race each other.
+  const id = genId();
+  let wt = null;
+  try { wt = setupUnitWorktree('task', id, proj.workdir); }
+  catch (e) {
+    if (e.code === 'GIT_UNAVAILABLE') return res.status(409).json({ error: e.message });
+    throw e;
+  }
+  // scheduled_at is stored as unix seconds (getTodoTasks compares it to unixepoch());
+  // a client may send ISO 8601 or seconds, so normalise here rather than trusting it.
+  let schedAt = null;
+  if (body.scheduled_at !== undefined && body.scheduled_at !== null && body.scheduled_at !== '') {
+    const v = body.scheduled_at;
+    if (typeof v === 'number') schedAt = v > 1e12 ? Math.floor(v / 1000) : Math.floor(v);
+    else { const ms = Date.parse(String(v)); if (isNaN(ms)) return res.status(400).json({ error: 'scheduled_at must be ISO 8601 or unix seconds' }); schedAt = Math.floor(ms / 1000); }
+  }
+  const deps = Array.isArray(body.depends_on) ? JSON.stringify(body.depends_on.map(String)) : null;
+  const maxTurns = Number(body.max_turns) > 0 ? Math.floor(Number(body.max_turns)) : UNATTENDED_MAX_TURNS;
+
+  stmts.createTask.run(
+    id, title.substring(0, 200), description.substring(0, MAX_TASK_TEXT), '',
+    status, 0, null, wt ? wt.workdir : proj.workdir,
+    typeof body.model === 'string' && body.model ? body.model : 'sonnet',
+    'auto', 'single', maxTurns,
+    null, deps, typeof body.chain_id === 'string' && body.chain_id ? body.chain_id : null,
+    null, schedAt, null, null, null, null, null
+  );
+  if (wt) stmts.setTaskGit.run(wt.workdir, wt.git_root, wt.git_branch, id);
+  if (status === 'todo') setImmediate(processQueue);
+
+  log.info('[external-api] create_task', { id, project: proj.id, status, token: req.externalToken.name });
+  res.status(201).json(externalTaskShape(stmts.getTask.get(id), loadProjects(), true));
+});
+
+app.post('/api/external/v1/tasks/:id/cancel', externalApiGuard('full'), (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'task not found' });
+  if (task.status === 'done') return res.status(400).json({ error: 'cannot cancel a completed task' });
+  if (task.status === 'cancelled') return res.json({ ok: true, task_id: task.id, status: 'cancelled' });
+  if (task.status === 'in_progress') {
+    const ctrl = runningTaskAborts.get(task.id);
+    if (ctrl) { stoppingTasks.add(task.id); ctrl.abort(); }
+    else if (task.worker_pid) { stoppingTasks.add(task.id); killByPid(task.worker_pid); }
+  }
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : '';
+  stmts.cancelTask.run(reason || 'Cancelled via external API', task.id);
+  log.info('[external-api] cancel_task', { id: task.id, token: req.externalToken.name });
+  res.json({ ok: true, task_id: task.id, status: 'cancelled' });
+});
+
 app.use(auth.authMiddleware);
 // Prevent browser caching for all API responses.
 // Without this Express sends ETag but no Cache-Control, so browsers may
@@ -6615,6 +6836,34 @@ app.use(auth.authMiddleware);
 app.use('/api', (_req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
+});
+
+// ─── External API tokens: management (session-authenticated) ────────────────
+// These stay behind authMiddleware on purpose: only the owner, from a logged-in
+// session, may mint or revoke a credential that can execute code in a project.
+app.get('/api/api-tokens', (_req, res) => res.json(apiToken.listTokens()));
+
+app.post('/api/api-tokens', express.json(), (req, res) => {
+  try {
+    const { token, record } = apiToken.createToken({
+      name: req.body?.name,
+      // Absent means the safe default; a typo means a 400 from the module, not a
+      // silent downgrade to some other scope.
+      scope: req.body?.scope === undefined ? 'read' : req.body.scope,
+    });
+    // The one response that ever carries the plaintext. The log line deliberately
+    // names the token by id so it can be revoked later without recording the secret.
+    log.info('[api-token] created', { id: record.id, name: record.name, scope: record.scope });
+    res.status(201).json({ ...record, token });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete('/api/api-tokens/:id', (req, res) => {
+  if (!apiToken.revokeToken(req.params.id)) return res.status(404).json({ error: 'not found' });
+  log.info('[api-token] revoked', { id: req.params.id });
+  res.json({ ok: true });
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
