@@ -49,6 +49,9 @@ fs.writeFileSync(path.join(APP_DIR, 'config.json'), JSON.stringify({ mcpServers:
 const ROOT = path.join(__dirname, '..');
 const SRC = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
 const MCP_SRC = fs.readFileSync(path.join(ROOT, 'mcp-task-manager.js'), 'utf8');
+// A third copy, deliberately: mcp-ccs.js ships to other machines/containers as a
+// single file (#150), so it cannot require task-text-limit.js and must not drift.
+const MCP_CCS_SRC = fs.readFileSync(path.join(ROOT, 'mcp-ccs.js'), 'utf8');
 const SCHED = fs.readFileSync(path.join(ROOT, 'public', 'schedule.html'), 'utf8');
 const KANBAN = fs.readFileSync(path.join(ROOT, 'public', 'kanban.html'), 'utf8');
 
@@ -107,10 +110,14 @@ const TOO_LONG = 'y'.repeat(25000);
     SRC.includes("require('./task-text-limit.js')"), true);
   check('no 2000-character truncation survives in server.js',
     (SRC.match(/substring\(0,\s*2000\)/g) || []).length, 0);
-  check('all ten task-text writes use the shared constant',
-    (SRC.match(/substring\(0,\s*MAX_TASK_TEXT\)/g) || []).length, 10);
+  // Eleven since #150 added the external API's create path; the count is the point —
+  // a twelfth write that hand-rolls its own limit is what this line is here to catch.
+  check('all eleven task-text writes use the shared constant',
+    (SRC.match(/substring\(0,\s*MAX_TASK_TEXT\)/g) || []).length, 11);
   check('the MCP schema advertises the same number, not a smaller one',
     MCP_SRC.includes('max ${MAX_TASK_TEXT} chars') && !MCP_SRC.includes('max 2000 chars'), true);
+  check('mcp-ccs.js carries the same literal in its schema and its comment',
+    MCP_CCS_SRC.includes('max ${MAX_TASK_TEXT} chars') && /const MAX_TASK_TEXT = 20000;/.test(MCP_CCS_SRC), true);
 
   // Each page is a single static file with no build step, so it carries its own copy of
   // the literal; the test fails if a copy drifts from the module above.

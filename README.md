@@ -504,6 +504,7 @@ npx github:Lexus2016/claude-code-studio    # launch as usual
 | **Kanban** | Task queue, parallel + sequential, cross-tab sync, drag-and-drop tabs, dependency graphs, engine + model + effort per task/chain |
 | **Scheduler** | One-time + recurring (hourly/daily/weekly/monthly), 5 parallel workers, Run Now, SQLite-persisted, engine + model + effort per task, watchdog auto-recovery |
 | **Task Manager** | Autonomous child tasks, chains, context passing, result reporting, cancellation, board-only cards (import a plan without running it) (MCP) |
+| **External API** | Drive CCS from an agent outside it: the `ccs` MCP server ([mcp-ccs.js](mcp-ccs.js)) lists projects, creates and follows tasks, reads results, cancels — plus a token-authenticated REST surface (`/api/external/v1`), scoped `read`/`full`, revocable, hashed at rest ([docs](docs/EXTERNAL-API.md)) |
 | **Telegram** | Bot control, push notifications, ask_user forwarding (+ file answers), session bridge, Forum Mode, inline stop, deep-link navigation, rich action buttons (localized EN/UA/RU/FR/HE), Write button, file attachments, interrupt queue while busy |
 | **Delegation** | Cross-agent handoff/sync (Codex, Antigravity, opencode), CONTEXT.md + DIALOG.md protocol, fs.watch + polling, persistent across restarts, Windows support, sidebar agents manager, auto-seeded defaults, test button |
 | **Agents** | Single, Multi (2–5 in-chat, schema-validated planning), Dispatch (Kanban), Room (project bots take serial turns on one message), auto-retry, cascade cancellation, effort propagation |
@@ -533,6 +534,8 @@ claude-cli.js          — spawns `claude` subprocess, parses JSON stream
 telegram-bot.js        — Telegram bot (Direct Mode)
 telegram-bot-forum.js  — Forum Mode standalone module (composition pattern)
 mcp-task-manager.js    — MCP server for autonomous task management
+api-token.js           — scoped, revocable tokens for the external API (hashed at rest)
+mcp-ccs.js             — MCP client for OUTSIDE agents: projects + tasks over /api/external/v1
 mcp-notify.js          — MCP server for non-blocking notifications
 public/index.html      — entire frontend (HTML + CSS + JS)
 config.json            — MCP servers + skills catalog
