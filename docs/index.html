@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Code Studio — A Workspace for Claude Code</title>
+<meta name="description" content="Bring Claude Code chats, a task board and project work into one browser or desktop workspace. Reopen saved conversations and see where tasks stand.">
+<meta name="theme-color" content="#fff4e8">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="Claude Code Studio">
+<meta property="og:url" content="https://lexus2016.github.io/claude-code-studio/">
+<meta property="og:title" content="Claude Code Studio — A Workspace for Claude Code">
+<meta property="og:description" content="Bring Claude Code chats, a task board and project work into one browser or desktop workspace. Reopen saved conversations and see where tasks stand.">
+<meta property="og:image" content="https://lexus2016.github.io/claude-code-studio/landing/social-en.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Claude Code Studio. Give Claude Code a workspace. The picture shows the task board.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Claude Code Studio — A Workspace for Claude Code">
+<meta name="twitter:description" content="Bring Claude Code chats, a task board and project work into one browser or desktop workspace. Reopen saved conversations and see where tasks stand.">
+<meta name="twitter:image" content="https://lexus2016.github.io/claude-code-studio/landing/social-en.png">
+<meta name="twitter:image:alt" content="Claude Code Studio. Give Claude Code a workspace. The picture shows the task board.">
+<link rel="canonical" href="https://lexus2016.github.io/claude-code-studio/">
+<link rel="icon" href="landing/app-icon.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://lexus2016.github.io/claude-code-studio/#page",
+      "url": "https://lexus2016.github.io/claude-code-studio/",
+      "name": "Claude Code Studio — A Workspace for Claude Code",
+      "description": "Bring Claude Code chats, a task board and project work into one browser or desktop workspace. Reopen saved conversations and see where tasks stand.",
+      "inLanguage": "en",
+      "primaryImageOfPage": "https://lexus2016.github.io/claude-code-studio/landing/social-en.png",
+      "mainEntity": {
+        "@id": "https://lexus2016.github.io/claude-code-studio/#app"
+      }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://lexus2016.github.io/claude-code-studio/#app",
+      "name": "Claude Code Studio",
+      "description": "Bring Claude Code chats, a task board and project work into one browser or desktop workspace. Reopen saved conversations and see where tasks stand.",
+      "url": "https://lexus2016.github.io/claude-code-studio/",
+      "image": "https://lexus2016.github.io/claude-code-studio/landing/social-en.png",
+      "operatingSystem": "macOS (Apple silicon), Windows, Linux",
+      "applicationCategory": "DeveloperApplication",
+      "downloadUrl": "https://github.com/Lexus2016/claude-code-studio/releases/latest"
+    }
+  ]
+}
+</script>
+<style>
+@font-face{font-family:Unbounded;font-style:normal;font-weight:700;font-display:swap;src:url("landing/fonts/unbounded-cyrillic-700.woff2") format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:Unbounded;font-style:normal;font-weight:700;font-display:swap;src:url("landing/fonts/unbounded-latin-ext-700.woff2") format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:Unbounded;font-style:normal;font-weight:700;font-display:swap;src:url("landing/fonts/unbounded-latin-700.woff2") format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:Literata;font-style:normal;font-weight:400;font-display:swap;src:url("landing/fonts/literata-cyrillic-400.woff2") format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:Literata;font-style:normal;font-weight:400;font-display:swap;src:url("landing/fonts/literata-latin-ext-400.woff2") format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:Literata;font-style:normal;font-weight:400;font-display:swap;src:url("landing/fonts/literata-latin-400.woff2") format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:Literata;font-style:normal;font-weight:600;font-display:swap;src:url("landing/fonts/literata-cyrillic-600.woff2") format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:Literata;font-style:normal;font-weight:600;font-display:swap;src:url("landing/fonts/literata-latin-ext-600.woff2") format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:Literata;font-style:normal;font-weight:600;font-display:swap;src:url("landing/fonts/literata-latin-600.woff2") format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+
+:root{color-scheme:light;--paper:#fff4e8;--ink:#1c140e;--muted:#5c4d3e;--surface:#fff;--rule:#1c140e;--board:#241c16;--cream:#fff6e4;--gold:#f0d7a2;--yellow:#ffe14a}
+:root[data-theme="dark"]{color-scheme:dark;--paper:#1c1612;--ink:#fff4e8;--muted:#e0cab5;--surface:#342820;--rule:#a88a72}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font:18px/1.55 Literata,Georgia,serif;margin:0}
+a{color:inherit;text-underline-offset:.18em}
+button,select,summary{font:inherit;color:inherit}
+button,select,summary{cursor:pointer}
+:focus-visible{outline:3px solid currentColor;outline-offset:4px}
+img{display:block;max-width:100%;height:auto}
+h1,h2,h3{font-family:Unbounded,Arial,sans-serif;line-height:1.1;letter-spacing:-.045em;margin:0;word-break:normal;overflow-wrap:normal;hyphens:none;text-wrap:balance}
+h1{font-size:clamp(2rem,4.25vw,3.45rem);max-width:15ch}
+h2{font-size:clamp(1.6rem,3.1vw,2.6rem)}
+h3{font-size:clamp(1.2rem,2.15vw,1.75rem);line-height:1.26}
+p{margin:0}
+[hidden]{display:none!important}
+.wrap{width:min(1120px,calc(100% - 32px));margin-inline:auto}
+.skip{position:absolute;left:12px;top:-90px;background:var(--yellow);color:#1c140e;z-index:30;padding:10px 14px}
+.skip:focus{top:12px}
+header{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:2px solid var(--rule)}
+.bar,.foot{display:flex;gap:12px;align-items:center;justify-content:space-between;min-height:68px}
+.brand{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-right:auto;text-decoration:none;font:700 15px/1.2 Unbounded,Arial,sans-serif}
+.brand img{width:34px;height:34px;border-radius:8px;flex:none}
+.links,.tools,.cta,.foot nav{display:flex;align-items:center;gap:12px}
+.links a,.foot a{display:inline-flex;align-items:center;min-height:44px;font-weight:600}
+.links a{text-decoration:none;white-space:nowrap}
+.links a:hover{text-decoration:underline}
+.control,.menu summary{background:var(--surface);border:2px solid var(--rule);border-radius:999px;min-height:44px;padding:0 10px}
+.control{font:700 12px Unbounded,Arial,sans-serif}
+.theme{min-width:44px;font-size:16px}
+.menu{display:none;position:relative}
+.menu summary{display:grid;place-items:center;list-style:none;min-width:44px}
+.menu summary::-webkit-details-marker{display:none}
+.menu-panel{position:absolute;right:0;top:calc(100% + 7px);background:var(--surface);border:2px solid var(--rule);border-radius:15px;padding:5px;min-width:min(210px,82vw)}
+.menu-panel a{display:block;padding:10px 14px;min-height:44px;text-decoration:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;border:2px solid var(--rule);border-radius:999px;min-height:48px;padding:9px 15px;text-decoration:none;text-align:center;font:700 .78rem/1.3 Unbounded,Arial,sans-serif;background:var(--surface)}
+.btn:hover{box-shadow:inset 0 0 0 1px currentColor}
+.go{background:#1c140e;color:var(--yellow)}
+[data-theme="dark"] .go{background:var(--yellow);color:#1c140e}
+.hero{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);align-items:center;gap:36px;padding:48px 0 32px;position:relative;isolation:isolate}
+.hero::before{content:"";z-index:-1;position:absolute;inset:0 0 auto;height:290px;pointer-events:none;background:radial-gradient(ellipse at 5% 3%,#ff7e58bb,transparent 44%),radial-gradient(ellipse at 70% 1%,#ffe363bb,transparent 41%),radial-gradient(ellipse at 100% 42%,#55c8bcbc,transparent 39%)}
+[data-theme="dark"] .hero::before{opacity:.23}
+.hero p{margin-top:14px}
+.lead{font-size:20px;max-width:45ch}
+.sub{max-width:44ch}
+.note,.caption{font-size:14px;color:var(--muted)}
+.cta{flex-wrap:wrap;margin-top:19px}
+.board{background:var(--board);color:var(--cream);border-radius:26px;padding:16px 16px 12px;box-shadow:0 21px 44px #28120829;min-width:0}
+.stripes{height:12px;border-radius:8px;background:repeating-linear-gradient(to right,#ff4d3a 0 12.5%,#ffe14a 12.5% 25%,#14b8a6 25% 37.5%,#2f5bff 37.5% 50%)}
+.tiles{display:flex;justify-content:center;gap:6px;perspective:800px;margin-top:13px}
+.tile{position:relative;display:grid;place-items:center;width:58px;height:59px;border-radius:9px;background:linear-gradient(#3a3128,#2a231c);font:700 29px Unbounded,Arial,sans-serif}
+.tile::after{content:"";position:absolute;left:3px;right:3px;top:50%;border-top:1px solid #1c140e;pointer-events:none}
+.tile:last-child{color:var(--yellow)}
+.flip .tile{animation:flip .37s both}
+.flip .tile:nth-child(2){animation-delay:40ms}
+.flip .tile:nth-child(3){animation-delay:80ms}
+@keyframes flip{from{transform:rotateX(-90deg)}to{transform:rotateX(0)}}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin-block:12px}
+.chip,.play{border:1px solid #907657;background:#3a3128;color:var(--cream);min-height:44px;border-radius:999px;padding:5px 13px;font-size:.88rem}
+.chip[aria-pressed="true"]{background:var(--yellow);color:#1c140e}
+.example{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}
+.example div{background:#30261e;border:1px solid #907657;border-radius:12px;padding:12px}
+.example div+div{background:#3a3128}
+.example dt{color:var(--gold);font-size:14px;font-weight:600}
+.example dd{margin:4px 0 0;font-size:16px}
+.board .hint{text-align:center;color:var(--gold);font-size:13px;margin-top:10px}
+.ribbon{overflow:hidden;padding:10px 0;background:#1c140e;color:#fff6e4;font:700 14px Unbounded,Arial,sans-serif;white-space:nowrap}
+.ribbon span{display:block;width:max-content;min-width:100%;text-align:center;word-spacing:.14em}
+.ribbon b{color:#ffe14a}
+section[id],main[id]{scroll-margin-top:92px}
+.section{padding-block:49px}
+.section h2{margin-bottom:23px}
+.scenario{border-top:2px solid var(--rule);display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:32px;align-items:center;padding:26px 0}
+.scenario:nth-of-type(even){grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr)}
+.scenario:nth-of-type(even) .copy{order:2}
+.scenario h3{margin-bottom:11px}
+figure{margin:0;min-width:0}
+.scenario img{width:100%;background:var(--board);border:2px solid #1c140e;border-radius:18px}
+figcaption{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+.play{background:var(--surface);color:var(--ink);border:2px solid var(--rule)}
+.real{min-height:44px;display:inline-flex;align-items:center}
+.screens{margin-top:20px;border-block:1px solid var(--rule);padding:5px 0 10px}
+.screens summary{min-height:44px;align-content:center;font-weight:600}
+.screens img{display:block;width:min(100%,820px);max-height:580px;object-fit:contain;margin:10px auto 0;background:var(--board);border:2px solid var(--rule);border-radius:14px}
+.callout{margin-top:13px;padding:20px;border:2px solid #1c140e;border-radius:18px;background:#ffe14a;color:#1c140e}
+.callout h2{font-size:clamp(1.15rem,2vw,1.55rem);margin-bottom:8px}
+.callout p{max-width:70ch}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:20px}
+.step{border:2px solid var(--rule);border-radius:16px;padding:15px;background:var(--surface)}
+.step h3{font-size:1rem;margin-bottom:7px}
+.faq{margin-top:24px}
+.faq h2{font-size:clamp(1.35rem,2.4vw,1.8rem);margin-bottom:8px}
+.faq details{border-top:1px solid var(--rule);padding:5px 0 8px}
+.faq summary{min-height:44px;align-content:center;font-weight:600}
+footer{border-top:2px solid var(--rule)}
+.foot{flex-wrap:wrap;gap:8px;padding-block:8px}
+.foot nav{flex-wrap:wrap;gap:8px 14px;font-size:.88rem}
+@media(max-width:960px){.links,.bar>.btn{display:none}.menu{display:block}}
+@media(max-width:850px){
+ .hero,.scenario,.scenario:nth-of-type(even),.steps{grid-template-columns:1fr;gap:19px}
+ .hero{padding-top:28px}
+ .scenario:nth-of-type(even) .copy{order:0}
+ .section{padding-block:35px}
+}
+@media(max-width:455px){
+ .wrap{width:calc(100% - 22px)}
+ .bar{gap:6px;min-height:60px}
+ .tools{gap:5px}
+ .control{font-size:11px;padding:0 5px;max-width:102px}
+ .theme{font-size:15px;min-width:40px}
+ .brand{font-size:11px;gap:4px;text-wrap:balance}
+ .brand img{width:27px;height:27px}
+ .menu summary{position:relative;font-size:0;padding:0}
+ .menu summary::before{content:"";width:15px;height:2px;background:currentColor;box-shadow:0 5px 0 currentColor,0 -5px 0 currentColor}
+ h1{font-size:clamp(1.7rem,8vw,2.2rem)}
+ .lead{font-size:18px}
+ .example{grid-template-columns:1fr}
+ .section h2{margin-bottom:15px}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.flip .tile{animation:none}}
+
+</style>
+</head>
+<body id="top">
+<a data-copy="skip" class="skip" href="#main">Skip to content</a>
+<header>
+  <div class="wrap bar">
+    <a class="brand" href="#top"><img src="landing/app-icon.png" alt="" width="34" height="34">Claude Code Studio</a>
+    <nav class="links" aria-label="Sections" data-label="sections"><a data-copy="features" class="" href="#features">What it solves</a><a data-copy="install" class="" href="#install">Get started</a></nav>
+    <div class="tools" data-nosnippet>
+      <select id="lang" class="control" aria-label="Site language" data-label="language"><option value="en" lang="en">English</option><option value="uk" lang="uk">Українська</option><option value="ru" lang="ru">Русский</option></select>
+      <button id="theme" type="button" class="control theme" aria-pressed="false" aria-label="Dark theme" data-label="theme">◐</button>
+      <details class="menu"><summary data-copy="menu">Menu</summary><div class="menu-panel"><a data-copy="features" class="" href="#features">What it solves</a><a data-copy="install" class="" href="#install">Get started</a></div></details>
+    </div>
+    <a data-copy="cta" class="btn go" href="https://github.com/Lexus2016/claude-code-studio/releases/latest">See downloads</a>
+  </div>
+</header>
+<main id="main">
+  <div class="wrap hero">
+    <div>
+      <h1 data-copy="headline">Give Claude Code a workspace</h1>
+      <p data-copy="lead" class="lead">Reopen yesterday’s chat, see what’s on your task board, and find the right project without digging through terminal windows.</p>
+      <p data-copy="sub" class="sub">Use it in your browser or as a desktop app. You’ll need Claude Code installed and signed in.</p>
+      <div class="cta"><a data-copy="cta" class="btn go" href="https://github.com/Lexus2016/claude-code-studio/releases/latest">See downloads</a><a data-copy="features" class="btn" href="#features">What it solves</a></div>
+      <p data-copy="meta" class="note">macOS with Apple silicon · Windows · Linux</p>
+    </div>
+    <div class="board" data-nosnippet>
+      <div class="stripes" aria-hidden="true"></div>
+      <div class="tiles" aria-hidden="true"><span class="tile">›</span><span class="tile">▤</span><span class="tile">✓</span></div>
+      <div class="chips" role="group" aria-label="Try a scenario" data-label="tryIt" hidden>
+        <button data-copy="case0Label" class="chip" type="button" data-scenario="0" aria-pressed="true">Saved chats</button>
+        <button data-copy="case1Label" class="chip" type="button" data-scenario="1" aria-pressed="false">Task board</button>
+        <button data-copy="case2Label" class="chip" type="button" data-scenario="2" aria-pressed="false">Projects</button>
+      </div>
+      <dl class="example" id="examples" aria-live="polite" aria-atomic="true">
+        <div><dt data-copy="before">The situation</dt><dd id="exampleBefore">You want to finish yesterday’s work.</dd></div>
+        <div><dt data-copy="after">What you can do</dt><dd id="exampleAfter">Open the saved chat or import a Claude Code session.</dd></div>
+      </dl>
+      <p data-copy="sample" class="hint">Illustrated examples. The actions happen in the app.</p>
+    </div>
+  </div>
+  <div class="ribbon" data-nosnippet aria-hidden="true"><span>Claude Code Studio <b>✶</b> English <b>✶</b> Українська <b>✶</b> Русский <b>✶</b> Claude Code Studio</span></div>
+  <section id="features" class="wrap section">
+    <h2 data-copy="featureTitle">Stay on top of your work</h2>
+      <article class="scenario">
+        <div class="copy">
+          <h3 data-copy="case0Problem">Where did that conversation go?</h3>
+          <p data-copy="case0Body">Open a saved conversation and pick up where you left off. Already use the command line? Import existing Claude Code sessions from a project folder.</p>
+        </div>
+        <figure data-nosnippet>
+          <img src="landing/scenario-1.webp" loading="lazy" width="720" height="430" alt="" data-animation="landing/scenario-1.gif">
+          <figcaption>
+            <span data-copy="animated" class="caption">Illustrated steps</span>
+            <button data-copy="play" class="play" type="button" aria-pressed="false" hidden>Play GIF</button>
+            <a data-copy="case0Shot" class="real caption" href="landing/chat.webp">A saved conversation in Claude Code Studio</a>
+          </figcaption>
+        </figure>
+      </article>
+      <article class="scenario">
+        <div class="copy">
+          <h3 data-copy="case1Problem">It’s hard to tell which task is still running.</h3>
+          <p data-copy="case1Body">Put tasks on cards. The board shows what’s queued, what’s running and what’s done. Open the result and review it before using it.</p>
+        </div>
+        <figure data-nosnippet>
+          <img src="landing/scenario-2.webp" loading="lazy" width="720" height="430" alt="" data-animation="landing/scenario-2.gif">
+          <figcaption>
+            <span data-copy="animated" class="caption">Illustrated steps</span>
+            <button data-copy="play" class="play" type="button" aria-pressed="false" hidden>Play GIF</button>
+            <a data-copy="case1Shot" class="real caption" href="landing/board.webp">Claude Code Studio task board with status columns</a>
+          </figcaption>
+        </figure>
+      </article>
+      <article class="scenario">
+        <div class="copy">
+          <h3 data-copy="case2Problem">What was I doing in this project?</h3>
+          <p data-copy="case2Body">Save the folders you work in and switch between projects from the sidebar. Start a chat in the project you’ve opened and find its conversations again later.</p>
+        </div>
+        <figure data-nosnippet>
+          <img src="landing/scenario-3.webp" loading="lazy" width="720" height="430" alt="" data-animation="landing/scenario-3.gif">
+          <figcaption>
+            <span data-copy="animated" class="caption">Illustrated steps</span>
+            <button data-copy="play" class="play" type="button" aria-pressed="false" hidden>Play GIF</button>
+            <a data-copy="case2Shot" class="real caption" href="landing/project.webp">Claude Code Studio chat with the project sidebar</a>
+          </figcaption>
+        </figure>
+      </article>
+    <div class="callout"><h2 data-copy="extraTitle">Already use Claude Code in a terminal?</h2><p data-copy="extra">Bring your saved sessions into Studio and keep working from the same project folders. Studio uses your existing Claude Code installation.</p></div>
+    <details class="screens">
+      <summary data-copy="screenshots">See the real interface</summary>
+      <img src="landing/chat.webp" width="1600" height="1000" loading="lazy" alt="A saved conversation in Claude Code Studio">
+    </details>
+  </section>
+  <section id="install" class="wrap section">
+    <h2 data-copy="install">Get started</h2>
+    <div class="steps">
+      <article class="step"><h3 data-copy="step0Title">Set up Claude Code</h3><p data-copy="step0Body">Install the Claude Code command-line tool and sign in first.</p></article>
+      <article class="step"><h3 data-copy="step1Title">Choose desktop or web</h3><p data-copy="step1Body">Download the desktop app for your system, or follow the self-hosted web guide on GitHub.</p></article>
+      <article class="step"><h3 data-copy="step2Title">Open a project</h3><p data-copy="step2Body">Choose the folder you want to work in. Then start a chat or open the task board.</p></article>
+    </div>
+    <div class="cta"><a data-copy="cta" class="btn go" href="https://github.com/Lexus2016/claude-code-studio/releases/latest">See downloads</a><a data-copy="webGuide" class="btn" href="https://github.com/Lexus2016/claude-code-studio#web-version-run-it-yourself">Web setup guide</a></div>
+    <div class="faq">
+      <h2 data-copy="faq">Common questions</h2>
+      <details><summary data-copy="faq0Q">Does Studio include access to Claude?</summary><p data-copy="faq0A">Studio uses your own Claude Code sign-in. Claude access and any charges depend on your account and plan.</p></details>
+      <details><summary data-copy="faq1Q">Where does the web version run?</summary><p data-copy="faq1A">You run Studio yourself. The local desktop app runs on your computer. For the web version, follow the setup and access instructions in the repository.</p></details>
+    </div>
+  </section>
+</main>
+<footer>
+  <div class="wrap foot">
+    <a href="#top" class="brand">Claude Code Studio</a>
+    <nav aria-label="Project links" data-nosnippet>
+      <a data-copy="source" class="" href="https://github.com/Lexus2016/claude-code-studio">Source on GitHub</a> <a data-copy="releases" class="" href="https://github.com/Lexus2016/claude-code-studio/releases">Releases</a> <a href="https://github.com/Lexus2016/claude-code-studio/blob/main/README.md" lang="en">English</a> <a href="https://github.com/Lexus2016/claude-code-studio/blob/main/README_UA.md" lang="uk">Українська</a> <a href="https://github.com/Lexus2016/claude-code-studio/blob/main/README_RU.md" lang="ru">Русский</a>
+    </nav>
+  </div>
+</footer>
+<script>
+const COPY = {
+  "en": {
+    "skip": "Skip to content",
+    "sections": "Sections",
+    "language": "Site language",
+    "theme": "Dark theme",
+    "menu": "Menu",
+    "features": "What it solves",
+    "install": "Get started",
+    "tryIt": "Try a scenario",
+    "before": "The situation",
+    "after": "What you can do",
+    "sample": "Illustrated examples. The actions happen in the app.",
+    "play": "Play GIF",
+    "stop": "Stop GIF",
+    "animated": "Illustrated steps",
+    "screenshots": "See the real interface",
+    "faq": "Common questions",
+    "source": "Source on GitHub",
+    "releases": "Releases",
+    "headline": "Give Claude Code a workspace",
+    "lead": "Reopen yesterday’s chat, see what’s on your task board, and find the right project without digging through terminal windows.",
+    "sub": "Use it in your browser or as a desktop app. You’ll need Claude Code installed and signed in.",
+    "cta": "See downloads",
+    "meta": "macOS with Apple silicon · Windows · Linux",
+    "featureTitle": "Stay on top of your work",
+    "extraTitle": "Already use Claude Code in a terminal?",
+    "extra": "Bring your saved sessions into Studio and keep working from the same project folders. Studio uses your existing Claude Code installation.",
+    "case0Label": "Saved chats",
+    "case0Before": "You want to finish yesterday’s work.",
+    "case0After": "Open the saved chat or import a Claude Code session.",
+    "case0Problem": "Where did that conversation go?",
+    "case0Body": "Open a saved conversation and pick up where you left off. Already use the command line? Import existing Claude Code sessions from a project folder.",
+    "case0Shot": "A saved conversation in Claude Code Studio",
+    "case1Label": "Task board",
+    "case1Before": "You’ve got several tasks at once.",
+    "case1After": "See what’s planned, running and done on one board.",
+    "case1Problem": "It’s hard to tell which task is still running.",
+    "case1Body": "Put tasks on cards. The board shows what’s queued, what’s running and what’s done. Open the result and review it before using it.",
+    "case1Shot": "Claude Code Studio task board with status columns",
+    "case2Label": "Projects",
+    "case2Before": "You switch between several folders.",
+    "case2After": "Open the right project and find its chats together.",
+    "case2Problem": "What was I doing in this project?",
+    "case2Body": "Save the folders you work in and switch between projects from the sidebar. Start a chat in the project you’ve opened and find its conversations again later.",
+    "case2Shot": "Claude Code Studio chat with the project sidebar",
+    "step0Title": "Set up Claude Code",
+    "step0Body": "Install the Claude Code command-line tool and sign in first.",
+    "step1Title": "Choose desktop or web",
+    "step1Body": "Download the desktop app for your system, or follow the self-hosted web guide on GitHub.",
+    "step2Title": "Open a project",
+    "step2Body": "Choose the folder you want to work in. Then start a chat or open the task board.",
+    "faq0Q": "Does Studio include access to Claude?",
+    "faq0A": "Studio uses your own Claude Code sign-in. Claude access and any charges depend on your account and plan.",
+    "faq1Q": "Where does the web version run?",
+    "faq1A": "You run Studio yourself. The local desktop app runs on your computer. For the web version, follow the setup and access instructions in the repository.",
+    "webGuide": "Web setup guide"
+  },
+  "uk": {
+    "skip": "Перейти до вмісту",
+    "sections": "Розділи",
+    "language": "Мова сайту",
+    "theme": "Темна тема",
+    "menu": "Меню",
+    "features": "Як допомагає",
+    "install": "Як почати",
+    "tryIt": "Спробуйте сценарій",
+    "before": "Ситуація",
+    "after": "Що можна зробити",
+    "sample": "Це готові приклади. Дії виконуються в застосунку.",
+    "play": "Запустити GIF",
+    "stop": "Зупинити GIF",
+    "animated": "Приклад у дії",
+    "screenshots": "Як виглядає застосунок",
+    "faq": "Поширені запитання",
+    "source": "Код на GitHub",
+    "releases": "Випуски",
+    "headline": "Робочий простір для Claude Code",
+    "lead": "Поверніться до вчорашньої розмови, перегляньте, що на дошці завдань, і відкрийте потрібний проєкт без пошуку по вікнах термінала.",
+    "sub": "Працюйте в браузері або окремому застосунку. Потрібен встановлений Claude Code, у який ви вже ввійшли.",
+    "cta": "До завантажень",
+    "meta": "macOS з чипом Apple · Windows · Linux",
+    "featureTitle": "З чим допомагає Studio",
+    "extraTitle": "Уже користуєтеся Claude Code в терміналі?",
+    "extra": "Імпортуйте збережені сеанси та продовжуйте роботу в тих самих папках. Studio працює з вашим установленим Claude Code.",
+    "case0Label": "Розмови",
+    "case0Before": "Ви хочете завершити вчорашню роботу.",
+    "case0After": "Відкрийте збережену розмову або імпортуйте сеанс Claude Code.",
+    "case0Problem": "Де та розмова, у якій я зупинився?",
+    "case0Body": "Відкрийте збережену розмову й продовжте роботу. Якщо вже користуєтеся командним рядком, імпортуйте сеанси Claude Code з папки проєкту.",
+    "case0Shot": "Збережена розмова в Claude Code Studio",
+    "case1Label": "Завдання",
+    "case1Before": "У вас кілька завдань одночасно.",
+    "case1After": "На одній дошці видно, що заплановано, виконується й готово.",
+    "case1Problem": "Важко зрозуміти, яке завдання ще виконується.",
+    "case1Body": "Додавайте завдання як картки. На дошці видно чергу, поточну роботу й завершені завдання. Відкрийте результат і перевірте його перед використанням.",
+    "case1Shot": "Дошка завдань Claude Code Studio зі стовпцями станів",
+    "case2Label": "Проєкти",
+    "case2Before": "Ви перемикаєтеся між кількома папками.",
+    "case2After": "Відкрийте потрібний проєкт і знайдіть його розмови в одному місці.",
+    "case2Problem": "Що я робив у цьому проєкті?",
+    "case2Body": "Збережіть робочі папки й перемикайтеся між проєктами в бічній панелі. Почніть розмову у відкритому проєкті, щоб згодом легко її знайти.",
+    "case2Shot": "Розмова в Claude Code Studio з бічною панеллю проєктів",
+    "step0Title": "Налаштуйте Claude Code",
+    "step0Body": "Встановіть Claude Code для командного рядка й увійдіть.",
+    "step1Title": "Виберіть спосіб запуску",
+    "step1Body": "Завантажте застосунок для своєї системи або скористайтеся інструкцією запуску в браузері на GitHub.",
+    "step2Title": "Відкрийте проєкт",
+    "step2Body": "Оберіть робочу папку. Почніть розмову або відкрийте дошку завдань.",
+    "faq0Q": "Чи надає Studio доступ до Claude?",
+    "faq0A": "Studio використовує ваш обліковий запис Claude Code. Доступ до Claude й можлива плата залежать від вашого облікового запису й тарифу.",
+    "faq1Q": "Де працює браузерна версія?",
+    "faq1A": "Ви запускаєте Studio самостійно. Окремий застосунок працює на вашому комп’ютері. Для запуску через браузер дотримуйтеся інструкцій із налаштування й доступу в репозиторії.",
+    "webGuide": "Запуск у браузері"
+  },
+  "ru": {
+    "skip": "К содержанию",
+    "sections": "Разделы",
+    "language": "Язык сайта",
+    "theme": "Тёмная тема",
+    "menu": "Меню",
+    "features": "Чем помогает",
+    "install": "Как начать",
+    "tryIt": "Попробуйте сценарий",
+    "before": "Ситуация",
+    "after": "Что можно сделать",
+    "sample": "Это готовые примеры. Действия выполняются в приложении.",
+    "play": "Запустить GIF",
+    "stop": "Остановить GIF",
+    "animated": "Пример в действии",
+    "screenshots": "Как выглядит приложение",
+    "faq": "Частые вопросы",
+    "source": "Код на GitHub",
+    "releases": "Выпуски",
+    "headline": "Рабочее пространство для Claude Code",
+    "lead": "Вернитесь ко вчерашнему разговору, посмотрите, что на доске задач, и откройте нужный проект без поиска по окнам терминала.",
+    "sub": "Работайте в браузере или отдельном приложении. Понадобится установленный Claude Code, в который вы уже вошли.",
+    "cta": "К загрузкам",
+    "meta": "macOS с чипом Apple · Windows · Linux",
+    "featureTitle": "В чём помогает Studio",
+    "extraTitle": "Уже пользуетесь Claude Code в терминале?",
+    "extra": "Импортируйте сохранённые сеансы и продолжайте работу в тех же папках. Studio работает с установленным Claude Code.",
+    "case0Label": "Разговоры",
+    "case0Before": "Вы хотите закончить вчерашнюю работу.",
+    "case0After": "Откройте сохранённый разговор или импортируйте сеанс Claude Code.",
+    "case0Problem": "Где разговор, на котором я остановился?",
+    "case0Body": "Откройте сохранённый разговор и продолжите работу. Если пользуетесь командной строкой, импортируйте сеансы Claude Code из папки проекта.",
+    "case0Shot": "Сохранённый разговор в Claude Code Studio",
+    "case1Label": "Задачи",
+    "case1Before": "У вас сразу несколько задач.",
+    "case1After": "На одной доске видно, что запланировано, выполняется и готово.",
+    "case1Problem": "Трудно понять, какая задача ещё выполняется.",
+    "case1Body": "Добавляйте задачи в виде карточек. На доске видно очередь, текущую работу и завершённые задачи. Откройте и проверьте результат перед использованием.",
+    "case1Shot": "Доска задач Claude Code Studio со столбцами состояний",
+    "case2Label": "Проекты",
+    "case2Before": "Вы переключаетесь между папками.",
+    "case2After": "Откройте нужный проект и найдите его разговоры в одном месте.",
+    "case2Problem": "Что я делал в этом проекте?",
+    "case2Body": "Сохраните рабочие папки и переключайтесь между проектами в боковой панели. Начните разговор в открытом проекте, чтобы потом легко его найти.",
+    "case2Shot": "Разговор в Claude Code Studio с боковой панелью проектов",
+    "step0Title": "Настройте Claude Code",
+    "step0Body": "Установите Claude Code для командной строки и войдите.",
+    "step1Title": "Выберите способ запуска",
+    "step1Body": "Скачайте приложение для своей системы или откройте инструкцию для запуска в браузере на GitHub.",
+    "step2Title": "Откройте проект",
+    "step2Body": "Выберите рабочую папку. Начните разговор или откройте доску задач.",
+    "faq0Q": "Даёт ли Studio доступ к Claude?",
+    "faq0A": "Studio использует вашу учётную запись Claude Code. Доступ к Claude и возможная плата зависят от вашей учётной записи и тарифа.",
+    "faq1Q": "Где работает версия для браузера?",
+    "faq1A": "Вы запускаете Studio самостоятельно. Отдельное приложение работает на вашем компьютере. Для запуска в браузере следуйте инструкции по настройке и доступу в репозитории.",
+    "webGuide": "Запуск в браузере"
+  }
+};
+
+const params = new URLSearchParams(location.search);
+const langPicker = document.querySelector("#lang");
+const themeButton = document.querySelector("#theme");
+const tabs = [...document.querySelectorAll("[data-scenario]")];
+const example = document.querySelector("#examples");
+const tiles = document.querySelector(".tiles");
+const menu = document.querySelector(".menu");
+const text = [...document.querySelectorAll("[data-copy]")];
+const labels = [...document.querySelectorAll("[data-label]")];
+const altText = document.querySelector(".screens img");
+const assets = [...document.querySelectorAll("[data-animation]")];
+let language = "en";
+let selected = 0;
+
+function preference(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function store(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* Storage may be unavailable. */ }
+}
+
+function showScenario() {
+  const pack = COPY[language];
+  const input = pack["case" + selected + "Before"];
+  const output = pack["case" + selected + "After"];
+  example.querySelector("#exampleBefore").textContent = input;
+  example.querySelector("#exampleAfter").textContent = output;
+  tabs.forEach((tab, index) => tab.setAttribute("aria-pressed", String(index === selected)));
+}
+
+function applyLanguage(next) {
+  language = Object.hasOwn(COPY, next) ? next : "en";
+  const pack = COPY[language];
+  document.documentElement.lang = langPicker.value = language;
+  text.forEach(node => { node.textContent = pack[node.dataset.copy]; });
+  labels.forEach(node => { node.setAttribute("aria-label", pack[node.dataset.label]); });
+  altText.alt = pack.case0Shot;
+  for (const image of assets) {
+    const button = image.closest("figure").querySelector(".play");
+    button.textContent = pack[button.getAttribute("aria-pressed") === "true" ? "stop" : "play"];
+  }
+  showScenario();
+}
+
+function applyTheme(mode) {
+  const dark = mode === "dark";
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  themeButton.setAttribute("aria-pressed", String(dark));
+}
+
+for (const [index, tab] of tabs.entries()) {
+  tab.addEventListener("click", () => {
+    selected = index;
+    showScenario();
+    tiles.classList.remove("flip");
+    void tiles.offsetWidth;
+    tiles.classList.add("flip");
+  });
+}
+
+for (const image of assets) {
+  const still = image.getAttribute("src");
+  const button = image.closest("figure").querySelector(".play");
+  button.addEventListener("click", () => {
+    const play = button.getAttribute("aria-pressed") !== "true";
+    image.src = play ? image.dataset.animation : still;
+    button.setAttribute("aria-pressed", String(play));
+    button.textContent = COPY[language][play ? "stop" : "play"];
+  });
+  button.hidden = false;
+}
+langPicker.addEventListener("change", () => {
+  applyLanguage(langPicker.value);
+  store("landing-language", language);
+  const current = new URL(location.href);
+  current.searchParams.set("lang", language);
+  history.replaceState(null, "", current);
+});
+themeButton.addEventListener("click", () => {
+  const mode = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(mode);
+  store("landing-theme", mode);
+});
+menu.querySelectorAll("a").forEach(link => link.addEventListener("click", () => { menu.open = false; }));
+applyLanguage(params.get("lang") || preference("landing-language") || "en");
+applyTheme(params.get("theme") || preference("landing-theme") || "light");
+document.querySelector(".chips").hidden = false;
+
+</script>
+</body>
+</html>

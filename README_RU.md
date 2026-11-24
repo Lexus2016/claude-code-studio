@@ -4,6 +4,8 @@
 
 **Веб- и десктопное рабочее пространство для Claude Code CLI на вашем компьютере: чат, Kanban-задачи и управление проектами.**
 
+[Сайт проекта](https://lexus2016.github.io/claude-code-studio/?lang=ru)
+
 > [English](README.md) | [Українська](README_UA.md) | [Русский](README_RU.md) | [简体中文入门](docs/README.zh-CN.md) | [日本語入門](docs/README.ja.md)
 
 > 📖 [От терминала к дашборду](https://www.notion.so/From-Terminal-to-Dashboard-How-Claude-Code-Studio-Changes-AI-Assisted-Development-329676bbc5b6809f9c63e29ca66d8135) | [Революция удалённого доступа](https://www.notion.so/Claude-Code-Studio-The-Remote-Access-Revolution-for-AI-Assisted-Development-329676bbc5b68097a5aefac4db29a60d)
