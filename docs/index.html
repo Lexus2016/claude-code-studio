@@ -173,7 +173,7 @@ footer{border-top:2px solid var(--rule)}
  .wrap{width:calc(100% - 22px)}
  .bar{gap:6px;min-height:60px}
  .tools{gap:5px}
- .control{font-size:11px;padding:0 5px;max-width:102px}
+ .control{font-size:11px;padding:0 5px;max-width:none}
  .theme{font-size:15px;min-width:40px}
  .brand{font-size:11px;gap:4px;text-wrap:balance}
  .brand img{width:27px;height:27px}
@@ -549,7 +549,7 @@ for (const image of assets) {
 }
 langPicker.addEventListener("change", () => {
   applyLanguage(langPicker.value);
-  store("landing-language", language);
+  store("ccstudio-landing-language", language);
   const current = new URL(location.href);
   current.searchParams.set("lang", language);
   history.replaceState(null, "", current);
@@ -557,11 +557,11 @@ langPicker.addEventListener("change", () => {
 themeButton.addEventListener("click", () => {
   const mode = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   applyTheme(mode);
-  store("landing-theme", mode);
+  store("ccstudio-landing-theme", mode);
 });
 menu.querySelectorAll("a").forEach(link => link.addEventListener("click", () => { menu.open = false; }));
-applyLanguage(params.get("lang") || preference("landing-language") || "en");
-applyTheme(params.get("theme") || preference("landing-theme") || "light");
+applyLanguage(params.get("lang") || preference("ccstudio-landing-language") || "en");
+applyTheme(params.get("theme") || preference("ccstudio-landing-theme") || "light");
 document.querySelector(".chips").hidden = false;
 
 </script>
