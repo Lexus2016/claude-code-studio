@@ -242,8 +242,25 @@ function decodeOutputPayload(payload) {
 // view scrolls by one, and the cursor ends up a line BELOW where tmux has it. That is
 // the "cursor one line low after switching projects" report; switching is a re-attach,
 // and every re-attach repainted from this snapshot.
-function captureScreen(name) {
-  const r = tmux(['capture-pane', '-p', '-e', '-t', name]);
+// #152: how many lines of tmux history a FIRST attach may replay. xterm's own
+// scrollback is 10000 lines and tmux's default history-limit is 2000, so this covers
+// the whole pane on a default install while keeping one attach's payload bounded.
+// A reconnect asks for 0: its xterm already holds the history, and replaying it again
+// would double every line the reader scrolls back through.
+const BOOTSTRAP_HISTORY_LINES = 2000;
+
+// argv for a capture, split out so the history flag is testable without tmux.
+// `-S -N` asks for the last N lines of scrollback BEFORE the visible screen; with
+// historyLines 0 the capture stays exactly what it always was.
+function captureArgs(name, historyLines) {
+  const args = ['capture-pane', '-p', '-e'];
+  if (historyLines > 0) args.push('-S', `-${historyLines}`);
+  args.push('-t', name);
+  return args;
+}
+
+function captureScreen(name, historyLines = 0) {
+  const r = tmux(captureArgs(name, historyLines));
   if (r.status !== 0) return null;
   const body = String(r.stdout || '').replace(/\n+$/, '');
   return Buffer.from(body.replace(/\n/g, '\r\n'), 'utf8');
@@ -270,7 +287,7 @@ function cursorSeq(name) {
 // snapshot. Replaying it would double-print and can corrupt a TUI's screen, so the
 // buffer is DISCARDED, not flushed. Anything arriving after the snapshot returns is
 // streamed live.
-function attach({ name, cols, rows, onData, onExit, onGeometry, resizeOnAttach = true }) {
+function attach({ name, cols, rows, onData, onExit, onGeometry, resizeOnAttach = true, historyLines = 0 }) {
   assertName(name);
   const env = utf8Env();
   delete env.CLAUDECODE; // parent Claude Code session sets this and it confuses children
@@ -588,7 +605,7 @@ function attach({ name, cols, rows, onData, onExit, onGeometry, resizeOnAttach =
       scheduleRepaint(true);
       return;
     }
-    const screen = captureScreen(name);   // synchronous — see the bootstrap note above
+    const screen = captureScreen(name, historyLines);   // synchronous — see the bootstrap note above
     if (screen) {
       const cur = cursorSeq(name);
       emit(Buffer.concat([Buffer.from('\x1b[H\x1b[2J', 'latin1'), screen, cur || Buffer.alloc(0)]));
@@ -696,5 +713,5 @@ module.exports = {
   TMUX_SOCKET, tmuxAvailable, hasSession, sessionInfo, paneHash, cursorSeq,
   listTerminalSessions, ensureSession, attach, detachClients,
   setWindowSizeManual, paneSize, paneGeometry, paneCount, paneActiveId, paneLayout,
-  captureScreen, decodeOutputPayload, saveScrollback, killSession,
+  captureScreen, captureArgs, BOOTSTRAP_HISTORY_LINES, decodeOutputPayload, saveScrollback, killSession,
 };

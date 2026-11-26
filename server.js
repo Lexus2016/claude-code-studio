@@ -11897,12 +11897,19 @@ wssTerm.on('connection', (ws, req) => {
   // `view=engine` switches this socket from "drive a terminal session" to "watch the
   // pane a CHAT session's subscription engine already owns" — see the block below.
   let termView = null;
+  // #152: the tmux scrollback this viewer asks to have replayed in its first paint. A
+  // page load builds a NEW xterm and needs the history; a reconnect of a live one sends
+  // nothing, because its buffer already holds it and a second replay would duplicate
+  // every line. Client input, so clamped — an unbounded value would ship an unbounded
+  // payload straight into the browser.
+  let termHistory = 0;
   try {
     const q = new URL(req.url, 'http://x').searchParams;
     sessionId = q.get('session');
     termCols = parseInt(q.get('cols'), 10) || 80;
     termRows = parseInt(q.get('rows'), 10) || 24;
     termView = q.get('view');
+    termHistory = Math.max(0, Math.min(10000, parseInt(q.get('hist'), 10) || 0));
   } catch {}
   const session = sessionId ? stmts.getSession.get(sessionId) : null;
 
@@ -11953,6 +11960,7 @@ wssTerm.on('connection', (ws, req) => {
     try {
       engHandle = termBridge.attach({
         name: engName, cols: geo.cols, rows: geo.rows, resizeOnAttach: false,
+        historyLines: termHistory,
         onData: (buf) => {
           if (ws.bufferedAmount > 4 * 1024 * 1024) return;
           try { ws.send(buf); } catch {}
@@ -12039,6 +12047,7 @@ wssTerm.on('connection', (ws, req) => {
     try {
       handle = termBridge.attach({
         name, cols: termCols, rows: termRows,
+        historyLines: termHistory,
         onData: (buf) => {
           // Drop output rather than let a slow browser grow an unbounded send queue.
           if (ws.bufferedAmount > 4 * 1024 * 1024) return;
