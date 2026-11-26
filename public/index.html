@@ -19455,6 +19455,60 @@ let _lastTerminalSessionId = null;
 // keeps a live entry here so switching tabs never reconnects or repaints it.
 const _terms = new Map();
 
+// #152: xterm's buffer and the pane's horizontal offset both die with the page, so a
+// refresh reopened the pane on the bare visible screen with the reader at the bottom.
+// The position is remembered as lines ABOVE the bottom (a replayed buffer of a
+// different length then lands in the same place) and restored once the first paint of
+// a connect has been parsed. localStorage carries it across a reload; the Map carries
+// it across a reconnect without a storage write on every scroll tick.
+const TERM_VIEW_KEY_PREFIX = 'ccs:termView:';
+const _termView = new Map();
+const _termViewTimers = new Map();
+
+function _readTermView(sessionId) {
+  if (_termView.has(sessionId)) return _termView.get(sessionId);
+  try {
+    const raw = localStorage.getItem(TERM_VIEW_KEY_PREFIX + sessionId);
+    const v = raw ? JSON.parse(raw) : null;
+    if (v && Number.isFinite(v.fromBottom) && Number.isFinite(v.left)) {
+      _termView.set(sessionId, v);
+      return v;
+    }
+  } catch {}
+  return null;
+}
+
+function _saveTermView(sessionId) {
+  const entry = _terms.get(sessionId); if (!entry) return;
+  const buf = entry.term && entry.term.buffer && entry.term.buffer.active;
+  const fromBottom = buf ? Math.max(0, (buf.baseY || 0) - (buf.viewportY || 0)) : 0;
+  const left = entry.host && entry.host.scrollLeft ? Math.round(entry.host.scrollLeft) : 0;
+  const v = { fromBottom, left };
+  _termView.set(sessionId, v);
+  try { localStorage.setItem(TERM_VIEW_KEY_PREFIX + sessionId, JSON.stringify(v)); } catch {}
+}
+
+// Scroll events arrive per frame; one storage write per frame is not worth it.
+function _saveTermViewSoon(sessionId) {
+  if (_termViewTimers.has(sessionId)) return;
+  const t = setTimeout(() => { _termViewTimers.delete(sessionId); _saveTermView(sessionId); }, 250);
+  _termViewTimers.set(sessionId, t);
+}
+
+function _restoreTermView(sessionId) {
+  const entry = _terms.get(sessionId); if (!entry) return;
+  const v = _readTermView(sessionId); if (!v) return;
+  try {
+    const buf = entry.term.buffer && entry.term.buffer.active;
+    const base = buf ? (buf.baseY || 0) : 0;
+    if (v.fromBottom > 0 && buf && typeof entry.term.scrollToLine === 'function') {
+      const line = Math.max(0, base - v.fromBottom);
+      if (line < base) entry.term.scrollToLine(line);
+    }
+  } catch {}
+  if (v.left > 0 && entry.host) { try { entry.host.scrollLeft = v.left; } catch {} }
+}
+
 async function loadTerminalCapability() {
   try {
     const r = await fetch('/api/terminal/capability');
@@ -20064,6 +20118,11 @@ function _createTerminal(sessionId) {
   const entry = { term, fit, ws: null, host, label: '', dot: '#8b949e', state: '', search: addons.search || null };
   _terms.set(sessionId, entry);
 
+  // #152: keep the reader's place while they scroll — the xterm buffer's offset and the
+  // pane's own horizontal scroll (an engine pane wider than the window scrolls sideways).
+  try { term.onScroll(() => _saveTermViewSoon(sessionId)); } catch {}
+  host.addEventListener('scroll', () => _saveTermViewSoon(sessionId), { passive: true });
+
   // Bound to `entry.ws`, not a captured socket — so a later reconnect (fresh
   // WebSocket swapped into entry.ws) keeps routing keystrokes without re-wiring.
   // A dead socket used to make this a silent drain: the guard was `readyState === 1`
@@ -20160,9 +20219,15 @@ function _connectTerminalWs(sessionId) {
   // resize message lands. That correction reflowed a running TUI twice on every
   // re-attach, which is what made a reconnect look like it scrambled the agent's work.
   const _tgt = _termWsTarget(sessionId);
+  // #152: a NEW xterm (first open, page load, reload) asks the server to replay tmux's
+  // scrollback with its first paint. A reconnect of a live one asks for none — its
+  // buffer already holds that history, and a second copy would duplicate every line.
+  const wantHist = entry.booted ? 0 : 2000;
   const ws = new WebSocket(`${proto}//${location.host}/ws/terminal?session=${encodeURIComponent(_tgt.session)}&cols=${term.cols || 80}&rows=${term.rows || 24}`
-    + (_tgt.view ? `&view=${encodeURIComponent(_tgt.view)}` : ''));
+    + (_tgt.view ? `&view=${encodeURIComponent(_tgt.view)}` : '')
+    + (wantHist ? `&hist=${wantHist}` : ''));
   entry.ws = ws;
+  entry._paintFrames = 0;
   ws.binaryType = 'arraybuffer';
   ws.onopen = () => {
     entry._reconnectDelay = 1000;
@@ -20176,7 +20241,18 @@ function _connectTerminalWs(sessionId) {
     requestAnimationFrame(() => { try { term.focus(); } catch {} });
   };
   ws.onmessage = (ev) => {
-    if (typeof ev.data !== 'string') { term.write(new Uint8Array(ev.data)); return; }
+    if (typeof ev.data !== 'string') {
+      // #152: the first frame of a connect is the bootstrap (the visible screen, or the
+      // history a fresh xterm asked for). Only once xterm has PARSED it can the saved
+      // scroll position be applied — term.write's callback is that moment. `booted`
+      // flips here and not on open: a connect that dies before painting must ask for
+      // the history again on its retry, or the retry replays nothing.
+      entry._paintFrames = (entry._paintFrames || 0) + 1;
+      entry.booted = true;
+      term.write(new Uint8Array(ev.data),
+        entry._paintFrames === 1 ? () => { try { _restoreTermView(sessionId); } catch {} } : undefined);
+      return;
+    }
     let msg = null; try { msg = JSON.parse(ev.data); } catch { return; }
     if (msg.type === 'ready' && msg.view === 'engine') {
       entry.state = t('term.state.enginePane'); entry.dot = '#a78bfa';

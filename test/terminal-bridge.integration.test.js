@@ -294,6 +294,29 @@ const screenHas = (name, s) => String(bridge.captureScreen(name) || '').includes
     bridge.killSession(sname);
   }
 
+  // ── #152: a FIRST attach may carry the pane's tmux history ──────────
+  // A reload rebuilds the xterm, so a visible-only bootstrap left the reader with no
+  // way back to output that had just scrolled off. captureScreen(name, N) is what the
+  // server replays then; captureScreen(name) must stay visible-only, because the
+  // compositor's repaint and every screenHas() assertion depend on that exact shape.
+  {
+    const hname = 'ccsterm-itest-hist';
+    bridge.killSession(hname);
+    bridge.ensureSession({
+      name: hname, workdir: '/tmp',
+      launchCommand: `sh -c 'i=1; while [ $i -le 120 ]; do echo hist-line-$i; i=$((i+1)); done; sleep 30'`,
+    });
+    await waitFor(() => screenHas(hname, 'hist-line-120'));
+    const visible = String(bridge.captureScreen(hname) || '');
+    const withHist = String(bridge.captureScreen(hname, bridge.BOOTSTRAP_HISTORY_LINES) || '');
+    // Whole-line match: 'hist-line-1' is a prefix of hist-line-10 and hist-line-100.
+    const hasLine = (txt, n) => new RegExp(`(^|\\r\\n)hist-line-${n}(\\r\\n|$)`).test(txt);
+    check('the visible screen alone no longer holds the first line', hasLine(visible, 1), false);
+    check('a bootstrap with history does hold it', hasLine(withHist, 1), true);
+    check('...and still ends where the visible screen ends', hasLine(withHist, 120), true);
+    bridge.killSession(hname);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })();
