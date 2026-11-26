@@ -264,5 +264,26 @@ check('and it focuses the pane, so the next Enter goes to the TUI and not back i
 // The skills list and the commands list share this one function, so the fix covers both.
 check('pasteSkillToTerminal routes through it', /pasteSkillToTerminal[\s\S]{0,400}?pasteToTerminal\(d\.content\)/.test(TB), true);
 
+console.log('\n\u2014 5. opening the live pane keeps the unsent chat draft \u2014');
+
+// #155: openTerminalTab() switched activeTabId to the pane WITHOUT saving the composer
+// first, so a message being typed vanished on the first "Open pane" click -- and the
+// attachments and the reply target with it. switchTab() has always saved on the same
+// path; the ORDER (save before the assignment) is the whole fix, so it is pinned by
+// index rather than by presence alone.
+{
+  const start = SRC.indexOf('async function openTerminalTab(');
+  check('openTerminalTab is declared once', start > 0, true);
+  const body = SRC.slice(start, SRC.indexOf('\n}\n', start) + 2);
+  const save = body.indexOf('saveComposerState(activeTabId)');
+  const assign = body.indexOf('activeTabId = sessionId');
+  check('it saves the composer state of the tab it leaves', save > 0, true);
+  check('...before activeTabId is reassigned', save > 0 && assign > save, true);
+  check('using the same guarded call switchTab makes',
+    /if \(activeTabId\) saveComposerState\(activeTabId\);/.test(body), true);
+  check('the pane is still shown after the switch',
+    body.indexOf('showTerminalView(sessionId, label)') > assign, true);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
