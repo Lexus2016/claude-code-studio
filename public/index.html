@@ -19689,6 +19689,11 @@ async function openTerminalTab(sessionId, label, avatar) {
   if (_terminalAvailable === null) await loadTerminalCapability();
   if (!_terminalAvailable) { toast(_termCapabilityReason || t('term.unavailable'), true); return; }
   if (typeof Terminal === 'undefined') { toast(TT('term.xterm.fail'), true); return; }
+  // #155: opening the pane is a tab switch, and the composer belongs to the tab we
+  // leave behind. switchTab() saves it on the same path; this entry point did not, so
+  // the first click on "Open pane" replaced an unsent draft (and its attachments and
+  // reply target) with the terminal tab's empty state, and coming back found nothing.
+  if (activeTabId) saveComposerState(activeTabId);
   if (!openTabs.some(x => x.id === sessionId)) {
     openTabs.push({ id: sessionId, title: (avatar ? avatar + ' ' : '') + (label || 'terminal'),
                     generating: false, done: false, kind: 'terminal', termLabel: label, termAvatar: avatar });
