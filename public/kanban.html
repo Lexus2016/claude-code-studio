@@ -532,6 +532,7 @@ body::after{ display:none; }
     <button class="hb" onclick="refresh(true)" id="refreshBtn" title="Refresh" data-i18n-title="hdr.refresh">&#8635;</button>
     <button class="hb" onclick="openAddChainModal()" id="addGroupBtn" data-i18n-title="hdr.group_hint">&#xFF0B; <span id="addGroupBtnLabel" data-i18n="hdr.group">Group</span></button>
     <button class="hb" onclick="openAddModal()" id="addBtn">&#xFF0B; <span id="addBtnLabel" data-i18n="hdr.add">Task</span></button>
+    <button class="hb" onclick="openPurge()" id="purgeBtn" title="Clean up finished tasks" data-i18n-title="hdr.purge_tip">&#129529; <span data-i18n="hdr.purge">Clean up</span></button>
     <a class="hb" href="https://github.com/Lexus2016/claude-code-studio" target="_blank" rel="noopener" aria-label="GitHub">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.34-3.369-1.34-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
     </a>
@@ -655,6 +656,23 @@ body::after{ display:none; }
   </div>
 </div>
 
+<div class="ov hidden" id="purgeOv" aria-hidden="true" onclick="if(event.target===this)closePurge()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="purgeTitle" tabindex="-1" style="max-width:620px">
+    <div class="modal-hd">
+      <span class="modal-hd-title" id="purgeTitle" data-i18n="purge.title">Clean up finished tasks</span>
+      <button class="modal-close" onclick="closePurge()">×</button>
+    </div>
+    <div class="modal-body" style="gap:10px">
+      <p style="font-size:12px;color:var(--muted);margin:0" data-i18n="purge.body">Tasks whose worktree holds no unmerged work are removed with their branch. Tasks that still hold work stay in this list: merge them, or delete without merging.</p>
+      <div id="purgeReview"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost btn-sm" onclick="closePurge()" data-i18n="modal.cancel">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="purgeRunBtn" onclick="runPurge()" data-i18n="purge.run">Clean up</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 
@@ -744,6 +762,12 @@ const pageNavigation = (() => {
 // ─── i18n ─────────────────────────────────────────────────────────────────
 const TR = {
   uk: {
+    'hdr.purge':'Прибрати','hdr.purge_tip':'Прибрати завершені й скасовані задачі',
+    'purge.title':'Прибирання завершених задач',
+    'purge.body':'Задачі, у яких у worktree немає незамердженої роботи, буде видалено разом із гілкою. Ті, що ще тримають роботу, залишаться у списку: їх можна змерджити або видалити без злиття.',
+    'purge.run':'Прибрати','purge.none':'Немає чого прибирати','purge.deleted':'Прибрано задач: {n}','purge.reviewed':'Залишено для перегляду: {n}',
+    'purge.merge':'Змерджити','purge.delete':'Видалити без злиття','purge.merged':'Змерджено й прибрано','purge.merge_failed':'Не вдалося змерджити: ',
+    'purge.why.unmerged':'worktree ще тримає незамерджене або незакомічене','purge.why.unreadable':'не вдалося прочитати стан worktree','purge.why.running':'задача ще виконується',
     'nav.back': 'Назад',
     'nav.skip': 'Перейти до вмісту',
     'modal.task_cfg':'Параметри запуску','modal.task_cfg_note':'Зміни зберігаються і впливають на наступний запуск, а не на поточний. Які саме дилки подіють, залежить від двигуна задачі й від того, чи вона вже має сесію.',
@@ -800,6 +824,12 @@ const TR = {
     'dlg.tuning.hint':'Варіанти — з каталогу самого агента (models / efforts у його конфігу). «—» лишає вибір агенту.','dlg.toast.delegated':'Делеговано {agent} — стежте за ходом через значок ⇗ на картці','dlg.toast.stopped':'Делегування зупинено',
   },
   en: {
+    'hdr.purge':'Clean up','hdr.purge_tip':'Remove finished and cancelled tasks',
+    'purge.title':'Clean up finished tasks',
+    'purge.body':'Tasks whose worktree holds no unmerged work are removed with their branch. Tasks that still hold work stay in this list: merge them, or delete without merging.',
+    'purge.run':'Clean up','purge.none':'Nothing to clean up','purge.deleted':'Removed {n} tasks','purge.reviewed':'Kept for review: {n}',
+    'purge.merge':'Merge','purge.delete':'Delete without merging','purge.merged':'Merged and removed','purge.merge_failed':'Merge failed: ',
+    'purge.why.unmerged':'the worktree still holds unmerged or uncommitted work','purge.why.unreadable':'the worktree state could not be read','purge.why.running':'the task is still running',
     'nav.back': 'Back',
     'nav.skip': 'Skip to content',
     'modal.task_cfg':'Run settings','modal.task_cfg_note':'Changes are saved and affect the next run, not the one in progress. Which dials take effect depends on the task engine and on whether it already has a session.',
@@ -856,6 +886,12 @@ const TR = {
     'dlg.tuning.hint':'Options come from this agent\'s own catalog (models / efforts in its config). “—” leaves the choice to the agent.','dlg.toast.delegated':'Delegated to {agent} — follow it via the ⇗ badge on the card','dlg.toast.stopped':'Delegation stopped',
   },
   ru: {
+    'hdr.purge':'Убрать','hdr.purge_tip':'Убрать завершённые и отменённые задачи',
+    'purge.title':'Уборка завершённых задач',
+    'purge.body':'Задачи, у которых в worktree нет незамёрженной работы, будут удалены вместе с веткой. Те, что ещё держат работу, останутся в списке: их можно смёржить или удалить без слияния.',
+    'purge.run':'Убрать','purge.none':'Нечего убирать','purge.deleted':'Убрано задач: {n}','purge.reviewed':'Оставлено для просмотра: {n}',
+    'purge.merge':'Смёржить','purge.delete':'Удалить без слияния','purge.merged':'Смёржено и убрано','purge.merge_failed':'Не удалось смёржить: ',
+    'purge.why.unmerged':'worktree ещё держит незамёрженное или незакоммиченное','purge.why.unreadable':'не удалось прочитать состояние worktree','purge.why.running':'задача ещё выполняется',
     'nav.back': 'Назад',
     'nav.skip': 'Перейти к содержимому',
     'modal.task_cfg':'Параметры запуска','modal.task_cfg_note':'Изменения сохраняются и влияют на следующий запуск, а не на текущий. Какие именно настройки подействуют, зависит от движка задачи и от того, есть ли у неё уже сессия.',
@@ -912,6 +948,12 @@ const TR = {
     'dlg.tuning.hint':'Варианты — из каталога самого агента (models / efforts в его конфиге). «—» оставляет выбор агенту.','dlg.toast.delegated':'Делегировано {agent} — следите за ходом через значок ⇗ на карточке','dlg.toast.stopped':'Делегирование остановлено',
   },
   fr: {
+    'hdr.purge':'Nettoyer','hdr.purge_tip':'Retirer les tâches terminées et annulées',
+    'purge.title':'Nettoyage des tâches terminées',
+    'purge.body':'Les tâches dont le worktree ne contient aucun travail non fusionné sont supprimées avec leur branche. Celles qui contiennent encore du travail restent dans cette liste : fusionnez-les ou supprimez-les sans fusion.',
+    'purge.run':'Nettoyer','purge.none':'Rien à nettoyer','purge.deleted':'Tâches retirées : {n}','purge.reviewed':'Conservées pour revue : {n}',
+    'purge.merge':'Fusionner','purge.delete':'Supprimer sans fusion','purge.merged':'Fusionnée et retirée','purge.merge_failed':'Échec de la fusion : ',
+    'purge.why.unmerged':'le worktree contient encore du travail non fusionné ou non validé','purge.why.unreadable':"l'état du worktree est illisible",'purge.why.running':'la tâche est encore en cours',
     'nav.back': 'Retour',
     'nav.skip': 'Aller au contenu',
     'modal.task_cfg':'Paramètres d exécution','modal.task_cfg_note':'Les modifications sont enregistrées et affectent le prochain lancement, pas celui en cours. Les réglages qui prennent effet dépendent du moteur de la tâche et du fait qu elle ait déjà une session.',
@@ -968,6 +1010,12 @@ const TR = {
     'dlg.tuning.hint':'Les options viennent du catalogue de cet agent (models / efforts dans sa config). « — » laisse le choix à l\'agent.','dlg.toast.delegated':'Délégué à {agent} — suivez-le via le badge ⇗ de la carte','dlg.toast.stopped':'Délégation arrêtée',
   },
   he: {
+    'hdr.purge':'ניקוי','hdr.purge_tip':'הסרת משימות שהושלמו או בוטלו',
+    'purge.title':'ניקוי משימות שהושלמו',
+    'purge.body':'משימות שה-worktree שלהן אינו מחזיק עבודה שלא מוזגה יוסרו יחד עם הענף. משימות שעדיין מחזיקות עבודה יישארו ברשימה: מזגו אותן, או מחקו ללא מיזוג.',
+    'purge.run':'ניקוי','purge.none':'אין מה לנקות','purge.deleted':'הוסרו {n} משימות','purge.reviewed':'נשמרו לבדיקה: {n}',
+    'purge.merge':'מיזוג','purge.delete':'מחיקה ללא מיזוג','purge.merged':'מוזג והוסר','purge.merge_failed':'המיזוג נכשל: ',
+    'purge.why.unmerged':'ה-worktree עדיין מחזיק עבודה שלא מוזגה או שלא נשמרה','purge.why.unreadable':'לא ניתן היה לקרוא את מצב ה-worktree','purge.why.running':'המשימה עדיין רצה',
     'nav.back': 'חזרה',
     'nav.skip': 'דילוג לתוכן',
     'modal.task_cfg':'הגדרות הרצה','modal.task_cfg_note':'השינויים נשמרים ומשפיעים על ההרצה הבאה, לא על זו שרצה כעת. אילו הגדרות ייכנסו לתוקף תלוי במנוע המשימה ובשאלה אם כבר יש לה סשן.',
@@ -2743,6 +2791,89 @@ function confirmDelete(id){
 }
 function closeConfirm(){closeOverlay('confirmOv');}
 function closeModal(){closeOverlay('taskOv');}
+
+// ─── Clean up finished tasks (#160) ──────────────────────────────────────────
+// Nothing is thrown away unseen. Tasks whose worktree holds nothing go in one
+// pass; every card that still holds work comes back here with its branch and
+// path, and the next step is either Merge (the change is wanted) or Delete
+// without merging (it is not). The bulk call never sends ?force — a force delete
+// stays a decision about ONE card, named by branch and worktree.
+let _purgeItems = [];
+function openPurge(){
+  _purgeItems = [];
+  const box = $i('purgeReview'); if (box) box.innerHTML = '';
+  const btn = $i('purgeRunBtn'); if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+  openOverlay('purgeOv', { initialFocus: '#purgeRunBtn', onEscape: closePurge });
+}
+function closePurge(){ closeOverlay('purgeOv'); }
+function _purgeWhy(reason){
+  return t(reason === 'running' ? 'purge.why.running' : reason === 'unreadable' ? 'purge.why.unreadable' : 'purge.why.unmerged');
+}
+function renderPurgeReview(){
+  const box = $i('purgeReview'); if (!box) return;
+  box.innerHTML = _purgeItems.map(it => `
+    <div class="purge-row" data-id="${escH(it.id)}" style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px">${escH(it.title || it.id)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${escH(_purgeWhy(it.reason))}</div>
+        ${it.branch ? `<div style="font-size:11px;color:var(--muted);margin-top:2px"><code>${escH(it.branch)}</code>${it.workdir ? ' · ' + escH(it.workdir) : ''}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        ${it.reason === 'unmerged' ? `<button class="btn btn-sm" data-purge-act="merge">${escH(t('purge.merge'))}</button>` : ''}
+        ${it.reason === 'running' ? '' : `<button class="btn btn-danger btn-sm" data-purge-act="delete">${escH(t('purge.delete'))}</button>`}
+      </div>
+    </div>`).join('');
+}
+async function runPurge(){
+  const btn = $i('purgeRunBtn');
+  if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
+  try {
+    const r = await apiFetch('/api/tasks/purge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workdir: curWorkdir || null }) });
+    if (r.status === 401) { location.href = '/login'; return; }
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok) { toast(t('toast.err') + (res.error || r.status), true); return; }
+    _purgeItems = Array.isArray(res.review) ? res.review : [];
+    toast(t('purge.deleted').replace('{n}', String(res.deleted || 0)));
+    if (_purgeItems.length) toast(t('purge.reviewed').replace('{n}', String(_purgeItems.length)));
+    else toast(t('purge.none'));
+    renderPurgeReview();
+    await refresh(true);
+  } catch (e) { toast(t('toast.err') + e.message, true); }
+  finally { if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); } }
+}
+async function _purgeAct(id, act){
+  if (act === 'merge') {
+    const r = await apiFetch('/api/tasks/' + encodeURIComponent(id) + '/git-merge', { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) { toast(t('purge.merge_failed') + (j.message || j.error || r.status), true); return; }
+    // Merged means nothing is left to lose, so the ordinary delete applies.
+    const d = await fetch('/api/tasks/' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!d.ok) { const e = await d.json().catch(() => ({})); toast(t('toast.err') + (e.error || d.status), true); return; }
+    toast(t('purge.merged'));
+  } else {
+    const it = _purgeItems.find(x => x.id === id);
+    const msg = t('confirm.unmerged').replace('{branch}', it?.branch || '?').replace('{path}', it?.workdir || '?');
+    if (!(await confirm(msg))) return;
+    const d = await fetch('/api/tasks/' + encodeURIComponent(id) + '?force=1', { method: 'DELETE' });
+    if (!d.ok) { const e = await d.json().catch(() => ({})); toast(t('toast.err') + (e.error || d.status), true); return; }
+    toast(t('toast.deleted'));
+  }
+  _purgeItems = _purgeItems.filter(x => x.id !== id);
+  renderPurgeReview();
+  await refresh(true);
+}
+{
+  const box = $i('purgeReview');
+  if (box && !box.dataset.purgeBound) {
+    box.dataset.purgeBound = '1';
+    box.addEventListener('click', ev => {
+      const b = ev.target.closest('[data-purge-act]'); if (!b) return;
+      const row = b.closest('[data-id]'); if (!row) return;
+      _purgeAct(row.getAttribute('data-id'), b.getAttribute('data-purge-act'));
+    });
+  }
+}
+
 
 // ─── Delegation ───────────────────────────────────────────────────────────
 let _activeDelegations = [];

@@ -140,6 +140,9 @@ const enginePrompts = require('./engine-prompts').createEnginePromptStore();
 // double tap cannot send two digits before the first one has been seen to land.
 const _promptAnswering = new Set();
 const WM = require('./worktree-manager');
+// Bulk purge of finished tasks (#160): what may go in one pass vs what must be
+// looked at first. Kept in its own module so the rule is tested on its own.
+const { planPurge } = require('./task-purge');
 const ClaudeSSH = require('./claude-ssh');
 const { testSshConnection } = require('./claude-ssh');
 const TelegramBot = require('./telegram-bot');
@@ -7739,27 +7742,35 @@ app.put('/api/tasks/:id', (req, res) => {
   if (status === 'todo') setImmediate(processQueue);
   res.json(updated);
 });
-app.delete('/api/tasks/:id', (req, res) => {
-  const tid = req.params.id;
-  const task = stmts.getTask.get(tid);
-  // Same guard as DELETE /api/sessions/:id: a task cancelled on merge conflict
-  // (or deleted mid-run) can still hold uncommitted/unmerged work in its own
-  // worktree — ?force / body.force bypasses it, same convention.
-  const force = req.query.force === '1' || req.body?.force === true;
-  if (task?.git_root && task?.workdir && !force) {
-    let unmerged = false;
-    try {
-      unmerged = WM.hasUnmergedWork({ worktreeDir: task.workdir, projectDir: task.git_root, defaultBranch: WM.getDefaultBranch(task.git_root), branch: task.git_branch });
-    } catch { /* worktree already gone — nothing to lose */ }
-    if (unmerged) return res.status(409).json({ error: 'task has unmerged or uncommitted changes', code: 'UNMERGED_WORK' });
-  }
+/** Does this task's own worktree still hold work a delete would destroy? The one
+ *  gate both task delete doors ask before anything is removed.
+ *
+ *  `failSafe` is what an unreadable tree means. A user-confirmed delete reads it as
+ *  "nothing to lose" (the tree is usually already gone, and the user can retry with
+ *  force); the unattended bulk purge reads it as "keep it" — nobody is watching and
+ *  a deleted tree cannot be brought back. */
+function taskHasUnmergedWork(task, { failSafe = false } = {}) {
+  if (!task?.git_root || !task?.workdir) return false;
+  try {
+    return WM.hasUnmergedWork({ worktreeDir: task.workdir, projectDir: task.git_root, defaultBranch: WM.getDefaultBranch(task.git_root), branch: task.git_branch });
+  } catch { return failSafe; }
+}
+
+/** Remove a task row and everything hanging off it — the ONE task teardown.
+ *
+ *  Callers decide WHETHER a task may go (the unmerged-work guard, a running worker);
+ *  this decides only what deleting one means. It is shared by DELETE /api/tasks/:id
+ *  and the bulk purge so the two doors cannot drift apart — the session paths once
+ *  carried three copies of this and the copies stopped agreeing. */
+function deleteTaskRow(task) {
+  const tid = task.id;
   // Abort running subprocess if this task is in progress
   const taskAbort = runningTaskAborts.get(tid);
   if (taskAbort) {
     stoppingTasks.add(tid);
     try { taskAbort.abort(); } catch {}
   }
-  // Kill worker process directly if PID is known
+  // Stop the worker process directly when its PID is known
   if (task?.worker_pid) killByPid(task.worker_pid);
   // Re-link depends_on for chain tasks so the next task doesn't get stuck
   if (task?.chain_id) {
@@ -7786,8 +7797,92 @@ app.delete('/api/tasks/:id', (req, res) => {
       try { WM.removeWorktree({ projectDir: task.git_root, worktreeDir: task.workdir, branch: task.git_branch, force: true }); } catch (e) { log.warn('removeWorktree failed on task delete', { tid, err: e.message }); }
     }
   }
+}
+
+app.delete('/api/tasks/:id', (req, res) => {
+  const tid = req.params.id;
+  const task = stmts.getTask.get(tid);
+  // Same guard as DELETE /api/sessions/:id: a task cancelled on merge conflict
+  // (or deleted mid-run) can still hold uncommitted/unmerged work in its own
+  // worktree — ?force / body.force bypasses it, same convention.
+  const force = req.query.force === '1' || req.body?.force === true;
+  if (task && !force && taskHasUnmergedWork(task)) {
+    return res.status(409).json({ error: 'task has unmerged or uncommitted changes', code: 'UNMERGED_WORK' });
+  }
+  if (task) deleteTaskRow(task);
   res.json({ ok: true });
 });
+
+// ─── Finished-task cleanup (#160) ──────────────────────────────────────────
+// Abandoned scheduled tasks pile up in data/worktrees with their ccs/* branch, and
+// the only way out used to be manual git in the container. The purge below removes
+// the cards that have nothing to lose and hands the rest BACK: a finished card
+// whose worktree still holds work is never destroyed unseen — it comes back with
+// its branch and path so it can be looked at, then merged (the change is wanted)
+// or force-deleted (it is not). Those two are the same doors the board already has,
+// so a reviewed card needs no third one.
+
+app.get('/api/tasks/:id/git-status', (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'not found' });
+  res.json({ status: getUnitGitStatus(task), unmerged: taskHasUnmergedWork(task, { failSafe: true }) });
+});
+
+app.post('/api/tasks/:id/git-merge', async (req, res) => {
+  const task = stmts.getTask.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'not found' });
+  if (!task.git_root || !task.git_branch) return res.status(400).json({ error: 'task is not worktree-isolated' });
+  // A running task is still writing into that tree; merging half a change and then
+  // letting the worker commit the rest onto a merged branch is worse than waiting.
+  if (runningTaskAborts.has(task.id) || task.status === 'in_progress') {
+    return res.status(409).json({ error: 'task is still running', code: 'TASK_RUNNING' });
+  }
+  try {
+    const defaultBranch = WM.getDefaultBranch(task.git_root);
+    // mergeBranch() merges committed history only. An abandoned task usually left
+    // its edits uncommitted, so commit them first — but only while the tree is
+    // still on the task's own branch, or a stray checkout would put real work on
+    // the wrong ref. Same rule the worker's auto-merge follows.
+    if (task.workdir) {
+      const wtStatus = WM.getStatus({ worktreeDir: task.workdir, defaultBranch });
+      if (wtStatus.branch === task.git_branch) {
+        WM.commitAll({ worktreeDir: task.workdir, message: `Commit before merge: task ${task.id}` });
+      } else {
+        log.warn('[taskMerge] worktree not on expected branch, skipping commit', { taskId: task.id, expected: task.git_branch, actual: wtStatus.branch });
+      }
+    }
+    const result = await WM.mergeBranch({ projectDir: task.git_root, defaultBranch, branch: task.git_branch });
+    stmts.setTaskGitConflict.run(result.ok ? 0 : 1, task.id);
+    res.json({ ...result, status: getUnitGitStatus(stmts.getTask.get(task.id)) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/tasks/purge', (req, res) => {
+  const workdir = typeof req.body?.workdir === 'string' && req.body.workdir ? req.body.workdir : null;
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter(x => typeof x === 'string' && x) : null;
+  let candidates;
+  if (ids) candidates = ids.map(id => stmts.getTask.get(id)).filter(Boolean);
+  else if (workdir) candidates = stmts.getTasks.all({ w: workdir });
+  else candidates = db.prepare(`SELECT * FROM tasks WHERE status IN ('done','cancelled') ORDER BY updated_at ASC LIMIT 5000`).all();
+  const { remove, review } = planPurge({
+    tasks: candidates,
+    // The worker owns the card while it runs; the tree is being written to.
+    isRunning: t => runningTaskAborts.has(t.id) || t.status === 'in_progress',
+    inspect: t => (taskHasUnmergedWork(t, { failSafe: true }) ? 'unmerged' : 'clean'),
+  });
+  for (const task of remove) deleteTaskRow(task);
+  res.json({
+    deleted: remove.length,
+    review: review.map(({ task, reason }) => ({
+      id: task.id, title: task.title, status: task.status, reason,
+      branch: task.git_branch || null, workdir: task.workdir || null,
+      git_root: task.git_root || null,
+    })),
+  });
+});
+
 
 // ─── Task Chains (Groups) ────────────────────────────────────────────────
 app.get('/api/task-chains', (req, res) => {
