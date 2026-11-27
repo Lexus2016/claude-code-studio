@@ -650,6 +650,7 @@ const TR = {
     'toast.no_project': 'Спочатку оберіть проєкт',
     'toast.err.load': 'Помилка завантаження: ', 'toast.err': 'Помилка: ',
     'confirm.delete': 'Видалити завдання? Цю дію не можна скасувати.',
+    'confirm.unmerged': 'Видалити попри незамерджену роботу?\n\nГілка {branch} у {path} має незамерджені коміти або незакомічені зміни. Видалення знищить їх безповоротно.',
     'tasks.count': '{n} завдань', 'tasks.count.1': '{n} завдання', 'tasks.count.few': '{n} завдання',
     'form.exec': 'Параметри виконання',
     'form.exec.mode': 'Режим', 'form.exec.agent': 'Агент',
@@ -716,6 +717,7 @@ const TR = {
     'toast.no_project': 'Select a project first',
     'toast.err.load': 'Loading error: ', 'toast.err': 'Error: ',
     'confirm.delete': 'Delete task? This action cannot be undone.',
+    'confirm.unmerged': 'Delete despite unmerged work?\n\nThe branch {branch} in {path} holds unmerged commits or uncommitted changes. Deleting the task destroys them for good.',
     'tasks.count': '{n} tasks', 'tasks.count.1': '{n} task', 'tasks.count.few': '{n} tasks',
     'form.exec': 'Execution options',
     'form.exec.mode': 'Mode', 'form.exec.agent': 'Agent',
@@ -782,6 +784,7 @@ const TR = {
     'toast.no_project': 'Сначала выберите проект',
     'toast.err.load': 'Ошибка загрузки: ', 'toast.err': 'Ошибка: ',
     'confirm.delete': 'Удалить задачу? Это действие нельзя отменить.',
+    'confirm.unmerged': 'Удалить несмотря на несмерженную работу?\n\nВетка {branch} в {path} содержит несмерженные коммиты или незакоммиченные изменения. Удаление уничтожит их безвозвратно.',
     'tasks.count': '{n} задач', 'tasks.count.1': '{n} задача', 'tasks.count.few': '{n} задачи',
     'form.exec': 'Параметры выполнения',
     'form.exec.mode': 'Режим', 'form.exec.agent': 'Агент',
@@ -848,6 +851,7 @@ const TR = {
     'toast.no_project': 'Choisissez d\'abord un projet',
     'toast.err.load': 'Erreur de chargement : ', 'toast.err': 'Erreur : ',
     'confirm.delete': 'Supprimer la tâche ? Cette action est irréversible.',
+    'confirm.unmerged': 'Supprimer malgré le travail non fusionné ?\n\nLa branche {branch} dans {path} contient des commits non fusionnés ou des modifications non validées. La suppression les détruit définitivement.',
     'tasks.count': '{n} tâches', 'tasks.count.1': '{n} tâche', 'tasks.count.few': '{n} tâches',
     'form.exec': 'Options d\'exécution',
     'form.exec.mode': 'Mode', 'form.exec.agent': 'Agent',
@@ -914,6 +918,7 @@ const TR = {
     'toast.no_project': 'בחרו קודם פרויקט',
     'toast.err.load': 'שגיאת טעינה: ', 'toast.err': 'שגיאה: ',
     'confirm.delete': 'למחוק את המשימה? הפעולה אינה הפיכה.',
+    'confirm.unmerged': 'למחוק למרות עבודה שלא מוזגה?\n\nהענף {branch} ב-{path} מכיל קומיטים שלא מוזגו או שינויים שלא נשמרו. המחיקה תשמיד אותם לצמיתות.',
     'tasks.count': '{n} משימות', 'tasks.count.1': '{n} משימה', 'tasks.count.few': '{n} משימות',
     'form.exec': 'אפשרויות הרצה',
     'form.exec.mode': 'מצב', 'form.exec.agent': 'סוכן',
@@ -1859,10 +1864,39 @@ async function saveTask() {
   }
 }
 
+// The server refuses (409 UNMERGED_WORK) to delete a task whose worktree still holds
+// unmerged commits or uncommitted changes. This list used to show the raw refusal and
+// stop, so such a scheduled task could not be removed here at all (#160). The first
+// refusal now becomes the question, naming the branch and the worktree the delete
+// would destroy; a confirmed second attempt resends with force. `ask` resolves true to
+// go ahead.
+async function _taskDeleteRequest(tk, send, ask) {
+  let force = false;
+  for (;;) {
+    const r = await send(force);
+    if (r.status === 401) { location.href = '/login'; return false; }
+    if (r.status === 409) {
+      const e = await r.json().catch(() => ({}));
+      // A refusal on the FORCED attempt is a real error, not another question: asking
+      // the same thing twice would loop forever.
+      if (e.code !== 'UNMERGED_WORK' || force) { toast(t('toast.err') + (e.error || r.status), 'err'); return false; }
+      const msg = t('confirm.unmerged').replace('{branch}', tk?.git_branch || '?').replace('{path}', tk?.workdir || '?');
+      if (!(await ask(msg))) return false;
+      force = true; continue;
+    }
+    if (!r.ok) { const e = await r.json().catch(() => ({})); toast(t('toast.err') + (e.error || r.status), 'err'); return false; }
+    return true;
+  }
+}
+
 async function deleteTask(id) {
   if (!confirm(t('confirm.delete'))) return;
+  const tk = tasks.find(x => x.id === id);
   try {
-    await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
+    const ok = await _taskDeleteRequest(tk,
+      force => fetch(`/api/tasks/${encodeURIComponent(id)}${force ? '?force=1' : ''}`, { method: 'DELETE' }),
+      msg => Promise.resolve(confirm(msg)));
+    if (!ok) return;
     // Optimistically remove from local state so UI updates immediately
     tasks = tasks.filter(x => x.id !== id);
     render();

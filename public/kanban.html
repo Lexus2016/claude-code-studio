@@ -764,7 +764,7 @@ const TR = {
     'modal.attach':'Вкладення','modal.attach_hint':'Клікніть, перетягніть або вставте (Ctrl+V)','modal.attach_max':'Максимум 10 файлів на завдання',
     'modal.create':'Створити','modal.save':'Зберегти','modal.cancel':'Скасувати',
     'modal.delete':'Видалити',
-    'confirm.title':'Видалити завдання?','confirm.body':'Ця дія незворотна.',
+    'confirm.title':'Видалити завдання?','confirm.body':'Ця дія незворотна.','confirm.unmerged':'Видалити попри незамерджену роботу?\n\nГілка {branch} у {path} має незамерджені коміти або незакомічені зміни. Видалення знищить їх безповоротно.',
     'confirm.ok':'Видалити','confirm.cancel':'Скасувати',
     'chat.title':'Чат сесії','chat.empty':'Немає повідомлень','chat.open':'↗ Відкрити в чаті',
     'toast.created':'✓ Завдання створено','toast.saved':'✓ Збережено',
@@ -820,7 +820,7 @@ const TR = {
     'modal.attach':'Attachments','modal.attach_hint':'Click, drag or paste (Ctrl+V)','modal.attach_max':'Maximum 10 files per task',
     'modal.create':'Create','modal.save':'Save','modal.cancel':'Cancel',
     'modal.delete':'Delete',
-    'confirm.title':'Delete task?','confirm.body':'This action is irreversible.',
+    'confirm.title':'Delete task?','confirm.body':'This action is irreversible.','confirm.unmerged':'Delete despite unmerged work?\n\nThe branch {branch} in {path} holds unmerged commits or uncommitted changes. Deleting the task destroys them for good.',
     'confirm.ok':'Delete','confirm.cancel':'Cancel',
     'chat.title':'Session chat','chat.empty':'No messages','chat.open':'↗ Open in chat',
     'toast.created':'✓ Task created','toast.saved':'✓ Saved',
@@ -875,7 +875,7 @@ const TR = {
     'modal.desc':'Описание','modal.notes':'Заметки',
     'modal.create':'Создать','modal.save':'Сохранить','modal.cancel':'Отмена',
     'modal.delete':'Удалить',
-    'confirm.title':'Удалить задачу?','confirm.body':'Это действие необратимо.',
+    'confirm.title':'Удалить задачу?','confirm.body':'Это действие необратимо.','confirm.unmerged':'Удалить несмотря на несмерженную работу?\n\nВетка {branch} в {path} содержит несмерженные коммиты или незакоммиченные изменения. Удаление уничтожит их безвозвратно.',
     'confirm.ok':'Удалить','confirm.cancel':'Отмена',
     'chat.title':'Чат сессии','chat.empty':'Нет сообщений','chat.open':'↗ Открыть в чате',
     'toast.created':'✓ Задача создана','toast.saved':'✓ Сохранено',
@@ -932,7 +932,7 @@ const TR = {
     'modal.attach':'Pièces jointes','modal.attach_hint':'Cliquez, glissez ou collez (Ctrl+V)','modal.attach_max':'Maximum 10 fichiers par tâche',
     'modal.create':'Créer','modal.save':'Enregistrer','modal.cancel':'Annuler',
     'modal.delete':'Supprimer',
-    'confirm.title':'Supprimer la tâche ?','confirm.body':'Cette action est irréversible.',
+    'confirm.title':'Supprimer la tâche ?','confirm.body':'Cette action est irréversible.','confirm.unmerged':'Supprimer malgré le travail non fusionné ?\n\nLa branche {branch} dans {path} contient des commits non fusionnés ou des modifications non validées. La suppression les détruit définitivement.',
     'confirm.ok':'Supprimer','confirm.cancel':'Annuler',
     'chat.title':'Discussion de la session','chat.empty':'Aucun message','chat.open':'↗ Ouvrir dans la discussion',
     'toast.created':'✓ Tâche créée','toast.saved':'✓ Enregistré',
@@ -988,7 +988,7 @@ const TR = {
     'modal.attach':'קבצים מצורפים','modal.attach_hint':'לחצו, גררו או הדביקו (Ctrl+V)','modal.attach_max':'מקסימום 10 קבצים למשימה',
     'modal.create':'יצירה','modal.save':'שמירה','modal.cancel':'ביטול',
     'modal.delete':'מחיקה',
-    'confirm.title':'למחוק את המשימה?','confirm.body':'הפעולה אינה הפיכה.',
+    'confirm.title':'למחוק את המשימה?','confirm.body':'הפעולה אינה הפיכה.','confirm.unmerged':'למחוק למרות עבודה שלא מוזגה?\n\nהענף {branch} ב-{path} מכיל קומיטים שלא מוזגו או שינויים שלא נשמרו. המחיקה תשמיד אותם לצמיתות.',
     'confirm.ok':'מחיקה','confirm.cancel':'ביטול',
     'chat.title':'צ׳אט הסשן','chat.empty':'אין הודעות','chat.open':'↗ פתיחה בצ׳אט',
     'toast.created':'✓ המשימה נוצרה','toast.saved':'✓ נשמר',
@@ -2695,13 +2695,41 @@ async function saveTask(){
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────
+// The server refuses (409 UNMERGED_WORK) to delete a task whose worktree still holds
+// unmerged commits or uncommitted changes. This board used to show the raw refusal and
+// stop, so a card in that state could not be removed here at all — the only way out was
+// manual git in the container (#160). The first refusal now becomes the question,
+// naming the branch and the worktree the delete would destroy; a confirmed second
+// attempt resends with force. `ask` resolves true to go ahead.
+async function _taskDeleteRequest(tk, send, ask){
+  let force=false;
+  for(;;){
+    const r=await send(force);
+    if(r.status===401){location.href='/login';return false;}
+    if(r.status===409){
+      const e=await r.json().catch(()=>({}));
+      // A refusal on the FORCED attempt is a real error, not another question: asking
+      // the same thing twice would loop forever.
+      if(e.code!=='UNMERGED_WORK'||force){toast(t('toast.err')+(e.error||r.status),true);return false;}
+      const msg=t('confirm.unmerged').replace('{branch}',tk?.git_branch||'?').replace('{path}',tk?.workdir||'?');
+      if(!(await ask(msg))) return false;
+      force=true;continue;
+    }
+    if(!r.ok){const e=await r.json().catch(()=>({}));toast(t('toast.err')+(e.error||r.status),true);return false;}
+    return true;
+  }
+}
+
 function confirmDelete(id){
   const tk=tasks.find(x=>x.id===id);
   $i('confirmTitle').textContent=t('confirm.title');
   $i('confirmBody').innerHTML=`<p style="font-size:14px;color:var(--text)">«${escH(tk?.title||id)}»</p><p style="font-size:12px;color:var(--muted);margin-top:6px">${t('confirm.body')}</p>`;
   $i('confirmOkBtn').onclick=async()=>{
     try{
-      await apiFetch(`/api/tasks/${id}`,{method:'DELETE'});
+      const ok=await _taskDeleteRequest(tk,
+        force=>fetch(`/api/tasks/${encodeURIComponent(id)}${force?'?force=1':''}`,{method:'DELETE'}),
+        msg=>Promise.resolve(confirm(msg)));
+      if(!ok){closeConfirm();return;}
       // Optimistically remove card from local state so UI updates immediately
       tasks=tasks.filter(x=>x.id!==id);
       renderBoard();
@@ -2709,7 +2737,7 @@ function confirmDelete(id){
       // Notify other tabs (scheduler, etc.)
       try{const bc=new BroadcastChannel('tasks');bc.postMessage({type:'task_deleted',id});bc.close();}catch{}
       await refresh(true);
-    }catch(e){if(e.message!=='401')toast(t('toast.err')+e.message,true);}
+    }catch(e){toast(t('toast.err')+e.message,true);}
   };
   openOverlay('confirmOv',{initialFocus:'#cancelBtn',onEscape:closeConfirm});
 }
